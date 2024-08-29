@@ -41,6 +41,8 @@ fincept start
 - **India Mutual Fund Data**
 - **Company Finaical Statements Data**
 
-[![GitHub stars](https://img.shields.io/github/stars/Fincept-Corporation/fincept-investments.svg?style=social&label=Star&maxAge=2592000)](https://github.com/Fincept-Corporation/fincept-investments/stargazers)
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=huglemon/inwind-landing-page&type=Date)](https://star-history.com/#huglemon/inwind-landing-page&Date)
 
 ## PLEASE LEAVE AN STAR ON THE REPO AND FOR ANY QUERY OR UPDATE REACH OUT TO ME ON dev@fincept.in
