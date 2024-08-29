@@ -7,7 +7,7 @@
 
 **Fincept Investments** is a comprehensive CLI tool that provides financial insights, market analysis, and a host of other financial services such as technical analysis, fundamental analysis, sentiment analysis, quantitative analysis, and economic data services. It's designed to help investors and financial professionals navigate the complex world of investments with ease and precision.
 
-(Currently it has more India Specific Data we are constantly updating it for presenting world data and new updates are release everyday. If you are from another country and can help me with the data source of your country please reach out to me.)
+(Currently, it has more India-specific data. We are constantly updating it to present world data, and new updates are released every day. If you are from another country and can help me with the data source of your country, please reach out to me.)
 
 ## Features 🧐
 
@@ -40,5 +40,7 @@ fincept start
 - **India Bond Data**
 - **India Mutual Fund Data**
 - **Company Finaical Statements Data**
+
+[![GitHub stars](https://img.shields.io/github/stars/Fincept-Corporation/fincept-investments.svg?style=social&label=Star&maxAge=2592000)](https://github.com/Fincept-Corporation/fincept-investments/stargazers)
 
 ## PLEASE LEAVE AN STAR ON THE REPO AND FOR ANY QUERY OR UPDATE REACH OUT TO ME ON dev@fincept.in
