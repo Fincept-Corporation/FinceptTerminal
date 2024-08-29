@@ -43,6 +43,6 @@ fincept start
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=huglemon/inwind-landing-page&type=Date)](https://star-history.com/#huglemon/inwind-landing-page&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/fincept-investments&type=Date)](https://star-history.com/#Fincept-Corporation/fincept-investments&Date)
 
 ## PLEASE LEAVE AN STAR ON THE REPO AND FOR ANY QUERY OR UPDATE REACH OUT TO ME ON dev@fincept.in
