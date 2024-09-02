@@ -2,8 +2,3 @@
 
 include README.md
 
-python setup.py sdist bdist_wheel
-
-pip install -e .
-
-twine upload dist/* --repository-url https://upload.pypi.org/legacy/ -u __token__ -p pypi-AgEIcHlwaS5vcmcCJGE0NTNiOGE4LTU5NjgtNDg0Mi1iYTJlLWU0OGVkY2NjY2VkNgACKlszLCI3NTZkMmEwMy0yMGJlLTQ5YmMtODQ3MS0zMjZhNWZhNGEzZmMiXQAABiDWzHgQ68NfZP-j1XVH8tGtGjx6stSVm94bZ-wMXterqg
