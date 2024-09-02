@@ -43,6 +43,8 @@ fincept start
 
 ## Star History
 
+![GitHub commit activity](https://github-readme-stats.vercel.app/api?username=tilakpatel22&show_icons=true&theme=radical)
 [![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/fincept-investments&type=Date)](https://star-history.com/#Fincept-Corporation/fincept-investments&Date)
+
 
 ## PLEASE LEAVE AN STAR ON THE REPO AND FOR ANY QUERY OR UPDATE REACH OUT TO ME ON dev@fincept.in
