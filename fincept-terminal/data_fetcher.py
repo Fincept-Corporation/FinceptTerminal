@@ -1,6 +1,7 @@
-import requests
 from themes import console
 from utilities import display_fii_dii_table
+from data import fetch_equities_data  
+import requests
 
 def display_fii_dii_data():
     fii_dii_url = "https://fincept.share.zrok.io/IndiaStockExchange/fii_dii_data/data"

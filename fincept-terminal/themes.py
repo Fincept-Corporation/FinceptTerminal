@@ -1,5 +1,4 @@
 from rich.console import Console
-from rich.panel import Panel
 from rich.theme import Theme
 
 custom_theme = Theme({
@@ -11,6 +10,3 @@ custom_theme = Theme({
 })
 
 console = Console(theme=custom_theme, style="white on #282828")
-
-def create_panel(text, title):
-    return Panel(text, title=title, title_align="center", style="highlight", padding=(1, 2))

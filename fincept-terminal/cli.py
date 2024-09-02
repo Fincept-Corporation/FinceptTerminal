@@ -3,6 +3,7 @@ from display import display_art
 from market import show_market_tracker_menu
 from assets import search_assets
 from themes import console
+from rich.panel import Panel
 
 @click.group(invoke_without_command=True)
 @click.pass_context
@@ -28,7 +29,7 @@ def show_main_menu():
 4. EXIT
         """
 
-        menu_panel = console.create_panel(menu_text, title="SELECT AN OPTION")
+        menu_panel = Panel(menu_text, title="SELECT AN OPTION", title_align="center", style="highlight", padding=(1, 2))
         console.print(menu_panel)
         
         choice = click.prompt("Please select an option", type=int)

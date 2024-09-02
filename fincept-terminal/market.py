@@ -1,7 +1,8 @@
+import click
 from themes import console
 from data_fetcher import display_fii_dii_data
-import click
 from assets import search_assets
+from rich.panel import Panel
 
 def show_market_tracker_menu():
     while True:
@@ -14,7 +15,7 @@ def show_market_tracker_menu():
 4. BACK TO MAIN MENU
         """
 
-        tracker_panel = console.create_panel(tracker_text, title="SELECT AN OPTION")
+        tracker_panel = Panel(tracker_text, title="SELECT AN OPTION", title_align="center", style="highlight", padding=(1, 2))
         console.print(tracker_panel)
 
         choice = click.prompt("Please select an option", type=int)

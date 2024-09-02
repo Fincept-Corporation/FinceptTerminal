@@ -1,16 +1,18 @@
-import pandas as pd
+import click
 from difflib import get_close_matches
+from data import fetch_equities_data  # Import from the new data.py module
 from themes import console
 from utilities import display_options_in_columns, select_option_from_list, display_search_results, fetch_detailed_data
-import click
 
-# Load the updated equities data
-equities_df = pd.read_csv('C:/Projects/FinceptInvestments/fincept/updated_equities.csv')
+equities_df = fetch_equities_data()
 
 def search_assets():
     console.print("[highlight]SEARCH ASSETS[/highlight]\n")
 
     countries = sorted(equities_df['country'].dropna().unique())
+    
+    console.print(f"Total number of countries available: {len(countries)}", style="info")
+    
     display_options_in_columns(countries, "Available Countries")
 
     country_choice = select_option_from_list(countries, "country")
@@ -49,7 +51,6 @@ def search_assets():
             console.print(f"[danger]No matching symbol found for '{input_name}'.[/danger]")
 
 def match_symbol(input_name, df):
-    """Match the input name or symbol to the closest available symbol in the DataFrame."""
     symbols = df['symbol'].tolist()
     names = df['name'].tolist()
     

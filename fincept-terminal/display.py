@@ -2,12 +2,10 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.align import Align
 from rich.markdown import Markdown
-from rich.text import Text
 
 def display_art():
     console = Console()
-    art = """
-
+    art = r"""
 $$$$$$$$\ $$\                                          $$\           $$$$$$\                                           $$\                                        $$\               
 $$  _____|\__|                                         $$ |          \_$$  _|                                          $$ |                                       $$ |              
 $$ |      $$\ $$$$$$$\   $$$$$$$\  $$$$$$\   $$$$$$\ $$$$$$\           $$ |  $$$$$$$\ $$\    $$\  $$$$$$\   $$$$$$$\ $$$$$$\   $$$$$$\$$$$\   $$$$$$\  $$$$$$$\ $$$$$$\    $$$$$$$\ 
@@ -19,7 +17,6 @@ $$ |      $$ |$$ |  $$ |\$$$$$$$\ \$$$$$$$\ $$$$$$$  | \$$$$  |      $$$$$$\ $$ 
                                             $$ |                                                                                                                                    
                                             $$ |                                                                                                                                    
                                             \__|                                                                                                                                    
-
     """
     description = (
         "Welcome to Fincept Investments\n\n"
@@ -41,8 +38,6 @@ $$ |      $$ |$$ |  $$ |\$$$$$$$\ \$$$$$$$\ $$$$$$$  | \$$$$  |      $$$$$$\ $$ 
         "Instagram: https://instagram.com/finceptcorp \n"
     )
     
-
-    # Align art to center and wrap it in a Panel
     art_panel = Panel(Align.center(art, vertical="middle"), style="bold yellow")
     description_panel = Panel(Align.center(Markdown(description), vertical="middle"), style="green")
 
