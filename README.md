@@ -11,7 +11,7 @@
 
 ## Features 🧐
 
-- **Market Tracker**: Track FII/DII data, Nifty 50 list, and more.
+- **Dynamic Asset Searching**: we have an comprehensive list of assets from around the world
 - **Economics**: Get economic indicators and analysis (Feature under development).
 - **News**: Stay updated with top financial news across the globe.
 - **Technical Analysis**: Perform technical analysis on stocks and market indices.
@@ -43,7 +43,6 @@ fincept start
 
 ## Star History
 
-![GitHub repo stats](https://github-readme-stats.vercel.app/api/pin/?username=Fincept-Corporation&repo=FinceptTerminal&show_icons=true&theme=radical)
 [![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/fincept-investments&type=Date)](https://star-history.com/#Fincept-Corporation/fincept-investments&Date)
 
 
