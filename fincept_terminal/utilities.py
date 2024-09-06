@@ -1,5 +1,5 @@
 from rich.table import Table
-from themes import console
+from .themes import console
 import click
 
 def display_options_in_columns(options, title):

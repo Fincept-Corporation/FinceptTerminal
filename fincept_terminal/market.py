@@ -1,7 +1,7 @@
 import click
-from themes import console
-from data_fetcher import display_fii_dii_data
-from assets import search_assets
+from .themes import console
+from .data_fetcher import display_fii_dii_data
+from .assets import search_assets
 from rich.panel import Panel
 
 def show_market_tracker_menu():

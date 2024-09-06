@@ -1,8 +1,8 @@
 import click
 from difflib import get_close_matches
-from data import fetch_equities_data  # Import from the new data.py module
-from themes import console
-from utilities import display_options_in_columns, select_option_from_list, display_search_results, fetch_detailed_data
+from .data import fetch_equities_data  # Import from the new data.py module
+from .themes import console
+from .utilities import display_options_in_columns, select_option_from_list, display_search_results, fetch_detailed_data
 
 equities_df = fetch_equities_data()
 

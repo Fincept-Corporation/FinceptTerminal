@@ -1,0 +1,109 @@
+import click
+from rich.console import Console
+from rich.panel import Panel
+
+console = Console()
+
+@click.group(invoke_without_command=True)
+@click.version_option(version="0.1.1", prog_name="Fincept Investments")
+@click.pass_context
+def cli(ctx):
+    """Fincept Investments CLI - Your professional financial terminal."""
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())  # Display help if no command is given
+
+# Start Command
+@cli.command()
+def start():
+    """Start the Fincept Investments terminal"""
+    from .display import display_art
+    display_art()
+    show_main_menu()
+
+def show_main_menu():
+    while True:
+        console.print("[bold cyan]MAIN MENU[/bold cyan]\n")
+
+        menu_text = """
+1. MARKET TRACKER
+2. ECONOMICS
+3. NEWS
+4. EQUITIES
+5. FUNDS
+6. BONDS
+7. EXIT
+        """
+
+        menu_panel = Panel(menu_text, title="SELECT AN OPTION", title_align="center", style="bold green", padding=(1, 2))
+        console.print(menu_panel)
+        
+        choice = click.prompt("Please select an option", type=int)
+
+        if choice == 1:
+            show_market_tracker_menu()
+        elif choice == 2:
+            show_economics_data()
+        elif choice == 3:
+            show_news()
+        elif choice == 4:
+            show_equities()
+        elif choice == 5:
+            show_funds()
+        elif choice == 6:
+            show_bonds()
+        elif choice == 7:
+            console.print("\n[bold red]EXITING FINCEPT INVESTMENTS.[/bold red]")
+            break
+        else:
+            console.print("\n[bold red]INVALID OPTION. PLEASE TRY AGAIN.[/bold red]")
+
+# Market Tracker Command
+def show_market_tracker_menu():
+    """Display the market tracker menu"""
+    # Example of displaying market data (this function should be implemented as needed)
+    console.print("[bold green]Market Tracker Data[/bold green]")
+
+# Economics Data Command
+def show_economics_data():
+    """Display economics data"""
+    # Example of displaying economics data (this function should be implemented as needed)
+    console.print("[bold blue]Economics Data[/bold blue]")
+
+# News Command
+def show_news():
+    """Display news on a specific topic"""
+    # Example of displaying news data (this function should be implemented as needed)
+    console.print("[bold cyan]Latest News[/bold cyan]")
+
+# Equities Command
+def show_equities():
+    """Display equities data"""
+    # Example of displaying equities data (this function should be implemented as needed)
+    console.print("[bold magenta]Equities Data[/bold magenta]")
+
+# Funds Command
+def show_funds():
+    """Display funds data"""
+    # Example of displaying funds data (this function should be implemented as needed)
+    console.print("[bold yellow]Funds Data[/bold yellow]")
+
+# Bonds Command
+def show_bonds():
+    """Display bonds data"""
+    # Example of displaying bonds data (this function should be implemented as needed)
+    console.print("[bold red]Bonds Data[/bold red]")
+
+# Contact Command
+@cli.command()
+def contact():
+    """Display contact information"""
+    console.print(Panel("[bold yellow]Contact us at: contact@fincept.in[/bold yellow]", title="Contact", expand=False))
+
+# Custom Help Command
+@cli.command()
+def help():
+    """Display help information"""
+    click.echo(cli.get_help())  # Show the help message from the Click context
+
+if __name__ == "__main__":
+    cli()
