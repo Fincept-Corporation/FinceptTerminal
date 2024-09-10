@@ -1,2 +1,4 @@
 # .gitignore
 *.egg-info/
+.idea/
+__pycache__/
