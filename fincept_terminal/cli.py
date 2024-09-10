@@ -1,33 +1,11 @@
 import click
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Prompt
-from rich.table import Table
-from rich.text import Text
-from .market import show_market_tracker_menu
-from .data_fetcher import fetch_sectors_by_country, fetch_industries_by_sector, fetch_stocks_by_industry, display_fii_dii_data
-from .assets import search_assets
-from .data import get_countries_by_continent
-from .themes import console
-import yfinance as yf
-from fuzzywuzzy import process 
-import datetime
-import time
-from empyrical import cum_returns, max_drawdown, sharpe_ratio, annual_volatility
-import requests
-import json
-import pandas as pd
-
+import logging
+logging.getLogger('numexpr').setLevel(logging.ERROR)
 import warnings
 warnings.filterwarnings("ignore")
 
-# Debugging helper function to print messages
-def debug(msg):
-    console.print(f"[bold yellow][DEBUG] {msg}[/bold yellow]", style="info")
-
-     
 @click.group(invoke_without_command=True)
-@click.version_option(version="0.1.1", prog_name="Fincept Investments")
+@click.version_option(version="0.1.2", prog_name="Fincept Investments")
 @click.pass_context
 def cli(ctx):
     """Fincept Investments CLI - Your professional financial terminal."""
@@ -38,51 +16,55 @@ def cli(ctx):
 @cli.command()
 def start():
     """Start the Fincept Investments terminal"""
-    from .display import display_art
+    from fincept_terminal.display import display_art
     display_art()
     show_main_menu()
-    
+
 
 def show_main_menu():
     """Main menu with navigation options."""
-    debug("Displaying Main Menu...")
+    from fincept_terminal.themes import console
     console.print("\n")
     console.print("[bold cyan]MAIN MENU[/bold cyan]\n", style="info")
-    
+
     main_menu_options = [
-        "MARKET TRACKER",
-        "ECONOMICS & MACRO TRENDS",
-        "NEWS & ANALYSIS",
-        "STOCKS (Equities)",
-        "FUNDS & ETFs",
-        "BONDS & FIXED INCOME",
-        "OPTIONS & DERIVATIVES",
-        "CRYPTOCURRENCIES",
-        "PORTFOLIO & INVESTMENT TOOLS",
-        "CURRENCY MARKETS (Forex)",
-        "COMMODITIES",
-        "GenAI Query",
-        "EDUCATION & RESOURCES",
-        "SETTINGS & CUSTOMIZATION",
-        "Terminal Documentation",
-        "EXIT"
+        "MARKET TRACKER", #1
+        "ECONOMICS & MACRO TRENDS", #2
+        "Global News & Sentiment", #3
+        "STOCKS (Equities)", #4
+        "FUNDS & ETFs", #5
+        "BONDS & FIXED INCOME", #6
+        "OPTIONS & DERIVATIVES", #7
+        "CryptoCurrency", #8
+        "PORTFOLIO & INVESTMENT TOOLS", #9
+        "CURRENCY MARKETS (Forex)", #10
+        "COMMODITIES", #11
+        "BACKTESTING STOCKS", #12
+        "GenAI Query", #13
+        "EDUCATION & RESOURCES", #14
+        "SETTINGS & CUSTOMIZATION", #15
+        "Terminal Documentation", #16
+        "EXIT", #17
     ]
 
     # Display main menu in columns
+    from fincept_terminal.const import display_in_columns
     display_in_columns("Select an Option", main_menu_options)
 
     console.print("\n")
+    from rich.prompt import Prompt
     choice = Prompt.ask("Enter your choice")
-    debug(f"User selected menu option: {choice}")
     console.print("\n")
 
     if choice == "1":
+        from fincept_terminal.menuList import show_market_tracker_menu
         show_market_tracker_menu()  # Market Tracker submenu
     elif choice == "2":
         console.print("[bold yellow]Economics section under development[/bold yellow]", style="warning")
     elif choice == "3":
-        console.print("[bold yellow]News section under development[/bold yellow]", style="warning")
+        show_news_and_sentiment_menu()
     elif choice == "4":
+        from fincept_terminal.menuList import show_equities_menu
         show_equities_menu()  # Equities submenu for continent and country selection
     elif choice == "5":
         console.print("[bold yellow]Funds section under development[/bold yellow]", style="warning")
@@ -90,490 +72,279 @@ def show_main_menu():
         console.print("[bold yellow]Bonds section under development[/bold yellow]", style="warning")
     elif choice == "7":
         console.print("[bold red]Exiting the Fincept terminal...[/bold red]", style="danger")
+    elif choice == "8":
+        crypto_main_menu()
     elif choice == "9":
+        from fincept_terminal.portfolio import show_portfolio_menu
         show_portfolio_menu()
-    elif choice == "12":  # GenAI Query option
+    elif choice == "12":
+        from fincept_terminal.portfolio import show_backtesting_menu
+        show_backtesting_menu()
+    elif choice == "13":  # GenAI Query option
+        from fincept_terminal.GenAI import show_genai_query
         show_genai_query()
-        
-        
-# Initialize an empty dictionary to hold multiple portfolios
-portfolios = {}
-
-def show_portfolio_menu():
-    """Submenu for Portfolio & Investment Tools with multiple portfolios management."""
-    
-    while True:
-        console.print("[highlight]PORTFOLIO & INVESTMENT TOOLS[/highlight]\n", style="info")
-
-        portfolio_text = """
-1. CREATE NEW PORTFOLIO
-2. SELECT EXISTING PORTFOLIO
-3. VIEW ALL PORTFOLIOS
-4. BACK TO MAIN MENU
-        """
-
-        portfolio_panel = Panel(portfolio_text, title="PORTFOLIO MENU", title_align="center", style="bold green on #282828", padding=(1, 2))
-        console.print(portfolio_panel)
-
-        choice = Prompt.ask("Enter your choice")
-
-        if choice == "1":
-            create_new_portfolio()
-        elif choice == "2":
-            select_portfolio()
-        elif choice == "3":
-            view_all_portfolios()
-        elif choice == "4":
-            break  # Return to main menu
 
 
-def create_new_portfolio():
-    """Allow users to create a new portfolio and directly manage it after creation."""
-    portfolio_name = Prompt.ask("Enter the new portfolio name")
-    if portfolio_name in portfolios:
-        console.print(f"[bold red]Portfolio '{portfolio_name}' already exists![/bold red]")
+import warnings
+from gnews import GNews
+
+# Suppress warnings
+warnings.filterwarnings("ignore")
+
+# Initialize GNews with default settings
+google_news = GNews(language='en', max_results=25)
+
+# Country code mapping based on GNews documentation
+COUNTRY_CODES = {
+    'Australia': 'AU', 'Botswana': 'BW', 'Canada': 'CA', 'Ethiopia': 'ET', 'Ghana': 'GH', 'India': 'IN', 'Indonesia': 'ID',
+    'Ireland': 'IE', 'Israel': 'IL', 'Kenya': 'KE', 'Latvia': 'LV', 'Malaysia': 'MY', 'Namibia': 'NA', 'New Zealand': 'NZ',
+    'Nigeria': 'NG', 'Pakistan': 'PK', 'Philippines': 'PH', 'Singapore': 'SG', 'South Africa': 'ZA', 'Tanzania': 'TZ',
+    'Uganda': 'UG', 'United Kingdom': 'GB', 'United States': 'US', 'Zimbabwe': 'ZW', 'Czech Republic': 'CZ',
+    'Germany': 'DE', 'Austria': 'AT', 'Switzerland': 'CH', 'Argentina': 'AR', 'Chile': 'CL', 'Colombia': 'CO',
+    'Cuba': 'CU', 'Mexico': 'MX', 'Peru': 'PE', 'Venezuela': 'VE', 'Belgium': 'BE', 'France': 'FR', 'Morocco': 'MA',
+    'Senegal': 'SN', 'Italy': 'IT', 'Lithuania': 'LT', 'Hungary': 'HU', 'Netherlands': 'NL', 'Norway': 'NO',
+    'Poland': 'PL', 'Brazil': 'BR', 'Portugal': 'PT', 'Romania': 'RO', 'Slovakia': 'SK', 'Slovenia': 'SI',
+    'Sweden': 'SE', 'Vietnam': 'VN', 'Turkey': 'TR', 'Greece': 'GR', 'Bulgaria': 'BG', 'Russia': 'RU', 'Ukraine': 'UA',
+    'Serbia': 'RS', 'United Arab Emirates': 'AE', 'Saudi Arabia': 'SA', 'Lebanon': 'LB', 'Egypt': 'EG',
+    'Bangladesh': 'BD', 'Thailand': 'TH', 'China': 'CN', 'Taiwan': 'TW', 'Hong Kong': 'HK', 'Japan': 'JP',
+    'Republic of Korea': 'KR'
+}
+
+
+def set_gnews_country(country):
+    """Set the GNews country dynamically based on user selection."""
+    if country == "WORLD":
+        google_news.country = None  # No specific country, fetch global news
     else:
-        portfolios[portfolio_name] = []
-        console.print(f"[bold green]Portfolio '{portfolio_name}' created successfully![/bold green]")
-        manage_selected_portfolio(portfolio_name)   # Automatically go to manage the newly created portfolio
+        google_news.country = COUNTRY_CODES.get(country, None)
 
 
+def show_news_and_sentiment_menu():
+    """Display Global News and Sentiment analysis by continent and country."""
+    from fincept_terminal.themes import console
+    from fincept_terminal.data import get_countries_by_continent
+    from fincept_terminal.const import display_in_columns
+    from rich.prompt import Prompt
 
-def select_portfolio():
-    """Allow users to select an existing portfolio for adding stocks or analysis."""
-    if not portfolios:
-        console.print("[bold red]No portfolios available. Create a portfolio first.[/bold red]")
-        return
+    while True:  # Loop to keep asking the user for news until they choose to exit
+        # Step 1: Prompt user to select a continent
+        console.print("[bold cyan]GLOBAL NEWS AND SENTIMENT[/bold cyan]\n", style="info")
 
-    console.print("[bold cyan]Select an existing portfolio:[/bold cyan]\n")
-    portfolio_names = list(portfolios.keys())
-    display_in_columns("Available Portfolios", portfolio_names)
-
-    portfolio_choice = Prompt.ask("Enter the portfolio number to select")
-    selected_portfolio_name = portfolio_names[int(portfolio_choice) - 1]
-
-    manage_selected_portfolio(selected_portfolio_name)
-
-
-def manage_selected_portfolio(portfolio_name):
-    """Manage the selected portfolio (add stocks, view stocks, analyze)."""
-    
-    while True:
-        console.print(f"[highlight]MANAGE PORTFOLIO: {portfolio_name}[/highlight]\n", style="info")
-
-        portfolio_menu_text = """
-1. ADD STOCK TO PORTFOLIO
-2. VIEW CURRENT PORTFOLIO
-3. ANALYZE PORTFOLIO PERFORMANCE
-4. BACK TO PREVIOUS MENU
-        """
-        
-        portfolio_panel = Panel(portfolio_menu_text, title=f"PORTFOLIO: {portfolio_name}", title_align="center", style="bold green on #282828", padding=(1, 2))
-        console.print(portfolio_panel)
-
-        choice = Prompt.ask("Enter your choice")
-
-        if choice == "1":
-            add_stock_to_portfolio(portfolio_name)
-        elif choice == "2":
-            view_portfolio(portfolio_name)
-        elif choice == "3":
-            analyze_portfolio(portfolio_name)
-        elif choice == "4":
-            break  # Go back to the previous menu
-
-
-def add_stock_to_portfolio(portfolio_name=None):
-    """Allow users to add multiple stocks to the selected portfolio until they choose to return."""
-    if portfolio_name is None:
-        # Ask user to select a portfolio if none provided
-        if not portfolios:
-            console.print("[bold red]No portfolios available. Please create a portfolio first.[/bold red]")
-            return
-        portfolio_names = list(portfolios.keys())
-        display_in_columns("Select a Portfolio", portfolio_names)
-        portfolio_choice = Prompt.ask("Enter the portfolio number to select")
-        portfolio_name = portfolio_names[int(portfolio_choice) - 1]
-    
-    while True:
-        ticker = Prompt.ask("Enter the stock symbol (or type 'back' to return to the portfolio menu)")
-        if ticker.lower() == 'back':
-            break  # Exit the loop and return to the portfolio menu
-        try:
-            stock = yf.Ticker(ticker)
-            stock_info = stock.history(period="1y")  # Fetch 1-year historical data
-            if not stock_info.empty:
-                portfolios[portfolio_name].append(stock)
-                console.print(f"[bold green]{ticker} added to portfolio '{portfolio_name}'![/bold green]")
-            else:
-                console.print(f"[bold red]No data found for {ticker}.[/bold red]")
-        except Exception as e:
-            console.print(f"[bold red]Error: {e}[/bold red]")
-
-
-def view_portfolio(portfolio_name):
-    """Display the current portfolio."""
-    portfolio = portfolios.get(portfolio_name, [])
-    
-    if not portfolio:
-        console.print(f"[bold red]Portfolio '{portfolio_name}' is empty.[/bold red]")
-        return
-
-    table = Table(title=f"Portfolio: {portfolio_name}", header_style="bold", show_lines=True)
-    table.add_column("Symbol", style="cyan", width=15)
-    table.add_column("Name", style="green", width=50)
-    
-    for stock in portfolio:
-        stock_info = stock.info
-        table.add_row(stock_info.get('symbol', 'N/A'), stock_info.get('shortName', 'N/A'))
-
-    console.print(table)
-
-
-def analyze_portfolio(portfolio_name):
-    """Analyze portfolio performance using empyrical-reloaded."""
-    portfolio = portfolios.get(portfolio_name, [])
-
-    if not portfolio:
-        console.print(f"[bold red]Portfolio '{portfolio_name}' is empty.[/bold red]")
-        return
-
-    portfolio_returns = pd.DataFrame()
-
-    # Collect returns for each stock in the portfolio
-    for stock in portfolio:
-        ticker = stock.info['symbol']
-        stock_history = stock.history(period="1y")['Close']  # Get the stock's closing prices
-        stock_returns = stock_history.pct_change().dropna()  # Calculate daily returns
-        portfolio_returns[ticker] = stock_returns
-
-    # Calculate cumulative returns, Sharpe ratio, max drawdown, and annual volatility
-    try:
-        cumulative_returns = cum_returns(portfolio_returns.mean(axis=1))
-        sharpe = sharpe_ratio(portfolio_returns.mean(axis=1))
-        max_dd = max_drawdown(portfolio_returns.mean(axis=1))
-        annual_vol = annual_volatility(portfolio_returns.mean(axis=1))
-
-        # Display the analysis in a table
-        analysis_table = Table(title=f"Portfolio Performance Analysis: {portfolio_name}", header_style="bold", show_lines=True)
-        analysis_table.add_column("Metric", style="cyan")
-        analysis_table.add_column("Value", style="green")
-
-        analysis_table.add_row("Cumulative Returns", f"{cumulative_returns[-1]:.2%}")
-        analysis_table.add_row("Sharpe Ratio", f"{sharpe:.2f}")
-        analysis_table.add_row("Max Drawdown", f"{max_dd:.2%}")
-        analysis_table.add_row("Annual Volatility", f"{annual_vol:.2%}")
-
-        console.print(analysis_table)
-
-    except Exception as e:
-        console.print(f"[bold red]Error in analyzing portfolio: {e}[/bold red]")
-
-
-def view_all_portfolios():
-    """Display a list of all existing portfolios."""
-    if not portfolios:
-        console.print("[bold red]No portfolios available. Create a portfolio first.[/bold red]")
-        return
-    
-    table = Table(title="All Portfolios", header_style="bold", show_lines=True)
-    table.add_column("Portfolio Name", style="cyan", width=30)
-    table.add_column("Number of Stocks", style="green", width=20)
-    
-    for portfolio_name, stocks in portfolios.items():
-        table.add_row(portfolio_name, str(len(stocks)))
-
-    console.print(table)
-
-# Equities submenu
-def show_equities_menu():
-    """Equities submenu that allows selection of stocks based on continent and country."""
-    continents = ["Asia", "Europe", "Africa", "North America", "South America", "Oceania", "Middle East", "Main Menu"]
-
-    while True:
-        console.print("[bold cyan]EQUITIES MENU[/bold cyan]\n", style="info")
+        continents = ["Asia", "Europe", "Africa", "North America", "South America", "Oceania", "Middle East", "Main Menu"]
         display_in_columns("Select a Continent", continents)
-        
         console.print("\n")
-        choice = Prompt.ask("Enter your choice")
-        console.print("\n")
-        
-        if choice == "8":
-            show_main_menu()
-            return  # Exit equities menu and return to main menu
+        continent_choice = Prompt.ask("Enter your continent choice (Press enter to default to WORLD)")
 
-        selected_continent = continents[int(choice) - 1]
+        if not continent_choice or continent_choice.lower() == 'main menu':
+            selected_continent = "WORLD"  # Default to global news
+        else:
+            try:
+                selected_continent = continents[int(continent_choice) - 1]
+            except (ValueError, IndexError):
+                selected_continent = "WORLD"  # Default to global news if input is invalid
 
-        # If country/sector fetching fails, return to the continent selection
-        if not show_country_menu(selected_continent):
-            continue  # Loop back to continent selection if no valid data is found
-        
-def genai_query(user_input):
-    """
-    Send the user's query to the GenAI API and return the response.
-    
-    Parameters:
-    user_input (str): The query/question entered by the user.
-    
-    Returns:
-    str: The formatted response from the GenAI API.
-    """
-    api_url = "https://fincept.share.zrok.io/process-gemini/"
-    headers = {
-        "Content-Type": "application/json"
-    }
-    data = {
-        "user_input": user_input
-    }
+        # Step 2: Show available countries for the selected continent
+        if selected_continent == "WORLD":
+            selected_country = "WORLD"
+            set_gnews_country(selected_country)
+            fetch_and_display_global_news()  # Fetch global news directly without category
+        else:
+            countries = get_countries_by_continent(selected_continent)
+            if not countries:
+                console.print(f"[bold red]No countries available in {selected_continent}[/bold red]")
+                continue  # Restart the loop to select a new continent
 
-    try:
-        # Send POST request
-        response = requests.post(api_url, headers=headers, json=data)
-        response.raise_for_status()  # Check for HTTP errors
-        
-        # Parse the JSON response and extract the 'gemini_response'
-        api_response = response.json()
-        raw_text = api_response.get("gemini_response", "No response received from the server.")
-        
-        # Handle any Markdown-like syntax and format the text dynamically
-        formatted_response = format_genai_response(raw_text)
-        return formatted_response
-    
-    except requests.exceptions.RequestException as e:
-        return f"Error processing query: {str(e)}"
-
-
-def format_genai_response(response):
-    """
-    Dynamically format the response text: remove unnecessary symbols, handle Markdown-like syntax, and apply styling.
-    
-    Parameters:
-    response (str): The raw response text from the API.
-    
-    Returns:
-    Text: A Rich Text object with formatted response.
-    """
-    # Remove Markdown-like symbols (e.g., **, ##) and apply rich formatting
-    response = response.replace("**", "").replace("##", "").strip()
-
-    # Create a Rich Text object with cyan color and bold style
-    formatted_text = Text(response, style="bold cyan")
-
-    return formatted_text
-
-
-def show_genai_query():
-    """Prompt the user for a finance-related query and send it to the GenAI API."""
-    console.print("[bold cyan]GENAI QUERY[/bold cyan]\n", style="info")
-
-    while True:
-        query = Prompt.ask("Enter your finance-related query (or type 'back' to return to main menu)")
-
-        if query.lower() == 'back':
-            return  # Exit back to the main menu if user types 'back'
-
-        # Send the query to the GenAI API
-        console.print("\n[bold yellow]Processing your query...[/bold yellow]\n", style="info")
-        response = genai_query(query)
-
-        # Display the formatted response in a panel
-        console.print(Panel(response, title="GenAI Query Response", style="cyan on #282828"))
-
-        # Ask if the user wants to make another query
-        another_query = Prompt.ask("\nWould you like to make another query? (yes/no)")
-
-        if another_query.lower() == 'no':
-            console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]", style="info")
-            show_main_menu()
-            return  # Redirect back to the main menu if user types 'no'
-
-def show_country_menu(continent):
-    """Display available countries for a given continent and allow the user to select one."""
-    countries = get_countries_by_continent(continent)
-
-    if not countries:
-        console.print(f"[bold red]No countries available for {continent}[/bold red]", style="danger")
-        return
-
-    console.print(f"[bold cyan]Countries in {continent}[/bold cyan]\n", style="info")
-    display_in_columns(f"Select a Country in {continent}", countries)
-    
-    console.print("\n")
-    choice = Prompt.ask("Enter your choice")
-    selected_country = countries[int(choice) - 1]
-    console.print("\n")
-    
-    show_sectors_in_country(selected_country)
-    
-def show_country_menu(continent):
-    """Display available countries for a given continent and allow the user to select one."""
-    countries = get_countries_by_continent(continent)
-
-    if not countries:
-        console.print(f"[bold red]No countries available for {continent}[/bold red]", style="danger")
-        return False  # Indicate that there are no countries and return to the main menu
-
-    console.print(f"[bold cyan]Countries in {continent}[/bold cyan]\n", style="info")
-    display_in_columns(f"Select a Country in {continent}", countries)
-    
-    console.print("\n")
-    choice = Prompt.ask("Enter your choice")
-    selected_country = countries[int(choice) - 1]
-    console.print("\n")
-    
-    # Check if sectors are available, otherwise return to country menu
-    return show_sectors_in_country(selected_country)
-
-def fetch_sectors_with_retry(country, max_retries=3, retry_delay=2):
-    """Fetch sectors with retry logic."""
-    sectors_url = f"https://fincept.share.zrok.io/FinanceDB/equities/sectors_and_industries_and_stocks?filter_column=country&filter_value={country}"
-    
-    retries = 0
-    while retries < max_retries:
-        try:
-            # Simulate fetching sectors (replace this with actual request logic)
-            response = requests.get(sectors_url)
-            response.raise_for_status()
-            sectors = response.json().get('sectors', [])
-            return sectors
-        except requests.exceptions.RequestException:
-            retries += 1
-            time.sleep(retry_delay)  # Wait before retrying
-            if retries >= max_retries:
-                return None  # Return None after max retries
-
-
-def show_sectors_in_country(country):
-    """Fetch sectors for the selected country and allow the user to select one."""
-    console.print(f"[bold cyan]Fetching sectors for {country}...[/bold cyan]\n", style="info")
-    
-    # Fetch sectors with retries
-    sectors = fetch_sectors_with_retry(country)
-    
-    if not sectors:
-        # Display user-friendly error after retries
-        console.print(f"[bold red]Data temporarily unavailable for {country}. Redirecting to the main menu...[/bold red]", style="danger")
-        return False  # Indicate failure to fetch sectors, return to main menu
-
-    console.print(f"[bold cyan]Sectors in {country}[/bold cyan]\n", style="info")
-    display_in_columns(f"Select a Sector in {country}", sectors)
-
-    console.print("\n")
-    choice = Prompt.ask("Enter your choice")
-    selected_sector = sectors[int(choice) - 1]
-
-    show_industries_in_sector(country, selected_sector)
-    return True  # Continue normally if sectors were fetched successfully
-
-def show_industries_in_sector(country, sector):
-    """Fetch industries for the selected sector and allow the user to select one."""
-    industries = fetch_industries_by_sector(country, sector)
-
-    if not industries:
-        console.print(f"[bold red]No industries available for {sector} in {country}.[/bold red]", style="danger")
-        return
-
-    console.print(f"[bold cyan]Industries in {sector}, {country}[/bold cyan]\n", style="info")
-    display_in_columns(f"Select an Industry in {sector}", industries)
-    
-    choice = Prompt.ask("Enter your choice")
-    selected_industry = industries[int(choice) - 1]
-
-    show_stocks_in_industry(country, sector, selected_industry)
-    
-# After displaying the stocks, ask the user if they want to search more information
-def show_stocks_in_industry(country, sector, industry):
-    """Display stocks available in the selected industry."""
-    stock_data = fetch_stocks_by_industry(country, sector, industry)
-
-    if stock_data.empty:
-        console.print(f"[bold red]No stocks available for {industry} in {sector}, {country}.[/bold red]", style="danger")
-    else:
-        display_equities(stock_data)
-
-        while True:
-            console.print("\n")
-            choice = Prompt.ask("Would you like to search for more information on a specific stock? (yes/no)")
-            if choice.lower() == 'yes':
-                ticker_name = Prompt.ask("Please enter the stock symbol or company name (partial or full)")
-                closest_ticker = find_closest_ticker(ticker_name, stock_data)
-                if closest_ticker:
-                    display_stock_info(closest_ticker)
-                else:
-                    console.print(f"[bold red]No matching ticker found for '{ticker_name}'.[/bold red]", style="danger")
+            display_in_columns(f"Select a Country in {selected_continent} (or press Enter for WORLD)", countries)
+            country_choice = Prompt.ask("Enter your country choice or press Enter for WORLD")
+            if not country_choice:
+                selected_country = "WORLD"
+                fetch_and_display_global_news()  # Fetch global news directly without category
             else:
-                return  # Return to the previous menu instead of directly to the main menu
+                try:
+                    selected_country = countries[int(country_choice) - 1]
+                    set_gnews_country(selected_country)
+                    # Step 3: Prompt for news category (NATION, BUSINESS, TECHNOLOGY)
+                    topics = ["NATION", "BUSINESS", "TECHNOLOGY"]
+                    display_in_columns("Select a Topic", topics)
+                    topic_choice = Prompt.ask("Enter your topic choice")
+                    try:
+                        selected_topic = topics[int(topic_choice) - 1]
+                    except (ValueError, IndexError):
+                        console.print("[bold red]Invalid topic choice. Defaulting to NATION.[/bold red]")
+                        selected_topic = "NATION"  # Default to NATION if the user input is invalid
 
-def find_closest_ticker(user_input, stock_data):
-    """Find the closest matching ticker or company name from the displayed stocks."""
-    stock_symbols = stock_data['symbol'].tolist()
-    stock_names = stock_data['name'].tolist()
+                    # Fetch and display news based on country and topic
+                    fetch_and_display_news(selected_country, selected_topic)
+                except (ValueError, IndexError):
+                    selected_country = "WORLD"
+                    fetch_and_display_global_news()  # Fetch global news directly without category
 
-    # Combine symbols and names into a list for fuzzy matching
-    stock_list = stock_symbols + stock_names
-
-    # Use fuzzy matching to find the closest match
-    closest_match, score = process.extractOne(user_input, stock_list)
-    
-    if score > 70:
-        if closest_match in stock_names:
-            return stock_data.loc[stock_data['name'] == closest_match, 'symbol'].values[0]
-        return closest_match
-    return None
+        # Ask user if they want to fetch more news
+        another_news = Prompt.ask("\nWould you like to fetch more news? (yes/no)").lower()
+        if another_news == "no":
+            break
 
 
-def display_stock_info(ticker):
-    """Fetch and display detailed stock information using yfinance."""
-    stock = yf.Ticker(ticker)
-    stock_info = stock.info
+def fetch_and_display_global_news():
+    """Fetch and display global news directly without category."""
+    from fincept_terminal.themes import console
 
-    if not stock_info:
-        console.print(f"[bold red]No information found for {ticker}.[/bold red]", style="danger")
+    # Fetch global news
+    console.print(f"[bold cyan]Fetching Global News...[/bold cyan]")
+    articles = google_news.get_top_news()
+
+    if not articles:
+        console.print(f"[bold red]No global news found.[/bold red]")
         return
 
-    # Filter out null values and unwanted keys
-    filtered_info = {k: v for k, v in stock_info.items() if v is not None and k not in [
-        'uuid', 'gmtOffSetMilliseconds', 'messageBoardId', 'compensationAsOfEpochDate', 'maxAge'
-    ]}
+    # Display articles and perform sentiment analysis
+    from rich.table import Table
+    table = Table(title="Global News", title_justify="center", header_style="bold green on #282828")
+    table.add_column("Headline", style="cyan", justify="left", no_wrap=True)
+    table.add_column("Sentiment", style="magenta", justify="left")
 
-    # Display `longBusinessSummary` in one row (full width)
-    console.print(f"\n[highlight]Business Summary[/highlight]: {filtered_info.get('longBusinessSummary', 'N/A')}", style="info")
+    positive_count = 0
+    neutral_count = 0
+    negative_count = 0
 
-    # Display `companyOfficers` in a structured way
-    if 'companyOfficers' in filtered_info:
-        console.print("\n[highlight]Company Officers:[/highlight]", style="highlight")
-        officers_table = Table(show_lines=True, style="info", header_style="bold white on #282828")
+    # Loop over the articles, perform sentiment analysis, and display the news
+    for article in articles:
+        headline = article['title']
 
-        officers_table.add_column("Name", style="cyan on #282828")
-        officers_table.add_column("Title", style="green on #282828")
-        officers_table.add_column("Total Pay", style="magenta on #282828")
-        officers_table.add_column("Age", style="yellow on #282828")
-        
-        for officer in filtered_info['companyOfficers']:
-            name = officer.get('name', 'N/A')
-            title = officer.get('title', 'N/A')
-            total_pay = officer.get('totalPay', 'N/A')
-            age = officer.get('age', 'N/A')
-            officers_table.add_row(name, title, str(total_pay), str(age))
-        console.print(officers_table)
-        console.print("\n")
+        # Perform sentiment analysis on the headline
+        from textblob import TextBlob
+        sentiment_score = TextBlob(headline).sentiment.polarity
+        if sentiment_score > 0:
+            sentiment = "Positive"
+            positive_count += 1
+        elif sentiment_score < 0:
+            sentiment = "Negative"
+            negative_count += 1
+        else:
+            sentiment = "Neutral"
+            neutral_count += 1
 
-    # Remove `longBusinessSummary` and `companyOfficers` from the filtered info as we already displayed them
-    filtered_info.pop('longBusinessSummary', None)
-    filtered_info.pop('companyOfficers', None)
+        table.add_row(headline, sentiment)
 
-    # Display the remaining data in three columns
-    display_info_in_three_columns(filtered_info)
+    console.print(table)
 
-    # Ask if the user wants to export the data
-    choice = Prompt.ask("\nWould you like to export the data to CSV or Excel? (yes/no)", default="no")
-    
-    if choice.lower() == "yes":
-        export_choice = Prompt.ask("Choose export format: CSV or Excel?", choices=["csv", "excel"], default="csv")
-        export_stock_info(filtered_info, ticker, export_choice)
+    # Step 4: Display sentiment analysis as ASCII bars in one line
+    display_sentiment_bar(positive_count, neutral_count, negative_count)
 
+
+def fetch_and_display_news(country, topic):
+    from fincept_terminal.themes import console
+    """Fetch and display news articles along with sentiment analysis for a selected country and topic."""
+
+    # Fetch news articles based on the topic
+    console.print(f"[bold cyan]Fetching {topic} news for {country}...[/bold cyan]")
+    articles = google_news.get_news_by_topic(topic.lower())
+
+    if not articles:
+        console.print(f"[bold red]No news articles found for {topic} in {country}[/bold red]")
+        return
+
+    # Display articles and perform sentiment analysis
+    from rich.table import Table
+    table = Table(title=f"{topic} News for {country}", title_justify="center", header_style="bold green on #282828")
+    table.add_column("Headline", style="cyan", justify="left", no_wrap=True)
+    table.add_column("Sentiment", style="magenta", justify="left")
+
+    positive_count = 0
+    neutral_count = 0
+    negative_count = 0
+
+    # Loop over the articles, perform sentiment analysis, and display the news
+    for article in articles:
+        headline = article['title']
+
+        # Perform sentiment analysis on the headline
+        from textblob import TextBlob
+        sentiment_score = TextBlob(headline).sentiment.polarity
+        if sentiment_score > 0:
+            sentiment = "Positive"
+            positive_count += 1
+        elif sentiment_score < 0:
+            sentiment = "Negative"
+            negative_count += 1
+        else:
+            sentiment = "Neutral"
+            neutral_count += 1
+
+        table.add_row(headline, sentiment)
+
+    console.print(table)
+
+    # Step 4: Display sentiment analysis as ASCII bars in one line
+    display_sentiment_bar(positive_count, neutral_count, negative_count)
+
+
+def display_sentiment_bar(positive, neutral, negative):
+    """Display sentiment analysis as ASCII bar chart in one line."""
+    from fincept_terminal.themes import console
+
+    # Calculate the total number of articles
+    total = positive + neutral + negative
+    if total == 0:
+        console.print("[bold red]No sentiment data available.[/bold red]")
+        return
+
+    # Calculate the percentage for each sentiment
+    positive_percent = (positive / total) * 100
+    neutral_percent = (neutral / total) * 100
+    negative_percent = (negative / total) * 100
+
+    # Display sentiment as ASCII bar
+    bar_length = 40  # Length of the bar
+    positive_bar = '█' * int((positive_percent / 100) * bar_length)
+    neutral_bar = '█' * int((neutral_percent / 100) * bar_length)
+    negative_bar = '█' * int((negative_percent / 100) * bar_length)
+
+    # Create labels for each sentiment category
+    positive_label = f"Positive: {positive} ({positive_percent:.2f}%)"
+    neutral_label = f"Neutral: {neutral} ({neutral_percent:.2f}%)"
+    negative_label = f"Negative: {negative} ({negative_percent:.2f}%)"
+
+    # Display the bars in a single line
+    console.print(f"\n[bold green]{positive_label}[/bold green] {positive_bar}  [bold yellow]{neutral_label}[/bold yellow] {neutral_bar}  [bold red]{negative_label}[/bold red] {negative_bar}")
+
+import requests
+from rich.prompt import Prompt
+from rich.progress import Progress
+import yfinance as yf
+from fincept_terminal.themes import console  # Using existing console
+
+# API Endpoints
+CURRENCY_API = "https://fincept.share.zrok.io/FinanceDB/cryptos/currency/data?unique=true"
+CRYPTO_BY_CURRENCY_API = "https://fincept.share.zrok.io/FinanceDB/cryptos/currency/filter?value={}"
+
+# Constants
+ROWS_PER_COLUMN = 7
+COLUMNS_PER_PAGE = 9
+ITEMS_PER_PAGE = ROWS_PER_COLUMN * COLUMNS_PER_PAGE  # 7 rows per column * 9 columns per page = 63 items per page
+
+# Fetch available currencies from the API
+def fetch_available_currencies():
+    with Progress() as progress:
+        task = progress.add_task("[cyan]Fetching currencies...", total=100)
+        response = requests.get(CURRENCY_API)
+        data = response.json()
+        progress.update(task, advance=100)
+        return data['currency']
+
+# Fetch all cryptocurrencies by currency
+def fetch_cryptos_by_currency(currency):
+    url = CRYPTO_BY_CURRENCY_API.format(currency)
+    with Progress() as progress:
+        task = progress.add_task(f"[cyan]Fetching cryptocurrencies for {currency}...", total=100)
+        response = requests.get(url)
+        progress.update(task, advance=100)
+    return response.json()
+
+# Display information in three columns, skipping long values
 def display_info_in_three_columns(info):
     """Display key-value pairs in three columns, skipping long values."""
+    from rich.table import Table
     table = Table(show_lines=True, style="info", header_style="bold white on #282828")
 
     # Add columns for three attributes and values
@@ -608,88 +379,146 @@ def display_info_in_three_columns(info):
 
     console.print(table)
 
-def export_stock_info(info, ticker, export_format):
-    """Export stock information to CSV or Excel."""
-    # Convert the info dictionary to a pandas DataFrame
-    df = pd.DataFrame(list(info.items()), columns=["Attribute", "Value"])
+# Display the items in a paginated table with 7 rows and up to 9 columns per page, allowing index selection
+def display_paginated_columns(title, items, current_page=1, allow_selection=False):
+    """Display items in paginated table format (7 rows per column, up to 9 columns per page), with optional index selection."""
+    from rich.table import Table
 
-    # Define the file name
-    file_name = f"{ticker}_stock_info.{export_format}"
+    start_index = (current_page - 1) * ITEMS_PER_PAGE
+    end_index = start_index + ITEMS_PER_PAGE
 
-    try:
-        if export_format == "csv":
-            df.to_csv(file_name, index=False)
-        elif export_format == "excel":
-            df.to_excel(file_name, index=False)
-        console.print(f"[bold green]Stock information successfully exported to {file_name}![/bold green]", style="success")
-    except Exception as e:
-        console.print(f"[bold red]Failed to export data: {e}[/bold red]", style="danger")
+    # Get the items for the current page
+    page_items = items[start_index:end_index]
+    total_pages = (len(items) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE
 
-def display_equities(stock_data):
-    """Display stock data in a tabular format."""
-    table = Table(title="Available Stocks", title_justify="left", header_style="bold", show_lines=True)
-    table.add_column("Symbol", style="cyan", justify="left", width=15)
-    table.add_column("Name", style="green", justify="left", width=50)
-    table.add_column("Market Cap", style="yellow", justify="left", width=20)
+    # Calculate the number of columns to display dynamically
+    num_columns = (len(page_items) + ROWS_PER_COLUMN - 1) // ROWS_PER_COLUMN
 
-    for _, row in stock_data.iterrows():
-        table.add_row(str(row['symbol']), str(row['name']), str(row['market_cap']))
+    table = Table(title=f"{title} (Page {current_page}/{total_pages})", header_style="bold green on #282828", show_lines=True)
 
-    console.print("\n")
-    console.print(table)
-
-# Function to display lists in columns with max 7 rows per column (no "Column 1" heading)
-def display_in_columns(title, items):
-    """Display the items in a table with multiple columns if they exceed 7 rows."""
-    table = Table(title=title, header_style="bold green on #282828", show_lines=True)  # show_lines=True adds spacing between rows
-    max_rows = 7  # Maximum number of rows per column
-    num_columns = (len(items) + max_rows - 1) // max_rows  # Calculate the required number of columns
-
-    # Add the columns (empty headers to remove column titles)
-    for _ in range(num_columns):
+    # Add only the necessary columns based on data length
+    for _ in range(min(num_columns, COLUMNS_PER_PAGE)):
         table.add_column("", style="highlight", justify="left")
 
-    # Add rows in columns
-    rows = [[] for _ in range(max_rows)]  # Empty rows to hold the items
-    for index, item in enumerate(items):
-        row_index = index % max_rows
-        rows[row_index].append(f"{index+1}. {item}")
+    # Add rows in columns (7 rows per column)
+    rows = [[] for _ in range(ROWS_PER_COLUMN)]
+    for index, item in enumerate(page_items):
+        row_index = index % ROWS_PER_COLUMN
+        rows[row_index].append(f"{start_index + index + 1}. {item}")
 
     # Fill the table
     for row in rows:
-        # If the row has fewer elements than the number of columns, fill the rest with empty strings
-        row += [""] * (num_columns - len(row))
+        row += [""] * (num_columns - len(row))  # Only add empty strings for missing columns
         table.add_row(*row)
 
     console.print(table)
 
+    # Check if more pages are available
+    if allow_selection:
+        return Prompt.ask("\nSelect an index to view details, or 'n' for next page, 'p' for previous, or 'q' to quit")
 
-# Submenu handling for Market Tracker in `market.py`
-def show_market_tracker_menu():
-    """Market Tracker submenu."""
+    if current_page < total_pages:
+        next_page = Prompt.ask(f"Page {current_page} of {total_pages}. Enter 'n' for next page, 'p' for previous, or 'q' to quit", default="n")
+        if next_page == "n":
+            display_paginated_columns(title, items, current_page + 1)
+        elif next_page == "p" and current_page > 1:
+            display_paginated_columns(title, items, current_page - 1)
+        elif next_page != "q":
+            console.print("[bold red]Invalid input. Returning to the main menu.[/bold red]")
+
+# Main menu for Crypto operations
+def crypto_main_menu():
     while True:
-        console.print("[highlight]MARKET TRACKER[/highlight]\n", style="info")
+        console.print("\n[bold cyan]CRYPTO MENU[/bold cyan]\n")
+        menu_items = ["1. Search Cryptocurrency by Symbol (Using yfinance)",
+                      "2. View All Cryptocurrencies (Select Currency First)",
+                      "3. Exit"]
+        display_paginated_columns("CRYPTO MENU", menu_items)
 
-        tracker_text = """
-1. FII/DII DATA INDIA
-2. NIFTY 50 LIST
-3. SEARCH ASSETS
-4. BACK TO MAIN MENU
-        """
-
-        tracker_panel = Panel(tracker_text, title="MARKET TRACKER MENU", title_align="center", style="bold green on #282828", padding=(1, 2))
-        console.print(tracker_panel)
-
-        choice = Prompt.ask("Enter your choice")
+        choice = Prompt.ask("\nEnter your choice")
 
         if choice == "1":
-            display_fii_dii_data()  
+            symbol = Prompt.ask("Enter cryptocurrency symbol (e.g., BTC, ETH)").upper()
+            fetch_and_display_yfinance_data(symbol)  # Fetch and display yfinance data
         elif choice == "2":
-            console.print("[bold yellow]Nifty 50 list under development[/bold yellow]", style="warning")
+            view_all_cryptocurrencies()  # View all cryptocurrencies
         elif choice == "3":
-            search_assets() 
-        elif choice == "4":
+            console.print("[bold green]Exiting Crypto Menu...[/bold green]")
             break
+        else:
+            console.print("[bold red]Invalid choice. Please try again.[/bold red]")
+
+# Crypto Menu - Option 2: View All Cryptocurrencies
+def view_all_cryptocurrencies():
+    # Fetch and display available currencies
+    currencies = fetch_available_currencies()
+    console.print(f"\n[bold cyan]Total Currencies Available: {len(currencies)}[/bold cyan]")
+    display_paginated_columns("Available Currencies", currencies)
+
+    # Ask the user to select a currency
+    selected_currency_index = Prompt.ask("Select a currency by entering the index")
+    try:
+        selected_currency = currencies[int(selected_currency_index) - 1]
+    except (ValueError, IndexError):
+        console.print("[bold red]Invalid currency selection! Returning to main menu.[/bold red]")
+        return
+
+    console.print(f"\n[bold green]Fetching cryptocurrencies for {selected_currency}...[/bold green]")
+
+    # Fetch and display cryptocurrencies for the selected currency
+    cryptos = fetch_cryptos_by_currency(selected_currency)
+    if not cryptos:
+        console.print(f"[bold red]No cryptocurrencies found for {selected_currency}.[/bold red]")
+        return
+
+    # Display the available cryptocurrencies with pagination and allow index selection
+    selected_crypto_index = display_paginated_columns(f"Cryptocurrencies for {selected_currency}", [crypto['symbol'] for crypto in cryptos], allow_selection=True)
+
+    if selected_crypto_index.isdigit():
+        try:
+            selected_crypto = cryptos[int(selected_crypto_index) - 1]
+        except (ValueError, IndexError):
+            console.print("[bold red]Invalid cryptocurrency selection! Returning to main menu.[/bold red]")
+            return
+
+        # Display the selected cryptocurrency details
+        fetch_and_display_yfinance_data(selected_crypto['symbol'])
+        prompt_for_another_query()
+    elif selected_crypto_index.lower() not in ['n', 'p', 'q']:
+        console.print("[bold red]Invalid input. Returning to the main menu.[/bold red]")
+
+# Prompt the user if they want to query another cryptocurrency
+def prompt_for_another_query():
+    choice = Prompt.ask("\nWould you like to query another cryptocurrency? (yes/no)", default="no").lower()
+    if choice == "yes":
+        show_main_menu()
+    else:
+        console.print("[bold green]Returning to main menu...[/bold green]")
+
+# Fetch and display yfinance data for the given symbol
+def fetch_and_display_yfinance_data(symbol):
+    ticker = yf.Ticker(symbol)
+    data = ticker.info  # Get the JSON data
+
+    # Define the keys to exclude
+    excluded_keys = {'uuid', 'messageBoardId', 'maxAge'}
+
+    # Check if description or summary exists and remove it from the table
+    description = data.pop('description', None)
+    summary = data.pop('summary', None)
+
+    # Filter the data
+    filtered_data = {k: v for k, v in data.items() if k not in excluded_keys}
+
+    # Display the data in three columns
+    display_info_in_three_columns(filtered_data)
+
+    # Display the summary/description separately
+    if description:
+        console.print(f"\n[bold cyan]Description[/bold cyan]: {description}")
+    if summary:
+        console.print(f"\n[bold cyan]Summary[/bold cyan]: {summary}")
+
 
 if __name__ == '__main__':
     cli()

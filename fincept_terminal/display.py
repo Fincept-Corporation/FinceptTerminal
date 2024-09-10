@@ -1,26 +1,21 @@
-from rich.console import Console
-from rich.panel import Panel
-from rich.markdown import Markdown
-from rich.layout import Layout
-from rich.align import Align
-from rich.text import Text
-
-# Using the existing dark-themed console
-from .themes import console  
-
 def display_art():
     art = r"""
-$$$$$$$$\ $$\                                          $$\           $$$$$$\                                           $$\                                        $$\               
-$$  _____|\__|                                         $$ |          \_$$  _|                                          $$ |                                       $$ |              
-$$ |      $$\ $$$$$$$\   $$$$$$$\  $$$$$$\   $$$$$$\ $$$$$$\           $$ |  $$$$$$$\ $$\    $$\  $$$$$$\   $$$$$$$\ $$$$$$\   $$$$$$\$$$$\   $$$$$$\  $$$$$$$\ $$$$$$\    $$$$$$$\ 
-$$$$$\    $$ |$$  __$$\ $$  _____|$$  __$$\ $$  __$$\\_$$  _|          $$ |  $$  __$$\\$$\  $$  |$$  __$$\ $$  _____|\_$$  _|  $$  _$$  _$$\ $$  __$$\ $$  __$$\\_$$  _|  $$  _____|
-$$  __|   $$ |$$ |  $$ |$$ /      $$$$$$$$ |$$ /  $$ | $$ |            $$ |  $$ |  $$ |\$$\$$  / $$$$$$$$ |\$$$$$$\    $$ |    $$ / $$ / $$ |$$$$$$$$ |$$ |  $$ | $$ |    \$$$$$$\  
-$$ |      $$ |$$ |  $$ |$$ |      $$   ____|$$ |  $$ | $$ |$$\         $$ |  $$ |  $$ | \$$$  /  $$   ____| \____$$\   $$ |$$\ $$ | $$ | $$ |$$   ____|$$ |  $$ | $$ |$$\  \____$$\ 
-$$ |      $$ |$$ |  $$ |\$$$$$$$\ \$$$$$$$\ $$$$$$$  | \$$$$  |      $$$$$$\ $$ |  $$ |  \$  /   \$$$$$$$\ $$$$$$$  |  \$$$$  |$$ | $$ | $$ |\$$$$$$$\ $$ |  $$ | \$$$$  |$$$$$$$  |
-\__|      \__|\__|  \__| \_______| \_______|$$  ____/   \____/       \______|\__|  \__|   \_/     \_______|\_______/    \____/ \__| \__| \__| \_______|\__|  \__|  \____/ \_______/ 
-                                            $$ |                                                                                                                                    
-                                            $$ |                                                                                                                                    
-                                            \__|                                                                                                                                    
+ _____                                                                                                                                              _____ 
+( ___ )--------------------------------------------------------------------------------------------------------------------------------------------( ___ )
+ |   |                                                                                                                                              |   | 
+ |   |  $$$$$$$$\ $$\                                          $$\           $$$$$$$$\                                $$\                     $$\   |   | 
+ |   |  $$  _____|\__|                                         $$ |          \__$$  __|                               \__|                    $$ |  |   | 
+ |   |  $$ |      $$\ $$$$$$$\   $$$$$$$\  $$$$$$\   $$$$$$\ $$$$$$\            $$ | $$$$$$\   $$$$$$\  $$$$$$\$$$$\  $$\ $$$$$$$\   $$$$$$\  $$ |  |   | 
+ |   |  $$$$$\    $$ |$$  __$$\ $$  _____|$$  __$$\ $$  __$$\\_$$  _|           $$ |$$  __$$\ $$  __$$\ $$  _$$  _$$\ $$ |$$  __$$\  \____$$\ $$ |  |   | 
+ |   |  $$  __|   $$ |$$ |  $$ |$$ /      $$$$$$$$ |$$ /  $$ | $$ |             $$ |$$$$$$$$ |$$ |  \__|$$ / $$ / $$ |$$ |$$ |  $$ | $$$$$$$ |$$ |  |   | 
+ |   |  $$ |      $$ |$$ |  $$ |$$ |      $$   ____|$$ |  $$ | $$ |$$\          $$ |$$   ____|$$ |      $$ | $$ | $$ |$$ |$$ |  $$ |$$  __$$ |$$ |  |   | 
+ |   |  $$ |      $$ |$$ |  $$ |\$$$$$$$\ \$$$$$$$\ $$$$$$$  | \$$$$  |         $$ |\$$$$$$$\ $$ |      $$ | $$ | $$ |$$ |$$ |  $$ |\$$$$$$$ |$$ |  |   | 
+ |   |  \__|      \__|\__|  \__| \_______| \_______|$$  ____/   \____/          \__| \_______|\__|      \__| \__| \__|\__|\__|  \__| \_______|\__|  |   | 
+ |   |                                              $$ |                                                                                            |   | 
+ |   |                                              $$ |                                                                                            |   | 
+ |   |                                              \__|                                                                                            |   | 
+ |___|                                                                                                                                              |___| 
+(_____)--------------------------------------------------------------------------------------------------------------------------------------------(_____)                         
     """
 
     description = """
@@ -42,18 +37,23 @@ Instagram: https://instagram.com/finceptcorp
     """
 
     # Create a layout that adjusts based on terminal size
+    from rich.layout import Layout
     layout = Layout()
 
     # Split the layout into two areas, with art taking up 60% of the space and description 40%
     layout.split(
-        Layout(name="art", ratio=3),
+        Layout(name="art", ratio=2),
         Layout(name="description", ratio=2)
     )
 
     # Dynamically align and style the content
+    from rich.panel import Panel
+    from rich.align import Align
+    from rich.markdown import Markdown
     layout["art"].update(Panel(Align.center(art, vertical="middle"), style="bold red on #282828"))
     layout["description"].update(Panel(Align.center(Markdown(description), vertical="middle"), style="bold white on #282828"))
 
     # Print the dynamic layout, which will adjust based on terminal size
+    from .themes import console
     console.print(layout)
 

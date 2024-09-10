@@ -6,7 +6,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='fincept-investments',
-    version='0.1.1',
+    version='0.1.2',
     author='Fincept Corporation',
     author_email='dev@fincept.in',
     description='A Terminal for Financial Market Analysis and Fetching all kinds of Data.',

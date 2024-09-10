@@ -1,18 +1,21 @@
-import click
-from difflib import get_close_matches
-from .data import fetch_equities_data  # Import from the new data.py module
-from .themes import console
-from .utilities import display_options_in_columns, select_option_from_list, display_search_results, fetch_detailed_data
-
-equities_df = fetch_equities_data()
+# import click
+# from difflib import get_close_matches
+# from .data import fetch_equities_data  # Import from the new data.py module
+# from .themes import console
+# from .utilities import display_options_in_columns, select_option_from_list, display_search_results, fetch_detailed_data
 
 def search_assets():
+    from fincept_terminal.themes import console
     console.print("[highlight]SEARCH ASSETS[/highlight]\n")
 
+    from fincept_terminal.data import fetch_equities_data
+    equities_df = fetch_equities_data()
     countries = sorted(equities_df['country'].dropna().unique())
     
     console.print(f"Total number of countries available: {len(countries)}", style="info")
-    
+
+    from .utilities import display_options_in_columns, select_option_from_list, display_search_results, \
+        fetch_detailed_data
     display_options_in_columns(countries, "Available Countries")
 
     country_choice = select_option_from_list(countries, "country")
@@ -41,6 +44,7 @@ def search_assets():
 
     display_search_results(search_results)
 
+    import click
     fetch_data = click.prompt("Would you like to fetch detailed data for any symbol using yfinance? (y/n)", type=str)
     if fetch_data.lower() == 'y':
         input_name = click.prompt("Enter the symbol or name to fetch data for", type=str)
@@ -53,7 +57,8 @@ def search_assets():
 def match_symbol(input_name, df):
     symbols = df['symbol'].tolist()
     names = df['name'].tolist()
-    
+
+    from difflib import get_close_matches
     closest_symbol = get_close_matches(input_name.upper(), symbols, n=1)
     if closest_symbol:
         return closest_symbol[0]
