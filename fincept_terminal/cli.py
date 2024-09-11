@@ -10,12 +10,14 @@ warnings.filterwarnings("ignore")
 def cli(ctx):
     """Fincept Investments CLI - Your professional financial terminal."""
     if ctx.invoked_subcommand is None:
-        click.echo(ctx.get_help())  # Display help if no command is given
+        start()
 
 # Start Command
 @cli.command()
 def start():
     """Start the Fincept Investments terminal"""
+    from fincept_terminal import update_checker
+    update_checker.check_for_update()
     from fincept_terminal.display import display_art
     display_art()
     show_main_menu()
@@ -32,19 +34,21 @@ def show_main_menu():
         "ECONOMICS & MACRO TRENDS", #2
         "Global News & Sentiment", #3
         "STOCKS (Equities)", #4
-        "FUNDS & ETFs", #5
-        "BONDS & FIXED INCOME", #6
-        "OPTIONS & DERIVATIVES", #7
-        "CryptoCurrency", #8
-        "PORTFOLIO & INVESTMENT TOOLS", #9
-        "CURRENCY MARKETS (Forex)", #10
-        "COMMODITIES", #11
-        "BACKTESTING STOCKS", #12
-        "GenAI Query", #13
-        "EDUCATION & RESOURCES", #14
-        "SETTINGS & CUSTOMIZATION", #15
-        "Terminal Documentation", #16
-        "EXIT", #17
+        "Global Funds", #5
+        "Exchange Traded Funds", #6
+        "BONDS & FIXED INCOME", #7
+        "OPTIONS & DERIVATIVES", #8
+        "CryptoCurrency", #9
+        "PORTFOLIO & INVESTMENT TOOLS", #10
+        "Scanner & Advance Technicals", #11
+        "CURRENCY MARKETS (Forex)", #12
+        "COMMODITIES", #13
+        "BACKTESTING STOCKS", #14
+        "GenAI Query", #15
+        "EDUCATION & RESOURCES", #16
+        "SETTINGS & CUSTOMIZATION", #17
+        "Terminal Documentation", #18
+        "EXIT", #19
     ]
 
     # Display main menu in columns
@@ -67,22 +71,186 @@ def show_main_menu():
         from fincept_terminal.menuList import show_equities_menu
         show_equities_menu()  # Equities submenu for continent and country selection
     elif choice == "5":
-        console.print("[bold yellow]Funds section under development[/bold yellow]", style="warning")
+        funds_selection_menu()
     elif choice == "6":
         console.print("[bold yellow]Bonds section under development[/bold yellow]", style="warning")
     elif choice == "7":
         console.print("[bold red]Exiting the Fincept terminal...[/bold red]", style="danger")
-    elif choice == "8":
-        crypto_main_menu()
     elif choice == "9":
+        crypto_main_menu()
+    elif choice == "10":
         from fincept_terminal.portfolio import show_portfolio_menu
         show_portfolio_menu()
-    elif choice == "12":
+    elif choice == "14":
         from fincept_terminal.portfolio import show_backtesting_menu
         show_backtesting_menu()
-    elif choice == "13":  # GenAI Query option
+    elif choice == "15":  # GenAI Query option
         from fincept_terminal.GenAI import show_genai_query
         show_genai_query()
+    elif choice == "17":  # Redirect to Documentation
+    import webbrowser
+    webbrowser.open("https://docs.fincept.in")
+    console.print("[bold green]Redirecting to Fincept Documentation...[/bold green]")
+
+
+import requests
+from rich.prompt import Prompt
+from rich.progress import Progress
+from fincept_terminal.themes import console  # Using existing console
+
+# API Endpoints
+EXCHANGE_API = "https://fincept.share.zrok.io/FinanceDB/funds/exchange/data?unique=true"
+FUNDS_BY_EXCHANGE_API = "https://fincept.share.zrok.io/FinanceDB/funds/exchange/filter?value={}"
+FUNDS_DATA_API = "https://fincept.share.zrok.io/FinanceDB/funds/data"
+
+# Valid exchanges: List of patterns to exclude
+INVALID_EXCHANGE_PATTERNS = [
+    "s\u001a¢¬Ä¬ôil est plus \u001aÉ¬©lev\u001aÉ¬©",
+    "de 10 % de la volatilit\u001aÉ¬© de l\u001a¢¬Ä¬ôindice"
+]
+
+# Fetch available exchanges from the API
+def fetch_available_exchanges():
+    with Progress() as progress:
+        task = progress.add_task("[cyan]Fetching exchanges...", total=100)
+        response = requests.get(EXCHANGE_API)
+        data = response.json()
+        progress.update(task, advance=100)
+
+        # Remove invalid exchanges based on specific patterns
+        valid_exchanges = [exchange for exchange in data['exchange']
+                           if exchange and "s\u001a¢" not in exchange and "de 10 %" not in exchange]
+
+        return valid_exchanges
+
+def fetch_funds_by_exchange(exchange):
+    url = FUNDS_BY_EXCHANGE_API.format(exchange)
+    with Progress() as progress:
+        task = progress.add_task(f"[cyan]Fetching funds for {exchange}...", total=100)
+        response = requests.get(url)
+        progress.update(task, advance=100)
+    return response.json()
+
+
+# Display fund details in a table
+def display_fund_details(fund):
+    from rich.table import Table
+    table = Table(title=f"Fund Details for {fund['name']}", header_style="bold green on #282828", show_lines=True)
+
+    # Add columns for attributes and values
+    table.add_column("Field", style="cyan", justify="left")
+    table.add_column("Value", style="magenta", justify="left")
+
+    # Fill the table with fund details, replacing None with 'Unknown'
+    for key, value in fund.items():
+        if value is None:
+            value = "Unknown"
+        table.add_row(key, str(value))
+
+    # Display the table
+    console.print(table)
+
+
+# Funds Menu: Step 1 - Select an Exchange, Step 2 - Select a Fund, Step 3 - Show Details
+def funds_menu():
+    # Step 1: Fetch and display exchanges
+    exchanges = fetch_available_exchanges()
+    console.print(f"\n[bold cyan]Total Exchanges Available: {len(exchanges)}[/bold cyan]")
+
+    # Use the display_in_columns function to show the exchanges
+    display_in_columns("Available Exchanges", exchanges)
+
+    # Ask the user to select an exchange
+    selected_exchange_index = Prompt.ask("Select an exchange by entering the index")
+    try:
+        selected_exchange = exchanges[int(selected_exchange_index) - 1]
+    except (ValueError, IndexError):
+        console.print("[bold red]Invalid exchange selection! Returning to main menu.[/bold red]")
+        return
+
+    # Step 2: Fetch and display funds for the selected exchange
+    console.print(f"\n[bold green]Fetching funds for {selected_exchange}...[/bold green]")
+    funds = fetch_funds_by_exchange(selected_exchange)
+
+    if not funds:
+        console.print(f"[bold red]No funds found for {selected_exchange}.[/bold red]")
+        return
+
+    # Step 3: Paginated display of funds list
+    selected_fund_index = display_funds_list(funds)
+
+    if selected_fund_index is not None and selected_fund_index <= len(funds):
+        selected_fund = funds[selected_fund_index - 1]
+        display_fund_details(selected_fund)
+
+# Universal display function for tables
+def display_in_columns(title, items, max_rows=7):
+    """Display items in a table format with multiple columns."""
+    from rich.table import Table
+    table = Table(title=title, header_style="bold green on #282828", show_lines=True)
+
+    # Calculate number of columns
+    num_columns = (len(items) + max_rows - 1) // max_rows  # Total number of columns
+
+    # Add columns (empty headers)
+    for _ in range(min(num_columns, 7)):  # Maximum number of columns is 7
+        table.add_column("", style="highlight", justify="left")
+
+    # Fill rows with items
+    rows = [[] for _ in range(max_rows)]
+    for index, item in enumerate(items):
+        row_index = index % max_rows
+        rows[row_index].append(f"{index + 1}. {item}")
+
+    # Ensure rows have empty spaces if columns are fewer
+    for row in rows:
+        row += [""] * (num_columns - len(row))
+        table.add_row(*row)
+
+    console.print(table)
+
+
+# Updated display_funds_list to use display_in_columns
+def display_funds_list(funds, current_page=1, items_per_page=14):  # Change items_per_page to 14
+    """Display funds list with pagination and allow selection."""
+    start_index = (current_page - 1) * items_per_page
+    end_index = start_index + items_per_page
+
+    # Get the items for the current page
+    page_items = [fund['name'] for fund in funds[start_index:end_index]]
+    total_pages = (len(funds) + items_per_page - 1) // items_per_page
+
+    # Use display_in_columns to show the funds in a table
+    display_in_columns(f"Funds List (Page {current_page}/{total_pages})", page_items)
+
+    # Pagination options
+    if current_page < total_pages:
+        next_page = Prompt.ask(
+            f"Page {current_page} of {total_pages}. Enter 'n' for next page, 'p' for previous, or enter the index to select")
+        if next_page == "n":
+            return display_funds_list(funds, current_page + 1, items_per_page)
+        elif next_page == "p" and current_page > 1:
+            return display_funds_list(funds, current_page - 1, items_per_page)
+        elif next_page.isdigit():
+            return int(next_page)
+    return None
+
+
+
+# Run the funds menu directly (without crypto menu integration)
+def funds_selection_menu():
+    console.print("\n[bold cyan]FUNDS MENU[/bold cyan]\n")
+    console.print("1. View Funds (Select Exchange and Fund)")
+    console.print("2. Exit")
+
+    choice = Prompt.ask("\nEnter your choice")
+
+    if choice == "1":
+        funds_menu()  # View Funds option
+    elif choice == "2":
+        console.print("[bold green]Exiting Funds Menu...[/bold green]")
+    else:
+        console.print("[bold red]Invalid choice. Please try again.[/bold red]")
 
 
 import warnings

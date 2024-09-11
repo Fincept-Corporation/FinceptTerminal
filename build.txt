@@ -1,0 +1,35 @@
+pyinstaller --onefile --clean --noconfirm --upx-dir upx --strip fincept_terminal/cli.py
+
+finceptvenv\Scripts\activate
+
+[Setup]
+AppName=Fincept Terminal
+AppVersion=0.1.2
+AppPublisher=Fincept
+DefaultDirName={pf}\FinceptInvestments
+DefaultGroupName=Fincept Investments
+OutputBaseFilename=FinceptInvestmentsInstaller
+Compression=lzma
+SolidCompression=yes
+SetupIconFile="C:\Projects\fincept\fincept_icon.ico"
+
+[Files]
+; Include Cmder folder and its content
+Source: "C:\Projects\fincept\cmder\*"; DestDir: "{app}\Cmder"; Flags: ignoreversion recursesubdirs
+
+; Include the compiled Python project (cli.exe)
+Source: "C:\Projects\fincept\dist\cli.exe"; DestDir: "{app}\dist"; Flags: ignoreversion
+
+; Include the icon file
+Source: "C:\Projects\fincept\fincept_icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+
+[Icons]
+; Desktop shortcut to Cmder with a custom icon
+Name: "{commondesktop}\Fincept Investments"; Filename: "{app}\Cmder\Cmder.exe"; Parameters: "/TASK ""Fincept Terminal"""; WorkingDir: "{app}"; IconFilename: "{app}\fincept_icon.ico"; IconIndex: 0; Flags: createonlyiffileexists
+
+; Start Menu shortcut to Cmder with a custom icon
+Name: "{group}\Fincept Investments"; Filename: "{app}\Cmder\Cmder.exe"; Parameters: "/TASK ""Fincept Terminal"""; WorkingDir: "{app}"; IconFilename: "{app}\fincept_icon.ico"; IconIndex: 0; Flags: createonlyiffileexists
+
+[Run]
+; Run Cmder to start the Fincept Terminal task with a custom description
+Filename: "{app}\Cmder\Cmder.exe"; Parameters: "/TASK ""Fincept Terminal"""; WorkingDir: "{app}"; Description: "Run Fincept Terminal"; Flags: nowait postinstall
