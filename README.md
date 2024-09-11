@@ -24,15 +24,43 @@
 
 Install the latest version of Fincept Investments from PyPI: pip install fincept-investments 
 
+Get the Windows Installation on this - https://product.fincept.in/FinceptInvestmentsInstaller.exe
+
 ## USAGE
 
-1 -> Stock Tracker -> fiidii Data , stock query
-2 -> Economics (InDevelopment)
-3 -> News -> 10 Country News Available
+List through list of Menu 
+
+Market Tracker
+Economics & Macro Trends
+Global News & Sentiment
+Stocks (Equities)
+Global Funds
+Exchange Traded Funds
+Bonds & Fixed Income
+Options & Derivatives
+CryptoCurrency
+Portfolio & Investment Tools
+Scanner & Advanced Technicals
+Currency Markets (Forex)
+Commodities
+Backtesting Stocks
+GenAI Query
+Education & Resources
+Settings & Customization
+Terminal Documentation
 
 ```toml
 fincept start
 ```
+
+```toml
+fincept --help
+```
+
+```toml
+fincept --version
+```
+
 
 ## UPCOMING FEATURS
 

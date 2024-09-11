@@ -8,6 +8,7 @@ cmder
 finceptvenv
 Output
 cli.spec
+build.txt
 fincept_icon.ico
 setup.iss
 upx.exe
