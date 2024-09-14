@@ -1,0 +1,15 @@
+# .gitignore
+*.egg-info/
+.idea/
+__pycache__/
+dist
+build/cli/cli.pkg
+build
+build.txt
+cmder
+finceptvenv
+Output
+cli.spec
+fincept_icon.ico
+setup.iss
+upx.exe"build/" 
