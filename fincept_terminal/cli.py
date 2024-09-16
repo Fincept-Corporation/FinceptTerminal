@@ -45,12 +45,13 @@ def show_main_menu():
         "COMMODITIES", #13
         "Money Market", #14
         "BACKTESTING STOCKS", #15
-        "Advance Technicals",  # 16
-        "GenAI Query", #17
-        "Education & Resources", #18
-        "SETTINGS & CUSTOMIZATION", #19
-        "Terminal Documentation", #20
-        "EXIT", #21
+        "Robo Advisor", #16
+        "Advance Technicals",  # 17
+        "GenAI Query", #18
+        "Education & Resources", #19
+        "SETTINGS & CUSTOMIZATION", #20
+        "Terminal Documentation", #21
+        "EXIT", #22
     ]
 
     # Display main menu in columns
@@ -72,7 +73,7 @@ def show_main_menu():
         show_news_and_sentiment_menu()
     elif choice == "4":
         from fincept_terminal.menuList import show_equities_menu
-        show_equities_menu() 
+        show_equities_menu()
     elif choice == "5":
         from fincept_terminal.funds import show_global_funds_menu
         show_global_funds_menu()
@@ -103,21 +104,25 @@ def show_main_menu():
         from fincept_terminal.portfolio import show_backtesting_menu
         show_backtesting_menu()
     elif choice == "16":
+        from fincept_terminal.roboadvisor import show_robo_advisor_menu
+        show_robo_advisor_menu()
+    elif choice == "17":
         from fincept_terminal.advancetechnicals import show_technical_main_menu
         show_technical_main_menu()
-    elif choice == "17":
+    elif choice == "18":
         from fincept_terminal.GenAI import show_genai_query
         show_genai_query()
-    elif choice == "18":
-        console.print("[bold red] Feature still in development [/bold red]", style="danger")
     elif choice == "19":
-        console.print("[bold red]Feature still in development [/bold red]", style="danger")
+        console.print("[bold red] Feature still in development [/bold red]", style="danger")
     elif choice == "20":
+        from fincept_terminal.roboadvisor import show_robo_advisor_menu
+        show_robo_advisor_menu()
+    elif choice == "21":
         import webbrowser
         webbrowser.open("https://docs.fincept.in")
         console.print("[bold green]Redirecting to Fincept Documentation...[/bold green]")
         show_main_menu()
-    elif choice == "21":
+    elif choice == "22":
         print("[bold green]Exiting Fincept Terminal...[/bold green]")
         import sys
         sys.exit(0)
