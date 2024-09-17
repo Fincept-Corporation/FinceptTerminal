@@ -9,7 +9,7 @@
 
 (We are extending our data feeds everyday so check for new data on every alternate day and you can open an feature request on github if you want to add any custom data feed. If you are from another country and can help me with the data source of your country, please reach out to me.)
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/7vf4ZOfDUTs?si=K3GCVqg-MaIdgx-m" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+[Watch the video on YouTube](https://www.youtube.com/watch?v=7vf4ZOfDUTs)
 
 ## Features 🧐
 
