@@ -1,6 +1,0 @@
-id,realtime_start,realtime_end,title,observation_start,observation_end,frequency,frequency_short,units,units_short,seasonal_adjustment,seasonal_adjustment_short,last_updated,popularity,notes
-PCU611420611420,2024-09-18,2024-09-18,Producer Price Index by Industry: Computer Training,2006-06-01,2017-08-01,Monthly,M,Index Jun 2006=100,Index Jun 2006=100,Not Seasonally Adjusted,NSA,2018-01-11 09:05:54-06:00,1,
-PCU6114206114201,2024-09-18,2024-09-18,Producer Price Index by Industry: Computer Training: Computer Training Services,2006-06-01,2017-08-01,Monthly,M,Index Jun 2006=100,Index Jun 2006=100,Not Seasonally Adjusted,NSA,2018-01-11 09:05:54-06:00,1,
-PCU611420611420P,2024-09-18,2024-09-18,Producer Price Index by Industry: Computer Training: Primary Services,2006-06-01,2017-08-01,Monthly,M,Index Jun 2006=100,Index Jun 2006=100,Not Seasonally Adjusted,NSA,2018-01-11 09:05:54-06:00,0,
-PCU611420611420SM,2024-09-18,2024-09-18,Producer Price Index by Industry: Computer Training: Other Receipts,2006-06-01,2014-08-01,Monthly,M,Index Jun 2006=100,Index Jun 2006=100,Not Seasonally Adjusted,NSA,2015-05-15 08:00:24-05:00,1,
-PCU6114261142,2024-09-18,2024-09-18,Producer Price Index by Industry: Computer Training,2006-06-01,2017-08-01,Monthly,M,Index Jun 2006=100,Index Jun 2006=100,Not Seasonally Adjusted,NSA,2018-01-11 09:05:54-06:00,1,

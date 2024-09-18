@@ -1,2 +1,0 @@
-id,realtime_start,realtime_end,title,observation_start,observation_end,frequency,frequency_short,units,units_short,seasonal_adjustment,seasonal_adjustment_short,last_updated,popularity,notes
-TERMCBPER24NS,2024-09-18,2024-09-18,"Finance Rate on Personal Loans at Commercial Banks, 24 Month Loan",1972-02-01,2024-05-01,Monthly,M,Percent,%,Not Seasonally Adjusted,NSA,2024-07-08 14:03:50-05:00,52,"For further information, please refer to the Board of Governors of the Federal Reserve System's G.19 release, online at http://www.federalreserve.gov/releases/g19/."
