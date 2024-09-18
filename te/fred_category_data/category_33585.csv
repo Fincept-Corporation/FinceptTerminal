@@ -1,0 +1,7 @@
+id,realtime_start,realtime_end,title,observation_start,observation_end,frequency,frequency_short,units,units_short,seasonal_adjustment,seasonal_adjustment_short,last_updated,popularity,notes
+PCU113310113310,2024-09-18,2024-09-18,Producer Price Index by Industry: Logging,1981-12-01,2024-08-01,Monthly,M,Index Dec 1981=100,Index Dec 1981=100,Not Seasonally Adjusted,NSA,2024-09-12 07:59:51-05:00,1,
+PCU113310113310M,2024-09-18,2024-09-18,Producer Price Index by Industry: Logging: Miscellaneous Receipts,1986-06-01,2022-07-01,Monthly,M,Index Jun 1986=100,Index Jun 1986=100,Not Seasonally Adjusted,NSA,2022-12-09 08:00:44-06:00,1,
+PCU113310113310MM,2024-09-18,2024-09-18,Producer Price Index by Industry: Logging: Miscellaneous Receipts,1986-06-01,1998-08-01,Monthly,M,Index Jun 1986=100,Index Jun 1986=100,Not Seasonally Adjusted,NSA,2015-05-15 08:52:31-05:00,1,
+PCU113310113310P,2024-09-18,2024-09-18,Producer Price Index by Industry: Logging: Primary Products,1981-12-01,2024-08-01,Monthly,M,Index Dec 1981=100,Index Dec 1981=100,Not Seasonally Adjusted,NSA,2024-09-12 07:56:31-05:00,2,
+PCU1133111331,2024-09-18,2024-09-18,Producer Price Index by Industry: Logging,1981-12-01,2024-08-01,Monthly,M,Index Dec 1981=100,Index Dec 1981=100,Not Seasonally Adjusted,NSA,2024-09-12 07:59:51-05:00,1,
+PCU11331133,2024-09-18,2024-09-18,Producer Price Index by Industry: Logging,1981-12-01,2024-08-01,Monthly,M,Index Dec 1981=100,Index Dec 1981=100,Not Seasonally Adjusted,NSA,2024-09-12 07:56:07-05:00,9,
