@@ -1,0 +1,70 @@
+{
+    "index_name": "07b59cc2-3489-4146-9700-c3acc817cf54",
+    "title": "Wholesale Price Index (Base Year 2011-12) till last financial year",
+    "desc": "Wholesale Price Index (Base Year 2011-12) till last financial year",
+    "created": 1666952178,
+    "updated": 1689767705,
+    "created_date": "2022-10-28T15:52:18Z",
+    "updated_date": "2023-07-19T17:25:05Z",
+    "active": "1",
+    "visualizable": "1",
+    "catalog_uuid": "25ef5e14-fdb0-48e0-9d34-5fcf71f0622e",
+    "source": "data.gov.in",
+    "org_type": "Central",
+    "org": [
+        "Ministry of Commerce and Industry"
+    ],
+    "sector": [
+        "Economy"
+    ],
+    "field": [
+        {
+            "name": "COMM_NAME",
+            "id": "COMM_NAME",
+            "type": "keyword"
+        }
+    ],
+    "target_bucket": {
+        "index": "dipp_wpi",
+        "type": "25ef5e14-fdb0-48e0-9d34-5fcf71f0622e",
+        "field": "07b59cc2-3489-4146-9700-c3acc817cf54"
+    },
+    "message": "Resource lists",
+    "version": "2.2.0",
+    "status": "ok",
+    "total": 869,
+    "count": 868,
+    "limit": "1000",
+    "offset": "1",
+    "records": [
+        {
+            "COMM_NAME": "a1. CEREALS",
+            "COMM_CODE": "1101010100",
+            "COMM_WT": 2.82378,
+            "INDEX2011": "NA",
+            "INDEX20112012": "NA",
+            "INDEX2012": "NA",
+            "INDEX20122013": "114.1",
+            "INDEX2013": "124.3",
+            "INDEX20132014": "126.6",
+            "INDEX2014": "130.0",
+            "INDEX20142015": "129.9",
+            "INDEX2015": "129.9",
+            "INDEX20152016": "131.3",
+            "INDEX2016": "139.9",
+            "INDEX20162017": "142.7",
+            "INDEX2017": "143.6",
+            "INDEX20172018": "143.1",
+            "INDEX2018": "147.8",
+            "INDEX20182019": "151.0",
+            "INDEX2019": "160.3",
+            "INDEX20192020": "162.3",
+            "INDEX2020": "160.6",
+            "INDEX20202021": "158.1",
+            "INDEX2021": "158.2",
+            "INDEX20212022": "160.7",
+            "INDEX2022": "173.6",
+            "INDEX20222023": "178.9"
+        }
+    ]
+}
