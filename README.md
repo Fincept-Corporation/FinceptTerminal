@@ -9,6 +9,8 @@
 
 (We are extending our data feeds everyday so check for new data on every alternate day and you can open an feature request on github if you want to add any custom data feed. If you are from another country and can help me with the data source of your country, please reach out to me.)
 
+[![Watch the video](https://img.youtube.com/vi/7vf4ZOfDUTs/0.jpg)](https://www.youtube.com/watch?v=7vf4ZOfDUTs)
+
 ## Features 🧐
 
 - **Dynamic Asset Searching**: we have an comprehensive list of assets from around the world
