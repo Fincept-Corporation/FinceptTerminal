@@ -38,12 +38,12 @@ def show_main_menu():
 
     main_menu_options = [
         "Global Indices",  # 1
-        "World Economic Trends",  # 2
+        "World Economy Tracker",  # 2
         "Global News & Sentiment",  # 3
         "Global Stocks (Equities)",  # 4
         "Global Funds",  # 5
         "Exchange Traded Funds",  # 6
-        "BONDS & FIXED INCOME",  # 7
+        "Global Bond Market",  # 7 fixed income to add
         "Options & Derivatives",  # 8
         "CryptoCurrency",  # 9
         "PORTFOLIO & INVESTMENT TOOLS",  # 10
@@ -82,7 +82,8 @@ def show_main_menu():
         from fincept_terminal.indices import show_global_indices_menu
         show_global_indices_menu()
     elif choice == 2:
-        console.print("[bold yellow] Feature still in development [/bold yellow]", style="warning")
+        from fincept_terminal.economytracker import show_world_economy_tracker_menu
+        show_world_economy_tracker_menu()
     elif choice == 3:
         from fincept_terminal.newsfetch import show_news_and_sentiment_menu
         show_news_and_sentiment_menu()
@@ -96,7 +97,8 @@ def show_main_menu():
         from fincept_terminal.etfdata import show_etf_market_menu
         show_etf_market_menu()
     elif choice == 7:
-        console.print("[bold red] Feature still in development [/bold red]", style="danger")
+        from fincept_terminal.bonds import show_bond_market_menu
+        show_bond_market_menu()
     elif choice == 8:
         console.print("[bold red] Feature still in development [/bold red]", style="danger")
     elif choice == 9:
