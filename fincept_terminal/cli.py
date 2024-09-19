@@ -13,7 +13,7 @@ logging.getLogger('numexpr').setLevel(logging.ERROR)
 warnings.filterwarnings("ignore")
 
 @click.group(invoke_without_command=True)
-@click.version_option(version="0.1.2", prog_name="Fincept Investments")
+@click.version_option(version="0.1.3", prog_name="Fincept Investments")
 @click.pass_context
 def cli(ctx):
     """Fincept Investments CLI - Your professional financial terminal."""
@@ -55,10 +55,11 @@ def show_main_menu():
         "Robo Advisor",  # 16
         "Advance Technicals",  # 17
         "GenAI Query",  # 18
-        "Education & Resources",  # 19
-        "SETTINGS & CUSTOMIZATION",  # 20
-        "Terminal Documentation",  # 21
-        "EXIT",  # 22
+        "FinScript", #19
+        "Education & Resources",  # 20
+        "SETTINGS & CUSTOMIZATION",  # 21
+        "Terminal Documentation",  # 22
+        "EXIT",  # 23
     ]
 
     # Display main menu in columns
@@ -127,15 +128,18 @@ def show_main_menu():
         from fincept_terminal.GenAI import show_genai_query
         show_genai_query()
     elif choice == 19:
-        console.print("[bold red] Feature still in development [/bold red]", style="danger")
+        from fincept_terminal.finscript import show_finscript_menu
+        show_finscript_menu()
     elif choice == 20:
         # Call the settings menu
-        show_settings_menu()  # Call this function instead of calling a Click command
+        console.print("[bold green]Under Construction...[/bold green]")
     elif choice == 21:
+        show_settings_menu()  # Call this function instead of calling a Click command
+    elif choice == 22:
         webbrowser.open("https://docs.fincept.in")
         console.print("[bold green]Redirecting to Fincept Documentation...[/bold green]")
         show_main_menu()
-    elif choice == 22:
+    elif choice == 23:
         console.print("[bold green]Exiting Fincept Terminal...[/bold green]")
         sys.exit(0)
     else:
