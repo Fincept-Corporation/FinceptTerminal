@@ -37,7 +37,8 @@ def show_finscript_menu():
         elif choice == "5":
             show_finscript_help()
         elif choice == "6":
-            break
+            from fincept_terminal.cli import show_main_menu
+            show_main_menu()
         else:
             console.print("\n[danger]INVALID OPTION. PLEASE TRY AGAIN.[/danger]")
 
