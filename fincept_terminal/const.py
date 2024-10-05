@@ -66,24 +66,36 @@ def display_info_in_three_columns(info):
     console.print(table)
 
 
-def find_closest_ticker(user_input, stock_data):
+from fuzzywuzzy import process
+
+def find_closest_ticker(user_input, stock_data, threshold=70):
     """Find the closest matching ticker or company name from the displayed stocks."""
     stock_symbols = stock_data['symbol'].tolist()
     stock_names = stock_data['name'].tolist()
 
-    # Combine symbols and names into a list for fuzzy matching
-    stock_list = stock_symbols + stock_names
+    # Combine symbols and names into a dictionary for easy reference
+    stock_dict = {symbol: name for symbol, name in zip(stock_symbols, stock_names)}
 
-    # Use fuzzy matching to find the closest match
+    # Use fuzzy matching to find the closest matches in both symbols and names
+    matches = process.extract(user_input, stock_symbols + stock_names, limit=5)
 
-    from fuzzywuzzy import process
-    closest_match, score = process.extractOne(user_input, stock_list)
+    # Filter matches by threshold
+    valid_matches = [match for match, score in matches if score >= threshold]
 
-    if score > 70:
-        if closest_match in stock_names:
-            return stock_data.loc[stock_data['name'] == closest_match, 'symbol'].values[0]
-        return closest_match
+    if valid_matches:
+        # Create a list of dictionaries to store matches and their details
+        match_list = []
+        for match in valid_matches:
+            if match in stock_symbols:
+                match_list.append({'symbol': match, 'name': stock_dict[match]})
+            else:
+                # If the match is a company name, find the corresponding symbol
+                symbol = next(symbol for symbol, name in stock_dict.items() if name == match)
+                match_list.append({'symbol': symbol, 'name': match})
+        return match_list
+
     return None
+
 
 
 

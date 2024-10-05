@@ -438,43 +438,67 @@ def export_backtest_results(pf, portfolio_name):
 
 
 def backtest_portfolio(portfolio_name):
+    from fincept_terminal.themes import console
+    import pandas as pd
     """Perform a backtest on the entire portfolio by combining all stock prices."""
     portfolio = portfolios.get(portfolio_name, [])
-    from fincept_terminal.themes import console
 
     if not portfolio:
         console.print(f"[bold red]Portfolio '{portfolio_name}' is empty.[/bold red]")
         return
 
-    import pandas as pd
     portfolio_returns = pd.DataFrame()
 
     # Collect historical data for each stock and combine returns into a single DataFrame
     for stock in portfolio:
         ticker = stock.info['symbol']
-        stock_history = stock.history(period="1y")['Close']  # Get stock prices for 1 year
+        stock_history = stock.history(period="1y")['Close']
 
         if stock_history.empty:
             console.print(f"[bold red]No data available for {ticker}.[/bold red]")
             continue
 
-        stock_history = stock_history.asfreq('D').fillna(method='ffill')  # Forward fill missing data
-        portfolio_returns[ticker] = stock_history.pct_change().dropna()  # Calculate daily returns
+        # Resample to daily frequency and fill any missing data
+        stock_history = stock_history.asfreq('D').fillna(method='ffill')
+
+        # Debugging: Output the stock's historical data to check for issues
+        console.print(f"[yellow]Stock History for {ticker}:[/yellow]")
+        console.print(stock_history.head(10))  # Display first 10 rows for inspection
+
+        # Calculate daily returns
+        stock_returns = stock_history.pct_change().dropna()
+
+        # Store the returns in the portfolio dataframe
+        portfolio_returns[ticker] = stock_returns
 
     # Check if there are enough stocks in the portfolio
     if portfolio_returns.empty:
         console.print(f"[bold red]No valid stock data found in the portfolio '{portfolio_name}'[/bold red]")
         return
 
-    # Create a portfolio-wide return series by averaging individual returns (or weighting them if needed)
+    # Handle zero and non-finite values before backtesting
+    import numpy as np
+    portfolio_returns = portfolio_returns.replace([np.inf, -np.inf], np.nan).dropna()
+    portfolio_returns = portfolio_returns[portfolio_returns > 0].dropna()
+
+    # Validate the combined portfolio data
+    if not validate_stock_data(portfolio_returns):
+        console.print(f"[bold red]Invalid data detected in the portfolio '{portfolio_name}'[/bold red]")
+        return
+
+    # Create a portfolio-wide return series by averaging individual returns
     portfolio_returns['Portfolio'] = portfolio_returns.mean(axis=1)
+
+    # Debugging: Output the portfolio returns to check for issues
+    console.print(f"[yellow]Portfolio Returns:[/yellow]")
+    console.print(portfolio_returns.head(10))  # Display first 10 rows for inspection
 
     console.print(f"\nGenerating backtest charts for {portfolio_name} (combined portfolio)...")
 
     try:
         # Use vectorbt to run the backtest on the combined portfolio
         import vectorbt as vbt
-        pf = vbt.Portfolio.from_holding(portfolio_returns['Portfolio'], freq='D')  # Set frequency to daily (D)
+        pf = vbt.Portfolio.from_holding(portfolio_returns['Portfolio'], freq='D')
 
         # Plot the backtest charts for the entire portfolio
         pf.plot().show()
@@ -484,9 +508,30 @@ def backtest_portfolio(portfolio_name):
 
     except Exception as e:
         console.print(f"[bold red]Error in backtesting portfolio: {e}[/bold red]")
+        console.print(f"[bold red]Please ensure all data is correct and finite before backtesting.[/bold red]")
 
 
+def validate_stock_data(portfolio_returns):
+    """Ensure that all data in the portfolio returns DataFrame is valid and finite."""
+    # Check for missing values
+    from fincept_terminal.themes import console
+    if portfolio_returns.isnull().values.any():
+        console.print("[bold red]Error: Portfolio data contains missing (NaN) values.[/bold red]")
+        return False
 
+    # Check for non-finite values
+    import numpy as np
+    from fincept_terminal.themes import console
+    if not np.isfinite(portfolio_returns.values).all():
+        console.print("[bold red]Error: Portfolio data contains non-finite values (e.g., inf, -inf).[/bold red]")
+        return False
+
+    # Check for non-positive values
+    if (portfolio_returns <= 0).any().any():
+        console.print("[bold red]Error: Portfolio data contains non-positive values.[/bold red]")
+        return False
+
+    return True  # Allow only valid, finite, and positive returns
 
 def display_backtest_metrics(pf, portfolio_name):
     """Display backtest performance metrics in a table for the entire portfolio."""
@@ -499,26 +544,33 @@ def display_backtest_metrics(pf, portfolio_name):
     table.add_column("Metric", style="cyan", justify="left")
     table.add_column("Value", style="green", justify="right")
 
-    # Add the metrics to the table, handling both Series and scalar values
     try:
-        import pandas as pd
-        total_return = pf.total_return() if not isinstance(pf.total_return(), pd.Series) else pf.total_return().iloc[-1]
-        annualized_return = pf.annualized_return() if not isinstance(pf.annualized_return(), pd.Series) else pf.annualized_return().iloc[-1]
-        max_drawdown = pf.max_drawdown() if not isinstance(pf.max_drawdown(), pd.Series) else pf.max_drawdown().iloc[-1]
-        sharpe_ratio = pf.sharpe_ratio() if not isinstance(pf.sharpe_ratio(), pd.Series) else pf.sharpe_ratio().iloc[-1]
-        sortino_ratio = pf.sortino_ratio() if not isinstance(pf.sortino_ratio(), pd.Series) else pf.sortino_ratio().iloc[-1]
+        # Calculate metrics
+        total_return = pf.total_return()
+        annualized_return = pf.annualized_return()
+        max_drawdown = pf.max_drawdown()
+        sharpe_ratio = pf.sharpe_ratio()
+        sortino_ratio = pf.sortino_ratio()
+        import numpy as np
+
+        # Safeguard: If the annualized return is unreasonably high, flag it
+        if annualized_return > 1000:  # Example threshold, adjust based on context
+            console.print("[bold red]Warning: Annualized Return seems unreasonably high![/bold red]")
+            annualized_return = np.nan  # Or handle appropriately
 
         # Add the metrics to the table
-        table.add_row("Total Return", f"{total_return:.2%}")
-        table.add_row("Annualized Return", f"{annualized_return:.2%}" if not pd.isna(annualized_return) else "nan")
-        table.add_row("Max Drawdown", f"{max_drawdown:.2%}" if not pd.isna(max_drawdown) else "nan")
-        table.add_row("Sharpe Ratio", f"{sharpe_ratio:.2f}" if not pd.isna(sharpe_ratio) else "nan")
-        table.add_row("Sortino Ratio", f"{sortino_ratio:.2f}" if not pd.isna(sortino_ratio) else "nan")
+        table.add_row("Total Return", f"{total_return:.2%}" if isinstance(total_return, (int, float, np.float64)) else f"{total_return.iloc[-1]:.2%}")
+        table.add_row("Annualized Return", f"{annualized_return:.2%}" if isinstance(annualized_return, (int, float, np.float64)) else f"{annualized_return.iloc[-1]:.2%}")
+        table.add_row("Max Drawdown", f"{max_drawdown:.2%}" if isinstance(max_drawdown, (int, float, np.float64)) else f"{max_drawdown.iloc[-1]:.2%}")
+        table.add_row("Sharpe Ratio", f"{sharpe_ratio:.2f}" if isinstance(sharpe_ratio, (int, float, np.float64)) else f"{sharpe_ratio.iloc[-1]:.2f}")
+        table.add_row("Sortino Ratio", f"{sortino_ratio:.2f}" if isinstance(sortino_ratio, (int, float, np.float64)) else f"{sortino_ratio.iloc[-1]:.2f}")
 
     except Exception as e:
         console.print(f"[bold red]Error in calculating metrics: {e}[/bold red]")
 
     console.print(table)
+
+
 
 def show_backtesting_menu():
     """Backtesting menu where users can run backtests on their portfolios."""

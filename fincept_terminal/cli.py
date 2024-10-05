@@ -13,7 +13,7 @@ logging.getLogger('numexpr').setLevel(logging.ERROR)
 warnings.filterwarnings("ignore")
 
 @click.group(invoke_without_command=True)
-@click.version_option(version="0.1.3", prog_name="Fincept Investments")
+@click.version_option(version="0.1.3", prog_name="Fincept Investments Terminal")
 @click.pass_context
 def cli(ctx):
     """Fincept Investments CLI - Your professional financial terminal."""
@@ -60,6 +60,10 @@ def show_main_menu():
         "SETTINGS & CUSTOMIZATION",  # 21
         "Terminal Documentation",  # 22
         "EXIT",  # 23
+        "Live Price India",
+        "Satellite Imagery Analysis",
+        "Marine Trade Data",
+        "India Macro & Micro Data"
     ]
 
     # Display main menu in columns
@@ -88,7 +92,7 @@ def show_main_menu():
         from fincept_terminal.newsfetch import show_news_and_sentiment_menu
         show_news_and_sentiment_menu()
     elif choice == 4:
-        from fincept_terminal.menuList import show_equities_menu
+        from fincept_terminal.stock import show_equities_menu
         show_equities_menu()
     elif choice == 5:
         from fincept_terminal.funds import show_global_funds_menu
@@ -144,6 +148,18 @@ def show_main_menu():
     elif choice == 23:
         console.print("[bold green]Exiting Fincept Terminal...[/bold green]")
         sys.exit(0)
+    elif choice == 24:
+        from fincept_terminal.liveprice import start_live_price_menu
+        start_live_price_menu()
+    elif choice == 25:
+        from fincept_terminal.SatelliteImagery import show_car_analysis_menu
+        show_car_analysis_menu()
+    elif choice == 26:
+        from fincept_terminal.marine import marine_menu
+        marine_menu()
+    elif choice == 27:
+        from fincept_terminal.indiamacro import show_india_macro_micro_menu
+        show_india_macro_micro_menu()
     else:
         console.print("[bold red]Invalid option. Please select a valid menu option.[/bold red]")
         show_main_menu()  # Show the menu again if an invalid option is chosen
