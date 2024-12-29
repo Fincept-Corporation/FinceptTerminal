@@ -63,7 +63,8 @@ def show_main_menu():
         "Live Price India",
         "Satellite Imagery Analysis",
         "Marine Trade Data",
-        "India Macro & Micro Data"
+        "India Macro & Micro Data",
+        "Consumer Behaviour", # 28
     ]
 
     # Display main menu in columns
@@ -160,6 +161,9 @@ def show_main_menu():
     elif choice == 27:
         from fincept_terminal.indiamacro import show_india_macro_micro_menu
         show_india_macro_micro_menu()
+    elif choice == 28:
+        from fincept_terminal.consumer_behavior import show_consumer_behavior_menu
+        show_consumer_behavior_menu()
     else:
         console.print("[bold red]Invalid option. Please select a valid menu option.[/bold red]")
         show_main_menu()  # Show the menu again if an invalid option is chosen

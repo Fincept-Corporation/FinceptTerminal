@@ -17,7 +17,6 @@ custom_theme = Theme({
 # Create a console with the custom theme
 console = Console(theme=custom_theme)
 
-
 def clean_html(raw_html):
     """Remove HTML tags and return clean text."""
     clean_text = re.sub('<.*?>', '', raw_html)
@@ -114,6 +113,8 @@ def query_table_data(table_name):
         show_india_macro_micro_menu()
     else:
         console.print("[highlight]Returning to the main menu...[/highlight]", style="highlight")
+        from fincept_terminal.cli import show_main_menu
+        show_main_menu()
 
 
 def display_static_table(data):
