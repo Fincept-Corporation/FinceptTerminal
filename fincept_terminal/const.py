@@ -9,7 +9,7 @@ def display_in_columns(title, items):
 
     # Add the columns (empty headers to remove column titles)
     for _ in range(num_columns):
-        table.add_column("", style="highlight", justify="left")
+        table.add_column("", justify="left")
 
     # Add rows in columns
     rows = [[] for _ in range(max_rows)]  # Empty rows to hold the items

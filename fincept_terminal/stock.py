@@ -269,6 +269,7 @@ def display_financial_table(financial_data, title):
     # Print the table
     console.print(table)
 
+
 def display_stock_info(ticker):
     """Fetch and display detailed stock information using yfinance."""
     stock = yf.Ticker(ticker)
@@ -289,36 +290,14 @@ def display_stock_info(ticker):
 
     # Display `companyOfficers` in a separate table if it exists
     if 'companyOfficers' in stock_info:
-        console.print("\n[highlight]Company Officers:[/highlight]", style="highlight")
-        from rich.table import Table
-        officers_table = Table(show_lines=True, style="info", header_style="bold white on #282828")
-
-        officers_table.add_column("Name", style="cyan on #282828")
-        officers_table.add_column("Title", style="green on #282828")
-        officers_table.add_column("Age", style="yellow on #282828")
-        officers_table.add_column("Total Pay", style="magenta on #282828")
-        officers_table.add_column("Exercised Value", style="blue on #282828")
-        officers_table.add_column("Unexercised Value", style="red on #282828")
-
-        for officer in stock_info['companyOfficers']:
-            name = officer.get('name', 'N/A')
-            title = officer.get('title', 'N/A')
-            age = str(officer.get('age', 'N/A'))
-            total_pay = str(officer.get('totalPay', 'N/A'))
-            exercised_value = str(officer.get('exercisedValue', 'N/A'))
-            unexercised_value = str(officer.get('unexercisedValue', 'N/A'))
-
-            officers_table.add_row(name, title, age, total_pay, exercised_value, unexercised_value)
-
-        console.print(officers_table)
-        console.print("\n")
+        display_company_officers(stock_info['companyOfficers'])
 
     # Remove `longBusinessSummary` and `companyOfficers` from the filtered info as we already displayed them
     filtered_info.pop('longBusinessSummary', None)
     filtered_info.pop('companyOfficers', None)
 
-    from fincept_terminal.const import display_info_in_three_columns
     # Display the remaining data in three columns
+    from fincept_terminal.const import display_info_in_three_columns
     display_info_in_three_columns(filtered_info)
 
     # Ask if the user wants to export the data
@@ -334,8 +313,200 @@ def display_stock_info(ticker):
     query_financials = Prompt.ask("\nWould you like to query the financials of this company? (yes/no)", default="no")
     if query_financials.lower() == "yes":
         display_company_financials(ticker)
-    else:
-        console.print("[bold yellow]Returning to the previous menu...[/bold yellow]", style="info")
+
+    # Provide further analysis options: News, Technicals, Fundamentals, Quantitative Methods
+    while True:
+        console.print("\n[bold yellow]Additional Analysis Options[/bold yellow]:\n")
+        analysis_options = [
+            "News",
+            "Technicals",
+            "Fundamentals",
+            "Quantitative Methods",
+            "Return to Main Menu"
+        ]
+
+        from fincept_terminal.const import display_in_columns
+        display_in_columns("Select an Analysis Option", analysis_options)
+
+        from rich.prompt import Prompt
+        choice = Prompt.ask("Enter your choice")
+
+        if choice == "1":
+            display_news_analysis(ticker)
+        elif choice == "2":
+            display_technical_analysis(ticker)
+        elif choice == "3":
+            display_fundamental_analysis(ticker)
+        elif choice == "4":
+            display_quantitative_analysis(ticker)
+        elif choice == "5":
+            console.print("[bold yellow]Returning to the main menu...[/bold yellow]", style="info")
+            from fincept_terminal.cli import show_main_menu
+            show_main_menu()
+            break
+        else:
+            console.print("[bold red]Invalid choice, please select again.[/bold red]", style="danger")
+
+
+def display_company_officers(officers):
+    """Display company officers in a table."""
+    console.print("\n[highlight]Company Officers:[/highlight]", style="highlight")
+    from rich.table import Table
+    officers_table = Table(show_lines=True, style="info", header_style="bold white on #282828")
+
+    officers_table.add_column("Name", style="cyan on #282828")
+    officers_table.add_column("Title", style="green on #282828")
+    officers_table.add_column("Age", style="yellow on #282828")
+    officers_table.add_column("Total Pay", style="magenta on #282828")
+    officers_table.add_column("Exercised Value", style="blue on #282828")
+    officers_table.add_column("Unexercised Value", style="red on #282828")
+
+    for officer in officers:
+        name = officer.get('name', 'N/A')
+        title = officer.get('title', 'N/A')
+        age = str(officer.get('age', 'N/A'))
+        total_pay = str(officer.get('totalPay', 'N/A'))
+        exercised_value = str(officer.get('exercisedValue', 'N/A'))
+        unexercised_value = str(officer.get('unexercisedValue', 'N/A'))
+
+        officers_table.add_row(name, title, age, total_pay, exercised_value, unexercised_value)
+
+    console.print(officers_table)
+    console.print("\n")
+
+
+def display_news_analysis(ticker):
+    """Fetch and display recent news for the given ticker and perform sentiment analysis in a table."""
+    from gnews import GNews
+    news = GNews()
+    news_results = news.get_news(ticker)
+
+    console.print(f"[bold cyan]Recent News for {ticker}:[/bold cyan]", style="info")
+    if not news_results:
+        console.print("[bold red]No news found for this stock.[/bold red]", style="danger")
+        return
+
+    # Create a table for news articles
+    from rich.table import Table
+    news_table = Table(title="Recent News", show_lines=True, header_style="bold cyan")
+    news_table.add_column("Title", style="cyan")
+    news_table.add_column("Published", style="yellow")
+    news_table.add_column("Description", style="green")
+    news_table.add_column("URL", style="blue")
+
+    for article in news_results[:5]:  # Display the top 5 news articles
+        title = article.get('title', 'No Title')
+        description = article.get('description', 'No Description')
+        url = article.get('url', 'No URL')
+        published = article.get('published', 'No Publication Date')
+
+        news_table.add_row(title, published, description, url)
+
+    console.print(news_table)
+
+    # Display sentiment analysis in a table
+    positive_news = sum(1 for article in news_results if
+                        "good" in article.get('title', '').lower() or "positive" in article.get('description',
+                                                                                                '').lower())
+    negative_news = sum(1 for article in news_results if
+                        "bad" in article.get('title', '').lower() or "negative" in article.get('description',
+                                                                                               '').lower())
+    sentiment_table = Table(title="Sentiment Analysis", show_lines=True, header_style="bold yellow")
+    sentiment_table.add_column("Sentiment Type")
+    sentiment_table.add_column("Count")
+
+    sentiment_table.add_row("Positive News Articles", str(positive_news))
+    sentiment_table.add_row("Negative News Articles", str(negative_news))
+    sentiment_table.add_row("Neutral/Other Articles", str(len(news_results) - (positive_news + negative_news)))
+    console.print(sentiment_table)
+
+
+def display_technical_analysis(ticker):
+    """Perform and display technical analysis using yfinance in a table."""
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period="1y")
+
+    # Calculate technical indicators
+    hist['50_MA'] = hist['Close'].rolling(window=50, min_periods=1).mean()
+    hist['200_MA'] = hist['Close'].rolling(window=200, min_periods=1).mean()
+    hist['RSI'] = 100 - (100 / (
+                1 + hist['Close'].pct_change().rolling(window=14).mean() / hist['Close'].pct_change().rolling(
+            window=14).std()))
+    hist['MACD'] = hist['Close'].ewm(span=12, adjust=False).mean() - hist['Close'].ewm(span=26, adjust=False).mean()
+    hist['Signal'] = hist['MACD'].ewm(span=9, adjust=False).mean()
+
+    # Create a table for technical analysis
+    from rich.table import Table
+    tech_table = Table(title="Technical Analysis", show_lines=True, header_style="bold cyan")
+    tech_table.add_column("Indicator")
+    tech_table.add_column("Value")
+
+    tech_table.add_row("50-Day Moving Average", f"{hist['50_MA'].iloc[-1]:.2f}")
+    tech_table.add_row("200-Day Moving Average", f"{hist['200_MA'].iloc[-1]:.2f}")
+    tech_table.add_row("Latest RSI (14-day)", f"{hist['RSI'].iloc[-1]:.2f}")
+    tech_table.add_row("MACD", f"{hist['MACD'].iloc[-1]:.2f}")
+    tech_table.add_row("Signal Line", f"{hist['Signal'].iloc[-1]:.2f}")
+
+    console.print(tech_table)
+
+
+def display_fundamental_analysis(ticker):
+    """Display key fundamental analysis metrics in a table."""
+    stock = yf.Ticker(ticker)
+    stock_info = stock.info
+
+    console.print(f"\n[bold cyan]Fundamental Analysis for {ticker}:[/bold cyan]", style="info")
+    metrics = {
+        "P/E Ratio": stock_info.get('trailingPE', 'N/A'),
+        "Forward P/E": stock_info.get('forwardPE', 'N/A'),
+        "Price/Book Ratio": stock_info.get('priceToBook', 'N/A'),
+        "Earnings Per Share (EPS)": stock_info.get('trailingEps', 'N/A'),
+        "Return on Equity (ROE)": stock_info.get('returnOnEquity', 'N/A'),
+        "Debt/Equity Ratio": stock_info.get('debtToEquity', 'N/A'),
+        "Gross Margin": stock_info.get('grossMargins', 'N/A'),
+        "Dividend Yield": stock_info.get('dividendYield', 'N/A'),
+        "Market Cap": stock_info.get('marketCap', 'N/A')
+    }
+
+    # Display fundamental metrics in a table
+    from rich.table import Table
+    fundamentals_table = Table(title="Fundamental Analysis", show_lines=True, header_style="bold cyan")
+    fundamentals_table.add_column("Metric")
+    fundamentals_table.add_column("Value")
+
+    for metric, value in metrics.items():
+        fundamentals_table.add_row(metric, str(value))
+
+    console.print(fundamentals_table)
+
+
+def display_quantitative_analysis(ticker):
+    """Perform and display quantitative methods such as Sharpe Ratio or volatility analysis in a table."""
+    stock = yf.Ticker(ticker)
+    hist = stock.history(period="1y")
+
+    # Calculate daily returns
+    hist['Daily Return'] = hist['Close'].pct_change()
+
+    # Calculate Sharpe Ratio
+    avg_daily_return = hist['Daily Return'].mean()
+    std_daily_return = hist['Daily Return'].std()
+    sharpe_ratio = (avg_daily_return / std_daily_return) * (252 ** 0.5)  # Annualized Sharpe Ratio
+
+    # Calculate rolling volatility
+    hist['Volatility'] = hist['Daily Return'].rolling(window=21).std() * (252 ** 0.5)  # 21 trading days in a month
+
+    # Create a table for quantitative analysis
+    from rich.table import Table
+    quant_table = Table(title="Quantitative Analysis", show_lines=True, header_style="bold cyan")
+    quant_table.add_column("Metric")
+    quant_table.add_column("Value")
+
+    quant_table.add_row("Annualized Sharpe Ratio", f"{sharpe_ratio:.2f}")
+    quant_table.add_row("Volatility (Annualized)", f"{std_daily_return * (252 ** 0.5):.2%}")
+    quant_table.add_row("Rolling 21-Day Volatility", f"{hist['Volatility'].iloc[-1]:.2%}")
+
+    console.print(quant_table)
 
 
 def export_stock_info(info, ticker, export_format):
