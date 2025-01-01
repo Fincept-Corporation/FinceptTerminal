@@ -90,7 +90,42 @@ def display_indices_paginated(indices, start_index=0, page_size=21):
 
 
 # Step 5: Fetch index data by symbol using yfinance and historical data
+
 def fetch_index_data_by_symbol_with_history(symbol):
+    """
+    Fetch general information and historical data for a given symbol.
+    Returns:
+        - filtered_info: Dictionary of filtered general information
+        - history_table: DataFrame of historical data
+    """
+    try:
+        ticker = yf.Ticker(symbol)
+
+        # Fetch general info
+        info = ticker.info
+
+        # Filter out unnecessary fields
+        filtered_info = {k: v for k, v in info.items() if
+                         k not in ['maxAge', 'uuid', 'messageBoardId', 'gmtOffSetMilliseconds']}
+
+        # Fetch last 7 days of historical data
+        history_data = ticker.history(period='7d')
+
+        # Validate if historical data is available
+        if history_data.empty:
+            raise ValueError(f"No historical data found for the symbol '{symbol}'. Please enter a valid symbol.")
+
+        # Extract important columns from historical data
+        history_table = history_data[['Open', 'High', 'Low', 'Close', 'Volume']].tail(7)
+
+        return filtered_info, history_table
+
+    except ValueError as ve:
+        return str(ve), None
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}", None
+
+def fetch_index_data_by_symbol_with_history_1(symbol):
     ticker = yf.Ticker(symbol)
 
     # Fetch general info
@@ -107,7 +142,6 @@ def fetch_index_data_by_symbol_with_history(symbol):
 
     return filtered_info, history_table
 
-
 # Step 8: Display details in three columns and price history
 def display_info_with_history(info, history_table):
     """Display key-value pairs in three columns, and display the last 7 days of price data."""
@@ -121,6 +155,11 @@ def display_info_with_history(info, history_table):
     table.add_column("Value 2", style="green on #282828", width=35)
     table.add_column("Attribute 3", style="cyan on #282828", width=25)
     table.add_column("Value 3", style="green on #282828", width=35)
+
+    # Check if `info` is a dictionary
+    if not isinstance(info, dict):
+        console.print(f"[bold red]Error: {info}[/bold red]")
+        return
 
     max_value_length = 40  # Set a maximum length for displayed values
     keys = list(info.keys())
@@ -169,34 +208,61 @@ def show_global_indices_menu():
     from rich.prompt import Prompt
 
     # Display two options: Global Indices or Search by Symbol
-    options = ["Global Indices", "Search Indices Symbol"]
+    options = ["GLOBAL INDICES", "SEARCH INDICES SYMBOL", "BACK TO MAIN MENU"]
     display_in_columns("Select an Option", options)
 
     choice = Prompt.ask("Enter the number corresponding to your choice")
 
     if choice == "1":  # Global Indices
         exchanges = fetch_indices_exchanges()
+        exchanges.append("BACK TO MAIN MENU")
+
         if not exchanges:
             return
-        selected_exchange = display_indices_exchanges_full(exchanges)  # This will display the full list of exchanges
+
+        # Display the full list of exchanges and let the user select one
+        selected_exchange = display_indices_exchanges_full(exchanges)
+
+        if selected_exchange == "BACK TO MAIN MENU":
+            from fincept_terminal.cli import show_main_menu
+            show_main_menu()
+            return
+
         if selected_exchange:
             indices = fetch_indices_by_exchange(selected_exchange)
             if not indices:
                 return
 
-            # Display the indices and let user select one
+            # Display the indices and let the user select one
             selected_index = display_indices_paginated(indices)
 
             # Fetch and display the selected index details and the last 7 days of price history
             if selected_index:
                 display_index_info(selected_index)
-                index_data, history_table = fetch_index_data_by_symbol_with_history(selected_index['symbol'])
-                display_info_with_history(index_data, history_table)  # Correctly passing index data and history table
+                index_data, history_table = fetch_index_data_by_symbol_with_history_1(selected_index['symbol'])
+
+                # Handle cases where data is unavailable
+                if isinstance(index_data, dict) and "error" in index_data:
+                    console.print(f"[bold red]{index_data['error']}[/bold red]")
+                else:
+                    display_info_with_history(index_data, history_table)
 
     elif choice == "2":  # Search Indices Symbol
         symbol = Prompt.ask("Enter the index symbol")
         index_data, history_table = fetch_index_data_by_symbol_with_history(symbol)
-        display_info_with_history(index_data, history_table)
+
+        if history_table is not None:
+            display_info_with_history(index_data, history_table)
+        else:
+            console.print(f"[bold red]{index_data}[/bold red]")
+
+    elif choice == "3": #Back to Main Menu
+        console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]", style="info")
+        from fincept_terminal.cli import show_main_menu
+        show_main_menu()
+    else:
+        console.print("\n[danger]INVALID OPTION. PLEASE TRY AGAIN.[/danger]")
+
 
     # Ask if the user wants to query another index or exit to the main menu
     continue_query = Prompt.ask("Do you want to query another index? (yes/no)")
