@@ -37,34 +37,34 @@ def show_main_menu():
     console.print("[bold cyan]MAIN MENU[/bold cyan]\n", style="info")
 
     main_menu_options = [
-        "Global Indices",  # 1
-        "World Economy Tracker",  # 2
-        "Global News & Sentiment",  # 3
-        "Global Stocks (Equities)",  # 4
-        "Global Funds",  # 5
-        "Exchange Traded Funds",  # 6
-        "Global Bond Market",  # 7 fixed income to add
-        "Options & Derivatives",  # 8
-        "CryptoCurrency",  # 9
+        "GLOBAL INDICES",  # 1
+        "WORLD ECONOMY TRACKER",  # 2
+        "GLOBAL NEWS & SENTIMENT",  # 3
+        "GLOBAL STOCKS (EQUITIES)",  # 4
+        "GLOBAL FUNDS",  # 5
+        "EXCHANGE TRADED FUNDS",  # 6
+        "GLOBAL BOND MARKET",  # 7 fixed income to add
+        "OPTIONS & DERIVATIVES",  # 8
+        "CRYPTOCURRENCY",  # 9
         "PORTFOLIO & INVESTMENT TOOLS",  # 10
-        "Global Stock Scanner",  # 11
-        "Currency Markets (Forex)",  # 12
+        "GLOBAL STOCK SCANNER",  # 11
+        "CURRENCY MARKETS (FOREX)",  # 12
         "COMMODITIES",  # 13
-        "Money Market",  # 14
+        "MONEY MARKET",  # 14
         "BACKTESTING STOCKS",  # 15
-        "Robo Advisor",  # 16
-        "Advance Technicals",  # 17
-        "GenAI Query",  # 18
-        "FinScript", #19
-        "Education & Resources",  # 20
+        "ROBO ADVISOR",  # 16
+        "ADVANCE TECHNICALS",  # 17
+        "GENAI QUERY",  # 18
+        "FINSCRIPT",  # 19
+        "EDUCATION & RESOURCES",  # 20
         "SETTINGS & CUSTOMIZATION",  # 21
-        "Terminal Documentation",  # 22
-        "EXIT",  # 23
-        "Live Price India",
-        "Satellite Imagery Analysis",
-        "Marine Trade Data",
-        "India Macro & Micro Data",
-        "Consumer Behaviour", # 28
+        "TERMINAL DOCUMENTATION",  # 22
+        "CONSUMER BEHAVIOUR",  # 23
+        "LIVE PRICE INDIA",  # 24
+        "SATELLITE IMAGERY ANALYSIS",  # 25
+        "MARINE TRADE DATA",  # 26
+        "INDIA MACRO & MICRO DATA",  # 27
+        "EXIT",  # 28
     ]
 
     # Display main menu in columns
@@ -147,8 +147,8 @@ def show_main_menu():
         console.print("[bold green]Redirecting to Fincept Documentation...[/bold green]")
         show_main_menu()
     elif choice == 23:
-        console.print("[bold green]Exiting Fincept Terminal...[/bold green]")
-        sys.exit(0)
+        from fincept_terminal.consumer_behavior import show_consumer_behavior_menu
+        show_consumer_behavior_menu()
     elif choice == 24:
         from fincept_terminal.liveprice import start_live_price_menu
         start_live_price_menu()
@@ -162,8 +162,8 @@ def show_main_menu():
         from fincept_terminal.indiamacro import show_india_macro_micro_menu
         show_india_macro_micro_menu()
     elif choice == 28:
-        from fincept_terminal.consumer_behavior import show_consumer_behavior_menu
-        show_consumer_behavior_menu()
+        console.print("[bold green]Exiting Fincept Terminal...[/bold green]")
+        sys.exit(0)
     else:
         console.print("[bold red]Invalid option. Please select a valid menu option.[/bold red]")
         show_main_menu()  # Show the menu again if an invalid option is chosen
