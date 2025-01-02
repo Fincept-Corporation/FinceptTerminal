@@ -3,7 +3,7 @@ import yfinance as yf
 def show_country_menu(continent):
     """Display available countries for a given continent and allow the user to select one."""
     from fincept_terminal.data import get_countries_by_continent
-    countries = get_countries_by_continent(continent)
+    countries = get_countries_by_continent(continent) + ["BACK TO MAIN MENU"]
 
     if not countries:
         console.print(f"[bold red]No countries available for {continent}[/bold red]", style="danger")
@@ -18,14 +18,16 @@ def show_country_menu(continent):
     choice = Prompt.ask("Enter your choice")
     selected_country = countries[int(choice) - 1]
     console.print("\n")
-
-    from fincept_terminal.stock import show_sectors_in_country
-    return show_sectors_in_country(selected_country)
+    if selected_country == 'BACK TO MAIN MENU':
+        from fincept_terminal.cli import show_main_menu
+        show_main_menu()
+    else:
+        from fincept_terminal.stock import show_sectors_in_country
+        return show_sectors_in_country(selected_country)
 
 def show_equities_menu():
     """Equities submenu that allows selection of stocks based on continent, country, or direct query."""
-    continents = ["Asia", "Europe", "Africa", "North America", "South America", "Oceania", "Middle East", "Main Menu", "Query Stock Ticker"]
-
+    continents = ["Asia", "Europe", "Africa", "North America", "South America", "Oceania", "Middle East", "Query Stock Ticker", "BACK TO MAIN MENU"]
     while True:
         console.print("[bold cyan]EQUITIES MENU[/bold cyan]\n", style="info")
         from fincept_terminal.const import display_in_columns
@@ -37,13 +39,14 @@ def show_equities_menu():
         console.print("\n")
 
         if choice == "8":
-            from fincept_terminal.cli import show_main_menu
-            show_main_menu()
-            return  # Exit equities menu and return to main menu
+            query_direct_from_yahoo()  # After querying, return to the menu
+            return
 
         elif choice == "9":
-            query_direct_from_yahoo()
-            return  # After querying, return to the menu
+            from fincept_terminal.cli import show_main_menu
+            show_main_menu()
+            return
+
 
         selected_continent = continents[int(choice) - 1]
 
@@ -101,6 +104,7 @@ def show_sectors_in_country(country):
 
     # Fetch sectors with retries
     sectors = fetch_sectors_with_retry(country)
+    sectors.append("BACK TO MAIN MENU")
 
     if not sectors:
         # Display user-friendly error after retries
@@ -117,9 +121,12 @@ def show_sectors_in_country(country):
     from rich.prompt import Prompt
     choice = Prompt.ask("Enter your choice")
     selected_sector = sectors[int(choice) - 1]
-
-    show_industries_in_sector(country, selected_sector)
-    return True  # Continue normally if sectors were fetched successfully
+    if selected_sector == "BACK TO MAIN MENU":
+        from fincept_terminal.cli import show_main_menu
+        show_main_menu()
+    else:
+        show_industries_in_sector(country, selected_sector)
+        return True  # Continue normally if sectors were fetched successfully
 
 
 import urllib.parse
