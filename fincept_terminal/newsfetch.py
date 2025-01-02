@@ -33,13 +33,13 @@ COUNTRY_CODES = {
 
 # Mapping of continents to the countries they contain
 CONTINENT_COUNTRIES = {
-    'Asia': ['India', 'Indonesia', 'Israel', 'Japan', 'Republic of Korea', 'China', 'Taiwan', 'Thailand', 'Vietnam'],
-    'Europe': ['United Kingdom', 'Germany', 'France', 'Italy', 'Spain', 'Netherlands', 'Sweden', 'Norway'],
-    'Africa': ['South Africa', 'Nigeria', 'Kenya', 'Ethiopia', 'Ghana', 'Uganda', 'Tanzania'],
-    'North America': ['United States', 'Canada', 'Mexico'],
-    'South America': ['Brazil', 'Argentina', 'Colombia', 'Chile'],
-    'Oceania': ['Australia', 'New Zealand'],
-    'Middle East': ['United Arab Emirates', 'Saudi Arabia', 'Lebanon', 'Egypt']
+    'ASIA': ['INDIA', 'INDONESIA', 'ISRAEL', 'JAPAN', 'REPUBLIC OF KOREA', 'CHINA', 'TAIWAN', 'THAILAND', 'VIETNAM'],
+    'EUROPE': ['UNITED KINGDOM', 'GERMANY', 'FRANCE', 'ITALY', 'SPAIN', 'NETHERLANDS', 'SWEDEN', 'NORWAY'],
+    'AFRICA': ['SOUTH AFRICA', 'NIGERIA', 'KENYA', 'ETHIOPIA', 'GHANA', 'UGANDA', 'TANZANIA'],
+    'NORTH AMERICA': ['UNITED STATES', 'CANADA', 'MEXICO'],
+    'SOUTH AMERICA': ['BRAZIL', 'ARGENTINA', 'COLOMBIA', 'CHILE'],
+    'OCEANIA': ['AUSTRALIA', 'NEW ZEALAND'],
+    'MIDDLE EAST': ['UNITED ARAB EMIRATES', 'SAUDI ARABIA', 'LEBANON', 'EGYPT']
 }
 
 def set_gnews_country(country):
@@ -153,7 +153,7 @@ def display_sentiment_bar(positive, neutral, negative):
 
 def show_news_and_sentiment_menu():
     """Display Global News and Sentiment analysis by continent and country."""
-    continents = list(CONTINENT_COUNTRIES.keys()) + ["WORLD", "Main Menu"]
+    continents = list(CONTINENT_COUNTRIES.keys()) + ["WORLD", "BACK TO MAIN MENU"]
 
     while True:
         console.print("[bold cyan]GLOBAL NEWS AND SENTIMENT[/bold cyan]\n", style="info")
@@ -161,7 +161,7 @@ def show_news_and_sentiment_menu():
 
         continent_choice = Prompt.ask("Enter your continent choice (Press enter to default to WORLD)", default="WORLD")
 
-        if continent_choice.lower() == "main menu":
+        if continent_choice == "BACK TO MAIN MENU":
             return
 
         try:
@@ -175,29 +175,50 @@ def show_news_and_sentiment_menu():
             google_news.country = None
             console.print(f"[bold cyan]Fetching global news...[/bold cyan]")
             fetch_custom_news("Business", selected_country)
+        elif selected_continent == "BACK TO MAIN MENU":
+            from fincept_terminal.cli import show_main_menu
+            show_main_menu()
         else:
-            countries = CONTINENT_COUNTRIES[selected_continent]
+            countries = CONTINENT_COUNTRIES[selected_continent] + ["BACK TO MAIN MENU"]
+
             display_in_columns(f"Select a Country in {selected_continent}", countries)
 
             country_choice = Prompt.ask("Enter your country choice", default="WORLD")
             selected_country = countries[int(country_choice) - 1] if country_choice.isdigit() else country_choice
 
-            if selected_country not in countries:
+            if selected_country == "BACK TO MAIN MENU":
+                from fincept_terminal.cli import show_main_menu
+                show_main_menu()
+            elif selected_country not in countries:
                 console.print(f"[bold red]Invalid country selection. Please choose a valid country from the list.[/bold red]")
                 continue
 
             set_gnews_country(selected_country)
 
             topics = ["NATION", "BUSINESS", "TECHNOLOGY", "CUSTOM KEYWORD"]
+            topics.append("BACK TO MAIN MENU")
             display_in_columns("Select a Topic", topics)
 
             topic_choice = Prompt.ask("Enter your topic choice", default="BUSINESS")
+            # Ensure valid input before proceeding
+            if topic_choice.isdigit():
+                topic_choice = int(topic_choice)
+                if topic_choice < 1 or topic_choice > len(topics):
+                    console.print("[bold red]Invalid choice. Please try again.[/bold red]")
+                    return
+            else:
+                console.print("[bold red]Invalid choice. Please enter a valid number.[/bold red]")
+                return
 
-            if topic_choice.isdigit() and int(topic_choice) == 4:
+            selected_topic = topics[topic_choice - 1]
+
+            if selected_topic == "BACK TO MAIN MENU":
+                from fincept_terminal.cli import show_main_menu
+                show_main_menu()
+            elif selected_topic == "CUSTOM KEYWORD":
                 keyword = Prompt.ask("Enter the keyword you want to search for (e.g., HDFC Bank)")
                 fetch_custom_news(keyword, selected_country)
             else:
-                selected_topic = topics[int(topic_choice) - 1] if topic_choice.isdigit() else topic_choice
                 fetch_and_display_news(selected_country, selected_topic)
 
         another_news = Prompt.ask("\nWould you like to fetch more news? (yes/no)").lower()
