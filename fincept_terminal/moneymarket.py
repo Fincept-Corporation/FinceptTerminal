@@ -3,7 +3,6 @@ import yfinance as yf
 from fincept_terminal.themes import console
 from fincept_terminal.const import display_in_columns,display_info_in_three_columns
 
-
 # Step 1: Fetch the list of exchanges for money markets
 def fetch_money_market_exchanges():
     url = "https://fincept.share.zrok.io/FinanceDB/moneymarkets/exchange/data?unique=true"
@@ -104,7 +103,6 @@ def show_money_market_menu():
     console.print("[bold cyan]MONEY MARKET MENU[/bold cyan]\n", style="info")
 
     from rich.prompt import Prompt
-
     # Display two options: Global Market or Search by Symbol
     options = ["Global Market", "Search Market Symbol"]
     display_in_columns("Select an Option", options)
