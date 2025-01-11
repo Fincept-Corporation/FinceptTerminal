@@ -14,10 +14,10 @@ def show_world_economy_tracker_menu():
         console.print("[highlight]WORLD ECONOMY TRACKER[/highlight]\n", style="info")
 
         menu_options = [
-            "List of Countries",
-            "Search by Index",
-            "Query FRED Data",
-            "Back to Main Menu"
+            "LIST OF COUNTRIES",
+            "SEARCH BY INDEX",
+            "QUERY FRED DATA",
+            "BACK TO MAIN MENU"
         ]
 
         display_in_columns("WORLD ECONOMY TRACKER MENU", menu_options)
@@ -40,12 +40,12 @@ def show_world_economy_tracker_menu():
 def show_list_of_countries():
     """Display the list of countries."""
     try:
-        url = "https://fincept.share.zrok.io/LargeEconomicDatabase/countries/data"
+        url = "https://fincept.share.zrok.io/metaData/world_country_list/data"
         response = requests.get(url)
         response.raise_for_status()
         countries_data = response.json()
 
-        countries = [item['country_name'] for item in countries_data]
+        countries = [item['name'] for item in countries_data]
         paginate_display_in_columns("List of Countries", countries)
 
     except requests.exceptions.RequestException as e:
@@ -144,14 +144,62 @@ def paginate_display_in_columns(title, items, items_per_page=21):
             if proceed.lower() != "yes":
                 break
 
+def display_series_id_paginated(indices, start_index=0, page_size=21):
+    end_index = min(start_index + page_size, len(indices))
+    indices_page = indices[start_index:end_index]
+
+    # Extract only the names of the indices to display
+    index_names = [index['id'] for index in indices_page]
+
+    # Display the current page of indices
+    display_in_columns(f"Indices (Showing {start_index + 1} - {end_index})", index_names)
+
+    # Ask the user to navigate or select an index
+    from rich.prompt import Prompt
+    action = Prompt.ask(
+        "\n[bold cyan]Next Page (N) / Previous Page (P) / Select an Index (1-{0})[/bold cyan]".format(len(index_names)))
+
+    if action.lower() == 'n':
+        if end_index < len(indices):
+            return display_series_id_paginated(indices, start_index + page_size)
+        else:
+            console.print("[bold red]No more pages.[/bold red]")
+            return display_series_id_paginated(indices, start_index)
+    elif action.lower() == 'p':
+        if start_index > 0:
+            return display_series_id_paginated(indices, start_index - page_size)
+        else:
+            console.print("[bold red]You are on the first page.[/bold red]")
+            return display_series_id_paginated(indices, start_index)
+    else:
+        try:
+            selected_index = int(action) - 1 + start_index
+            if 0 <= selected_index < len(indices):
+                return indices[selected_index]
+            else:
+                console.print("[bold red]Invalid selection. Please try again.[/bold red]")
+                return display_series_id_paginated(indices, start_index)
+        except ValueError:
+            console.print("[bold red]Invalid input. Please enter a number or 'N'/'P'.[/bold red]")
+            return display_series_id_paginated(indices, start_index)
+
 def query_fred_data():
     """Query and display FRED data, with an option to perform ARIMA analysis."""
     try:
+        fredCategoryData_url = "https://fincept.share.zrok.io/metaData/fredCategoryData/data?limit=30"
+        response = requests.get(fredCategoryData_url)
+        response.raise_for_status()
+        fredcategorydata = response.json()
+
+        #series_id = [item['id'] for item in fredcategorydata]
+        selected_series = display_series_id_paginated(fredcategorydata)
+        selected_id = selected_series['id']
+
         # Prompt the user to enter a FRED series ID
-        series_id = Prompt.ask("Enter the FRED Series ID (e.g., GDP, UNRATE)")
+        #series_id = Prompt.ask("Enter the FRED Series ID (e.g., GDP, UNRATE)")
 
         # Build the FRED API URL
-        fred_url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json"
+        fred_url = f"https://api.stlouisfed.org/fred/series/observations?series_id={selected_id}&api_key={FRED_API_KEY}&file_type=json"
         response = requests.get(fred_url)
         response.raise_for_status()
         fred_data = response.json()
@@ -165,22 +213,22 @@ def query_fred_data():
                 df['date'] = pd.to_datetime(df['date'])
                 df['value'] = pd.to_numeric(df['value'], errors='coerce')
 
-                console.print(f"[bold green]FRED Data for {series_id.upper()} retrieved successfully.[/bold green]")
+                console.print(f"[bold green]FRED Data for {selected_id.upper()} retrieved successfully.[/bold green]")
 
                 display_items = [f"Date: {row['date'].strftime('%Y-%m-%d')} | Value: {row['value']}" for _, row in df.iterrows()]
-                paginate_display_in_columns(f"FRED Data for {series_id.upper()}", display_items)
+                paginate_display_in_columns(f"FRED Data for {selected_id.upper()}", display_items)
 
                 # Ask the user if they want to perform ARIMA analysis
                 perform_arima = Prompt.ask("Would you like to perform ARIMA analysis on this data? (yes/no)", default="yes")
 
                 if perform_arima.lower() == 'yes':
-                    arima_analysis(df, series_id)
+                    arima_analysis(df, selected_id)
 
                 # Return to the World Economy Tracker menu
                 show_world_economy_tracker_menu()
 
             else:
-                console.print(f"[bold red]No data found for the FRED Series ID: {series_id}[/bold red]", style="danger")
+                console.print(f"[bold red]No data found for the FRED Series ID: {selected_id}[/bold red]", style="danger")
         else:
             console.print(f"[bold red]Error retrieving FRED data: {fred_data.get('error_message', 'Unknown error')}[/bold red]", style="danger")
 
