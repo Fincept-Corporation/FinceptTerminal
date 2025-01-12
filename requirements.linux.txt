@@ -77,7 +77,6 @@ simplejson~=3.19.1
 parse~=1.19.0
 gnews~=0.3.7
 feedparser~=6.0.11
-pywin32~=306
 mdurl~=0.1.2
 llvmlite~=0.40.1
 numba~=0.57.1
