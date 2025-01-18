@@ -84,25 +84,25 @@ def show_main_menu():
 
     # Call corresponding function based on the choice
     if choice == 1:
-        from fincept_terminal.global_indices.indices import show_global_indices_menu
+        from fincept_terminal.Global.indices import show_global_indices_menu
         show_global_indices_menu()
     elif choice == 2:
         from fincept_terminal.world_economy_tracker.economytracker import show_world_economy_tracker_menu
         show_world_economy_tracker_menu()
     elif choice == 3:
-        from fincept_terminal.global_news_sentiment.newsfetch import show_news_and_sentiment_menu
+        from fincept_terminal.Global.newsfetch import show_news_and_sentiment_menu
         show_news_and_sentiment_menu()
     elif choice == 4:
-        from fincept_terminal.global_stocks.stock import show_equities_menu
+        from fincept_terminal.Global.stock import show_equities_menu
         show_equities_menu()
     elif choice == 5:
-        from fincept_terminal.global_funds.funds import show_global_funds_menu
+        from fincept_terminal.Global.funds import show_global_funds_menu
         show_global_funds_menu()
     elif choice == 6:
         from fincept_terminal.exchange_traded_funds.etfdata import show_etf_market_menu
         show_etf_market_menu()
     elif choice == 7:
-        from fincept_terminal.global_bond_market.bonds import show_bond_market_menu
+        from fincept_terminal.Global.bonds import show_bond_market_menu
         show_bond_market_menu()
     elif choice == 8:
         console.print("[bold red] Feature still in development [/bold red]", style="danger")
