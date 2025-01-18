@@ -70,9 +70,9 @@ We welcome contributions from everyone! Check out our [Contributing Documentatio
 
 If you encounter any issues or have suggestions, feel free to create a GitHub ticket. Before submitting, please ensure the ticket doesn't already exist by searching through the existing [issues](https://github.com/fincept/fincept-terminal/issues).
 
-- **[Report a bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?assignees=&labels=bug&template=report_bug.md&title=%5BBug%5D)**: Found a bug? Let us know!
-- **[Suggest an improvement](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?assignees=&labels=improvement&template=improvement.md&title=%5BIMPROVE%5D)**: Have an idea to enhance the terminal? Share it with us!
-- **[Request a feature](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?assignees=&labels=new+feature&template=feature_request.md&title=%5BFEATURE%5D)**: Got a feature request? We’re listening!
+- **[Report a bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)**: Found a bug? Let us know!
+- **[Suggest an improvement](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=improvement.md)**: Have an idea to enhance the terminal? Share it with us!
+- **[Request a feature](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)**: Got a feature request? We’re listening!
 
 ### Submit a Pull Request
 
