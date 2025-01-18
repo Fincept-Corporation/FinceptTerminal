@@ -2,11 +2,13 @@
 FROM python:3.11-slim
 
 # Set environment variables
+# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app/finceptTerminal
 
 # Set the working directory
-WORKDIR /app
+WORKDIR /app/finceptTerminal
 
 # Install system dependencies for psycopg2, mysqlclient, and other build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
