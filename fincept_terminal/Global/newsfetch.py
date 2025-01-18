@@ -173,7 +173,7 @@ def show_news_and_sentiment_menu():
         if selected_continent == "WORLD":
             selected_country = "WORLD"
             google_news.country = None
-            console.print(f"[bold cyan]Fetching global news...[/bold cyan]")
+            console.print(f"[bold cyan]Fetching Global news...[/bold cyan]")
             fetch_custom_news("Business", selected_country)
         elif selected_continent == "BACK TO MAIN MENU":
             from fincept_terminal.cli import show_main_menu

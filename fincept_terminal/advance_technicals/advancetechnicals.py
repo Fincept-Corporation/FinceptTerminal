@@ -63,7 +63,7 @@ def get_countries_by_continent(continent):
 
 # Step 1: Technical Main Menu
 def show_technical_main_menu():
-    """Technical analysis main menu that allows global or direct stock symbol selection."""
+    """Technical analysis main menu that allows Global or direct stock symbol selection."""
     console.print("[bold cyan]TECHNICAL ANALYSIS MENU[/bold cyan]\n", style="info")
 
     # Step 1.1: List the main options
