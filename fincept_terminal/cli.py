@@ -25,11 +25,57 @@ def cli(ctx):
 def start():
     """Start the Fincept Investments terminal."""
     # Check for updates on startup
+    # show_image_splash_screen("C:\\Projects\\finceptTerminal\\finscript\\fincept.png")  # Path to your splash image
+    # set_full_screen()  # Make the terminal full screen
     update_checker.check_for_update()
 
     # Display ASCII art and then the main menu
     display_art()
     show_main_menu()
+
+
+import os
+import platform
+
+def set_full_screen():
+    """Set the terminal window to full-screen mode."""
+    if platform.system() == "Windows":
+        os.system("mode con: cols=200 lines=50")  # Adjust dimensions
+        os.system("powershell -command \"[System.Console]::WindowWidth = [System.Console]::LargestWindowWidth; [System.Console]::WindowHeight = [System.Console]::LargestWindowHeight\"")
+    else:
+        console.print("[bold yellow]Full-screen mode is not supported on this platform.[/bold yellow]")
+
+
+from tkinter import Toplevel, Tk, Canvas
+from PIL import Image, ImageTk
+import time
+import threading
+
+def show_image_splash_screen(image_path):
+    """Show a splash screen with an image."""
+    def splash():
+        root = Tk()
+        root.overrideredirect(True)  # Remove window decorations (title bar, close button, etc.)
+        root.geometry("600x400+400+200")  # Set window size and position
+
+        # Display the image
+        image = Image.open(image_path)
+        image = image.resize((600, 400), Image.Resampling.LANCZOS)  # Use LANCZOS instead of ANTIALIAS
+        photo = ImageTk.PhotoImage(image)
+
+        canvas = Canvas(root, width=600, height=400)
+        canvas.pack(fill="both", expand=True)
+        canvas.create_image(0, 0, anchor="nw", image=photo)
+
+        # Show the splash screen for a few seconds
+        root.after(3000, root.destroy)  # Close after 3 seconds
+        root.mainloop()
+
+    # Run the splash screen in a separate thread
+    splash_thread = threading.Thread(target=splash)
+    splash_thread.start()
+    splash_thread.join()  # Ensure it finishes before proceeding
+
 
 def show_main_menu():
     """Main menu with navigation options."""
@@ -65,6 +111,8 @@ def show_main_menu():
         "MARINE TRADE DATA",  # 26
         "INDIA MACRO & MICRO DATA",  # 27
         "EXIT",  # 28
+        "FETCH LATEST NEWS",
+        "ALPHA",
     ]
 
     # Display main menu in columns
@@ -138,8 +186,8 @@ def show_main_menu():
         from fincept_terminal.finscript import show_finscript_menu
         show_finscript_menu()
     elif choice == 20:
-        # Call the settings menu
         console.print("[bold green]Under Construction...[/bold green]")
+        show_main_menu()
     elif choice == 21:
         show_settings_menu()  # Call this function instead of calling a Click command
     elif choice == 22:
@@ -164,6 +212,12 @@ def show_main_menu():
     elif choice == 28:
         console.print("[bold green]Exiting Fincept Terminal...[/bold green]")
         sys.exit(0)
+    elif choice == 29:
+        from fincept_terminal.newsfetcher import display_latest_news
+        display_latest_news()
+    elif choice == 30:
+        from fincept_terminal.alphavantagee import display_stock_data
+        display_stock_data()
     else:
         console.print("[bold red]Invalid option. Please select a valid menu option.[/bold red]")
         show_main_menu()  # Show the menu again if an invalid option is chosen
@@ -245,4 +299,6 @@ def display_current_configurations():
 
 
 if __name__ == '__main__':
+    from fincept_terminal.utils import load_environment
+    load_environment()
     cli()
