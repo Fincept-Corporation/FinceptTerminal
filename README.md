@@ -58,6 +58,30 @@ fincept --version
 - **Country Specific Data**
 - **Advance Technical/Fundamental Analysis**
 
+## CONTRIBUTING
+
+There are three main ways to contribute to this project. (Hopefully, you’ve starred the project by now ⭐️)
+
+### Become a Contributor
+
+We welcome contributions from everyone! Check out our [Contributing Documentation](https://docs.fincept.in/developer_guide/contributing) for detailed guidelines on how you can start contributing to the Fincept Terminal.
+
+### Create a GitHub Ticket
+
+If you encounter any issues or have suggestions, feel free to create a GitHub ticket. Before submitting, please ensure the ticket doesn't already exist by searching through the existing [issues](https://github.com/fincept/fincept-terminal/issues).
+
+- **[Report a bug](https://github.com/fincept/fincept-terminal/issues/new?assignees=&labels=bug&template=report_bug.md&title=%5BBug%5D)**: Found a bug? Let us know!
+- **[Suggest an improvement](https://github.com/fincept/fincept-terminal/issues/new?assignees=&labels=improvement&template=improvement.md&title=%5BIMPROVE%5D)**: Have an idea to enhance the terminal? Share it with us!
+- **[Request a feature](https://github.com/fincept/fincept-terminal/issues/new?assignees=&labels=new+feature&template=feature_request.md&title=%5BFEATURE%5D)**: Got a feature request? We’re listening!
+
+### Submit a Pull Request
+
+For developers ready to contribute code:
+1. Fork the repository and create your feature branch:
+   ```bash
+   git checkout -b feature/AmazingFeature
+
+
 ## Star History
 
 **PLEASE STAR ⭐ THE REPO AND SHARE THE PROJECT ❤️‍🩹 **
