@@ -1,3 +1,10 @@
+import requests
+from rich.text import Text
+from rich.prompt import Prompt
+from rich.panel import Panel
+from fincept_terminal.themes import console
+from fincept_terminal.cli import show_main_menu
+
 def genai_query(user_input):
     """
     Send the user's query to the GenAI API and return the response.
@@ -17,7 +24,6 @@ def genai_query(user_input):
     }
 
     try:
-        import requests
         # Send POST request
         response = requests.post(api_url, headers=headers, json=data)
         response.raise_for_status()  # Check for HTTP errors
@@ -30,9 +36,14 @@ def genai_query(user_input):
         formatted_response = format_genai_response(raw_text)
         return formatted_response
 
-    except requests.exceptions.RequestException as e:
-        return f"Error processing query: {str(e)}"
-
+    except requests.exceptions.HTTPError as http_err:
+        return f"HTTP error occurred: {http_err}"
+    except requests.exceptions.ConnectionError as conn_err:
+        return f"Connection error occurred: {conn_err}"
+    except requests.exceptions.Timeout as timeout_err:
+        return f"Timeout error occurred: {timeout_err}"
+    except requests.exceptions.RequestException as req_err:
+        return f"Error processing query: {req_err}"
 
 def format_genai_response(response):
     """
@@ -48,23 +59,18 @@ def format_genai_response(response):
     response = response.replace("**", "").replace("##", "").strip()
 
     # Create a Rich Text object with cyan color and bold style
-    from rich.text import Text
     formatted_text = Text(response, style="bold cyan")
 
     return formatted_text
 
-
 def show_genai_query():
     """Prompt the user for a finance-related query and send it to the GenAI API."""
-    from fincept_terminal.themes import console
     console.print("[bold cyan]GENAI QUERY[/bold cyan]\n", style="info")
 
     while True:
-        from rich.prompt import Prompt
         query = Prompt.ask("Enter your finance-related query (or type 'back' to return to main menu)")
 
         if query.lower() == 'back':
-            from fincept_terminal.cli import show_main_menu
             return show_main_menu()
 
         # Send the query to the GenAI API
@@ -72,7 +78,6 @@ def show_genai_query():
         response = genai_query(query)
 
         # Display the formatted response in a panel
-        from rich.panel import Panel
         console.print(Panel(response, title="GenAI Query Response", style="cyan on #282828"))
 
         # Ask if the user wants to make another query
@@ -80,6 +85,5 @@ def show_genai_query():
 
         if another_query.lower() == 'no':
             console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]", style="info")
-            from fincept_terminal.cli import show_main_menu
             show_main_menu()
             return  # Redirect back to the main menu if user types 'no'
