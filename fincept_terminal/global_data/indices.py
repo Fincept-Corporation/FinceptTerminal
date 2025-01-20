@@ -202,19 +202,19 @@ def display_info_with_history(info, history_table):
     console.print(history_table_display)
 
 
-# Step 6: Main function to show the Global Indices menu
+# Step 6: Main function to show the global_data Indices menu
 def show_global_indices_menu():
     console.print("[bold cyan]GLOBAL INDICES MENU[/bold cyan]\n", style="info")
 
     from rich.prompt import Prompt
 
-    # Display two options: Global Indices or Search by Symbol
+    # Display two options: global_data Indices or Search by Symbol
     options = ["GLOBAL INDICES", "SEARCH INDICES SYMBOL", "BACK TO MAIN MENU"]
     display_in_columns("Select an Option", options)
 
     choice = Prompt.ask("Enter the number corresponding to your choice")
 
-    if choice == "1":  # Global Indices
+    if choice == "1":  # global_data Indices
         exchanges = fetch_indices_exchanges()
         exchanges.append("BACK TO MAIN MENU")
 
@@ -268,7 +268,7 @@ def show_global_indices_menu():
     # Ask if the user wants to query another index or exit to the main menu
     continue_query = Prompt.ask("Do you want to query another index? (yes/no)")
     if continue_query.lower() == 'yes':
-        show_global_indices_menu()  # Redirect back to the Global Indices menu
+        show_global_indices_menu()  # Redirect back to the global_data Indices menu
     else:
         console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]", style="info")
         from fincept_terminal.cli import show_main_menu

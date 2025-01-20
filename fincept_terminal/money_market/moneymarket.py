@@ -103,13 +103,13 @@ def show_money_market_menu():
     console.print("[bold cyan]MONEY MARKET MENU[/bold cyan]\n", style="info")
 
     from rich.prompt import Prompt
-    # Display two options: Global Market or Search by Symbol
-    options = ["Global Market", "Search Market Symbol"]
+    # Display two options: global_data Market or Search by Symbol
+    options = ["global_data Market", "Search Market Symbol"]
     display_in_columns("Select an Option", options)
 
     choice = Prompt.ask("Enter the number corresponding to your choice")
 
-    if choice == "1":  # Global Market
+    if choice == "1":  # global_data Market
         exchanges = fetch_money_market_exchanges()
         if not exchanges:
             return

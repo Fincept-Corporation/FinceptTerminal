@@ -1,5 +1,4 @@
 import threading
-import sys
 import msvcrt  # Windows-specific module for capturing key presses
 from fyers_apiv3.FyersWebsocket import data_ws
 from rich.console import Console

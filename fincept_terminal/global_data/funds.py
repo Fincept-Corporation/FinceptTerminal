@@ -119,22 +119,24 @@ def fetch_fund_data_by_symbol(symbol):
     return filtered_info
 
 
-# Step 6: Main function to show the Global Funds menu
+# Step 6: Main function to show the global_data Funds menu
 def show_global_funds_menu():
     console.print("[bold cyan]GLOBAL FUNDS MENU[/bold cyan]\n", style="info")
 
     from rich.prompt import Prompt
 
-    # Display two options: Global Funds or Search by Symbol
-    options = ["Global Funds", "Search Fund With Symbol"]
+    # Display two options: global_data Funds or Search by Symbol
+    options = ["global_data Funds", "Search Fund With Symbol"]
     display_in_columns("Select an Option", options)
 
     choice = Prompt.ask("Enter the number corresponding to your choice")
 
-    if choice == "1":  # Global Funds
+    if choice == "1":  # global_data Funds
         exchanges = fetch_fund_exchanges()
         if not exchanges:
-            return
+            from fincept_terminal.global_data.funds import show_global_funds_menu
+            show_global_funds_menu()
+
         selected_exchange = display_fund_exchanges_paginated(exchanges)
         if selected_exchange:
             funds = fetch_funds_by_exchange(selected_exchange)
@@ -158,7 +160,7 @@ def show_global_funds_menu():
     # Ask if the user wants to query another fund or exit to the main menu
     continue_query = Prompt.ask("Do you want to query another fund? (yes/no)")
     if continue_query.lower() == 'yes':
-        show_global_funds_menu()  # Redirect back to the Global Funds menu
+        show_global_funds_menu()  # Redirect back to the global_data Funds menu
     else:
         console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]", style="info")
         from fincept_terminal.cli import show_main_menu

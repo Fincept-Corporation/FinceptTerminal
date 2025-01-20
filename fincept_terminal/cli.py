@@ -84,28 +84,29 @@ def show_main_menu():
 
     # Call corresponding function based on the choice
     if choice == 1:
-        from fincept_terminal.Global.indices import show_global_indices_menu
+        from fincept_terminal.global_data.indices import show_global_indices_menu
         show_global_indices_menu()
     elif choice == 2:
         from fincept_terminal.world_economy_tracker.economytracker import show_world_economy_tracker_menu
         show_world_economy_tracker_menu()
     elif choice == 3:
-        from fincept_terminal.Global.newsfetch import show_news_and_sentiment_menu
+        from fincept_terminal.global_data.newsfetch import show_news_and_sentiment_menu
         show_news_and_sentiment_menu()
     elif choice == 4:
-        from fincept_terminal.Global.stock import show_equities_menu
+        from fincept_terminal.global_data.stock import show_equities_menu
         show_equities_menu()
     elif choice == 5:
-        from fincept_terminal.Global.funds import show_global_funds_menu
+        from fincept_terminal.global_data.funds import show_global_funds_menu
         show_global_funds_menu()
     elif choice == 6:
         from fincept_terminal.exchange_traded_funds.etfdata import show_etf_market_menu
         show_etf_market_menu()
     elif choice == 7:
-        from fincept_terminal.Global.bonds import show_bond_market_menu
+        from fincept_terminal.global_data.bonds import show_bond_market_menu
         show_bond_market_menu()
     elif choice == 8:
         console.print("[bold red] Feature still in development [/bold red]", style="danger")
+        show_main_menu()
     elif choice == 9:
         from fincept_terminal.cryptocurrency.cryptodata import crypto_main_menu
         crypto_main_menu()
@@ -114,11 +115,13 @@ def show_main_menu():
         show_portfolio_menu()
     elif choice == 11:
         console.print("[bold red] Feature still in development [/bold red]", style="danger")
+        show_main_menu()
     elif choice == 12:
         from fincept_terminal.currency_markets.currencyforex import show_currency_market_menu
         show_currency_market_menu()
     elif choice == 13:
         console.print("[bold red] Feature still in development [/bold red]", style="danger")
+        show_main_menu()
     elif choice == 14:
         from fincept_terminal.money_market.moneymarket import show_money_market_menu
         show_money_market_menu()
@@ -140,6 +143,7 @@ def show_main_menu():
     elif choice == 20:
         # Call the settings menu
         console.print("[bold green]Under Construction...[/bold green]")
+        show_main_menu()
     elif choice == 21:
         show_settings_menu()  # Call this function instead of calling a Click command
     elif choice == 22:

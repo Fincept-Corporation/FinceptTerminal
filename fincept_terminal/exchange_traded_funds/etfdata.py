@@ -90,17 +90,19 @@ def show_etf_market_menu():
 
     while True:
         from fincept_terminal.utils.const import display_in_columns
-        # Display two options: Global Search or Search by Symbol
-        options = ["Global Search", "Search by Symbol"]
+        # Display two options: global_data Search or Search by Symbol
+        options = ["global_data Search", "Search by Symbol"]
         display_in_columns("Select an Option", options)
 
         choice = Prompt.ask("Enter the number corresponding to your choice")
 
         from fincept_terminal.utils.const import display_info_in_three_columns
-        if choice == "1":  # Global Search
+        if choice == "1":  # global_data Search
             families = fetch_etf_families()
             if not families:
-                return
+                from fincept_terminal.exchange_traded_funds.etfdata import show_etf_market_menu
+                show_etf_market_menu()
+
             selected_family = display_etf_families_paginated(families)
             if selected_family:
                 etfs = fetch_etfs_by_family(selected_family)

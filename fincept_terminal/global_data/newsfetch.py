@@ -152,7 +152,7 @@ def display_sentiment_bar(positive, neutral, negative):
         f"\n[bold green]{positive_label}[/bold green] {positive_bar}  [bold yellow]{neutral_label}[/bold yellow] {neutral_bar}  [bold red]{negative_label}[/bold red] {negative_bar}")
 
 def show_news_and_sentiment_menu():
-    """Display Global News and Sentiment analysis by continent and country."""
+    """Display global_data News and Sentiment analysis by continent and country."""
     continents = list(CONTINENT_COUNTRIES.keys()) + ["WORLD", "BACK TO MAIN MENU"]
 
     while True:
@@ -173,7 +173,7 @@ def show_news_and_sentiment_menu():
         if selected_continent == "WORLD":
             selected_country = "WORLD"
             google_news.country = None
-            console.print(f"[bold cyan]Fetching Global news...[/bold cyan]")
+            console.print(f"[bold cyan]Fetching global_data news...[/bold cyan]")
             fetch_custom_news("Business", selected_country)
         elif selected_continent == "BACK TO MAIN MENU":
             from fincept_terminal.cli import show_main_menu
