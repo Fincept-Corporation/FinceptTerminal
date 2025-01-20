@@ -54,7 +54,7 @@ def fetch_latest_news(country="us", category=None, page_size=5):
 
 
 
-from fincept_terminal.themes import console
+from fincept_terminal.utils.themes import console
 from rich.table import Table
 
 def display_latest_news():
