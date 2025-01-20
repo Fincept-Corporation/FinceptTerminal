@@ -47,10 +47,13 @@ fincept --help
 fincept --version
 ```
 
+<<<<<<< HEAD
 ## REPORT A BUG ##
 [Open a new issue](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?assignees=&labels=bug&template=bug_report.md&title=%5BBug%5D%3A+)
 
 
+=======
+>>>>>>> d07b0ed2ea71d0585068b2152dde4ff20b0ff1fc
 ## UPCOMING FEATURS
 
 - **World Mariane Trade Data**
@@ -62,10 +65,44 @@ fincept --version
 - **Country Specific Data**
 - **Advance Technical/Fundamental Analysis**
 
+<<<<<<< HEAD
+=======
+## CONTRIBUTING
+
+There are three main ways to contribute to this project. (Hopefully, you’ve starred the project by now ⭐️)
+
+### Become a Contributor
+
+We welcome contributions from everyone! Check out our [Contributing Documentation](https://docs.fincept.in/developer_guide/contributing) for detailed guidelines on how you can start contributing to the Fincept Terminal.
+
+### Create a GitHub Ticket
+
+If you encounter any issues or have suggestions, feel free to create a GitHub ticket. Before submitting, please ensure the ticket doesn't already exist by searching through the existing [issues](https://github.com/fincept/fincept-terminal/issues).
+
+- **[Report a bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)**: Found a bug? Let us know!
+- **[Suggest an improvement](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=improvement.md)**: Have an idea to enhance the terminal? Share it with us!
+- **[Request a feature](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)**: Got a feature request? We’re listening!
+
+### Submit a Pull Request
+
+For developers ready to contribute code:
+1. Fork the repository and create your feature branch:
+   ```bash
+   git checkout -b feature/AmazingFeature
+
+
+>>>>>>> d07b0ed2ea71d0585068b2152dde4ff20b0ff1fc
 ## Star History
 
 **PLEASE STAR ⭐ THE REPO AND SHARE THE PROJECT ❤️‍🩹 **
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/fincept-investments&type=Date)](https://star-history.com/#Fincept-Corporation/fincept-investments&Date)
 
+<<<<<<< HEAD
 ## FOR ANY QUERY OR UPDATE REACH OUT TO ME ON dev@fincept.in
+=======
+## Contact Us 📞
+
+Have questions or feedback? Facing issues? Fill out our contact form:  
+[Google Form: Contact Us](https://forms.gle/DUsDHwxBNRVstYMi6)
+>>>>>>> d07b0ed2ea71d0585068b2152dde4ff20b0ff1fc
