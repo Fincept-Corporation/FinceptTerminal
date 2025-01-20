@@ -1,3 +1,6 @@
+API_URL = "https://fincept.share.zrok.io/process-gemini/"
+HEADERS = {"Content-Type": "application/json"}
+
 def genai_query(user_input):
     """
     Send the user's query to the GenAI API and return the response.
@@ -8,27 +11,17 @@ def genai_query(user_input):
     Returns:
     str: The formatted response from the GenAI API.
     """
-    api_url = "https://fincept.share.zrok.io/process-gemini/"
-    headers = {
-        "Content-Type": "application/json"
-    }
-    data = {
-        "user_input": user_input
-    }
+    data = {"user_input": user_input}
 
     try:
         import requests
-        # Send POST request
-        response = requests.post(api_url, headers=headers, json=data)
+        response = requests.post(API_URL, headers=HEADERS, json=data)
         response.raise_for_status()  # Check for HTTP errors
 
-        # Parse the JSON response and extract the 'gemini_response'
         api_response = response.json()
         raw_text = api_response.get("gemini_response", "No response received from the server.")
 
-        # Handle any Markdown-like syntax and format the text dynamically
-        formatted_response = format_genai_response(raw_text)
-        return formatted_response
+        return format_genai_response(raw_text)
 
     except requests.exceptions.RequestException as e:
         return f"Error processing query: {str(e)}"
@@ -44,14 +37,10 @@ def format_genai_response(response):
     Returns:
     Text: A Rich Text object with formatted response.
     """
-    # Remove Markdown-like symbols (e.g., **, ##) and apply rich formatting
     response = response.replace("**", "").replace("##", "").strip()
 
-    # Create a Rich Text object with cyan color and bold style
     from rich.text import Text
-    formatted_text = Text(response, style="bold cyan")
-
-    return formatted_text
+    return Text(response, style="bold cyan")
 
 
 def show_genai_query():
@@ -67,15 +56,12 @@ def show_genai_query():
             from fincept_terminal.cli import show_main_menu
             return show_main_menu()
 
-        # Send the query to the GenAI API
         console.print("\n[bold yellow]Processing your query...[/bold yellow]\n", style="info")
         response = genai_query(query)
 
-        # Display the formatted response in a panel
         from rich.panel import Panel
         console.print(Panel(response, title="GenAI Query Response", style="cyan on #282828"))
 
-        # Ask if the user wants to make another query
         another_query = Prompt.ask("\nWould you like to make another query? (yes/no)")
 
         if another_query.lower() == 'no':

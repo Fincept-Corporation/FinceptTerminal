@@ -47,13 +47,9 @@ fincept --help
 fincept --version
 ```
 
-<<<<<<< HEAD
 ## REPORT A BUG ##
 [Open a new issue](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?assignees=&labels=bug&template=bug_report.md&title=%5BBug%5D%3A+)
 
-
-=======
->>>>>>> d07b0ed2ea71d0585068b2152dde4ff20b0ff1fc
 ## UPCOMING FEATURS
 
 - **World Mariane Trade Data**
@@ -65,8 +61,6 @@ fincept --version
 - **Country Specific Data**
 - **Advance Technical/Fundamental Analysis**
 
-<<<<<<< HEAD
-=======
 ## CONTRIBUTING
 
 There are three main ways to contribute to this project. (Hopefully, you’ve starred the project by now ⭐️)
@@ -90,19 +84,16 @@ For developers ready to contribute code:
    ```bash
    git checkout -b feature/AmazingFeature
 
-
->>>>>>> d07b0ed2ea71d0585068b2152dde4ff20b0ff1fc
 ## Star History
 
 **PLEASE STAR ⭐ THE REPO AND SHARE THE PROJECT ❤️‍🩹 **
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/fincept-investments&type=Date)](https://star-history.com/#Fincept-Corporation/fincept-investments&Date)
 
-<<<<<<< HEAD
+
 ## FOR ANY QUERY OR UPDATE REACH OUT TO ME ON dev@fincept.in
-=======
 ## Contact Us 📞
 
 Have questions or feedback? Facing issues? Fill out our contact form:  
 [Google Form: Contact Us](https://forms.gle/DUsDHwxBNRVstYMi6)
->>>>>>> d07b0ed2ea71d0585068b2152dde4ff20b0ff1fc
+
