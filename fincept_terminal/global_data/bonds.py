@@ -9,7 +9,7 @@ def show_bond_market_menu():
         console.print("[highlight]BOND MARKET[/highlight]\n", style="info")
 
         menu_options = [
-            "Global Bonds",
+            "global_data Bonds",
             "Back to Main Menu"
         ]
 
@@ -83,12 +83,12 @@ def show_countries_in_region(region):
         response.raise_for_status()
         countries = [item['country_name'] for item in response.json()]
 
-        countries.append("Back to Global Bonds Menu")
+        countries.append("Back to global_data Bonds Menu")
         display_in_columns(f"Countries in {region}", countries)
 
         country_choice = Prompt.ask("Enter your choice")
 
-        if int(country_choice) == len(countries):  # Back to Global Bonds Menu
+        if int(country_choice) == len(countries):  # Back to global_data Bonds Menu
             return
 
         selected_country = countries[int(country_choice) - 1]

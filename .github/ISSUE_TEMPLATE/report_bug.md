@@ -1,35 +1,32 @@
 ---
-name: Bug report
+name: Bug Report
 about: Create a report to help us improve
-title: "[Bug]"
-labels: 'type:bug'
+title: "[Bug] <Short Description>"
+labels: bug
 assignees: ''
+
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+### Describe the Bug
+Provide a clear and concise description of what the bug is.
 
-**To Reproduce**
-Steps (from the start) and commands to reproduce the behavior:
-
+### Steps to Reproduce
+Steps to reproduce the behavior:
 1. Go to '...'
-2. Run command '...'
-3. Perform action '...'
+2. Click on '...'
+3. Scroll down to '...'
 4. See error
 
-**Screenshots**
+### Expected Behavior
+A clear and concise description of what you expected to happen.
+
+### Screenshots
 If applicable, add screenshots to help explain your problem.
 
-If you are running the terminal using the conda version, please rerun the terminal with:
-```bash
-python cli.py --debug
-```
-Then recreate your issue and include a screenshot of the entire error printout.
+### System Information
+- **OS**: [e.g., Windows, macOS, Linux]
+- **Browser**: [e.g., Chrome, Safari, Firefox]
+- **Version**: [e.g., 22]
 
-**Desktop (please complete the following information):**
-
-- OS: [e.g., Windows]
-- Python version: [e.g., 3.11.0]
-
-**Additional context**
-Add any other information that you think could be useful for us.
+### Additional Context
+Add any other context about the problem here.
