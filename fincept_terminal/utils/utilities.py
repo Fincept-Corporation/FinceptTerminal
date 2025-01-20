@@ -2,6 +2,13 @@ from rich.table import Table
 from fincept_terminal.utils.themes import console
 import click
 
+
+from dotenv import load_dotenv
+
+def load_environment():
+    """Load environment variables from .env file."""
+    load_dotenv()  # Load variables from .env into the environment
+
 def display_options_in_columns(options, title):
     num_columns = 4
     table = Table(title=title, title_justify="left", header_style="highlight")
