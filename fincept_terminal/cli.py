@@ -32,7 +32,7 @@ def start():
     show_main_menu()
 
 def show_main_menu():
-    """Main menu with navigation options."""
+    """Main menu with navigation options and other details."""
     console.print("\n")
     console.print("[bold cyan]MAIN MENU[/bold cyan]\n", style="info")
 
