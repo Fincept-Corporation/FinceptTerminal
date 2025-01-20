@@ -42,8 +42,11 @@ cmder/
 
 # Output directories
 Output/
+<<<<<<< HEAD
 te/
 finscript/
 upx.exe
 setup.py
 
+=======
+>>>>>>> d07b0ed2ea71d0585068b2152dde4ff20b0ff1fc

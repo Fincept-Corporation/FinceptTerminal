@@ -77,7 +77,11 @@ simplejson~=3.19.1
 parse~=1.19.0
 gnews~=0.3.7
 feedparser~=6.0.11
+<<<<<<< HEAD
 pywin32~=306
+=======
+pywin32==306
+>>>>>>> d07b0ed2ea71d0585068b2152dde4ff20b0ff1fc
 mdurl~=0.1.2
 llvmlite~=0.40.1
 numba~=0.57.1
@@ -185,6 +189,10 @@ Kivy~=2.2.1
 pyperclip~=1.8.2
 wrapt~=1.15.0
 parsel~=1.8.1
+<<<<<<< HEAD
 folium~=0.17.0
+=======
+folium~=0.19.4
+>>>>>>> d07b0ed2ea71d0585068b2152dde4ff20b0ff1fc
 ujson~=5.10.0
 statsmodels~=0.14.0
