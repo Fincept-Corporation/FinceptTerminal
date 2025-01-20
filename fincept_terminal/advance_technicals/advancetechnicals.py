@@ -45,7 +45,7 @@ def show_country_menu(continent):
     selected_country = countries[int(choice) - 1]
     console.print("\n")
 
-    from fincept_terminal.global_stocks.stock import show_sectors_in_country
+    from fincept_terminal.global_data.stock import show_sectors_in_country
     return show_sectors_in_country(selected_country)
 
 
@@ -63,16 +63,16 @@ def get_countries_by_continent(continent):
 
 # Step 1: Technical Main Menu
 def show_technical_main_menu():
-    """Technical analysis main menu that allows Global or direct stock symbol selection."""
+    """Technical analysis main menu that allows global_data or direct stock symbol selection."""
     console.print("[bold cyan]TECHNICAL ANALYSIS MENU[/bold cyan]\n", style="info")
 
     # Step 1.1: List the main options
-    options = ["Global Stocks", "Search Stock Symbol", "Main Menu"]
+    options = ["global_data Stocks", "Search Stock Symbol", "Main Menu"]
     display_in_columns("Select an Option", options)
 
     choice = Prompt.ask("Enter your choice")
 
-    if choice == "1":  # Global Stocks
+    if choice == "1":  # global_data Stocks
         show_equities_menu()  # This will handle stock selection through continents/countries
 
         # You need to store the selected stock symbol in this process

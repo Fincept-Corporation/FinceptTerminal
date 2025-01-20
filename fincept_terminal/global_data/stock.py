@@ -22,7 +22,7 @@ def show_country_menu(continent):
         from fincept_terminal.cli import show_main_menu
         show_main_menu()
     else:
-        from fincept_terminal.global_stocks.stock import show_sectors_in_country
+        from fincept_terminal.global_data.stock import show_sectors_in_country
         return show_sectors_in_country(selected_country)
 
 def show_equities_menu():
