@@ -1,0 +1,5 @@
+if ema(RITES.NS, 21) > wma(RITES.NS, 50) {
+    buy "EMA 21 crosses WMA 50 Buy"
+}
+
+plot_candlestick RITES.NS, "RITES Candlestick Chart"
