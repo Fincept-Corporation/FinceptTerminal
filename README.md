@@ -3,7 +3,11 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/yourusername/fincept-investments/blob/main/LICENSE.txt)
 [![PyPI - Version](https://img.shields.io/pypi/v/fincept-investments.svg)](https://pypi.org/project/fincept-investments/)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fincept-investments.svg)](https://pypi.org/project/fincept-investments/)
+<a target="_blank" href="https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/examples/news_sentiment_demo.ipynb">
+  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+</a>
 [![Downloads](https://static.pepy.tech/badge/fincept-investments/month)](https://pypi.org/project/fincept-investments/)
+
 
 **Fincept Investments** is a comprehensive CLI tool that provides financial insights, market analysis, and a host of other financial services such as technical analysis, fundamental analysis, sentiment analysis, quantitative analysis, and economic data services. It's designed to help investors and financial professionals navigate the complex world of investments with ease and precision.
 
