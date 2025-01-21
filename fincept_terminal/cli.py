@@ -13,7 +13,7 @@ logging.getLogger('numexpr').setLevel(logging.ERROR)
 warnings.filterwarnings("ignore")
 
 @click.group(invoke_without_command=True)
-@click.version_option(version="0.1.4", prog_name="Fincept Investments Terminal")
+@click.version_option(version="1.0.0", prog_name="Fincept Investments Terminal")
 @click.pass_context
 def cli(ctx):
     """Fincept Investments CLI - Your professional financial terminal."""
