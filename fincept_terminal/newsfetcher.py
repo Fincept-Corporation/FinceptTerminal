@@ -17,8 +17,7 @@ sentiment_analysis = pipeline("sentiment-analysis")
 google_news = GNews(language='en', max_results=25)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FOLDER = os.path.join(BASE_DIR, "settings")
-SETTINGS_FILE = os.path.join(SETTINGS_FOLDER, "settings.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
 
 # Mapping of continents to the countries they contain
 CONTINENT_COUNTRIES = {
@@ -48,22 +47,29 @@ def analyze_sentiment(text):
 def fetch_and_display_news_with_sentiment(topic, country):
     from fincept_terminal.data_connectors.Gnews.news_from_gnews import fetch_gnews_news
     from fincept_terminal.data_connectors.NewsAPI.news_from_newsapi import fetch_newsapi_news
+    from fincept_terminal.data_connectors.RSS_Feed.news_from_rssfeed import fetch_rss_feed_news
 
     settings = load_settings()
     source = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("source")
     api_key = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("api_key")
+    rss_feed_urls = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("rss_feeds")
 
     # Determine the source to use
     if source == "GNews":
         articles = fetch_gnews_news(topic, country)
     elif source == "News API":
         articles = fetch_newsapi_news(topic, country, api_key)
+    elif source == "RSS_Feed (API)":
+        articles = []
+        for rss_feed_url in rss_feed_urls:
+            articles.extend(fetch_rss_feed_news(rss_feed_url))
     else:
         console.print("[bold red]No valid source configured for Global News & Sentiment.[/bold red]")
         return
 
     # If no articles are found
     if not articles:
+        console.print("[bold red]No articles found.[/bold red]")
         return
 
     # Display articles and perform sentiment analysis
@@ -91,7 +97,6 @@ def fetch_and_display_news_with_sentiment(topic, country):
 
     console.print(table)
     display_sentiment_bar(positive_count, neutral_count, negative_count)
-
 # Display sentiment bar
 def display_sentiment_bar(positive, neutral, negative):
     total = positive + neutral + negative
@@ -120,10 +125,10 @@ def display_sentiment_bar(positive, neutral, negative):
 def show_news_and_sentiment_menu():
     from fincept_terminal.data_connectors.Gnews.news_from_gnews import set_gnews_country
 
-    """Display global news and sentiment analysis by continent and country."""
     settings = load_settings()
     news_source = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("source", "GNews")
     api_key = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("api_key")
+    rss_feed_url = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("rss_feeds")
 
     continents = list(CONTINENT_COUNTRIES.keys()) + ["WORLD", "BACK TO MAIN MENU"]
 
@@ -185,11 +190,15 @@ def show_news_and_sentiment_menu():
             fetch_and_display_news_with_sentiment(selected_topic, selected_country)
         elif news_source == "News API" and api_key:
             fetch_and_display_news_with_sentiment(selected_topic, selected_country)
+        elif news_source == "RSS_Feed (API)" and rss_feed_url:
+            fetch_and_display_news_with_sentiment(selected_topic, selected_country)
         else:
             console.print("[bold red]No valid news source configured. Please check your settings.[/bold red]")
             return
 
         another_news = Prompt.ask("\nWould you like to fetch more news? (yes/no)", default="no").lower()
         if another_news != "yes":
-            return
+            console.print("\n[bold yellow]Returning to the main menu...[/bold yellow]")
+            from fincept_terminal.cli import show_main_menu
+            return show_main_menu()
 
