@@ -1,83 +1,195 @@
-import os
-import requests
-from dotenv import load_dotenv
-
-load_dotenv()
-
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")
-NEWS_API_URL = "https://newsapi.org/v2/top-headlines"
-
-def fetch_latest_news(country="us", category=None, page_size=5):
-    """
-    Fetch the latest news articles using the News API.
-
-    :param country: Country code for news (default: 'us').
-    :param category: News category (e.g., 'technology', 'business').
-    :param page_size: Number of articles to fetch (default: 5).
-    :return: List of news articles or error message.
-    """
-    # Validate API key
-    if not NEWS_API_KEY or NEWS_API_KEY.strip() == "":
-        return "API key is missing or empty. Please set NEWS_API_KEY in the .env file."
-
-    params = {
-        "apiKey": NEWS_API_KEY,
-        "country": country,
-        "pageSize": page_size,
-    }
-
-    if category:
-        params["category"] = category
-
-    try:
-        response = requests.get(NEWS_API_URL, params=params)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-
-        if response.status_code == 401:  # Unauthorized - Invalid API Key
-            return "Invalid API key. Please check your NEWS_API_KEY in the .env file."
-
-        articles = response.json().get("articles", [])
-
-        # Format articles for display
-        formatted_articles = []
-        for article in articles:
-            formatted_articles.append({
-                "title": article.get("title", "No title"),
-                "description": article.get("description", "No description"),
-                "url": article.get("url", "#")
-            })
-
-        return formatted_articles
-
-    except requests.exceptions.RequestException as e:
-        return f"Error fetching news: {e}"
-
-
-
+import warnings
+from gnews import GNews
+from transformers import pipeline
 from fincept_terminal.utils.themes import console
-from rich.table import Table
+from fincept_terminal.utils.const import display_in_columns
+from rich.prompt import Prompt
+import ujson as json
+import os
 
-def display_latest_news():
-    """Fetch and display the latest news articles."""
-    console.print("\n[bold cyan]Fetching the latest news...[/bold cyan]")
-    news_articles = fetch_latest_news()
+# Suppress warnings from transformers
+warnings.filterwarnings("ignore", category=UserWarning)
 
-    if isinstance(news_articles, str):  # Handle error messages as strings
-        console.print(f"[bold red]{news_articles}[/bold red]")
+# Initialize Hugging Face sentiment analysis pipeline
+sentiment_analysis = pipeline("sentiment-analysis")
+
+# Initialize GNews with default settings
+google_news = GNews(language='en', max_results=25)
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SETTINGS_FOLDER = os.path.join(BASE_DIR, "settings")
+SETTINGS_FILE = os.path.join(SETTINGS_FOLDER, "settings.json")
+
+# Mapping of continents to the countries they contain
+CONTINENT_COUNTRIES = {
+    'ASIA': ['INDIA', 'INDONESIA', 'ISRAEL', 'JAPAN', 'REPUBLIC OF KOREA', 'CHINA', 'TAIWAN', 'THAILAND', 'VIETNAM'],
+    'EUROPE': ['UNITED KINGDOM', 'GERMANY', 'FRANCE', 'ITALY', 'SPAIN', 'NETHERLANDS', 'SWEDEN', 'NORWAY'],
+    'AFRICA': ['SOUTH AFRICA', 'NIGERIA', 'KENYA', 'ETHIOPIA', 'GHANA', 'UGANDA', 'TANZANIA'],
+    'NORTH AMERICA': ['UNITED STATES', 'CANADA', 'MEXICO'],
+    'SOUTH AMERICA': ['BRAZIL', 'ARGENTINA', 'COLOMBIA', 'CHILE'],
+    'OCEANIA': ['AUSTRALIA', 'NEW ZEALAND'],
+    'MIDDLE EAST': ['UNITED ARAB EMIRATES', 'SAUDI ARABIA', 'LEBANON', 'EGYPT']
+}
+
+# Helper: Load settings
+def load_settings():
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+# Helper: Analyze sentiment
+def analyze_sentiment(text):
+    result = sentiment_analysis(text[:512])  # Limit to 512 characters for model compatibility
+    sentiment = result[0]['label']  # Get sentiment label (POSITIVE, NEGATIVE, NEUTRAL)
+    return sentiment
+
+# Fetch and display news with sentiment analysis
+def fetch_and_display_news_with_sentiment(topic, country):
+    from fincept_terminal.data_connectors.Gnews.news_from_gnews import fetch_gnews_news
+    from fincept_terminal.data_connectors.NewsAPI.news_from_newsapi import fetch_newsapi_news
+
+    settings = load_settings()
+    source = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("source")
+    api_key = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("api_key")
+
+    # Determine the source to use
+    if source == "GNews":
+        articles = fetch_gnews_news(topic, country)
+    elif source == "News API":
+        articles = fetch_newsapi_news(topic, country, api_key)
+    else:
+        console.print("[bold red]No valid source configured for Global News & Sentiment.[/bold red]")
         return
 
-    if not news_articles:  # Handle cases where no articles are returned
-        console.print("[bold yellow]No news articles available.[/bold yellow]")
+    # If no articles are found
+    if not articles:
         return
 
-    table = Table(title="Latest News", header_style="bold green")
-    table.add_column("Title", justify="left", style="cyan", no_wrap=True)
-    table.add_column("Description", justify="left", style="white", no_wrap=False)
-    table.add_column("URL", justify="left", style="yellow", no_wrap=True)
+    # Display articles and perform sentiment analysis
+    from rich.table import Table
+    table = Table(title=f"{topic} News for {country}", title_justify="center", header_style="bold green on #282828")
+    table.add_column("Headline", style="cyan", justify="left", no_wrap=False)
+    table.add_column("Sentiment", style="magenta", justify="center")
 
-    for article in news_articles:
-        table.add_row(article["title"], article["description"], article["url"])
+    positive_count = 0
+    neutral_count = 0
+    negative_count = 0
+
+    for article in articles:
+        headline = article['title']
+        sentiment = analyze_sentiment(headline)
+
+        if sentiment == "POSITIVE":
+            positive_count += 1
+        elif sentiment == "NEGATIVE":
+            negative_count += 1
+        else:
+            neutral_count += 1
+
+        table.add_row(headline, sentiment)
 
     console.print(table)
+    display_sentiment_bar(positive_count, neutral_count, negative_count)
 
+# Display sentiment bar
+def display_sentiment_bar(positive, neutral, negative):
+    total = positive + neutral + negative
+    if total == 0:
+        console.print("[bold red]No sentiment data available.[/bold red]")
+        return
+
+    positive_percent = (positive / total) * 100
+    neutral_percent = (neutral / total) * 100
+    negative_percent = (negative / total) * 100
+
+    bar_length = 40
+    positive_bar = '█' * int((positive_percent / 100) * bar_length)
+    neutral_bar = '█' * int((neutral_percent / 100) * bar_length)
+    negative_bar = '█' * int((negative_percent / 100) * bar_length)
+
+    positive_label = f"Positive: {positive} ({positive_percent:.2f}%)"
+    neutral_label = f"Neutral: {neutral} ({neutral_percent:.2f}%)"
+    negative_label = f"Negative: {negative} ({negative_percent:.2f}%)"
+
+    console.print(
+        f"\n[bold green]{positive_label}[/bold green] {positive_bar}  "
+        f"[bold yellow]{neutral_label}[/bold yellow] {neutral_bar}  "
+        f"[bold red]{negative_label}[/bold red] {negative_bar}"
+    )
+def show_news_and_sentiment_menu():
+    from fincept_terminal.data_connectors.Gnews.news_from_gnews import set_gnews_country
+
+    """Display global news and sentiment analysis by continent and country."""
+    settings = load_settings()
+    news_source = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("source", "GNews")
+    api_key = settings.get("data_sources", {}).get("Global News & Sentiment", {}).get("api_key")
+
+    continents = list(CONTINENT_COUNTRIES.keys()) + ["WORLD", "BACK TO MAIN MENU"]
+
+    while True:
+        console.print("[bold cyan]GLOBAL NEWS AND SENTIMENT[/bold cyan]\n", style="info")
+        display_in_columns("Select a Continent or WORLD", continents)
+
+        continent_choice = Prompt.ask("Enter your continent choice (Press enter to default to WORLD)", default="WORLD")
+
+        if continent_choice.upper() == "BACK TO MAIN MENU":
+            return
+
+        try:
+            selected_continent = continents[int(continent_choice) - 1] if continent_choice.isdigit() else continent_choice
+        except (IndexError, ValueError):
+            console.print(f"[bold red]Invalid choice. Please select a valid continent or WORLD.[/bold red]")
+            continue
+
+        if selected_continent.upper() == "WORLD":
+            selected_country = "WORLD"
+            google_news.country = None
+            console.print(f"[bold cyan]Fetching global news...[/bold cyan]")
+        else:
+            countries = CONTINENT_COUNTRIES[selected_continent.upper()] + ["BACK TO MAIN MENU"]
+            display_in_columns(f"Select a Country in {selected_continent}", countries)
+
+            country_choice = Prompt.ask("Enter your country choice", default="WORLD")
+            try:
+                selected_country = countries[int(country_choice) - 1] if country_choice.isdigit() else country_choice
+            except (IndexError, ValueError):
+                console.print(f"[bold red]Invalid country selection. Please choose a valid country from the list.[/bold red]")
+                continue
+
+            if selected_country.upper() == "BACK TO MAIN MENU":
+                return
+
+            set_gnews_country(selected_country)
+
+        # Topic selection
+        topics = ["NATION", "BUSINESS", "TECHNOLOGY", "CUSTOM KEYWORD", "BACK TO MAIN MENU"]
+        display_in_columns("Select a Topic", topics)
+
+        topic_choice = Prompt.ask("Enter your topic choice", default="BUSINESS")
+        try:
+            selected_topic = topics[int(topic_choice) - 1] if topic_choice.isdigit() else topic_choice
+        except (IndexError, ValueError):
+            console.print("[bold red]Invalid choice. Please select a valid topic.[/bold red]")
+            continue
+
+        if selected_topic.upper() == "BACK TO MAIN MENU":
+            return
+
+        if selected_topic.upper() == "CUSTOM KEYWORD":
+            keyword = Prompt.ask("Enter the keyword you want to search for (e.g., HDFC Bank)")
+            selected_topic = keyword
+
+        # Fetch and display news based on the selected source
+        if news_source == "GNews":
+            fetch_and_display_news_with_sentiment(selected_topic, selected_country)
+        elif news_source == "News API" and api_key:
+            fetch_and_display_news_with_sentiment(selected_topic, selected_country)
+        else:
+            console.print("[bold red]No valid news source configured. Please check your settings.[/bold red]")
+            return
+
+        another_news = Prompt.ask("\nWould you like to fetch more news? (yes/no)", default="no").lower()
+        if another_news != "yes":
+            return
 
