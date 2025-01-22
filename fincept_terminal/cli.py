@@ -144,7 +144,7 @@ def show_main_menu():
         "SETTINGS & CUSTOMIZATION",  # 21
         "TERMINAL DOCUMENTATION",  # 22
         "CONSUMER BEHAVIOUR",  # 23
-        "LIVE PRICE INDIA",  # 24
+        "REPORTS AND ANALYTICS",  # 24
         "SATELLITE IMAGERY ANALYSIS",  # 25
         "MARINE TRADE DATA",  # 26
         "INDIA MACRO & MICRO DATA",  # 27
@@ -238,8 +238,8 @@ def show_main_menu():
         from fincept_terminal.consumer_behaviour.consumer_behavior import show_consumer_behavior_menu
         show_consumer_behavior_menu()
     elif choice == 24:
-        from fincept_terminal.live_price_india.liveprice import start_live_price_menu
-        start_live_price_menu()
+        from fincept_terminal.analytics_reports.analytics import daily_report_menu
+        daily_report_menu()
     elif choice == 25:
         from fincept_terminal.satellite_imagery_analysis.SatelliteImagery import show_car_analysis_menu
         show_car_analysis_menu()
