@@ -1,9 +1,10 @@
 import requests
+import pandas as pd
 from rich.prompt import Prompt
 from fincept_terminal.utils.themes import console
 from fincept_terminal.utils.const import display_in_columns
 from statsmodels.tsa.arima.model import ARIMA
-
+from fincept_terminal.settings.settings import load_settings
 # Your FRED API key
 FRED_API_KEY = "186968c7ec98984b5d08393e93aedf2b"
 
@@ -183,56 +184,106 @@ def display_series_id_paginated(indices, start_index=0, page_size=21):
             return display_series_id_paginated(indices, start_index)
 
 def query_fred_data():
-    """Query and display FRED data, with an option to perform ARIMA analysis."""
+    """Query and display FRED data based on the selected data source, with an option to perform ARIMA analysis."""
     try:
-        fredCategoryData_url = "https://fincept.share.zrok.io/metaData/fredCategoryData/data?limit=30"
-        response = requests.get(fredCategoryData_url)
-        response.raise_for_status()
-        fredcategorydata = response.json()
+        # Load settings to get the selected data source
+        settings = load_settings()
+        data_source = settings.get("data_sources", {}).get("World Economy Tracker", {}).get("source", "Fincept API")
+        fred_api_key = settings.get("data_sources", {}).get("World Economy Tracker", {}).get("api_key", None)
 
-        #series_id = [item['id'] for item in fredcategorydata]
-        selected_series = display_series_id_paginated(fredcategorydata)
-        selected_id = selected_series['id']
+        if data_source == "Fincept API":
+            # Use Fincept API to fetch data
+            fredCategoryData_url = "https://fincept.share.zrok.io/metaData/fredCategoryData/data?limit=30"
+            response = requests.get(fredCategoryData_url)
+            response.raise_for_status()
+            fred_category_data = response.json()
 
-        # Prompt the user to enter a FRED series ID
-        #series_id = Prompt.ask("Enter the FRED Series ID (e.g., GDP, UNRATE)")
+            selected_series = display_series_id_paginated(fred_category_data)
+            selected_id = selected_series['id']
 
-        # Build the FRED API URL
-        fred_url = f"https://api.stlouisfed.org/fred/series/observations?series_id={selected_id}&api_key={FRED_API_KEY}&file_type=json"
+            # Fetch observations from Fincept API
+            fred_url = f"https://fincept.share.zrok.io/metaData/fredData/data?series_id={selected_id}&limit=100"
+            response = requests.get(fred_url)
+            response.raise_for_status()
+            fred_data = response.json()
+
+        elif data_source == "FRED (API)":
+            # Fetch data directly from FRED API
+            selected_id = Prompt.ask("Enter the FRED Series ID (e.g., GDP, UNRATE)")
+            fred_data = fetch_fred_api_data(selected_id, fred_api_key)
+
+        else:
+            console.print("[bold red]No valid data source configured for FRED data.[/bold red]")
+            return
+
+        # Process the retrieved data
+        process_fred_data(fred_data, selected_id)
+
+    except requests.exceptions.RequestException as e:
+        console.print(f"[bold red]Error fetching FRED data: {e}[/bold red]", style="danger")
+
+def fetch_fred_api_data(series_id, api_key):
+    """
+    Fetch economic data from the FRED API.
+
+    Parameters:
+    series_id (str): The FRED series ID (e.g., GDP, UNRATE).
+    api_key (str): The API key for accessing the FRED API.
+
+    Returns:
+    dict: JSON response from the FRED API.
+    """
+    if not api_key:
+        raise ValueError("FRED API key is not configured in the settings.")
+
+    fred_url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={api_key}&file_type=json"
+
+    try:
         response = requests.get(fred_url)
         response.raise_for_status()
         fred_data = response.json()
 
-        if "observations" in fred_data:
-            observations = fred_data["observations"]
-            if observations:
-                import pandas as pd
-                # Convert observations to a DataFrame
-                df = pd.DataFrame(observations)
-                df['date'] = pd.to_datetime(df['date'])
-                df['value'] = pd.to_numeric(df['value'], errors='coerce')
+        if "observations" not in fred_data:
+            raise ValueError(f"Error fetching data: {fred_data.get('error_message', 'Unknown error')}")
 
-                console.print(f"[bold green]FRED Data for {selected_id.upper()} retrieved successfully.[/bold green]")
-
-                display_items = [f"Date: {row['date'].strftime('%Y-%m-%d')} | Value: {row['value']}" for _, row in df.iterrows()]
-                paginate_display_in_columns(f"FRED Data for {selected_id.upper()}", display_items)
-
-                # Ask the user if they want to perform ARIMA analysis
-                perform_arima = Prompt.ask("Would you like to perform ARIMA analysis on this data? (yes/no)", default="yes")
-
-                if perform_arima.lower() == 'yes':
-                    arima_analysis(df, selected_id)
-
-                # Return to the World Economy Tracker menu
-                show_world_economy_tracker_menu()
-
-            else:
-                console.print(f"[bold red]No data found for the FRED Series ID: {selected_id}[/bold red]", style="danger")
-        else:
-            console.print(f"[bold red]Error retrieving FRED data: {fred_data.get('error_message', 'Unknown error')}[/bold red]", style="danger")
+        return fred_data
 
     except requests.exceptions.RequestException as e:
-        console.print(f"[bold red]Error fetching FRED data: {e}[/bold red]", style="danger")
+        raise RuntimeError(f"Error querying FRED API: {e}")
+
+
+def process_fred_data(fred_data, selected_id):
+    """
+    Process and display FRED data.
+
+    Parameters:
+    fred_data (dict): The JSON response containing FRED data.
+    selected_id (str): The selected FRED series ID.
+    """
+    if "observations" in fred_data:
+        observations = fred_data["observations"]
+        if observations:
+            # Convert observations to a DataFrame
+            df = pd.DataFrame(observations)
+            df['date'] = pd.to_datetime(df['date'])
+            df['value'] = pd.to_numeric(df['value'], errors='coerce')
+
+            console.print(f"[bold green]FRED Data for {selected_id.upper()} retrieved successfully.[/bold green]")
+
+            display_items = [f"Date: {row['date'].strftime('%Y-%m-%d')} | Value: {row['value']}" for _, row in df.iterrows()]
+            paginate_display_in_columns(f"FRED Data for {selected_id.upper()}", display_items)
+
+            # Ask the user if they want to perform ARIMA analysis
+            perform_arima = Prompt.ask("Would you like to perform ARIMA analysis on this data? (yes/no)", default="yes")
+
+            if perform_arima.lower() == 'yes':
+                arima_analysis(df, selected_id)
+
+        else:
+            console.print(f"[bold red]No data found for the FRED Series ID: {selected_id}[/bold red]", style="danger")
+    else:
+        console.print(f"[bold red]Error retrieving FRED data: {fred_data.get('error_message', 'Unknown error')}[/bold red]", style="danger")
+
 
 def arima_analysis(df, series_id):
     """Perform ARIMA analysis on the FRED data."""

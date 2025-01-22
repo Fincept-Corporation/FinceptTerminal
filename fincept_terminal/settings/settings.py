@@ -68,38 +68,88 @@ def settings_menu(ctx):
 
 
 def configure_sources():
-    """Configure data sources for different data menus."""
+    """Configure data sources for different data menus in a tabular form."""
+    from rich.console import Console
+    from rich.prompt import Prompt
+    from fincept_terminal.utils.const import display_in_columns
+
+    console = Console()
+
+    # Define the data menus and source options
     data_menus = {
         "Global Indices": ["Source A (API)", "Source B (Public Data)", "Source C (Custom API)"],
         "World Economy Tracker": ["Source X", "Source Y (API)", "Source Z"],
-        "Global News & Sentiment": ["News API", "GNews"],
+        "Global News & Sentiment": ["News API", "GNews", "RSS_Feed (API)"],
         "Currency Markets": ["Forex API", "Crypto Exchange Data"],
         "Portfolio Management": ["Manual Input", "Broker API"],
-        "GenAI Model" : ["Gemini (API)", "OpenAI (API)", "Ollama (API)", "Claude (API)"]
+        "GenAI Model": ["Gemini (API)", "OpenAI (API)", "Ollama (API)", "Claude (API)"]
     }
 
     settings = load_settings()
 
-    # Iterate over each data menu and configure the source
-    for menu, source_options in data_menus.items():
-        console.print(f"\n[bold cyan]{menu} Sources[/bold cyan]")
-        for idx, source in enumerate(source_options, 1):
-            console.print(f"{idx}. {source}")
+    while True:
+        # Display the modules with their current data sources in columns
+        module_names = list(data_menus.keys())
+        current_sources = [
+            settings.get("data_sources", {}).get(module, {}).get("source", "Not Configured")
+            for module in module_names
+        ]
+        options_to_display = [
+            f"{module} (Current: {source})"
+            for module, source in zip(module_names, current_sources)
+        ]
 
-        choice = Prompt.ask(
-            f"Select a source for [cyan]{menu}[/cyan] (Enter the number)",
-            choices=[str(i) for i in range(1, len(source_options) + 1)]
+        display_in_columns("Data Source Modules", options_to_display)
+
+        console.print("\n")
+        module_choice = Prompt.ask(
+            "Enter the [yellow]option number[/yellow] of the module you want to configure (or type '0' to finish)",
+            choices=[str(i + 1) for i in range(len(module_names))] + ["0"],
+            default="0"
         )
-        selected_source = source_options[int(choice) - 1]
-        settings["data_sources"][menu] = {"source": selected_source}
 
-        # If the source requires an API key, prompt the user
-        if "API" in selected_source:
+        if module_choice == "0":
+            break
+
+        module_index = int(module_choice) - 1
+        selected_module = module_names[module_index]
+
+        # Display source options for the selected module
+        console.print(f"\n[cyan]Select a data source for [bold]{selected_module}[/bold]:[/cyan]")
+        source_options = data_menus[selected_module]
+        display_in_columns(f"Available Sources for {selected_module}", source_options)
+
+        source_choice = Prompt.ask(
+            f"Select a source for [cyan]{selected_module}[/cyan] (Enter the number)",
+            choices=[str(i + 1) for i in range(len(source_options))]
+        )
+        selected_source = source_options[int(source_choice) - 1]
+        settings["data_sources"][selected_module] = {"source": selected_source}
+
+        # Handle RSS Feed inputs
+        if selected_source == "RSS_Feed (API)":
+            console.print("\n[cyan]You can add multiple RSS feed URLs. Type 'done' when finished.[/cyan]")
+            rss_feeds = []
+            while True:
+                rss_feed_url = Prompt.ask("Enter an RSS feed URL (or type 'done' to finish)")
+                if rss_feed_url.lower() == "done":
+                    break
+                rss_feeds.append(rss_feed_url)
+
+            settings["data_sources"][selected_module]["rss_feeds"] = rss_feeds
+
+        # Handle API key input
+        elif "API" in selected_source and selected_source != "RSS_Feed (API)":
             api_key = Prompt.ask(f"Enter the API key for [cyan]{selected_source}[/cyan]")
-            settings["data_sources"][menu]["api_key"] = api_key
+            settings["data_sources"][selected_module]["api_key"] = api_key
+
+        console.print(f"[green]Configuration for {selected_module} updated successfully![/green]\n")
 
     save_settings(settings)
-    console.print("\n[green]Data sources configured successfully![/green]")
+    console.print("[bold green]All data sources configured successfully![/bold green]")
+
+
+
 
 
 def change_theme():
