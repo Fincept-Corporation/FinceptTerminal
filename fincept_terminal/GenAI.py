@@ -26,7 +26,6 @@ def genai_query(user_input):
     except requests.exceptions.RequestException as e:
         return f"Error processing query: {str(e)}"
 
-
 def format_genai_response(response):
     """
     Dynamically format the response text: remove unnecessary symbols, handle Markdown-like syntax, and apply styling.
@@ -41,7 +40,6 @@ def format_genai_response(response):
 
     from rich.text import Text
     return Text(response, style="bold cyan")
-
 
 def show_genai_query():
     """Prompt the user for a finance-related query and send it to the GenAI API."""
@@ -69,3 +67,48 @@ def show_genai_query():
             from fincept_terminal.cli import show_main_menu
             show_main_menu()
             return  # Redirect back to the main menu if user types 'no'
+
+import requests
+
+def fetch_gov_data():
+    url = "https://datos.gob.es/en/apidata#/"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return None
+
+def display_gov_data(data):
+    if data:
+        # Format and display the data as needed
+        print("Government Data:")
+        for item in data:
+            print(f"Title: {item['title']}, Description: {item['description']}")
+    else:
+        print("Failed to fetch data.")
+
+def main_menu():
+    while True:
+        print("Main Menu:")
+        print("1. Existing Option 1")
+        print("2. Existing Option 2")
+        print("3. Fetch Government Data")
+        print("4. Exit")
+        choice = input("Enter your choice: ")
+
+        if choice == '1':
+            # Existing functionality
+            pass
+        elif choice == '2':
+            # Existing functionality
+            pass
+        elif choice == '3':
+            data = fetch_gov_data()
+            display_gov_data(data)
+        elif choice == '4':
+            break
+        else:
+            print("Invalid choice. Please try again.")
+
+if __name__ == "__main__":
+    main_menu()
