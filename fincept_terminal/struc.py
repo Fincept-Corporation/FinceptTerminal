@@ -3,12 +3,12 @@ from pathlib import Path
 
 # Define the project structure as a dictionary
 project_structure = {
-    'ai_hedge_fund': [
+    'ai_hedge_funds': [
         'README.md',
         'LICENSE',
         'setup.py',
         'requirements.txt',
-        {'ai_hedge_fund': [
+        {'ai_hedge_funds': [
             '__init__.py',
             {'agents': [
                 '__init__.py',

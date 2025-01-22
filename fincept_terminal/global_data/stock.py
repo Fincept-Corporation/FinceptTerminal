@@ -78,55 +78,70 @@ def query_direct_from_yahoo():
 
 def fetch_sectors_with_retry(country, max_retries=3, retry_delay=2):
     """Fetch sectors with retry logic."""
-    sectors_url = f"https://fincept.share.zrok.io/FinanceDB/equities/sectors_and_industries_and_stocks?filter_column=country&filter_value={country}"
+    sectors_url = f"https://finceptapi.share.zrok.io/public/FinanceDB/equities/sectors_and_industries_and_stocks?filter_column=country&filter_value={country}"
+
+    import requests, time
 
     retries = 0
     while retries < max_retries:
-        import requests
         try:
-            # Simulate fetching sectors (replace this with actual request logic)
             response = requests.get(sectors_url)
             response.raise_for_status()
-            sectors = response.json().get('sectors', [])
+
+            # The endpoint returns a list, so parse it directly
+            sectors = response.json()
+            # Optional: Validate it's really a list
+            if not isinstance(sectors, list):
+                # If it's not a list, handle or raise an error as appropriate
+                return None
+
             return sectors
         except requests.exceptions.RequestException:
             retries += 1
-            import time
-            time.sleep(retry_delay)  # Wait before retrying
-            if retries >= max_retries:
-                return None  # Return None after max retries
+            time.sleep(retry_delay)
+
+    # If we reach max_retries without a successful response, return None
+    return None
 
 
 def show_sectors_in_country(country):
-    """Fetch sectors for the selected country and allow the user to select one."""
+    """
+    Fetch sectors for the selected country and allow the user to select one.
+    """
     from fincept_terminal.utils.themes import console
     console.print(f"[bold cyan]Fetching sectors for {country}...[/bold cyan]\n", style="info")
 
     # Fetch sectors with retries
     sectors = fetch_sectors_with_retry(country)
-    sectors.append("BACK TO MAIN MENU")
 
+    # If the call failed or returned no data, sectors will be None or an empty list
     if not sectors:
-        # Display user-friendly error after retries
         console.print(
-            f"[bold red]Data temporarily unavailable for {country}. Redirecting to the main menu...[/bold red]",
-            style="danger")
+            f"[bold red]Data temporarily unavailable for {country}. "
+            f"Redirecting to the main menu...[/bold red]",
+            style="danger",
+        )
         return False  # Indicate failure to fetch sectors, return to main menu
 
-    console.print(f"[bold cyan]Sectors in {country}[/bold cyan]\n", style="info")
+    # Append "BACK TO MAIN MENU" so the user can navigate
+    sectors.append("BACK TO MAIN MENU")
+
     from fincept_terminal.utils.const import display_in_columns
+    console.print(f"[bold cyan]Sectors in {country}[/bold cyan]\n", style="info")
     display_in_columns(f"Select a Sector in {country}", sectors)
 
     console.print("\n")
     from rich.prompt import Prompt
     choice = Prompt.ask("Enter your choice")
     selected_sector = sectors[int(choice) - 1]
+
     if selected_sector == "BACK TO MAIN MENU":
         from fincept_terminal.cli import show_main_menu
         show_main_menu()
     else:
+        # Proceed to show industries in the chosen sector
         show_industries_in_sector(country, selected_sector)
-        return True  # Continue normally if sectors were fetched successfully
+        return True
 
 
 import urllib.parse
@@ -134,7 +149,7 @@ import requests
 from fincept_terminal.utils.themes import console
 
 # Define the base URL in a configuration or a constant
-BASE_API_URL = "https://fincept.share.zrok.io/FinanceDB/equities/sectors_and_industries_and_stocks"
+BASE_API_URL = "https://finceptapi.share.zrok.io/public/FinanceDB/equities/sectors_and_industries_and_stocks"
 
 
 def build_url(base_url, params):
@@ -143,8 +158,8 @@ def build_url(base_url, params):
     return f"{base_url}?{query_string}"
 
 
-def fetch_industries_by_sector(country, sector):
-    """Fetch industries for the selected sector with dynamic URL construction."""
+def fetch_industries_by_sector(country, sector, max_retries=3, retry_delay=2):
+
     # URL encode the sector and country as part of query parameters
     params = {
         "filter_column": "country",
@@ -152,25 +167,54 @@ def fetch_industries_by_sector(country, sector):
         "sector": sector
     }
 
-    # Build the full URL dynamically
     industries_url = build_url(BASE_API_URL, params)
 
-    try:
-        response = requests.get(industries_url)
-        response.raise_for_status()
-        industries_data = response.json()
-        return industries_data.get('industries', [])
-    except requests.exceptions.RequestException as e:
-        console.print(f"[bold red]Error fetching industries for {sector} in {country}: {e}[/bold red]", style="danger")
-        return None
+    retries = 0
+    while retries < max_retries:
+        import requests, time
+        try:
+            response = requests.get(industries_url)
+            response.raise_for_status()
+
+            # The endpoint returns a top-level list
+            industries_data = response.json()
+
+            # Validate if it's truly a list
+            if not isinstance(industries_data, list):
+                console.print(
+                    f"[bold red]Unexpected data format received from API for industries in {sector}.[/bold red]",
+                    style="danger"
+                )
+                return None
+
+            return industries_data  # Return the list of industries
+        except requests.exceptions.RequestException as e:
+            console.print(f"[bold yellow]Retry {retries + 1}/{max_retries} failed: {e}[/bold yellow]", style="warning")
+            retries += 1
+            time.sleep(retry_delay)  # Wait before retrying
+
+    # If we reach max retries, return None
+    console.print(
+        f"[bold red]Failed to fetch industries for {sector} in {country} after {max_retries} retries.[/bold red]",
+        style="danger"
+    )
+    return None
 
 
 def show_industries_in_sector(country, sector):
-    """Fetch industries for the selected sector and allow the user to select one."""
+    """
+    Fetch industries for the selected sector and allow the user to select one.
+    """
+    from fincept_terminal.utils.themes import console
+    console.print(f"[bold cyan]Fetching industries for sector '{sector}' in {country}...[/bold cyan]\n", style="info")
+
     industries = fetch_industries_by_sector(country, sector)
 
     if not industries:
-        console.print(f"[bold red]No industries available for {sector} in {country}.[/bold red]", style="danger")
+        console.print(
+            f"[bold red]No industries available for sector '{sector}' in {country}.[/bold red]",
+            style="danger"
+        )
         return
 
     console.print(f"[bold cyan]Industries in {sector}, {country}[/bold cyan]\n", style="info")
