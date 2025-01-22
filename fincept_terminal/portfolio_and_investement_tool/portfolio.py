@@ -1,33 +1,54 @@
 import ujson as json
+import os
 
-PORTFOLIO_FILE = "portfolios.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
+SETTINGS_FILE = os.path.join(BASE_DIR, "..", "settings", "settings.json")
+
 
 def save_portfolios():
-    """Save the portfolios to a JSON file."""
-    serializable_portfolios = {name: [stock.info['symbol'] for stock in stocks] for name, stocks in portfolios.items()}
-
-    with open(PORTFOLIO_FILE, "w") as file:
-        json.dump(serializable_portfolios, file)
-
+    """Save the portfolios to the settings.json file."""
     from fincept_terminal.utils.themes import console
-    console.print("[bold green]Portfolios saved successfully![/bold green]")
+
+    # Load existing settings
+    if os.path.exists(SETTINGS_FILE):
+        with open(SETTINGS_FILE, "r") as file:
+            settings = json.load(file)
+    else:
+        settings = {}
+
+    # Update the portfolios key in the settings
+    settings["portfolios"] = {
+        name: [stock.info.get('symbol', stock.ticker) for stock in stocks]
+        for name, stocks in portfolios.items()
+    }
+
+    # Save updated settings back to the file
+    with open(SETTINGS_FILE, "w") as file:
+        json.dump(settings, file, indent=4)
+
+    console.print("[bold green]Portfolios saved successfully to settings.json![/bold green]")
 
 
 def load_portfolios():
-    """Load portfolios from a JSON file if it exists and is valid."""
+    """Load portfolios from the settings.json file."""
     from os import path
-    if path.exists(PORTFOLIO_FILE):
+    import yfinance as yf
+    from fincept_terminal.utils.themes import console
+
+    if path.exists(SETTINGS_FILE):
         try:
-            with open(PORTFOLIO_FILE, "r") as file:
-                saved_portfolios = json.load(file)
-                # Recreate portfolios with Ticker objects from the saved stock symbols
-                import yfinance as yf
-                return {name: [yf.Ticker(symbol) for symbol in stocks] for name, stocks in saved_portfolios.items()}
+            with open(SETTINGS_FILE, "r") as file:
+                settings = json.load(file)
+                saved_portfolios = settings.get("portfolios", {})
+                return {
+                    name: [yf.Ticker(symbol) for symbol in stocks]
+                    for name, stocks in saved_portfolios.items()
+                }
         except (json.JSONDecodeError, ValueError):
-            from fincept_terminal.utils.themes import console
             console.print(
-                "[bold red]Error: The portfolio file is corrupted or empty. Starting with an empty portfolio.[/bold red]")
-            return {}  # Return an empty dictionary if the JSON is invalid or corrupted
+                "[bold red]Error: The settings file is corrupted or invalid. Starting with an empty portfolio.[/bold red]"
+            )
+            return {}  # Return empty dictionary if JSON is invalid
     return {}
 
 # Load the portfolios at startup
@@ -159,42 +180,38 @@ def manage_selected_portfolio(portfolio_name, country):
 
 
 def add_stock_to_portfolio(portfolio_name=None):
-    """Allow users to add multiple stocks to the selected portfolio until they choose to return."""
-    from fincept_terminal.utils.themes import console
+    """Add stocks to an existing portfolio."""
     from rich.prompt import Prompt
+    from fincept_terminal.utils.themes import console
+    import yfinance as yf
+
     if portfolio_name is None:
-        # Ask the user to select a portfolio if none provided
         if not portfolios:
-            console.print("[bold red]No portfolios available. Please create a portfolio first.[/bold red]")
+            console.print("[bold red]No portfolios available. Please create one first.[/bold red]")
             return
 
-        # Display available portfolios for selection
         portfolio_names = list(portfolios.keys())
-        from fincept_terminal.utils.const import display_in_columns
-        display_in_columns("Select a Portfolio", portfolio_names)
-        portfolio_choice = Prompt.ask("Enter the portfolio number to select")
-        portfolio_name = portfolio_names[int(portfolio_choice) - 1]
+        portfolio_name = Prompt.ask("Enter the portfolio name")
 
     while True:
-        # Ask the user for a stock symbol
-        ticker = Prompt.ask("Enter the stock symbol (or type 'back' to return to the portfolio menu)")
+        ticker = Prompt.ask("Enter the stock symbol (or type 'back' to return)")
         if ticker.lower() == 'back':
-            break  # Exit the loop and return to the portfolio menu
+            break
 
         try:
-            # Create a yfinance.Ticker object from the symbol
-            import yfinance as yf
             stock = yf.Ticker(ticker)
-            stock_info = stock.history(period="1y")  # Fetch 1-year historical data
+            stock_info = stock.history(period="1y")
 
             if not stock_info.empty:
-                # Add the Ticker object to the portfolio
                 portfolios[portfolio_name].append(stock)
                 console.print(f"[bold green]{ticker} added to portfolio '{portfolio_name}'![/bold green]")
+
+                # Save updated portfolios to settings.json
+                save_portfolios()
             else:
                 console.print(f"[bold red]No data found for {ticker}.[/bold red]")
         except Exception as e:
-            console.print(f"[bold red]Error: {e}[/bold red]")
+            console.print(f"[bold red]Error adding stock: {e}[/bold red]")
 
 
 def view_portfolio(portfolio_name):
@@ -362,23 +379,43 @@ def view_all_portfolios():
 def modify_portfolio_name():
     """Modify the name of an existing portfolio."""
     from rich.prompt import Prompt
+    from fincept_terminal.utils.themes import console
+
+    if not portfolios:
+        console.print("[bold yellow]No portfolios available to modify.[/bold yellow]")
+        return
+
     portfolio_name = Prompt.ask("Enter the portfolio name you want to modify")
 
-    from fincept_terminal.utils.themes import console
     if portfolio_name not in portfolios:
         console.print(f"[bold red]Portfolio '{portfolio_name}' does not exist.[/bold red]")
         return
 
     new_name = Prompt.ask("Enter the new portfolio name")
-    portfolios[new_name] = portfolios.pop(portfolio_name)  # Rename the portfolio
-    console.print(f"Portfolio '{portfolio_name}' renamed to '{new_name}' successfully!")
-    save_portfolios()  # Save the changes
+
+    if new_name in portfolios:
+        console.print(f"[bold red]A portfolio with the name '{new_name}' already exists.[/bold red]")
+        return
+
+    # Rename the portfolio
+    portfolios[new_name] = portfolios.pop(portfolio_name)
+
+    # Save updated portfolios to settings.json
+    save_portfolios()
+
+    console.print(f"[bold green]Portfolio '{portfolio_name}' renamed to '{new_name}' successfully![/bold green]")
+
 
 
 def delete_portfolio():
     """Delete an existing portfolio."""
     from fincept_terminal.utils.themes import console
     from rich.prompt import Prompt
+
+    if not portfolios:
+        console.print("[bold yellow]No portfolios available to delete.[/bold yellow]")
+        return
+
     portfolio_name = Prompt.ask("Enter the portfolio name you want to delete")
 
     if portfolio_name not in portfolios:
@@ -389,8 +426,11 @@ def delete_portfolio():
 
     if confirm.lower() == "yes":
         portfolios.pop(portfolio_name)
-        console.print(f"Portfolio '{portfolio_name}' deleted successfully!")
-        save_portfolios()  # Save the changes
+        console.print(f"[bold green]Portfolio '{portfolio_name}' deleted successfully![/bold green]")
+
+        # Save updated portfolios to settings.json
+        save_portfolios()
+
 
 
 def export_portfolio_results(results, portfolio_name):
