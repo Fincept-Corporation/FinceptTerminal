@@ -148,7 +148,8 @@ def show_main_menu():
         "SATELLITE IMAGERY ANALYSIS",  # 25
         "MARINE TRADE DATA",  # 26
         "INDIA MACRO & MICRO DATA",  # 27
-        "EXIT",  # 28
+        "EXIT",
+        "COMPARISON ANALYSIS"
     ]
 
     # Display main menu in columns
@@ -252,6 +253,9 @@ def show_main_menu():
     elif choice == 28:
         console.print("[bold green]Exiting Fincept Terminal...[/bold green]")
         sys.exit(0)
+    elif choice == 29:
+        from fincept_terminal.comparison_analysis.comparison_analysis import show_comparison_analysis
+        show_comparison_analysis()
     else:
         console.print("[bold red]Invalid option. Please select a valid menu option.[/bold red]")
         show_main_menu()  # Show the menu again if an invalid option is chosen
