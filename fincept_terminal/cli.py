@@ -248,7 +248,7 @@ def show_main_menu():
         from fincept_terminal.marine_trade_data.marine import marine_menu
         marine_menu()
     elif choice == 27:
-        from fincept_terminal.india_macro_micro_data.indiamacro import show_india_macro_micro_menu
+        from fincept_terminal.WorldEconomyData.EcoIndia.indiamacro import show_india_macro_micro_menu
         show_india_macro_micro_menu()
     elif choice == 28:
         console.print("[bold green]Exiting Fincept Terminal...[/bold green]")
