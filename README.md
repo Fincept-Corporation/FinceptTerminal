@@ -51,9 +51,6 @@ fincept --help
 fincept --version
 ```
 
-## REPORT A BUG ##
-[Open a new issue](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?assignees=&labels=bug&template=bug_report.md&title=%5BBug%5D%3A+)
-
 ## UPCOMING FEATURS
 
 - **World Mariane Trade Data**
