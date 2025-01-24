@@ -98,51 +98,120 @@ def paginate_display_in_columns(title, items, items_per_page=None):
 
         start += items_per_page
 
+def display_indices_paginated(indices, start_index=0, page_size=21):
+    """
+    Paginate and display a list of indices for user selection.
+
+    Args:
+        indices (list): List of indices (dictionaries with at least a 'name' key or string names).
+        start_index (int): Starting index of the current page.
+        page_size (int): Number of indices to display per page.
+
+    Returns:
+        dict or str: Selected index from the list, or None if the user exits.
+    """
+    # Ensure indices are in the correct format
+    if not isinstance(indices, list) or not all(isinstance(index, dict) and 'name' in index for index in indices):
+        console.print("[bold red]Invalid indices data format. Expected a list of dictionaries with a 'name' key.[/bold red]")
+        return None
+
+    # Determine end index for pagination
+    end_index = min(start_index + page_size, len(indices))
+    indices_page = indices[start_index:end_index]
+
+    # Extract names of indices for display
+    index_names = [index['name'] for index in indices_page]
+
+    # Display the current page of indices
+    display_in_columns(f"Select an Index (Showing {start_index + 1} - {end_index})", index_names)
+
+    # Prompt the user for navigation or selection
+    action = Prompt.ask(
+        "\n[bold cyan]Next Page (N) / Previous Page (P) / Select an Index (1-{0}) / Exit (E)[/bold cyan]".format(len(indices_page))
+    )
+
+    # Handle user actions
+    if action.lower() == 'n':
+        if end_index < len(indices):
+            return display_indices_paginated(indices, start_index + page_size)
+        else:
+            console.print("[bold red]No more pages available.[/bold red]")
+            return display_indices_paginated(indices, start_index)
+    elif action.lower() == 'p':
+        if start_index > 0:
+            return display_indices_paginated(indices, start_index - page_size)
+        else:
+            console.print("[bold red]Already on the first page.[/bold red]")
+            return display_indices_paginated(indices, start_index)
+    elif action.lower() == 'e':
+        console.print("[bold yellow]Exiting index selection...[/bold yellow]")
+        return None
+    else:
+        try:
+            # Convert action to integer to select an index
+            selected_index = int(action) - 1 + start_index
+            if 0 <= selected_index < len(indices):
+                return indices[selected_index]
+            else:
+                console.print("[bold red]Invalid selection. Please try again.[/bold red]")
+                return display_indices_paginated(indices, start_index)
+        except ValueError:
+            console.print("[bold red]Invalid input. Please enter a number, 'N', 'P', or 'E'.[/bold red]")
+            return display_indices_paginated(indices, start_index)
+
+
 def search_by_index():
     """Search and display economic data by selected index."""
     try:
+        # Fetch the list of indices
         url = "https://fincept.share.zrok.io/LargeEconomicDatabase/tables"
         response = requests.get(url)
         response.raise_for_status()
         indices = response.json()
 
-        # Filter out "countries" from the list
-        indices = [index for index in indices if index != "countries"]
-        indices.append("Back to Main Menu")  # Add the back option
+        # Filter out "countries" from the list and format indices as dictionaries
+        indices = [{"name": index} for index in indices if index != "countries"]
 
-        display_in_columns("Select an Index", indices)
+        # Add the "Back to Main Menu" option
+        indices.append({"name": "Back to Main Menu"})
 
-        index_choice = Prompt.ask("Enter your choice")
-        selected_index = indices[int(index_choice) - 1]
+        # Display the indices using the paginated method and allow the user to select
+        selected_index = display_indices_paginated(indices)
 
-        if int(index_choice) == len(indices):  # Check if the user chose the "Back to Main Menu" option
+        # Handle the user's selection
+        if selected_index is None:  # No valid selection, return to the main menu
+            from fincept_terminal.cli import show_main_menu
+            return show_main_menu()
+
+        if selected_index["name"] == "Back to Main Menu":  # User chose to go back
             from fincept_terminal.cli import show_main_menu
             return show_main_menu()
 
         # Fetch data for the selected index
-        index_data_url = f"https://fincept.share.zrok.io/LargeEconomicDatabase/{selected_index}/data"
+        selected_index_name = selected_index["name"]
+        index_data_url = f"https://fincept.share.zrok.io/LargeEconomicDatabase/{selected_index_name}/data"
         response = requests.get(index_data_url)
         response.raise_for_status()
         index_data = response.json()
 
-        index_items = [item['column_name'] for item in index_data]
-        paginate_display_in_columns(f"Data for {selected_index.replace('_', ' ').title()}", index_items)
+        # Handle empty data
+        if not index_data:
+            console.print(f"[bold yellow]No data available for index: {selected_index_name}[/bold yellow]")
+            return
+
+        # Extract column names from the keys of the first entry in the data
+        index_items = list(index_data[0].keys())
+
+        # Display the column names with pagination
+        paginate_display_in_columns(f"Data for {selected_index_name.replace('_', ' ').title()}", index_items)
 
     except requests.exceptions.RequestException as e:
         console.print(f"[bold red]Error fetching index data: {e}[/bold red]", style="danger")
+    except KeyError as e:
+        console.print(f"[bold red]Key error: {e}[/bold red]", style="danger")
+    except IndexError:
+        console.print(f"[bold yellow]No data available to display for the selected index.[/bold yellow]")
 
-
-def paginate_display_in_columns(title, items, items_per_page=21):
-    """Paginate and display items in columns."""
-    total_items = len(items)
-    for start in range(0, total_items, items_per_page):
-        end = start + items_per_page
-        display_in_columns(title, items[start:end])
-
-        if end < total_items:
-            proceed = Prompt.ask("\nMore results available. Would you like to see more? (yes/no)", default="yes")
-            if proceed.lower() != "yes":
-                break
 
 def display_series_id_paginated(indices, start_index=0, page_size=21):
     end_index = min(start_index + page_size, len(indices))
@@ -188,10 +257,10 @@ def query_fred_data():
     try:
         # Load settings to get the selected data source
         settings = load_settings()
-        data_source = settings.get("data_sources", {}).get("World Economy Tracker", {}).get("source", "Fincept API")
+        data_source = settings.get("data_sources", {}).get("World Economy Tracker", {}).get("source", "Fincept")
         fred_api_key = settings.get("data_sources", {}).get("World Economy Tracker", {}).get("api_key", None)
 
-        if data_source == "Fincept API":
+        if data_source == "Fincept":
             # Use Fincept API to fetch data
             fredCategoryData_url = "https://fincept.share.zrok.io/metaData/fredCategoryData/data?limit=30"
             response = requests.get(fredCategoryData_url)
