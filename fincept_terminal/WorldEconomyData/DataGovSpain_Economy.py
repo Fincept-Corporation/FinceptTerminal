@@ -77,7 +77,7 @@ def display_table_list(tables):
 
 def query_table_data(table_name):
     """Fetch and display data from the selected table."""
-    info_url = f"https://api.gobierno.es/DataGovES/{table_name}/data"
+    info_url = f"https://datos.gob.es/en/apidata#/{table_name}/data"
     data_url = info_url.replace("resource_info", "resource_data")
 
     try:
@@ -129,7 +129,7 @@ def show_spain_macro_micro_menu():
     console.print("[highlight]Spain Macro & Micro Data[/highlight]\n", style="highlight")
 
     # Fetch the list of available tables
-    url = "https://api.gobierno.es/DataGovES/tables"
+    url = "https://datos.gob.es/en/apidata#/tables"
     try:
         tables = fetch_json_data(url)
         display_table_list(tables)
