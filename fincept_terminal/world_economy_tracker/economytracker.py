@@ -5,8 +5,10 @@ from fincept_terminal.utils.themes import console
 from fincept_terminal.utils.const import display_in_columns
 from statsmodels.tsa.arima.model import ARIMA
 from fincept_terminal.settings.settings import load_settings
+
+
 # Your FRED API key
-FRED_API_KEY = "186968c7ec98984b5d08393e93aedf2b"
+FRED_API_KEY = ""
 
 def show_world_economy_tracker_menu():
     """World Economy Tracker menu."""
