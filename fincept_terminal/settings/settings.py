@@ -78,7 +78,7 @@ def configure_sources():
     # Define the data menus and source options
     data_menus = {
         "Global Indices": ["Source A (API)", "Source B (Public Data)", "Source C (Custom API)"],
-        "World Economy Tracker": ["Fincept", "FRED (API)"],
+        "World Economy Tracker": ["Fincept", "FRED (API)", "DataGovIn (API)"],
         "Global News & Sentiment": ["News API", "GNews", "RSS_Feed (API)"],
         "Currency Markets": ["Forex API", "Crypto Exchange Data"],
         "Portfolio Management": ["Manual Input", "Broker API"],
