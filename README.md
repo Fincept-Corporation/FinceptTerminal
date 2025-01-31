@@ -40,8 +40,10 @@ Get the Windows Installation on this - https://github.com/Fincept-Corporation/Fi
 
 ## USAGE
 
+COMMAND TO START THE TERMINAL 
+
 ```toml
-fincept start
+fincept
 ```
 
 ```toml
