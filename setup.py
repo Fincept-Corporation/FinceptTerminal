@@ -13,7 +13,7 @@ setup(
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/Fincept-Corporation/fincept-investments',
-    packages=find_packages(exclude=['*.idea', '*.pycache', '*.egg-info','sqlalchemy', 'asyncio']),  
+    packages=find_packages(exclude=['*.idea', '*.pycache', '*.egg-info', 'sqlalchemy', 'asyncio']),
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
@@ -28,7 +28,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'fincept=fincept_terminal.cli:start',  # Points to the cli function inside cli.py in fincept_terminal
+            'fincept=fincept_terminal.FinceptTerminalStart:start',
         ],
     },
     include_package_data=True,
@@ -36,4 +36,3 @@ setup(
         '': ['*.txt', '*.md'],
     },
 )
-
