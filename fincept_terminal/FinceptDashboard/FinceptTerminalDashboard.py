@@ -1231,7 +1231,7 @@ class FinceptTerminalDashboard(Screen):
         with TabbedContent(initial="world-tracker"):
             # Define each TabPane with a unique ID and title
             with TabPane("World Tracker", id="world-tracker"):
-                yield Markdown("# World Tracker Content")
+                yield Static("")
             with TabPane("Economic Analysis", id="economic-analysis"):
                 yield Markdown("# Economic Analysis Content")
             with TabPane("Financial Markets", id="financial-markets"):
