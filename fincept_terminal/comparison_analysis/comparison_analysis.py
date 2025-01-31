@@ -72,7 +72,7 @@ def show_comparison_analysis():
             economic_indicator_comparison()
         elif choice == "5":
             # Exit to the main menu
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             return  # Exit this menu
 

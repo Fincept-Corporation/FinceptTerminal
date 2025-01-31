@@ -1,32 +1,21 @@
 {
-    "api_key": null,
-    "email": null,
-    "username": null,
-    "theme": "dark",
-    "notifications": true,
-    "display_rows": 10,
-    "auto_update": false,
-    "data_sources": {
-        "Global Indices": {
-            "source": "Source A (API)",
-            "api_key": "109b48c2a3754f18abb73e54f5ff7057"
-        },
-        "World Economy Tracker": {
-            "source": "Source X"
-        },
-        "Global News & Sentiment": {
-            "source": "News API",
-            "api_key": "109b48c2a3754f18abb73e54f5ff7057"
-        },
-        "Currency Markets": {
-            "source": "Crypto Exchange Data"
-        },
-        "Portfolio Management": {
-            "source": "Manual Input"
-        },
-        "GenAI Model": {
-            "source": "Gemini (API)",
-            "api_key": "1"
+    "portfolios": {
+        "Railway Stocks": {
+            "RITES.NS": {
+                "quantity": 10,
+                "avg_price": 252.2,
+                "last_added": "29-01-2024"
+            },
+            "RVNL.NS": {
+                "quantity": 15,
+                "avg_price": 427.65,
+                "last_added": "29-01-2024"
+            },
+            "OIL.NS": {
+                "quantity": 212,
+                "avg_price": 407.55,
+                "last_added": "22-07-2009"
+            }
         }
     }
 }

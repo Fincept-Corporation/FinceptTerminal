@@ -19,7 +19,7 @@ def show_country_menu(continent):
     selected_country = countries[int(choice) - 1]
     console.print("\n")
     if selected_country == 'BACK TO MAIN MENU':
-        from fincept_terminal.cli import show_main_menu
+        from fincept_terminal.oldTerminal.cli import show_main_menu
         show_main_menu()
     else:
         from fincept_terminal.global_data.stock import show_sectors_in_country
@@ -43,7 +43,7 @@ def show_equities_menu():
             return
 
         elif choice == "9":
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             return
 
@@ -72,7 +72,7 @@ def query_direct_from_yahoo():
             break
 
     console.print("[bold yellow]Returning to the main menu...[/bold yellow]", style="info")
-    from fincept_terminal.cli import show_main_menu
+    from fincept_terminal.oldTerminal.cli import show_main_menu
     show_main_menu()
 
 
@@ -136,7 +136,7 @@ def show_sectors_in_country(country):
     selected_sector = sectors[int(choice) - 1]
 
     if selected_sector == "BACK TO MAIN MENU":
-        from fincept_terminal.cli import show_main_menu
+        from fincept_terminal.oldTerminal.cli import show_main_menu
         show_main_menu()
     else:
         # Proceed to show industries in the chosen sector
@@ -145,7 +145,6 @@ def show_sectors_in_country(country):
 
 
 import urllib.parse
-import requests
 from fincept_terminal.utils.themes import console
 
 # Define the base URL in a configuration or a constant
@@ -392,7 +391,7 @@ def display_stock_info(ticker):
             display_quantitative_analysis(ticker)
         elif choice == "5":
             console.print("[bold yellow]Returning to the main menu...[/bold yellow]", style="info")
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             break
         else:

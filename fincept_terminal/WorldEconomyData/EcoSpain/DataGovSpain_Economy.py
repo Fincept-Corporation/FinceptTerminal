@@ -107,7 +107,7 @@ def query_table_data(table_name):
         show_spain_macro_micro_menu()
     else:
         console.print("[highlight]Returning to the main menu...[/highlight]", style="highlight")
-        from fincept_terminal.cli import show_main_menu
+        from fincept_terminal.oldTerminal.cli import show_main_menu
         show_main_menu()
 
 def display_static_table(data):

@@ -257,7 +257,7 @@ def interactive_menu():
             generate_consumer_behavior_insights(city)
         elif choice == "2":
             console.print(Panel("[bold green]Goodbye![/bold green]"))
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
 
 # Run the interactive menu
