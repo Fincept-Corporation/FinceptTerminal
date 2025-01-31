@@ -1,20 +1,22 @@
-# Fincept Investments ✨
+# Fincept Investments ✨ 
+
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/yourusername/fincept-investments/blob/main/LICENSE.txt)
-[![PyPI - Version](https://img.shields.io/pypi/v/fincept-investments.svg)](https://pypi.org/project/fincept-investments/)
+[![PyPI version](https://badge.fury.io/py/fincept-investments.svg)](https://badge.fury.io/py/fincept-investments)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fincept-investments.svg)](https://pypi.org/project/fincept-investments/)
 <a target="_blank" href="https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/examples/news_sentiment_demo.ipynb">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
+[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 [![Downloads](https://static.pepy.tech/badge/fincept-investments/month)](https://pypi.org/project/fincept-investments/)
 
-![Isometric Commit Calendar](./metrics.plugin.isocalendar.svg)
+**Fincept Terminal** is a comprehensive Command Line tool that helps in Investment research, Extracting financial insights, market analysis, and a lot of other financial services such as technical analysis, fundamental analysis, sentiment analysis, quantitative analysis, and economic data analysis. It's designed to help investors and financial professionals navigate the complex world of investments with ease and precision.
 
-**Fincept Investments** is a comprehensive CLI tool that provides financial insights, market analysis, and a host of other financial services such as technical analysis, fundamental analysis, sentiment analysis, quantitative analysis, and economic data services. It's designed to help investors and financial professionals navigate the complex world of investments with ease and precision.
-
-(We are extending our data feeds everyday so check for new data on every alternate day and you can open an feature request on github if you want to add any custom data feed. If you are from another country and can help me with the data source of your country, please reach out to me.)
-
-[![Watch the video](https://img.youtube.com/vi/7vf4ZOfDUTs/0.jpg)](https://www.youtube.com/watch?v=7vf4ZOfDUTs)
+<a href="https://product.fincept.in/">
+  <div align="center">
+  <img src="images/FinceptTerminal.png" alt="Logo" width="600">
+  </div>
+</a>
 
 ## Features 🧐
 
@@ -56,22 +58,31 @@ fincept --version
 
 ## UPCOMING FEATURS
 
-- **World Mariane Trade Data**
-- **Quant Analysis on Stocks**
-- **Data Feed Update**
-- **Company Finaical Statements Data**
-- **Customize Terminal**
-- **AirTraffic Data**
+- **Add Custom Data Sources**
+- **Common Analysis Tool for all data**
+- **RealTime Data (Web-Sockets)**
+- **Top Economy Data Sources**
+- **Customize Terminal Settings**
+- **General Optimizations**
 - **Country Specific Data**
-- **Advance Technical/Fundamental Analysis**
-
-## CONTRIBUTING
-
-There are three main ways to contribute to this project. (Hopefully, you’ve starred the project by now ⭐️)
+- **Making AI Based Terminal**
 
 ### Become a Contributor
 
-We welcome contributions from everyone! Check out our [Contributing Documentation](https://docs.fincept.in/developer_guide/contributing) for detailed guidelines on how you can start contributing to the Fincept Terminal.
+We welcome contributions from everyone! Check out our [Contributing Documentation](https://docs.fincept.in/contributing) for detailed guidelines on how you can start contributing to the Fincept Terminal.
+
+## Table of Contents
+
+- [Code of Conduct](#code-of-conduct)
+- [How Can I Contribute?](#how-can-i-contribute)
+  - [Reporting Bugs](#reporting-bugs)
+  - [Suggesting Enhancements](#suggesting-enhancements)
+  - [Submitting Pull Requests](#submitting-pull-requests)
+- [Style Guides](#style-guides)
+  - [Coding Standards](#coding-standards)
+  - [Commit Messages](#commit-messages)
+- [Additional Resources](#additional-resources)
+
 
 ### Create a GitHub Ticket
 
@@ -81,12 +92,6 @@ If you encounter any issues or have suggestions, feel free to create a GitHub ti
 - **[Suggest an improvement](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=improvement.md)**: Have an idea to enhance the terminal? Share it with us!
 - **[Request a feature](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)**: Got a feature request? We’re listening!
 
-### Submit a Pull Request
-
-For developers ready to contribute code:
-1. Fork the repository and create your feature branch:
-   ```bash
-   git checkout -b feature/AmazingFeature
 
 ## Star History
 
@@ -95,7 +100,7 @@ For developers ready to contribute code:
 [![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/fincept-investments&type=Date)](https://star-history.com/#Fincept-Corporation/fincept-investments&Date)
 
 
-## FOR ANY QUERY OR UPDATE REACH OUT TO ME ON dev@fincept.in
+## FOR ANY QUERY OR UPDATE REACH OUT TO US ON dev@fincept.in
 ## Contact Us 📞
 
 Have questions or feedback? Facing issues? Fill out our contact form:  
