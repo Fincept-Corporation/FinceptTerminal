@@ -1227,84 +1227,79 @@ class FinceptTerminalDashboard(Screen):
         yield Header(show_clock=True)
         yield self.ticker  # Adding the Stock Ticker Below the Header
 
-        # Define the TabbedContent with initial active tab
-        with TabbedContent(initial="world-tracker"):
-            # Define each TabPane with a unique ID and title
-            with TabPane("World Tracker", id="world-tracker"):
-                yield Static("")
-            with TabPane("Economic Analysis", id="economic-analysis"):
-                yield Markdown("# Economic Analysis Content")
-            with TabPane("Financial Markets", id="financial-markets"):
-                yield Markdown("# Financial Markets Content")
-            with TabPane("AI-Powered Research", id="ai-research"):
-                yield Markdown("# AI-Powered Research Content")
-            with TabPane("FinScript", id="finscript"):
-                yield Markdown("# FinScript Content")
-            with TabPane("Portfolio Management", id="portfolio-management"):
-                yield Markdown("# Portfolio Management Content")
-            with TabPane("Edu. & Resources", id="edu-resources"):
-                yield Markdown("# Educational & Resources Content")
-            with TabPane("Settings", id="settings"):
-                yield Markdown("# Settings Content")
-            with TabPane("Help & About", id="help-about"):
-                yield Markdown("# Help & About Content")
-            with TabPane("Exit", id="exit"):
-                yield Markdown("# Exit Content")
-
-
         with Container(id="dashboard-grid"):
+            # Sidebar
             with VerticalScroll(id="sidebar-scroll", classes="sidebar"):
+                yield Static("-----------------")
                 yield Link("Overview", url="#", tooltip="Go to Overview", id="overview")
-                yield Horizontal(classes="separator")
+                yield Static("-----------------")
                 yield Link("Balance Sheet", url="#", tooltip="View Balance Sheet", id="balance_sheet")
-                yield Horizontal(classes="separator")
+                yield Static("-----------------")
                 yield Link("Cash Flow", url="#", tooltip="View Cash Flow", id="cash_flow")
-                yield Horizontal(classes="separator")
+                yield Static("-----------------")
                 yield Link("Aging Report", url="#", tooltip="View Aging Report", id="aging_report")
-                yield Horizontal(classes="separator")
+                yield Static("-----------------")
                 yield Link("Forecasting", url="#", tooltip="View Forecasting", id="forecasting")
-                yield Horizontal(classes="separator")
-                yield Link("Terminal \n Documentation", url="https://docs.fincept.in/",
+                yield Static("-----------------")
+                yield Link("Terminal Docs", url="https://docs.fincept.in/",
                            tooltip="View Scenario Analysis", id="scenario")
+                yield Static("-----------------")
 
+            # Main Content Inside TabbedContent
             with Container(classes="main-content"):
-                with TabbedContent():
-                    with TabPane("Global Indices", id="global_indices"):
-                        yield MarketTab()
-                        # with VerticalScroll():
-                        #     yield Static("Available Exchanges:", id="exchange-title")
-                        #     yield DataTable(id="exchange-table", classes="exchange-table")
-                        #     yield Static("Enter Selected Exchange:", id="input-title")
-                        #     yield Input(placeholder="Type exchange here...", id="exchange-input")
-                        #     yield Button("Submit Exchange", id="submit-exchange", classes="submit-button")
+                with TabbedContent(initial="world-tracker"):
+                    with TabPane("World Tracker", id="world-tracker"):
+                        # **Nested TabbedContent inside "World Tracker"**
+                        with TabbedContent(initial="global_indices"):
+                            with TabPane("Global Indices", id="global_indices"):
+                                yield MarketTab()
 
-                    with TabPane("Global Funds", id="global_funds"):
-                        yield Static("Loading exchanges for funds...", id="funds-title")
-                        yield DataTable(id="fund-exchange-table")
-                        yield DataTable(id="funds-table")
+                            with TabPane("Global Funds", id="global_funds"):
+                                yield Static("Loading exchanges for funds...", id="funds-title")
+                                yield DataTable(id="fund-exchange-table")
+                                yield DataTable(id="funds-table")
 
-                    with TabPane("World Sentiment Tracker", id="global_sentiment_tab"):
-                        yield Static("Sentiment Data of India From Different Parts", id="sentiment_text")
+                            with TabPane("World Sentiment Tracker", id="global_sentiment_tab"):
+                                yield Static("Sentiment Data of India From Different Parts", id="sentiment_text")
 
-                        # Grid container inside TabPane
-                        with Container(id="sentiment_grid"):
-                            yield Static("Region 1: Positive", id="region_1")
-                            yield Static("Region 2: Neutral", id="region_2")
-                            yield Static("Region 3: Negative", id="region_3")
-                            yield Static("Region 4: Mixed", id="region_4")
-                            yield Static("Region 5: Mixed", id="region_5")
-                            yield Static("Region 6: Mixed", id="region_6")
+                                # Grid container inside TabPane
+                                with Container(id="sentiment_grid"):
+                                    yield Static("Region 1: Positive", id="region_1")
+                                    yield Static("Region 2: Neutral", id="region_2")
+                                    yield Static("Region 3: Negative", id="region_3")
+                                    yield Static("Region 4: Mixed", id="region_4")
+                                    yield Static("Region 5: Mixed", id="region_5")
+                                    yield Static("Region 6: Mixed", id="region_6")
 
-                    with TabPane("World Market Tracker", id="world_market_tracker"):
-                        yield MarketTab()
+                            with TabPane("World Market Tracker", id="world_market_tracker"):
+                                yield MarketTab()
 
-                    with TabPane("Portfolio Management", id="portfolio_management"):
-                        yield PortfolioTab()
+                            with TabPane("Portfolio Management", id="portfolio_management"):
+                                yield PortfolioTab()
 
+                    # Other Main Tabs
+                    with TabPane("Economic Analysis", id="economic-analysis"):
+                        yield Markdown("# Economic Analysis Content")
+                    with TabPane("Financial Markets", id="financial-markets"):
+                        yield Markdown("# Financial Markets Content")
+                    with TabPane("AI-Powered Research", id="ai-research"):
+                        yield Markdown("# AI-Powered Research Content")
+                    with TabPane("FinScript", id="finscript"):
+                        yield Markdown("# FinScript Content")
+                    with TabPane("Portfolio Management", id="portfolio-management"):
+                        yield Markdown("# Portfolio Management Content")
+                    with TabPane("Edu. & Resources", id="edu-resources"):
+                        yield Markdown("# Educational & Resources Content")
+                    with TabPane("Settings", id="settings"):
+                        yield Markdown("# Settings Content")
+                    with TabPane("Help & About", id="help-about"):
+                        yield Markdown("# Help & About Content")
+                    with TabPane("Exit", id="exit"):
+                        yield Markdown("# Exit Content")
 
+            # News Section (Always Visible)
             with Vertical(classes="news-section", id="news-section"):
-                yield Static("Latest News", id="news-title", classes="news-title")
-                # Just create a DataTable with no columns at first
+                yield Static("📰 Latest News", id="news-title", classes="news-title")
                 yield DataTable(id="news-table")
 
         yield Footer()
