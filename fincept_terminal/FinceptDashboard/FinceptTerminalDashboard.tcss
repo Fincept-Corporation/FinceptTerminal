@@ -5,11 +5,10 @@ Screen {
 
 #dashboard-grid {
     layout: grid;
-    grid-size: 2 3; /* 3 columns and 3 rows */
-    grid-columns: 13% 87%; /* Sidebar, Main Content */
-    grid-rows: 80% 20%; /* Main Content, News Section */
-    grid-gutter: 0; /* No gaps between grid items */
-    height: 100%; /* Full height of the parent container */
+    grid-size: 2 3;
+    grid-columns: 10% 90%;
+    grid-rows: 80% 20%;
+    height: 100%;
     width: 100%;
 }
 
@@ -29,18 +28,16 @@ Screen {
 }
 
 .sidebar {
-    column-span: 1; /* Sidebar stays in the first column */
-    background: #1e1e1e; /* Slightly darker sidebar */
-    padding: 1;
-    border: round #00b894; /* Teal border for the sidebar */
-    overflow-y: auto; /* Enable vertical scrolling */
-    max-height: 100%; /* Restrict sidebar height to enable scrolling */
+    column-span: 1;
+    background: #1e1e1e;
+    border: round #00b894;
+    overflow-y: auto;
+    max-height: 100%;
 }
 
 .sidebar Button {
     background: #2a2a2a; /* Dark gray button background */
-    margin: 1;
-    text-align: left;
+    text-align: center;
     color: #e0e0e0; /* Light gray text for buttons */
 }
 
