@@ -33,7 +33,7 @@ def show_world_economy_tracker_menu():
         elif choice == "3":
             query_fred_data()
         elif choice == "4":
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
         else:
             console.print("\n[danger]INVALID OPTION. PLEASE TRY AGAIN.[/danger]")
@@ -182,11 +182,11 @@ def search_by_index():
 
         # Handle the user's selection
         if selected_index is None:  # No valid selection, return to the main menu
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             return show_main_menu()
 
         if selected_index["name"] == "Back to Main Menu":  # User chose to go back
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             return show_main_menu()
 
         # Fetch data for the selected index

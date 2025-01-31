@@ -1,4 +1,3 @@
-import pandas as pd
 import yfinance as yf
 from rich.prompt import Prompt
 from rich.console import Console
@@ -185,7 +184,7 @@ def show_etf_market_menu():
 
         elif choice == "3":  # Back to Main Menu
             console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]")
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             break
 

@@ -176,7 +176,7 @@ def show_news_and_sentiment_menu():
             console.print(f"[bold cyan]Fetching global_data news...[/bold cyan]")
             fetch_custom_news("Business", selected_country)
         elif selected_continent == "BACK TO MAIN MENU":
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
         else:
             countries = CONTINENT_COUNTRIES[selected_continent] + ["BACK TO MAIN MENU"]
@@ -187,7 +187,7 @@ def show_news_and_sentiment_menu():
             selected_country = countries[int(country_choice) - 1] if country_choice.isdigit() else country_choice
 
             if selected_country == "BACK TO MAIN MENU":
-                from fincept_terminal.cli import show_main_menu
+                from fincept_terminal.oldTerminal.cli import show_main_menu
                 show_main_menu()
             elif selected_country not in countries:
                 console.print(f"[bold red]Invalid country selection. Please choose a valid country from the list.[/bold red]")
@@ -213,7 +213,7 @@ def show_news_and_sentiment_menu():
             selected_topic = topics[topic_choice - 1]
 
             if selected_topic == "BACK TO MAIN MENU":
-                from fincept_terminal.cli import show_main_menu
+                from fincept_terminal.oldTerminal.cli import show_main_menu
                 show_main_menu()
             elif selected_topic == "CUSTOM KEYWORD":
                 keyword = Prompt.ask("Enter the keyword you want to search for (e.g., HDFC Bank)")
@@ -223,6 +223,6 @@ def show_news_and_sentiment_menu():
 
         another_news = Prompt.ask("\nWould you like to fetch more news? (yes/no)").lower()
         if another_news == "no":
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             break

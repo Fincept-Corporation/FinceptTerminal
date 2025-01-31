@@ -239,7 +239,7 @@ def start_live_price_menu():
                     exit_counter = 0  # Reset the counter if a different key is pressed
 
     # Redirect to the main menu after exiting the live display
-    from fincept_terminal.cli import show_main_menu
+    from fincept_terminal.oldTerminal.cli import show_main_menu
     show_main_menu()
 
 

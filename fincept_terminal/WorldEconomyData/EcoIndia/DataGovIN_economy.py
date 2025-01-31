@@ -358,7 +358,7 @@ def show_datagovindia_menu():
         selected_resource = display_resources_paginated(resources, title="Available Resources")
         if not selected_resource:
             console.print("[bold yellow]No selection made. Returning to the main menu...[/bold yellow]")
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             break
 
@@ -401,7 +401,7 @@ def show_datagovindia_menu():
             continue_query = Prompt.ask("\nDo you want to query another resource ID? (yes/no)", default="no").lower()
             if continue_query != "yes":
                 console.print("[bold yellow]Exiting DataGovIndia module...[/bold yellow]")
-                from fincept_terminal.cli import show_main_menu
+                from fincept_terminal.oldTerminal.cli import show_main_menu
                 show_main_menu()
                 break
         except Exception as e:

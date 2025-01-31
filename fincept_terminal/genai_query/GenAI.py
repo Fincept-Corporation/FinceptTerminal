@@ -4,7 +4,7 @@ from rich.panel import Panel
 import os
 import ujson as json
 from rich.prompt import Prompt
-from fincept_terminal.cli import show_main_menu
+from fincept_terminal.oldTerminal.cli import show_main_menu
 # from fincept_terminal.data_connector.genai import genai_query
 
 console = Console()

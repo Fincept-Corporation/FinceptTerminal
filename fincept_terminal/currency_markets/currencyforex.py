@@ -77,7 +77,7 @@ def show_currency_market_menu():
         continue_query = Prompt.ask("Do you want to query another currency pair? (yes/no)")
         if continue_query.lower() == 'no':
             console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]", style="info")
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             break  # Exit the loop and redirect to the main menu
 

@@ -1,5 +1,3 @@
-import yfinance as yf
-from fincept_terminal.utils.themes import console
 from fincept_terminal.utils.const import display_in_columns
 import financedatabase as fd
 
@@ -329,7 +327,7 @@ def show_global_indices_menu():
         selected_exchange = display_indices_exchanges_full(exchanges)
 
         if selected_exchange == "BACK TO MAIN MENU":
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             return
 
@@ -364,7 +362,7 @@ def show_global_indices_menu():
 
     elif choice == "3":  # BACK TO MAIN MENU
         console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]")
-        from fincept_terminal.cli import show_main_menu
+        from fincept_terminal.oldTerminal.cli import show_main_menu
         show_main_menu()
         return
 
@@ -377,7 +375,7 @@ def show_global_indices_menu():
         show_global_indices_menu()
     else:
         console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]")
-        from fincept_terminal.cli import show_main_menu
+        from fincept_terminal.oldTerminal.cli import show_main_menu
         show_main_menu()
 
 

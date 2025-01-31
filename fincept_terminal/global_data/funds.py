@@ -173,7 +173,7 @@ def show_global_funds_menu():
 
         elif choice == "3":  # Back to Main Menu
             console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]")
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             break
 
