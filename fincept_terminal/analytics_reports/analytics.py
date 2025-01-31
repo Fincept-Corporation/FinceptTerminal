@@ -6,7 +6,6 @@ from email import encoders
 from rich.prompt import Prompt
 from fincept_terminal.utils.themes import console
 from fincept_terminal.utils.const import display_in_columns
-import pandas as pd
 import yfinance as yf
 
 SMTP_SERVER = "smtp.hostinger.com"
@@ -142,7 +141,7 @@ def daily_report_menu():
                 email_body = f"Attached is the daily report for {stock_symbol}."
                 send_email(email_recipient, f"Daily Report: {stock_symbol}", email_body, file_path)
         elif choice == "2":
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             return
         else:

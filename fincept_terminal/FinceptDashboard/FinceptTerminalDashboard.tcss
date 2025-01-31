@@ -1,0 +1,180 @@
+Screen {
+    background: #121212; /* Darker black for the entire screen */
+    color: #e0e0e0; /* Light gray text for readability */
+}
+
+#dashboard-grid {
+    layout: grid;
+    grid-size: 2 3; /* 3 columns and 3 rows */
+    grid-columns: 13% 87%; /* Sidebar, Main Content */
+    grid-rows: 80% 20%; /* Main Content, News Section */
+    grid-gutter: 0; /* No gaps between grid items */
+    height: 100%; /* Full height of the parent container */
+    width: 100%;
+}
+
+.header {
+    column-span: 3; /* Header spans all columns */
+    background: #1c1c1c; /* Charcoal black for header */
+    color: #ffa500; /* Orange text for header title */
+    border: round #333333; /* Slightly lighter border for the header */
+    width: 95%;
+}
+
+.separator {
+    height: 1;
+    width: 100%;
+    background: gray;
+    margin: 1 ;
+}
+
+.sidebar {
+    column-span: 1; /* Sidebar stays in the first column */
+    background: #1e1e1e; /* Slightly darker sidebar */
+    padding: 1;
+    border: round #00b894; /* Teal border for the sidebar */
+    overflow-y: auto; /* Enable vertical scrolling */
+    max-height: 100%; /* Restrict sidebar height to enable scrolling */
+}
+
+.sidebar Button {
+    background: #2a2a2a; /* Dark gray button background */
+    margin: 1;
+    text-align: left;
+    color: #e0e0e0; /* Light gray text for buttons */
+}
+
+.sidebar Button:hover {
+    background: #ffa500; /* Bright orange hover */
+    color: #121212; /* Dark text for hover contrast */
+}
+
+/* Main Content Layout */
+.main-content {
+    column-span: 1; /* Fixed to the second column */
+    padding: 0; /* Padding inside main content */
+    margin: 0; /* Add some margin around the container */
+    border: round #444444; /* Subtle border for main content */
+    background: #181818; /* Deep black for the main content background */
+    height: auto; /* Let the content determine the height */
+    width: 100%; /* Make the container span the full width */
+    overflow-y: auto; /* Add vertical scrolling if the content overflows */
+}
+
+/* Buttons Section */
+#buttons {
+    column-span: 2; /* Spans across both columns */
+    padding: 0; /* Padding inside buttons container */
+    border: round green; /* Green border for buttons container */
+}
+
+/* Individual Buttons */
+Button {
+    border: none; /* Remove border */
+    width: auto; /* Automatically adjust width to fit text */
+    height: auto; /* Automatically adjust height to fit text */
+    padding: 0 1; /* Add minimal padding for better spacing */
+}
+
+Button:hover {
+    text-style: bold; /* Optional: Bold text on hover for better interaction */
+}
+
+/* Content Switcher */
+.content-switcher {
+    padding: 1; /* Padding inside the switcher */
+    background: #13132a; /* Matches main content background */
+    border: round green; /* Green border for content switcher */
+}
+
+/* Static Content in Content Switcher */
+.content-switcher Static {
+    margin: 1 0; /* Space between content sections */
+    padding: 0; /* No additional padding */
+    background: #24243a; /* Dark background for static sections */
+    color: #d4d4d4; /* Softer text color */
+    border: round #2a2a3a; /* Subtle border */
+}
+
+/* Content Sections Inside Main Content */
+.content-section {
+    padding: 1; /* Padding inside content sections */
+    background: #1e1e2e; /* Slightly different shade for sections */
+    border: round #2a2a3a; /* Subtle border for content sections */
+    color: #d4d4d4; /* Softer text color */
+}
+
+.news-section {
+    column-span: 3; /* Spans all columns */
+    background: #121212; /* Matches the overall screen background */
+    border: round #333333; /* Subtle border */
+    text-align: left;
+    overflow-y: auto; /* Enable vertical scrolling */
+    max-height: 20; /* Restrict the news section to about 20 text lines */
+    padding: 0; /* Spacing inside the section */
+    margin-top: 0; /* No extra margin above */
+}
+
+.news-section Static {
+    margin-bottom: 1;
+    padding: 0;
+    color: #ffa500; /* Orange text for better visibility */
+}
+
+.news-section Static:hover {
+    color: #00b894; /* Teal accent on hover */
+}
+
+.news-title {
+    text-align: left; /* Left-aligned title */
+    color: #ffa500; /* Bright orange title text */
+    margin-bottom: 0;
+}
+
+.content-tile {
+    background: #1e1e1e; /* Matches other sections */
+    border: round #00b894; /* Teal border */
+    padding: 0;
+    align: center middle;
+    color: #e0e0e0; /* Softer text color */
+    margin-bottom: 0;
+}
+
+#sentiment_grid {
+    layout: grid;
+    grid-size: 3;  /* Two columns */
+    border: round white;
+    padding: 1;
+}
+
+#region_1, #region_2, #region_3, #region_4, #region_5, #region_6 {
+    border: solid cyan;
+    padding: 1;
+}
+
+#market-grid {
+        layout: grid;
+        grid-size: 2 3; /* 3 columns and 2 rows */
+        grid-columns: 1fr 1fr; /* Equal width for 3 columns */
+        grid-rows: 1fr 1fr 1fr; /* Equal height for 2 rows */
+        grid-gutter: 1; /* Small gap between grid items */
+        height: 100%;
+        width: 100%;
+}
+
+.market-table {
+    width: 100%;
+    height: 100%;
+}
+
+.section-header {
+    text-align: center;
+    background: darkblue;
+    color: white;
+    text-style: bold;
+}
+
+.row_flash {
+    background: yellow;
+    color: black;
+}

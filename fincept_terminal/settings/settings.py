@@ -10,6 +10,83 @@ console = Console()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
 
+# def find_project_root(starting_dir):
+#     """
+#     Traverse up the directory tree to find the project root by looking for a marker file or folder.
+#     """
+#     current_dir = starting_dir
+#     while current_dir != os.path.dirname(current_dir):  # Keep going up until root
+#         if os.path.exists(os.path.join(current_dir, "settings")):  # Check if 'settings' folder exists
+#             return current_dir  # Return the root directory when found
+#         current_dir = os.path.dirname(current_dir)
+#     return None  # Return None if the project root can't be found
+#
+# # Get the current file's directory
+# current_file_dir = os.path.dirname(os.path.abspath(__file__))
+#
+# # Find the project root directory
+# project_root = find_project_root(current_file_dir)
+#
+# if project_root:
+#     # Construct the path to the settings file from the project root
+#     SETTINGS_FILE = os.path.join(project_root, "settings", "settings.json")
+#
+#     # Read or modify the settings file
+#     try:
+#         with open(SETTINGS_FILE, 'r') as file:
+#             settings = json.load(file)
+#     except FileNotFoundError:
+#         print(f"Error: {SETTINGS_FILE} not found.")
+#         settings = {}  # Initialize with an empty dictionary if the file doesn't exist
+#
+#     # Modify or use settings as needed
+#     settings['new_key'] = 'new_value'  # Update the settings
+#
+#     with open(SETTINGS_FILE, 'w') as file:
+#         json.dump(settings, file, indent=4)  # Write with formatting (indentation)
+# else:
+#     print("Project root not found.")
+#
+#
+# def load_settings():
+#     """
+#     Load the settings from the settings.json file.
+#     """
+#     current_file_dir = os.path.dirname(os.path.abspath(__file__))  # Current script's directory
+#     project_root = find_project_root(current_file_dir)
+#
+#     if project_root:
+#         SETTINGS_FILE = os.path.join(project_root, "settings", "settings.json")
+#
+#         try:
+#             with open(SETTINGS_FILE, 'r') as file:
+#                 settings = json.load(file)
+#             return settings  # Return settings as a dictionary
+#         except FileNotFoundError:
+#             print(f"Error: {SETTINGS_FILE} not found.")
+#             return {}
+#     else:
+#         print("Project root not found.")
+#         return {}
+#
+# # Example function to modify settings
+# def update_settings(new_key, new_value):
+#     settings = load_settings()
+#     if settings:
+#         settings[new_key] = new_value
+#         current_file_dir = os.path.dirname(os.path.abspath(__file__))  # Current script's directory
+#         project_root = find_project_root(current_file_dir)
+#         if project_root:
+#             SETTINGS_FILE = os.path.join(project_root, "settings", "settings.json")
+#             with open(SETTINGS_FILE, 'w') as file:
+#                 json.dump(settings, file, indent=4)  # Save the settings back to file
+
+# from settings import load_settings, update_settings
+#
+# # Load settings from the settings.json file
+# settings = load_settings()
+# print(settings)  # You can print or use the settings dictionary
+
 
 def load_settings():
     """Load settings from the file if they exist, otherwise create default settings."""

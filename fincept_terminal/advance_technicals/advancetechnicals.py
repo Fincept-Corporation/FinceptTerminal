@@ -19,7 +19,7 @@ def show_equities_menu():
         console.print("\n")
 
         if choice == "8":  # Exit to Main Menu
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
             return
 
@@ -85,7 +85,7 @@ def show_technical_main_menu():
         show_technical_analysis_menu(stock_symbol)
 
     elif choice == "3":  # Main Menu
-        from fincept_terminal.cli import show_main_menu
+        from fincept_terminal.oldTerminal.cli import show_main_menu
         show_main_menu()
     else:
         console.print("[bold red]Invalid selection, please try again.[/bold red]")
@@ -134,7 +134,7 @@ def show_technical_analysis_menu(stock_symbol):
         show_technical_analysis_menu(stock_symbol)
     else:
         console.print("\n[bold yellow]Redirecting to the main menu...[/bold yellow]", style="info")
-        from fincept_terminal.cli import show_main_menu
+        from fincept_terminal.oldTerminal.cli import show_main_menu
         show_main_menu()
 
 

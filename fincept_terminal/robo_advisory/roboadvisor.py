@@ -4,7 +4,7 @@ from rich.panel import Panel
 import yfinance as yf
 import pandas as pd
 from fincept_terminal.portfolio_and_investement_tool.portfolio import portfolios, save_portfolios
-from fincept_terminal.cli import show_main_menu
+from fincept_terminal.oldTerminal.cli import show_main_menu
 
 
 def show_robo_advisor_menu():

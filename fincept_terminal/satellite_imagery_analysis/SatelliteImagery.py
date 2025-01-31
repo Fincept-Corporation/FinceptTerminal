@@ -138,7 +138,7 @@ def show_car_analysis_menu():
             image_path = Prompt.ask("Enter the path of the image to analyze")
             image_path = process_local_image(image_path)
         elif choice == "3":
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             return show_main_menu()
         else:
             console.print("[danger]Invalid option selected. Please try again.[/danger]")

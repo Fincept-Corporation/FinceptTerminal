@@ -20,7 +20,7 @@ def show_bond_market_menu():
         if choice == "1":
             show_global_bonds()
         elif choice == "2":
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
         else:
             console.print("\n[danger]INVALID OPTION. PLEASE TRY AGAIN.[/danger]")

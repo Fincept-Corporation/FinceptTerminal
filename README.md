@@ -8,6 +8,7 @@
 </a>
 [![Downloads](https://static.pepy.tech/badge/fincept-investments/month)](https://pypi.org/project/fincept-investments/)
 
+![Isometric Commit Calendar](./metrics.plugin.isocalendar.svg)
 
 **Fincept Investments** is a comprehensive CLI tool that provides financial insights, market analysis, and a host of other financial services such as technical analysis, fundamental analysis, sentiment analysis, quantitative analysis, and economic data services. It's designed to help investors and financial professionals navigate the complex world of investments with ease and precision.
 

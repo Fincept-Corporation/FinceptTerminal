@@ -199,6 +199,6 @@ def show_news_and_sentiment_menu():
         another_news = Prompt.ask("\nWould you like to fetch more news? (yes/no)", default="no").lower()
         if another_news != "yes":
             console.print("\n[bold yellow]Returning to the main menu...[/bold yellow]")
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             return show_main_menu()
 

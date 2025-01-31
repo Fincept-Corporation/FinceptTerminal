@@ -46,13 +46,13 @@ def register_user(username, email, password):
         return {}
 
 
-def verify_otp(email):
+def verify_otp(email, otp):
     """Verify the OTP for the given email."""
     # Prompt user for the OTP
     # otp = Prompt.ask("Enter the OTP sent to your email")
 
     # Construct the payload
-    payload = {"email": email, "otp": SAMPLE_OTP}
+    payload = {"email": email, "otp": otp}
 
     # Send OTP verification request
     response = requests.post(VERIFY_OTP_ENDPOINT, json=payload)

@@ -112,7 +112,7 @@ def marine_menu():
         choice = Prompt.ask("Enter your choice", default="2")
 
         if choice == "2":
-            from fincept_terminal.cli import show_main_menu
+            from fincept_terminal.oldTerminal.cli import show_main_menu
             show_main_menu()
 
         elif choice == "1":
