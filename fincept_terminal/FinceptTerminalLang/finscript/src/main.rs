@@ -367,10 +367,10 @@ fn lex(input: &str) -> Vec<Token> {
                     }
                 }
             }
-            _ if ch.is_alphabetic() || ch == '_' => {  // ✅ Allow stock symbols
+            _ if ch.is_alphabetic() || ch == '_' || ch == '.' => {  // ✅ Allow `RITES.NS` and `AAPL`
                 let mut identifier = String::new();
                 while let Some(&c) = chars.peek() {
-                    if c.is_alphabetic() || c.is_digit(10) || c == '_' {  // ✅ Allow "AAPL", "TSLA", "RITES.NS"
+                    if c.is_alphabetic() || c.is_digit(10) || c == '_' || c == '.' {  // ✅ Fix: Allow dot in symbols
                         identifier.push(c);
                         chars.next();
                     } else {
@@ -382,9 +382,10 @@ fn lex(input: &str) -> Vec<Token> {
                     "if" | "buy" | "sell" | "plot" | "sma" | "ema" | "wma" => {
                         tokens.push(Token::Keyword(identifier))
                     }
-                    _ => tokens.push(Token::Identifier(identifier)),  // ✅ Stock symbols are now identifiers
+                    _ => tokens.push(Token::Identifier(identifier)),  // ✅ Correctly classify `AAPL` and `RITES.NS`
                 }
             }
+
             _ => {
                 chars.next(); // Skip unrecognized characters
             }
@@ -467,13 +468,13 @@ fn parse_expression(iter: &mut std::iter::Peekable<std::vec::IntoIter<Token>>) -
     if let Some(Token::Identifier(func_name)) = iter.next() {
         let mut args = Vec::new();
 
-        // Ensure that a function call has parentheses
+        // ✅ Ensure that a function call is properly enclosed in ()
         if let Some(Token::OpenParen) = iter.next() {
             while let Some(arg_token) = iter.next() {
                 match arg_token {
                     Token::Identifier(arg) => args.push(ASTNode::Variable(arg)),  // ✅ Fix: Allow stock symbols
-                    Token::Number(num) => args.push(ASTNode::Number(num)),        // ✅ Fix: Handle numeric values
-                    Token::CloseParen => break,                                   // ✅ Properly close the function
+                    Token::Number(num) => args.push(ASTNode::Number(num)),        // ✅ Fix: Handle numbers
+                    Token::CloseParen => break,                                   // ✅ Properly close function call
                     _ => {
                         panic!("Unexpected token in function call: {:?}", arg_token);
                     }
@@ -481,11 +482,12 @@ fn parse_expression(iter: &mut std::iter::Peekable<std::vec::IntoIter<Token>>) -
             }
             return ASTNode::FunctionCall { name: func_name, args };
         } else {
-            panic!("Expected function call, but '{}' was not followed by '('", func_name);
+            panic!("Expected '(' after function name '{}', but got {:?}", func_name, iter.peek());
         }
     }
     panic!("Expected function call, but received an unexpected token");
 }
+
 
 
 
