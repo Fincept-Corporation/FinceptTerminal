@@ -247,3 +247,11 @@ Button:hover {
     padding: 1; /* Add padding */
     margin-left: 1; /* Add spacing between input and button */
 }
+
+.consumer_behaviour_content_section{
+    height: 80%;
+    align: center top;
+}
+.ai_agents_display{
+    height: 90%;
+}

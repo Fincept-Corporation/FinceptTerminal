@@ -10,13 +10,13 @@ class FinceptTerminal(App):
     def __init__(self):
         super().__init__()
         # Register screens here
-        from fincept_terminal.FinceptTerminalAuthModule.WelcomeScreen import WelcomeScreen
+        from fincept_terminal.FinceptAuthModule.WelcomeScreen import WelcomeScreen
         self.install_screen(WelcomeScreen(), "welcome")
         from fincept_terminal.FinceptDashboardModule.FinceptTerminalDashboard import FinceptTerminalDashboard
         self.install_screen(FinceptTerminalDashboard(), "dashboard")
-        from fincept_terminal.FinceptTerminalAuthModule.RegistrationScreen import RegistrationScreen
+        from fincept_terminal.FinceptAuthModule.RegistrationScreen import RegistrationScreen
         self.install_screen(RegistrationScreen(), "registration")
-        from fincept_terminal.FinceptTerminalEcoAnModule.FinceptTerminalEconomicAnalysisScreen import EconomicAnalysisScreen
+        from fincept_terminal.FinceptEcoAnModule.FinceptTerminalEconomicAnalysisScreen import EconomicAnalysisScreen
         self.install_screen(EconomicAnalysisScreen(), "economic_analysis")
 
     def compose(self):

@@ -1,9 +1,9 @@
 from langchain_core.messages import HumanMessage
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.state import AgentState, show_agent_reasoning
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.utils.progress import progress
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.state import AgentState, show_agent_reasoning
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.utils.progress import progress
 import json
 
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.data_acquisition import get_financial_metrics
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.data_acquisition import get_financial_metrics
 
 def fundamentals_agent(state: AgentState):
     data = state["data"]

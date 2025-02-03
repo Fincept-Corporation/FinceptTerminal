@@ -5,7 +5,7 @@ import os
 import uuid
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptTerminalSettingModule.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptSettingModule.json")
 
 class GenAITab(VerticalScroll):
     """Generative AI Chatbot with Multi-Session Management"""

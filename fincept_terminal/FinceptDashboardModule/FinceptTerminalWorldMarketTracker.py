@@ -17,7 +17,7 @@ class MarketTab(Container):
     def compose(self) -> ComposeResult:
         """Create a 3x2 grid layout with 6 sections for market data."""
         with Container(id="market-grid"):
-            from fincept_terminal.FinceptTerminalUtilsModule.const import ASSETS
+            from fincept_terminal.FinceptUtilsModule.const import ASSETS
             categories = list(ASSETS.keys())
             for i, category in enumerate(categories):
                 table = DataTable(id=f"table-{category.replace(' ', '-').lower()}", classes="market-table")
@@ -73,7 +73,7 @@ class MarketTab(Container):
 
     async def fetch_asset_data(self):
         """Fetch market data for all assets concurrently."""
-        from fincept_terminal.FinceptTerminalUtilsModule.const import ASSETS
+        from fincept_terminal.FinceptUtilsModule.const import ASSETS
         tasks = [self.fetch_single_asset(cat, name, ticker) for cat, items in ASSETS.items() for name, ticker in items.items()]
         return await asyncio.gather(*tasks)
 

@@ -11,7 +11,7 @@ from data.data_acquisition import get_historical_data
 from data.data_preprocessing import preprocess_data
 from utils.config import API_KEY
 
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.state import AgentState
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.state import AgentState
 
 def setup_logger():
     logging.basicConfig(
