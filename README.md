@@ -12,11 +12,7 @@
 
 **Fincept Terminal** is a comprehensive Command Line tool that helps in Investment research, Extracting financial insights, market analysis, and a lot of other financial services such as technical analysis, fundamental analysis, sentiment analysis, quantitative analysis, and economic data analysis. It's designed to help investors and financial professionals navigate the complex world of investments with ease and precision.
 
-<a href="https://product.fincept.in/">
-  <div align="center">
-  <img src="images/FinceptTerminalDash.png" alt="Logo" width="900">
-  </div>
-</a>
+![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/FinceptTerminalDash.png)  
 
 ## Features 🧐
 
@@ -38,7 +34,12 @@
 
 Install the latest version of Fincept Investments from PyPI: pip install fincept-investments 
 
-Get the Windows Installation on this - https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/Production0.1.2/FinceptInvestmentsInstaller.exe
+Get the Windows Installation on this - [![Download Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/download-windows.svg)](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/Production1.0.0/FinceptInvestmentsInstaller.exe)
+
+```toml
+pip install fincept-terminal==1.0.0     # easy way to get started if you have python 
+```
+
 
 ## USAGE
 
