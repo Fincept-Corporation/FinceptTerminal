@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.widgets import Static, Input, Button, DataTable
 import json, os
 
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.utils.config import API_KEY
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.utils.config import API_KEY
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
 SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
@@ -73,7 +73,7 @@ class AIAgentsTab(VerticalScroll):
     async def execute_agents(self, ticker):
         """Runs all AI agents for a stock symbol and returns analysis results."""
         start_date, end_date = "2024-01-01", "2024-12-31"
-        from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.state import AgentState
+        from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.state import AgentState
         state = AgentState(
             messages=[],
             data={
@@ -94,7 +94,7 @@ class AIAgentsTab(VerticalScroll):
         self.logger.info(f"Using API Key: {api_key}")
 
         # Run Sentiment Analysis
-        from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.agents.sentiment_agent import SentimentAgent
+        from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.sentiment_agent import SentimentAgent
         sentiment_agent = SentimentAgent(api_key=api_key)
         sentiment_result = sentiment_agent.analyze_sentiment("Company posted robust quarterly earnings.")
 
@@ -105,31 +105,31 @@ class AIAgentsTab(VerticalScroll):
         }
 
         # Fetch Historical Data
-        from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.data_acquisition import \
+        from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.data_acquisition import \
             get_historical_data
         hist_df = get_historical_data(ticker, start_date, end_date)
         if hist_df is None or hist_df.empty:
             self.logger.error("No historical data found for %s", ticker)
             return None
 
-        from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.data_preprocessing import preprocess_data
+        from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.data_preprocessing import preprocess_data
         clean_df = preprocess_data(hist_df)
 
         # Run AI Agents
-        from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.agents.fundamentals_agent import \
+        from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.fundamentals_agent import \
             fundamentals_agent
         state = fundamentals_agent(state)
-        from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.agents.valuation_agent import valuation_agent
+        from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.valuation_agent import valuation_agent
         state = valuation_agent(state)
-        from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.agents.technical_analyst import \
+        from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.technical_analyst import \
             technical_analyst_agent
         state = technical_analyst_agent(state)
-        from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.agents.risk_manager import \
+        from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.risk_manager import \
             risk_management_agent
         state = risk_management_agent(state)
 
         # Run Portfolio Management
-        from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.agents.portfolio_manager import \
+        from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.portfolio_manager import \
             PortfolioManagementAgent
         portfolio_manager = PortfolioManagementAgent(api_key=api_key)
         final_state = portfolio_manager.make_decision(state)

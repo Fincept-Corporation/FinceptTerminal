@@ -165,7 +165,12 @@ class FinceptTerminalDashboard(Screen):
 
 
                     with TabPane("FinScript", id="finscript"):
-                        yield Markdown("# FinScript Content")
+                        with TabbedContent():
+                            with TabPane("Code Editor", id="code_editor"):
+                                from fincept_terminal.FinceptLangModule.finscript import FinceptLangScreen
+                                yield FinceptLangScreen()
+
+
                     with TabPane("Portfolio Management", id="portfolio-management"):
                         from fincept_terminal.FinceptPortfolioModule.FinceptTerminalPortfolioTab import \
                             PortfolioTab
