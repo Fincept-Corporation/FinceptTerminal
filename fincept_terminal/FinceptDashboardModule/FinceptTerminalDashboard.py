@@ -142,6 +142,15 @@ class FinceptTerminalDashboard(Screen):
                                 from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalMoneyMarketTab import \
                                     MoneyMarketTab
                                 yield MoneyMarketTab()
+                            with TabPane("Other Analysis", id="consumer_comparison_tab"):
+                                with TabbedContent():
+                                    with TabPane("Consumer Behaviour", id="consumer_behaviour"):
+                                        from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalConsumerCompareTab import ConsumerBehaviorTab
+                                        yield ConsumerBehaviorTab()
+                                    with TabPane("Comparison Analysis", id="comparison_analysis"):
+                                        from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalConsumerCompareTab import \
+                                            ComparisonAnalysisTab
+                                        yield ComparisonAnalysisTab()
 
 
 
