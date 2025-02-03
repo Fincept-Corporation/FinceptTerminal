@@ -9,7 +9,7 @@ class FinceptApp(App):
         # Register screens here
         from fincept_terminal.auth.WelcomeScreen import WelcomeScreen
         self.install_screen(WelcomeScreen(), "welcome")
-        from fincept_terminal.FinceptDashboard.FinceptTerminalDashboard import FinceptTerminalDashboard
+        from fincept_terminal.FinceptDashboardModule.FinceptTerminalDashboard import FinceptTerminalDashboard
         self.install_screen(FinceptTerminalDashboard(), "dashboard")
         from fincept_terminal.auth.RegistrationScreen import RegistrationScreen
         self.install_screen(RegistrationScreen(), "registration")

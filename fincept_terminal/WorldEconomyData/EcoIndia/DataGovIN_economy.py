@@ -2,43 +2,43 @@ import os
 import sys
 import json
 import sqlite3
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 from datagovindia import DataGovIndia, check_api_key
 
 
-SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "settings", "settings.json")
+SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "FinceptTerminalSettings", "FinceptTerminalSettings.json")
 DB_PATH = os.path.expanduser("~/datagovindia.db")  # Default database path
 
 
 def validate_api_key():
     """
     Validate the API key for the OGD platform.
-    Fetches the API key for 'World Economy Tracker' from the 'settings.json' file in the settings folder.
+    Fetches the API key for 'World Economy Tracker' from the 'FinceptTerminalSettings.json' file in the FinceptTerminalSettings folder.
     """
-    # Check if the settings.json file exists
+    # Check if the FinceptTerminalSettings.json file exists
     if not os.path.exists(SETTINGS_FILE):
-        console.print("[bold red]Settings file not found. Please ensure 'settings.json' exists in the settings folder.[/bold red]")
+        console.print("[bold red]Settings file not found. Please ensure 'FinceptTerminalSettings.json' exists in the FinceptTerminalSettings folder.[/bold red]")
         sys.exit(1)
 
-    # Load the settings.json file
+    # Load the FinceptTerminalSettings.json file
     try:
         with open(SETTINGS_FILE, "r") as file:
             settings = json.load(file)
             world_economy_tracker = settings.get("data_sources", {}).get("World Economy Tracker", {})
             api_key = world_economy_tracker.get("api_key")
     except json.JSONDecodeError:
-        console.print("[bold red]Error: 'settings.json' file is corrupted or invalid.[/bold red]")
+        console.print("[bold red]Error: 'FinceptTerminalSettings.json' file is corrupted or invalid.[/bold red]")
         sys.exit(1)
 
     # Validate the presence of the API key
     if not api_key:
-        console.print("[bold red]API key not found for 'World Economy Tracker' in 'settings.json'. Please add it to the file.[/bold red]")
+        console.print("[bold red]API key not found for 'World Economy Tracker' in 'FinceptTerminalSettings.json'. Please add it to the file.[/bold red]")
         sys.exit(1)
 
     # Validate the API key using the check_api_key function
     if not check_api_key(api_key):
-        console.print("[bold red]Invalid API key for 'World Economy Tracker'. Please set a valid key in 'settings.json'.[/bold red]")
+        console.print("[bold red]Invalid API key for 'World Economy Tracker'. Please set a valid key in 'FinceptTerminalSettings.json'.[/bold red]")
         sys.exit(1)
 
     console.print("[bold green]API key for 'World Economy Tracker' validated successfully![/bold green]")

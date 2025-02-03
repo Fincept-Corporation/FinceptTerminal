@@ -53,7 +53,7 @@ def load_chat_history(session_name):
     conn.close()
     return result[0].split("\n") if result else []
 
-class ChatApp(App):
+class GenAIScreen(App):
     """A finance-focused terminal-based chat UI with Gemini AI, allowing document-based Q&A."""
 
     CSS = """
@@ -268,5 +268,5 @@ class ChatApp(App):
 
 
 if __name__ == "__main__":
-    app = ChatApp()
+    app = GenAIScreen()
     app.run()

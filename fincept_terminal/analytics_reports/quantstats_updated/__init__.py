@@ -106,7 +106,7 @@ def extend_pandas():
         stats.probabilistic_adjusted_sortino_ratio
     )
 
-    # methods from utils
+    # methods from FinceptTerminalUtils
     _po.to_returns = utils.to_returns
     _po.to_prices = utils.to_prices
     _po.to_log_returns = utils.to_log_returns

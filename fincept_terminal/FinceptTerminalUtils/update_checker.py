@@ -13,7 +13,7 @@ SETTINGS_FILE = "user_settings.json"
 
 
 def load_settings():
-    """Load user settings from a JSON file."""
+    """Load user FinceptTerminalSettings from a JSON file."""
     default_settings = {
         "theme": "dark",
         "notifications": True,

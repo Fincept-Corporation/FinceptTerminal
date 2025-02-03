@@ -3,7 +3,7 @@ import cv2
 from PIL import Image
 import numpy as np
 from collections import Counter
-from fincept_terminal.utils.themes import console
+from fincept_terminal.FinceptTerminalUtils.themes import console
 from rich.table import Table
 
 DEFAULT_IMAGE_PATH = r'C:\Projects\fincept\fincept_terminal\cars.png'

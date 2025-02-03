@@ -55,7 +55,7 @@ def fetch_stock_data(symbol):
         return f"Error fetching stock data: {e}"
 
 
-from fincept_terminal.utils.themes import console
+from fincept_terminal.FinceptTerminalUtils.themes import console
 from rich.table import Table
 
 def display_stock_data():

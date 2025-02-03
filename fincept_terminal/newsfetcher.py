@@ -1,8 +1,8 @@
 import warnings
 from gnews import GNews
 from transformers import pipeline
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 from rich.prompt import Prompt
 import ujson as json
 import os
@@ -13,11 +13,11 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # Initialize Hugging Face sentiment analysis pipeline
 sentiment_analysis = pipeline("sentiment-analysis")
 
-# Initialize GNews with default settings
+# Initialize GNews with default FinceptTerminalSettings
 google_news = GNews(language='en', max_results=25)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptTerminalSettings.json")
 
 # Mapping of continents to the countries they contain
 CONTINENT_COUNTRIES = {
@@ -30,7 +30,7 @@ CONTINENT_COUNTRIES = {
     'MIDDLE EAST': ['UNITED ARAB EMIRATES', 'SAUDI ARABIA', 'LEBANON', 'EGYPT']
 }
 
-# Helper: Load settings
+# Helper: Load FinceptTerminalSettings
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, "r") as f:
@@ -193,7 +193,7 @@ def show_news_and_sentiment_menu():
         elif news_source == "RSS_Feed (API)" and rss_feed_url:
             fetch_and_display_news_with_sentiment(selected_topic, selected_country)
         else:
-            console.print("[bold red]No valid news source configured. Please check your settings.[/bold red]")
+            console.print("[bold red]No valid news source configured. Please check your FinceptTerminalSettings.[/bold red]")
             return
 
         another_news = Prompt.ask("\nWould you like to fetch more news? (yes/no)", default="no").lower()

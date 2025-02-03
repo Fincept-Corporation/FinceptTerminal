@@ -1,10 +1,14 @@
-from textual.screen import Screen
 from textual.widgets import Button, Header, TabPane, TabbedContent, Static, Collapsible, Input, Switch
-from textual.containers import Container, Vertical
+from textual.containers import Container, Vertical, Horizontal
 import os
+import json
 
-class SettingsScreen(Screen):
-    #CSS_PATH = "settings.tcss"
+# Path for storing user FinceptTerminalSettings
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptTerminalSettings.json")
+
+class SettingsScreen(Container):
+    CSS_PATH = "FinceptTerminalDashboard.tcss"
     data_menus = {
         "World Economy Tracker": ["Fincept", "FRED_API", "DataGovIn_API", "DataGovUS_API"],
         "Global News & Sentiment": ["News_API", "GNews", "RSS_Feed"],
@@ -18,9 +22,7 @@ class SettingsScreen(Screen):
         self.settings = self.load_settings()
 
     def compose(self):
-        yield Header(name="Settings")
-        yield Button("Back", id="back")
-        with Container(id="settings-container"):
+        with Container(id="FinceptTerminalSettings-container"):
             with TabbedContent():
                 # Data Sources Tab
                 with TabPane("Data Sources", id="data-source"):
@@ -47,7 +49,7 @@ class SettingsScreen(Screen):
                     with Vertical(id="display-container"):
                         yield Static("Configure Display Options", classes="header")
                         yield Input(placeholder="Enter Rows to Display", id="display-rows")
-                        yield Button("Save Display Settings", id="save-display-settings", variant="primary")
+                        yield Button("Save Display Settings", id="save-display-FinceptTerminalSettings", variant="primary")
 
                 # Notifications Tab
                 with TabPane("Notifications", id="notifications-tab"):
@@ -57,11 +59,16 @@ class SettingsScreen(Screen):
                         yield Button("Disable Notifications", id="disable-notifications", variant="primary")
 
                 # Auto-Update Tab
-                with TabPane("Auto-Update", id="auto-update-tab"):
+                with TabPane("FinHub", id="auto-update-tab"):
                     with Vertical(id="auto-update-container"):
                         yield Static("Manage Auto-Update Settings", classes="header")
                         yield Button("Enable Auto-Update", id="enable-auto-update", variant="primary")
                         yield Button("Disable Auto-Update", id="disable-auto-update", variant="primary")
+                        yield Static("Sync Your Data with Fincept Cloud")
+                        yield Horizontal(
+                            Switch(value=True),
+                            classes="container",
+                        )
 
             # Back Button
             yield Button("Back to Dashboard", id="back-to-dashboard", variant="default")
@@ -107,7 +114,7 @@ class SettingsScreen(Screen):
             self.notify("Switched to Light Theme." )
 
         # Display Options Tab: Save Rows Setting
-        elif button_id == "save-display-settings":
+        elif button_id == "save-display-FinceptTerminalSettings":
             rows = self.query_one("#display-rows", Input).value.strip()
             if rows.isdigit():
                 self.settings["display_rows"] = int(rows)
@@ -140,7 +147,7 @@ class SettingsScreen(Screen):
         elif button_id == "back-to-dashboard":
             await self.app.pop_screen()
 
-    # Load settings from the JSON file
+    # Load FinceptTerminalSettings from the JSON file
     def load_settings(self):
         default_settings = {
             # "api_key": None,
@@ -157,34 +164,34 @@ class SettingsScreen(Screen):
                 return {**default_settings, **json.load(f)}
         return default_settings
 
-    # Save settings to the JSON file
+    # Save FinceptTerminalSettings to the JSON file
     def save_settings(self):
         """
-        Save or update settings in `settings.json`.
+        Save or update FinceptTerminalSettings in `FinceptTerminalSettings.json`.
         - Updates existing data instead of overwriting the whole file.
-        - Merges old data with new settings.
+        - Merges old data with new FinceptTerminalSettings.
         """
-        # ✅ Load current settings if file exists
+        # ✅ Load current FinceptTerminalSettings if file exists
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 try:
                     existing_settings = json.load(f)
                 except json.JSONDecodeError:
-                    print("⚠️ Error: settings.json is corrupted. Resetting to defaults.")
+                    print("⚠️ Error: FinceptTerminalSettings.json is corrupted. Resetting to defaults.")
                     existing_settings = {}
         else:
             existing_settings = {}
 
-        # ✅ Merge new settings with existing settings
+        # ✅ Merge new FinceptTerminalSettings with existing FinceptTerminalSettings
         existing_settings.update(self.settings)
 
-        # ✅ Write updated settings back to the file
+        # ✅ Write updated FinceptTerminalSettings back to the file
         try:
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(existing_settings, f, indent=4)
             print("✅ Settings updated successfully.")
         except Exception as e:
-            print(f"❌ Error writing settings file: {e}")
+            print(f"❌ Error writing FinceptTerminalSettings file: {e}")
 
-        # ✅ Debugging: Print settings after save
+        # ✅ Debugging: Print FinceptTerminalSettings after save
         print("📜 Current Settings:", json.dumps(existing_settings, indent=4))

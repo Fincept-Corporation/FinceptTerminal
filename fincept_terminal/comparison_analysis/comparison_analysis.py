@@ -6,8 +6,8 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
 import yfinance as yf
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 from empyrical import (
     cum_returns,
     annual_volatility,
@@ -17,11 +17,11 @@ from empyrical import (
 )
 
 
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "settings", "settings.json")
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "FinceptTerminalSettings", "FinceptTerminalSettings.json")
 console = Console()
 
 def load_portfolios_from_settings():
-    """Load portfolios from the settings.json file."""
+    """Load portfolios from the FinceptTerminalSettings.json file."""
     if not os.path.exists(SETTINGS_FILE):
         console.print("[bold red]Settings file not found. Please configure your portfolios first.[/bold red]")
         return {}
@@ -43,7 +43,7 @@ def load_portfolios_from_settings():
             return formatted_portfolios
 
     except (json.JSONDecodeError, ValueError):
-        console.print("[bold red]Error: The settings file is corrupted or invalid.[/bold red]")
+        console.print("[bold red]Error: The FinceptTerminalSettings file is corrupted or invalid.[/bold red]")
         return {}
 
 def show_comparison_analysis():
@@ -81,7 +81,7 @@ def portfolio_comparison():
     """Compare performance metrics of multiple portfolios."""
     console.print("[bold cyan]PORTFOLIO COMPARISON[/bold cyan]")
 
-    # Load portfolios from settings.json
+    # Load portfolios from FinceptTerminalSettings.json
     portfolios = load_portfolios_from_settings()
     if not portfolios:
         console.print("[bold red]No portfolios available for comparison. Please create portfolios first.[/bold red]")

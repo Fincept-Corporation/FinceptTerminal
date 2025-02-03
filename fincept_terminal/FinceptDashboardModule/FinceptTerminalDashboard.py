@@ -4,20 +4,6 @@ from textual.screen import Screen
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.widgets import Static, Link, DataTable, Header, TabbedContent, TabPane, Footer, Markdown
 
-# # Configure logging to both console and log file
-# logging.basicConfig(
-#     level=logging.DEBUG,
-#     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-#     handlers=[
-#         logging.StreamHandler(sys.stdout),  # Log to terminal
-#         logging.FileHandler("fincept_terminal.log", mode="a", encoding="utf-8"),  # Log to file
-#     ]
-# )
-#
-
-# # Example usage
-# logging.info("🚀 Logging initialized. Saving logs to fincept_terminal.log")
-
 
 class FinceptTerminalDashboard(Screen):
     """Main Dashboard Screen."""
@@ -27,12 +13,12 @@ class FinceptTerminalDashboard(Screen):
         super().__init__()
         from fincept_terminal.FinceptTerminalNewsModule.FinceptTerminalNewsFooter import NewsManager
         self.news_manager = NewsManager()
-        from fincept_terminal.utils.DashboardUtils.RotatingTickerUtil import AsyncRotatingStockTicker
+        from fincept_terminal.FinceptTerminalUtils.DashboardUtils.RotatingTickerUtil import AsyncRotatingStockTicker
         self.ticker = AsyncRotatingStockTicker()
 
     def compose(self) -> ComposeResult:
         """Compose the professional dashboard layout."""
-        yield Header(show_clock=True)
+        yield Header(show_clock=True,name="Fincept Terminal")
         yield self.ticker  # Adding the Stock Ticker Below the Header
 
         with Container(id="dashboard-grid"):
@@ -96,10 +82,10 @@ class FinceptTerminalDashboard(Screen):
                 with TabbedContent(initial="world-tracker"):
                     with TabPane("World Tracker", id="world-tracker"):
                         # **Nested TabbedContent inside "World Tracker"**
-                        with TabbedContent(initial="global_indices"):
-                            with TabPane("Global Indices", id="global_indices"):
-                                from fincept_terminal.FinceptDashboard.FinceptTerminalWorldMarketTracker import MarketTab
-                                yield MarketTab()
+                        with TabbedContent(initial="world_market_tracker"):
+                            with TabPane("Stock Search", id="stock_search"):
+                                from fincept_terminal.FinceptTerminalStockScreen.FinceptTerminalStockSearchTab import StockTrackerTab
+                                yield StockTrackerTab()
 
                             with TabPane("Global Funds", id="global_funds"):
                                 yield Static("Loading exchanges for funds...", id="funds-title")
@@ -119,11 +105,9 @@ class FinceptTerminalDashboard(Screen):
                                     yield Static("Region 6: Mixed", id="region_6")
 
                             with TabPane("World Market Tracker", id="world_market_tracker"):
+                                from fincept_terminal.FinceptDashboardModule.FinceptTerminalWorldMarketTracker import \
+                                    MarketTab
                                 yield MarketTab()
-
-                            with TabPane("Portfolio Management", id="portfolio_management"):
-                                from fincept_terminal.FinceptTerminalPortfolioModule.FinceptTerminalPortfolioTab import PortfolioTab
-                                yield PortfolioTab()
 
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
@@ -132,17 +116,22 @@ class FinceptTerminalDashboard(Screen):
                     with TabPane("Financial Markets", id="financial-markets"):
                         yield Markdown("# Financial Markets Content")
                     with TabPane("AI-Powered Research", id="ai-research"):
-                        yield Markdown("# AI-Powered Research Content")
+                        from fincept_terminal.FinceptTerminalGenAI.FinceptTerminalGenAI import GenAIScreen
+                        yield GenAIScreen()
                     with TabPane("FinScript", id="finscript"):
                         yield Markdown("# FinScript Content")
                     with TabPane("Portfolio Management", id="portfolio-management"):
-                        yield Markdown("# Portfolio Management Content")
+                        from fincept_terminal.FinceptTerminalPortfolioModule.FinceptTerminalPortfolioTab import \
+                            PortfolioTab
+                        yield PortfolioTab()
                     with TabPane("Edu. & Resources", id="edu-resources"):
                         yield Markdown("# Educational & Resources Content")
-                    with TabPane("Settings", id="settings"):
-                        yield Markdown("# Settings Content")
+                    with TabPane("Settings", id="FinceptTerminalSettings"):
+                        from fincept_terminal.FinceptTerminalSettings.FinceptTerminalSettings import SettingsScreen
+                        yield SettingsScreen()
                     with TabPane("Help & About", id="help-about"):
-                        yield Markdown("# Help & About Content")
+                        from fincept_terminal.FinceptTerminalUtils.FinceptTerminalHelpTab.FinceptTerminalHelpTab import HelpWindow
+                        yield HelpWindow()
                     with TabPane("Exit", id="exit"):
                         yield Markdown("# Closing Application...")
 
