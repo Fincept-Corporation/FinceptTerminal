@@ -2,7 +2,7 @@ import asyncio
 from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.containers import Container, Vertical, VerticalScroll
-from textual.widgets import Static, Link, DataTable, Header, TabbedContent, TabPane, Footer, Markdown
+from textual.widgets import Static, Link, DataTable, Header, TabbedContent, TabPane, Footer, Markdown, Button
 
 
 class FinceptTerminalDashboard(Screen):
@@ -13,7 +13,7 @@ class FinceptTerminalDashboard(Screen):
         super().__init__()
         from fincept_terminal.FinceptTerminalNewsModule.FinceptTerminalNewsFooter import NewsManager
         self.news_manager = NewsManager()
-        from fincept_terminal.FinceptTerminalUtils.DashboardUtils.RotatingTickerUtil import AsyncRotatingStockTicker
+        from fincept_terminal.FinceptTerminalUtilsModule.DashboardUtils.RotatingTickerUtil import AsyncRotatingStockTicker
         self.ticker = AsyncRotatingStockTicker()
 
     def compose(self) -> ComposeResult:
@@ -111,13 +111,50 @@ class FinceptTerminalDashboard(Screen):
 
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
-                        yield Markdown("# Economic Analysis Content")
+                        from fincept_terminal.FinceptTerminalFinMarketModule.robo_advisory.FinceptTerminalRoboAdvisorTab import RoboAdvisorTab
+                        yield RoboAdvisorTab()
+
 
                     with TabPane("Financial Markets", id="financial-markets"):
-                        yield Markdown("# Financial Markets Content")
+                        with TabbedContent():
+                            with TabPane("Stock Search", id="stock_searchs"):
+                                from fincept_terminal.FinceptTerminalStockScreen.FinceptTerminalStockSearchTab import \
+                                    StockTrackerTab
+                                yield StockTrackerTab()
+                            with TabPane("Robo Advisor", id="robo_advisor"):
+                                from fincept_terminal.FinceptTerminalFinMarketModule.robo_advisory.FinceptTerminalRoboAdvisorTab import \
+                                    RoboAdvisorTab
+                                yield RoboAdvisorTab()
+                            with TabPane("Global Index", id="global_index"):
+                                from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalGlobalIndexTab import \
+                                    GlobalIndicesTab
+                                yield GlobalIndicesTab()
+                            # with TabPane("ETF Market", id="etf_market"):
+                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalETFTab import \
+                            #         ETFMarketTab
+                            #     yield ETFMarketTab()
+                            # with TabPane("Currency Market", id="currency_market"):
+                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalCurrencyTab import \
+                            #         CurrencyForexTab
+                            #     yield CurrencyForexTab()
+                            # with TabPane("Crypto Market", id="crypto_market"):
+                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalCryptoTab import \
+                            #         CryptoMarketTab
+                            #     yield CryptoMarketTab()
+                            # with TabPane("Global Funds", id="global_funds"):
+                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalGlobalFundTab import \
+                            #         GlobalFundsTab
+                            #     yield GlobalFundsTab()
+                            # with TabPane("Money Market", id="money_market"):
+                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalMoneyMarketTab import \
+                            #         MoneyMarketTab
+                            #     yield MoneyMarketTab()
+
+
+
                     with TabPane("AI-Powered Research", id="ai-research"):
-                        from fincept_terminal.FinceptTerminalGenAI.FinceptTerminalGenAI import GenAIScreen
-                        yield GenAIScreen()
+                        from fincept_terminal.FinceptTerminalAIPwrResModule.FinceptTerminalGenAI import GenAITab
+                        yield GenAITab()
                     with TabPane("FinScript", id="finscript"):
                         yield Markdown("# FinScript Content")
                     with TabPane("Portfolio Management", id="portfolio-management"):
@@ -126,14 +163,20 @@ class FinceptTerminalDashboard(Screen):
                         yield PortfolioTab()
                     with TabPane("Edu. & Resources", id="edu-resources"):
                         yield Markdown("# Educational & Resources Content")
-                    with TabPane("Settings", id="FinceptTerminalSettings"):
-                        from fincept_terminal.FinceptTerminalSettings.FinceptTerminalSettings import SettingsScreen
+                    with TabPane("Settings", id="FinceptTerminalSettingModule"):
+                        from fincept_terminal.FinceptTerminalSettingModule.FinceptTerminalSettings import SettingsScreen
                         yield SettingsScreen()
                     with TabPane("Help & About", id="help-about"):
-                        from fincept_terminal.FinceptTerminalUtils.FinceptTerminalHelpTab.FinceptTerminalHelpTab import HelpWindow
+                        from fincept_terminal.FinceptTerminalUtilsModule.FinceptTerminalHelpTab.FinceptTerminalHelpTab import HelpWindow
                         yield HelpWindow()
                     with TabPane("Exit", id="exit"):
                         yield Markdown("# Closing Application...")
+                        from fincept_terminal.FinceptTerminalUtilsModule.FinceptTerminalExitScreen import ExitScreen
+                        exit_screen_instance = ExitScreen()
+
+                        with TabPane("Exit", id="exit"):
+                            yield Markdown("# Closing Application...")
+                            yield Button(label="EXIT", action=exit_screen_instance)
 
             # News Section (Always Visible)
             with Vertical(classes="news-section", id="news-section"):
