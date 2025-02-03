@@ -3,9 +3,9 @@ from textual.containers import Container, Vertical, Horizontal
 import os
 import json
 
-# Path for storing user FinceptTerminalSettingModule
+# Path for storing user FinceptSettingModule
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptTerminalSettingModule.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptSettingModule.json")
 
 class SettingsScreen(Container):
     CSS_PATH = "FinceptTerminalDashboard.tcss"
@@ -23,7 +23,7 @@ class SettingsScreen(Container):
         self.settings = self.load_settings()
 
     def compose(self):
-        with Container(id="FinceptTerminalSettingModule-container"):
+        with Container(id="FinceptSettingModule-container"):
             with TabbedContent():
                 # Data Sources Tab
                 with TabPane("Data Sources", id="data-source"):
@@ -52,7 +52,7 @@ class SettingsScreen(Container):
                     with Vertical(id="display-container"):
                         yield Static("Configure Display Options", classes="header")
                         yield Input(placeholder="Enter Rows to Display", id="display-rows")
-                        yield Button("Save Display Settings", id="save-display-FinceptTerminalSettingModule", variant="primary")
+                        yield Button("Save Display Settings", id="save-display-FinceptSettingModule", variant="primary")
 
                 # Notifications Tab
                 with TabPane("Notifications", id="notifications-tab"):
@@ -117,7 +117,7 @@ class SettingsScreen(Container):
             self.notify("Switched to Light Theme." )
 
         # Display Options Tab: Save Rows Setting
-        elif button_id == "save-display-FinceptTerminalSettingModule":
+        elif button_id == "save-display-FinceptSettingModule":
             rows = self.query_one("#display-rows", Input).value.strip()
             if rows.isdigit():
                 self.settings["display_rows"] = int(rows)
@@ -150,7 +150,7 @@ class SettingsScreen(Container):
         elif button_id == "back-to-dashboard":
             await self.app.pop_screen()
 
-    # Load FinceptTerminalSettingModule from the JSON file
+    # Load FinceptSettingModule from the JSON file
     def load_settings(self):
         default_settings = {
             # "api_key": None,
@@ -167,34 +167,34 @@ class SettingsScreen(Container):
                 return {**default_settings, **json.load(f)}
         return default_settings
 
-    # Save FinceptTerminalSettingModule to the JSON file
+    # Save FinceptSettingModule to the JSON file
     def save_settings(self):
         """
-        Save or update FinceptTerminalSettingModule in `FinceptTerminalSettingModule.json`.
+        Save or update FinceptSettingModule in `FinceptSettingModule.json`.
         - Updates existing data instead of overwriting the whole file.
-        - Merges old data with new FinceptTerminalSettingModule.
+        - Merges old data with new FinceptSettingModule.
         """
-        # ✅ Load current FinceptTerminalSettingModule if file exists
+        # ✅ Load current FinceptSettingModule if file exists
         if os.path.exists(SETTINGS_FILE):
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 try:
                     existing_settings = json.load(f)
                 except json.JSONDecodeError:
-                    print("⚠️ Error: FinceptTerminalSettingModule.json is corrupted. Resetting to defaults.")
+                    print("⚠️ Error: FinceptSettingModule.json is corrupted. Resetting to defaults.")
                     existing_settings = {}
         else:
             existing_settings = {}
 
-        # ✅ Merge new FinceptTerminalSettingModule with existing FinceptTerminalSettingModule
+        # ✅ Merge new FinceptSettingModule with existing FinceptSettingModule
         existing_settings.update(self.settings)
 
-        # ✅ Write updated FinceptTerminalSettingModule back to the file
+        # ✅ Write updated FinceptSettingModule back to the file
         try:
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(existing_settings, f, indent=4)
             print("✅ Settings updated successfully.")
         except Exception as e:
-            print(f"❌ Error writing FinceptTerminalSettingModule file: {e}")
+            print(f"❌ Error writing FinceptSettingModule file: {e}")
 
-        # ✅ Debugging: Print FinceptTerminalSettingModule after save
+        # ✅ Debugging: Print FinceptSettingModule after save
         print("📜 Current Settings:", json.dumps(existing_settings, indent=4))

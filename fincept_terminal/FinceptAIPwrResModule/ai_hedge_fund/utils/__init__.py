@@ -1,0 +1,3 @@
+"""
+FinceptUtilsModule subpackage initializer
+"""

@@ -21,8 +21,8 @@ from typing_extensions import Literal
 from langchain_core.messages import HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.state import AgentState, show_agent_reasoning
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.utils.progress import progress
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.state import AgentState, show_agent_reasoning
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.utils.progress import progress
 
 # ✅ Logging configuration
 logger = logging.getLogger(__name__)

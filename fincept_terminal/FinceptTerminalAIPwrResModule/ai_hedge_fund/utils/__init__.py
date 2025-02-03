@@ -1,3 +1,0 @@
-"""
-FinceptTerminalUtilsModule subpackage initializer
-"""
