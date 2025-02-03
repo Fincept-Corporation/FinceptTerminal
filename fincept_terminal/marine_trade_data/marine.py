@@ -1,8 +1,8 @@
 import requests
 import folium
 from folium.features import CustomIcon
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 from rich.prompt import Prompt
 import webbrowser
 

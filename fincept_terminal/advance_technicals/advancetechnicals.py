@@ -1,5 +1,5 @@
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 from rich.prompt import Prompt
 import yfinance as yf
 import pandas as pd

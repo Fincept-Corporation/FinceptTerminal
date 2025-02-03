@@ -14,7 +14,7 @@
 
 <a href="https://product.fincept.in/">
   <div align="center">
-  <img src="images/FinceptTerminal.png" alt="Logo" width="900">
+  <img src="images/FinceptTerminalDash.png" alt="Logo" width="900">
   </div>
 </a>
 

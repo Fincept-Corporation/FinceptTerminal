@@ -125,9 +125,9 @@ class WelcomeScreen(Screen):
                 "Good evening"
             )
 
-            from fincept_terminal.settings.FinceptTerminalSettings import is_registered
+            from fincept_terminal.FinceptTerminalSettings.FinceptTerminalSettingUtils import is_registered
             if is_registered():
-                from fincept_terminal.settings.FinceptTerminalSettings import get_user_name
+                from fincept_terminal.FinceptTerminalSettings.FinceptTerminalSettingUtils import get_user_name
                 username = get_user_name() or "Guest"
                 yield Static(f"{greeting}, {username}! Welcome back to Fincept Terminal.", id="fincept-greeting")
 
@@ -153,6 +153,6 @@ class WelcomeScreen(Screen):
         elif button.id == "fincept-button-continue":
             await self.app.push_screen("dashboard")
         elif button.id == "fincept-button-logout":
-            from fincept_terminal.settings.FinceptTerminalSettings import clear_user_data
+            from fincept_terminal.FinceptTerminalSettings.FinceptTerminalSettings import clear_user_data
             clear_user_data()
             await self.refresh()

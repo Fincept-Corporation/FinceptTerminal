@@ -7,7 +7,7 @@ def fetch_sectors_by_country(country):
 
     import requests
     try:
-        from fincept_terminal.utils.themes import console
+        from fincept_terminal.FinceptTerminalUtils.themes import console
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
@@ -23,7 +23,7 @@ def fetch_industries_by_sector(country, sector):
     url = f"https://fincept.share.zrok.io/FinanceDB/equities/sectors_and_industries_and_stocks?filter_column=country&filter_value={country}&sector={sector.replace(' ', '%20')}"
 
     import requests
-    from fincept_terminal.utils.themes import console
+    from fincept_terminal.FinceptTerminalUtils.themes import console
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -46,7 +46,7 @@ def fetch_stocks_by_industry(country, sector, industry):
     url = f"https://fincept.share.zrok.io/FinanceDB/equities/sectors_and_industries_and_stocks?filter_column=country&filter_value={country}&sector={sector_encoded}&industry={industry_encoded}"
 
     import requests
-    from fincept_terminal.utils.themes import console
+    from fincept_terminal.FinceptTerminalUtils.themes import console
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -70,11 +70,11 @@ def display_fii_dii_data():
         response = requests.get(fii_dii_url)
         response.raise_for_status()
         fii_dii_data = response.json()
-        from fincept_terminal.utils.utilities import display_fii_dii_table
+        from fincept_terminal.FinceptTerminalUtils.utilities import display_fii_dii_table
         display_fii_dii_table(fii_dii_data)
 
     except requests.exceptions.RequestException as e:
-        from fincept_terminal.utils.themes import console
+        from fincept_terminal.FinceptTerminalUtils.themes import console
         console.print(f"[bold red]Error fetching FII/DII data: {e}[/bold red]", justify="left")
 
 def fetch_equities_by_country(country):
@@ -90,6 +90,6 @@ def fetch_equities_by_country(country):
         response.raise_for_status()  # Raise an error for bad HTTP responses
         return pd.DataFrame(response.json())  # Convert JSON response to DataFrame
     except requests.exceptions.RequestException as e:
-        from fincept_terminal.utils.themes import console
+        from fincept_terminal.FinceptTerminalUtils.themes import console
         console.print(f"[bold red]Error fetching stock data for {country}: {e}[/bold red]")
         return pd.DataFrame()  # Return empty DataFrame on failure

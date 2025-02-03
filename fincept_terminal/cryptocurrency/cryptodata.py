@@ -1,7 +1,7 @@
 import financedatabase as fd
 from rich.prompt import Prompt
 import yfinance as yf
-from fincept_terminal.utils.themes import console
+from fincept_terminal.FinceptTerminalUtils.themes import console
 
 # Fetch available currencies using financedatabase
 def fetch_available_currencies():
@@ -66,7 +66,7 @@ def display_cryptos_paginated(cryptos, title="Select a Cryptocurrency", start_in
     Returns:
         dict: The selected cryptocurrency or None if the user exits.
     """
-    from fincept_terminal.utils.const import display_in_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 
     while True:
         end_index = min(start_index + page_size, len(cryptos))
@@ -110,7 +110,7 @@ def crypto_main_menu():
     """
     Main menu for Crypto operations, displaying options using the display_in_columns method.
     """
-    from fincept_terminal.utils.const import display_in_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
     while True:
         console.print("\n[bold cyan]CRYPTO MENU[/bold cyan]\n")
 
@@ -173,7 +173,7 @@ def fetch_and_display_yfinance_data(symbol):
     """
     Fetch and display cryptocurrency data using yfinance.
     """
-    from fincept_terminal.utils.const import display_info_in_three_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_info_in_three_columns
     try:
         ticker = yf.Ticker(symbol)
         data = ticker.info

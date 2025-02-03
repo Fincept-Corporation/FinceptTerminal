@@ -1,8 +1,8 @@
 import warnings
 from gnews import GNews
 from transformers import pipeline
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 from rich.prompt import Prompt
 
 # Suppress warnings from transformers
@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 # Initialize Hugging Face sentiment analysis pipeline
 sentiment_analysis = pipeline("sentiment-analysis")
 
-# Initialize GNews with default settings
+# Initialize GNews with default FinceptTerminalSettings
 google_news = GNews(language='en', max_results=25)
 
 # Country code mapping based on GNews documentation

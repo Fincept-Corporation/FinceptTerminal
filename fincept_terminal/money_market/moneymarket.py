@@ -1,6 +1,6 @@
 import yfinance as yf
 from rich.prompt import Prompt
-from fincept_terminal.utils.themes import console
+from fincept_terminal.FinceptTerminalUtils.themes import console
 import financedatabase as fd
 
 # Step 1: Fetch the list of exchanges for money markets
@@ -31,7 +31,7 @@ def display_money_market_exchanges_paginated(exchanges, title="Select an Exchang
     Returns:
         str: Selected exchange or None if the user exits.
     """
-    from fincept_terminal.utils.const import display_in_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
     while True:
         end_index = min(start_index + page_size, len(exchanges))
         current_page = exchanges[start_index:end_index]
@@ -97,7 +97,7 @@ def display_money_market_symbols_paginated(symbols, title="Select a Symbol", sta
     Returns:
         dict: The selected symbol dictionary or None if the user exits.
     """
-    from fincept_terminal.utils.const import display_in_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 
     while True:
         # Calculate the range of items to display
@@ -179,7 +179,7 @@ def show_money_market_menu():
     """
     Show the Money Market menu and handle user interactions.
     """
-    from fincept_terminal.utils.const import display_in_columns, display_info_in_three_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns, display_info_in_three_columns
     console.print("[bold cyan]MONEY MARKET MENU[/bold cyan]\n")
 
     while True:  # Loop to keep showing the menu until the user selects "Back to Main Menu"
@@ -230,7 +230,7 @@ def show_money_market_menu():
 
 
 def display_symbol_info(symbol):
-    from fincept_terminal.utils.const import display_in_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
     details = [
         f"Name: {symbol.get('name', 'N/A')}",
         f"Currency: {symbol.get('currency', 'N/A')}",
