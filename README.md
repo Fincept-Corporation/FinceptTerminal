@@ -67,14 +67,17 @@ fincept --version
 - **Country Specific Data**
 - **Making AI Based Terminal**
 
-### Become a Contributor
+### Become a Contributor (Developer) 🚀
 
-We welcome contributions from everyone! Check out our [Contributing Documentation](https://docs.fincept.in/contributing) for detailed guidelines on how you can start contributing to the Fincept Terminal.
+We welcome contributions from everyone! Whether you're fixing bugs, adding new features, or improving documentation, **your help is valuable!**  
+
+📌 **Read the Contribution Guidelines:**  
+Check out our [CONTRIBUTING.md](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/CONTRIBUTING.md) to learn how you can contribute to Fincept Terminal.
 
 ## Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
-- [How Can I Contribute?](#how-can-i-contribute)
+- [How Can I as a User Contribute?](#how-can-i-contribute)
   - [Reporting Bugs](#reporting-bugs)
   - [Suggesting Enhancements](#suggesting-enhancements)
   - [Submitting Pull Requests](#submitting-pull-requests)
@@ -99,9 +102,11 @@ If you encounter any issues or have suggestions, feel free to create a GitHub ti
 
 [![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/fincept-investments&type=Date)](https://star-history.com/#Fincept-Corporation/fincept-investments&Date)
 
+📌 **Join the Community:**  
+- Discuss ideas and improvements in [GitHub Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+- Report bugs in [GitHub Issues](https://github.com/Fincept-Corporation/FinceptTerminal/issues)
+- Connect with us via email at [dev@fincept.in](mailto:dev@fincept.in)
 
-## FOR ANY QUERY OR UPDATE REACH OUT TO US ON dev@fincept.in
-## Contact Us 📞
 
 Have questions or feedback? Facing issues? Fill out our contact form:  
 [Google Form: Contact Us](https://forms.gle/DUsDHwxBNRVstYMi6)
