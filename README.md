@@ -1,6 +1,6 @@
 # Fincept Investments ✨ 
 
-[![FinceptTerminal on Product Hunt](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/snapshot-product-hunt-button.png)](https://www.producthunt.com/posts/finceptterminal/maker-invite?code=QNwUTM)
+[![FinceptTerminal on Product Hunt](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/snapshot-product-hunt-button.png)](https://www.producthunt.com/products/finceptterminal)
 
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/yourusername/fincept-investments/blob/main/LICENSE.txt)
