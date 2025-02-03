@@ -160,7 +160,8 @@ class FinceptTerminalDashboard(Screen):
                                 from fincept_terminal.FinceptTerminalAIPwrResModule.FinceptTerminalGenAI import GenAITab
                                 yield GenAITab()
                             with TabPane("AI Hedge Fund", id="ai_hedge_fund"):
-                                yield Static("Under Development")
+                                from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.FinceptTerminalAIHedgeFundTab import AIAgentsTab
+                                yield AIAgentsTab()
 
 
                     with TabPane("FinScript", id="finscript"):
