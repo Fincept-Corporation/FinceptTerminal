@@ -24,6 +24,7 @@ class FinceptTerminalDashboard(Screen):
         with Container(id="dashboard-grid"):
             # Sidebar
             with VerticalScroll(id="sidebar-scroll", classes="sidebar"):
+                yield Static("Menu not Working")
                 yield Static("-------------------")
                 yield Link("Overview", url="#", tooltip="Go to Overview", id="overview")
                 yield Static("-------------------")
@@ -83,14 +84,6 @@ class FinceptTerminalDashboard(Screen):
                     with TabPane("World Tracker", id="world-tracker"):
                         # **Nested TabbedContent inside "World Tracker"**
                         with TabbedContent(initial="world_market_tracker"):
-                            with TabPane("Stock Search", id="stock_search"):
-                                from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalStockSearchTab import StockTrackerTab
-                                yield StockTrackerTab()
-
-                            with TabPane("Global Funds", id="global_funds"):
-                                yield Static("Loading exchanges for funds...", id="funds-title")
-                                yield DataTable(id="fund-exchange-table")
-                                yield DataTable(id="funds-table")
 
                             with TabPane("World Sentiment Tracker", id="global_sentiment_tab"):
                                 yield Static("Sentiment Data of India From Different Parts", id="sentiment_text")
@@ -153,8 +146,14 @@ class FinceptTerminalDashboard(Screen):
 
 
                     with TabPane("AI-Powered Research", id="ai-research"):
-                        from fincept_terminal.FinceptTerminalAIPwrResModule.FinceptTerminalGenAI import GenAITab
-                        yield GenAITab()
+                        with TabbedContent():
+                            with TabPane("GenAI Chat", id="genai_chat"):
+                                from fincept_terminal.FinceptTerminalAIPwrResModule.FinceptTerminalGenAI import GenAITab
+                                yield GenAITab()
+                            with TabPane("AI Hedge Fund", id="ai_hedge_fund"):
+                                yield Static("Under Development")
+
+
                     with TabPane("FinScript", id="finscript"):
                         yield Markdown("# FinScript Content")
                     with TabPane("Portfolio Management", id="portfolio-management"):
