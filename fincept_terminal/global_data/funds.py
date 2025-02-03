@@ -1,6 +1,6 @@
 import yfinance as yf
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns, display_info_in_three_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns, display_info_in_three_columns
 import financedatabase as fd
 
 

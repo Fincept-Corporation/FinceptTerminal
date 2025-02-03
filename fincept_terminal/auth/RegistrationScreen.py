@@ -2,7 +2,7 @@ from textual.screen import Screen
 from textual.widgets import Input, Button, Static
 from textual.containers import Center, Vertical
 from fincept_terminal.auth.authentication import register_user, verify_otp
-from fincept_terminal.settings.FinceptTerminalSettings import save_user_data
+from fincept_terminal.FinceptTerminalSettings.FinceptTerminalSettingUtils import save_user_data
 import asyncio
 
 class RegistrationScreen(Screen):

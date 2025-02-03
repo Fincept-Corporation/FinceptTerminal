@@ -1,7 +1,7 @@
 import requests
 from rich.prompt import Prompt
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns , display_info_in_three_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns , display_info_in_three_columns
 
 def show_bond_market_menu():
     """Bond Market Menu"""

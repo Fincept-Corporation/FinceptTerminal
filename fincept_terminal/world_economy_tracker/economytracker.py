@@ -1,10 +1,10 @@
 import requests
 import pandas as pd
 from rich.prompt import Prompt
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 from statsmodels.tsa.arima.model import ARIMA
-from fincept_terminal.settings.settings import load_settings
+from fincept_terminal.FinceptTerminalSettings.settings import load_settings
 
 
 # Your FRED API key
@@ -257,7 +257,7 @@ def display_series_id_paginated(indices, start_index=0, page_size=21):
 def query_fred_data():
     """Query and display FRED data based on the selected data source, with an option to perform ARIMA analysis."""
     try:
-        # Load settings to get the selected data source
+        # Load FinceptTerminalSettings to get the selected data source
         settings = load_settings()
         data_source = settings.get("data_sources", {}).get("World Economy Tracker", {}).get("source", "Fincept")
         fred_api_key = settings.get("data_sources", {}).get("World Economy Tracker", {}).get("api_key", None)
@@ -305,7 +305,7 @@ def fetch_fred_api_data(series_id, api_key):
     dict: JSON response from the FRED API.
     """
     if not api_key:
-        raise ValueError("FRED API key is not configured in the settings.")
+        raise ValueError("FRED API key is not configured in the FinceptTerminalSettings.")
 
     fred_url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={api_key}&file_type=json"
 

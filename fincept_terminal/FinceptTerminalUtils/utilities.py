@@ -1,5 +1,5 @@
 from rich.table import Table
-from fincept_terminal.utils.themes import console
+from fincept_terminal.FinceptTerminalUtils.themes import console
 import click
 
 

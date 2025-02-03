@@ -1,6 +1,6 @@
 import requests
 import yfinance as yf
-from fincept_terminal.utils.themes import console
+from fincept_terminal.FinceptTerminalUtils.themes import console
 
 
 # Step 1: Fetch and display the list of base currencies
@@ -46,7 +46,7 @@ def show_currency_market_menu():
         if not base_currencies:
             return
 
-        from fincept_terminal.utils.const import display_in_columns
+        from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
         console.print("[bold green]Available Base Currencies:[/bold green]\n", style="info")
         display_in_columns("Select a Base Currency", base_currencies)
 
@@ -70,7 +70,7 @@ def show_currency_market_menu():
         # Step 3: Fetch and display details for the selected currency pair
         currency_details = fetch_currency_pair_details(selected_currency_pair)
         if currency_details:
-            from fincept_terminal.utils.const import display_info_in_three_columns
+            from fincept_terminal.FinceptTerminalUtils.const import display_info_in_three_columns
             display_info_in_three_columns(currency_details)
 
         # Ask if the user wants to query another pair or exit

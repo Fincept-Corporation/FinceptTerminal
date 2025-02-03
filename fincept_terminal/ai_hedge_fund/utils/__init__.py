@@ -1,3 +1,3 @@
 """
-utils subpackage initializer
+FinceptTerminalUtils subpackage initializer
 """

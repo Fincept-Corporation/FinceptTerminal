@@ -16,7 +16,7 @@ def extract_captions(video_id):
 
         # Check if the video's length exceeds 3 minutes (180 seconds)
         total_duration = sum([line['duration'] for line in transcript_list])
-        from fincept_terminal.utils.themes import console
+        from fincept_terminal.FinceptTerminalUtils.themes import console
         if total_duration > 180:
             console.print("[bold red]Video exceeds the 3-minute limit![/bold red]")
             return None
@@ -47,14 +47,14 @@ def analyze_sentiment(text):
         sentiment_response = response.json().get("gemini_response", "No response received.")
         return sentiment_response
     except requests.exceptions.RequestException as e:
-        from fincept_terminal.utils.themes import console
+        from fincept_terminal.FinceptTerminalUtils.themes import console
         console.print(f"[bold red]Error analyzing sentiment: {e}[/bold red]")
         return None
 
 
 # Function to get video URL and perform sentiment analysis
 def sentiment_analysis_for_video():
-    from fincept_terminal.utils.themes import console
+    from fincept_terminal.FinceptTerminalUtils.themes import console
     console.print("[bold cyan]YouTube Sentiment Analysis[/bold cyan]")
 
     from rich.prompt import Prompt

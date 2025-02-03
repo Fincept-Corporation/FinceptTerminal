@@ -1,4 +1,4 @@
-from fincept_terminal.utils.const import display_in_columns
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 import financedatabase as fd
 
 # Initialize the Equities database
@@ -197,7 +197,7 @@ def fetch_index_data_by_symbol_with_history(symbol):
 
 import pandas as pd
 import yfinance as yf
-from fincept_terminal.utils.themes import console
+from fincept_terminal.FinceptTerminalUtils.themes import console
 
 
 def fetch_index_data_by_symbol_with_history_1(symbol):

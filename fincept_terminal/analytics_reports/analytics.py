@@ -4,8 +4,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from rich.prompt import Prompt
-from fincept_terminal.utils.themes import console
-from fincept_terminal.utils.const import display_in_columns
+from fincept_terminal.FinceptTerminalUtils.themes import console
+from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 import yfinance as yf
 
 SMTP_SERVER = "smtp.hostinger.com"

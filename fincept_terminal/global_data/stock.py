@@ -9,7 +9,7 @@ def show_country_menu(continent):
         console.print(f"[bold red]No countries available for {continent}[/bold red]", style="danger")
         return False  # Indicate that there are no countries and return to the main menu
 
-    from fincept_terminal.utils.const import display_in_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
     console.print(f"[bold cyan]Countries in {continent}[/bold cyan]\n", style="info")
     display_in_columns(f"Select a Country in {continent}", countries)
 
@@ -30,7 +30,7 @@ def show_equities_menu():
     continents = ["Asia", "Europe", "Africa", "North America", "South America", "Oceania", "Middle East", "Query Stock Ticker", "BACK TO MAIN MENU"]
     while True:
         console.print("[bold cyan]EQUITIES MENU[/bold cyan]\n", style="info")
-        from fincept_terminal.utils.const import display_in_columns
+        from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
         display_in_columns("Select a Continent or Option", continents)
 
         console.print("\n")
@@ -108,7 +108,7 @@ def show_sectors_in_country(country):
     """
     Fetch sectors for the selected country and allow the user to select one.
     """
-    from fincept_terminal.utils.themes import console
+    from fincept_terminal.FinceptTerminalUtils.themes import console
     console.print(f"[bold cyan]Fetching sectors for {country}...[/bold cyan]\n", style="info")
 
     # Fetch sectors with retries
@@ -126,7 +126,7 @@ def show_sectors_in_country(country):
     # Append "BACK TO MAIN MENU" so the user can navigate
     sectors.append("BACK TO MAIN MENU")
 
-    from fincept_terminal.utils.const import display_in_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
     console.print(f"[bold cyan]Sectors in {country}[/bold cyan]\n", style="info")
     display_in_columns(f"Select a Sector in {country}", sectors)
 
@@ -145,7 +145,7 @@ def show_sectors_in_country(country):
 
 
 import urllib.parse
-from fincept_terminal.utils.themes import console
+from fincept_terminal.FinceptTerminalUtils.themes import console
 
 # Define the base URL in a configuration or a constant
 BASE_API_URL = "https://finceptapi.share.zrok.io/public/FinanceDB/equities/sectors_and_industries_and_stocks"
@@ -204,7 +204,7 @@ def show_industries_in_sector(country, sector):
     """
     Fetch industries for the selected sector and allow the user to select one.
     """
-    from fincept_terminal.utils.themes import console
+    from fincept_terminal.FinceptTerminalUtils.themes import console
     console.print(f"[bold cyan]Fetching industries for sector '{sector}' in {country}...[/bold cyan]\n", style="info")
 
     industries = fetch_industries_by_sector(country, sector)
@@ -217,7 +217,7 @@ def show_industries_in_sector(country, sector):
         return
 
     console.print(f"[bold cyan]Industries in {sector}, {country}[/bold cyan]\n", style="info")
-    from fincept_terminal.utils.const import display_in_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
     display_in_columns(f"Select an Industry in {sector}", industries)
 
     from rich.prompt import Prompt
@@ -234,7 +234,7 @@ def show_stocks_in_industry(country, sector, industry):
     from fincept_terminal.data.data_fetcher import fetch_stocks_by_industry
     stock_data = fetch_stocks_by_industry(country, sector, industry)
 
-    from fincept_terminal.utils.themes import console
+    from fincept_terminal.FinceptTerminalUtils.themes import console
     if stock_data.empty:
         console.print(f"[bold red]No stocks available for {industry} in {sector}, {country}.[/bold red]",
                       style="danger")
@@ -247,7 +247,7 @@ def show_stocks_in_industry(country, sector, industry):
             choice = Prompt.ask("Would you like to search for more information on a specific stock? (yes/no)")
             if choice.lower() == 'yes':
                 ticker_name = Prompt.ask("Please enter the stock symbol or company name (partial or full)")
-                from fincept_terminal.utils.const import find_closest_ticker
+                from fincept_terminal.FinceptTerminalUtils.const import find_closest_ticker
                 matches = find_closest_ticker(ticker_name, stock_data)
                 if not matches:
                     console.print(f"[bold red]No matching tickers found for '{ticker_name}'.[/bold red]", style="danger")
@@ -256,7 +256,7 @@ def show_stocks_in_industry(country, sector, industry):
                 else:
                     # If multiple matches are found, ask the user to select one
                     console.print(f"[bold yellow]Multiple matches found for '{ticker_name}':[/bold yellow]\n")
-                    from fincept_terminal.utils.const import display_in_columns
+                    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
                     display_in_columns("Select a Stock", [f"{m['symbol']} - {m['name']}" for m in matches])
                     user_choice = Prompt.ask("Please select the stock by entering the number")
                     selected_ticker = matches[int(user_choice) - 1]['symbol']
@@ -347,7 +347,7 @@ def display_stock_info(ticker):
     filtered_info.pop('companyOfficers', None)
 
     # Display the remaining data in three columns
-    from fincept_terminal.utils.const import display_info_in_three_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_info_in_three_columns
     display_info_in_three_columns(filtered_info)
 
     # Ask if the user wants to export the data
@@ -375,7 +375,7 @@ def display_stock_info(ticker):
             "Return to Main Menu"
         ]
 
-        from fincept_terminal.utils.const import display_in_columns
+        from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
         display_in_columns("Select an Analysis Option", analysis_options)
 
         from rich.prompt import Prompt
@@ -568,7 +568,7 @@ def export_stock_info(info, ticker, export_format):
     # Define the file name
     file_name = f"{ticker}_stock_info.{export_format}"
 
-    from fincept_terminal.utils.themes import console
+    from fincept_terminal.FinceptTerminalUtils.themes import console
     try:
         if export_format == "csv":
             df.to_csv(file_name, index=False)
@@ -591,6 +591,6 @@ def display_equities(stock_data):
     for _, row in stock_data.iterrows():
         table.add_row(str(row['symbol']), str(row['name']), str(row['market_cap']))
 
-    from fincept_terminal.utils.themes import console
+    from fincept_terminal.FinceptTerminalUtils.themes import console
     console.print("\n")
     console.print(table)

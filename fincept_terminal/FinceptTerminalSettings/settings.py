@@ -6,9 +6,9 @@ from rich.prompt import Prompt
 
 console = Console()
 
-# Path for storing user settings
+# Path for storing user FinceptTerminalSettings
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptTerminalSettings.json")
 
 # def find_project_root(starting_dir):
 #     """
@@ -16,7 +16,7 @@ SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
 #     """
 #     current_dir = starting_dir
 #     while current_dir != os.path.dirname(current_dir):  # Keep going up until root
-#         if os.path.exists(os.path.join(current_dir, "settings")):  # Check if 'settings' folder exists
+#         if os.path.exists(os.path.join(current_dir, "FinceptTerminalSettings")):  # Check if 'FinceptTerminalSettings' folder exists
 #             return current_dir  # Return the root directory when found
 #         current_dir = os.path.dirname(current_dir)
 #     return None  # Return None if the project root can't be found
@@ -28,40 +28,40 @@ SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
 # project_root = find_project_root(current_file_dir)
 #
 # if project_root:
-#     # Construct the path to the settings file from the project root
-#     SETTINGS_FILE = os.path.join(project_root, "settings", "settings.json")
+#     # Construct the path to the FinceptTerminalSettings file from the project root
+#     SETTINGS_FILE = os.path.join(project_root, "FinceptTerminalSettings", "FinceptTerminalSettings.json")
 #
-#     # Read or modify the settings file
+#     # Read or modify the FinceptTerminalSettings file
 #     try:
 #         with open(SETTINGS_FILE, 'r') as file:
-#             settings = json.load(file)
+#             FinceptTerminalSettings = json.load(file)
 #     except FileNotFoundError:
 #         print(f"Error: {SETTINGS_FILE} not found.")
-#         settings = {}  # Initialize with an empty dictionary if the file doesn't exist
+#         FinceptTerminalSettings = {}  # Initialize with an empty dictionary if the file doesn't exist
 #
-#     # Modify or use settings as needed
-#     settings['new_key'] = 'new_value'  # Update the settings
+#     # Modify or use FinceptTerminalSettings as needed
+#     FinceptTerminalSettings['new_key'] = 'new_value'  # Update the FinceptTerminalSettings
 #
 #     with open(SETTINGS_FILE, 'w') as file:
-#         json.dump(settings, file, indent=4)  # Write with formatting (indentation)
+#         json.dump(FinceptTerminalSettings, file, indent=4)  # Write with formatting (indentation)
 # else:
 #     print("Project root not found.")
 #
 #
 # def load_settings():
 #     """
-#     Load the settings from the settings.json file.
+#     Load the FinceptTerminalSettings from the FinceptTerminalSettings.json file.
 #     """
 #     current_file_dir = os.path.dirname(os.path.abspath(__file__))  # Current script's directory
 #     project_root = find_project_root(current_file_dir)
 #
 #     if project_root:
-#         SETTINGS_FILE = os.path.join(project_root, "settings", "settings.json")
+#         SETTINGS_FILE = os.path.join(project_root, "FinceptTerminalSettings", "FinceptTerminalSettings.json")
 #
 #         try:
 #             with open(SETTINGS_FILE, 'r') as file:
-#                 settings = json.load(file)
-#             return settings  # Return settings as a dictionary
+#                 FinceptTerminalSettings = json.load(file)
+#             return FinceptTerminalSettings  # Return FinceptTerminalSettings as a dictionary
 #         except FileNotFoundError:
 #             print(f"Error: {SETTINGS_FILE} not found.")
 #             return {}
@@ -69,27 +69,27 @@ SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
 #         print("Project root not found.")
 #         return {}
 #
-# # Example function to modify settings
+# # Example function to modify FinceptTerminalSettings
 # def update_settings(new_key, new_value):
-#     settings = load_settings()
-#     if settings:
-#         settings[new_key] = new_value
+#     FinceptTerminalSettings = load_settings()
+#     if FinceptTerminalSettings:
+#         FinceptTerminalSettings[new_key] = new_value
 #         current_file_dir = os.path.dirname(os.path.abspath(__file__))  # Current script's directory
 #         project_root = find_project_root(current_file_dir)
 #         if project_root:
-#             SETTINGS_FILE = os.path.join(project_root, "settings", "settings.json")
+#             SETTINGS_FILE = os.path.join(project_root, "FinceptTerminalSettings", "FinceptTerminalSettings.json")
 #             with open(SETTINGS_FILE, 'w') as file:
-#                 json.dump(settings, file, indent=4)  # Save the settings back to file
+#                 json.dump(FinceptTerminalSettings, file, indent=4)  # Save the FinceptTerminalSettings back to file
 
-# from settings import load_settings, update_settings
+# from FinceptTerminalSettings import load_settings, update_settings
 #
-# # Load settings from the settings.json file
-# settings = load_settings()
-# print(settings)  # You can print or use the settings dictionary
+# # Load FinceptTerminalSettings from the FinceptTerminalSettings.json file
+# FinceptTerminalSettings = load_settings()
+# print(FinceptTerminalSettings)  # You can print or use the FinceptTerminalSettings dictionary
 
 
 def load_settings():
-    """Load settings from the file if they exist, otherwise create default settings."""
+    """Load FinceptTerminalSettings from the file if they exist, otherwise create default FinceptTerminalSettings."""
     default_settings = {
         "api_key": None,  # Placeholder for user API key
         "email": None,  # Placeholder for user email
@@ -103,13 +103,13 @@ def load_settings():
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, "r") as f:
             existing_settings = json.load(f)
-            # Merge existing settings with defaults (to add new fields if not present)
+            # Merge existing FinceptTerminalSettings with defaults (to add new fields if not present)
             return {**default_settings, **existing_settings}
     return default_settings
 
 
 def save_settings(settings):
-    """Save settings to the file."""
+    """Save FinceptTerminalSettings to the file."""
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings, f, indent=4)
     console.print(f"\n[green]Settings saved successfully to {SETTINGS_FILE}[/green]")
@@ -118,7 +118,7 @@ def save_settings(settings):
 @click.command()
 @click.pass_context
 def settings_menu(ctx):
-    """Customize your Fincept terminal settings."""
+    """Customize your Fincept terminal FinceptTerminalSettings."""
     click.echo("\n[Settings Menu]")
     click.echo("1. Configure Data Sources")
     click.echo("2. Change Theme")
@@ -148,7 +148,7 @@ def configure_sources():
     """Configure data sources for different data menus in a tabular form."""
     from rich.console import Console
     from rich.prompt import Prompt
-    from fincept_terminal.utils.const import display_in_columns
+    from fincept_terminal.FinceptTerminalUtils.const import display_in_columns
 
     console = Console()
 
@@ -248,13 +248,13 @@ def change_theme():
 
 
 def configure_display():
-    """Configure display settings such as the number of rows."""
+    """Configure display FinceptTerminalSettings such as the number of rows."""
     settings = load_settings()
     click.echo(f"\nCurrent number of rows displayed: {settings['display_rows']}")
     new_rows = click.prompt("Enter the number of rows to display", type=int)
     settings["display_rows"] = new_rows
     save_settings(settings)
-    click.echo(f"\nDisplay settings updated. Now showing {new_rows} rows.")
+    click.echo(f"\nDisplay FinceptTerminalSettings updated. Now showing {new_rows} rows.")
 
 
 def toggle_notifications():
