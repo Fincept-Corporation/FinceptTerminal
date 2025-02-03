@@ -28,7 +28,7 @@ numpy==1.24.0
 openai==1.58.1
 osmnx==1.9.4
 packaging==24.1
-pandas==1.5.3
+pandas>=2.1.0,<3.0.0
 parse==1.19.0
 passlib==1.7.4
 pdfplumber==0.11.4
