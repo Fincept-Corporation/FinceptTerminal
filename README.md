@@ -1,9 +1,11 @@
 # Fincept Investments ✨ 
 
+[![FinceptTerminal on Product Hunt](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/snapshot-product-hunt-button.png)](https://www.producthunt.com/posts/finceptterminal/maker-invite?code=QNwUTM)
+
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/yourusername/fincept-investments/blob/main/LICENSE.txt)
-[![PyPI version](https://badge.fury.io/py/fincept-investments.svg)](https://badge.fury.io/py/fincept-investments)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fincept-investments.svg)](https://pypi.org/project/fincept-investments/)
+[![PyPI version](https://badge.fury.io/py/fincept-terminal.svg)](https://badge.fury.io/py/fincept-terminal)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fincept-terminal.svg)](https://pypi.org/project/fincept-terminal/)
 <a target="_blank" href="https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/examples/news_sentiment_demo.ipynb">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
