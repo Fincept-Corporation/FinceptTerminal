@@ -5,7 +5,7 @@ from agents.valuation_agent import valuation_agent
 from agents.fundamentals_agent import fundamentals_agent
 from agents.technical_analyst import technical_analyst_agent
 from agents.risk_manager import risk_management_agent
-from agents.portfolio_manager import portfolio_management_agent
+from agents.portfolio_manager import PortfolioManagementAgent
 
 from data.data_acquisition import get_historical_data
 from data.data_preprocessing import preprocess_data
@@ -101,7 +101,11 @@ def main():
     logger.info("Analyst Signals so far: %s", state["data"]["analyst_signals"])
 
     logger.info("Running portfolio_management_agent")
-    final_state = portfolio_management_agent(state)
+    # Initialize the Portfolio Management Agent with the Gemini API Key
+    portfolio_manager = PortfolioManagementAgent(api_key=API_KEY)
+
+    # Invoke the decision-making process
+    final_state = portfolio_manager.make_decision(state)
 
     logger.info("Final portfolio management output:")
     logger.info(final_state["data"]["analyst_signals"].get("portfolio_management", {}))

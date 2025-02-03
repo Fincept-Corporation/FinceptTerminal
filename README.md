@@ -45,15 +45,15 @@ Get the Windows Installation on this - https://github.com/Fincept-Corporation/Fi
 COMMAND TO START THE TERMINAL 
 
 ```toml
-fincept
+fincept     # First Command to start the Terminal
 ```
 
 ```toml
-fincept --help
+finceptterninal --help      # Get the list of available help options
 ```
 
 ```toml
-fincept --version
+fincept --version        # Check on which version you are running
 ```
 
 ## UPCOMING FEATURS
