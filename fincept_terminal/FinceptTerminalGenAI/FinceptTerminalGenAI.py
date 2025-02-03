@@ -53,7 +53,7 @@ def load_chat_history(session_name):
     conn.close()
     return result[0].split("\n") if result else []
 
-class GenAIScreen(App):
+class GenAIScreen(Container):
     """A finance-focused terminal-based chat UI with Gemini AI, allowing document-based Q&A."""
 
     CSS = """
