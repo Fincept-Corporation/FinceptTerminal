@@ -229,6 +229,7 @@ class StockTrackerTab(Container):
 
         # Fetch news articles
         try:
+            from gnews import GNews
             news = GNews()
             news_results = news.get_news(ticker)
 

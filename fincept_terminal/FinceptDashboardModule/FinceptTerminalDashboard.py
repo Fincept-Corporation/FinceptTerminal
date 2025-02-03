@@ -84,7 +84,7 @@ class FinceptTerminalDashboard(Screen):
                         # **Nested TabbedContent inside "World Tracker"**
                         with TabbedContent(initial="world_market_tracker"):
                             with TabPane("Stock Search", id="stock_search"):
-                                from fincept_terminal.FinceptTerminalStockScreen.FinceptTerminalStockSearchTab import StockTrackerTab
+                                from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalStockSearchTab import StockTrackerTab
                                 yield StockTrackerTab()
 
                             with TabPane("Global Funds", id="global_funds"):
@@ -118,7 +118,7 @@ class FinceptTerminalDashboard(Screen):
                     with TabPane("Financial Markets", id="financial-markets"):
                         with TabbedContent():
                             with TabPane("Stock Search", id="stock_searchs"):
-                                from fincept_terminal.FinceptTerminalStockScreen.FinceptTerminalStockSearchTab import \
+                                from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalStockSearchTab import \
                                     StockTrackerTab
                                 yield StockTrackerTab()
                             with TabPane("Robo Advisor", id="robo_advisor"):
@@ -129,26 +129,26 @@ class FinceptTerminalDashboard(Screen):
                                 from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalGlobalIndexTab import \
                                     GlobalIndicesTab
                                 yield GlobalIndicesTab()
-                            # with TabPane("ETF Market", id="etf_market"):
-                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalETFTab import \
-                            #         ETFMarketTab
-                            #     yield ETFMarketTab()
-                            # with TabPane("Currency Market", id="currency_market"):
-                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalCurrencyTab import \
-                            #         CurrencyForexTab
-                            #     yield CurrencyForexTab()
-                            # with TabPane("Crypto Market", id="crypto_market"):
-                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalCryptoTab import \
-                            #         CryptoMarketTab
-                            #     yield CryptoMarketTab()
-                            # with TabPane("Global Funds", id="global_funds"):
-                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalGlobalFundTab import \
-                            #         GlobalFundsTab
-                            #     yield GlobalFundsTab()
-                            # with TabPane("Money Market", id="money_market"):
-                            #     from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalMoneyMarketTab import \
-                            #         MoneyMarketTab
-                            #     yield MoneyMarketTab()
+                            with TabPane("ETF Market", id="etf_market"):
+                                from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalETFTab import \
+                                    ETFMarketTab
+                                yield ETFMarketTab()
+                            with TabPane("Currency Market", id="currency_market"):
+                                from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalCurrencyTab import \
+                                    CurrencyForexTab
+                                yield CurrencyForexTab()
+                            with TabPane("Crypto Market", id="crypto_market"):
+                                from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalCryptoTab import \
+                                    CryptoMarketTab
+                                yield CryptoMarketTab()
+                            with TabPane("Global Funds", id="global_funds"):
+                                from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalGlobalFundTab import \
+                                    GlobalFundsTab
+                                yield GlobalFundsTab()
+                            with TabPane("Money Market", id="money_market"):
+                                from fincept_terminal.FinceptTerminalFinMarketModule.FinceptTerminalMoneyMarketTab import \
+                                    MoneyMarketTab
+                                yield MoneyMarketTab()
 
 
 
