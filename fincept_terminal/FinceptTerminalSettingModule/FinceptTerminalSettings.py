@@ -1,4 +1,4 @@
-from textual.widgets import Button, Header, TabPane, TabbedContent, Static, Collapsible, Input, Switch
+from textual.widgets import Button, TabPane, TabbedContent, Static, Collapsible, Input, Switch, Label, Rule
 from textual.containers import Container, Vertical, Horizontal
 import os
 import json
@@ -9,6 +9,7 @@ SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptTerminalSettingModule.json")
 
 class SettingsScreen(Container):
     CSS_PATH = "FinceptTerminalDashboard.tcss"
+
     data_menus = {
         "World Economy Tracker": ["Fincept", "FRED_API", "DataGovIn_API", "DataGovUS_API"],
         "Global News & Sentiment": ["News_API", "GNews", "RSS_Feed"],
@@ -37,6 +38,7 @@ class SettingsScreen(Container):
                                         yield Button("Save", id=f"save-{source_id}")
 
                 # Theme Tab
+
                 with TabPane("Theme", id="theme-tab"):
                     with Vertical(id="theme-container"):
                         yield Static("Choose Theme", classes="header")
@@ -45,6 +47,7 @@ class SettingsScreen(Container):
                         yield Button("Switch to Light Theme", id="light-theme", variant="primary")
 
                 # Display Options Tab
+
                 with TabPane("Display Options", id="display-tab"):
                     with Vertical(id="display-container"):
                         yield Static("Configure Display Options", classes="header")

@@ -140,6 +140,7 @@ class WelcomeScreen(Screen):
 
                 # Buttons for new users
                 with Horizontal(classes="fincept-horizontal"):
+                    yield Button("Login", id="fincept-button-login", classes="fincept-button")
                     yield Button("Guest User", id="fincept-button-guest", classes="fincept-button")
                     yield Button("Register", id="fincept-button-register", classes="fincept-button")
 

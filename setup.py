@@ -12,7 +12,7 @@ setup(
     description='A Terminal for Financial Market Analysis and Fetching all kinds of Data.',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/Fincept-Corporation/fincept-investments',
+    url='https://github.com/Fincept-Corporation/FinceptTerminal',
     packages=find_packages(exclude=['*.idea', '*.pycache', '*.egg-info', 'sqlalchemy', 'asyncio']),
     classifiers=[
         'Programming Language :: Python :: 3',
@@ -28,7 +28,8 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'fincept=fincept_terminal.FinceptTerminalStart:start',
+            'fincept=fincept_terminal.FinceptTerminalStart:start_terminal',
+            'finceptterminal=fincept_terminal.FinceptTerminalStart:cli_handler',
         ],
     },
     include_package_data=True,

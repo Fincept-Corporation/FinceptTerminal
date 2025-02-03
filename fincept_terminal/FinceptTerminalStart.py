@@ -1,5 +1,8 @@
+import sys
 from textual.app import App
 from textual.containers import Container
+
+VERSION = "1.0.0"  # Define the version of Fincept Terminal
 
 class FinceptTerminal(App):
     """Main entry point for the Fincept Terminal."""
@@ -18,24 +21,25 @@ class FinceptTerminal(App):
 
     def compose(self):
         """Define the layout of the app."""
-        yield Container(id="fincept-app")  # Updated ID to match TCSS
+        yield Container(id="fincept-app")
 
     async def on_mount(self):
         """Mount the Welcome Screen."""
         await self.push_screen("welcome")
 
-def start():
-    """
-    Entry point function for running the Fincept Terminal.
-    """
-    try:
-        app = FinceptTerminal()  # Create an instance of the app
-        app.run()           # Launch the app instance
-    except Exception as e:
-        raise
+def start_terminal():
+    """Launches the Fincept Terminal application."""
+    app = FinceptTerminal()
+    app.run()
 
-
-if __name__ == "__main__":
-    import sys, os
-    sys.stdout = open(os.devnull, 'w')
-    start()
+def cli_handler():
+    """Handles CLI commands for finceptterminal."""
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--version":
+            print(f"Fincept Terminal Version: {VERSION}")
+        elif sys.argv[1] == "--help":
+            print("Fincept Terminal: Under Development")
+        else:
+            print("Invalid command. Use 'finceptterminal --help' for options.")
+    else:
+        print("Invalid command. Use 'finceptterminal --help' for options.")
