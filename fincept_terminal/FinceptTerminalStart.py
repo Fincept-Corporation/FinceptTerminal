@@ -1,7 +1,7 @@
 from textual.app import App
 from textual.containers import Container
 
-class FinceptApp(App):
+class FinceptTerminal(App):
     """Main entry point for the Fincept Terminal."""
 
     def __init__(self):
@@ -29,7 +29,7 @@ def start():
     Entry point function for running the Fincept Terminal.
     """
     try:
-        app = FinceptApp()  # Create an instance of the app
+        app = FinceptTerminal()  # Create an instance of the app
         app.run()           # Launch the app instance
     except Exception as e:
         raise
