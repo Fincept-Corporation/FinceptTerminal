@@ -4,9 +4,9 @@ import pandas as pd
 import numpy as np
 
 from langchain_core.messages import HumanMessage
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.state import AgentState, show_agent_reasoning
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.utils.progress import progress
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.data_acquisition import get_prices, prices_to_df
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.state import AgentState, show_agent_reasoning
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.utils.progress import progress
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.data_acquisition import get_prices, prices_to_df
 
 def technical_analyst_agent(state: AgentState):
     data = state["data"]

@@ -2,11 +2,11 @@ import json
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
-SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptTerminalSettingModule.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptSettingModule.json")
 
 def load_settings():
     """
-    Load FinceptTerminalSettingModule from the FinceptTerminalSettingModule.json file.
+    Load FinceptSettingModule from the FinceptSettingModule.json file.
     If the file does not exist, create it with default empty content.
     """
     if not os.path.exists(SETTINGS_FILE):
@@ -19,7 +19,7 @@ def load_settings():
 
 def save_user_data(data):
     """
-    Save user data to the FinceptTerminalSettingModule.json file.
+    Save user data to the FinceptSettingModule.json file.
     """
     settings = load_settings()
     settings.update(data)
@@ -28,7 +28,7 @@ def save_user_data(data):
 
 def is_registered():
     """
-    Check if a user is registered by verifying the presence of 'name' in FinceptTerminalSettingModule.
+    Check if a user is registered by verifying the presence of 'name' in FinceptSettingModule.
     """
     settings = load_settings()
     return "username" in settings
@@ -42,7 +42,7 @@ def get_user_name():
 
 def clear_user_data():
     """
-    Clear all user data by deleting the FinceptTerminalSettingModule.json file.
+    Clear all user data by deleting the FinceptSettingModule.json file.
     """
     if os.path.exists(SETTINGS_FILE):
         os.remove(SETTINGS_FILE)

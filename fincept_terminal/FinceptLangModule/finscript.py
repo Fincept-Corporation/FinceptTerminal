@@ -1,7 +1,7 @@
 import os
 import platform
 import subprocess
-from fincept_terminal.FinceptTerminalUtilsModule.themes import console
+from fincept_terminal.FinceptUtilsModule.themes import console
 from rich.panel import Panel
 from rich.syntax import Syntax
 

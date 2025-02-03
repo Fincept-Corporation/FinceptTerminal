@@ -2,9 +2,9 @@ import os
 import pandas as pd
 import requests
 
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.cache import get_cache
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.cache import get_cache
 
-from fincept_terminal.FinceptTerminalAIPwrResModule.ai_hedge_fund.data.models import (
+from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.models import (
     CompanyNews,
     CompanyNewsResponse,
     FinancialMetrics,
