@@ -785,11 +785,3 @@ class ComparisonAnalysisTab(Container):
                 print(f"Error processing {stock}: {e}")  # Log error details
 
 
-class ConsumerComparisonTab(Container):
-
-    def compose(self):
-        with TabbedContent():
-            with TabPane("Consumer Behaviour", id="consumer_behaviour"):
-                yield ConsumerBehaviorTab()
-            with TabPane("Comparison Analysis", id="comparison_analysis"):
-                yield ComparisonAnalysisTab()
