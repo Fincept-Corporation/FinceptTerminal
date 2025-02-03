@@ -175,3 +175,75 @@ Button:hover {
     background: yellow;
     color: black;
 }
+
+
+/* GenAI TAB */
+.genai_header{
+    text-align: center;
+}
+.genai_container {
+    layout: grid;
+    grid-size: 2 2;
+    grid-rows: 85% 15%;
+    grid-columns: 20% 80%;
+    height: 100%;
+    width: 100%;
+}
+.genai_chat_vertical {
+    row-span: 2;  /* ✅ Spanning 2 Rows */
+    height: 100%;
+    width: auto;
+    border: solid red;
+}
+
+.genai_message_container {
+    padding: 1;
+    border: solid red;
+    height: auto;
+    width: auto;
+}
+.user-message {
+    color: #1e90ff; /* Bright blue for user messages */
+    text-align: left; /* Align to the left */
+    margin: 1 0;
+}
+
+.genai-message {
+    color: #32cd32; /* Green for GenAI messages */
+    text-align: right; /* Align to the right */
+    margin: 1 0;
+}
+
+.genai_input_container {
+    align: left middle;
+    border: solid red;
+    height: auto;
+}
+.chat_session_controls{
+    height: auto;
+    width: auto;
+    align: center top;
+}
+
+#chat_selector{
+    margin: 1 0 0 0;
+    height: auto;
+    width: 100%;
+}
+.chat_input_container {
+    align:left middle;
+    width: 100%; /* Ensure input container spans available space */
+    margin: 0 0; /* Add some spacing */
+}
+
+.chat_input {
+    display: block; /* Align inline for input and button */
+    width: 90%; /* Make the input field occupy most of the row */
+}
+
+.send_button {
+    display: block; /* Align inline for input and button */
+    width: auto; /* Adjust width automatically */
+    padding: 1; /* Add padding */
+    margin-left: 1; /* Add spacing between input and button */
+}
