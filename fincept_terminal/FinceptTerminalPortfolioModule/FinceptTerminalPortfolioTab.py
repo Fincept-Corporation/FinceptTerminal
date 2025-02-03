@@ -14,7 +14,7 @@ import plotly.offline as pyo
 
 import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
-SETTINGS_FILE = os.path.join(BASE_DIR, "..", "FinceptTerminalSettings", "FinceptTerminalSettings.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "..", "FinceptTerminalSettingModule", "FinceptTerminalSettingModule.json")
 
 class PortfolioTab(VerticalScroll):
     """Custom tab for Portfolio Management."""
@@ -435,7 +435,7 @@ class PortfolioTab(VerticalScroll):
             self.notify(f"Error analyzing portfolio: {e}")
 
     def load_portfolios(self):
-        """Load portfolios from the FinceptTerminalSettings file with notifications."""
+        """Load portfolios from the FinceptTerminalSettingModule file with notifications."""
         if os.path.exists(SETTINGS_FILE):
             try:
                 with open(SETTINGS_FILE, "r") as file:
@@ -447,8 +447,8 @@ class PortfolioTab(VerticalScroll):
                         self.notify("No portfolios found. Create one to get started!")
                     return portfolios
             except json.JSONDecodeError:
-                logging.error("Error loading portfolios: Corrupted FinceptTerminalSettings.json file.")
-                self.notify("Error: Corrupted FinceptTerminalSettings file. Starting with an empty portfolio.")
+                logging.error("Error loading portfolios: Corrupted FinceptTerminalSettingModule.json file.")
+                self.notify("Error: Corrupted FinceptTerminalSettingModule file. Starting with an empty portfolio.")
                 return {}
         self.notify("Settings file not found. Starting fresh.")
         return {}

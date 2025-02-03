@@ -216,19 +216,50 @@ class StockTrackerTab(Container):
         table.add_row("Rolling 21-Day Volatility", f"{history['Volatility'].iloc[-1]:.2%}")
 
     async def _populate_news_table(self, ticker):
-        """Fetch and display recent news (Placeholder - Extend for real news API)."""
+        """Fetch and display recent news for the given ticker and perform sentiment analysis."""
         table = self.query_one("#news_table", DataTable)
         table.clear()
+
+        # Ensure columns are set
         if not table.columns:
-            table.add_column("Headline")
+            table.add_column("Title", width=40)
+            table.add_column("Published")
+            table.add_column("Description", width=60)
             table.add_column("Sentiment")
 
-        # Placeholder news (replace with API)
-        sample_news = [
-            {"title": f"Great news for {ticker}!", "sentiment": "Positive"},
-            {"title": f"Concerns over {ticker} performance", "sentiment": "Negative"},
-            {"title": f"Analysts review {ticker} latest report", "sentiment": "Neutral"},
-        ]
+        # Fetch news articles
+        try:
+            news = GNews()
+            news_results = news.get_news(ticker)
 
-        for article in sample_news:
-            table.add_row(article["title"], article["sentiment"])
+            if not news_results:
+                self.app.notify(f"⚠ No news found for {ticker}.", severity="warning")
+                return
+
+            # Process and populate the table
+            for article in news_results[:5]:  # Fetch top 5 articles
+                title = article.get("title", "No Title")
+                published = article.get("published date", "Unknown Date")
+                description = article.get("description", "No Description")
+                sentiment = await self.analyze_sentiment(title + " " + description)  # Perform sentiment analysis
+
+                table.add_row(title, published, description, sentiment)
+
+            self.app.notify(f"✅ News for {ticker} loaded successfully!")
+        except Exception as e:
+            self.app.notify(f"❌ Error fetching news: {e}", severity="error")
+
+    async def analyze_sentiment(self, text):
+        """
+        Perform basic sentiment analysis.
+        - 'Positive' if keywords like 'good' or 'positive' are present.
+        - 'Negative' if keywords like 'bad' or 'negative' are present.
+        - 'Neutral' otherwise.
+        """
+        text = text.lower()
+        if any(word in text for word in ["good", "positive", "great", "excellent", "upbeat"]):
+            return "Positive"
+        elif any(word in text for word in ["bad", "negative", "poor", "down", "concern"]):
+            return "Negative"
+        else:
+            return "Neutral"
