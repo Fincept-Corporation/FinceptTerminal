@@ -1,0 +1,35 @@
+[project]
+name = "fincept-terminal"
+version = "1.0.0"
+description = "A Terminal for Financial Market Analysis and Fetching all kinds of Data."
+readme = "README.md"
+authors = [
+  { name = "Fincept Corporation", email = "dev@fincept.in" }
+]
+
+license = { text = "MIT" }
+
+requires-python = ">=3.11"
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+  "requests",
+  "gnews",
+  "textual"
+]
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[project.scripts]
+fincept = "fincept_terminal.FinceptTerminalStart:start_terminal"
+
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
