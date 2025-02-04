@@ -47,7 +47,7 @@ class RegistrationScreen(Screen):
             self.app.notify("Error: All fields are required.", severity="error")
             return
 
-        # Step 1: Register user
+        # Step 1: Register user (note: registration response now does not return an API key)
         self.app.notify("Info: Registering user, please wait...", severity="information")
         try:
             registration_response = await asyncio.to_thread(register_user, username, email, password)
@@ -55,13 +55,14 @@ class RegistrationScreen(Screen):
             self.app.notify(f"Error: Registration failed: {e}", severity="error")
             return
 
-        if not registration_response or "api_key" not in registration_response:
+        # Expect a response like {"message": "Registered. OTP sent."}
+        if not registration_response or registration_response.get("message") != "Registered. OTP sent.":
             error_detail = registration_response.get("detail", "Unknown error occurred.")
             self.app.notify(f"Error: Registration failed: {error_detail}", severity="error")
             return
 
-        # Save API key for later use
-        self.api_key = registration_response["api_key"]
+        # Save email and username for later use (API key will be received after OTP verification)
+        self.username = username
         self.email = email
 
         # Step 2: Show OTP input
@@ -78,25 +79,29 @@ class RegistrationScreen(Screen):
 
     async def handle_verify_otp(self):
         """Handle OTP verification asynchronously."""
-        otp_input = self.query_one("#otp-input", Input).value.strip()
-        if not otp_input:
+        otp_input_value = self.query_one("#otp-input", Input).value.strip()
+        if not otp_input_value:
             self.app.notify("Error: OTP is required for verification.", severity="error")
             return
 
         self.app.notify("Info: Verifying OTP, please wait...", severity="information")
         try:
-            verification_response = await asyncio.to_thread(verify_otp, self.email, otp_input)
+            verification_response = await asyncio.to_thread(verify_otp, self.email, otp_input_value)
         except Exception as e:
             self.app.notify(f"Error: OTP verification failed: {e}", severity="error")
             return
 
-        if not verification_response.get("message") == "Email verified successfully!":
+        # Expected response: {"message": "Verified", "api_key": <user_api_key>}
+        if verification_response.get("message") != "Verified":
             self.app.notify("Error: Invalid OTP. Registration failed.", severity="error")
             return
 
-        # Step 3: Save user data
+        # Save the API key from the verification response
+        self.api_key = verification_response.get("api_key")
+
+        # Step 3: Save user data locally
         save_user_data({
-            "username": self.query_one("#username", Input).value.strip(),
+            "username": self.username,
             "email": self.email,
             "api_key": self.api_key,
         })

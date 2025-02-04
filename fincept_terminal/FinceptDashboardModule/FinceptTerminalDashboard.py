@@ -3,11 +3,14 @@ from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.widgets import Static, Link, DataTable, Header, TabbedContent, TabPane, Footer, Markdown, Button
-
+import sys, os
 
 class FinceptTerminalDashboard(Screen):
     """Main Dashboard Screen."""
-    CSS_PATH = "FinceptTerminalDashboard.tcss"
+
+    # Dynamically find the CSS file
+    BASE_DIR = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
+    CSS_PATH = os.path.join(BASE_DIR, "FinceptTerminalDashboard.tcss")
 
     def __init__(self):
         super().__init__()
@@ -104,8 +107,8 @@ class FinceptTerminalDashboard(Screen):
 
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
-                        from fincept_terminal.FinceptFinMarketModule.robo_advisory.FinceptTerminalRoboAdvisorTab import RoboAdvisorTab
-                        yield RoboAdvisorTab()
+                        from fincept_terminal.FinceptEcoAnModule.FinceptTerminalEconomicAnalysisScreen import DataGovINtab
+                        yield DataGovINtab()
 
 
                     with TabPane("Financial Markets", id="financial-markets"):

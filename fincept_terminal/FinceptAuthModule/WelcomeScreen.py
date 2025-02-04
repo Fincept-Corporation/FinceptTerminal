@@ -151,6 +151,10 @@ class WelcomeScreen(Screen):
             await self.app.push_screen("registration")
         elif button.id == "fincept-button-guest":
             await self.app.push_screen("dashboard")
+        elif button.id == "fincept-button-login":
+            # Push the LoginScreen when the Login button is pressed
+            from fincept_terminal.FinceptAuthModule.LoginScreen import LoginScreen
+            await self.app.push_screen(LoginScreen())
         elif button.id == "fincept-button-continue":
             await self.app.push_screen("dashboard")
         elif button.id == "fincept-button-logout":
