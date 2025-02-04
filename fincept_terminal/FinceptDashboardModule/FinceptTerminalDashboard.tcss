@@ -252,6 +252,18 @@ Button:hover {
     height: 80%;
     align: center top;
 }
+
 .ai_agents_display{
     height: 90%;
+}
+
+#datagovin_container{
+    layout: grid;
+    grid-size: 2 2;
+    grid-rows: 1fr 1fr;
+    grid-columns: 30% 70%;
+}
+.resource_collapsible{
+    row-span: 2;
+    height:100%
 }
