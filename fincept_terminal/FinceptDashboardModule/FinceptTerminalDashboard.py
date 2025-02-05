@@ -111,7 +111,7 @@ class FinceptTerminalDashboard(Screen):
                         with TabbedContent():
                             with TabPane("DataGovIN"):
                                 from fincept_terminal.FinceptEcoAnModule.FinceptTerminalEconomicAnalysisScreen import DataGovINtab
-                                #yield DataGovINtab()
+                                yield DataGovINtab()
 
                             with TabPane("EconDB"):
                                 from fincept_terminal.FinceptEcoAnModule.WorldEconomyData.EconDB.FinceptTerminalEconDBTab import EconDBTab
