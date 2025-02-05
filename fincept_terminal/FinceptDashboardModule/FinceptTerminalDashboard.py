@@ -108,8 +108,14 @@ class FinceptTerminalDashboard(Screen):
 
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
-                        from fincept_terminal.FinceptEcoAnModule.FinceptTerminalEconomicAnalysisScreen import DataGovINtab
-                        yield DataGovINtab()
+                        with TabbedContent():
+                            with TabPane("DataGovIN"):
+                                from fincept_terminal.FinceptEcoAnModule.FinceptTerminalEconomicAnalysisScreen import DataGovINtab
+                                yield DataGovINtab()
+
+                            with TabPane("EconDB"):
+                                from fincept_terminal.FinceptEcoAnModule.WorldEconomyData.EconDB.FinceptTerminalEconDBTab import EconDBTab
+                                yield EconDBTab()
 
 
                     with TabPane("Financial Markets", id="financial-markets"):

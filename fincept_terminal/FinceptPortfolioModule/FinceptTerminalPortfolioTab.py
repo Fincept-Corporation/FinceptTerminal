@@ -4,7 +4,7 @@ from textual.validation import Function
 import yfinance as yf
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 from collections import defaultdict
 from plotly.subplots import make_subplots
@@ -67,8 +67,7 @@ class PortfolioTab(VerticalScroll):
                 yield Static("STOCK SYMBOL:", id="add-stock-title", classes="sub-header")
                 yield Input(placeholder="Enter Stock Symbol...", id="stock-symbol-input", classes="action-input")
                 yield Input(placeholder="Enter Quantity...", id="stock-quantity-input", classes="action-input")
-                yield Input(placeholder="Enter Date in DD-MM-YYYY...", id="stock-date-input", classes="action-input", validators=[Function(self.validate_date_ddmmyyyy, "The Date Formate is incorrect")])
-
+                yield Input(placeholder="Enter Date in YYYY-MM-DD...", id="stock-date-input", classes="action-input", validators=[Function(self.validate_date_ddmmyyyy, "The Date Formate is incorrect")])
 
                 # Buttons for Portfolio Management
                 with Horizontal(classes="button-container"):
@@ -85,9 +84,18 @@ class PortfolioTab(VerticalScroll):
 
     @staticmethod
     def validate_date_ddmmyyyy(date_str: str) -> bool:
+        """
+        Validate if the input date is in the correct format: DD-MM-YYYY.
+
+        Args:
+            date_str (str): The date string entered by the user.
+
+        Returns:
+            bool: True if the date is valid, False otherwise.
+        """
         try:
             # Try parsing the date in DD-MM-YYYY format
-            datetime.datetime.strptime(date_str, "%d-%m-%Y")
+            datetime.strptime(date_str, "%Y-%m-%d")
             return True
         except ValueError:
             return False
@@ -125,9 +133,14 @@ class PortfolioTab(VerticalScroll):
             portfolio = self.query_one("#portfolio-name-input-tracker", Input).value.strip()
             await self.visualize_portfolio_allocation(portfolio)
 
-
-
     async def visualize_portfolio_allocation(self, portfolio_name: str):
+        """
+        Fetch stocks in the portfolio, get their sectors and industries,
+        and visualize allocation using a pie chart.
+
+        Args:
+            portfolio_name (str): The name of the portfolio to analyze.
+        """
         try:
             # ✅ Step 1: Fetch portfolio stocks
             portfolios = self.load_portfolios()
@@ -168,6 +181,14 @@ class PortfolioTab(VerticalScroll):
             sys.exit(0)
 
     def generate_and_open_pie_chart(self, sector_data: dict, industry_data: dict):
+        """
+        Generate pie charts for sector and industry allocations using Plotly and open in browser.
+
+        Args:
+            sector_data (dict): Dictionary with sector allocations.
+            industry_data (dict): Dictionary with industry allocations.
+        """
+
         # ✅ Create a single figure with two pie charts using make_subplots
         fig = make_subplots(
             rows=1, cols=2,  # ✅ Arrange charts side by side (1 row, 2 columns)
@@ -272,7 +293,7 @@ class PortfolioTab(VerticalScroll):
         self.app.notify(f"Portfolio '{portfolio_name}' tracking details loaded successfully.", severity="information")
 
     def add_stock_to_portfolio(self, portfolio_name):
-        """Ask for stock symbol and quantity, fetch current price, and add stock to the selected portfolio."""
+        """Ask for stock symbol, quantity, and purchase date; fetch historical price, and add stock to the selected portfolio."""
         if portfolio_name not in self.portfolios:
             self.notify(f"Portfolio '{portfolio_name}' not found.", severity="error")
             return
@@ -287,26 +308,30 @@ class PortfolioTab(VerticalScroll):
 
         if not self.validate_date_ddmmyyyy(date):
             self.notify("Invalid date format! Please use DD-MM-YYYY.", severity="error")
-            return  # ⛔ STOP execution if the date is invalid
-
-        if not stock_symbol or not quantity_input.isdigit():
-            self.notify("Invalid stock symbol or quantity.", severity="error")
             return
 
         quantity = int(quantity_input)
 
-        # Fetch current price from yfinance
+        try:
+            buy_date = datetime.strptime(date, "%Y-%m-%d")
+            start_date = (buy_date - timedelta(days=1)).strftime("%Y-%m-%d")
+            end_date = buy_date.strftime("%Y-%m-%d")
+        except ValueError:
+            self.notify("Invalid date format! Please use YYYY-MM-DD.", severity="error")
+            return
+        # Fetch historical price for the specified date
         try:
             stock = yf.Ticker(stock_symbol)
-            stock_history = stock.history(period="1d")
-            avg_price = stock_history["Close"].iloc[-1] if not stock_history.empty else None
-
-            if avg_price is None:
-                self.notify(f"Could not fetch price for {stock_symbol}. Stock not added.", severity="error")
+            stock_history = stock.history(start=start_date, end=buy_date)
+            if stock_history.empty:
+                self.notify(f"No data available for {stock_symbol} on {date}. Stock not added.", severity="error")
                 return
 
+            # Get the closing price on the specified date
+            close_price = stock_history["Close"].iloc[0]
+
         except Exception as e:
-            self.notify(f"Error fetching stock price for {stock_symbol}: {e}", severity="error")
+            self.notify(f"Error fetching stock price for {stock_symbol} on {date}: {e}", severity="error")
             return
 
         # Ensure the portfolio is in dictionary format
@@ -321,7 +346,7 @@ class PortfolioTab(VerticalScroll):
 
             # Calculate new average price and update quantity
             new_quantity = current_quantity + quantity
-            new_avg_price = ((current_avg_price * current_quantity) + (avg_price * quantity)) / new_quantity
+            new_avg_price = ((current_avg_price * current_quantity) + (close_price * quantity)) / new_quantity
 
             self.portfolios[portfolio_name][stock_symbol] = {
                 "quantity": new_quantity,
@@ -332,13 +357,13 @@ class PortfolioTab(VerticalScroll):
             # Add a new stock entry
             self.portfolios[portfolio_name][stock_symbol] = {
                 "quantity": quantity,
-                "avg_price": round(avg_price, 2),
+                "avg_price": round(close_price, 2),
                 "last_added": date
             }
 
         self.save_portfolios()
 
-        self.notify(f"Added {quantity} of {stock_symbol} to {portfolio_name} at ₹{avg_price:.2f}.")
+        self.notify(f"Added {quantity} of {stock_symbol} to {portfolio_name} at ₹{close_price:.2f}.")
         self.view_current_portfolio(portfolio_name)
 
     def remove_stock_from_portfolio(self, portfolio_name: str):
@@ -435,7 +460,7 @@ class PortfolioTab(VerticalScroll):
             self.notify(f"Error analyzing portfolio: {e}")
 
     def load_portfolios(self):
-        """Load portfolios from the FinceptSettingModule file with notifications."""
+        """Load portfolios from the settings file with notifications."""
         if os.path.exists(SETTINGS_FILE):
             try:
                 with open(SETTINGS_FILE, "r") as file:
@@ -447,8 +472,8 @@ class PortfolioTab(VerticalScroll):
                         self.notify("No portfolios found. Create one to get started!")
                     return portfolios
             except json.JSONDecodeError:
-                logging.error("Error loading portfolios: Corrupted FinceptSettingModule.json file.")
-                self.notify("Error: Corrupted FinceptSettingModule file. Starting with an empty portfolio.")
+                logging.error("Error loading portfolios: Corrupted settings.json file.")
+                self.notify("Error: Corrupted settings file. Starting with an empty portfolio.")
                 return {}
         self.notify("Settings file not found. Starting fresh.")
         return {}
