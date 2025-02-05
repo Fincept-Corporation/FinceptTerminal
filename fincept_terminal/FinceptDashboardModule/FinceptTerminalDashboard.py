@@ -88,6 +88,11 @@ class FinceptTerminalDashboard(Screen):
                         # **Nested TabbedContent inside "World Tracker"**
                         with TabbedContent(initial="world_market_tracker"):
 
+                            with TabPane("World Market Tracker", id="world_market_tracker"):
+                                from fincept_terminal.FinceptDashboardModule.FinceptTerminalWorldMarketTracker import \
+                                    MarketTab
+                                yield MarketTab()
+
                             with TabPane("World Sentiment Tracker", id="global_sentiment_tab"):
                                 yield Static("Sentiment Data of India From Different Parts", id="sentiment_text")
 
@@ -100,10 +105,6 @@ class FinceptTerminalDashboard(Screen):
                                     yield Static("Region 5: Mixed", id="region_5")
                                     yield Static("Region 6: Mixed", id="region_6")
 
-                            with TabPane("World Market Tracker", id="world_market_tracker"):
-                                from fincept_terminal.FinceptDashboardModule.FinceptTerminalWorldMarketTracker import \
-                                    MarketTab
-                                yield MarketTab()
 
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
