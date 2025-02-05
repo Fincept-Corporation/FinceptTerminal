@@ -1,0 +1,16 @@
+{
+    "portfolios": {
+        "fmcg": {
+            "OIL.NS": {
+                "quantity": 1,
+                "avg_price": 406.65,
+                "last_added": "2025-01-28"
+            },
+            "ONGC.NS": {
+                "quantity": 7,
+                "avg_price": 250.78,
+                "last_added": "2025-01-28"
+            }
+        }
+    }
+}
