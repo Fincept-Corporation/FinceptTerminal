@@ -267,3 +267,33 @@ Button:hover {
     row-span: 2;
     height:100%
 }
+.horizontal_next_previous{
+    height: auto;
+}
+.history_data_container{
+    layout: grid;
+    grid-size: 2 1;
+    grid-rows: 1fr;
+    grid-columns: 50% 50%;
+}
+.national_accounts{
+    layout: grid;
+    grid-size: 2 3;
+    grid-rows: 1fr 1fr 1fr;
+    grid-columns: 50% 50%;
+    border: solid red;
+}
+.price_labour, .port_activity, .oil_gas{
+    layout: grid;
+    grid-size: 2 2;
+    grid-rows: 1fr 1fr;
+    grid-columns: 50% 50%;
+    border: solid red;
+}
+.interest_money{
+    layout: grid;
+    grid-size: 2 1;
+    grid-rows: 1fr;
+    grid-columns: 50% 50%;
+    border: solid red;
+}
