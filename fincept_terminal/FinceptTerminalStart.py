@@ -3,6 +3,8 @@ import os
 import json
 from textual.app import App
 from textual.containers import Container
+from textual.binding import Binding
+from textual.widgets import Header, Footer
 
 # 🔹 Define a persistent settings directory in the user's home folder
 SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".fincept")
@@ -16,6 +18,17 @@ DEFAULT_SETTINGS = {
     "auto_update": False,
     "data_sources": {}
 }
+
+BINDINGS = [
+    Binding(key="q", action="quit", description="Quit the app"),
+    Binding(
+        key="question_mark",
+        action="help",
+        description="Show help screen",
+        key_display="?",
+    ),
+    Binding(key="j", action="down", description="Scroll down", show=False),
+]
 
 def ensure_settings_file():
     """Creates `FinceptSettingModule.json` in the user's home directory if it doesn't exist."""
@@ -43,6 +56,7 @@ class FinceptTerminal(App):
         # ✅ Ensure settings file is created in a persistent location
         ensure_settings_file()
 
+
         from fincept_terminal.FinceptAuthModule.WelcomeScreen import WelcomeScreen
         from fincept_terminal.FinceptDashboardModule.FinceptTerminalDashboard import FinceptTerminalDashboard
         from fincept_terminal.FinceptAuthModule.RegistrationScreen import RegistrationScreen
@@ -50,6 +64,7 @@ class FinceptTerminal(App):
         self.install_screen(WelcomeScreen(), "welcome")
         self.install_screen(FinceptTerminalDashboard(), "dashboard")
         self.install_screen(RegistrationScreen(), "registration")
+
 
     def compose(self):
         yield Container(id="fincept-app")

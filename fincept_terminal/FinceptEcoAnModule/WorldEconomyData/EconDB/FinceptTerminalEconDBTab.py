@@ -225,19 +225,26 @@ class MainIndicatorTab(VerticalScroll):
             """Helper function to populate a DataTable with historical data."""
             table.clear()  # Clear the table before adding rows and columns
 
-            # Add columns to the table
+            # Ensure the correct number of columns exist in the table
             if not table.columns:
-                table.add_column("Date")  # First column is Date
-            for ticker in tickers:
-                if not table.columns:
+                table.add_column("Date")  # First column is always Date
+                for ticker in tickers:
                     table.add_column(ticker)
+
+            # Validate column count before adding rows
+            num_columns = len(table.columns)
 
             # Populate rows for the table
             for date in sorted(data.keys(), reverse=True):  # Reverse sort for descending order
                 row = [date]  # Start the row with the date
                 for ticker in tickers:
                     row.append(str(data[date].get(ticker, "N/A")))
-                table.add_row(*row)
+
+                # Ensure row length matches the number of columns before adding
+                if len(row) == num_columns:
+                    table.add_row(*row)
+                else:
+                    print(f"⚠️ Row length mismatch: Expected {num_columns}, got {len(row)} → {row}")  # Debugging
 
         # Process Monthly Data
         monthly_table = self.query_one("#monthly_data_table", DataTable)
