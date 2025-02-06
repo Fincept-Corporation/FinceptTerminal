@@ -1,4 +1,4 @@
-# Fincept Terminal ✨ 
+# Fincept Terminal ✨
 
 [![FinceptTerminal on Product Hunt](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/snapshot-product-hunt-button.png)](https://www.producthunt.com/products/finceptterminal)
 
