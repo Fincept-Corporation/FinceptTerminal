@@ -4,18 +4,6 @@ from textual.screen import Screen
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.widgets import Static, Link, DataTable, Header, TabbedContent, TabPane, Footer, Markdown, Button
 import sys, os
-from textual.binding import Binding
-
-BINDINGS = [
-    Binding(key="q", action="quit", description="Quit the app"),
-    Binding(
-        key="question_mark",
-        action="help",
-        description="Show help screen",
-        key_display="?",
-    ),
-    Binding(key="j", action="down", description="Scroll down", show=False),
-]
 
 class FinceptTerminalDashboard(Screen):
     """Main Dashboard Screen."""
