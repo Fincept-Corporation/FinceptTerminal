@@ -4,6 +4,18 @@ from textual.screen import Screen
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.widgets import Static, Link, DataTable, Header, TabbedContent, TabPane, Footer, Markdown, Button
 import sys, os
+from textual.binding import Binding
+
+BINDINGS = [
+    Binding(key="q", action="quit", description="Quit the app"),
+    Binding(
+        key="question_mark",
+        action="help",
+        description="Show help screen",
+        key_display="?",
+    ),
+    Binding(key="j", action="down", description="Scroll down", show=False),
+]
 
 class FinceptTerminalDashboard(Screen):
     """Main Dashboard Screen."""
@@ -193,14 +205,6 @@ class FinceptTerminalDashboard(Screen):
                     with TabPane("Help & About", id="help-about"):
                         from fincept_terminal.FinceptUtilsModule.FinceptTerminalHelpTab.FinceptTerminalHelpTab import HelpWindow
                         yield HelpWindow()
-                    with TabPane("Exit", id="exit"):
-                        yield Markdown("# Closing Application...")
-                        from fincept_terminal.FinceptUtilsModule.FinceptTerminalExitScreen import ExitScreen
-                        exit_screen_instance = ExitScreen()
-
-                        with TabPane("Exit", id="exit"):
-                            yield Markdown("# Closing Application...")
-                            yield Button(label="EXIT", action=exit_screen_instance)
 
             # News Section (Always Visible)
             with Vertical(classes="news-section", id="news-section"):
