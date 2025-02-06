@@ -103,7 +103,9 @@ If you encounter any issues or have suggestions, feel free to create a GitHub ti
 
 **PLEASE STAR ⭐ THE REPO AND SHARE THE PROJECT ❤️‍🩹 **
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/fincept-investments&type=Date)](https://star-history.com/#Fincept-Corporation/fincept-investments&Date)
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Timeline)](https://star-history.com/#Fincept-Corporation/FinceptTerminal&Timeline)
 
 📌 **Join the Community:**  
 - Discuss ideas and improvements in [GitHub Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
