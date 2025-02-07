@@ -1,4 +1,4 @@
-# Fincept Investments ✨ 
+# Fincept Terminal ✨
 
 [![FinceptTerminal on Product Hunt](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/snapshot-product-hunt-button.png)](https://www.producthunt.com/products/finceptterminal)
 
@@ -10,7 +10,7 @@
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
 [![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
-[![Downloads](https://static.pepy.tech/badge/fincept-investments/month)](https://pypi.org/project/fincept-investments/)
+[![PyPI Downloads](https://static.pepy.tech/badge/fincept-terminal)](https://pepy.tech/projects/fincept-terminal)
 
 **Fincept Terminal** is a comprehensive Command Line tool that helps in Investment research, Extracting financial insights, market analysis, and a lot of other financial services such as technical analysis, fundamental analysis, sentiment analysis, quantitative analysis, and economic data analysis. It's designed to help investors and financial professionals navigate the complex world of investments with ease and precision.
 
@@ -103,7 +103,9 @@ If you encounter any issues or have suggestions, feel free to create a GitHub ti
 
 **PLEASE STAR ⭐ THE REPO AND SHARE THE PROJECT ❤️‍🩹 **
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/fincept-investments&type=Date)](https://star-history.com/#Fincept-Corporation/fincept-investments&Date)
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Timeline)](https://star-history.com/#Fincept-Corporation/FinceptTerminal&Timeline)
 
 📌 **Join the Community:**  
 - Discuss ideas and improvements in [GitHub Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
