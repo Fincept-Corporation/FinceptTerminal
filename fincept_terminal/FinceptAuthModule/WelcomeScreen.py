@@ -4,6 +4,9 @@ from textual.widgets import Static, Button, Header
 from textual.containers import Horizontal, VerticalScroll, Container
 from datetime import datetime
 
+from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import clear_user_data
+
+
 class WelcomeScreen(Screen):
     """Welcome Screen for the Fincept Terminal."""
 
@@ -159,6 +162,4 @@ class WelcomeScreen(Screen):
         elif button.id == "fincept-button-continue":
             await self.app.push_screen("dashboard")
         elif button.id == "fincept-button-logout":
-            from fincept_terminal.FinceptSettingModule.FinceptTerminalSettings import clear_user_data
             clear_user_data()
-            await self.refresh()

@@ -237,6 +237,9 @@ class MainIndicatorTab(VerticalScroll):
             table.add_column("Date")  # First column is always Date
             for ticker in tickers:
                 table.add_column(ticker)  # Add a column for each ticker
+            if not table.columns:
+                for ticker in tickers:
+                    table.add_column(ticker)
 
             # Populate rows with the correct data
             for date in sorted(data.keys(), reverse=True):  # Sort dates in descending order
@@ -246,6 +249,8 @@ class MainIndicatorTab(VerticalScroll):
 
                 # Add row to the table
                 table.add_row(*row)
+                    row.append(str(data[date].get(ticker, "N/A")))
+                    table.add_row(*row)
 
         # Process Monthly Data
         monthly_table = self.query_one("#monthly_data_table", DataTable)
