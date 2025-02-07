@@ -264,6 +264,10 @@ Button:hover {
     grid-rows: 1fr 1fr;
     grid-columns: 30% 70%;
 }
+.settings_save_paste{
+    height: auto;
+}
+
 .resource_collapsible{
     row-span: 2;
     height:100%
@@ -297,4 +301,9 @@ Button:hover {
     grid-rows: 1fr;
     grid-columns: 50% 50%;
     border: solid red;
+}
+.gdp_growth, .contribution_to_gdp .import_export{
+    height: 20%;
+    width: 30;
+    border: red
 }
