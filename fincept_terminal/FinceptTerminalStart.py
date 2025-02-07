@@ -46,10 +46,12 @@ class FinceptTerminal(App):
         from fincept_terminal.FinceptAuthModule.WelcomeScreen import WelcomeScreen
         from fincept_terminal.FinceptDashboardModule.FinceptTerminalDashboard import FinceptTerminalDashboard
         from fincept_terminal.FinceptAuthModule.RegistrationScreen import RegistrationScreen
+        from fincept_terminal.FinceptAuthModule.LoginScreen import LoginScreen
 
         self.install_screen(WelcomeScreen(), "welcome")
         self.install_screen(FinceptTerminalDashboard(), "dashboard")
         self.install_screen(RegistrationScreen(), "registration")
+        self.install_screen(LoginScreen(), "login")
 
     def compose(self):
         yield Container(id="fincept-app")

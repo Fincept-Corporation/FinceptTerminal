@@ -37,12 +37,15 @@ class LoginScreen(Screen):
                 yield Input(placeholder="Enter your email", id="email", classes="input-field")
                 yield Input(placeholder="Enter your password", id="password", password=True, classes="input-field")
                 yield Button("Login", id="login", classes="button")
+                yield Button("Back", id="back")
 
     async def on_button_pressed(self, event: Button.Pressed):
         """Handle button presses."""
         button = event.button
         if button.id == "login":
             await self.handle_login()
+        elif button.id == "back":
+            await self.app.pop_screen()
 
     async def handle_login(self):
         """Handle the login button logic asynchronously."""

@@ -17,6 +17,7 @@ class RegistrationScreen(Screen):
                 yield Input(placeholder="Enter your email", id="email", classes="input-field")
                 yield Input(placeholder="Enter your password", id="password", password=True, classes="input-field")
                 yield Button("Submit", id="submit", classes="button")
+                yield Button("Back", id="back")
                 with Vertical(id="fincept-otp-container", classes="otp-section"):
                     yield Static("", id="otp-message", classes="info-message")
                     otp_input = Input(placeholder="Enter OTP", id="otp-input", classes="input-field")
@@ -32,7 +33,8 @@ class RegistrationScreen(Screen):
 
         if button.id == "submit":
             await self.handle_submit()
-
+        elif button.id == 'back':
+            await self.app.pop_screen()
         elif button.id == "verify-otp":
             await self.handle_verify_otp()
 
