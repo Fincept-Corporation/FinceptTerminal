@@ -193,14 +193,6 @@ class FinceptTerminalDashboard(Screen):
                     with TabPane("Help & About", id="help-about"):
                         from fincept_terminal.FinceptUtilsModule.FinceptTerminalHelpTab.FinceptTerminalHelpTab import HelpWindow
                         yield HelpWindow()
-                    with TabPane("Exit", id="exit"):
-                        yield Markdown("# Closing Application...")
-                        from fincept_terminal.FinceptUtilsModule.FinceptTerminalExitScreen import ExitScreen
-                        exit_screen_instance = ExitScreen()
-
-                        with TabPane("Exit", id="exit"):
-                            yield Markdown("# Closing Application...")
-                            yield Button(label="EXIT", action=exit_screen_instance)
 
             # News Section (Always Visible)
             with Vertical(classes="news-section", id="news-section"):
