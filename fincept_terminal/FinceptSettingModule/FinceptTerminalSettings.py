@@ -4,7 +4,7 @@ import os, json, requests, asyncio, time
 import pyperclip
 # Path for storing user settings
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
-SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptSettingModule.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
 
 FINCEPT_API_URL = "https://finceptapi.share.zrok.io"
 

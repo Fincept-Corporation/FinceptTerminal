@@ -4,8 +4,8 @@ import json
 import os
 import uuid
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptSettingModule.json")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
+SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
 
 class GenAITab(VerticalScroll):
     """Generative AI Chatbot with Multi-Session Management"""
