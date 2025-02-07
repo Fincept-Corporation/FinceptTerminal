@@ -23,13 +23,13 @@ class WelcomeScreen(Screen):
     .fincept-container {
         background: #282828;
         border: solid red; /* Solid red border for debugging */
-        margin: 1; /* Add margin to ensure border visibility */
-        padding: 1; /* Add padding inside the container */
+        margin: 0; /* Add margin to ensure border visibility */
+        padding: 0; /* Add padding inside the container */
     }
 
     .fincept-horizontal {
         align: center middle;
-        height: 10%;
+        height: auto;
         padding: 0;
         border: solid red; /* Solid red border for horizontal layout */
     }
@@ -67,24 +67,24 @@ class WelcomeScreen(Screen):
             # Banner section
             yield Container(
                 Static(
-                    """
-     _____                                                                                                                                              _____ 
-    ( ___ )--------------------------------------------------------------------------------------------------------------------------------------------( ___ )
-     |   |                                                                                                                                              |   | 
-     |   |  $$$$$$$$\ $$\                                          $$\           $$$$$$$$\                                $$\                     $$\   |   | 
-     |   |  $$  _____|\__|                                         $$ |          \__$$  __|                               \__|                    $$ |  |   | 
-     |   |  $$ |      $$\ $$$$$$$\   $$$$$$$\  $$$$$$\   $$$$$$\ $$$$$$\            $$ | $$$$$$\   $$$$$$\  $$$$$$\$$$$\  $$\ $$$$$$$\   $$$$$$\  $$ |  |   | 
-     |   |  $$$$$\    $$ |$$  __$$\ $$  _____|$$  __$$\ $$  __$$\\_$$  _|            $$ |$$  __$$\ $$  __$$\ $$  _$$  _$$\ $$ |$$  __$$\  \____$$\ $$ |  |   | 
-     |   |  $$  __|   $$ |$$ |  $$ |$$ /      $$$$$$$$ |$$ /  $$ | $$ |             $$ |$$$$$$$$ |$$ |  \__|$$ / $$ / $$ |$$ |$$ |  $$ | $$$$$$$ |$$ |  |   | 
-     |   |  $$ |      $$ |$$ |  $$ |$$ |      $$   ____|$$ |  $$ | $$ |$$\          $$ |$$   ____|$$ |      $$ | $$ | $$ |$$ |$$ |  $$ |$$  __$$ |$$ |  |   | 
-     |   |  $$ |      $$ |$$ |  $$ |\$$$$$$$\ \$$$$$$$\ $$$$$$$  | \$$$$  |         $$ |\$$$$$$$\ $$ |      $$ | $$ | $$ |$$ |$$ |  $$ |\$$$$$$$ |$$ |  |   | 
-     |   |  \__|      \__|\__|  \__| \_______| \_______|$$  ____/   \____/          \__| \_______|\__|      \__| \__| \__|\__|\__|  \__| \_______|\__|  |   | 
-     |   |                                              $$ |                                                                                            |   | 
-     |   |                                              $$ |                                                                                            |   | 
-     |   |                                              \__|                                                                                            |   | 
-     |___|                                                                                                                                              |___| 
-    (_____)--------------------------------------------------------------------------------------------------------------------------------------------(_____)                         
-                    """,
+                    """[red]
+                             _____                                                                                                                                              _____ 
+                            ( ___ )--------------------------------------------------------------------------------------------------------------------------------------------( ___ )
+                             |   |                                                                                                                                              |   | 
+                             |   |  $$$$$$$$\ $$\                                          $$\           $$$$$$$$\                                $$\                     $$\   |   | 
+                             |   |  $$  _____|\__|                                         $$ |          \__$$  __|                               \__|                    $$ |  |   | 
+                             |   |  $$ |      $$\ $$$$$$$\   $$$$$$$\  $$$$$$\   $$$$$$\ $$$$$$\            $$ | $$$$$$\   $$$$$$\  $$$$$$\$$$$\  $$\ $$$$$$$\   $$$$$$\  $$ |  |   | 
+                             |   |  $$$$$\    $$ |$$  __$$\ $$  _____|$$  __$$\ $$  __$$\\_$$  _|            $$ |$$  __$$\ $$  __$$\ $$  _$$  _$$\ $$ |$$  __$$\  \____$$\ $$ |  |   | 
+                             |   |  $$  __|   $$ |$$ |  $$ |$$ /      $$$$$$$$ |$$ /  $$ | $$ |             $$ |$$$$$$$$ |$$ |  \__|$$ / $$ / $$ |$$ |$$ |  $$ | $$$$$$$ |$$ |  |   | 
+                             |   |  $$ |      $$ |$$ |  $$ |$$ |      $$   ____|$$ |  $$ | $$ |$$\          $$ |$$   ____|$$ |      $$ | $$ | $$ |$$ |$$ |  $$ |$$  __$$ |$$ |  |   | 
+                             |   |  $$ |      $$ |$$ |  $$ |\$$$$$$$\ \$$$$$$$\ $$$$$$$  | \$$$$  |         $$ |\$$$$$$$\ $$ |      $$ | $$ | $$ |$$ |$$ |  $$ |\$$$$$$$ |$$ |  |   | 
+                             |   |  \__|      \__|\__|  \__| \_______| \_______|$$  ____/   \____/          \__| \_______|\__|      \__| \__| \__|\__|\__|  \__| \_______|\__|  |   | 
+                             |   |                                              $$ |                                                                                            |   | 
+                             |   |                                              $$ |                                                                                            |   | 
+                             |   |                                              \__|                                                                                            |   | 
+                             |___|                                                                                                                                              |___| 
+                            (_____)--------------------------------------------------------------------------------------------------------------------------------------------(_____)                         
+                    [/red]""",
                     id="fincept-banner-static",
                 ),
                 id="fincept-banner-container",
@@ -95,21 +95,22 @@ class WelcomeScreen(Screen):
             yield Container(
                 Static(
                     """
-        Welcome to Fincept Investments !!
+        [red]Welcome to Fincept Investments !![/red]
+        At Fincept Investments, we are your ultimate gateway to unparalleled financial insights and market analysis. Our platform is dedicated to empowering investors, traders, and financial enthusiasts with 
+        comprehensive data and cutting-edge tools to make informed decisions in the fast-paced world of finance.
 
-        At **Fincept Investments**, we are your ultimate gateway to unparalleled financial insights and market analysis. Our platform is dedicated to empowering investors, traders, and financial enthusiasts with comprehensive data and cutting-edge tools to make informed decisions in the fast-paced world of finance.
-
-        Our Services: 
-
-        - **Technical Analysis:** Dive deep into charts and trends with our advanced technical analysis tools. We provide real-time data and indicators to help you spot opportunities in the market.
-        - **Fundamental Analysis:** Understand the core value of assets with our in-depth fundamental analysis. We offer detailed reports on company financials, earnings, and key ratios to help you evaluate potential investments.
-        - **Sentiment Analysis:** Stay ahead of the market mood with our sentiment analysis. We track and analyze public opinion and market sentiment across social media and news sources to give you a competitive edge.
-        - **Quantitative Analysis:** Harness the power of numbers with our quantitative analysis tools. We provide robust models and algorithms to help you identify patterns and optimize your trading strategies.
-        - **Economic Data:** Access a wealth of economic indicators and macroeconomic data. Our platform delivers key economic metrics from around the globe, helping you understand the broader market context.
+        [red]Our Services:[/red] 
+        - [red]Technical Analysis:[/red] Dive deep into charts and trends with our advanced technical analysis tools. We provide real-time data and indicators to help you spot opportunities in the market.
+        - [red]Fundamental Analysis:[/red] Understand the core value of assets with our in-depth fundamental analysis. We offer detailed reports on company financials, earnings, and key ratios to help you evaluate
+          potential investments.
+        - [red]Sentiment Analysis:[/red] Stay ahead of the market mood with our sentiment analysis. We track and analyze public opinion and market sentiment across social media and news sources to give you a 
+          competitive edge.
+        - [red]Quantitative Analysis:[/red] Harness the power of numbers with our quantitative analysis tools. We provide robust models and algorithms to help you identify patterns and optimize your trading strategies.
+        - [red]Economic Data:[/red] Access a wealth of economic indicators and macroeconomic data. Our platform delivers key economic metrics from around the globe, helping you understand the broader market context.
 
         Connect with Us:
 
-        Instagram: https://instagram.com/finceptcorp
+        Instagram: [red]https://instagram.com/finceptcorp[/red]
                     """,
                     id="fincept-info-static",
                 ),
@@ -154,7 +155,7 @@ class WelcomeScreen(Screen):
         elif button.id == "fincept-button-login":
             # Push the LoginScreen when the Login button is pressed
             from fincept_terminal.FinceptAuthModule.LoginScreen import LoginScreen
-            await self.app.push_screen(LoginScreen())
+            await self.app.push_screen("login")
         elif button.id == "fincept-button-continue":
             await self.app.push_screen("dashboard")
         elif button.id == "fincept-button-logout":
