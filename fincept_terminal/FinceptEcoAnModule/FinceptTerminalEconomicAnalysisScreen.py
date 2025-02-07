@@ -9,7 +9,7 @@ import sqlite3
 DB_PATH = os.path.expanduser("~/datagovindia.db")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "..", "FinceptSettingModule", "FinceptSettingModule.json")
 
 class DataGovINtab(VerticalScroll):
     """
