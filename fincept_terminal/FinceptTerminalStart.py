@@ -4,34 +4,7 @@ import json
 from textual.app import App
 from textual.containers import Container
 
-# 🔹 Define a persistent settings directory in the user's home folder
-SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".fincept")
-SETTINGS_FILE = os.path.join(SETTINGS_DIR, "FinceptSettingModule.json")
-
-# ✅ Default settings (ensures new settings file is created if missing)
-DEFAULT_SETTINGS = {
-    "theme": "dark",
-    "notifications": True,
-    "display_rows": 10,
-    "auto_update": False,
-    "data_sources": {}
-}
-
-def ensure_settings_file():
-    """Creates `FinceptSettingModule.json` in the user's home directory if it doesn't exist."""
-
-    # ✅ Ensure the settings directory exists
-    if not os.path.exists(SETTINGS_DIR):
-        os.makedirs(SETTINGS_DIR, exist_ok=True)
-        print(f"📁 Created settings directory: {SETTINGS_DIR}")
-
-    # ✅ Create settings file if missing
-    if not os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(DEFAULT_SETTINGS, f, indent=4)
-        print(f"✅ Settings file created: {SETTINGS_FILE}")
-    else:
-        print(f"⚡ Settings file already exists: {SETTINGS_FILE}")
+from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import ensure_settings_file
 
 
 class FinceptTerminal(App):
