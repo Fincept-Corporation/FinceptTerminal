@@ -1,10 +1,10 @@
 from textual.widgets import Button, TabPane, TabbedContent, Static, Collapsible, Input, Switch, Label
 from textual.containers import Container, Vertical, Horizontal
 import os, json, requests, asyncio, time
-
+import pyperclip
 # Path for storing user settings
-SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".fincept")
-SETTINGS_FILE = os.path.join(SETTINGS_DIR, "FinceptSettingModule.json")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
+SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptSettingModule.json")
 
 FINCEPT_API_URL = "https://finceptapi.share.zrok.io"
 
@@ -105,8 +105,9 @@ class SettingsScreen(Container):
                                     source_id = source.lower().replace(" ", "_").replace("(api)", "")
                                     with Collapsible(title=source, id=f"source-{source_id}"):
                                         yield Input(placeholder="Enter API Key", id=f"apikey-{source_id}")
-                                        yield Button("Save", id=f"save-{source_id}")
-
+                                        with Horizontal(classes="settings_save_paste"):
+                                            yield Button("Save", id=f"save-{source_id}")
+                                            yield Button("Paste", id=f"paste-{source_id}", variant="default")
                 # Theme Tab
                 with TabPane("Theme", id="theme-tab"):
                     with Vertical(id="theme-container"):
@@ -222,6 +223,19 @@ class SettingsScreen(Container):
                     break
             else:
                 self.notify(f"Failed to find the parent collapsible for {source_id}.", severity="error")
+
+        elif button_id.startswith("paste-"):
+            # Extract source_id from the button id, e.g. "paste-gemini_api" -> "gemini_api"
+            source_id = button_id.replace("paste-", "")
+            try:
+                clipboard_text = pyperclip.paste()
+            except Exception as e:
+                self.notify(f"Error accessing clipboard: {e}", severity="error")
+                clipboard_text = ""
+            # Find the associated input widget using its id (e.g. "apikey-gemini_api")
+            input_widget = self.query_one(f"#apikey-{source_id}", Input)
+            input_widget.value = clipboard_text
+            self.notify(f"Pasted clipboard text for {source_id}.", severity="information")
 
         # Theme Tab: Switch Theme
         elif button_id == "dark-theme":

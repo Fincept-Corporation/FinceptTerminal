@@ -5,9 +5,8 @@ import requests
 from textual_plotext import PlotextPlot
 from datetime import datetime
 import httpx
-import plotext as plt
-
-
+import asyncio
+from fincept_terminal.FinceptUtilsModule.ChartingUtils.ChartingWidget import ChartWidget
 # API URLs
 COUNTRY_API_URL = "https://www.econdb.com/static/appdata/econdb-countries.json"
 BASE_API_URL = "https://www.econdb.com/api/series/{ticker}/?token=e17da7710dbd6103c273625fcd9f2e11d6f3249a&format=json"
@@ -48,14 +47,14 @@ class MainIndicatorTab(VerticalScroll):
                     yield DataTable(name="Monthly Data", id="monthly_data_table")
                     yield DataTable(name="Quarterly Data", id="quarterly_data_table")
 
-
     async def on_show(self):
         """Triggered when the tab becomes visible. Loads data only once."""
         if not self.is_loaded:
             self.app.notify("📡 Loading available data...")
-            await self.populate_country_list()
-            await self.populate_indicators_list()
-            self.is_loaded = True
+
+            # Schedule background tasks without blocking the UI
+            asyncio.create_task(self.populate_country_list())
+            asyncio.create_task(self.populate_indicators_list())
 
     async def populate_country_list(self):
         """Fetch and populate the list of available countries dynamically."""
@@ -79,6 +78,7 @@ class MainIndicatorTab(VerticalScroll):
                 return
         except Exception as e:
             self.app.notify(f"❌ Error loading indicators: {e}", severity="error")
+
 
     def display_countries(self):
         """Display the current page of countries in the OptionList."""
@@ -141,28 +141,33 @@ class MainIndicatorTab(VerticalScroll):
     async def fetch_economic_data(self, country_code):
         """Fetch economic indicator data dynamically based on the selected country code."""
         economic_data = []
+        try:
+            # Run HTTP requests concurrently for all indicators
+            tasks = []
+            async with httpx.AsyncClient() as client:
+                for indicator in self.all_indicators:
+                    ticker = f"{indicator['code']}{country_code}"
+                    api_url = BASE_API_URL.format(ticker=ticker)
+                    tasks.append(client.get(api_url))
 
-        for indicator in self.all_indicators:
-            ticker = f"{indicator['code']}{country_code}"  # Construct the ticker dynamically
-            api_url = BASE_API_URL.format(ticker=ticker)
+                # Await all HTTP responses
+                responses = await asyncio.gather(*tasks)
 
-            response = requests.get(api_url)
-            if response.status_code != 200:
-                print(f"Failed to fetch data for {ticker}, Status Code: {response.status_code}")
-                continue  # Skip if data is unavailable
+            # Process responses
+            for response, indicator in zip(responses, self.all_indicators):
+                if response.status_code == 200:
+                    api_data = response.json()
+                    if "data" in api_data and "values" in api_data["data"] and api_data["data"]["values"]:
+                        economic_data.append({
+                            "indicator_name": indicator["verbose"],
+                            "ticker": f"{indicator['code']}{country_code}",
+                            "frequency": api_data.get("frequency", "Unknown"),
+                            "latest_value": api_data["data"]["values"][-1] if api_data["data"]["values"] else "N/A"
+                        })
 
-            api_data = response.json()
-
-            if "data" in api_data and "values" in api_data["data"] and api_data["data"]["values"]:
-                economic_data.append({
-                    "indicator_name": indicator["verbose"],  # Use verbose name from the indicator API
-                    "ticker": ticker,
-                    "frequency": api_data.get("frequency", "Unknown"),
-                    "latest_value": api_data["data"]["values"][-1] if api_data["data"]["values"] else "N/A"
-                })
-
-        self.display_economic_data(economic_data, country_code)
-
+            self.display_economic_data(economic_data, country_code)
+        except Exception as e:
+            self.app.notify(f"❌ Error fetching economic data: {e}")
     def display_economic_data(self, economic_data, country_code):
         """Display the fetched economic indicator data in DataTable."""
         data_table = self.query_one("#economic_data_table", DataTable)
@@ -191,48 +196,59 @@ class MainIndicatorTab(VerticalScroll):
         """Fetch historical data for economic indicators and separate it by frequency."""
         historical_monthly = {}
         historical_quarterly = {}
+        try:
+            # Run HTTP requests concurrently for all indicators
+            tasks = []
+            async with httpx.AsyncClient() as client:
+                for indicator in self.all_indicators:
+                    ticker = f"{indicator['code']}{country_code}"
+                    api_url = BASE_API_URL.format(ticker=ticker)
+                    tasks.append(client.get(api_url))
 
-        for indicator in self.all_indicators:
-            ticker = f"{indicator['code']}{country_code}"  # Construct the ticker dynamically
-            api_url = BASE_API_URL.format(ticker=ticker)
+                # Await all HTTP responses
+                responses = await asyncio.gather(*tasks)
 
-            response = requests.get(api_url)
-            if response.status_code != 200:
-                print(f"Failed to fetch data for {ticker}, Status Code: {response.status_code}")
-                continue  # Skip if data is unavailable
+            # Process responses
+            for response, indicator in zip(responses, self.all_indicators):
+                if response.status_code == 200:
+                    api_data = response.json()
+                    if "data" in api_data and "values" in api_data["data"] and api_data["data"]["values"]:
+                        frequency = api_data.get("frequency", "Unknown")
+                        for date, value in zip(api_data["data"]["dates"], api_data["data"]["values"]):
+                            if frequency == "M":
+                                historical_monthly.setdefault(date, {})[f"{indicator['code']}{country_code}"] = value
+                            elif frequency == "Q":
+                                historical_quarterly.setdefault(date, {})[f"{indicator['code']}{country_code}"] = value
 
-            api_data = response.json()
-
-            # Check if data is available in the response
-            if "data" in api_data and "values" in api_data["data"] and api_data["data"]["values"]:
-                frequency = api_data.get("frequency", "Unknown")
-                for date, value in zip(api_data["data"]["dates"], api_data["data"]["values"]):
-                    if frequency == "M":  # Monthly frequency
-                        if date not in historical_monthly:
-                            historical_monthly[date] = {}
-                        historical_monthly[date][ticker] = value
-                    elif frequency == "Q":  # Quarterly frequency
-                        if date not in historical_quarterly:
-                            historical_quarterly[date] = {}
-                        historical_quarterly[date][ticker] = value
-
-        self.display_historical_data(historical_monthly, historical_quarterly)
+            self.display_historical_data(historical_monthly, historical_quarterly)
+        except Exception as e:
+            self.app.notify(f"❌ Error fetching historical data: {e}")
 
     def display_historical_data(self, historical_monthly, historical_quarterly):
         """Display historical data in separate tables for monthly and quarterly data."""
 
         def populate_table(table, data, tickers):
             """Helper function to populate a DataTable with historical data."""
-            table.clear()  # Clear the table before adding rows and columns
+            # Clear the table entirely before repopulating
+            table.clear()  # Clears rows and columns
 
+            # Reset columns to ensure no duplicates
+            table.columns.clear()  # Removes all existing columns
+            table.add_column("Date")  # First column is always Date
+            for ticker in tickers:
+                table.add_column(ticker)  # Add a column for each ticker
             if not table.columns:
                 for ticker in tickers:
                     table.add_column(ticker)
 
-            # Populate rows for the table
-            for date in sorted(data.keys(), reverse=True):  # Reverse sort for descending order
+            # Populate rows with the correct data
+            for date in sorted(data.keys(), reverse=True):  # Sort dates in descending order
                 row = [date]  # Start the row with the date
                 for ticker in tickers:
+                    row.append(str(data.get(date, {}).get(ticker, "N/A")))  # Fetch data or use "N/A"
+
+                # Add row to the table
+                table.add_row(*row)
                     row.append(str(data[date].get(ticker, "N/A")))
                     table.add_row(*row)
 
@@ -258,8 +274,21 @@ class MainIndicatorTab(VerticalScroll):
             selected_country = event.option_list.get_option_at_index(event.option_index).prompt
             country_code = selected_country.split(" (")[-1].strip(")")
             self.app.notify(f"✅ Selected Country: {selected_country}")
+            asyncio.create_task(self.fetch_all_data(country_code))
+
+    async def fetch_all_data(self, country_code):
+        """Fetch all data asynchronously."""
+        try:
+            # # Fetch economic and historical data concurrently
+            # await asyncio.gather(
+            #     asyncio.create_task(self.fetch_economic_data(country_code)),
+            #     asyncio.create_task(self.fetch_historical_data(country_code))
+            # )
             await self.fetch_economic_data(country_code)
             await self.fetch_historical_data(country_code)
+            self.app.notify("✅ All data loaded successfully!")
+        except Exception as e:
+            self.app.notify(f"❌ Error loading data: {e}")
 
     async def on_button_pressed(self, event: Button.Pressed):
         """Handle button presses for pagination."""
@@ -413,6 +442,8 @@ class EconomyInDetailTab(VerticalScroll):
                     data_table.add_column("Date")
                     data_table.add_column("Growth (%)")
 
+                chart_data = {"labels": [], "values": []}  # Store data for the bar chart
+
                 # Populate the table with GDP data
                 for entry in plot_data.get("data", []):
                     date = datetime.strptime(entry["Date"][:10], "%Y-%m-%d")
@@ -422,13 +453,22 @@ class EconomyInDetailTab(VerticalScroll):
                         formatted_date = date.strftime("%b %Y")  # Format: "Jan 2020"
                         data_table.add_row(formatted_date, f"{growth:.2f}%")
 
+                        # Collect chart data
+                        chart_data["labels"].append(formatted_date)
+                        chart_data["values"].append(growth)
+
+                # ✅ Create and mount the ChartWidget instead of yielding it
+                if chart_data["labels"] and chart_data["values"]:
+                    chart_widget = ChartWidget(chart_type="bar", raw_data=chart_data, title="GDP Growth", classes="gdp_growth")
+                    await self.mount(chart_widget)
+
                 self.notify(f"✅ Displayed GDP growth data for {self.selected_country_code}")
 
         except Exception as e:
             self.notify(f"⚠️ GDP Error: {str(e)}")
 
     async def process_contribution_to_gdp(self):
-        """Fetch and display Contributions to GDP data dynamically for the selected country (DataTable)."""
+        """Fetch and display Contributions to GDP data dynamically for the selected country (DataTable) and generate a Multi-Bar Chart."""
         if not self.selected_country_code:
             self.notify("⚠ No country selected! Please select a country.")
             return
@@ -454,7 +494,7 @@ class EconomyInDetailTab(VerticalScroll):
                     self.notify(f"⚠ No Contribution to GDP series data for {self.selected_country_code}")
                     return
 
-                # Extract column names (sector names) and their codes
+                # Extract sector names and their codes
                 sector_columns = {serie["name"]: serie["code"] for serie in series if "code" in serie}
 
                 # Clear the table and add columns
@@ -464,6 +504,10 @@ class EconomyInDetailTab(VerticalScroll):
                     for sector_name in sector_columns.keys():
                         data_table.add_column(sector_name)
 
+                # Store data for multi-bar chart
+                chart_categories = []  # Dates
+                series_data = {sector: [] for sector in sector_columns.keys()}  # Sector-wise values
+
                 # Populate rows for the DataTable
                 for entry in plot_data.get("data", []):
                     # Parse and format the date
@@ -471,14 +515,33 @@ class EconomyInDetailTab(VerticalScroll):
 
                     # Extract values for all sectors
                     row = [date]
-                    for sector_code in sector_columns.values():
+                    for sector_name, sector_code in sector_columns.items():
                         value = entry.get(sector_code, "N/A")
-                        row.append(f"{value:.2f}" if isinstance(value, (float, int)) else "N/A")
+                        formatted_value = f"{value:.2f}" if isinstance(value, (float, int)) else "N/A"
+                        row.append(formatted_value)
+
+                        # Add values to the multi-bar chart dataset
+                        if isinstance(value, (float, int)):
+                            series_data[sector_name].append(value)
+                        else:
+                            series_data[sector_name].append(0)  # Handle missing values
 
                     # Add row to the DataTable
                     data_table.add_row(*row)
+                    chart_categories.append(date)
 
-                self.notify(f"✅ Displayed Contribution to GDP data for {self.selected_country_code}")
+                # ✅ Ensure valid data exists before creating the chart
+                if chart_categories and any(len(v) > 0 for v in series_data.values()):
+                    chart_widget = ChartWidget(
+                        chart_type="multi_bar",
+                        raw_data={"categories": chart_categories, "series_data": series_data},
+                        title="Contribution to GDP",
+                        classes="contribution_to_gdp"
+                    )
+                    await self.mount(chart_widget)
+                    self.notify(f"✅ Displayed Contribution to GDP data for {self.selected_country_code}")
+                else:
+                    self.notify("⚠ No valid data available for Contribution to GDP chart.")
 
         except Exception as e:
             self.notify(f"⚠️ Contribution to GDP Error: {str(e)}")
@@ -510,7 +573,7 @@ class EconomyInDetailTab(VerticalScroll):
                 # Show only the last 10 records
                 trade_data = trade_data[-10:]
 
-                # Clear the table and add columns
+                # Prepare data for the DataTable
                 data_table.clear()
                 if not data_table.columns:
                     data_table.add_column("Date")
@@ -519,16 +582,25 @@ class EconomyInDetailTab(VerticalScroll):
                     data_table.add_column("Exports (% of GDP)")
                     data_table.add_column("Imports (% of GDP)")
 
-                # Populate rows for the DataTable (only last 10 entries)
+                # Prepare data for the Multi-Bar Chart
+                categories = []
+                series_data = {"Exports": [], "Imports": []}
+
+                # Populate rows for the DataTable and Multi-Bar Chart
                 for entry in trade_data:
                     # Parse and format the date
                     date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
+                    categories.append(date)
 
                     # Extract values for exports, imports, and percentages
                     exports = entry.get("EXPMON", "N/A")
-                    imports = abs(entry.get("IMPMON", 0))  # Convert imports to positive values
+                    imports = entry.get("IMPMON", 0)  # Keep the sign of imports
                     exp_pct = entry.get("EXP_PCT", "N/A")
                     imp_pct = entry.get("IMP_PCT", "N/A")
+
+                    # Add data for the multi-bar chart
+                    series_data["Exports"].append(exports if isinstance(exports, (int, float)) else 0)
+                    series_data["Imports"].append(imports if isinstance(imports, (int, float)) else 0)
 
                     # Format values for the table
                     exports = f"{exports:,.0f}" if isinstance(exports, (int, float)) else "N/A"
@@ -538,6 +610,15 @@ class EconomyInDetailTab(VerticalScroll):
 
                     # Add row to the DataTable
                     data_table.add_row(date, exports, imports, exp_pct, imp_pct)
+
+                # Generate the Multi-Bar Chart
+                chart_widget = ChartWidget(
+                    chart_type="multi_bar",
+                    raw_data={"categories": categories, "series_data": series_data},
+                    title="Imports and Exports Multi-Bar Chart",
+                    classes="import_export"
+                )
+                await self.mount(chart_widget)  # Mount the ChartWidget to display the chart
 
                 self.notify(f"✅ Displayed last 10 Imports and Exports records for {self.selected_country_code}")
 
