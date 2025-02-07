@@ -1,8 +1,8 @@
 import json
 import os
 
-SETTINGS_DIR = os.path.join(os.path.expanduser("~"), ".fincept")
-SETTINGS_FILE = os.path.join(SETTINGS_DIR, "FinceptSettingModule.json")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
+SETTINGS_FILE = os.path.join(BASE_DIR, "FinceptSettingModule.json")
 
 def load_settings():
     """
