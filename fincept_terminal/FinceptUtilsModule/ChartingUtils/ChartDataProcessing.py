@@ -117,5 +117,19 @@ class DataProcessing:
             else:
                 raise ValueError(
                     "Invalid data format for multi-bar chart. Expected {'categories': [], 'series_data': {}} or list of (category, series, value) tuples.")
+
+        elif chart_type == "mixed_bar_line":
+            # Expecting a dictionary {"categories": [], "bar_series_data": {}, "line_series_data": {}}
+            if isinstance(raw_data,
+                          dict) and "categories" in raw_data and "bar_series_data" in raw_data and "line_series_data" in raw_data:
+                if not isinstance(raw_data["categories"], list) or not isinstance(raw_data["bar_series_data"],
+                                                                                  dict) or not isinstance(
+                        raw_data["line_series_data"], dict):
+                    raise ValueError(
+                        "Mixed bar-line chart data must be structured as {'categories': [], 'bar_series_data': {}, 'line_series_data': {}}.")
+                return raw_data
+            else:
+                raise ValueError(
+                    "Invalid data format for mixed bar-line chart. Expected {'categories': [], 'bar_series_data': {}, 'line_series_data': {}}.")
         else:
             raise ValueError(f"Unknown chart type: {chart_type}")

@@ -281,14 +281,24 @@ Button:hover {
     grid-rows: 1fr;
     grid-columns: 50% 50%;
 }
+
 .national_accounts{
     layout: grid;
     grid-size: 2 3;
     grid-rows: 1fr 1fr 1fr;
     grid-columns: 50% 50%;
+    height: 100%;
     border: solid red;
 }
-.price_labour, .port_activity, .oil_gas{
+.price_labour{
+    layout: grid;
+    grid-size: 2 2;
+    grid-rows: 1fr 1fr;
+    grid-columns: 50% 50%;
+    height: 100%;
+    border: solid red;
+}
+.port_activity, .oil_gas{
     layout: grid;
     grid-size: 2 2;
     grid-rows: 1fr 1fr;
@@ -302,8 +312,23 @@ Button:hover {
     grid-columns: 50% 50%;
     border: solid red;
 }
-.gdp_growth, .contribution_to_gdp .import_export{
-    height: 20%;
-    width: 30;
-    border: red
+.chart-section{
+    height: 60%;
+}
+#government_finances_chart, #niip, #import_export, #contribution_gdp, #gdp_growth{
+    height: auto;
+    width: 20%;
+    border: red;
+}
+.price_labour_charts{
+    height: 30%;
+}
+#contribution_cpi, #cpi_chart, #supermarket_index_chart, #unemployment_rate_chart{
+    height: auto;
+    width: 20%;
+    border: red;
+}
+
+DataTable {
+    border: heavy white;
 }

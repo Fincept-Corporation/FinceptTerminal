@@ -17,18 +17,33 @@ classifiers = [
 ]
 
 dependencies = [
-  "requests",
-  "gnews",
-  "textual"
+  "requests>=2.31.0,<2.33.0",
+  "textual==1.0.0",
+  "pandas>=2.1.0,<3.0.0",
+  "numpy==1.24.0",
+  "matplotlib==3.9.0",
+  "plotly==5.15.0",
+  "sqlalchemy==2.0.34",
+  "psycopg2==2.9.6",
+  "fastapi==0.115.6",
 ]
 
+[project.optional-dependencies]
+news = ["gnews", "feedparser"]
+ML = ["statsmodels", "quantstats", "empyrical"]
+geo = ["osmnx", "shapely"]
+pdf = ["PyPDF2", "pdfplumber"]
+trading = ["vectorbt", "fyers_apiv3"]
+data = ["datagovindia", "fredapi"]
+AI = ["openai", "deep-translator"]
+research = ["scholarly"]
+dev = ["pytest", "black", "flake8"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 
 [project.scripts]
 fincept = "fincept_terminal.FinceptTerminalStart:start_terminal"
-
 
 [build-system]
 requires = ["pdm-backend"]
