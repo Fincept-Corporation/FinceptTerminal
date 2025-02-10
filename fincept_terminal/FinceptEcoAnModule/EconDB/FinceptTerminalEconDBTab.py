@@ -1,8 +1,7 @@
 from textual.widgets import Static, Button, DataTable, TabPane, TabbedContent, OptionList, Collapsible
 from textual.app import ComposeResult
-from textual.containers import Container, VerticalScroll, Horizontal
+from textual.containers import Container, VerticalScroll, Horizontal, Vertical
 import requests
-from textual_plotext import PlotextPlot
 from datetime import datetime
 import httpx
 import asyncio
@@ -11,10 +10,6 @@ from fincept_terminal.FinceptUtilsModule.ChartingUtils.ChartingWidget import Cha
 COUNTRY_API_URL = "https://www.econdb.com/static/appdata/econdb-countries.json"
 BASE_API_URL = "https://www.econdb.com/api/series/{ticker}/?token=e17da7710dbd6103c273625fcd9f2e11d6f3249a&format=json"
 INDICATORS_API_URL = "https://www.econdb.com/trends/list_indicators/"
-
-# List of Economic Indicators
-INDICATORS = ["RGDP", "GDP", "UNRATE", "PPI", "CPI", "RETA", "IP", "GBAL", "GDEBT", "CA", "NIIP", "Y10YD", "HOU", "OILPROD", "POP"]
-
 
 class MainIndicatorTab(VerticalScroll):
     """Tab for displaying economic indicators dynamically based on country selection."""
@@ -30,10 +25,8 @@ class MainIndicatorTab(VerticalScroll):
 
     def compose(self) -> ComposeResult:
         """Compose the UI layout for the Economic Indicators tab."""
-        yield Static("🌎 Select a Country for Economic Indicators")
-
         # Collapsible section for country selection
-        with Collapsible(title="Select Country", collapsed_symbol=">"):
+        with Collapsible(title="Select a Country 🌎", collapsed_symbol=">"):
             yield OptionList(id="country_selector")
             with Horizontal(classes="horizontal_next_previous"):
                 yield Button("Previous", id="previous_country_page", variant="default", disabled=True)
@@ -51,28 +44,27 @@ class MainIndicatorTab(VerticalScroll):
         """Triggered when the tab becomes visible. Loads data only once."""
         if not self.is_loaded:
             self.app.notify("📡 Loading available data...")
-
             # Schedule background tasks without blocking the UI
-            asyncio.create_task(self.populate_country_list())
-            asyncio.create_task(self.populate_indicators_list())
+            await asyncio.create_task(self.populate_country_list())
+            await asyncio.create_task(self.populate_indicators_list())
 
     async def populate_country_list(self):
         """Fetch and populate the list of available countries dynamically."""
         try:
-            self.all_countries = await self.fetch_available_countries()
+            self.all_countries = await asyncio.create_task(self.fetch_available_countries())
             if not self.all_countries:
                 self.app.notify("❌ No countries available.", severity="error")
                 return
 
             self.current_country_page = 0
-            self.display_countries()
+            asyncio.create_task(self.display_countries())
         except Exception as e:
             self.app.notify(f"❌ Error loading countries: {e}", severity="error")
 
     async def populate_indicators_list(self):
         """Fetch and populate the list of available indicators dynamically."""
         try:
-            self.all_indicators = await self.fetch_available_indicators()
+            self.all_indicators = await asyncio.create_task(self.fetch_available_indicators())
             if not self.all_indicators:
                 self.app.notify("❌ No indicators available.", severity="error")
                 return
@@ -80,7 +72,7 @@ class MainIndicatorTab(VerticalScroll):
             self.app.notify(f"❌ Error loading indicators: {e}", severity="error")
 
 
-    def display_countries(self):
+    async def display_countries(self):
         """Display the current page of countries in the OptionList."""
         start, end = self._get_pagination_range(self.current_country_page, self.all_countries)
         country_list = self.query_one("#country_selector", OptionList)
@@ -97,7 +89,7 @@ class MainIndicatorTab(VerticalScroll):
     async def fetch_available_countries(self):
         """Fetch country list dynamically from EconDB."""
         try:
-            response = requests.get(COUNTRY_API_URL)
+            response = await asyncio.to_thread(lambda: requests.get(COUNTRY_API_URL))
             if response.status_code == 200:
                 country_data = response.json()
                 unique_countries = {country["iso2"]: country for country in country_data}.values()  # Remove duplicates
@@ -117,7 +109,7 @@ class MainIndicatorTab(VerticalScroll):
         }
 
         try:
-            response = requests.get(INDICATORS_API_URL, headers=headers, timeout=10)  # Add headers
+            response = await asyncio.to_thread(lambda: requests.get(INDICATORS_API_URL, headers=headers, timeout=10))  # Add headers
             response.raise_for_status()  # Raise an exception for HTTP errors
 
             try:
@@ -237,9 +229,6 @@ class MainIndicatorTab(VerticalScroll):
             table.add_column("Date")  # First column is always Date
             for ticker in tickers:
                 table.add_column(ticker)  # Add a column for each ticker
-            if not table.columns:
-                for ticker in tickers:
-                    table.add_column(ticker)
 
             # Populate rows with the correct data
             for date in sorted(data.keys(), reverse=True):  # Sort dates in descending order
@@ -249,8 +238,6 @@ class MainIndicatorTab(VerticalScroll):
 
                 # Add row to the table
                 table.add_row(*row)
-                    row.append(str(data[date].get(ticker, "N/A")))
-                    table.add_row(*row)
 
         # Process Monthly Data
         monthly_table = self.query_one("#monthly_data_table", DataTable)
@@ -274,18 +261,13 @@ class MainIndicatorTab(VerticalScroll):
             selected_country = event.option_list.get_option_at_index(event.option_index).prompt
             country_code = selected_country.split(" (")[-1].strip(")")
             self.app.notify(f"✅ Selected Country: {selected_country}")
-            asyncio.create_task(self.fetch_all_data(country_code))
+            await asyncio.create_task(self.fetch_all_data(country_code))
 
     async def fetch_all_data(self, country_code):
         """Fetch all data asynchronously."""
         try:
-            # # Fetch economic and historical data concurrently
-            # await asyncio.gather(
-            #     asyncio.create_task(self.fetch_economic_data(country_code)),
-            #     asyncio.create_task(self.fetch_historical_data(country_code))
-            # )
-            await self.fetch_economic_data(country_code)
-            await self.fetch_historical_data(country_code)
+            await asyncio.create_task(self.fetch_economic_data(country_code))
+            await asyncio.create_task(self.fetch_historical_data(country_code))
             self.app.notify("✅ All data loaded successfully!")
         except Exception as e:
             self.app.notify(f"❌ Error loading data: {e}")
@@ -294,7 +276,7 @@ class MainIndicatorTab(VerticalScroll):
         """Handle button presses for pagination."""
         if event.button.id in ["next_country_page", "previous_country_page"]:
             self.current_country_page += 1 if "next" in event.button.id else -1
-            self.display_countries()
+            asyncio.create_task(self.display_countries())
 
     def _get_pagination_range(self, current_page, data_list):
         """Calculate start and end indices for pagination."""
@@ -318,42 +300,74 @@ class EconomyInDetailTab(VerticalScroll):
         self.selected_country_code = None  # Track the selected country code
         self.countries = []  # List of available countries
         self.plots = {}  # Dictionary to store PlotextPlot widgets
-
+        self.ITEMS_PER_PAGE = 10  # Number of countries per page
+        self.current_country_page = 0
     def compose(self):
         """Compose the UI for the Economy in Detail tab."""
-        # Add country selection
-        yield Static("Select a Country:", id="country_header")
-        with Collapsible():
+        with Collapsible(title="Select a Country 🌎", collapsed_symbol=">"):
             yield OptionList(id="country_selector")
+            with Horizontal(classes="horizontal_next_previous"):
+                yield Button("Previous", id="previous_country_page", disabled=True)
+                yield Static("Page 1", id="page_indicator")  # Page indicator
+                yield Button("Next", id="next_country_page", disabled=True)
 
         # Add sub-tabs for data visualization
         with TabbedContent():
             with TabPane("National Accounts"):
-                with Container(classes="national_accounts"):
-                    yield DataTable(id="gdp_growth_table")
-                    yield DataTable(id="contribution_gdp_table")
-                    yield DataTable(id="imports_exports_table")
-                    yield DataTable(id="niip_table")
-                    yield DataTable(id="government_finances_table")
+                with VerticalScroll():
+                    with Container(classes="national_accounts"):
+                        yield DataTable(id="gdp_growth_table",name="GDP Growth")
+                        yield DataTable(id="contribution_gdp_table")
+                        yield DataTable(id="imports_exports_table")
+                        yield DataTable(id="niip_table")
+                        yield DataTable(id="government_finances_table")
+                    with Vertical(classes="chart-section"):
+                        yield ChartWidget(chart_type="bar", title="GDP Growth", widget_id="gdp_growth")
+                        yield ChartWidget(chart_type="multi_bar", title="Contribution to GDP", widget_id="contribution_gdp")
+                        yield ChartWidget(chart_type="mixed_bar_line", title="Imports and Exports", widget_id="import_export")
+                        yield ChartWidget(chart_type="mixed_bar_line", title="Net International Investment Position", widget_id="niip")
+                        yield ChartWidget(chart_type="mixed_bar_line", title="Government balance and debt(%GDP)", widget_id="government_finances_chart")
+
             with TabPane("Price and Labour"):
-                with Container(classes="price_labour"):
-                    yield DataTable(id="cpi_table")
-                    yield DataTable(id="supermarket_index_table")
-                    yield DataTable(id="unemployment_rate_table")
+                with VerticalScroll():
+                    with Container(classes="price_labour"):
+                        yield DataTable(id="cpi_table")
+                        yield DataTable(id="cpi_contributions_table", name="Contribution to CPI" )
+                        yield DataTable(id="supermarket_index_table")
+                        yield DataTable(id="unemployment_rate_table")
+                    with Horizontal(classes="price_labour_charts"):
+                        yield ChartWidget(chart_type="mixed_bar_line", title="CPI",
+                                          widget_id="cpi_chart")
+                        yield ChartWidget(chart_type="multi_bar", title="Contribution to CPI",
+                                          widget_id="contribution_cpi")
+                        yield ChartWidget(chart_type="mixed_bar_line", title="Supermarket Price Index",
+                                          widget_id="supermarket_index_chart")
+                        yield ChartWidget(chart_type="mixed_bar_line", title="Unemployment Rate",
+                                          widget_id="unemployment_rate_chart")
+
             with TabPane("Interest and Money"):
-                with Container(classes="interest_money"):
-                    yield DataTable(id="money_supply_table")
-                    yield DataTable(id="policy_rate_table")
+                with VerticalScroll():
+                    with Container(classes="interest_money"):
+                        yield DataTable(id="yield_curve_table")
+                        yield DataTable(id="money_supply_table")
+                        yield DataTable(id="policy_rate_table")
+                    with Horizontal():
+                        yield ChartWidget(chart_type="mixed_bar_line", title="Yield Curve in Government Bonds",
+                                          widget_id="yield_curve_chart")
+                        yield ChartWidget(chart_type="mixed_bar_line", title="Monetary Policy Rate",
+                                          widget_id="policy_rate_chart")
             with TabPane("Port Activity"):
-                with Container(classes="port_activity"):
-                    yield DataTable(id="port_calls_table")
-                    yield DataTable(id="port_waiting_times_table")
-                    yield DataTable(id="container_trade_table")
+                with VerticalScroll():
+                    with Container(classes="port_activity"):
+                        yield DataTable(id="port_calls_table")
+                        yield DataTable(id="port_waiting_times_table")
+                        yield DataTable(id="container_trade_table")
             with TabPane("Oil and Gas"):
-                with Container(classes="oil_gas"):
-                    yield DataTable(id="oil_balance_table")
-                    yield DataTable(id="crude_oil_stock_table")
-                    yield DataTable(id="crude_oil_forward_cover_table")
+                with VerticalScroll():
+                    with Container(classes="oil_gas"):
+                        yield DataTable(id="oil_balance_table")
+                        yield DataTable(id="crude_oil_stock_table")
+                        yield DataTable(id="crude_oil_forward_cover_table")
 
 
     async def on_show(self):
@@ -364,21 +378,60 @@ class EconomyInDetailTab(VerticalScroll):
     async def load_countries(self):
         """Fetch and populate the list of available countries dynamically."""
         try:
-            response = requests.get(self.COUNTRY_API_URL)
+            response = requests.get(COUNTRY_API_URL)
             response.raise_for_status()
             country_data = response.json()
 
-            # Deduplicate and store country options
-            self.countries = sorted(
+            # Deduplicate and store countries
+            self.all_countries = sorted(
                 {country["iso2"]: country["verbose"] for country in country_data}.items()
             )
-            country_selector = self.query_one("#country_selector", OptionList)
-            for iso2, verbose in self.countries:
-                country_selector.add_option(f"{verbose} ({iso2})")
-
+            self.current_country_page = 0  # Reset to the first page
+            self.display_countries()  # Display the first page
             self.notify("✅ Loaded countries successfully.")
         except requests.RequestException as e:
             self.query_one("#country_header", Static).update(f"Error loading countries: {e}")
+
+    def display_countries(self):
+        """Display the current page of countries in the OptionList."""
+        start, end = self._get_pagination_range(self.current_country_page, self.all_countries)
+        country_selector = self.query_one("#country_selector", OptionList)
+        country_selector.clear_options()  # Clear existing options
+
+        # Add countries for the current page
+        for iso2, verbose in self.all_countries[start:end]:
+            country_selector.add_option(f"{verbose} ({iso2})")
+
+        # Update pagination controls
+        self._update_pagination_controls(
+            "previous_country_page", "next_country_page", self.current_country_page, len(self.all_countries
+            )
+        )
+
+        # Update the page indicator
+        total_pages = (len(self.all_countries) + self.ITEMS_PER_PAGE - 1) // self.ITEMS_PER_PAGE
+        self.query_one("#page_indicator", Static).update(f"Page {self.current_country_page + 1} of {total_pages}")
+
+    def _get_pagination_range(self, current_page, data_list):
+        """Calculate the start and end indices for the current page."""
+        start = current_page * self.ITEMS_PER_PAGE
+        end = start + self.ITEMS_PER_PAGE
+        return start, min(end, len(data_list))
+
+    def _update_pagination_controls(self, prev_button_id, next_button_id, current_page, total_items):
+        """Enable/Disable pagination buttons based on the current page and total items."""
+        total_pages = (total_items + self.ITEMS_PER_PAGE - 1) // self.ITEMS_PER_PAGE
+        self.query_one(f"#{prev_button_id}", Button).disabled = current_page == 0
+        self.query_one(f"#{next_button_id}", Button).disabled = current_page >= total_pages - 1
+
+    async def on_button_pressed(self, event: Button.Pressed):
+        """Handle pagination button presses."""
+        if event.button.id == "previous_country_page":
+            self.current_country_page -= 1  # Move to the previous page
+            self.display_countries()
+        elif event.button.id == "next_country_page":
+            self.current_country_page += 1  # Move to the next page
+            self.display_countries()
 
     async def on_option_list_option_selected(self, event: OptionList.OptionSelected):
         """Handle selection events for country selection."""
@@ -396,9 +449,12 @@ class EconomyInDetailTab(VerticalScroll):
         await self.process_niip_data()
         await self.process_government_finances()
         await self.process_cpi_data()
+        await self.process_contribution_to_cpi()
         await self.process_supermarket_index()
         await self.process_unemployment_rate()
+        await self.process_yield_curve_data()
         await self.process_money_supply_data()
+        await self.process_policy_rate_data()
         await self.process_port_calls_data()
         await self.process_port_waiting_times()
         await self.process_container_trade_data()
@@ -414,16 +470,19 @@ class EconomyInDetailTab(VerticalScroll):
 
         api_url = f"https://www.econdb.com/widgets/real-gdp-growth/data/?country={self.selected_country_code}&format=json"
         data_table = self.query_one("#gdp_growth_table", DataTable)
+        chart_widget = self.query_one("#gdp_growth", ChartWidget)
 
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(api_url)
                 response.raise_for_status()
                 data = response.json()
+                data_table.clear()
 
                 # Extract GDP data
                 plots = data.get("plots", [])
                 if not plots:
+                    data_table.add_row("No Data Available")
                     self.notify(f"⚠ No data available for GDP growth in {self.selected_country_code}")
                     return
 
@@ -437,7 +496,6 @@ class EconomyInDetailTab(VerticalScroll):
                 gdp_name = series[0].get("name", "GDP Growth")
 
                 # Clear the table and add columns
-                data_table.clear()
                 if not data_table.columns:
                     data_table.add_column("Date")
                     data_table.add_column("Growth (%)")
@@ -459,8 +517,7 @@ class EconomyInDetailTab(VerticalScroll):
 
                 # ✅ Create and mount the ChartWidget instead of yielding it
                 if chart_data["labels"] and chart_data["values"]:
-                    chart_widget = ChartWidget(chart_type="bar", raw_data=chart_data, title="GDP Growth", classes="gdp_growth")
-                    await self.mount(chart_widget)
+                    chart_widget.update_chart(chart_data, new_title=f"GDP_Growth - {self.selected_country_code}")
 
                 self.notify(f"✅ Displayed GDP growth data for {self.selected_country_code}")
 
@@ -475,16 +532,20 @@ class EconomyInDetailTab(VerticalScroll):
 
         api_url = f"https://www.econdb.com/widgets/contributions-to-gdp/data/?country={self.selected_country_code}&format=json"
         data_table = self.query_one("#contribution_gdp_table", DataTable)
+        chart_widget = self.query_one("#contribution_gdp", ChartWidget)
+
 
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(api_url)
                 response.raise_for_status()
                 data = response.json()
+                data_table.clear()
 
                 # Extract Contribution to GDP data
                 plots = data.get("plots", [])
                 if not plots:
+                    data_table.add_row("No Data Available")
                     self.notify(f"⚠ No data available for Contribution to GDP in {self.selected_country_code}")
                     return
 
@@ -498,7 +559,7 @@ class EconomyInDetailTab(VerticalScroll):
                 sector_columns = {serie["name"]: serie["code"] for serie in series if "code" in serie}
 
                 # Clear the table and add columns
-                data_table.clear()
+                # data_table.clear()
                 if not data_table.columns:
                     data_table.add_column("Date")
                     for sector_name in sector_columns.keys():
@@ -532,13 +593,9 @@ class EconomyInDetailTab(VerticalScroll):
 
                 # ✅ Ensure valid data exists before creating the chart
                 if chart_categories and any(len(v) > 0 for v in series_data.values()):
-                    chart_widget = ChartWidget(
-                        chart_type="multi_bar",
-                        raw_data={"categories": chart_categories, "series_data": series_data},
-                        title="Contribution to GDP",
-                        classes="contribution_to_gdp"
-                    )
-                    await self.mount(chart_widget)
+                    chart_data = {"categories": chart_categories, "series_data": series_data}
+                    new_title = f"Contribution to GDP - {self.selected_country_code.upper()}"
+                    chart_widget.update_chart(chart_data, new_title)  # Update existing ChartWidget
                     self.notify(f"✅ Displayed Contribution to GDP data for {self.selected_country_code}")
                 else:
                     self.notify("⚠ No valid data available for Contribution to GDP chart.")
@@ -554,71 +611,98 @@ class EconomyInDetailTab(VerticalScroll):
 
         api_url = f"https://www.econdb.com/widgets/imports-exports/data/?country={self.selected_country_code}&format=json"
         data_table = self.query_one("#imports_exports_table", DataTable)
+        chart_widget = self.query_one("#import_export", ChartWidget)
 
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(api_url)
                 response.raise_for_status()
                 data = response.json()
-
+                data_table.clear()
                 # Extract Imports and Exports data
                 plots = data.get("plots", [])
                 if not plots:
+                    data_table.add_row("No Data Available")
                     self.notify(f"⚠ No data available for Imports and Exports in {self.selected_country_code}")
                     return
 
                 plot_data = plots[0]
                 trade_data = plot_data.get("data", [])
+                series_metadata = plot_data.get("series", [])
 
-                # Show only the last 10 records
+                # Extract column names from the "name" field in the series metadata
+                columns = {series["code"]: series["name"] for series in series_metadata}
+
+                # Store full data for charting
+                display_data = trade_data
+
+                # Show only the last 10 records in DataTable
                 trade_data = trade_data[-10:]
 
-                # Prepare data for the DataTable
-                data_table.clear()
-                if not data_table.columns:
-                    data_table.add_column("Date")
-                    data_table.add_column("Exports (Millions USD)")
-                    data_table.add_column("Imports (Millions USD)")
-                    data_table.add_column("Exports (% of GDP)")
-                    data_table.add_column("Imports (% of GDP)")
+                # Dynamically determine column structure
+                date_column = "Date"
+                bar_columns = [code for code, name in columns.items() if "Mn." in name]  # Detect bar series
+                line_columns = [code for code, name in columns.items() if "%" in name]  # Detect line series
 
-                # Prepare data for the Multi-Bar Chart
-                categories = []
-                series_data = {"Exports": [], "Imports": []}
+                # 🛠 Reset DataTable columns dynamically
+                data_table.columns.clear()
 
-                # Populate rows for the DataTable and Multi-Bar Chart
+                # Add Date column and dynamically detected data columns
+                data_table.add_column("Date")
+                for code in bar_columns:
+                    data_table.add_column(columns[code])  # Add column by its "name"
+                for code in line_columns:
+                    data_table.add_column(columns[code])  # Add column by its "name"
+
+                # Populate rows for the DataTable
                 for entry in trade_data:
                     # Parse and format the date
-                    date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
+
+                    # Collect row data
+                    row_values = [date]
+                    for code in bar_columns:
+                        value = entry.get(code, "N/A")
+                        formatted_value = f"{value:,.0f}" if isinstance(value, (int, float)) else "N/A"
+                        row_values.append(formatted_value)
+
+                    for code in line_columns:
+                        value = entry.get(code, "N/A")
+                        formatted_value = f"{value:.2f}" if isinstance(value, (int, float)) else "N/A"
+                        row_values.append(formatted_value)
+
+                    # Add row to DataTable
+                    data_table.add_row(*row_values)
+
+                # 🎯 Prepare data for charting
+                categories = []
+                bar_series_data = {code: [] for code in bar_columns}
+                line_series_data = {code: [] for code in line_columns}
+
+                # Process full dataset for charting
+                for entry in display_data:
+                    # Parse and format the date
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
                     categories.append(date)
 
-                    # Extract values for exports, imports, and percentages
-                    exports = entry.get("EXPMON", "N/A")
-                    imports = entry.get("IMPMON", 0)  # Keep the sign of imports
-                    exp_pct = entry.get("EXP_PCT", "N/A")
-                    imp_pct = entry.get("IMP_PCT", "N/A")
+                    # Populate bar series data
+                    for code in bar_columns:
+                        value = entry.get(code, 0)
+                        bar_series_data[code].append(value if isinstance(value, (int, float)) else 0)
 
-                    # Add data for the multi-bar chart
-                    series_data["Exports"].append(exports if isinstance(exports, (int, float)) else 0)
-                    series_data["Imports"].append(imports if isinstance(imports, (int, float)) else 0)
+                    # Populate line series data
+                    for code in line_columns:
+                        value = entry.get(code, 0)
+                        line_series_data[code].append(value if isinstance(value, (int, float)) else 0)
 
-                    # Format values for the table
-                    exports = f"{exports:,.0f}" if isinstance(exports, (int, float)) else "N/A"
-                    imports = f"{imports:,.0f}" if isinstance(imports, (int, float)) else "N/A"
-                    exp_pct = f"{exp_pct:.2f}%" if isinstance(exp_pct, (int, float)) else "N/A"
-                    imp_pct = f"{imp_pct:.2f}%" if isinstance(imp_pct, (int, float)) else "N/A"
-
-                    # Add row to the DataTable
-                    data_table.add_row(date, exports, imports, exp_pct, imp_pct)
-
-                # Generate the Multi-Bar Chart
-                chart_widget = ChartWidget(
-                    chart_type="multi_bar",
-                    raw_data={"categories": categories, "series_data": series_data},
-                    title="Imports and Exports Multi-Bar Chart",
-                    classes="import_export"
-                )
-                await self.mount(chart_widget)  # Mount the ChartWidget to display the chart
+                # 🎯 Generate the Mixed Bar-Line Chart dynamically
+                chart_data = {
+                    "categories": categories,
+                    "bar_series_data": bar_series_data,
+                    "line_series_data": line_series_data,
+                }
+                new_title = f"Imports and Exports - {self.selected_country_code.upper()}"
+                chart_widget.update_chart(chart_data, new_title)
 
                 self.notify(f"✅ Displayed last 10 Imports and Exports records for {self.selected_country_code}")
 
@@ -633,6 +717,7 @@ class EconomyInDetailTab(VerticalScroll):
 
         api_url = f"https://www.econdb.com/widgets/niip/data/?country={self.selected_country_code}&format=json"
         data_table = self.query_one("#niip_table", DataTable)
+        chart_widget = self.query_one("#niip", ChartWidget)
 
         try:
             async with httpx.AsyncClient() as client:
@@ -648,31 +733,83 @@ class EconomyInDetailTab(VerticalScroll):
 
                 plot_data = plots[0]
                 niip_data = plot_data.get("data", [])
+                series_metadata = plot_data.get("series", [])
 
-                # Show only the last 10 records
+                # Extract column names dynamically from the "series" metadata
+                columns = {series["code"]: series["name"] for series in series_metadata}
+
+                # Store full data for charting
+                display_niip = niip_data
+
+                # Show only the last 10 records in DataTable
                 niip_data = niip_data[-10:]
-                # Clear the table and add columns
+
+                # Dynamically determine column structure
+                date_column = "Date"
+                bar_columns = [code for code, name in columns.items() if "Mn." in name]  # Bar data (e.g., NIIP Value)
+                line_columns = [code for code, name in columns.items() if
+                                "%" in name]  # Line data (e.g., NIIP % of GDP)
+
+                # 🛠 Reset DataTable columns dynamically
                 data_table.clear()
-                if not data_table.columns:
-                    data_table.add_column("Date")
-                    data_table.add_column("Net Position (Mn. ARS)")
-                    data_table.add_column("% of GDP")
+                data_table.columns.clear()
+
+                # Add Date column and dynamically detected data columns
+                data_table.add_column("Date")
+                for code in bar_columns:
+                    data_table.add_column(columns[code])  # Add column by its "name"
+                for code in line_columns:
+                    data_table.add_column(columns[code])  # Add column by its "name"
 
                 # Populate rows for the DataTable
                 for entry in niip_data:
                     # Parse and format the date
-                    date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
 
-                    # Extract values for NIIP and % of GDP
-                    niip_value = entry.get("NIIP", "N/A")
-                    pct_gdp = entry.get("PCT_GDP", "N/A")
+                    # Collect row data
+                    row_values = [date]
+                    for code in bar_columns:
+                        value = entry.get(code, "N/A")
+                        formatted_value = f"{value:,.2f}" if isinstance(value, (int, float)) else "N/A"
+                        row_values.append(formatted_value)
 
-                    # Format values for the table
-                    niip_value = f"{niip_value:,.2f}" if isinstance(niip_value, (int, float)) else "N/A"
-                    pct_gdp = f"{pct_gdp:.2f}%" if isinstance(pct_gdp, (int, float)) else "N/A"
+                    for code in line_columns:
+                        value = entry.get(code, "N/A")
+                        formatted_value = f"{value:.2f}%" if isinstance(value, (int, float)) else "N/A"
+                        row_values.append(formatted_value)
 
-                    # Add row to the DataTable
-                    data_table.add_row(date, niip_value, pct_gdp)
+                    # Add row to DataTable
+                    data_table.add_row(*row_values)
+
+                # 🎯 Prepare data for charting
+                categories = []
+                bar_series_data = {code: [] for code in bar_columns}
+                line_series_data = {code: [] for code in line_columns}
+
+                # Process full dataset for charting
+                for entry in display_niip:
+                    # Parse and format the date
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
+                    categories.append(date)
+
+                    # Populate bar series data
+                    for code in bar_columns:
+                        value = entry.get(code, 0)
+                        bar_series_data[code].append(value if isinstance(value, (int, float)) else 0)
+
+                    # Populate line series data
+                    for code in line_columns:
+                        value = entry.get(code, 0)
+                        line_series_data[code].append(value if isinstance(value, (int, float)) else 0)
+
+                # 🎯 Generate the Mixed Bar-Line Chart dynamically
+                chart_data = {
+                    "categories": categories,
+                    "bar_series_data": bar_series_data,
+                    "line_series_data": line_series_data,
+                }
+                new_title = f"Net International Investment Position (NIIP) - {self.selected_country_code.upper()}"
+                chart_widget.update_chart(chart_data, new_title)
 
                 self.notify(f"✅ Displayed NIIP data for {self.selected_country_code}")
 
@@ -687,6 +824,7 @@ class EconomyInDetailTab(VerticalScroll):
 
         api_url = f"https://www.econdb.com/widgets/public-finances/data/?country={self.selected_country_code}&format=json"
         data_table = self.query_one("#government_finances_table", DataTable)
+        chart_widget = self.query_one("#government_finances_chart", ChartWidget)
 
         try:
             async with httpx.AsyncClient() as client:
@@ -703,9 +841,11 @@ class EconomyInDetailTab(VerticalScroll):
                 plot_data = plots[0]
                 finance_data = plot_data.get("data", [])
 
+                display_finance = finance_data  # Store complete data for potential extended use
                 # Show only the last 10 records
                 finance_data = finance_data[-10:]
-                # Clear the table and add columns
+
+                # Clear the DataTable and add columns
                 data_table.clear()
                 if not data_table.columns:
                     data_table.add_column("Date")
@@ -714,7 +854,12 @@ class EconomyInDetailTab(VerticalScroll):
                     data_table.add_column("Balance (% GDP)")
                     data_table.add_column("Debt (% GDP)")
 
-                # Populate rows for the DataTable
+                # Prepare data for the Mixed Bar-Line Chart
+                categories = []
+                bar_series_data = {"Balance (% GDP)": []}  # Bar Data
+                line_series_data = {"Spending (% GDP)": [], "Revenue (% GDP)": [], "Debt (% GDP)": []}  # Line Data
+
+                # Populate rows for the DataTable and Chart
                 for entry in finance_data:
                     # Parse and format the date
                     date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
@@ -726,13 +871,39 @@ class EconomyInDetailTab(VerticalScroll):
                     debt = entry.get("GDEBT", "N/A")
 
                     # Format values for the table
-                    spending = f"{spending:.2f}%" if isinstance(spending, (int, float)) else "N/A"
-                    revenue = f"{revenue:.2f}%" if isinstance(revenue, (int, float)) else "N/A"
-                    balance = f"{balance:.2f}%" if isinstance(balance, (int, float)) else "N/A"
-                    debt = f"{debt:.2f}%" if isinstance(debt, (int, float)) else "N/A"
+                    spending_str = f"{spending:.2f}%" if isinstance(spending, (int, float)) else "N/A"
+                    revenue_str = f"{revenue:.2f}%" if isinstance(revenue, (int, float)) else "N/A"
+                    balance_str = f"{balance:.2f}%" if isinstance(balance, (int, float)) else "N/A"
+                    debt_str = f"{debt:.2f}%" if isinstance(debt, (int, float)) else "N/A"
 
                     # Add row to the DataTable
-                    data_table.add_row(date, spending, revenue, balance, debt)
+                    data_table.add_row(date, spending_str, revenue_str, balance_str, debt_str)
+
+                # Process all available data (if needed for extended range)
+                for entry in display_finance:
+                    date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
+
+                    # Extract values for Spending, Revenue, Balance, and Debt
+                    spending = entry.get("GSPE", "N/A")
+                    revenue = entry.get("GREV", "N/A")
+                    balance = entry.get("GBAL", "N/A")
+                    debt = entry.get("GDEBT", "N/A")
+
+                    # Add data to chart structures
+                    categories.append(date)
+                    bar_series_data["Balance (% GDP)"].append(balance if isinstance(balance, (int, float)) else 0)
+                    line_series_data["Spending (% GDP)"].append(spending if isinstance(spending, (int, float)) else 0)
+                    line_series_data["Revenue (% GDP)"].append(revenue if isinstance(revenue, (int, float)) else 0)
+                    line_series_data["Debt (% GDP)"].append(debt if isinstance(debt, (int, float)) else 0)
+
+                # Generate the Mixed Bar-Line Chart
+                chart_data = {
+                    "categories": categories,
+                    "bar_series_data": bar_series_data,
+                    "line_series_data": line_series_data
+                }
+                new_title = f"Government Finances - {self.selected_country_code.upper()}"
+                chart_widget.update_chart(chart_data, new_title)  # Update existing ChartWidget
 
                 self.notify(f"✅ Displayed Government Balance and Debt data for {self.selected_country_code}")
 
@@ -740,59 +911,171 @@ class EconomyInDetailTab(VerticalScroll):
             self.notify(f"⚠️ Government Finances Error: {str(e)}")
 
     async def process_cpi_data(self):
-        """Fetch and display the last 10 records of Consumer Price Index (CPI) data dynamically for the selected country (DataTable)."""
+        """Fetch and display the last 10 records of Consumer Price Index (CPI) data dynamically for the selected country (DataTable) and generate a Line Chart."""
         if not self.selected_country_code:
             self.notify("⚠ No country selected! Please select a country.")
             return
 
         api_url = f"https://www.econdb.com/widgets/cpi-annual-growth/data/?country={self.selected_country_code}&format=json"
         data_table = self.query_one("#cpi_table", DataTable)
+        chart_widget = self.query_one("#cpi_chart", ChartWidget)
 
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(api_url)
                 response.raise_for_status()
                 data = response.json()
+                data_table.clear()
 
                 # Extract CPI data
                 plots = data.get("plots", [])
                 if not plots:
+
                     self.notify(f"⚠ No data available for CPI in {self.selected_country_code}")
                     return
 
                 plot_data = plots[0]
                 cpi_data = plot_data.get("data", [])
+                series_metadata = plot_data.get("series", [])
 
-                # Show only the last 10 records
-                cpi_data = cpi_data[-10:]
+                # Extract column names dynamically from series metadata
+                columns = {series["code"]: series["name"] for series in series_metadata}
 
-                # Clear the table and add columns
-                data_table.clear()
-                if not data_table.columns:
-                    data_table.add_column("Date")
-                    data_table.add_column("All-items CPI (% Change)")
-                    data_table.add_column("Core CPI (% Change)")
+                # Show only the last 10 records in DataTable
+                cpi_data_last_10 = cpi_data[-10:]
 
-                # Populate rows for the DataTable (only last 10 entries)
+                # Dynamically determine column structure
+                date_column = "Date"
+                line_columns = ["ALL", "CORE"]  # Treat both "ALL" and "CORE" as line series
+
+                # Reset DataTable columns dynamically
+                data_table.columns.clear()
+
+                # Add Date column and dynamically detected line series columns
+                data_table.add_column("Date")
+                for code in line_columns:
+                    data_table.add_column(columns.get(code, code))  # Add column by dynamic name or fallback to code
+
+                # Populate rows for the DataTable
+                for entry in cpi_data_last_10:
+                    # Parse and format the date
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
+
+                    # Collect row data
+                    row_values = [date]
+                    for code in line_columns:
+                        value = entry.get(code, "N/A")
+                        formatted_value = f"{value:.2f}%" if isinstance(value, (float, int)) else "N/A"
+                        row_values.append(formatted_value)
+
+                    # Add row to DataTable
+                    data_table.add_row(*row_values)
+
+                # Prepare data for the Line Chart
+                categories = []
+                line_series_data = {code: [] for code in line_columns}
+
+                # Process full dataset for charting
                 for entry in cpi_data:
                     # Parse and format the date
-                    date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
+                    categories.append(date)
 
-                    # Extract values for CPI categories
-                    all_items_cpi = entry.get("ALL", "N/A")
-                    core_cpi = entry.get("CORE", "N/A")
+                    # Populate line series data
+                    for code in line_series_data.keys():
+                        value = entry.get(code, 0)
+                        line_series_data[code].append(value if isinstance(value, (float, int)) else 0)
 
-                    # Format values for the table
-                    all_items_cpi = f"{all_items_cpi:.2f}%" if isinstance(all_items_cpi, (int, float)) else "N/A"
-                    core_cpi = f"{core_cpi:.2f}%" if isinstance(core_cpi, (int, float)) else "N/A"
-
-                    # Add row to the DataTable
-                    data_table.add_row(date, all_items_cpi, core_cpi)
+                # Generate the Line Chart dynamically
+                chart_data = {
+                    "categories": categories,
+                    "bar_series_data": {},  # No bar series data
+                    "line_series_data": line_series_data,
+                }
+                new_title = f"Consumer Price Index (CPI) - {self.selected_country_code.upper()}"
+                chart_widget.update_chart(chart_data, new_title)
 
                 self.notify(f"✅ Displayed last 10 CPI records for {self.selected_country_code}")
 
         except Exception as e:
             self.notify(f"⚠️ CPI Error: {str(e)}")
+
+    async def process_contribution_to_cpi(self):
+        """Fetch and display Contributions to CPI data dynamically for the selected country (DataTable) and generate a Multi-Bar Chart."""
+        if not self.selected_country_code:
+            self.notify("⚠ No country selected! Please select a country.")
+            return
+
+        api_url = f"https://www.econdb.com/widgets/cpi-contributions/data/?country={self.selected_country_code}&format=json"
+        data_table = self.query_one("#cpi_contributions_table", DataTable)
+        chart_widget = self.query_one("#contribution_cpi", ChartWidget)
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(api_url)
+                response.raise_for_status()
+                data = response.json()
+                data_table.clear()
+
+                # Extract Contributions to CPI data
+                plots = data.get("plots", [])
+                if not plots:
+                    data_table.add_row("No Data Available")
+                    self.notify(f"⚠ No data available for Contribution to CPI in {self.selected_country_code}")
+                    return
+
+                plot_data = plots[0]
+                series = plot_data.get("series", [])
+                if not series:
+                    self.notify(f"⚠ No Contribution to CPI series data for {self.selected_country_code}")
+                    return
+
+                # Extract sector names and their codes
+                sector_columns = {serie["name"]: serie["code"] for serie in series if "code" in serie}
+
+                # Clear the table and add columns dynamically
+                if not data_table.columns:
+                    data_table.add_column("Date")
+                    for sector_name in sector_columns.keys():
+                        data_table.add_column(sector_name)
+
+                # Store data for multi-bar chart
+                chart_categories = []  # Dates
+                series_data = {sector: [] for sector in sector_columns.keys()}  # Sector-wise values
+
+                # Populate rows for the DataTable
+                for entry in plot_data.get("data", []):
+                    # Parse and format the date
+                    date = datetime.strptime(entry["Date"][:10], "%Y-%m-%d").strftime("%b %Y")
+
+                    # Extract values for all sectors
+                    row = [date]
+                    for sector_name, sector_code in sector_columns.items():
+                        value = entry.get(sector_code, "N/A")
+                        formatted_value = f"{value:.2f}" if isinstance(value, (float, int)) else "N/A"
+                        row.append(formatted_value)
+
+                        # Add values to the multi-bar chart dataset
+                        if isinstance(value, (float, int)):
+                            series_data[sector_name].append(value)
+                        else:
+                            series_data[sector_name].append(0)  # Handle missing values
+
+                    # Add row to the DataTable
+                    data_table.add_row(*row)
+                    chart_categories.append(date)
+
+                # ✅ Ensure valid data exists before creating the chart
+                if chart_categories and any(len(v) > 0 for v in series_data.values()):
+                    chart_data = {"categories": chart_categories, "series_data": series_data}
+                    new_title = f"Contribution to CPI - {self.selected_country_code.upper()}"
+                    chart_widget.update_chart(chart_data, new_title)  # Update existing ChartWidget
+                    self.notify(f"✅ Displayed Contribution to CPI data for {self.selected_country_code}")
+                else:
+                    self.notify("⚠ No valid data available for Contribution to CPI chart.")
+
+        except Exception as e:
+            self.notify(f"⚠️ Contribution to CPI Error: {str(e)}")
 
     async def process_supermarket_index(self):
         """Fetch and display the last 10 records of the Supermarket Price Index dynamically for the selected country (DataTable)."""
@@ -802,6 +1085,7 @@ class EconomyInDetailTab(VerticalScroll):
 
         api_url = f"https://www.econdb.com/widgets/supermarket-country-index/data/?country={self.selected_country_code}&format=json"
         data_table = self.query_one("#supermarket_index_table", DataTable)
+        chart_widget = self.query_one("#supermarket_index_chart", ChartWidget)
 
         try:
             async with httpx.AsyncClient() as client:
@@ -818,31 +1102,71 @@ class EconomyInDetailTab(VerticalScroll):
                 plot_data = plots[0]
                 index_data = plot_data.get("data", [])
 
-                # Show only the last 10 records
+                # Store full data for charting
+                display_cpi = index_data  # Used for the full dataset in the chart
+
+                # Show only the last 10 records in DataTable
                 index_data = index_data[-10:]
 
-                # Clear the table and add columns
-                data_table.clear()
-                if not data_table.columns:
-                    data_table.add_column("Date")
-                    data_table.add_column("Real Time Index")
-                    data_table.add_column("CPIAR")
+                # Dynamically determine available columns from the new data
+                all_columns = set()
+                for entry in index_data:
+                    all_columns.update(entry.keys())
 
-                # Populate rows for the DataTable (only last 10 entries)
+                # 🛠 Identify columns dynamically
+                all_columns.discard("Date")  # Ensure 'Date' is always the first column
+                column_names = ["Date"] + sorted(all_columns)  # Maintain consistent order
+
+                # 🛠 Reset DataTable columns dynamically
+                data_table.clear()
+                data_table.columns.clear()  # Clears previous columns to avoid mismatch when changing country
+
+                # Add new columns based on the current query data
+                for column in column_names:
+                    data_table.add_column(column)
+
+                # Populate rows for the DataTable
                 for entry in index_data:
                     # Parse and format the date
                     date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
 
-                    # Extract values for Supermarket Index and CPIAR
-                    real_time_index = entry.get("Real time index", "N/A")
-                    cpiar_value = entry.get("CPIAR", "N/A")
+                    # Collect values dynamically
+                    row_values = [date]  # Start with date column
+                    for column in all_columns:
+                        value = entry.get(column, "N/A")
+                        formatted_value = f"{value:.2f}" if isinstance(value, (int, float)) else "N/A"
+                        row_values.append(formatted_value)
 
-                    # Format values for the table
-                    real_time_index = f"{real_time_index:.2f}" if isinstance(real_time_index, (int, float)) else "N/A"
-                    cpiar_value = f"{cpiar_value:.2f}" if isinstance(cpiar_value, (int, float)) else "N/A"
+                    # Add row to DataTable
+                    data_table.add_row(*row_values)
 
-                    # Add row to the DataTable
-                    data_table.add_row(date, real_time_index, cpiar_value)
+                # 🎯 **Dynamic Charting Data Extraction**
+                categories = []
+                line_series_data = {}  # Store all detected line series
+
+                # **Auto-detect all numerical columns except "Date"**
+                for column in all_columns:
+                    line_series_data[column] = []  # Initialize empty list for each line series
+
+                # **Process the full dataset for charting**
+                for entry in display_cpi:
+                    # Parse and format the date
+                    date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
+                    categories.append(date)
+
+                    # Populate line series dynamically
+                    for column in all_columns:
+                        value = entry.get(column, 0)  # Default to 0 if missing
+                        line_series_data[column].append(value if isinstance(value, (int, float)) else 0)
+
+                # 🎯 **Generate the Chart with Dynamic Data**
+                chart_data = {
+                    "categories": categories,
+                    "bar_series_data": {},  # No bar data in this case
+                    "line_series_data": line_series_data  # Dynamically detected line series
+                }
+                new_title = f"Supermarket Price Index - {self.selected_country_code.upper()}"
+                chart_widget.update_chart(chart_data, new_title)  # Update ChartWidget
 
                 self.notify(f"✅ Displayed last 10 Supermarket Price Index records for {self.selected_country_code}")
 
@@ -850,13 +1174,14 @@ class EconomyInDetailTab(VerticalScroll):
             self.notify(f"⚠️ Supermarket Price Index Error: {str(e)}")
 
     async def process_unemployment_rate(self):
-        """Fetch and display the last 10 records of the Unemployment Rate dynamically for the selected country (DataTable)."""
+        """Fetch and display the last 10 records of the Unemployment Rate dynamically for the selected country (DataTable) and generate a Line Chart."""
         if not self.selected_country_code:
             self.notify("⚠ No country selected! Please select a country.")
             return
 
         api_url = f"https://www.econdb.com/widgets/unemployment-rate/data/?country={self.selected_country_code}&format=json"
         data_table = self.query_one("#unemployment_rate_table", DataTable)
+        chart_widget = self.query_one("#unemployment_rate_chart", ChartWidget)
 
         try:
             async with httpx.AsyncClient() as client:
@@ -872,35 +1197,166 @@ class EconomyInDetailTab(VerticalScroll):
 
                 plot_data = plots[0]
                 unemployment_data = plot_data.get("data", [])
+                series_metadata = plot_data.get("series", [])
 
-                # Show only the last 10 records
-                unemployment_data = unemployment_data[-10:]
+                # Extract series metadata dynamically (if multiple series exist in the future)
+                columns = {series["code"]: series["name"] for series in series_metadata}
 
-                # Clear the table and add columns
+                # Show only the last 10 records in DataTable
+                unemployment_data_last_10 = unemployment_data[-10:]
+
+                # Dynamically determine column structure
+                date_column = "Date"
+                line_columns = ["URATE"]  # Assume "URATE" is the key for the unemployment rate
+
+                # Reset DataTable columns dynamically
                 data_table.clear()
-                if not data_table.columns:
-                    data_table.add_column("Date")
-                    data_table.add_column("Unemployment Rate (%)")
+                data_table.columns.clear()
 
-                # Populate rows for the DataTable (only last 10 entries)
+                # Add Date column and dynamically detected data columns
+                data_table.add_column("Date")
+                for code in line_columns:
+                    data_table.add_column(
+                        columns.get(code, "Unemployment Rate (%)"))  # Default to "Unemployment Rate (%)"
+
+                # Populate rows for the DataTable
+                for entry in unemployment_data_last_10:
+                    # Parse and format the date
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
+
+                    # Collect row data
+                    row_values = [date]
+                    for code in line_columns:
+                        value = entry.get(code, "N/A")
+                        formatted_value = f"{value:.2f}%" if isinstance(value, (float, int)) else "N/A"
+                        row_values.append(formatted_value)
+
+                    # Add row to DataTable
+                    data_table.add_row(*row_values)
+
+                # Prepare data for the Line Chart
+                categories = []
+                line_series_data = {code: [] for code in line_columns}
+
+                # Process full dataset for charting
                 for entry in unemployment_data:
                     # Parse and format the date
-                    date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
+                    categories.append(date)
 
-                    # Extract values for the Unemployment Rate
-                    unemployment_rate = entry.get("URATE", "N/A")
+                    # Populate line series data
+                    for code in line_columns:
+                        value = entry.get(code, 0)
+                        line_series_data[code].append(value if isinstance(value, (float, int)) else 0)
 
-                    # Format values for the table
-                    unemployment_rate = f"{unemployment_rate:.2f}%" if isinstance(unemployment_rate,
-                                                                                  (int, float)) else "N/A"
-
-                    # Add row to the DataTable
-                    data_table.add_row(date, unemployment_rate)
+                # Generate the Line Chart dynamically
+                chart_data = {
+                    "categories": categories,
+                    "bar_series_data": {},  # No bar data in this case
+                    "line_series_data": line_series_data,
+                }
+                new_title = f"Unemployment Rate - {self.selected_country_code.upper()}"
+                chart_widget.update_chart(chart_data, new_title)
 
                 self.notify(f"✅ Displayed last 10 Unemployment Rate records for {self.selected_country_code}")
 
         except Exception as e:
             self.notify(f"⚠️ Unemployment Rate Error: {str(e)}")
+
+    async def process_yield_curve_data(self):
+        """Fetch and display the last 10 records of Yield Curve data dynamically for the selected country (DataTable)
+        and generate a Line Chart."""
+        if not self.selected_country_code:
+            self.notify("⚠ No country selected! Please select a country.")
+            return
+
+        api_url = f"https://www.econdb.com/widgets/yield-curve/data/?country={self.selected_country_code}&format=json"
+        data_table = self.query_one("#yield_curve_table", DataTable)
+        chart_widget = self.query_one("#yield_curve_chart", ChartWidget)
+
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(api_url)
+                response.raise_for_status()
+                data = response.json()
+
+            data_table.clear()
+
+            # Extract yield curve data from the API response
+            plots = data.get("plots", [])
+            if not plots:
+                self.notify(f"⚠ No data available for Yield Curve in {self.selected_country_code}")
+                return
+
+            plot_data = plots[0]
+            yield_data = plot_data.get("data", [])
+            series_metadata = plot_data.get("series", [])
+
+            # Map series code to series name dynamically
+            columns = {series["code"]: series["name"] for series in series_metadata}
+            # Use all available series codes from the metadata
+            yield_series_codes = list(columns.keys())
+
+            # Show only the last 10 records in the DataTable (if available)
+            yield_data_last_10 = yield_data[-10:] if len(yield_data) >= 10 else yield_data
+
+            # Reset DataTable columns dynamically: add Date and one column per series
+            data_table.columns.clear()
+            data_table.add_column("Date")
+            for code in yield_series_codes:
+                data_table.add_column(columns.get(code, code))
+
+            # Populate rows for the DataTable
+            for entry in yield_data_last_10:
+                # Parse and format the date (e.g., "May 2025")
+                try:
+                    date = datetime.strptime(entry["Date"], "%Y-%m-%d")
+                    formatted_date = date.strftime("%b %Y")
+                except Exception:
+                    formatted_date = entry.get("Date", "")
+
+                row_values = [formatted_date]
+                for code in yield_series_codes:
+                    value = entry.get(code, "N/A")
+                    if isinstance(value, (int, float)):
+                        formatted_value = f"{value:.4f}"
+                    else:
+                        formatted_value = "N/A"
+                    row_values.append(formatted_value)
+                data_table.add_row(*row_values)
+
+            # Prepare data for the Line Chart using the full dataset
+            categories = []
+            line_series_data = {code: [] for code in yield_series_codes}
+
+            for entry in yield_data:
+                try:
+                    date = datetime.strptime(entry["Date"], "%Y-%m-%d")
+                    formatted_date = date.strftime("%b %Y")
+                except Exception:
+                    formatted_date = entry.get("Date", "")
+                categories.append(formatted_date)
+
+                for code in yield_series_codes:
+                    value = entry.get(code, 0)
+                    # Append numeric value if possible, else default to 0
+                    if isinstance(value, (int, float)):
+                        line_series_data[code].append(value)
+                    else:
+                        line_series_data[code].append(0)
+
+            chart_data = {
+                "categories": categories,
+                "bar_series_data": {},  # No bar series data in this case
+                "line_series_data": line_series_data,
+            }
+            new_title = f"Yield Curve - {self.selected_country_code.upper()}"
+            chart_widget.update_chart(chart_data, new_title)
+
+            self.notify(f"✅ Displayed last 10 Yield Curve records for {self.selected_country_code}")
+
+        except Exception as e:
+            self.notify(f"⚠️ Yield Curve Error: {str(e)}")
 
     async def process_money_supply_data(self):
         """Fetch and display the last 10 records of Money Supply (M3) and Nominal GDP dynamically for the selected country (DataTable)."""
@@ -957,14 +1413,18 @@ class EconomyInDetailTab(VerticalScroll):
         except Exception as e:
             self.notify(f"⚠️ Money Supply Error: {str(e)}")
 
+    import datetime
+    import httpx
+
     async def process_policy_rate_data(self):
-        """Fetch and display the last 10 records of the Monetary Policy Rate dynamically for the selected country (DataTable)."""
+        """Fetch and display the last 10 records of the Monetary Policy Rate dynamically for the selected country (DataTable) and generate a Line Chart."""
         if not self.selected_country_code:
             self.notify("⚠ No country selected! Please select a country.")
             return
 
         api_url = f"https://www.econdb.com/widgets/policy-rate/data/?country={self.selected_country_code}&format=json"
         data_table = self.query_one("#policy_rate_table", DataTable)
+        chart_widget = self.query_one("#policy_rate_chart", ChartWidget)
 
         try:
             async with httpx.AsyncClient() as client:
@@ -980,29 +1440,65 @@ class EconomyInDetailTab(VerticalScroll):
 
                 plot_data = plots[0]
                 policy_rate_data = plot_data.get("data", [])
+                series_metadata = plot_data.get("series", [])
 
-                # Show only the last 10 records
-                policy_rate_data = policy_rate_data[-10:]
+                # Extract column names dynamically from series metadata
+                columns = {series["code"]: series["name"] for series in series_metadata}
 
-                # Clear the table and add columns
+                # Show only the last 10 records in DataTable
+                policy_rate_data_last_10 = policy_rate_data[-10:]
+
+                # Dynamically determine column structure
+                date_column = "Date"
+                line_columns = ["POLIR"]  # Treat "POLIR" as the line series (Policy Rate)
+
+                # Reset DataTable columns dynamically
                 data_table.clear()
-                if not data_table.columns:
-                    data_table.add_column("Date")
-                    data_table.add_column("Central Bank Policy Rate (%)")
+                data_table.columns.clear()
 
-                # Populate rows for the DataTable (only last 10 entries)
+                # Add Date column and dynamically detected line series columns
+                data_table.add_column("Date")
+                for code in line_columns:
+                    data_table.add_column(columns.get(code, code))  # Add column by dynamic name or fallback to code
+
+                # Populate rows for the DataTable
+                for entry in policy_rate_data_last_10:
+                    # Parse and format the date
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
+
+                    # Collect row data
+                    row_values = [date]
+                    for code in line_columns:
+                        value = entry.get(code, "N/A")
+                        formatted_value = f"{value:.2f}%" if isinstance(value, (float, int)) else "N/A"
+                        row_values.append(formatted_value)
+
+                    # Add row to DataTable
+                    data_table.add_row(*row_values)
+
+                # Prepare data for the Line Chart
+                categories = []
+                line_series_data = {code: [] for code in line_columns}
+
+                # Process full dataset for charting
                 for entry in policy_rate_data:
                     # Parse and format the date
-                    date = datetime.strptime(entry["Date"], "%Y-%m-%d").strftime("%b %Y")
+                    date = datetime.strptime(entry[date_column], "%Y-%m-%d").strftime("%b %Y")
+                    categories.append(date)
 
-                    # Extract values for Monetary Policy Rate
-                    policy_rate = entry.get("POLIR", "N/A")
+                    # Populate line series data
+                    for code in line_series_data.keys():
+                        value = entry.get(code, 0)
+                        line_series_data[code].append(value if isinstance(value, (float, int)) else 0)
 
-                    # Format values for the table
-                    policy_rate = f"{policy_rate:.2f}%" if isinstance(policy_rate, (int, float)) else "N/A"
-
-                    # Add row to the DataTable
-                    data_table.add_row(date, policy_rate)
+                # Generate the Line Chart dynamically
+                chart_data = {
+                    "categories": categories,
+                    "bar_series_data": {},  # No bar series data
+                    "line_series_data": line_series_data,
+                }
+                new_title = f"Monetary Policy Rate - {self.selected_country_code.upper()}"
+                chart_widget.update_chart(chart_data, new_title)
 
                 self.notify(f"✅ Displayed last 10 Monetary Policy Rate records for {self.selected_country_code}")
 

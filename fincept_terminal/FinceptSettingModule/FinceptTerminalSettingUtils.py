@@ -1,10 +1,26 @@
 import json
 import os
+import platform
 
-# 🔹 Define a persistent settings directory in the user's home folder
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
-SETTINGS_DIR = os.path.join(BASE_DIR, "settings")  # Directory for settings files
-SETTINGS_FILE = os.path.join(SETTINGS_DIR, "settings.json")  # Path to settings.json
+# 🔹 Define a persistent settings directory based on the user's OS
+def get_settings_path():
+    """Returns a consistent settings file path for both Python library and EXE."""
+    system = platform.system()
+
+    if system == "Windows":
+        base_dir = os.getenv("APPDATA", os.path.expanduser("~\\AppData\\Roaming"))
+    elif system == "Darwin":  # macOS
+        base_dir = os.path.expanduser("~/Library/Application Support")
+    else:  # Linux
+        base_dir = os.path.expanduser("~/.config")
+
+    settings_dir = os.path.join(base_dir, "FinceptTerminal")
+    os.makedirs(settings_dir, exist_ok=True)  # Ensure directory exists
+
+    return os.path.join(settings_dir, "settings.json")
+
+# 🔹 Global variable for settings file path
+SETTINGS_FILE = get_settings_path()
 
 # 🔹 Default settings template (Modify as needed)
 DEFAULT_SETTINGS = {
@@ -15,22 +31,16 @@ DEFAULT_SETTINGS = {
 
 def ensure_settings_file():
     """
-    Ensures that the settings directory and file exist.
-    If the file does not exist, it creates one with default settings.
+    Ensures that the settings file exists.
+    If the file does not exist or is corrupted, it creates a new one with default settings.
     """
-
-    # ✅ Ensure the settings directory exists
-    if not os.path.exists(SETTINGS_DIR):
-        os.makedirs(SETTINGS_DIR, exist_ok=True)
-        print(f"📁 Created settings directory: {SETTINGS_DIR}")
-
-    # ✅ Create settings file if missing or invalid
+    #  Create settings file if missing or invalid
     if not os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(DEFAULT_SETTINGS, f, indent=4)
-        print(f"✅ Settings file created: {SETTINGS_FILE}")
+        print(f"Settings file created: {SETTINGS_FILE}")
     else:
-        # ✅ Validate the existing settings file
+        # Validate the existing settings file
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 json.load(f)  # Try loading JSON to ensure it's valid
@@ -38,7 +48,7 @@ def ensure_settings_file():
             print(f"⚠ Corrupt settings file detected. Resetting to defaults.")
             with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
                 json.dump(DEFAULT_SETTINGS, f, indent=4)
-            print(f"✅ Settings file reset: {SETTINGS_FILE}")
+            print(f"Settings file reset: {SETTINGS_FILE}")
 
 # 🔹 Call the function to ensure settings exist before use
 ensure_settings_file()
@@ -85,3 +95,19 @@ def clear_user_data():
         with open(SETTINGS_FILE, "w", encoding="utf-8") as file:
             json.dump(DEFAULT_SETTINGS, file, indent=4)  # Reset to default settings
         print(f"🗑 User data cleared. Settings reset to defaults: {SETTINGS_FILE}")
+
+
+def get_documents_folder():
+    """Returns the path to the user's Documents/FinceptTerminal folder."""
+    system = platform.system()
+
+    if system == "Windows":
+        documents_path = os.path.join(os.getenv("USERPROFILE"), "Documents")
+    else:
+        documents_path = os.path.expanduser("~/Documents")
+
+    fincept_folder = os.path.join(documents_path, "FinceptTerminal")
+    os.makedirs(fincept_folder, exist_ok=True)  # Ensure directory exists
+    return fincept_folder
+
+DOCUMENTS_FOLDER = get_documents_folder()

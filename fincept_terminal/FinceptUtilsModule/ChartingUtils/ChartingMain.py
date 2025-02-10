@@ -1,7 +1,6 @@
 import plotly.graph_objects as go
 import os
 
-
 class ChartRenderer:
     """Class to generate various types of charts using Plotly."""
 

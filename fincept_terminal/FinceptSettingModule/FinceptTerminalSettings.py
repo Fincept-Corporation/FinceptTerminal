@@ -2,9 +2,10 @@ from textual.widgets import Button, TabPane, TabbedContent, Static, Collapsible,
 from textual.containers import Container, Vertical, Horizontal
 import os, json, requests, asyncio, time
 import pyperclip
+
 # Path for storing user settings
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
+from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import get_settings_path
+SETTINGS_FILE = get_settings_path()
 
 FINCEPT_API_URL = "https://finceptapi.share.zrok.io"
 
@@ -37,7 +38,7 @@ class SettingsScreen(Container):
             response = await asyncio.to_thread(requests.post, f"{FINCEPT_API_URL}/cloud-sync/upload", json=payload,
                                                headers=headers)
             if response.status_code == 200:
-                self.query_one("#cloud-sync-status", Label).update("Cloud Sync Status: ✅ Enabled")
+                self.query_one("#cloud-sync-status", Label).update("Cloud Sync Status: Enabled")
                 self.notify("Success: Cloud Sync Enabled! Settings uploaded.", severity="information")
                 return True  # Indicate success
             else:
@@ -85,7 +86,7 @@ class SettingsScreen(Container):
             if response.status_code == 200:
                 self.settings.update(response.json().get("settings", {}))
                 self.save_settings()
-                self.query_one("#cloud-sync-status", Label).update("Cloud Sync Status: ✅ Downloaded")
+                self.query_one("#cloud-sync-status", Label).update("Cloud Sync Status: Downloaded")
                 self.notify("Success: Settings downloaded from cloud!", severity="information")
             else:
                 self.notify(f"Error: {response.json().get('detail', 'No settings found')}", severity="error")
@@ -140,12 +141,12 @@ class SettingsScreen(Container):
                         yield Static("Sync Settings to Fincept Cloud", classes="header")
                         yield Horizontal(
                             Switch(
-                                value=self.settings.get("cloud_sync_enabled", False),  # ✅ Load state from JSON
+                                value=self.settings.get("cloud_sync_enabled", False),  # Load state from JSON
                                 id="cloud-sync-toggle"
                             ),
                             classes="container",
                         )
-                        yield Label("Cloud Sync Status: ❌ Disabled", id="cloud-sync-status")
+                        yield Label("Cloud Sync Status: Disabled", id="cloud-sync-status")
                         yield Button("Download Settings", id="download-cloud", variant="primary")
 
                 # **New Tab for User Information (API Key)**
@@ -164,30 +165,30 @@ class SettingsScreen(Container):
 
         if event.switch.id == "cloud-sync-toggle":
             current_time = time.time()
-            cooldown_period = 30 * 60  # ✅ 30 minutes in seconds
+            cooldown_period = 30 * 60  # 30 minutes in seconds
 
             if current_time - self.last_sync_time < cooldown_period:
                 if not self.cooldown_active:
                     self.notify("Cloud sync update allowed only every 30 minutes.", severity="warning")
-                    self.cooldown_active = True  # ✅ Prevent multiple notifications
-                event.switch.value = self.settings.get("cloud_sync_enabled", False)  # ✅ Revert to last saved state
+                    self.cooldown_active = True  # Prevent multiple notifications
+                event.switch.value = self.settings.get("cloud_sync_enabled", False)  # Revert to last saved state
                 return
 
             self.last_sync_time = current_time
             self.cooldown_active = False
 
-            # ✅ Update settings JSON
+            # Update settings JSON
             self.settings["cloud_sync_enabled"] = event.value
-            self.save_settings()  # ✅ Save immediately
+            self.save_settings()  # Save immediately
 
-            # ✅ Perform the operation based on switch value
-            if event.value:  # ✅ Cloud Sync Enabled
+            # Perform the operation based on switch value
+            if event.value:  # Cloud Sync Enabled
                 success = await self.run_async_task(self.upload_to_cloud)
                 if not success:  # If upload fails, reset switch to OFF
                     self.query_one("#cloud-sync-toggle", Switch).value = False
                     self.settings["cloud_sync_enabled"] = False
                     self.save_settings()
-            else:  # ❌ Cloud Sync Disabled
+            else:  # Cloud Sync Disabled
                 success = await self.run_async_task(self.delete_cloud_settings)
                 if not success:  # If deletion fails, reset switch to ON
                     self.query_one("#cloud-sync-toggle", Switch).value = True
