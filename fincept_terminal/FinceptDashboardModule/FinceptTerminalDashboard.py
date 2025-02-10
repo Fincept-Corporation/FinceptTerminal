@@ -105,16 +105,15 @@ class FinceptTerminalDashboard(Screen):
                                     yield Static("Region 5: Mixed", id="region_5")
                                     yield Static("Region 6: Mixed", id="region_6")
 
-
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
                         with TabbedContent():
                             with TabPane("DataGovIN"):
-                                from fincept_terminal.FinceptEcoAnModule.FinceptTerminalEconomicAnalysisScreen import DataGovINtab
+                                from fincept_terminal.FinceptEcoAnModule.WorldEconomyData.EcoIndia.DataGovIN_economy import DataGovINtab
                                 yield DataGovINtab()
 
                             with TabPane("EconDB"):
-                                from fincept_terminal.FinceptEcoAnModule.WorldEconomyData.EconDB.FinceptTerminalEconDBTab import EconDBTab
+                                from fincept_terminal.FinceptEcoAnModule.EconDB.FinceptTerminalEconDBTab import EconDBTab
                                 yield EconDBTab()
 
 

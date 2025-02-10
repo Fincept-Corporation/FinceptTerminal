@@ -12,8 +12,8 @@ from PyPDF2 import PdfReader
 import plotly.offline as pyo
 import plotly.graph_objects as go
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
+from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import get_settings_path
+SETTINGS_FILE = get_settings_path()
 
 class ConsumerBehaviorTab(Container):
     """Consumer Behavior Analysis Tab"""

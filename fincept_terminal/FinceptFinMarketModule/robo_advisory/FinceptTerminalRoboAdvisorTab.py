@@ -2,7 +2,7 @@ from textual.containers import VerticalScroll
 from textual.app import ComposeResult
 from textual.widgets import Collapsible, Static, OptionList, Button, DataTable
 import requests
-import parse
+from urllib import parse
 import pandas as pd
 import yfinance as yf
 import asyncio

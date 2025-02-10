@@ -11,10 +11,9 @@ from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import plotly.offline as pyo
 
-
 import os
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
+from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import get_settings_path
+SETTINGS_FILE = get_settings_path()
 
 class PortfolioTab(VerticalScroll):
     """Custom tab for Portfolio Management."""

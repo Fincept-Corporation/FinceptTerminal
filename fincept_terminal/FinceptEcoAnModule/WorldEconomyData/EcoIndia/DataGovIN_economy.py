@@ -1,408 +1,335 @@
-import os
-import sys
-import json
-import sqlite3
-from fincept_terminal.FinceptUtilsModule.themes import console
-from fincept_terminal.FinceptUtilsModule.const import display_in_columns
+# EconomicAnalysisScreen.py
+from textual.widgets import Static, Button, Collapsible, DataTable, OptionList
+import asyncio, os, json
+from textual.containers import VerticalScroll, Container, Horizontal
+from textual.app import ComposeResult
 from datagovindia import DataGovIndia, check_api_key
+import sqlite3
 
+DB_PATH = os.path.expanduser("~/datagovindia.db")
 
-SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "..", "..", "FinceptSettingModule", "FinceptSettingModule.json")
-DB_PATH = os.path.expanduser("~/datagovindia.db")  # Default database path
+from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import get_settings_path, get_documents_folder
+SETTINGS_FILE = get_settings_path()
+DOCUMENTS_FOLDER = get_documents_folder()
 
-
-def validate_api_key():
+class DataGovINtab(VerticalScroll):
     """
-    Validate the API key for the OGD platform.
-    Fetches the API key for 'World Economy Tracker' from the 'FinceptSettingModule.json' file in the FinceptSettingModule folder.
+    A Textual Tab to interact with DataGovIndia economic data.
+
+    This tab validates the API key, initializes and syncs metadata if needed,
+    displays a paginated list of available resources, and lets the user view
+    resource information, sample data, and download the resource data.
     """
-    # Check if the FinceptSettingModule.json file exists
-    if not os.path.exists(SETTINGS_FILE):
-        console.print("[bold red]Settings file not found. Please ensure 'FinceptSettingModule.json' exists in the FinceptSettingModule folder.[/bold red]")
-        sys.exit(1)
 
-    # Load the FinceptSettingModule.json file
-    try:
-        with open(SETTINGS_FILE, "r") as file:
-            settings = json.load(file)
-            world_economy_tracker = settings.get("data_sources", {}).get("World Economy Tracker", {})
-            api_key = world_economy_tracker.get("api_key")
-    except json.JSONDecodeError:
-        console.print("[bold red]Error: 'FinceptSettingModule.json' file is corrupted or invalid.[/bold red]")
-        sys.exit(1)
+    def __init__(self):
+        super().__init__()
+        self.api_key = None
+        self.resources = []  # List of resources (each a dict with title and resource_id)
+        self.current_resource_page = 0
+        self.items_per_page = 7
+        self.current_resource_id = None  # Tracks the resource currently selected
 
-    # Validate the presence of the API key
-    if not api_key:
-        console.print("[bold red]API key not found for 'World Economy Tracker' in 'FinceptSettingModule.json'. Please add it to the file.[/bold red]")
-        sys.exit(1)
+    def compose(self) -> ComposeResult:
+        """Compose the UI layout for the DataGovIndia tab."""
+        yield Static("DataGovIndia Economic Data", id="header")
 
-    # Validate the API key using the check_api_key function
-    if not check_api_key(api_key):
-        console.print("[bold red]Invalid API key for 'World Economy Tracker'. Please set a valid key in 'FinceptSettingModule.json'.[/bold red]")
-        sys.exit(1)
+        with Container(id="datagovin_container"):
 
-    console.print("[bold green]API key for 'World Economy Tracker' validated successfully![/bold green]")
-    return api_key
+        # Section for selecting a resource
+            with Collapsible(title="Select Resource", collapsed_symbol=">",classes="resource_collapsible"):
+                with VerticalScroll():
+                    yield OptionList(id="resource_selector")
+                    with Horizontal(classes="horizontal_next_previous"):
+                        yield Button("Previous Resources", id="previous_resource_page", variant="default")
+                        yield Button("Next Resources", id="next_resource_page", variant="default")
 
-def get_all_resources(db_path=DB_PATH):
-    """
-    Retrieve all resources (title and resource_id) directly from the database.
+        # Section for displaying general resource information
+            with Container(id="Resource_Information", classes="Resource_Information"):
+                yield Static("Resource Info", classes="header")
+                yield DataTable(id="resource_info_table", name="Resource Info")
 
-    Args:
-        db_path (str): Path to the SQLite database file.
+        # Section for displaying sample resource data
+            with VerticalScroll(id="Resource_Data", classes="Resource_Data"):
+                yield Static("Resource Data", classes="header")
+                yield DataTable(id="resource_data_table", name="Resource Data")
+                yield Button("Download Data", id="download_data", variant="primary")
 
-    Returns:
-        list: A list of dictionaries with 'title' and 'resource_id' keys.
-    """
-    try:
-        # Connect to the SQLite database
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
+    async def on_mount(self):
+        """Called when the component is mounted; initialize the metadata."""
+        self.app.notify("Initializing DataGovIndia Tab...")
+        asyncio.create_task(self.initialize_metadata())
 
-        # Query to fetch title and resource_id
-        query = "SELECT title, resource_id FROM resources"
-        cursor.execute(query)
-        resources = [{"title": row[0], "resource_id": row[1]} for row in cursor.fetchall()]
+    async def initialize_metadata(self):
+        """
+        Validate the API key, initialize metadata, and populate the resource list.
+        """
+        # Validate API key (runs file I/O in background)
+        self.api_key = await self.validate_api_key()
+        if not self.api_key:
+            self.app.notify("API key validation failed. Please check your settings.", severity="error")
+            return
 
-        # Close the connection
-        conn.close()
-
-        return resources
-    except sqlite3.Error as e:
-        console.print(f"[bold red]Error fetching resources from the database: {e}[/bold red]")
-        return []
-
-def initialize_metadata(api_key):
-    """
-    Ensure the metadata is initialized in the database.
-    If the database or metadata is missing, this will update it and return resources.
-
-    Args:
-        api_key (str): API key for authentication.
-
-    Returns:
-        list: A list of resources (dictionaries with 'title' and 'resource_id' keys).
-    """
-    try:
-        # Initialize the DataGovIndia wrapper with the provided API key
-        datagovin = DataGovIndia(api_key=api_key, db_path=DB_PATH)
-
-        # Check if the database file exists
-        if not os.path.exists(DB_PATH):
-            console.print("[bold yellow]Database file not found. Creating a new database...[/bold yellow]")
-
-        # Check if metadata is already synced
         try:
-            update_info = datagovin.get_update_info()
-            if update_info:
-                console.print(f"[bold green]Metadata last updated: {update_info}[/bold green]")
-            else:
-                console.print("[bold cyan]No update info available. Initializing metadata...[/bold cyan]")
+            datagovin = DataGovIndia(api_key=self.api_key, db_path=DB_PATH)
 
-            # Fetch resources (title and resource_id)
-            resources = get_all_resources(DB_PATH)
+            if not os.path.exists(DB_PATH):
+                self.app.notify("Database file not found. Creating a new database...", severity="warning")
+
+            try:
+                update_info = await asyncio.to_thread(datagovin.get_update_info)
+                if update_info:
+                    self.app.notify(f"Metadata last updated: {update_info}")
+                else:
+                    self.app.notify("No update info available. Initializing metadata...", severity="information")
+            except Exception as e:
+                self.app.notify(f"Metadata check failed: {e}. Initializing metadata...", severity="warning")
+
+            # Retrieve available resources from the database (using background thread)
+            resources = await self.get_all_resources()
             if resources:
-                console.print(f"[bold green]Found {len(resources)} resources in the database.[/bold green]")
-                return resources
+                self.app.notify(f"Found {len(resources)} resources in the database.")
             else:
-                console.print("[bold yellow]No resources found in the database. Syncing metadata...[/bold yellow]")
+                self.app.notify("No resources found in the database. Syncing metadata...", severity="warning")
+                await asyncio.to_thread(datagovin.sync_metadata)
+                resources = await self.get_all_resources()
+
+            self.resources = resources
+            self.current_resource_page = 0
+            await self.display_resources()
 
         except Exception as e:
-            console.print(f"[bold cyan]Metadata check failed: {e}. Initializing metadata...[/bold cyan]")
+            self.app.notify(f"Error initializing metadata: {e}", severity="error")
 
-        # Sync metadata if not found or invalid
-        datagovin.sync_metadata()
-        resources = get_all_resources()
-        console.print("[bold green]Metadata initialized successfully and resources fetched.[/bold green]")
-        return resources
-
-    except Exception as e:
-        console.print(f"[bold red]Error initializing metadata: {e}[/bold red]")
-        sys.exit(1)
-
-def fetch_resource_info(api_key, resource_id):
-    """
-    Fetch information about a specific resource using its resource ID.
-
-    Args:
-        api_key (str): The API key for the DataGovIndia platform.
-        resource_id (str): The ID of the resource to fetch information about.
-
-    Returns:
-        dict: The resource information, or None if not found or an error occurs.
-    """
-    try:
-        datagovin = DataGovIndia(api_key=api_key, db_path=DB_PATH)
-        console.print(f"[bold cyan]Fetching info for Resource ID: {resource_id}...[/bold cyan]")
-        resource_info = datagovin.get_resource_info(resource_id)
-
-        if not resource_info:
-            console.print(f"[bold yellow]No information found for Resource ID: {resource_id}[/bold yellow]")
+    async def validate_api_key(self) -> str:
+        """
+        Validate the API key from the settings file.
+        Instead of exiting on error, we notify the user.
+        """
+        if not os.path.exists(SETTINGS_FILE):
+            self.app.notify(
+                "Settings file not found. Please ensure 'settings.json' exists in the settings folder.",
+                severity="error"
+            )
             return None
 
-        console.print(f"[bold green]Resource info fetched successfully for Resource ID: {resource_id}[/bold green]")
-        return resource_info
+        # Wrap file reading in a thread since it is blocking.
+        try:
+            settings = await asyncio.to_thread(self._read_settings)
+            data_source = settings.get("data_sources", {}).get("world_economy_tracker", {})
+            api_key = data_source.get("apikey")
+        except Exception:
+            self.app.notify("Error: 'settings.json' file is corrupted or invalid.", severity="error")
+            return None
 
-    except Exception as e:
-        console.print(f"[bold red]Error fetching resource info: {e}[/bold red]")
-        return None
+        if not api_key:
+            self.app.notify(
+                "API key not found for 'World Economy Tracker' in 'settings.json'. Please add it.",
+                severity="error"
+            )
+            return None
 
+        if not await asyncio.to_thread(check_api_key, api_key):
+            self.app.notify(
+                "Invalid API key for 'World Economy Tracker'. Please set a valid key in 'settings.json'.",
+                severity="error"
+            )
+            return None
 
-def fetch_resource_data(api_key, resource_id, limit=5):
-    """
-    Fetch data for a specific resource ID.
-    """
-    try:
-        datagovin = DataGovIndia(api_key=api_key, db_path=DB_PATH)
-        console.print(f"[bold cyan]Fetching data for resource ID: {resource_id}[/bold cyan]")
-        data = datagovin.get_data(resource_id, limit=limit)
-        return data
-    except Exception as e:
-        console.print(f"[bold red]Error fetching data for resource ID '{resource_id}': {e}[/bold red]")
-        return None
+        self.app.notify("API key for 'World Economy Tracker' validated successfully!", severity="information")
+        return api_key
 
-def display_resources_paginated(resources, title="Select a Resource", start_index=0, page_size=10):
-    """
-    Paginate and display a list of resources for user selection.
+    def _read_settings(self):
+        """Helper function to read settings from SETTINGS_FILE."""
+        with open(SETTINGS_FILE, "r") as file:
+            return json.load(file)
 
-    Args:
-        resources (list): List of resources (dictionaries with 'name' and 'resource_id' keys).
-        title (str): Title for the displayed list.
-        start_index (int): Starting index for pagination.
-        page_size (int): Number of items per page.
+    async def get_all_resources(self, db_path=DB_PATH) -> list:
+        """
+        Retrieve all resources (title and resource_id) directly from the SQLite database.
+        This call is offloaded to a background thread.
+        """
+        return await asyncio.to_thread(self._get_all_resources_sync, db_path)
 
-    Returns:
-        dict: The selected resource or None if the user exits.
-    """
-    while True:
-        end_index = min(start_index + page_size, len(resources))
-        current_page = resources[start_index:end_index]
+    def _get_all_resources_sync(self, db_path):
+        """Synchronous helper for fetching resources from SQLite."""
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            query = "SELECT title, resource_id FROM resources"
+            cursor.execute(query)
+            resources = [{"title": row[0], "resource_id": row[1]} for row in cursor.fetchall()]
+            conn.close()
+            return resources
+        except sqlite3.Error as e:
+            self.app.notify(f"Error fetching resources from the database: {e}", severity="error")
+            return []
 
-        # Display resources using a table
-        from rich.table import Table
-        table = Table(title=f"{title} (Showing {start_index + 1}-{end_index} of {len(resources)})", show_lines=True)
-        table.add_column("Number", justify="right", style="cyan")
-        table.add_column("Name", style="bold white")
-        table.add_column("Resource ID", style="green")
+    async def display_resources(self):
+        """
+        Display the current page of resources in the OptionList with separators.
+        """
+        start_index = self.current_resource_page * self.items_per_page
+        end_index = start_index + self.items_per_page
+        resource_list = self.query_one("#resource_selector", OptionList)
+        resource_list.clear_options()
 
-        for i, resource in enumerate(current_page, start=start_index + 1):
-            table.add_row(str(i), resource["title"], resource["resource_id"])
+        # Get the resources for the current page
+        page_resources = self.resources[start_index:end_index]
 
-        console.print(table)
+        for i, resource in enumerate(page_resources):
+            # Format the option as "Resource Title - Resource_ID"
+            option_text = f"{resource['title']} - {resource['resource_id']}"
+            resource_list.add_option(option_text)
 
-        # Prompt for user action
-        from rich.prompt import Prompt
-        action = Prompt.ask(
-            "\n[bold cyan]Next Page (N) / Previous Page (P) / Select (1-{0}) / Exit (E)[/bold cyan]".format(len(current_page))
+        self.app.notify(
+            f"Showing resources {start_index + 1} to {min(end_index, len(self.resources))} of {len(self.resources)}"
         )
 
-        if action.lower() == 'n':
-            # Go to the next page
-            if end_index < len(resources):
-                start_index += page_size
+    async def on_button_pressed(self, event: Button.Pressed):
+        """
+        Handle pagination and download button actions.
+        """
+        button_id = event.button.id
+
+        if button_id == "next_resource_page":
+            if (self.current_resource_page + 1) * self.items_per_page < len(self.resources):
+                self.current_resource_page += 1
+                await self.display_resources()
             else:
-                console.print("[bold red]No more pages available.[/bold red]")
-        elif action.lower() == 'p':
-            # Go to the previous page
-            if start_index > 0:
-                start_index -= page_size
+                self.app.notify("No more resources to display.", severity="warning")
+
+        elif button_id == "previous_resource_page":
+            if self.current_resource_page > 0:
+                self.current_resource_page -= 1
+                await self.display_resources()
             else:
-                console.print("[bold red]Already on the first page.[/bold red]")
-        elif action.lower() == 'e':
-            # Exit selection
-            console.print("[bold yellow]Exiting resource selection...[/bold yellow]")
-            return None
-        else:
-            # Handle selection
-            try:
-                selected_index = int(action) - 1
-                if start_index <= selected_index < end_index:
-                    return current_page[selected_index]
+                self.app.notify("Already at the first page of resources.", severity="warning")
+
+        elif button_id == "download_data":
+            if self.current_resource_id:
+                # For simplicity, use a default file name based on the resource id.
+                file_name = f"resource_{self.current_resource_id}.csv"
+                success = await asyncio.create_task(self.download_resource_data(self.current_resource_id, file_name))
+                if success:
+                    self.app.notify(f"Data successfully downloaded as {file_name}!", severity="information")
                 else:
-                    console.print("[bold red]Invalid selection. Please select a valid number.[/bold red]")
-            except ValueError:
-                console.print("[bold red]Invalid input. Please enter a number, 'N', 'P', or 'E'.[/bold red]")
+                    self.app.notify("Failed to download the data.", severity="error")
+            else:
+                self.app.notify("No resource selected for download.", severity="warning")
 
-def display_resource_info(resource_info):
-    """
-    Display the resource information in two tables:
-    1. General resource information.
-    2. Fields information (separate table for fields).
+    async def on_option_list_option_selected(self, event: OptionList.OptionSelected):
+        """
+        When the user selects a resource, fetch and display its information and sample data.
+        """
+        if event.option_list.id == "resource_selector":
+            selected_text = event.option_list.get_option_at_index(event.option_index).prompt
+            # Expecting the format: "Resource Title - Resource_ID"
+            parts = selected_text.rsplit(" - ", 1)
+            if len(parts) != 2:
+                self.app.notify("Invalid resource format.", severity="error")
+                return
 
-    Args:
-        resource_info (dict): The resource information to display.
-    """
-    from rich.table import Table
-    if not resource_info:
-        console.print("[bold red]No resource information available to display.[/bold red]")
-        return
+            resource_id = parts[1]
+            self.current_resource_id = resource_id
+            self.app.notify(f"Selected Resource ID: {resource_id}", severity="information")
+            await self.fetch_and_display_resource_info(resource_id)
+            await self.fetch_and_display_resource_data(resource_id)
 
-    # Table 1: General Resource Information
-    general_table = Table(title="Resource Information", header_style="bold green on black", show_lines=True)
-    general_table.add_column("Attribute", style="cyan", justify="left")
-    general_table.add_column("Value", style="green", justify="left")
+    async def fetch_and_display_resource_info(self, resource_id: str):
+        """
+        Fetch resource information and display it in the Resource Information table.
+        """
+        try:
+            datagovin = DataGovIndia(api_key=self.api_key, db_path=DB_PATH)
+            self.app.notify(f"Fetching info for Resource ID: {resource_id}...", severity="information")
+            resource_info = await asyncio.to_thread(datagovin.get_resource_info, resource_id)
+            if not resource_info:
+                self.app.notify(f"No information found for Resource ID: {resource_id}", severity="warning")
+                return
 
-    # Exclude fields from the general table
-    for key, value in resource_info.items():
-        if key == "field":
-            continue  # Skip fields for the general table
-        # Format values
-        if isinstance(value, list):
-            value = ", ".join(map(str, value))
-        elif isinstance(value, bool):
-            value = "True" if value else "False"
-        elif value is None:
-            value = "N/A"
-        general_table.add_row(key, str(value))
+            data_table = self.query_one("#resource_info_table", DataTable)
+            data_table.clear()
+            if not data_table.columns:
+                data_table.add_column("Attribute")
+                data_table.add_column("Value")
 
-    console.print(general_table)
+            # Display general resource info (skip the "field" details)
+            for key, value in resource_info.items():
+                if key == "field":
+                    continue
+                if isinstance(value, list):
+                    value = ", ".join(map(str, value))
+                elif isinstance(value, bool):
+                    value = "True" if value else "False"
+                elif value is None:
+                    value = "N/A"
+                data_table.add_row(str(key), str(value))
 
-    # Table 2: Fields Information
-    fields = resource_info.get("field", [])
-    if fields:
-        fields_table = Table(title="Fields Information", header_style="bold green on black", show_lines=True)
-        fields_table.add_column("ID", style="cyan", justify="left")
-        fields_table.add_column("Name", style="green", justify="left")
-        fields_table.add_column("Type", style="cyan", justify="left")
+            self.app.notify(f"Resource info fetched successfully for Resource ID: {resource_id}", severity="information")
+        except Exception as e:
+            self.app.notify(f"Error fetching resource info: {e}", severity="error")
 
-        for field in fields:
-            fields_table.add_row(field.get("id", "N/A"), field.get("name", "N/A"), field.get("type", "N/A"))
+    async def fetch_and_display_resource_data(self, resource_id: str):
+        """
+        Fetch resource data (sample rows) and display it in the Resource Data table.
+        """
+        try:
+            datagovin = DataGovIndia(api_key=self.api_key, db_path=DB_PATH)
+            self.app.notify(f"Fetching data for Resource ID: {resource_id}...", severity="information")
+            # Limit to first 5 rows for display
+            data = datagovin.get_data(resource_id, limit=10)
+            if data is None or data.empty:
+                self.app.notify(f"No data available for Resource ID: {resource_id}", severity="warning")
+                return
 
-        console.print(fields_table)
-    else:
-        console.print("[bold yellow]No fields available for this resource.[/bold yellow]")
+            data_table = self.query_one("#resource_data_table", DataTable)
+            data_table.clear()
+            # Create columns based on the DataFrame
+            for col in data.columns:
+                data_table.add_column(str(col))
 
-def display_resource_data(resource_data):
-    """
-    Display the fetched resource data in a structured format with column headers.
+            # Add rows (only the first 5 rows)
+            for _, row in data.head(10).iterrows():
+                row_values = [str(item) for item in row.tolist()]
+                data_table.add_row(*row_values)
 
-    Args:
-        resource_data (DataFrame): The resource data fetched using `get_data`.
-    """
-    if resource_data.empty:
-        console.print("[bold red]No data available for this resource.[/bold red]")
-        return
+            self.app.notify(f"Resource data fetched successfully for Resource ID: {resource_id}", severity="information")
+        except Exception as e:
+            self.app.notify(f"Error fetching resource data: {e}", severity="error")
 
-    # Display a maximum of 5 rows for better readability
-    max_rows = 5
-    data_to_display = resource_data.head(max_rows)
+    async def download_resource_data(self, resource_id: str, output_file: str) -> bool:
+        """
+        Download the complete data for a resource and save it to the specified file inside the Documents folder.
+        Supported file formats are .csv, .json, and .xlsx.
+        """
+        try:
+            datagovin = DataGovIndia(api_key=self.api_key)
+            self.app.notify(f"Downloading data for Resource ID: {resource_id}...", severity="information")
 
-    # Extract column headers and rows
-    headers = data_to_display.columns.tolist()
-    rows = data_to_display.values.tolist()
+            # Fetch data asynchronously
+            data = await asyncio.to_thread(datagovin.get_data, resource_id)
+            if data is None or data.empty:
+                self.app.notify("No data available to download.", severity="warning")
+                return False
 
-    # Format the headers and rows for display
-    formatted_data = [" | ".join(headers)]  # Add headers as the first row
-    for row in rows:
-        formatted_data.append(" | ".join(map(str, row)))  # Add each row as a string
+            # Ensure the file is stored in the Documents/FinceptTerminal folder
+            output_file_path = os.path.join(DOCUMENTS_FOLDER, output_file)
 
-    # Display the formatted data using display_in_columns
-    title = f"Resource Data (First {max_rows} Rows)"
-    display_in_columns(title, formatted_data)
+            # Save the file based on format
+            if output_file.endswith(".csv"):
+                await asyncio.to_thread(data.to_csv, output_file_path, index=False)
+            elif output_file.endswith(".json"):
+                await asyncio.to_thread(data.to_json, output_file_path, orient="records", indent=4)
+            elif output_file.endswith(".xlsx"):
+                await asyncio.to_thread(data.to_excel, output_file_path, index=False, engine="openpyxl")
+            else:
+                self.app.notify("Invalid file format. Supported formats: .csv, .json, .xlsx", severity="error")
+                return False
 
-    if len(resource_data) > max_rows:
-        console.print(f"[bold yellow]Only the first {max_rows} rows are displayed.[/bold yellow]")
+            self.app.notify(f"✅ File saved at: {output_file_path}", severity="success")
+            return True
 
-def download_resource_data(api_key, resource_id, output_file):
-    """
-    Download resource data in the specified format.
-
-    Args:
-        api_key (str): The API key for authentication.
-        resource_id (str): The resource ID to fetch data for.
-        output_file (str): The output file path with format (e.g., .csv, .json, .xlsx).
-
-    Returns:
-        bool: True if the data is successfully downloaded, False otherwise.
-    """
-    try:
-        datagovin = DataGovIndia(api_key=api_key)
-        console.print(f"[bold cyan]Downloading data for Resource ID: {resource_id}...[/bold cyan]")
-        data = datagovin.get_data(resource_id)
-
-        # Save data based on the specified file extension
-        if output_file.endswith(".csv"):
-            data.to_csv(output_file, index=False)
-        elif output_file.endswith(".json"):
-            data.to_json(output_file, orient="records", indent=4)
-        elif output_file.endswith(".xlsx"):
-            data.to_excel(output_file, index=False, engine="openpyxl")
-        else:
-            console.print("[bold red]Invalid file format. Supported formats: .csv, .json, .xlsx[/bold red]")
+        except Exception as e:
+            self.app.notify(f"Error downloading resource data: {e}", severity="error")
             return False
 
-        return True
-    except Exception as e:
-        console.print(f"[bold red]Error downloading resource data: {e}[/bold red]")
-        return False
-
-def show_datagovindia_menu():
-    """
-    Show the DataGovIndia module menu.
-    """
-    console.print("[bold cyan]DATAGOVINDIA MENU[/bold cyan]\n")
-
-    # Step 1: Validate API Key
-    api_key = validate_api_key()
-
-    # Step 2: Initialize Metadata
-    resources = initialize_metadata(api_key)
-    # console.print(resources)
-    # Step 3: Fetch all resource IDs and names
-    #resources = fetch_resource_ids_with_names(api_key)
-    if not resources:
-        return
-
-    # Step 4: Paginated Display of Resource IDs and Names
-    while True:
-        selected_resource = display_resources_paginated(resources, title="Available Resources")
-        if not selected_resource:
-            console.print("[bold yellow]No selection made. Returning to the main menu...[/bold yellow]")
-            from fincept_terminal.oldTerminal.cli import show_main_menu
-            show_main_menu()
-            break
-
-        # Extract the selected resource ID
-        resource_id = selected_resource["resource_id"]
-
-        # Step 5: Fetch and Display Resource Info
-        try:
-            resource_info = fetch_resource_info(api_key, resource_id)
-            if resource_info:
-                console.print(f"[bold green]Resource Info for Resource ID: {resource_id}[/bold green]")
-                display_resource_info(resource_info)  # Display resource info
-
-                # Step 6: Fetch and Display Resource Data
-                data = fetch_resource_data(api_key, resource_id)
-                if data is not None:
-                    console.print(f"[bold green]Data for Resource ID: {resource_id}[/bold green]")
-                    items = data.head(5).to_dict()
-                    display_resource_info(items)  # Display first 5 rows of the data
-
-                    # Step 7: Prompt for Download Option
-                    from rich.prompt import Prompt
-                    download_option = Prompt.ask(
-                        "\nDo you want to download this data? (yes/no)", default="no"
-                    ).lower()
-
-                    if download_option == "yes":
-                        file_name = Prompt.ask("Enter the file name (e.g., data.csv, data.json, data.xlsx)").strip()
-                        download_success = download_resource_data(api_key, resource_id, file_name)
-                        if download_success:
-                            console.print(f"[bold green]Data successfully downloaded as {file_name}![/bold green]")
-                        else:
-                            console.print("[bold red]Failed to download the data.[/bold red]")
-                else:
-                    console.print(f"[bold red]No data found for Resource ID: {resource_id}[/bold red]")
-            else:
-                console.print(f"[bold red]No resource info found for Resource ID: {resource_id}[/bold red]")
-
-            # Prompt for another query or exit
-            continue_query = Prompt.ask("\nDo you want to query another resource ID? (yes/no)", default="no").lower()
-            if continue_query != "yes":
-                console.print("[bold yellow]Exiting DataGovIndia module...[/bold yellow]")
-                from fincept_terminal.oldTerminal.cli import show_main_menu
-                show_main_menu()
-                break
-        except Exception as e:
-            console.print(f"[bold red]Error processing resource data: {e}[/bold red]")

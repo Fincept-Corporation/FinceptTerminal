@@ -6,9 +6,6 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/yourusername/fincept-investments/blob/main/LICENSE.txt)
 [![PyPI version](https://badge.fury.io/py/fincept-terminal.svg)](https://badge.fury.io/py/fincept-terminal)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fincept-terminal.svg)](https://pypi.org/project/fincept-terminal/)
-<a target="_blank" href="https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/examples/news_sentiment_demo.ipynb">
-  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
-</a>
 [![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 [![PyPI Downloads](https://static.pepy.tech/badge/fincept-terminal)](https://pepy.tech/projects/fincept-terminal)
 
@@ -39,24 +36,15 @@ Install the latest version of Fincept Investments from PyPI: pip install fincept
 [![Download Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/download-windows.svg)](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/Production1.0.0/FinceptInvestmentsInstaller.exe)
 
 ```toml
-pip install fincept-terminal==1.0.0     # easy way to get started if you have python 
+pip install fincept-terminal        # easy way to get started if you have python
 ```
-
 
 ## USAGE
 
 COMMAND TO START THE TERMINAL 
 
 ```toml
-fincept     # First Command to start the Terminal
-```
-
-```toml
-finceptterninal --help      # Get the list of available help options
-```
-
-```toml
-fincept --version        # Check on which version you are running
+fincept          # First Command to start the Terminal
 ```
 
 ## UPCOMING FEATURS
@@ -77,17 +65,26 @@ We welcome contributions from everyone! Whether you're fixing bugs, adding new f
 📌 **Read the Contribution Guidelines:**  
 Check out our [CONTRIBUTING.md](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/CONTRIBUTING.md) to learn how you can contribute to Fincept Terminal.
 
-## Table of Contents
+[//]: # (## Table of Contents)
 
-- [Code of Conduct](#code-of-conduct)
-- [How Can I as a User Contribute?](#how-can-i-contribute)
-  - [Reporting Bugs](#reporting-bugs)
-  - [Suggesting Enhancements](#suggesting-enhancements)
-  - [Submitting Pull Requests](#submitting-pull-requests)
-- [Style Guides](#style-guides)
-  - [Coding Standards](#coding-standards)
-  - [Commit Messages](#commit-messages)
-- [Additional Resources](#additional-resources)
+[//]: # ()
+[//]: # (- [Code of Conduct]&#40;#code-of-conduct&#41;)
+
+[//]: # (- [How Can I as a User Contribute?]&#40;#how-can-i-contribute&#41;)
+
+[//]: # (  - [Reporting Bugs]&#40;#reporting-bugs&#41;)
+
+[//]: # (  - [Suggesting Enhancements]&#40;#suggesting-enhancements&#41;)
+
+[//]: # (  - [Submitting Pull Requests]&#40;#submitting-pull-requests&#41;)
+
+[//]: # (- [Style Guides]&#40;#style-guides&#41;)
+
+[//]: # (  - [Coding Standards]&#40;#coding-standards&#41;)
+
+[//]: # (  - [Commit Messages]&#40;#commit-messages&#41;)
+
+[//]: # (- [Additional Resources]&#40;#additional-resources&#41;)
 
 
 ### Create a GitHub Ticket
@@ -104,8 +101,14 @@ If you encounter any issues or have suggestions, feel free to create a GitHub ti
 **PLEASE STAR ⭐ THE REPO AND SHARE THE PROJECT ❤️‍🩹 **
 
 ## Star History
+<a href="https://star-history.com/#Fincept-Corporation/FinceptTerminal&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Date" />
+ </picture>
+</a>
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Timeline)](https://star-history.com/#Fincept-Corporation/FinceptTerminal&Timeline)
 
 📌 **Join the Community:**  
 - Discuss ideas and improvements in [GitHub Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)

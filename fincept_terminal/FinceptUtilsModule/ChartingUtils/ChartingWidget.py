@@ -1,4 +1,4 @@
-from textual.containers import Horizontal,Container
+from textual.containers import Horizontal, Container
 from textual.widget import Widget
 from textual.app import ComposeResult
 from textual.widgets import Button, Static
@@ -7,92 +7,121 @@ import os
 from fincept_terminal.FinceptUtilsModule.ChartingUtils.ChartDataProcessing import DataProcessing
 from fincept_terminal.FinceptUtilsModule.ChartingUtils.ChartingMain import ChartRenderer
 
-
 class ChartWidget(Widget):
-    """A widget that allows developers to specify a chart type and raw data for display in the TUI."""
-
-    def __init__(self, chart_type: str, raw_data: any, title: str, output_dir="charts", **kwargs):
+    """Custom reusable widget for dynamic charting."""
+    CSS = """
+    .chart_buttons{
+        height: auto;
+        border: red;
+    }
+    .chart_container{
+        height: auto;
+        border: cyan;
+    }
+    """
+    def __init__(self, chart_type: str, title: str, widget_id: str, output_dir="charts", raw_data: any = None, **kwargs):
         """
         Initialize the ChartWidget.
 
         Args:
-            chart_type (str): The type of chart to generate (e.g., "line", "bar", etc.).
-            raw_data (any): The unstructured data to be processed.
-            title (str): The title of the chart.
-            output_dir (str): Directory to save the generated chart HTML file.
+            chart_type (str): Type of chart to generate (e.g., "line", "bar", etc.).
+            raw_data (any): The data to be visualized.
+            title (str): Title of the chart.
+            widget_id (str): Unique ID for the widget (e.g., "gdp_growth").
+            output_dir (str): Directory for saving chart files.
         """
-        super().__init__(**kwargs)
-        self.chart_type = chart_type.lower().strip()  # Convert to lowercase for consistency
+        super().__init__(id=widget_id,**kwargs)
+        self.chart_type = chart_type.lower().strip()
         self.raw_data = raw_data
         self.title = title
+        self.widget_id = widget_id
         self.output_dir = output_dir
-
-        # ✅ Ensure output directory exists
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.chart_renderer = ChartRenderer(self.output_dir)
-        self.chart_path = None  # Store path to generated chart
+        self.chart_path = None  # Path to the generated chart
 
     def compose(self) -> ComposeResult:
-        """Create UI elements."""
-        with Container(classes="graph_buttons"):
-            yield Static(f"📊 {self.title} 📊", classes="title")
-            with Horizontal():
-                yield Button("Open Chart", id="open_chart")
-                yield Button("Close", id="close_button")
+        """Compose the widget UI."""
+        yield Button(f"📊 Visualize {self.title} 📊", id=f"{self.widget_id}_open_chart")
+
+
 
     def generate_chart(self):
-        """Process raw data and generate only the requested chart type."""
+        """Generate the chart based on the provided data and chart type."""
         try:
-            # ✅ Ensure valid data before processing
+            if not self.raw_data:
+                self.app.notify("no raw data found")
+            # Process the data for the chart
             chart_data = DataProcessing.process(self.chart_type, self.raw_data)
-
-            # ✅ Define valid chart types
+            # Chart type mapping
             chart_mapping = {
-                "line": lambda: self.chart_renderer.generate_line_chart("line_chart.html", chart_data["x"],
-                                                                        chart_data["y"]),
-                "bar": lambda: self.chart_renderer.generate_bar_chart("bar_chart.html", chart_data["labels"],
-                                                                      chart_data["values"]),
-                "scatter": lambda: self.chart_renderer.generate_scatter_plot("scatter_chart.html", chart_data["x"],
-                                                                             chart_data["y"]),
-                "candlestick": lambda: self.chart_renderer.generate_candlestick_chart("candlestick_chart.html",
-                                                                                      chart_data["ohlc"]),
-                "pie": lambda: self.chart_renderer.generate_pie_chart("pie_chart.html", chart_data["labels"],
-                                                                      chart_data["values"]),
-                "histogram": lambda: self.chart_renderer.generate_histogram("histogram.html", chart_data["values"]),
-                "bubble": lambda: self.chart_renderer.generate_bubble_chart("bubble_chart.html", chart_data["x"],
-                                                                            chart_data["y"], chart_data["sizes"]),
+                "line": lambda: self.chart_renderer.generate_line_chart(
+                    f"{self.title}_line_chart.html", chart_data["x"], chart_data["y"]
+                ),
+                "bar": lambda: self.chart_renderer.generate_bar_chart(
+                    f"{self.title}_bar_chart.html", chart_data["labels"], chart_data["values"]
+                ),
+                "scatter": lambda: self.chart_renderer.generate_scatter_plot(
+                    f"{self.title}_scatter_chart.html", chart_data["x"], chart_data["y"]
+                ),
+                "candlestick": lambda: self.chart_renderer.generate_candlestick_chart(
+                    f"{self.title}_candlestick_chart.html", chart_data["ohlc"]
+                ),
+                "pie": lambda: self.chart_renderer.generate_pie_chart(
+                    f"{self.title}_pie_chart.html", chart_data["labels"], chart_data["values"]
+                ),
+                "histogram": lambda: self.chart_renderer.generate_histogram(
+                    f"{self.title}_histogram_chart.html", chart_data["values"]
+                ),
+                "bubble": lambda: self.chart_renderer.generate_bubble_chart(
+                    f"{self.title}_bubble_chart.html", chart_data["x"], chart_data["y"], chart_data["sizes"]
+                ),
                 "multi_bar": lambda: self.chart_renderer.generate_multi_bar_chart(
-                    "multi_bar_chart.html",
+                    f"{self.title}_multi_bar_chart.html", chart_data["categories"], chart_data["series_data"]
+                ),
+                "mixed_bar_line": lambda: self.chart_renderer.generate_mixed_bar_line_chart(
+                    f"{self.title}_mixed_bar_line_chart.html",
                     chart_data["categories"],
-                    chart_data["series_data"]
-                )
+                    chart_data["bar_series_data"],
+                    chart_data["line_series_data"],
+                    y1_title="Values (Mn. USD)",  # Customize y-axis title for bar
+                    y2_title="Percentage Change",  # Customize y-axis title for line
+                    chart_title=self.title  # Use the provided title
+                ),
             }
 
-            # ✅ Generate only the requested chart type
+            # Generate the chart and store its path
             if self.chart_type in chart_mapping:
-                print(f"📊 Generating chart: {self.chart_type}")
-                self.chart_path = chart_mapping[self.chart_type]()  # Generate chart and store its path
-                print(f"✅ Chart saved at: {self.chart_path}")
+                self.chart_path = chart_mapping[self.chart_type]()
             else:
-                print(f"❌ Error: Unsupported chart type '{self.chart_type}'")
+                raise ValueError(f"Unsupported chart type: {self.chart_type}")
 
-        except ValueError as e:
-            print(f"⚠ Data Processing Error: {e}")
+        except Exception as e:
+            print(f"Error generating chart: {e}")
+
+    def update_chart(self, new_data: any, new_title: str):
+        """Update the chart with new data dynamically."""
+        if not new_data:
+            self.app.notify("No Data found")
+            return
+
+        self.raw_data = new_data
+        self.title = new_title
+        self.app.notify("Generating charts")
+        self.generate_chart()
 
     def on_mount(self) -> None:
         """Generate the chart when the widget is mounted."""
         self.generate_chart()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses to open or close the chart."""
-        if event.button.id == "open_chart":
-            print(f"🔍 Debug: Chart path -> {self.chart_path}")  # Debugging print
-
+        """Handle button presses for opening or closing the chart."""
+        if event.button.id == f"{self.widget_id}_open_chart":
             if self.chart_path and os.path.exists(self.chart_path):
-                print(f"✅ Opening chart: {self.chart_path}")
                 webbrowser.open(f"file://{os.path.abspath(self.chart_path)}")
             else:
-                print(f"❌ Error: Chart file {self.chart_path} not found!")
-        elif event.button.id == "close_button":
+                print(f"Error: Chart file {self.chart_path} not found!")
+        elif event.button.id == f"{self.widget_id}_close_chart":
             self.remove()
+
