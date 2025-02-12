@@ -161,7 +161,6 @@ class GenAITab(VerticalScroll):
         self.app.notify("✅ Chat session deleted successfully!")
 
     async def process_chat_message(self):
-        """Process the user's message and get AI response with immediate display and loading indicator."""
         chat_input = self.query_one("#chat_input")
         chat_display = self.query_one("#chat_display", VerticalScroll)
 
@@ -172,27 +171,30 @@ class GenAITab(VerticalScroll):
             self.app.notify("Please enter a message!", severity="warning")
             return
 
-        # ✅ Store & Display User's Message Immediately
-        if self.active_chat_id:
-            self.chat_sessions[self.active_chat_id]["messages"].append({"role": "user", "content": user_message})
-            await self.display_chat_messages()  # Update chat UI
+        # Check if an active chat session exists
+        if not self.active_chat_id:
+            self.app.notify("No active chat session. Please create or select a chat first.", severity="warning")
+            return
 
-        # ✅ Display Loading Indicator
+        # Store & display the user's message
+        self.chat_sessions[self.active_chat_id]["messages"].append({"role": "user", "content": user_message})
+        await self.display_chat_messages()
+
+        # Display loading indicator
         loading_message = Static("[italic magenta]Generating response...[/italic magenta]")
-        await chat_display.mount(loading_message)  # Show loading message
+        await chat_display.mount(loading_message)
 
-        # ✅ Fetch AI response asynchronously
-        response = await self.query_genai(user_message)  # ✅ Now properly awaited
+        # Fetch AI response asynchronously
+        response = await self.query_genai(user_message)
 
-        # ✅ Remove Loading Indicator
-        await chat_display.remove_children()  # Clears loading message
+        # Remove loading indicator
+        await chat_display.remove_children()
 
-        # ✅ Save & Display AI Response
-        if self.active_chat_id:
-            self.chat_sessions[self.active_chat_id]["messages"].append({"role": "ai", "content": response})
-            self.save_chat_sessions()  # Save updated chat sessions
+        # Save & display the AI response
+        self.chat_sessions[self.active_chat_id]["messages"].append({"role": "ai", "content": response})
+        self.save_chat_sessions()
 
-        await self.display_chat_messages()  # Refresh chat display
+        await self.display_chat_messages()
 
     async def query_genai(self, user_input):
         """Query the AI model based on user settings asynchronously."""
