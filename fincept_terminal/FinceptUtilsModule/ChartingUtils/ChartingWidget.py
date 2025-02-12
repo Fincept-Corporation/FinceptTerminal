@@ -4,6 +4,7 @@ from textual.app import ComposeResult
 from textual.widgets import Button, Static
 import webbrowser
 import os
+import tempfile
 from fincept_terminal.FinceptUtilsModule.ChartingUtils.ChartDataProcessing import DataProcessing
 from fincept_terminal.FinceptUtilsModule.ChartingUtils.ChartingMain import ChartRenderer
 
@@ -39,7 +40,7 @@ class ChartWidget(Widget):
         os.makedirs(self.output_dir, exist_ok=True)
 
         self.chart_renderer = ChartRenderer(self.output_dir)
-        self.chart_path = None  # Path to the generated chart
+        self.temp_chart_path = None  # Path to the generated chart
 
     def compose(self) -> ComposeResult:
         """Compose the widget UI."""
@@ -91,11 +92,46 @@ class ChartWidget(Widget):
                 ),
             }
 
-            # Generate the chart and store its path
+            # ✅ Generate the appropriate chart
             if self.chart_type in chart_mapping:
-                self.chart_path = chart_mapping[self.chart_type]()
+                fig = chart_mapping[self.chart_type]()
             else:
-                raise ValueError(f"Unsupported chart type: {self.chart_type}")
+                raise ValueError(f"❌ Unsupported chart type: {self.chart_type}")
+
+            fig_html = f"""
+                <html>
+                <head>
+                    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+                    <style>
+                        body {{
+                            margin: 0;
+                            padding: 0;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                            height: 100vh;
+                            background-color: #f8f9fa; /* Light background */
+                        }}
+                        #chart-container {{
+                            width: 95vw;
+                            height: 90vh;
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <div id="chart-container"></div>
+                    <script>
+                        var graph = {fig};
+                        Plotly.newPlot('chart-container', graph.data, graph.layout, {{ responsive: true }});
+                    </script>
+                </body>
+                </html>
+                """
+
+            # ✅ Save chart temporarily
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmpfile:
+                tmpfile.write(fig_html.encode("utf-8"))  # Write HTML content
+                self.temp_chart_path = tmpfile.name  # Store temp file path
 
         except Exception as e:
             print(f"Error generating chart: {e}")
@@ -108,7 +144,6 @@ class ChartWidget(Widget):
 
         self.raw_data = new_data
         self.title = new_title
-        self.app.notify("Generating charts")
         self.generate_chart()
 
     def on_mount(self) -> None:
@@ -116,12 +151,10 @@ class ChartWidget(Widget):
         self.generate_chart()
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button presses for opening or closing the chart."""
+        """Handle button presses for opening the chart."""
         if event.button.id == f"{self.widget_id}_open_chart":
-            if self.chart_path and os.path.exists(self.chart_path):
-                webbrowser.open(f"file://{os.path.abspath(self.chart_path)}")
+            if self.temp_chart_path and os.path.exists(self.temp_chart_path):
+                webbrowser.open(f"file://{self.temp_chart_path}")
             else:
-                print(f"Error: Chart file {self.chart_path} not found!")
-        elif event.button.id == f"{self.widget_id}_close_chart":
-            self.remove()
+                self.app.notify(f"⚠ Chart file not found: {self.temp_chart_path}", severity="error")
 
