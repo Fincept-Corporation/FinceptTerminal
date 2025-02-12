@@ -203,12 +203,19 @@ class GenAITab(VerticalScroll):
         api_key = settings.get("data_sources", {}).get("genai_model", {}).get("apikey")
 
         if not api_key:
-            return "❌ Error: API key is missing!"
+            # Show a toast message instructing the user to set the API key.
+            self.app.notify(
+                "⚠ API key is missing! Please go to settings and enter your API key first. Chat will work once the key is set.",
+                severity="error"
+            )
+            # Optionally, if you have a settings screen, you could navigate to it automatically:
+            # self.app.push_screen("settings")
+            return "❌ Error: API key is missing! Please enter it in settings."
 
         if source == "gemini_api":
-            return await self.query_gemini_direct(user_input, api_key)  # ✅ Await async function
+            return await self.query_gemini_direct(user_input, api_key)
         elif source == "openai_api":
-            return await self.query_openai(user_input, api_key)  # ✅ Await async function
+            return await self.query_openai(user_input, api_key)
         else:
             return "❌ Error: Unsupported AI model."
 
