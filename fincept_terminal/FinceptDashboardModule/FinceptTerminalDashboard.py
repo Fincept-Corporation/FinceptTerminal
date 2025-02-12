@@ -113,7 +113,7 @@ class FinceptTerminalDashboard(Screen):
                                 yield DataGovINtab()
 
                             with TabPane("EconDB"):
-                                from fincept_terminal.FinceptEcoAnModule.EconDB.FinceptTerminalEconDBTab import EconDBTab
+                                from fincept_terminal.FinceptChannelIntegration.DataProvider.EconDB.FinceptTerminalEconDBTab import EconDBTab
                                 yield EconDBTab()
 
 

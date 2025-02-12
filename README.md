@@ -9,6 +9,7 @@
 [![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 [![PyPI Downloads](https://static.pepy.tech/badge/fincept-terminal)](https://pepy.tech/projects/fincept-terminal)
 
+
 **Fincept Terminal** is a comprehensive Command Line tool that helps in Investment research, Extracting financial insights, market analysis, and a lot of other financial services such as technical analysis, fundamental analysis, sentiment analysis, quantitative analysis, and economic data analysis. It's designed to help investors and financial professionals navigate the complex world of investments with ease and precision.
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/FinceptTerminalDash.png)  

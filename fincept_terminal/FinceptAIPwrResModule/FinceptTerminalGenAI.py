@@ -4,6 +4,7 @@ import json
 import os
 import uuid
 import asyncio
+
 from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import get_settings_path
 SETTINGS_FILE = get_settings_path()
 
@@ -161,7 +162,6 @@ class GenAITab(VerticalScroll):
         self.app.notify("✅ Chat session deleted successfully!")
 
     async def process_chat_message(self):
-        """Process the user's message and get AI response with immediate display and loading indicator."""
         chat_input = self.query_one("#chat_input")
         chat_display = self.query_one("#chat_display", VerticalScroll)
 
@@ -176,23 +176,27 @@ class GenAITab(VerticalScroll):
         if self.active_chat_id:
             self.chat_sessions[self.active_chat_id]["messages"].append({"role": "user", "content": user_message})
             await asyncio.create_task(self.display_chat_messages())  # Update chat UI
+        # Check if an active chat session exists
+        if not self.active_chat_id:
+            self.app.notify("No active chat session. Please create or select a chat first.", severity="warning")
+            return
 
-        # ✅ Display Loading Indicator
+        # Display loading indicator
         loading_message = Static("[italic magenta]Generating response...[/italic magenta]")
-        await chat_display.mount(loading_message)  # Show loading message
+        await chat_display.mount(loading_message)
 
         # ✅ Fetch AI response asynchronously
         response = await asyncio.create_task(self.query_genai(user_message))  # ✅ Now properly awaited
 
-        # ✅ Remove Loading Indicator
-        await chat_display.remove_children()  # Clears loading message
+        # Remove loading indicator
+        await chat_display.remove_children()
 
-        # ✅ Save & Display AI Response
-        if self.active_chat_id:
-            self.chat_sessions[self.active_chat_id]["messages"].append({"role": "ai", "content": response})
-            self.save_chat_sessions()  # Save updated chat sessions
+        # Save & display the AI response
+        self.chat_sessions[self.active_chat_id]["messages"].append({"role": "ai", "content": response})
+        self.save_chat_sessions()
 
         await asyncio.create_task(self.display_chat_messages())  # Refresh chat display
+
 
     async def query_genai(self, user_input):
         """Query the AI model based on user settings asynchronously."""
@@ -201,12 +205,20 @@ class GenAITab(VerticalScroll):
         api_key = settings.get("data_sources", {}).get("genai_model", {}).get("apikey")
 
         if not api_key:
-            return "❌ Error: API key is missing!"
+            # Show a toast message instructing the user to set the API key.
+            self.app.notify(
+                "⚠ API key is missing! Please go to settings and enter your API key first. Chat will work once the key is set.",
+                severity="error"
+            )
+            # Optionally, if you have a settings screen, you could navigate to it automatically:
+            # self.app.push_screen("settings")
+            return "❌ Error: API key is missing! Please enter it in settings."
 
         if source == "gemini_api":
             return await asyncio.to_thread(self.query_gemini_direct, user_input, api_key)  # ✅ Await async function
         elif source == "openai_api":
             return await asyncio.to_thread(self.query_openai, user_input, api_key)  # ✅ Await async function
+
         else:
             return "❌ Error: Unsupported AI model."
 
