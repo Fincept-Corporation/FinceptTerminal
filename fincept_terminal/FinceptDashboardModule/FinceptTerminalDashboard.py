@@ -94,16 +94,8 @@ class FinceptTerminalDashboard(Screen):
                                 yield MarketTab()
 
                             with TabPane("World Sentiment Tracker", id="global_sentiment_tab"):
-                                yield Static("Sentiment Data of India From Different Parts", id="sentiment_text")
-
-                                # Grid container inside TabPane
-                                with Container(id="sentiment_grid"):
-                                    yield Static("Region 1: Positive", id="region_1")
-                                    yield Static("Region 2: Neutral", id="region_2")
-                                    yield Static("Region 3: Negative", id="region_3")
-                                    yield Static("Region 4: Mixed", id="region_4")
-                                    yield Static("Region 5: Mixed", id="region_5")
-                                    yield Static("Region 6: Mixed", id="region_6")
+                                from fincept_terminal.FinceptDashboardModule.FinceptTerminalSentimentTracker import YouTubeTranscriptApp
+                                yield YouTubeTranscriptApp()
 
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
