@@ -53,7 +53,7 @@ class ETFMarketTab(VerticalScroll):
             family_list = self.query_one("#family_selector", OptionList)
             family_list.clear_options()
 
-            if not self.all_families:
+            if not self.all_families or len(self.all_families) == 0:
                 self.app.notify("❌ No ETF families available.", severity="error")
                 return
 
@@ -78,6 +78,38 @@ class ETFMarketTab(VerticalScroll):
 
         self._update_pagination_controls("previous_family_page", "next_family_page",
                                          self.current_family_page, len(self.all_families))
+
+    def _get_pagination_range(self, current_page: int, items: list):
+        """
+        Calculate the start and end indices for paginated items.
+
+        Args:
+            current_page (int): The current page number.
+            items (list): The full list of items to paginate.
+
+        Returns:
+            tuple: (start_index, end_index) for slicing the list.
+        """
+        start_index = current_page * self.ITEMS_PER_PAGE
+        end_index = min(start_index + self.ITEMS_PER_PAGE, len(items))
+        return start_index, end_index
+
+    def _update_pagination_controls(self, prev_button_id: str, next_button_id: str, current_page: int,
+                                    total_items: int):
+        """
+        Enable or disable pagination buttons based on the current page.
+
+        Args:
+            prev_button_id (str): ID of the previous page button.
+            next_button_id (str): ID of the next page button.
+            current_page (int): The current page number.
+            total_items (int): The total number of items in the list.
+        """
+        prev_button = self.query_one(f"#{prev_button_id}", Button)
+        next_button = self.query_one(f"#{next_button_id}", Button)
+
+        prev_button.disabled = current_page == 0  # Disable if on the first page
+        next_button.disabled = (current_page + 1) * self.ITEMS_PER_PAGE >= total_items  # Disable if on the last page
 
     async def populate_etf_list(self, family):
         """Fetch and populate ETFs for a selected ETF family asynchronously."""

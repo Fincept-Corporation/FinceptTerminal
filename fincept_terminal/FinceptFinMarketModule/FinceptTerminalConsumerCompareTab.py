@@ -204,9 +204,9 @@ class ComparisonAnalysisTab(Container):
         button_id = event.button.id
 
         if button_id == "portfolio_analyze_button":
-            await self.process_portfolio_comparison()
+            await asyncio.create_task(self.process_portfolio_comparison())
         elif button_id == "index_analyze_button":
-            await self.process_index_comparison()
+            await asyncio.create_task(self.process_index_comparison())
         elif button_id == "index_trend_visualize":
             await self.visualize_index_trend("^GSPC")
         elif button_id == "stock_analyze_button":
@@ -251,7 +251,7 @@ class ComparisonAnalysisTab(Container):
             )
 
         # Load only the specified portfolios from settings
-        portfolios = self.load_portfolios_from_settings(portfolio_names)
+        portfolios = await asyncio.to_thread(self.load_portfolios_from_settings, portfolio_names)
         portfolios = {key.lower(): value for key, value in portfolios.items()}
 
         for name in portfolio_names:
@@ -283,8 +283,8 @@ class ComparisonAnalysisTab(Container):
                     total_invested += quantity * avg_price
 
                     # Fetch stock historical data
-                    stock = yf.Ticker(symbol)
-                    stock_history = stock.history(period="1y")["Close"]
+                    stock = await asyncio.to_thread(yf.Ticker, symbol)
+                    stock_history = (await asyncio.to_thread(stock.history, period="1y"))["Close"]
                     if stock_history.empty:
                         continue
 
@@ -297,7 +297,7 @@ class ComparisonAnalysisTab(Container):
                     portfolio_weights.append(quantity * avg_price)
 
                     # Sector allocation
-                    stock_info = stock.info
+                    stock_info = await asyncio.to_thread(lambda: stock.info)
                     sector = stock_info.get("sector", "Others")
                     sector_allocation[sector] = sector_allocation.get(sector, 0) + quantity * avg_price
                 except Exception as e:
@@ -342,9 +342,11 @@ class ComparisonAnalysisTab(Container):
                 )
 
                 # Add risk metrics
-                # Fetch Benchmark Data
+                # Fetch Benchmark Data NOTE "NSEI IS EXPLICITLY CHOSEN AS A BENCHMARK"
                 try:
-                    benchmark = yf.Ticker("^GSPC").history(period="1y")["Close"].pct_change().dropna()
+                    benchmark = await asyncio.to_thread(
+                        lambda: yf.Ticker("^NSEI").history(period="1y")["Close"].pct_change().dropna()
+                    )
                     if benchmark.empty:
                         print("Benchmark data is empty.")
                         alpha, beta = "N/A", "N/A"
@@ -526,8 +528,8 @@ class ComparisonAnalysisTab(Container):
         for index in indices:
             try:
                 # Fetch historical data for the index
-                index_ticker = yf.Ticker(index)
-                index_data = index_ticker.history(period="1y")
+                index_ticker = await asyncio.to_thread(yf.Ticker, index)
+                index_data = await asyncio.to_thread(lambda: index_ticker.history(period="1y"))
 
                 # Skip if no data
                 if index_data.empty:
@@ -586,10 +588,10 @@ class ComparisonAnalysisTab(Container):
             self.query_one(f"#{table_id}", DataTable).clear()
 
         # Analyze stocks
-        await self.basic_analysis(stocks)
-        await self.intermediate_analysis(stocks)
-        await self.advanced_analysis(stocks)
-        await self.performance_over_time_analysis(stocks)
+        await asyncio.create_task(self.basic_analysis(stocks))
+        await asyncio.create_task(self.intermediate_analysis(stocks))
+        await asyncio.create_task(self.advanced_analysis(stocks))
+        await asyncio.create_task(self.performance_over_time_analysis(stocks))
 
     async def basic_analysis(self, stocks):
         """Perform detailed basic stock analysis."""
@@ -608,7 +610,7 @@ class ComparisonAnalysisTab(Container):
 
         for stock in stocks:
             try:
-                ticker = yf.Ticker(stock)
+                ticker = await asyncio.to_thread(yf.Ticker, stock)
                 info = ticker.info
                 table.add_row(
                     stock,
@@ -640,7 +642,7 @@ class ComparisonAnalysisTab(Container):
 
         for stock in stocks:
             try:
-                ticker = yf.Ticker(stock)
+                ticker = await asyncio.to_thread(yf.Ticker, stock)
                 info = ticker.info
                 table.add_row(
                     stock,
@@ -674,8 +676,8 @@ class ComparisonAnalysisTab(Container):
         for stock in stocks:
             try:
                 # Fetch stock data
-                stockticker = yf.Ticker(stock)
-                stock_data = stockticker.history(period="2y")
+                stockticker = await asyncio.to_thread(yf.Ticker, stock)
+                stock_data = await asyncio.to_thread(lambda: stockticker.history(period="2y"))
                 if stock_data.empty or "Close" not in stock_data.columns:
                     table.add_row(stock, "No Data", "No Data", "No Data", "No Data", "No Data", "No Data", "No Data")
                     continue
@@ -698,8 +700,8 @@ class ComparisonAnalysisTab(Container):
                 )  # Assume 2% minimum return for Sortino
 
                 # Estimate Alpha and Beta (requires a market benchmark, e.g., S&P 500)
-                benchmark_data_ticker = yf.Ticker("^GSPC")
-                benchmark_data = benchmark_data_ticker.history(period="1y")  # S&P 500 as benchmark
+                benchmark_data_ticker = await asyncio.to_thread(yf.Ticker, "^NSEI")
+                benchmark_data = await asyncio.to_thread(lambda: benchmark_data_ticker.history(period="1y"))  # S&P 500 as benchmark
                 benchmark_data["Daily Return"] = benchmark_data["Close"].pct_change().dropna()
 
                 if not benchmark_data["Daily Return"].empty:
@@ -740,8 +742,8 @@ class ComparisonAnalysisTab(Container):
         for stock in stocks:
             try:
                 # Fetch stock data
-                stockticker = yf.Ticker(stock)
-                stock_data = stockticker.history(period="2y")
+                stockticker = await asyncio.to_thread(yf.Ticker, stock)
+                stock_data = await asyncio.to_thread(lambda: stockticker.history(period="2y"))
                 if stock_data.empty or "Close" not in stock_data.columns:
                     table.add_row(stock, "No Data", "No Data", "No Data")
                     continue

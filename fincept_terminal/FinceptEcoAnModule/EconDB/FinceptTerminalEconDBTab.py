@@ -373,6 +373,7 @@ class EconomyInDetailTab(VerticalScroll):
     async def on_show(self):
         """Triggered when the tab becomes visible. Loads country data if not already loaded."""
         if not self.countries:
+            self.loading = True
             await self.load_countries()
 
     async def load_countries(self):
@@ -391,6 +392,8 @@ class EconomyInDetailTab(VerticalScroll):
             self.notify("✅ Loaded countries successfully.")
         except requests.RequestException as e:
             self.query_one("#country_header", Static).update(f"Error loading countries: {e}")
+        finally:
+            self.loading = False
 
     def display_countries(self):
         """Display the current page of countries in the OptionList."""
@@ -641,8 +644,8 @@ class EconomyInDetailTab(VerticalScroll):
 
                 # Dynamically determine column structure
                 date_column = "Date"
-                bar_columns = [code for code, name in columns.items() if "Mn." in name]  # Detect bar series
-                line_columns = [code for code, name in columns.items() if "%" in name]  # Detect line series
+                bar_columns = [code for code, name in columns.items() if "MON" in code]
+                line_columns = [code for code, name in columns.items() if "PCT" in code]  # Detect line series
 
                 # 🛠 Reset DataTable columns dynamically
                 data_table.columns.clear()
