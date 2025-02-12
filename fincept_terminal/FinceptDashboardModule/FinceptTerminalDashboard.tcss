@@ -328,7 +328,9 @@ Button:hover {
     width: 20%;
     border: red;
 }
-
 DataTable {
     border: heavy white;
+}
+#page_indicator{
+    width: 7%;
 }
