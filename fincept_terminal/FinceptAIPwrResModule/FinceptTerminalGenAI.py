@@ -3,6 +3,7 @@ from textual.widgets import Static, OptionList, Button, Input
 import json
 import os
 import uuid
+import asyncio
 
 from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import get_settings_path
 SETTINGS_FILE = get_settings_path()
@@ -90,7 +91,7 @@ class GenAITab(VerticalScroll):
             return
 
         self.active_chat_id = chat_id  # Set the active chat session
-        await self.display_chat_messages()
+        await asyncio.create_task(self.display_chat_messages())
 
     async def display_chat_messages(self):
         """Display messages for the active chat session with sent/received formatting."""
@@ -120,12 +121,12 @@ class GenAITab(VerticalScroll):
                     Static(f"[bold red]Unknown:[/bold red] {content}", classes="unknown-message")
                 )
 
-        self.app.refresh()  # Refresh the UI to update the display
+        chat_display.scroll_end(animate=False)
 
     async def on_button_pressed(self, event):
         """Handle button clicks for chat actions."""
         if event.button.id == "send_chat":
-            await self.process_chat_message()
+            await asyncio.create_task(self.process_chat_message())
         elif event.button.id == "new_chat":
             self.create_new_chat()
         elif event.button.id == "delete_chat":
@@ -171,21 +172,21 @@ class GenAITab(VerticalScroll):
             self.app.notify("Please enter a message!", severity="warning")
             return
 
+        # ✅ Store & Display User's Message Immediately
+        if self.active_chat_id:
+            self.chat_sessions[self.active_chat_id]["messages"].append({"role": "user", "content": user_message})
+            await asyncio.create_task(self.display_chat_messages())  # Update chat UI
         # Check if an active chat session exists
         if not self.active_chat_id:
             self.app.notify("No active chat session. Please create or select a chat first.", severity="warning")
             return
 
-        # Store & display the user's message
-        self.chat_sessions[self.active_chat_id]["messages"].append({"role": "user", "content": user_message})
-        await self.display_chat_messages()
-
         # Display loading indicator
         loading_message = Static("[italic magenta]Generating response...[/italic magenta]")
         await chat_display.mount(loading_message)
 
-        # Fetch AI response asynchronously
-        response = await self.query_genai(user_message)
+        # ✅ Fetch AI response asynchronously
+        response = await asyncio.create_task(self.query_genai(user_message))  # ✅ Now properly awaited
 
         # Remove loading indicator
         await chat_display.remove_children()
@@ -194,7 +195,8 @@ class GenAITab(VerticalScroll):
         self.chat_sessions[self.active_chat_id]["messages"].append({"role": "ai", "content": response})
         self.save_chat_sessions()
 
-        await self.display_chat_messages()
+        await asyncio.create_task(self.display_chat_messages())  # Refresh chat display
+
 
     async def query_genai(self, user_input):
         """Query the AI model based on user settings asynchronously."""
@@ -213,9 +215,10 @@ class GenAITab(VerticalScroll):
             return "❌ Error: API key is missing! Please enter it in settings."
 
         if source == "gemini_api":
-            return await self.query_gemini_direct(user_input, api_key)
+            return await asyncio.to_thread(self.query_gemini_direct, user_input, api_key)  # ✅ Await async function
         elif source == "openai_api":
-            return await self.query_openai(user_input, api_key)
+            return await asyncio.to_thread(self.query_openai, user_input, api_key)  # ✅ Await async function
+
         else:
             return "❌ Error: Unsupported AI model."
 
@@ -239,7 +242,7 @@ class GenAITab(VerticalScroll):
             self.app.notify(f"❌ Error parsing settings.json: {e}", severity="error")
             return {}
 
-    async def query_gemini_direct(self, user_input, api_key):
+    def query_gemini_direct(self, user_input, api_key):
         """Query Gemini AI."""
         try:
             import google.generativeai as genai
@@ -250,7 +253,7 @@ class GenAITab(VerticalScroll):
         except Exception as e:
             return f"Error querying Gemini: {str(e)}"
 
-    async def query_openai(self, user_input, api_key):
+    def query_openai(self, user_input, api_key):
         """Query OpenAI API."""
         try:
             from openai import OpenAI

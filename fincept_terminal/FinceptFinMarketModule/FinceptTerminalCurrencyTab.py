@@ -116,6 +116,38 @@ class CurrencyForexTab(VerticalScroll):
         self._update_pagination_controls("previous_pair_page", "next_pair_page",
                                          self.current_pair_page, len(self.all_currency_pairs))
 
+    def _get_pagination_range(self, current_page: int, items: list):
+        """
+        Calculate the start and end indices for paginated items.
+
+        Args:
+            current_page (int): The current page number.
+            items (list): The full list of items to paginate.
+
+        Returns:
+            tuple: (start_index, end_index) for slicing the list.
+        """
+        start_index = current_page * self.ITEMS_PER_PAGE
+        end_index = min(start_index + self.ITEMS_PER_PAGE, len(items))
+        return start_index, end_index
+
+    def _update_pagination_controls(self, prev_button_id: str, next_button_id: str, current_page: int,
+                                    total_items: int):
+        """
+        Enable or disable pagination buttons based on the current page.
+
+        Args:
+            prev_button_id (str): ID of the previous page button.
+            next_button_id (str): ID of the next page button.
+            current_page (int): The current page number.
+            total_items (int): The total number of items in the list.
+        """
+        prev_button = self.query_one(f"#{prev_button_id}", Button)
+        next_button = self.query_one(f"#{next_button_id}", Button)
+
+        prev_button.disabled = current_page == 0  # Disable if on the first page
+        next_button.disabled = (current_page + 1) * self.ITEMS_PER_PAGE >= total_items  # Disable if on the last page
+
     def fetch_base_currencies(self):
         """Fetch available base currencies synchronously (executed in a separate thread)."""
         try:
