@@ -57,6 +57,7 @@ class DataGovINtab(VerticalScroll):
     async def on_mount(self):
         """Called when the component is mounted; initialize the metadata."""
         self.app.notify("Initializing DataGovIndia Tab...")
+        self.loading = True
         asyncio.create_task(self.initialize_metadata())
 
     async def initialize_metadata(self):
@@ -95,10 +96,12 @@ class DataGovINtab(VerticalScroll):
 
             self.resources = resources
             self.current_resource_page = 0
-            await self.display_resources()
+            asyncio.create_task(self.display_resources())
 
         except Exception as e:
             self.app.notify(f"Error initializing metadata: {e}", severity="error")
+        finally:
+            self.loading = False
 
     async def validate_api_key(self) -> str:
         """
@@ -194,14 +197,14 @@ class DataGovINtab(VerticalScroll):
         if button_id == "next_resource_page":
             if (self.current_resource_page + 1) * self.items_per_page < len(self.resources):
                 self.current_resource_page += 1
-                await self.display_resources()
+                asyncio.create_task(self.display_resources())
             else:
                 self.app.notify("No more resources to display.", severity="warning")
 
         elif button_id == "previous_resource_page":
             if self.current_resource_page > 0:
                 self.current_resource_page -= 1
-                await self.display_resources()
+                asyncio.create_task(self.display_resources())
             else:
                 self.app.notify("Already at the first page of resources.", severity="warning")
 
@@ -232,8 +235,9 @@ class DataGovINtab(VerticalScroll):
             resource_id = parts[1]
             self.current_resource_id = resource_id
             self.app.notify(f"Selected Resource ID: {resource_id}", severity="information")
-            await self.fetch_and_display_resource_info(resource_id)
-            await self.fetch_and_display_resource_data(resource_id)
+            self.loading = True
+            await asyncio.create_task(self.fetch_and_display_resource_info(resource_id))
+            await asyncio.create_task(self.fetch_and_display_resource_data(resource_id))
 
     async def fetch_and_display_resource_info(self, resource_id: str):
         """
@@ -276,7 +280,7 @@ class DataGovINtab(VerticalScroll):
         try:
             datagovin = DataGovIndia(api_key=self.api_key, db_path=DB_PATH)
             self.app.notify(f"Fetching data for Resource ID: {resource_id}...", severity="information")
-            # Limit to first 5 rows for display
+            # Limit to first 10 rows for display
             data = datagovin.get_data(resource_id, limit=10)
             if data is None or data.empty:
                 self.app.notify(f"No data available for Resource ID: {resource_id}", severity="warning")
@@ -296,6 +300,8 @@ class DataGovINtab(VerticalScroll):
             self.app.notify(f"Resource data fetched successfully for Resource ID: {resource_id}", severity="information")
         except Exception as e:
             self.app.notify(f"Error fetching resource data: {e}", severity="error")
+        finally:
+            self.loading = False
 
     async def download_resource_data(self, resource_id: str, output_file: str) -> bool:
         """

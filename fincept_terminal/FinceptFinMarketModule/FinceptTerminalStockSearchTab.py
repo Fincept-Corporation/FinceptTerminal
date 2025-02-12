@@ -3,6 +3,7 @@ from textual.widgets import Static, Input, Button, TabPane, TabbedContent, DataT
 from textual.app import ComposeResult
 import yfinance as yf
 import pandas as pd
+import asyncio
 
 class StockTrackerTab(Container):
     """Stock Tracker Interface with Multiple Analysis Sub-Tabs"""
@@ -51,35 +52,35 @@ class StockTrackerTab(Container):
             if not ticker:
                 self.app.notify("Please enter a valid stock ticker!", severity="error")
                 return
-            await self._fetch_stock_data(ticker)
+            await asyncio.create_task(self._fetch_stock_data(ticker))
             self.app.notify(f"Fetching data for {ticker}...", severity="information")
 
 
     async def _fetch_stock_data(self, ticker: str):
         """Fetch stock data and update tables."""
-        stock = yf.Ticker(ticker)
+        stock = await asyncio.to_thread(yf.Ticker, ticker)
 
         try:
             # ✅ Fetch all data
-            info = stock.info
-            history = stock.history(period="1y")
-            financials = stock.financials
-            balance_sheet = stock.balance_sheet
+            info = stock.info  # Direct dictionary access, no threading needed
+            history = await asyncio.to_thread(stock.history, period="1y")  # Fetch historical data
+            financials = stock.financials  # Direct access, no threading needed
+            balance_sheet = stock.balance_sheet  # Direct access, no threading needed
             cashflow = stock.cashflow
 
             # ✅ Populate all tables
-            await self._populate_info_table(info)
-            await self._populate_technical_table(history)
-            await self._populate_financial_table(financials, balance_sheet, cashflow)
-            await self._populate_quant_table(history)
-            await self._populate_news_table(ticker)
+            await asyncio.to_thread(self._populate_info_table, info)
+            await asyncio.to_thread(self._populate_technical_table, history)
+            await asyncio.to_thread(self._populate_financial_table, financials, balance_sheet, cashflow)
+            await asyncio.to_thread(self._populate_quant_table, history)
+            await asyncio.create_task(self._populate_news_table(ticker))
 
             self.app.notify(f"Data fetched successfully for {ticker}!")
 
         except Exception as e:
             self.app.notify(f"Error fetching data: {e}", severity="error")
 
-    async def _populate_info_table(self, info):
+    def _populate_info_table(self, info):
         """Populate the stock information table."""
         table = self.query_one("#stock_info_table", DataTable)
         table.clear()
@@ -90,7 +91,7 @@ class StockTrackerTab(Container):
         for key, value in info.items():
             table.add_row(str(key), str(value))
 
-    async def _populate_technical_table(self, history):
+    def _populate_technical_table(self, history):
         """Calculate and populate technical indicators."""
         if history.empty:
             self.app.notify("No historical data available!", severity="warning")
@@ -117,7 +118,7 @@ class StockTrackerTab(Container):
         table.add_row("MACD", f"{history['MACD'].iloc[-1]:.2f}")
         table.add_row("Signal Line", f"{history['Signal'].iloc[-1]:.2f}")
 
-    async def _populate_financial_table(self, financials, balance_sheet, cashflow):
+    def _populate_financial_table(self, financials, balance_sheet, cashflow):
         """Update the Financials Subtab with data for financials, balance sheet, and cashflow."""
 
         # Populate Financials Table
@@ -191,7 +192,7 @@ class StockTrackerTab(Container):
 
         self.app.notify("Financial data updated successfully!")
 
-    async def _populate_quant_table(self, history):
+    def _populate_quant_table(self, history):
         """Perform and display quantitative analysis (Sharpe Ratio & Volatility)."""
         if history.empty:
             self.app.notify("No historical data available for quantitative analysis!", severity="warning")
@@ -231,7 +232,7 @@ class StockTrackerTab(Container):
         try:
             from gnews import GNews
             news = GNews()
-            news_results = news.get_news(ticker)
+            news_results = await asyncio.to_thread(news.get_news, ticker)
 
             if not news_results:
                 self.app.notify(f"⚠ No news found for {ticker}.", severity="warning")
