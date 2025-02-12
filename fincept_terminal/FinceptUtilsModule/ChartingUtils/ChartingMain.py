@@ -29,22 +29,6 @@ class ChartRenderer:
         return self.save_chart(fig, filename)
 
     def generate_multi_bar_chart(self, filename, categories, series_data, title="Multi-Bar Chart"):
-        """
-        Generate and save a Multi-Series Bar Chart.
-
-        Args:
-            filename (str): The output HTML filename.
-            categories (list): The x-axis categories (e.g., years, regions).
-            series_data (dict): A dictionary where keys are series names and values are lists of values.
-
-        Example:
-            categories = ["2018", "2019", "2020"]
-            series_data = {
-                "Product A": [10, 20, 30],
-                "Product B": [15, 25, 35],
-                "Product C": [5, 15, 25]
-            }
-        """
         fig = go.Figure()
 
         # Add multiple bar series
