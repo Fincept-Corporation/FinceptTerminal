@@ -1,10 +1,11 @@
+import asyncio
+import json
 import logging
-from textual.containers import VerticalScroll, Container
-from textual.app import ComposeResult
-from textual.widgets import Static, Input, Button, DataTable
-import json, os
-
+import os
 from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.utils.config import API_KEY
+from textual.app import ComposeResult
+from textual.containers import VerticalScroll, Container
+from textual.widgets import Static, Input, Button, DataTable
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Current file's directory
 SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
@@ -32,7 +33,7 @@ class AIAgentsTab(VerticalScroll):
     async def on_button_pressed(self, event):
         """Handle button press for running AI agents."""
         if event.button.id == "run_agents":
-            await self.run_ai_agents()
+            await asyncio.create_task(self.run_ai_agents())
 
     def fetch_genai_api_key(self):
         """Fetch the GenAI API key from settings.json."""
@@ -64,7 +65,7 @@ class AIAgentsTab(VerticalScroll):
         await display_area.mount(loading_message)
 
         # Run AI analysis
-        self.analysis_results = await self.execute_agents(stock_symbol)
+        self.analysis_results = await asyncio.create_task(self.execute_agents(stock_symbol))
 
         # Remove loading indicator and display results
         await display_area.remove_children()
@@ -96,7 +97,7 @@ class AIAgentsTab(VerticalScroll):
         # Run Sentiment Analysis
         from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.sentiment_agent import SentimentAgent
         sentiment_agent = SentimentAgent(api_key=api_key)
-        sentiment_result = sentiment_agent.analyze_sentiment("Company posted robust quarterly earnings.")
+        sentiment_result = await asyncio.to_thread(sentiment_agent.analyze_sentiment, "Company posted robust quarterly earnings.")
 
         state["data"]["analyst_signals"]["sentiment_agent"] = {
             ticker: {"signal": "bullish" if "Positive" in sentiment_result["sentiment"] else "neutral",
@@ -107,7 +108,7 @@ class AIAgentsTab(VerticalScroll):
         # Fetch Historical Data
         from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.data.data_acquisition import \
             get_historical_data
-        hist_df = get_historical_data(ticker, start_date, end_date)
+        hist_df = await asyncio.to_thread(get_historical_data, ticker, start_date, end_date)
         if hist_df is None or hist_df.empty:
             self.logger.error("No historical data found for %s", ticker)
             return None
@@ -118,22 +119,21 @@ class AIAgentsTab(VerticalScroll):
         # Run AI Agents
         from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.fundamentals_agent import \
             fundamentals_agent
-        state = fundamentals_agent(state)
+        state = await asyncio.to_thread(fundamentals_agent, state)
         from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.valuation_agent import valuation_agent
-        state = valuation_agent(state)
+        state = await asyncio.to_thread(valuation_agent, state)
         from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.technical_analyst import \
             technical_analyst_agent
-        state = technical_analyst_agent(state)
+        state = await asyncio.to_thread(technical_analyst_agent, state)
         from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.risk_manager import \
             risk_management_agent
-        state = risk_management_agent(state)
+        state = await asyncio.to_thread(risk_management_agent, state)
 
         # Run Portfolio Management
         from fincept_terminal.FinceptAIPwrResModule.ai_hedge_fund.agents.portfolio_manager import \
             PortfolioManagementAgent
         portfolio_manager = PortfolioManagementAgent(api_key=api_key)
-        final_state = portfolio_manager.make_decision(state)
-
+        final_state = await asyncio.to_thread(portfolio_manager.make_decision, state)
         return final_state["data"]["analyst_signals"]
 
 
