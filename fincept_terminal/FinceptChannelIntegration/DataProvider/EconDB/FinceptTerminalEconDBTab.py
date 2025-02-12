@@ -35,7 +35,7 @@ class MainIndicatorTab(VerticalScroll):
             with TabPane("Latest Data"):
                 # DataTable to display economic indicators
                 yield DataTable(name="Economic Indicators", id="economic_data_table")
-            with TabPane("Historical Data",classes="history_data_tab"):
+            with TabPane("Historical Data", classes="history_data_tab"):
                 with Container(classes="history_data_container"):
                     yield DataTable(name="Monthly Data", id="monthly_data_table")
                     yield DataTable(name="Quarterly Data", id="quarterly_data_table")

@@ -162,12 +162,21 @@ class AIAgentsTab(VerticalScroll):
 
             # Populate the table with results
             for stock_symbol, details in agent_data.items():
-                for key, value in details.items():
-                    if isinstance(value, dict):  # Handle nested dictionaries
-                        for sub_key, sub_value in value.items():
-                            data_table.add_row(f"{key} → {sub_key}", str(sub_value))
-                    else:
-                        data_table.add_row(key, str(value))
+                for stock_symbol, details in agent_data.items():
+                    for key, value in details.items():
+                        if isinstance(value, dict):  # Handle first-level nested dictionaries
+                            for sub_key, sub_value in value.items():
+                                if isinstance(sub_value, dict):  # Handle second-level nested dictionaries
+                                    for inner_key, inner_value in sub_value.items():
+                                        if isinstance(inner_value, dict):  # Handle third-level nested dictionaries
+                                            formatted_values = ", ".join(f"{k}: {v}" for k, v in inner_value.items())
+                                            data_table.add_row(f"{key} → {sub_key} → {inner_key}", formatted_values)
+                                        else:
+                                            data_table.add_row(f"{key} → {sub_key} → {inner_key}", str(inner_value))
+                                else:
+                                    data_table.add_row(f"{key} → {sub_key}", str(sub_value))
+                        else:
+                            data_table.add_row(key, str(value))
 
             # Mount the table to the display area
             await display_area.mount(data_table)

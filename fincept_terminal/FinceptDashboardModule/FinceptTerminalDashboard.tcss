@@ -18,7 +18,7 @@ Screen {
     background: #1c1c1c; /* Charcoal black for header */
     color: #ffa500; /* Orange text for header title */
     border: round #333333; /* Slightly lighter border for the header */
-    width: 95%;
+    width: 100%;
 }
 
 .separator {
@@ -260,8 +260,8 @@ Button:hover {
 
 #datagovin_container{
     layout: grid;
-    grid-size: 2 2;
-    grid-rows: 1fr 1fr;
+    grid-size: 2 1;
+    grid-rows: 1fr;
     grid-columns: 30% 70%;
 }
 .settings_save_paste{
@@ -269,7 +269,6 @@ Button:hover {
 }
 
 .resource_collapsible{
-    row-span: 2;
     height:100%
 }
 .horizontal_next_previous{
