@@ -1,10 +1,14 @@
 from textual.screen import Screen
 from textual.app import ComposeResult
-from textual.widgets import Static, Button, Header
+from textual.widgets import Static, Button, Header, Footer
 from textual.containers import Horizontal, VerticalScroll, Container
 from datetime import datetime
-
+from textual.binding import Binding
 from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import clear_user_data
+
+BINDINGS = [
+    Binding(key="q", action="quit", description="Quit the app"),
+]
 
 
 class WelcomeScreen(Screen):
@@ -147,6 +151,9 @@ class WelcomeScreen(Screen):
                     yield Button("Login", id="fincept-button-login", classes="fincept-button")
                     yield Button("Guest User", id="fincept-button-guest", classes="fincept-button")
                     yield Button("Register", id="fincept-button-register", classes="fincept-button")
+
+            yield Footer()
+
 
     async def on_button_pressed(self, event: Button.Pressed):
         """Handle button presses."""

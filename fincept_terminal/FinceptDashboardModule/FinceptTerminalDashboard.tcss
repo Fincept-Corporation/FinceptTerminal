@@ -12,7 +12,6 @@ Screen {
     width: 100%;
 }
 
-
 .header {
     column-span: 3; /* Header spans all columns */
     background: #1c1c1c; /* Charcoal black for header */
