@@ -1,9 +1,15 @@
 import asyncio
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.screen import Screen
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.widgets import Static, Link, DataTable, Header, TabbedContent, TabPane, Footer, Markdown, Button
 import sys, os
+
+
+BINDINGS = [
+    Binding(key="q", action="quit", description="Quit the app"),
+]
 
 class FinceptTerminalDashboard(Screen):
     """Main Dashboard Screen."""
