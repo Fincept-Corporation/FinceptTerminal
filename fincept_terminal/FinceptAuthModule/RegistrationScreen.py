@@ -5,6 +5,18 @@ from fincept_terminal.FinceptAuthModule.authentication import register_user, ver
 from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import save_user_data
 import asyncio
 
+import warnings
+import logging
+
+# Suppress all FutureWarnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+# Optionally, suppress warnings from specific libraries
+logging.getLogger("yfinance").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+logging.getLogger("asyncio").setLevel(logging.ERROR)
+
+
 class RegistrationScreen(Screen):
     """Screen for user registration."""
 
