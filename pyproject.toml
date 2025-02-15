@@ -1,6 +1,6 @@
 [project]
 name = "fincept-terminal"
-version = "1.0.3"
+version = "1.0.4"
 description = "A Terminal for Financial Market Analysis and Fetching all kinds of Data."
 readme = "README.md"
 authors = [
@@ -20,12 +20,11 @@ dependencies = [
   "requests>=2.31.0,<2.33.0",
   "textual==1.0.0",
   "pandas>=2.1.0,<3.0.0",
-  "numpy==1.24.0",
+  "numpy>=2.0.0,<3.0.0",  # Updated to support Python 3.12
   "matplotlib==3.9.0",
   "plotly==5.15.0",
   "sqlalchemy==2.0.34",
   "psycopg2==2.9.6",
-  "fastapi==0.115.6",
 ]
 
 [project.optional-dependencies]
