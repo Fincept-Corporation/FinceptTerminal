@@ -103,12 +103,17 @@ class FinceptTerminalDashboard(Screen):
                 with TabbedContent(initial="world-tracker"):
                     with TabPane("World Tracker", id="world-tracker"):
                         # **Nested TabbedContent inside "World Tracker"**
-                        with TabbedContent(initial="world_market_tracker"):
+                        with TabbedContent(initial="world_market_trackers"):
 
-                            with TabPane("World Market Tracker", id="world_market_tracker"):
+                            with TabPane("World Market Tracker", id="world_market_trackers"):
                                 from fincept_terminal.FinceptDashboardModule.FinceptTerminalWorldMarketTracker import \
                                     MarketTab
                                 yield MarketTab()
+
+                            with TabPane("Watchlist", id="dashboard_watchlist"):
+                                from fincept_terminal.FinceptDashboardModule.FinceptWatchlist import \
+                                    WatchlistApp
+                                yield WatchlistApp()
 
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
