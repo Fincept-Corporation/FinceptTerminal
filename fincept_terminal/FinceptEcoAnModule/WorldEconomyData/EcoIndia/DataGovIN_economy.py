@@ -66,7 +66,7 @@ class DataGovINtab(VerticalScroll):
     async def on_mount(self):
         """Called when the component is mounted; initialize the metadata."""
         self.app.notify("Initializing DataGovIndia Tab...")
-        self.loading = True
+        #self.loading = True
         asyncio.create_task(self.initialize_metadata())
 
     async def initialize_metadata(self):
@@ -109,8 +109,8 @@ class DataGovINtab(VerticalScroll):
 
         except Exception as e:
             self.app.notify(f"Error initializing metadata: {e}", severity="error")
-        finally:
-            self.loading = False
+        # finally:
+        #     self.loading = False
 
     async def validate_api_key(self) -> str:
         """
