@@ -26,7 +26,7 @@ class DataGovINtab(VerticalScroll):
         self.api_key = None
         self.resources = []  # List of resources (each a dict with title and resource_id)
         self.current_resource_page = 0
-        self.items_per_page = 7
+        self.items_per_page = 5
         self.current_resource_id = None  # Tracks the resource currently selected
 
     def compose(self) -> ComposeResult:
@@ -43,15 +43,24 @@ class DataGovINtab(VerticalScroll):
                         yield Button("Previous Resources", id="previous_resource_page", variant="default")
                         yield Button("Next Resources", id="next_resource_page", variant="default")
 
-        # Section for displaying general resource information
-            with Container(id="Resource_Information", classes="Resource_Information"):
+            # Section for displaying general resource information
+            with VerticalScroll(id="Resource_Information", classes="Resource_Information"):
                 yield Static("Resource Info", classes="header")
-                yield DataTable(id="resource_info_table", name="Resource Info")
 
-        # Section for displaying sample resource data
-            with VerticalScroll(id="Resource_Data", classes="Resource_Data"):
+                # ✅ Placeholder message for Resource Info
+                resource_info_table = DataTable(id="resource_info_table", name="Resource Info")
+                resource_info_table.add_column("Message")
+                resource_info_table.add_row("No resource selected. Please choose a resource.")
+                yield resource_info_table
+
                 yield Static("Resource Data", classes="header")
-                yield DataTable(id="resource_data_table", name="Resource Data")
+
+                # ✅ Placeholder message for Resource Data
+                resource_data_table = DataTable(id="resource_data_table", name="Resource Data")
+                resource_data_table.add_column("Message")
+                resource_data_table.add_row("No resource selected. Please choose a resource.")
+                yield resource_data_table
+
                 yield Button("Download Data", id="download_data", variant="primary")
 
     async def on_mount(self):
@@ -183,6 +192,9 @@ class DataGovINtab(VerticalScroll):
             # Format the option as "Resource Title - Resource_ID"
             option_text = f"{resource['title']} - {resource['resource_id']}"
             resource_list.add_option(option_text)
+            # ✅ Add a separator after each resource, except for the last one
+            if i < len(page_resources) - 1:
+                resource_list.add_option("────────────────────────────────────────")
 
         self.app.notify(
             f"Showing resources {start_index + 1} to {min(end_index, len(self.resources))} of {len(self.resources)}"
@@ -243,21 +255,31 @@ class DataGovINtab(VerticalScroll):
         """
         Fetch resource information and display it in the Resource Information table.
         """
+        data_table = self.query_one("#resource_info_table", DataTable)
+        data_table.clear()
+
+        if not resource_id:
+            # ✅ Show placeholder message when no resource is selected
+            data_table.add_column("Message")
+            data_table.add_row("No resource selected. Please choose a resource.")
+            return
+
         try:
             datagovin = DataGovIndia(api_key=self.api_key, db_path=DB_PATH)
             self.app.notify(f"Fetching info for Resource ID: {resource_id}...", severity="information")
             resource_info = await asyncio.to_thread(datagovin.get_resource_info, resource_id)
+
             if not resource_info:
                 self.app.notify(f"No information found for Resource ID: {resource_id}", severity="warning")
                 return
 
-            data_table = self.query_one("#resource_info_table", DataTable)
+            # ✅ Ensure proper table structure for actual data
             data_table.clear()
-            if not data_table.columns:
-                data_table.add_column("Attribute")
-                data_table.add_column("Value")
+            data_table.columns.clear()  # Remove the placeholder column before adding new ones
 
-            # Display general resource info (skip the "field" details)
+            data_table.add_column("Attribute")
+            data_table.add_column("Value")
+
             for key, value in resource_info.items():
                 if key == "field":
                     continue
@@ -269,35 +291,45 @@ class DataGovINtab(VerticalScroll):
                     value = "N/A"
                 data_table.add_row(str(key), str(value))
 
-            self.app.notify(f"Resource info fetched successfully for Resource ID: {resource_id}", severity="information")
+            self.app.notify(f"✅ Resource info fetched successfully for Resource ID: {resource_id}",
+                            severity="information")
+
         except Exception as e:
-            self.app.notify(f"Error fetching resource info: {e}", severity="error")
+            self.app.notify(f"⚠️ Error fetching resource info: {e}", severity="error")
 
     async def fetch_and_display_resource_data(self, resource_id: str):
         """
         Fetch resource data (sample rows) and display it in the Resource Data table.
         """
+        data_table = self.query_one("#resource_data_table", DataTable)
+        data_table.clear()
+
+        if not resource_id:
+            # ✅ Show placeholder message when no resource is selected
+            data_table.add_column("Message")
+            data_table.add_row("No resource selected. Please choose a resource.")
+            return
+
         try:
             datagovin = DataGovIndia(api_key=self.api_key, db_path=DB_PATH)
             self.app.notify(f"Fetching data for Resource ID: {resource_id}...", severity="information")
-            # Limit to first 10 rows for display
             data = datagovin.get_data(resource_id, limit=10)
+
             if data is None or data.empty:
                 self.app.notify(f"No data available for Resource ID: {resource_id}", severity="warning")
                 return
 
-            data_table = self.query_one("#resource_data_table", DataTable)
+            # ✅ Clear and update the table with actual data
             data_table.clear()
-            # Create columns based on the DataFrame
             for col in data.columns:
                 data_table.add_column(str(col))
 
-            # Add rows (only the first 5 rows)
             for _, row in data.head(10).iterrows():
                 row_values = [str(item) for item in row.tolist()]
                 data_table.add_row(*row_values)
 
-            self.app.notify(f"Resource data fetched successfully for Resource ID: {resource_id}", severity="information")
+            self.app.notify(f"Resource data fetched successfully for Resource ID: {resource_id}",
+                            severity="information")
         except Exception as e:
             self.app.notify(f"Error fetching resource data: {e}", severity="error")
         finally:
