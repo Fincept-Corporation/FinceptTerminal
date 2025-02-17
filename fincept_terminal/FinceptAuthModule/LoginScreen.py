@@ -100,16 +100,20 @@ class LoginScreen(Screen):
             self.app.notify(f"Error: Login failed: {e}", severity="error")
             return
 
-        # Check if the login response indicates a successful login
-        if login_response.get("message") != "Login successful":
+        # Handle a response with an API key (successful login without MFA)
+        if "api_key" in login_response:
+            save_user_data({
+                "email": email,
+                "api_key": login_response["api_key"]
+            })
+            self.app.notify("Success: Login successful!", severity="information")
+            await self.app.push_screen("dashboard")
+        # Handle MFA (if you adjust your API to return a flag like mfa_required)
+        elif login_response.get("mfa_required"):
+            self.app.notify("Info: 2FA required. OTP sent to your secondary email.", severity="information")
+            # TODO: Push a 2FA verification screen here
+        # Fallback: show error details
+        else:
             error_detail = login_response.get("detail", "Unknown error occurred during login.")
             self.app.notify(f"Error: Login failed: {error_detail}", severity="error")
-            return
 
-        # Save user data (you may choose to save additional details if available)
-        save_user_data({
-            "email": email,
-        })
-
-        self.app.notify("Success: Login successful!", severity="information")
-        await self.app.push_screen("dashboard")
