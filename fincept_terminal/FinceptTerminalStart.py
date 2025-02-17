@@ -1,5 +1,6 @@
 from textual.app import App
 from textual.containers import Container
+from textual.widgets import Footer
 
 from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import ensure_settings_file
 

@@ -1,9 +1,26 @@
 import asyncio
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.screen import Screen
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.widgets import Static, Link, DataTable, Header, TabbedContent, TabPane, Footer, Markdown, Button
 import sys, os
+import warnings
+import logging
+
+# Suppress all FutureWarnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+# Optionally, suppress warnings from specific libraries
+logging.getLogger("yfinance").setLevel(logging.ERROR)
+logging.getLogger("urllib3").setLevel(logging.ERROR)
+logging.getLogger("asyncio").setLevel(logging.ERROR)
+
+
+
+BINDINGS = [
+    Binding(key="q", action="quit", description="Quit the app"),
+]
 
 class FinceptTerminalDashboard(Screen):
     """Main Dashboard Screen."""
@@ -86,13 +103,13 @@ class FinceptTerminalDashboard(Screen):
                 with TabbedContent(initial="world-tracker"):
                     with TabPane("World Tracker", id="world-tracker"):
                         # **Nested TabbedContent inside "World Tracker"**
-                        with TabbedContent(initial="world_market_tracker"):
+                        with TabbedContent(initial="world_market_trackers"):
 
-                            with TabPane("World Market Tracker", id="world_market_tracker"):
+                            with TabPane("World Market Tracker", id="world_market_trackers"):
                                 from fincept_terminal.FinceptDashboardModule.FinceptTerminalWorldMarketTracker import \
                                     MarketTab
                                 yield MarketTab()
-
+                                
                             with TabPane("World Sentiment Tracker", id="global_sentiment_tab"):
                                 from fincept_terminal.FinceptDashboardModule.FinceptTerminalSentimentTracker import YouTubeTranscriptApp
                                 yield YouTubeTranscriptApp()
@@ -100,6 +117,11 @@ class FinceptTerminalDashboard(Screen):
                             with TabPane("Stock Tracker", id="stock_tracker"):
                                 from fincept_terminal.FinceptDashboardModule.FinceptTerminalStockTracker import StockTrackerTab
                                 yield StockTrackerTab()
+                
+                            with TabPane("Watchlist", id="dashboard_watchlist"):
+                                from fincept_terminal.FinceptDashboardModule.FinceptWatchlist import \
+                                    WatchlistApp
+                                yield WatchlistApp()
 
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
