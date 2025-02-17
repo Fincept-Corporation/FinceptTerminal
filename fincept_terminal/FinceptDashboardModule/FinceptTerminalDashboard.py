@@ -97,6 +97,10 @@ class FinceptTerminalDashboard(Screen):
                                 from fincept_terminal.FinceptDashboardModule.FinceptTerminalSentimentTracker import YouTubeTranscriptApp
                                 yield YouTubeTranscriptApp()
 
+                            with TabPane("Stock Tracker", id="stock_tracker"):
+                                from fincept_terminal.FinceptDashboardModule.FinceptTerminalStockTracker import StockTrackerTab
+                                yield StockTrackerTab()
+
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
                         with TabbedContent():
@@ -178,6 +182,10 @@ class FinceptTerminalDashboard(Screen):
                         yield PortfolioTab()
                     with TabPane("Edu. & Resources", id="edu-resources"):
                         yield Markdown("# Educational & Resources Content")
+
+                    with TabPane("Forum", id="forum"):
+                        from fincept_terminal.FinceptForumModule.FinceptTerminalGlobalForumTab import ForumTab
+                        yield ForumTab()
                     with TabPane("Settings", id="FinceptSettingModule"):
                         from fincept_terminal.FinceptSettingModule.FinceptTerminalSettings import SettingsScreen
                         yield SettingsScreen()

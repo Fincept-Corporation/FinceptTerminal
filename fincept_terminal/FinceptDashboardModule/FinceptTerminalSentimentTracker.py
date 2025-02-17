@@ -1,5 +1,4 @@
 import asyncio
-
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll, Container
 from textual.widgets import Input, Button, OptionList, Static
