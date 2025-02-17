@@ -54,6 +54,7 @@ class WelcomeScreen(Screen):
 
     #fincept-registration-container {
         width: 40%;
+        content-align: center middle;
         align: center middle;
         padding: 10;
         border: solid orange;

@@ -333,3 +333,20 @@ DataTable {
 #page_indicator{
     width: 7%;
 }
+
+.forum_container{
+    layout: grid;
+    grid-size: 1 2;
+    grid-rows: 85% 15%;
+    height: 100%;
+    width: 100%;
+}
+
+.stocks_display{
+    layout: grid;
+    grid-size: 3 4;
+    grid-rows: 1fr 1fr 1fr 1fr;
+    grid-columns: 1fr 1fr 1fr;
+    height: 100%;
+    width: 100%;
+}
