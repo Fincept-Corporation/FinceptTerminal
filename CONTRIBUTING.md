@@ -20,6 +20,12 @@ Hey there, awesome developer! 👋 Want to make Fincept Terminal even cooler? We
    - Connect stock brokers so users can **buy/sell directly** from the terminal.  
    - Work on **country-specific broker plugins**.
 
+📖 **Fincept Docs**
+
+   - Create and maintain comprehensive documentation for Fincept Terminal.
+   - Cover installation, API usage, troubleshooting, and developer guides.
+   - Keep the documentation up-to-date with new features.
+
 ---
 
 ## 🛠 How to Get Started
