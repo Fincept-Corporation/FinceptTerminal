@@ -16,8 +16,6 @@ logging.getLogger("yfinance").setLevel(logging.ERROR)
 logging.getLogger("urllib3").setLevel(logging.ERROR)
 logging.getLogger("asyncio").setLevel(logging.ERROR)
 
-
-
 BINDINGS = [
     Binding(key="q", action="quit", description="Quit the app"),
 ]

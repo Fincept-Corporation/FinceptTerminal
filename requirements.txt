@@ -3,14 +3,11 @@ PyPDF2==2.12.1
 apscheduler==3.6.3
 asyncio==3.4.3
 click==8.1.8
-dash==2.11.1
 datagovindia==1.0.2
 datetime==5.1
-empyrical==0.5.5
-fastapi==0.115.6
+empyrical-reloaded==0.5.11
 feedparser==6.0.11
 financedatabase==2.2.2
-folium==0.17.0
 fredapi==0.5.2
 fuzzywuzzy==0.18.0
 fyers_apiv3==3.1.4
@@ -44,5 +41,5 @@ typing_extensions==4.12.2
 ujson==5.10.0
 uuid==1.30
 vectorbt==0.26.1
-yfinance==0.2.34
+yfinance==0.2.54
 youtube_transcript_api==0.6.1
