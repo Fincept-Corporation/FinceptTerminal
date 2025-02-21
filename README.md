@@ -1,8 +1,5 @@
 # Fincept Terminal ✨
 
-[![FinceptTerminal on Product Hunt](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/snapshot-product-hunt-button.png)](https://www.producthunt.com/products/finceptterminal)
-
-
 [![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/yourusername/fincept-investments/blob/main/LICENSE.txt)
 [![PyPI version](https://badge.fury.io/py/fincept-terminal.svg)](https://badge.fury.io/py/fincept-terminal)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/fincept-terminal.svg)](https://pypi.org/project/fincept-terminal/)
@@ -37,7 +34,7 @@ Install the latest version of Fincept Investments from PyPI: pip install fincept
 [![Download Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/download-windows.svg)](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/Production1.0.0/FinceptInvestmentsInstaller.exe)
 
 ```toml
-pip install fincept-terminal        # easy way to get started if you have python
+pip install "fincept-terminal[all]"        # easy way to get started if you have python
 ```
 
 ## USAGE
@@ -98,10 +95,8 @@ If you encounter any issues or have suggestions, feel free to create a GitHub ti
 
 
 ## Star History
+**PLEASE STAR ⭐ THE REPO AND SHARE THE PROJECT ❤️‍🩹**
 
-**PLEASE STAR ⭐ THE REPO AND SHARE THE PROJECT ❤️‍🩹 **
-
-## Star History
 <a href="https://star-history.com/#Fincept-Corporation/FinceptTerminal&Date">
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Fincept-Corporation/FinceptTerminal&type=Date&theme=dark" />
