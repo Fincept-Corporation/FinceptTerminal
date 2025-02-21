@@ -1,6 +1,6 @@
 [project]
 name = "fincept-terminal"
-version = "1.0.4"
+version = "1.0.5"
 description = "A Terminal for Financial Market Analysis and Fetching all kinds of Data."
 readme = "README.md"
 authors = [
@@ -20,23 +20,32 @@ dependencies = [
   "requests>=2.31.0,<2.33.0",
   "textual==1.0.0",
   "pandas>=2.1.0,<3.0.0",
-  "numpy>=2.0.0,<3.0.0",  # Updated to support Python 3.12
+  "numpy>=2.0.0,<3.0.0",
   "matplotlib==3.9.0",
   "plotly==5.15.0",
   "sqlalchemy==2.0.34",
   "psycopg2==2.9.6",
+  "feedparser==6.0.11",
+  "gnews",
+  "statsmodels",
+  "quantstats",
+  "empyrical-reloaded",
+  "osmnx",
+  "shapely",
+  "PyPDF2",
+  "pdfplumber",
+  "vectorbt",
+  "fyers_apiv3",
+  "datagovindia",
+  "fredapi",
+  "openai",
+  "deep-translator",
+  "scholarly",
+  "pytest",
+  "black",
+  "flake8",
+  "parse"
 ]
-
-[project.optional-dependencies]
-news = ["gnews", "feedparser"]
-ML = ["statsmodels", "quantstats", "empyrical"]
-geo = ["osmnx", "shapely"]
-pdf = ["PyPDF2", "pdfplumber"]
-trading = ["vectorbt", "fyers_apiv3"]
-data = ["datagovindia", "fredapi"]
-AI = ["openai", "deep-translator"]
-research = ["scholarly"]
-dev = ["pytest", "black", "flake8"]
 
 [tool.setuptools.packages.find]
 where = ["."]
