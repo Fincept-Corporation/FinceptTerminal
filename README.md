@@ -34,7 +34,7 @@ Install the latest version of Fincept Investments from PyPI: pip install fincept
 [![Download Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/download-windows.svg)](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/Production1.0.0/FinceptInvestmentsInstaller.exe)
 
 ```toml
-pip install "fincept-terminal[all]"        # easy way to get started if you have python
+pip install "fincept-terminal"        # easy way to get started if you have python
 ```
 
 ## USAGE
