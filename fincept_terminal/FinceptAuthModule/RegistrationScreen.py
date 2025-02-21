@@ -1,6 +1,6 @@
 from textual.screen import Screen
-from textual.widgets import Input, Button, Static
-from textual.containers import Center, Vertical
+from textual.widgets import Input, Button, Static, Header, Footer
+from textual.containers import Vertical, Container, Horizontal
 from fincept_terminal.FinceptAuthModule.authentication import register_user, verify_otp
 from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import save_user_data
 import asyncio
@@ -19,17 +19,71 @@ logging.getLogger("asyncio").setLevel(logging.ERROR)
 
 class RegistrationScreen(Screen):
     """Screen for user registration."""
+    # def compose(self):
+    #     """Compose the registration screen layout."""
+    #     with Center():
+    #         with Container(id="fincept-registration-container"):
+    #             yield Static("Register a New User", classes="title")
+    #             yield Input(placeholder="Enter your username", id="username", classes="input-field")
+    #             yield Input(placeholder="Enter your email", id="email", classes="input-field")
+    #             yield Input(placeholder="Enter your password", id="password", password=True, classes="input-field")
+    #             yield Button("Submit", id="submit", classes="button")
+    #             yield Button("Back", id="back")
+    #             with Vertical(id="fincept-otp-container", classes="otp-section"):
+    #                 yield Static("", id="otp-message", classes="info-message")
+    #                 otp_input = Input(placeholder="Enter OTP", id="otp-input", classes="input-field")
+    #                 otp_input.styles.display = "none"  # Hide initially
+    #                 yield otp_input
+    #                 verify_button = Button("Verify OTP", id="verify-otp", classes="button")
+    #                 verify_button.styles.display = "none"  # Hide initially
+    #                 yield verify_button
+    CSS = """
+        Screen{
+            border: solid red;
+        }
+        .super_container{
+            background: #282c34;
+            align: center middle;
+        }
+        .base_container{
+            padding: 1;
+            align: center top;
+            height: 60%;
+            width: 30%;
+            border: round #ffa500;
+        }
+        .header {
+            text-align: center;
+            background: #1c1c1c; /* Charcoal black for header */
+            color: #ffa500; /* Orange text for header title */
+            border: heavy #333333; /* Slightly lighter border for the header */
+            width: 100%;
+        }
+        .submit_horizontal{
+            margin: 1;
+            width: 100%;
+            align: center top;
+        }
+        .button{
+            width: 50%;
+            border: round #ffa500;
+        }
+        .input-field{
+            border: round #ffa500
+        }
+    """
 
     def compose(self):
-        """Compose the registration screen layout."""
-        with Center():
-            with Vertical(id="fincept-registration-container"):
-                yield Static("Register a New User", classes="title")
+        yield Header()
+        with Container(classes="super_container"):
+            with Container(classes="base_container"):
+                yield Static("Register a New User", classes="header")
                 yield Input(placeholder="Enter your username", id="username", classes="input-field")
                 yield Input(placeholder="Enter your email", id="email", classes="input-field")
                 yield Input(placeholder="Enter your password", id="password", password=True, classes="input-field")
-                yield Button("Submit", id="submit", classes="button")
-                yield Button("Back", id="back")
+                with Horizontal(classes="submit_horizontal"):
+                    yield Button("Submit", id="submit", classes="button")
+                    yield Button("Back", id="back", classes="button")
                 with Vertical(id="fincept-otp-container", classes="otp-section"):
                     yield Static("", id="otp-message", classes="info-message")
                     otp_input = Input(placeholder="Enter OTP", id="otp-input", classes="input-field")
@@ -38,7 +92,7 @@ class RegistrationScreen(Screen):
                     verify_button = Button("Verify OTP", id="verify-otp", classes="button")
                     verify_button.styles.display = "none"  # Hide initially
                     yield verify_button
-
+        yield Footer()
     async def on_button_pressed(self, event: Button.Pressed):
         """Handle button presses."""
         button = event.button
