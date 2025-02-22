@@ -1,6 +1,6 @@
 [project]
 name = "fincept-terminal"
-version = "1.0.5"
+version = "1.0.6"
 description = "A Terminal for Financial Market Analysis and Fetching all kinds of Data."
 readme = "README.md"
 authors = [
