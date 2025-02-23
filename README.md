@@ -29,20 +29,43 @@
 
 ## Installation 🚀
 
-Install the latest version of Fincept Investments from PyPI: pip install fincept-investments OR Download desktop app from below !!
+### **Option 1: Install via `pip`**
+Install the latest version of Fincept Terminal from PyPI:
+```sh
+pip install fincept-terminal==1.0.8
+```
 
+### **Option 2: Using a Virtual Environment (Recommended)**
+Before installing, it's best to create a virtual environment:
+
+#### **On Windows (CMD/PowerShell)**
+```sh
+python -m venv fincept-terminal-env
+fincept-terminal-env\Scripts\activate
+```
+
+#### **On macOS/Linux**
+```sh
+python -m venv fincept-terminal-env
+source fincept-terminal-env/bin/activate
+```
+
+Once the virtual environment is activated, install Fincept Terminal:
+```sh
+pip install fincept-terminal==1.0.8
+```
+
+### **Option 3: Download the Desktop App**
 [![Download Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/download-windows.svg)](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/Production1.0.0/FinceptInvestmentsInstaller.exe)
 
-```toml
-pip install "fincept-terminal"        # easy way to get started if you have python
-```
+---
 
 ## USAGE
 
 COMMAND TO START THE TERMINAL 
 
 ```toml
-fincept          # First Command to start the Terminal
+fincept # First Command to start the Terminal
 ```
 
 ## UPCOMING FEATURS

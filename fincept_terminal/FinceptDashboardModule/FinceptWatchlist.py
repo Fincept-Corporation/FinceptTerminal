@@ -1,13 +1,10 @@
 import asyncio
-import csv
 import json
 import os
 import tempfile
 from datetime import datetime
-
 import yfinance as yf
 import mplfinance as mpf
-
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, Container
 from textual.widgets import Input, Button, DataTable
@@ -18,28 +15,7 @@ from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import ge
 
 SETTINGS_FILE = get_settings_path()
 
-
 class WatchlistApp(Container):
-    CSS = """
-    Screen {
-        align: center middle;
-    }
-    #header {
-        margin: 1 2;
-    }
-    #header Input {
-        width: 20%;
-        margin-right: 1;
-    }
-    #actions {
-        margin: 1 2;
-    }
-    #watchlist_table {
-        height: 60%;
-        width: 90%;
-        margin: 1 2;
-    }
-    """
     watchlist: dict = reactive(dict)
     settings: dict = reactive(dict)
 
@@ -102,7 +78,8 @@ class WatchlistApp(Container):
             "Ticker", "Quantity", "Avg Price", "Current Price", "Change", "Change (%)",
             "Total Value", "Alert", "Last Updated", "1d Return", "7d Return", "30d Return"
         )
-        self.query_one("#ticker_input", Input).focus()
+        # Removed the focus() call to avoid auto-switching to Watchlist tab:
+        # self.query_one("#ticker_input", Input).focus()
         self.set_interval(600, self.refresh_all_prices)
         asyncio.create_task(self.refresh_all_prices())
 
@@ -272,7 +249,6 @@ class WatchlistApp(Container):
                 title=f"{ticker} Candlestick Chart",
                 savefig=tmp_file.name,
             )
-            # Instead of a modal, simply print the file path to the console.
             print(f"Chart for {ticker} generated and saved to: {tmp_file.name}")
         except Exception as e:
             pass
@@ -322,7 +298,4 @@ class WatchlistApp(Container):
         if event.key in ("d", "delete"):
             self.handle_remove_ticker()
         if event.key == "escape":
-            # No modal to close since we removed the green status box.
             pass
-
-

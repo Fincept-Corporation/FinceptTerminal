@@ -115,11 +115,11 @@ class FinceptTerminalDashboard(Screen):
                             with TabPane("Stock Tracker", id="stock_tracker"):
                                 from fincept_terminal.FinceptDashboardModule.FinceptTerminalStockTracker import StockTrackerTab
                                 yield StockTrackerTab()
-                
-                            with TabPane("Watchlist", id="dashboard_watchlist"):
-                                from fincept_terminal.FinceptDashboardModule.FinceptWatchlist import \
-                                    WatchlistApp
+
+                            with TabPane("Watchlist", id="watchlist"):
+                                from fincept_terminal.FinceptDashboardModule.FinceptWatchlist import WatchlistApp
                                 yield WatchlistApp()
+
 
                     # Other Main Tabs
                     with TabPane("Economic Analysis", id="economic-analysis"):
