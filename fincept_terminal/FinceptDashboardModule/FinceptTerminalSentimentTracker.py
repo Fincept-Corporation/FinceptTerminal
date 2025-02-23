@@ -12,10 +12,6 @@ from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import ge
 
 SETTINGS_FILE = get_settings_path()
 
-# ✅ Load RoBERTa Model & Tokenizer
-
-
-
 class YouTubeTranscriptApp(Container):
     """Textual App to search YouTube videos, fetch transcripts, and analyze sentiment."""
     tokenizer = AutoTokenizer.from_pretrained("cardiffnlp/twitter-roberta-base-sentiment")
