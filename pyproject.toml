@@ -1,6 +1,6 @@
 [project]
 name = "fincept-terminal"
-version = "1.0.6"
+version = "1.0.7"
 description = "A Terminal for Financial Market Analysis and Fetching all kinds of Data."
 readme = "README.md"
 authors = [
@@ -24,7 +24,7 @@ dependencies = [
   "matplotlib==3.9.0",
   "plotly==5.15.0",
   "sqlalchemy==2.0.34",
-  "psycopg2==2.9.6",
+  "psycopg2-binary==2.9.10",
   "feedparser==6.0.11",
   "gnews",
   "statsmodels",
