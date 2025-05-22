@@ -6,7 +6,7 @@ import json
 import torch
 import google.generativeai as gemai
 from youtube_search import YoutubeSearch
-from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from fincept_terminal.FinceptSettingModule.FinceptTerminalSettingUtils import get_settings_path
 
@@ -103,6 +103,8 @@ class YouTubeTranscriptApp(Container):
     async def get_transcript(self, video_id):
         """Fetch transcript for a given video ID with enhanced error handling."""
         try:
+            # pre-check for transcript before fetching(can also raise exceptions).
+            transcripts = await asyncio.to_thread(YouTubeTranscriptApi.list_transcripts, video_id)
             # ✅ Fetch transcript asynchronously using a thread
             transcript_data = await asyncio.to_thread(YouTubeTranscriptApi.get_transcript, video_id)
 
@@ -115,9 +117,21 @@ class YouTubeTranscriptApp(Container):
             self.app.notify("✅ Transcript fetched successfully!", severity="success")
             return transcript_text
 
+        except TranscriptsDisabled:
+            # checks if the subtitles are disabled for the video or not.
+            self.app.notify("⚠ Subtitles are disabled for this video.", severity="warning")
+            return "⚠ Transcript not available (Subtitles are disabled)."
+        except NoTranscriptFound:
+            # checks whether teh transcript is there or not.
+            self.app.notify("⚠ No transcript found for this video.", severity="warning")
+            return "⚠ Transcript not available."
+        except VideoUnavailable:
+            # checks if the video is available or not (like, having age restriction).
+            self.app.notify("❌ This video is unavailable.", severity="error")
+            return "⚠ Video is unavailable."
         except Exception as e:
             # ✅ Catch unexpected errors and notify user
-            self.app.notify(f"⚠ Error fetching transcript: {e}", severity="error")
+            self.app.notify(f"❌ Unexpected error fetching transcript: {e}", severity="error")
             return "⚠ Transcript not available."
 
     async def display_sentiment_report(self, text):
