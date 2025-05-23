@@ -1,0 +1,5 @@
+*.zip filter=lfs diff=lfs merge=lfs -text
+src-tauri/resources/bun-macos/bun filter=lfs diff=lfs merge=lfs -text
+src-tauri/resources/bun-linux/bun filter=lfs diff=lfs merge=lfs -text
+fincept-terminal-desktop/src-tauri/resources/bun-linux/bun filter=lfs diff=lfs merge=lfs -text
+fincept-terminal-desktop/src-tauri/resources/bun-macos/bun filter=lfs diff=lfs merge=lfs -text
