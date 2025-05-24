@@ -1,6 +1,6 @@
 [project]
 name = "fincept-terminal"
-version = "1.0.8"
+version = "1.0.9"
 description = "A Terminal for Financial Market Analysis and Fetching all kinds of Data."
 readme = "README.md"
 authors = [
@@ -28,17 +28,17 @@ dependencies = [
   "feedparser==6.0.11",
   "mplfinance",
   "pyperclip",
-  "financedatabase==2.2.2",
+  "financedatabase>=2.2.3,<2.3.0",
   "fredapi==0.5.2",
   "fuzzywuzzy==0.18.0",
   "fyers_apiv3==3.1.4",
   "gnews==0.3.7",
   "deep-translator",
   "httpx>=0.23.0,<1",
-  "matplotlib==3.9.0",
+  "matplotlib==3.9.1,<4.0",
   "numpy==1.26.4",
   "openai==1.58.1",
-  "osmnx==1.9.4",
+  "osmnx==2.0.3",
   "packaging==24.1",
   "transformers==4.49.0",
   "pandas>=2.1.0,<3.0.0",
