@@ -1,6 +1,6 @@
 [project]
 name = "fincept-terminal"
-version = "1.0.9"
+version = "1.0.10"
 description = "A Terminal for Financial Market Analysis and Fetching all kinds of Data."
 readme = "README.md"
 authors = [
@@ -20,56 +20,55 @@ dependencies = [
   "IPython==8.29.0",
   "PyPDF2==2.12.1",
   "apscheduler==3.6.3",
-  "asyncio==3.4.3",
+  # Removed asyncio - it's part of Python standard library since 3.4
   "click==8.1.8",
   "datagovindia==1.0.2",
-  "datetime==5.1",
+  # Removed datetime - it's part of Python standard library
   "empyrical-reloaded==0.5.11",
   "feedparser==6.0.11",
-  "mplfinance",
-  "pyperclip",
+  "mplfinance>=0.12.0",
+  "pyperclip==1.9.0",  # Removed duplicate, kept the newer version
   "financedatabase>=2.2.3,<2.3.0",
   "fredapi==0.5.2",
   "fuzzywuzzy==0.18.0",
   "fyers_apiv3==3.1.4",
   "gnews==0.3.7",
-  "deep-translator",
+  "deep-translator>=1.9.0",
   "httpx>=0.23.0,<1",
-  "matplotlib==3.9.1,<4.0",
-  "numpy==1.26.4",
-  "openai==1.58.1",
-  "osmnx==2.0.3",
-  "packaging==24.1",
-  "transformers==4.49.0",
-  "pandas>=2.1.0,<3.0.0",
+  "matplotlib>=3.5.0,<4.0",  # Made more flexible to avoid conflicts
+  "numpy>=1.21.0,<2.0.0",    # Made more flexible for better compatibility
+  "openai>=1.50.0,<2.0.0",   # Made more flexible
+  "osmnx>=1.6.0,<3.0.0",     # Made more flexible
+  "packaging>=20.0",
+  "transformers>=4.30.0,<5.0.0",  # Made more flexible
+  "pandas>=2.0.0,<3.0.0",    # Adjusted minimum version
   "parse==1.19.0",
   "passlib==1.7.4",
   "pdfplumber==0.11.4",
-  "plotly==5.15.0",
+  "plotly>=5.0.0,<6.0.0",    # Made more flexible
   "psycopg2-binary==2.9.10",
-  "pydantic==2.10.5",
+  "pydantic>=2.0.0,<3.0.0",  # Made more flexible
   "pygad==3.3.1",
-  "quantstats==0.0.64",
-  "requests>=2.31.0,<2.33.0",
-  "pyperclip==1.9.0",
+  "quantstats>=0.0.60",      # Made more flexible
+  "requests>=2.31.0,<3.0.0", # Extended upper bound
   "scholarly==1.7.11",
-  "shapely==2.0.7",
-  "sqlalchemy==2.0.34",
-  "statsmodels==0.14.4",
+  "shapely>=2.0.0,<3.0.0",   # Made more flexible
+  "sqlalchemy>=2.0.0,<3.0.0", # Made more flexible
+  "statsmodels>=0.14.0,<1.0.0", # Made more flexible
   "tabulate==0.9.0",
-  "textual==1.0.0",
-  "tqdm==4.64.0",
-  "typer==0.9.4",
-  "typing_extensions==4.12.2",
-  "ujson==5.10.0",
-  "uuid==1.30",
-  "torch==2.6.0",
-  "vectorbt==0.26.1",
-  "yfinance==0.2.54",
+  "textual>=0.40.0,<2.0.0",  # Made more flexible
+  "tqdm>=4.60.0",             # Made more flexible
+  "typer>=0.9.0,<1.0.0",     # Made more flexible
+  "typing_extensions>=4.0.0", # Made more flexible
+  "ujson>=5.0.0,<6.0.0",     # Made more flexible
+  # Removed uuid - it's part of Python standard library
+  "torch>=2.0.0,<3.0.0",     # Made more flexible for better compatibility
+  "vectorbt>=0.25.0,<1.0.0", # Made more flexible
+  "yfinance>=0.2.0,<1.0.0",  # Made more flexible
   "youtube-search==2.1.2",
   "youtube_transcript_api==0.6.1",
-  "setuptools==75.8.0",
-  "google-generativeai==0.8.4",
+  "setuptools>=65.0.0",      # Made more flexible
+  "google-generativeai>=0.8.0,<1.0.0",  # Made more flexible
 ]
 
 [tool.setuptools.packages.find]
