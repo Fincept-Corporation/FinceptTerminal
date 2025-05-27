@@ -35,15 +35,30 @@ Screen {
     max-height: 100%;
 }
 
-.sidebar Button {
-    background: #2a2a2a; /* Dark gray button background */
-    text-align: center;
+
+.sidebar .sidebar-button {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
     color: #e0e0e0; /* Light gray text for buttons */
 }
 
-.sidebar Button:hover {
+.sidebar .sidebar-button-active {
+    background: #e0e0e0;
+    color: #1e1e1e;
+    border: none;
+}
+
+.sidebar .sidebar-button:hover {
     background: #ffa500; /* Bright orange hover */
     color: #121212; /* Dark text for hover contrast */
+}
+
+/* had to override the default behaviour of focus event by textual. */
+.sidebar .sidebar-button:focus,
+.sidebar .sidebar-button-active:focus {
+    text-style: bold;
 }
 
 /* Main Content Layout */
