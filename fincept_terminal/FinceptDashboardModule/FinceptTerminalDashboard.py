@@ -4,6 +4,7 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.widgets import Static, Link, DataTable, Header, TabbedContent, TabPane, Footer, Markdown, Button
+from textual import log, on
 import sys, os
 import warnings
 import logging
@@ -27,12 +28,32 @@ class FinceptTerminalDashboard(Screen):
     BASE_DIR = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
     CSS_PATH = os.path.join(BASE_DIR, "FinceptTerminalDashboard.tcss")
 
+    SIDEBAR_TAB_MAPPING = {
+        "world_tracker": "world-tracker",                    
+        "economic_analysis": "economic-analysis",
+        "financial_markets": "financial-markets",
+        "ai_powered_research": "ai-research",
+        "finscript": "finscript",
+        "portfolio_management": "portfolio-management",      
+        "edu_resources": "edu-resources",
+        "forum": "forum",
+        "settings": "FinceptSettingModule",
+        "help_about": "help-about",
+        # "terminal_docs": "terminal_docs"      # External link, not a TabPane
+    }
+
+    # To work with tab to sidebar mapping.
+    TAB_TO_BUTTON_MAPPING = {v: k for k, v in SIDEBAR_TAB_MAPPING.items()}
+
     def __init__(self):
         super().__init__()
         from fincept_terminal.FinceptNewsModule.FinceptTerminalNewsFooter import NewsManager
         self.news_manager = NewsManager()
         from fincept_terminal.FinceptUtilsModule.DashboardUtils.RotatingTickerUtil import AsyncRotatingStockTicker
         self.ticker = AsyncRotatingStockTicker()
+
+        # Track the currently active button
+        self.active_button_id = "world_tracker"  # Default active button
 
     def compose(self) -> ComposeResult:
         """Compose the professional dashboard layout."""
@@ -42,63 +63,35 @@ class FinceptTerminalDashboard(Screen):
         with Container(id="dashboard-grid"):
             # Sidebar
             with VerticalScroll(id="sidebar-scroll", classes="sidebar"):
-                yield Static("Menu not Working")
+                # yield Static("Menu not Working")
                 yield Static("-------------------")
-                yield Link("Overview", url="#", tooltip="Go to Overview", id="overview")
+                yield Button("World Tracker", id="world_tracker", classes="sidebar-button sidebar-button-active")
                 yield Static("-------------------")
-                yield Link("Balance Sheet", url="#", tooltip="View Balance Sheet", id="balance_sheet")
+                yield Button("Economic Analysis", id="economic_analysis", classes="sidebar-button")
                 yield Static("-------------------")
-                yield Link("Cash Flow", url="#", tooltip="View Cash Flow", id="cash_flow")
+                yield Button("Financial Markets", id="financial_markets", classes="sidebar-button")
                 yield Static("-------------------")
-                yield Link("Aging Report", url="#", tooltip="View Aging Report", id="aging_report")
+                yield Button("AI-Powered Research", id="ai_powered_research", classes="sidebar-button")
                 yield Static("-------------------")
-                yield Link("Forecasting", url="#", tooltip="View Forecasting", id="forecasting")
+                yield Button("FinScript", id="finscript", classes="sidebar-button")
+                yield Static("-------------------")
+                yield Button("Portfolio Management", id="portfolio_management", classes="sidebar-button")
+                yield Static("-------------------")
+                yield Button("Edu. & Resources", id="edu_resources", classes="sidebar-button")
+                yield Static("-------------------")
+                yield Button("Forum", id="forum", classes="sidebar-button")
+                yield Static("-------------------")
+                yield Button("Settings", id="settings", classes="sidebar-button")
+                yield Static("-------------------")
+                yield Button("Help & About", id="help_about", classes="sidebar-button")
                 yield Static("-------------------")
                 yield Link("Terminal Docs", url="https://docs.fincept.in/", tooltip="View Scenario Analysis",
-                           id="scenario")
-                yield Static("-------------------")
-
-                # 15 Additional Dummy Options
-                yield Link("Market Insights", url="#", tooltip="Latest Market Insights", id="market_insights")
-                yield Static("-------------------")
-                yield Link("Economic Calendar", url="#", tooltip="View Upcoming Economic Events",
-                           id="economic_calendar")
-                yield Static("-------------------")
-                yield Link("Technical Indicators", url="#", tooltip="Explore Technical Indicators",
-                           id="technical_indicators")
-                yield Static("-------------------")
-                yield Link("Stock Screeners", url="#", tooltip="Find the Best Stocks", id="stock_screeners")
-                yield Static("-------------------")
-                yield Link("AI Market Predictions", url="#", tooltip="AI-driven Market Trends",
-                           id="ai_market_predictions")
-                yield Static("-------------------")
-                yield Link("Risk Analysis", url="#", tooltip="Assess Market Risks", id="risk_analysis")
-                yield Static("-------------------")
-                yield Link("Sector Performance", url="#", tooltip="Track Sector-Wise Performance",
-                           id="sector_performance")
-                yield Static("-------------------")
-                yield Link("Top Gainers & Losers", url="#", tooltip="Daily Market Movers", id="top_gainers_losers")
-                yield Static("-------------------")
-                yield Link("Crypto Market", url="#", tooltip="Latest Crypto Trends", id="crypto_market")
-                yield Static("-------------------")
-                yield Link("Commodities", url="#", tooltip="Gold, Silver, Oil & More", id="commodities")
-                yield Static("-------------------")
-                yield Link("Forex Rates", url="#", tooltip="Live Currency Exchange Rates", id="forex_rates")
-                yield Static("-------------------")
-                yield Link("ETF Analysis", url="#", tooltip="Track Exchange-Traded Funds", id="etf_analysis")
-                yield Static("-------------------")
-                yield Link("Options & Derivatives", url="#", tooltip="View Derivatives Data", id="options_derivatives")
-                yield Static("-------------------")
-                yield Link("Market Sentiment", url="#", tooltip="Track Investor Sentiment", id="market_sentiment")
-                yield Static("-------------------")
-                yield Link("Global Indices", url="#", tooltip="World Stock Market Indices", id="global_indices")
-                yield Static("-------------------")
-                yield Link("News & Reports", url="#", tooltip="Financial News & Reports", id="news_reports")
+                           id="terminal_docs")
                 yield Static("-------------------")
 
             # Main Content Inside TabbedContent
             with Container(classes="main-content"):
-                with TabbedContent(initial="world-tracker"):
+                with TabbedContent(initial="world-tracker", id="main-tabs"):
                     with TabPane("World Tracker", id="world-tracker"):
                         # **Nested TabbedContent inside "World Tracker"**
                         with TabbedContent(initial="world_market_trackers"):
@@ -234,7 +227,55 @@ class FinceptTerminalDashboard(Screen):
         # 3) Start auto-refresh
         asyncio.create_task(self.news_manager.auto_refresh_news(self))
         asyncio.create_task(self.ticker.refresh_stock_data_periodically())
+    
 
+    def update_sidebar_button_state(self, new_active_button_id):
+        """Update the visual state of sidebar buttons - only one active at a time."""
+        # Remove active class from the previously active button
+        if self.active_button_id:
+            prev_button = self.query_one(f"#{self.active_button_id}", Button)
+            prev_button.remove_class("sidebar-button-active")
+        
+            # Add active class to the new active button
+            new_button = self.query_one(f"#{new_active_button_id}", Button)
+            new_button.add_class("sidebar-button-active")
+        
+        # Update the tracked active button
+        self.active_button_id = new_active_button_id
+
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle sidebar button presses for tab switching."""
+        button_id = event.button.id
+        
+        # Get the corresponding tab ID from the mapping
+        if button_id in self.SIDEBAR_TAB_MAPPING:
+            tab_id = self.SIDEBAR_TAB_MAPPING[button_id]
+
+            # Update button visual states
+            self.update_sidebar_button_state(button_id)
+
+            # switch the tab
+            await self.action_switch_tab(tab_id)
+
+    @on(TabbedContent.TabActivated, "#main-tabs")
+    def on_tab_activated(self, event) -> None:
+        """Update sidebar when main tab is changed via TabbedContent."""
+        # if event.tab.parent.id == "main-tabs":
+        tab_id = event.pane.id
+        button_id = self.TAB_TO_BUTTON_MAPPING[tab_id]
+
+        if button_id:
+            self.update_sidebar_button_state(button_id)
+
+
+    async def action_switch_tab(self, tab_id: str) -> None:
+        """Activates the tab-pane as per the sidebar click."""
+        main_content = self.query_one("#main-tabs", TabbedContent)
+        if main_content:
+            main_content.active = tab_id
+        else:
+            log("Main TabbedContent not found")
 
 
 if __name__ == "__main__":
