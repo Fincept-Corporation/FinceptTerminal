@@ -32,6 +32,7 @@ class FinceptTerminalDashboard(Screen):
         "world_tracker": "world-tracker",                    
         "economic_analysis": "economic-analysis",
         "financial_markets": "financial-markets",
+        "market_prediction": "market-prediction",
         "ai_powered_research": "ai-research",
         "finscript": "finscript",
         "portfolio_management": "portfolio-management",      
@@ -70,6 +71,8 @@ class FinceptTerminalDashboard(Screen):
                 yield Button("Economic Analysis", id="economic_analysis", classes="sidebar-button")
                 yield Static("-------------------")
                 yield Button("Financial Markets", id="financial_markets", classes="sidebar-button")
+                yield Static("-------------------")
+                yield Button("Market Prediction", id="market_prediction", classes="sidebar-button")
                 yield Static("-------------------")
                 yield Button("AI-Powered Research", id="ai_powered_research", classes="sidebar-button")
                 yield Static("-------------------")
@@ -171,6 +174,12 @@ class FinceptTerminalDashboard(Screen):
                                         yield ComparisonAnalysisTab()
 
 
+                    with TabPane("Market Prediction", id="market-prediction"):
+                        with TabbedContent():
+                            with TabPane("Stock Prediction"):
+                                from fincept_terminal.FinceptMarketPredictionModule.FinceptTerminalPredictor import PredictorTab
+                                yield PredictorTab()
+
 
                     with TabPane("AI-Powered Research", id="ai-research"):
                         with TabbedContent():
@@ -244,7 +253,7 @@ class FinceptTerminalDashboard(Screen):
         self.active_button_id = new_active_button_id
 
 
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
+    def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle sidebar button presses for tab switching."""
         button_id = event.button.id
         
@@ -256,7 +265,7 @@ class FinceptTerminalDashboard(Screen):
             self.update_sidebar_button_state(button_id)
 
             # switch the tab
-            await self.action_switch_tab(tab_id)
+            self.action_switch_tab(tab_id)
 
     @on(TabbedContent.TabActivated, "#main-tabs")
     def on_tab_activated(self, event) -> None:
@@ -269,7 +278,7 @@ class FinceptTerminalDashboard(Screen):
             self.update_sidebar_button_state(button_id)
 
 
-    async def action_switch_tab(self, tab_id: str) -> None:
+    def action_switch_tab(self, tab_id: str) -> None:
         """Activates the tab-pane as per the sidebar click."""
         main_content = self.query_one("#main-tabs", TabbedContent)
         if main_content:
