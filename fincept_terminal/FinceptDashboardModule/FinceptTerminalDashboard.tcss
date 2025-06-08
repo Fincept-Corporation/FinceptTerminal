@@ -364,3 +364,19 @@ DataTable {
     height: 100%;
     width: 100%;
 }
+
+
+
+#predictor_buttons_section {
+    height: auto;
+}
+
+#predictor_result_section {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#results_log {
+    height: 100%;
+}
