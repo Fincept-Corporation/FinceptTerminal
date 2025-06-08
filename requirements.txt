@@ -49,3 +49,4 @@ vectorbt==0.26.1
 yfinance==0.2.54
 youtube_transcript_api==0.6.1
 youtube-search==2.1.2
+pyqlib==0.9.6
