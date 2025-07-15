@@ -9,7 +9,7 @@ authors = [
 
 license = { text = "MIT" }
 
-requires-python = ">=3.8"
+requires-python = ">=3.11,<3.14"
 
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -20,14 +20,11 @@ dependencies = [
   "IPython==8.29.0",
   "PyPDF2==2.12.1",
   "apscheduler==3.6.3",
-  # Removed asyncio - it's part of Python standard library since 3.4
   "click==8.1.8",
   "datagovindia==1.0.2",
-  # Removed datetime - it's part of Python standard library
-  "empyrical-reloaded==0.5.11",
   "feedparser==6.0.11",
   "mplfinance>=0.12.0",
-  "pyperclip==1.9.0",  # Removed duplicate, kept the newer version
+  "pyperclip==1.9.0",
   "financedatabase>=2.2.3,<2.3.0",
   "fredapi==0.5.2",
   "fuzzywuzzy==0.18.0",
@@ -36,7 +33,7 @@ dependencies = [
   "deep-translator>=1.9.0",
   "httpx>=0.23.0,<1",
   "matplotlib>=3.5.0,<4.0",  # Made more flexible to avoid conflicts
-  "numpy>=1.21.0,<2.0.0",    # Made more flexible for better compatibility
+  "numpy>=1.23.5,<2.0.0",    # Made more flexible for better compatibility
   "openai>=1.50.0,<2.0.0",   # Made more flexible
   "osmnx>=1.6.0,<3.0.0",     # Made more flexible
   "packaging>=20.0",
@@ -55,14 +52,11 @@ dependencies = [
   "shapely>=2.0.0,<3.0.0",   # Made more flexible
   "sqlalchemy>=2.0.0,<3.0.0", # Made more flexible
   "statsmodels>=0.14.0,<1.0.0", # Made more flexible
-  "tabulate==0.9.0",
-  "textual>=0.40.0,<2.0.0",  # Made more flexible
   "tqdm>=4.60.0",             # Made more flexible
+  "dearpygui==2.0.0",
   "typer>=0.9.0,<1.0.0",     # Made more flexible
   "typing_extensions>=4.0.0", # Made more flexible
   "ujson>=5.0.0,<6.0.0",     # Made more flexible
-  # Removed uuid - it's part of Python standard library
-  "torch>=2.0.0,<3.0.0",     # Made more flexible for better compatibility
   "vectorbt>=0.25.0,<1.0.0", # Made more flexible
   "yfinance>=0.2.0,<1.0.0",  # Made more flexible
   "youtube-search==2.1.2",
