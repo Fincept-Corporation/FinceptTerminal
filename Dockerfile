@@ -1,7 +1,7 @@
 # Use the official Python image with Python 3.11
 FROM python:3.11-slim
 
-# set gdal version as some packages requires gdal.
+# Set GDAL version (used by osmnx, shapely, etc.)
 ENV GDAL_VERSION=3.6.3
 
 # Set environment variables
@@ -9,16 +9,10 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/finceptTerminal
 
-# Set the working directory
-WORKDIR /app/finceptTerminal
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
-# Install system dependencies for psycopg2, mysqlclient, and other build tools
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     gdal-bin \
@@ -28,26 +22,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     build-essential \
     pkg-config \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    qt5-default \
+    libqt5webkit5-dev \
+    libqt5webengine5 \
+    libqt5webenginewidgets5 \
+    curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements file
-COPY requirements.txt .
+# Install PDM for pyproject.toml-based builds
+RUN pip install --no-cache-dir pdm
 
+# Copy pyproject and lock file (if exists)
+COPY pyproject.toml ./
+COPY pdm.lock ./
 
-# Remove 'pywin32' from requirements.txt and install dependencies
-RUN grep -v 'pywin32' requirements.txt > filtered-requirements.txt && \
-    pip install --no-cache-dir -r filtered-requirements.txt
+# Install dependencies with PDM (without dev-deps)
+RUN pdm install --no-editable --prod
 
-RUN pip install --no-cache-dir -r requirements.txt
-
-
-# Copy the rest of the application code
+# Copy the entire project
 COPY . .
 
-# Specify the command to run your application
-
-CMD ["python", "fincept_terminal/cli.py"]
-
-CMD ["python", "-m", "fincept_terminal.FinceptTerminalStart"]
-
+# Default command to run the app
+CMD ["pdm", "run", "python", "-m", "fincept_terminal.FinceptTerminalStart"]
