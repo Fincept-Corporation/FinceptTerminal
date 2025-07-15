@@ -1,4 +1,4 @@
-from base_tab import BaseTab
+from fincept_terminal.Utils.base_tab import BaseTab
 import yfinance as yf
 import pandas as pd
 import json
