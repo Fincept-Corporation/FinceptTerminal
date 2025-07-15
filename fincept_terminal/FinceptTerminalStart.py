@@ -42,7 +42,6 @@ def safe_import_tab(tab_name, module_name, class_name):
         return None
 
 
-
 # Import tabs safely
 TAB_IMPORTS = [
     ("Dashboard", "fincept_terminal.DashBoard.dashboard_tab", "DashboardTab"),
@@ -50,7 +49,7 @@ TAB_IMPORTS = [
     ("Rss Tab", "rss_tab", "RssTab"),
     ("analytics", "analytics_tab", "AnalyticsTab"),
     ("Portfolio", "portfolio_tab", "PortfolioTab"),
-    ("Watchlist", "watchlist_tab", "WatchlistTab"),
+    ("Watchlist", "fincept_terminal.DashBoard.WatchListTab.watchlist_tab", "WatchlistTab"),
     ("database", "database_tab", "DatabaseTab"),
     ("fyers", "fyers_tab", "FyersTab"),
     #("Technicals", "technical_tab", "TechnicalAnalysisTab"),
