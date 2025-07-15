@@ -34,7 +34,6 @@ RUN pip install --no-cache-dir pdm
 
 # Copy pyproject and lock file (if exists)
 COPY pyproject.toml ./
-COPY pdm.lock ./
 
 # Install dependencies with PDM (without dev-deps)
 RUN pdm install --no-editable --prod
