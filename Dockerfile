@@ -1,18 +1,14 @@
 # Use the official Python image with Python 3.11
 FROM python:3.11-slim
 
-# Set GDAL version (used by osmnx, shapely, etc.)
 ENV GDAL_VERSION=3.6.3
-
-# Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app/finceptTerminal
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (REMOVED qt5-default)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     gdal-bin \
@@ -22,24 +18,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     build-essential \
     pkg-config \
-    qt5-default \
     libqt5webkit5-dev \
     libqt5webengine5 \
     libqt5webenginewidgets5 \
     curl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install PDM for pyproject.toml-based builds
+# Install PDM for pyproject.toml-based dependency management
 RUN pip install --no-cache-dir pdm
 
-# Copy pyproject and lock file (if exists)
+# Copy pyproject only
 COPY pyproject.toml ./
 
-# Install dependencies with PDM (without dev-deps)
+# Install dependencies via PDM
 RUN pdm install --no-editable --prod
 
-# Copy the entire project
+# Copy the full project
 COPY . .
 
-# Default command to run the app
+# Run the app
 CMD ["pdm", "run", "python", "-m", "fincept_terminal.FinceptTerminalStart"]
