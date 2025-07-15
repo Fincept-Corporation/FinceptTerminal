@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir pdm
 
 # Copy pyproject only
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 
 # Install dependencies via PDM
 RUN pdm install --no-editable --prod
