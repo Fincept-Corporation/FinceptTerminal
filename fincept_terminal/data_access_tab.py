@@ -2,7 +2,7 @@ import dearpygui.dearpygui as dpg
 import requests
 import json
 from datetime import datetime
-from base_tab import BaseTab
+from fincept_terminal.Utils.base_tab import BaseTab
 
 
 class DataAccessTab(BaseTab):

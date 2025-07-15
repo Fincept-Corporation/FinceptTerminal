@@ -6,7 +6,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 import json
-from base_tab import BaseTab
+from fincept_terminal.Utils.base_tab import BaseTab
 
 
 class DBnomicsTab(BaseTab):
@@ -72,7 +72,8 @@ class DBnomicsTab(BaseTab):
                 label="Search Terms",
                 tag="search_input",
                 width=300,
-                callback=self._on_search_input
+                # Remove callback parameter to fix the error
+                # We'll handle search via button click instead
             )
             dpg.add_button(label="Search", callback=self._on_search_click)
             dpg.add_button(label="Clear", callback=self._on_clear_search)
@@ -320,75 +321,99 @@ class DBnomicsTab(BaseTab):
     # Event handlers
     def _on_main_tab_change(self, sender, app_data):
         """Handle main tab changes"""
-        if app_data == "tab_search" and not self.providers_cache:
-            self._load_providers()
+        try:
+            if app_data == "tab_search" and not self.providers_cache:
+                self._load_providers()
+        except Exception as e:
+            print(f"Error in tab change: {e}")
 
-    def _on_search_input(self, sender, app_data):
-        """Handle search input with debouncing"""
-        pass  # Implement debouncing if needed
-
-    def _on_search_click(self):
+    def _on_search_click(self, sender=None, app_data=None):
         """Handle search button click"""
-        query = dpg.get_value("search_input").strip()
-        if not query:
-            dpg.set_value("search_status", "Please enter search terms")
-            return
+        try:
+            if not dpg.does_item_exist("search_input"):
+                return
 
-        self.current_page = 1
-        dpg.set_value("search_status", "Searching...")
-        asyncio.create_task(self._search_series(query))
+            query = dpg.get_value("search_input").strip()
+            if not query:
+                dpg.set_value("search_status", "Please enter search terms")
+                return
 
-    def _on_clear_search(self):
+            self.current_page = 1
+            dpg.set_value("search_status", "Searching...")
+
+            # Use threading instead of asyncio for better compatibility
+            self.executor.submit(self._search_series_sync, query)
+        except Exception as e:
+            print(f"Search error: {e}")
+            if dpg.does_item_exist("search_status"):
+                dpg.set_value("search_status", f"Search error: {str(e)}")
+
+    def _on_clear_search(self, sender=None, app_data=None):
         """Clear search results and reset interface"""
-        dpg.set_value("search_input", "")
-        dpg.delete_item("search_results_table", children_only=True)
-        self._recreate_search_table_headers()
-        dpg.set_value("search_status", "Ready")
-        dpg.configure_item("prev_page", enabled=False)
-        dpg.configure_item("next_page", enabled=False)
-        dpg.set_value("page_info", "Page 1")
+        try:
+            dpg.set_value("search_input", "")
+            dpg.delete_item("search_results_table", children_only=True)
+            self._recreate_search_table_headers()
+            dpg.set_value("search_status", "Ready")
+            dpg.configure_item("prev_page", enabled=False)
+            dpg.configure_item("next_page", enabled=False)
+            dpg.set_value("page_info", "Page 1")
+        except Exception as e:
+            print(f"Clear search error: {e}")
 
-    def _on_provider_change(self):
+    def _on_provider_change(self, sender=None, app_data=None):
         """Handle provider filter change"""
-        provider = dpg.get_value("provider_filter")
-        if provider != "All Providers":
-            self._load_datasets_for_provider(provider)
+        try:
+            provider = dpg.get_value("provider_filter")
+            if provider != "All Providers":
+                self._load_datasets_for_provider(provider)
+        except Exception as e:
+            print(f"Provider change error: {e}")
 
-    def _on_prev_page(self):
+    def _on_prev_page(self, sender=None, app_data=None):
         """Handle previous page navigation"""
-        if self.current_page > 1:
-            self.current_page -= 1
-            query = dpg.get_value("search_input")
-            asyncio.create_task(self._search_series(query))
+        try:
+            if self.current_page > 1:
+                self.current_page -= 1
+                query = dpg.get_value("search_input")
+                self.executor.submit(self._search_series_sync, query)
+        except Exception as e:
+            print(f"Previous page error: {e}")
 
-    def _on_next_page(self):
+    def _on_next_page(self, sender=None, app_data=None):
         """Handle next page navigation"""
-        if self.current_page * self.items_per_page < self.total_items:
-            self.current_page += 1
-            query = dpg.get_value("search_input")
-            asyncio.create_task(self._search_series(query))
+        try:
+            if self.current_page * self.items_per_page < self.total_items:
+                self.current_page += 1
+                query = dpg.get_value("search_input")
+                self.executor.submit(self._search_series_sync, query)
+        except Exception as e:
+            print(f"Next page error: {e}")
 
-    def _on_load_selected(self):
+    def _on_load_selected(self, sender=None, app_data=None):
         """Load selected series data"""
-        selected_rows = self._get_selected_table_rows()
-        if not selected_rows:
-            dpg.set_value("search_status", "No series selected")
-            return
+        try:
+            selected_rows = self._get_selected_table_rows()
+            if not selected_rows:
+                dpg.set_value("search_status", "No series selected")
+                return
 
-        dpg.set_value("search_status", f"Loading {len(selected_rows)} series...")
-        asyncio.create_task(self._load_series_data(selected_rows))
+            dpg.set_value("search_status", f"Loading {len(selected_rows)} series...")
+            self.executor.submit(self._load_series_data_sync, selected_rows)
+        except Exception as e:
+            print(f"Load selected error: {e}")
 
-    def _on_view_details(self):
+    def _on_view_details(self, sender=None, app_data=None):
         """View details of selected series"""
         pass  # Implement details view
 
-    def _on_add_watchlist(self):
+    def _on_add_watchlist(self, sender=None, app_data=None):
         """Add selected series to watchlist"""
         pass  # Implement watchlist functionality
 
-    # API methods
-    async def _search_series(self, query):
-        """Search for series using DBnomics API"""
+    # API methods (converted to synchronous)
+    def _search_series_sync(self, query):
+        """Search for series using DBnomics API (synchronous version)"""
         try:
             params = {
                 'q': query,
@@ -406,8 +431,7 @@ class DBnomicsTab(BaseTab):
             if frequency != "All":
                 params['dimensions.freq'] = frequency
 
-            response = await asyncio.to_thread(
-                self.session.get,
+            response = self.session.get(
                 f"{self.base_url}/series",
                 params=params,
                 timeout=30
@@ -418,19 +442,20 @@ class DBnomicsTab(BaseTab):
                 self.total_items = data.get('series', {}).get('num_found', 0)
                 series_list = data.get('series', {}).get('docs', [])
 
-                dpg.run_async_callback(self._update_search_results, series_list)
+                # Schedule UI update on main thread
+                self._schedule_ui_update(self._update_search_results, series_list)
             else:
-                dpg.run_async_callback(
+                self._schedule_ui_update(
                     lambda: dpg.set_value("search_status", f"Search failed: {response.status_code}")
                 )
 
         except Exception as e:
-            dpg.run_async_callback(
+            self._schedule_ui_update(
                 lambda: dpg.set_value("search_status", f"Search error: {str(e)}")
             )
 
-    async def _load_series_data(self, series_info_list):
-        """Load actual time series data for selected series"""
+    def _load_series_data_sync(self, series_info_list):
+        """Load actual time series data for selected series (synchronous)"""
         try:
             loaded_count = 0
             for series_info in series_info_list:
@@ -444,8 +469,7 @@ class DBnomicsTab(BaseTab):
                 # Construct series URL
                 series_url = f"{self.base_url}/series/{provider_code}/{dataset_code}/{series_code}"
 
-                response = await asyncio.to_thread(
-                    self.session.get,
+                response = self.session.get(
                     series_url,
                     params={'format': 'json'},
                     timeout=30
@@ -465,17 +489,34 @@ class DBnomicsTab(BaseTab):
                         }
                         loaded_count += 1
 
-            dpg.run_async_callback(self._update_loaded_series_ui, loaded_count)
+            self._schedule_ui_update(self._update_loaded_series_ui, loaded_count)
 
         except Exception as e:
-            dpg.run_async_callback(
+            self._schedule_ui_update(
                 lambda: dpg.set_value("search_status", f"Loading error: {str(e)}")
             )
+
+    def _schedule_ui_update(self, func, *args):
+        """Schedule UI update on main thread"""
+        try:
+            if args:
+                dpg.set_frame_callback(frame=dpg.get_frame_count() + 1, callback=lambda: func(*args))
+            else:
+                dpg.set_frame_callback(frame=dpg.get_frame_count() + 1, callback=func)
+        except:
+            # Fallback - try to execute immediately
+            try:
+                if args:
+                    func(*args)
+                else:
+                    func()
+            except:
+                pass
 
     def _load_providers(self):
         """Load available data providers"""
 
-        def load_providers_async():
+        def load_providers_sync():
             try:
                 response = self.session.get(f"{self.base_url}/providers", timeout=10)
                 if response.status_code == 200:
@@ -484,298 +525,342 @@ class DBnomicsTab(BaseTab):
                     provider_names = ["All Providers"] + [p['code'] for p in providers]
                     self.providers_cache = {p['code']: p for p in providers}
 
-                    dpg.run_async_callback(
+                    self._schedule_ui_update(
                         lambda: dpg.configure_item("provider_filter", items=provider_names)
                     )
             except Exception as e:
                 print(f"Failed to load providers: {e}")
 
-        self.executor.submit(load_providers_async)
+        self.executor.submit(load_providers_sync)
 
     # UI update methods
     def _update_search_results(self, series_list):
         """Update search results table"""
-        # Clear existing results
-        dpg.delete_item("search_results_table", children_only=True)
-        self._recreate_search_table_headers()
+        try:
+            # Clear existing results
+            dpg.delete_item("search_results_table", children_only=True)
+            self._recreate_search_table_headers()
 
-        # Add new results
-        for i, series in enumerate(series_list):
-            with dpg.table_row(parent="search_results_table"):
-                # Checkbox for selection
-                dpg.add_checkbox(tag=f"select_{i}", user_data=series)
+            # Add new results
+            for i, series in enumerate(series_list):
+                with dpg.table_row(parent="search_results_table"):
+                    # Checkbox for selection
+                    dpg.add_checkbox(tag=f"select_{i}", user_data=series)
 
-                # Series information
-                dpg.add_text(series.get('provider_code', 'N/A'))
-                dpg.add_text(series.get('dataset_code', 'N/A'))
-                dpg.add_text(
-                    series.get('name', 'N/A')[:50] + "..." if len(series.get('name', '')) > 50 else series.get('name',
-                                                                                                               'N/A'))
+                    # Series information
+                    dpg.add_text(series.get('provider_code', 'N/A'))
+                    dpg.add_text(series.get('dataset_code', 'N/A'))
+                    name = series.get('name', 'N/A')
+                    display_name = name[:50] + "..." if len(name) > 50 else name
+                    dpg.add_text(display_name)
 
-                # Frequency
-                freq = series.get('dimensions', {}).get('freq', ['N/A'])
-                dpg.add_text(freq[0] if isinstance(freq, list) else str(freq))
+                    # Frequency
+                    freq = series.get('dimensions', {}).get('freq', ['N/A'])
+                    dpg.add_text(freq[0] if isinstance(freq, list) else str(freq))
 
-                # Start and end dates
-                period_start = series.get('period_start_day', 'N/A')
-                period_end = series.get('period_end_day', 'N/A')
-                dpg.add_text(period_start)
-                dpg.add_text(period_end)
+                    # Start and end dates
+                    period_start = series.get('period_start_day', 'N/A')
+                    period_end = series.get('period_end_day', 'N/A')
+                    dpg.add_text(period_start)
+                    dpg.add_text(period_end)
 
-                # Last update
-                indexed_at = series.get('indexed_at', 'N/A')
-                if indexed_at != 'N/A':
-                    try:
-                        dt = datetime.fromisoformat(indexed_at.replace('Z', '+00:00'))
-                        indexed_at = dt.strftime('%Y-%m-%d')
-                    except:
-                        pass
-                dpg.add_text(indexed_at)
+                    # Last update
+                    indexed_at = series.get('indexed_at', 'N/A')
+                    if indexed_at != 'N/A':
+                        try:
+                            dt = datetime.fromisoformat(indexed_at.replace('Z', '+00:00'))
+                            indexed_at = dt.strftime('%Y-%m-%d')
+                        except:
+                            pass
+                    dpg.add_text(indexed_at)
 
-        # Update pagination
-        total_pages = (self.total_items + self.items_per_page - 1) // self.items_per_page
-        dpg.set_value("page_info", f"Page {self.current_page} of {total_pages}")
-        dpg.configure_item("prev_page", enabled=self.current_page > 1)
-        dpg.configure_item("next_page", enabled=self.current_page < total_pages)
-        dpg.set_value("search_status", f"Found {self.total_items} series")
+            # Update pagination
+            total_pages = (self.total_items + self.items_per_page - 1) // self.items_per_page
+            dpg.set_value("page_info", f"Page {self.current_page} of {total_pages}")
+            dpg.configure_item("prev_page", enabled=self.current_page > 1)
+            dpg.configure_item("next_page", enabled=self.current_page < total_pages)
+            dpg.set_value("search_status", f"Found {self.total_items} series")
+        except Exception as e:
+            print(f"Error updating search results: {e}")
 
     def _recreate_search_table_headers(self):
         """Recreate table headers after clearing"""
-        dpg.add_table_column(label="Select", width_fixed=True, init_width_or_weight=60, parent="search_results_table")
-        dpg.add_table_column(label="Provider", width_fixed=True, init_width_or_weight=100,
-                             parent="search_results_table")
-        dpg.add_table_column(label="Dataset", width_fixed=True, init_width_or_weight=150, parent="search_results_table")
-        dpg.add_table_column(label="Series Name", width_fixed=True, init_width_or_weight=300,
-                             parent="search_results_table")
-        dpg.add_table_column(label="Frequency", width_fixed=True, init_width_or_weight=100,
-                             parent="search_results_table")
-        dpg.add_table_column(label="Start", width_fixed=True, init_width_or_weight=100, parent="search_results_table")
-        dpg.add_table_column(label="End", width_fixed=True, init_width_or_weight=100, parent="search_results_table")
-        dpg.add_table_column(label="Last Update", width_fixed=True, init_width_or_weight=120,
-                             parent="search_results_table")
+        try:
+            dpg.add_table_column(label="Select", width_fixed=True, init_width_or_weight=60,
+                                 parent="search_results_table")
+            dpg.add_table_column(label="Provider", width_fixed=True, init_width_or_weight=100,
+                                 parent="search_results_table")
+            dpg.add_table_column(label="Dataset", width_fixed=True, init_width_or_weight=150,
+                                 parent="search_results_table")
+            dpg.add_table_column(label="Series Name", width_fixed=True, init_width_or_weight=300,
+                                 parent="search_results_table")
+            dpg.add_table_column(label="Frequency", width_fixed=True, init_width_or_weight=100,
+                                 parent="search_results_table")
+            dpg.add_table_column(label="Start", width_fixed=True, init_width_or_weight=100,
+                                 parent="search_results_table")
+            dpg.add_table_column(label="End", width_fixed=True, init_width_or_weight=100, parent="search_results_table")
+            dpg.add_table_column(label="Last Update", width_fixed=True, init_width_or_weight=120,
+                                 parent="search_results_table")
+        except Exception as e:
+            print(f"Error recreating table headers: {e}")
 
     def _update_loaded_series_ui(self, loaded_count):
         """Update UI after loading series data"""
-        if loaded_count > 0:
-            series_names = list(self.series_cache.keys())
-            dpg.configure_item("loaded_series_combo", items=series_names)
-            if series_names:
-                dpg.set_value("loaded_series_combo", series_names[0])
-                self._display_series_data(series_names[0])
+        try:
+            if loaded_count > 0:
+                series_names = list(self.series_cache.keys())
+                dpg.configure_item("loaded_series_combo", items=series_names)
+                if series_names:
+                    dpg.set_value("loaded_series_combo", series_names[0])
+                    self._display_series_data(series_names[0])
 
-            dpg.set_value("search_status", f"Loaded {loaded_count} series successfully")
-        else:
-            dpg.set_value("search_status", "No series data loaded")
+                dpg.set_value("search_status", f"Loaded {loaded_count} series successfully")
+            else:
+                dpg.set_value("search_status", "No series data loaded")
+        except Exception as e:
+            print(f"Error updating loaded series UI: {e}")
 
     def _display_series_data(self, series_key):
         """Display data for a specific series"""
-        if series_key not in self.series_cache:
-            return
+        try:
+            if series_key not in self.series_cache:
+                return
 
-        series_data = self.series_cache[series_key]
-        observations = series_data['observations']
+            series_data = self.series_cache[series_key]
+            observations = series_data['observations']
 
-        if not observations:
-            return
+            if not observations:
+                return
 
-        # Convert to DataFrame for easier manipulation
-        df = pd.DataFrame(observations)
-        if 'period' in df.columns and 'value' in df.columns:
-            df['period'] = pd.to_datetime(df['period'])
-            df = df.sort_values('period')
-            df = df.dropna(subset=['value'])
+            # Convert to DataFrame for easier manipulation
+            df = pd.DataFrame(observations)
+            if 'period' in df.columns and 'value' in df.columns:
+                df['period'] = pd.to_datetime(df['period'])
+                df = df.sort_values('period')
+                df = df.dropna(subset=['value'])
 
-            # Update data table
-            self._update_data_table(df)
+                # Update data table
+                self._update_data_table(df)
 
-            # Update statistics
-            self._update_statistics(df)
+                # Update statistics
+                self._update_statistics(df)
 
-            # Update chart
-            self._update_chart_data(series_key, df)
+                # Update chart
+                self._update_chart_data(series_key, df)
+        except Exception as e:
+            print(f"Error displaying series data: {e}")
 
     def _update_data_table(self, df):
         """Update the data table with series observations"""
-        dpg.delete_item("data_table", children_only=True)
+        try:
+            dpg.delete_item("data_table", children_only=True)
 
-        # Recreate headers
-        dpg.add_table_column(label="Date", width_fixed=True, init_width_or_weight=120, parent="data_table")
-        dpg.add_table_column(label="Value", width_fixed=True, init_width_or_weight=150, parent="data_table")
+            # Recreate headers
+            dpg.add_table_column(label="Date", width_fixed=True, init_width_or_weight=120, parent="data_table")
+            dpg.add_table_column(label="Value", width_fixed=True, init_width_or_weight=150, parent="data_table")
 
-        # Add data rows (limit to recent 100 observations for performance)
-        recent_data = df.tail(100)
-        for _, row in recent_data.iterrows():
-            with dpg.table_row(parent="data_table"):
-                dpg.add_text(row['period'].strftime('%Y-%m-%d'))
-                dpg.add_text(f"{float(row['value']):.4f}")
+            # Add data rows (limit to recent 100 observations for performance)
+            recent_data = df.tail(100)
+            for _, row in recent_data.iterrows():
+                with dpg.table_row(parent="data_table"):
+                    dpg.add_text(row['period'].strftime('%Y-%m-%d'))
+                    dpg.add_text(f"{float(row['value']):.4f}")
+        except Exception as e:
+            print(f"Error updating data table: {e}")
 
     def _update_statistics(self, df):
         """Update statistics table"""
-        dpg.delete_item("stats_table", children_only=True)
+        try:
+            dpg.delete_item("stats_table", children_only=True)
 
-        # Recreate headers
-        dpg.add_table_column(label="Statistic", parent="stats_table")
-        dpg.add_table_column(label="Value", parent="stats_table")
+            # Recreate headers
+            dpg.add_table_column(label="Statistic", parent="stats_table")
+            dpg.add_table_column(label="Value", parent="stats_table")
 
-        # Calculate statistics
-        values = df['value'].astype(float)
-        stats = {
-            'Count': len(values),
-            'Mean': values.mean(),
-            'Median': values.median(),
-            'Std Dev': values.std(),
-            'Min': values.min(),
-            'Max': values.max(),
-            'Latest': values.iloc[-1] if len(values) > 0 else None,
-            'Latest Date': df['period'].iloc[-1].strftime('%Y-%m-%d') if len(df) > 0 else None
-        }
+            # Calculate statistics
+            values = df['value'].astype(float)
+            stats = {
+                'Count': len(values),
+                'Mean': values.mean(),
+                'Median': values.median(),
+                'Std Dev': values.std(),
+                'Min': values.min(),
+                'Max': values.max(),
+                'Latest': values.iloc[-1] if len(values) > 0 else None,
+                'Latest Date': df['period'].iloc[-1].strftime('%Y-%m-%d') if len(df) > 0 else None
+            }
 
-        for stat_name, stat_value in stats.items():
-            with dpg.table_row(parent="stats_table"):
-                dpg.add_text(stat_name)
-                if isinstance(stat_value, (int, float)):
-                    dpg.add_text(f"{stat_value:.4f}")
-                else:
-                    dpg.add_text(str(stat_value))
+            for stat_name, stat_value in stats.items():
+                with dpg.table_row(parent="stats_table"):
+                    dpg.add_text(stat_name)
+                    if isinstance(stat_value, (int, float)):
+                        dpg.add_text(f"{stat_value:.4f}")
+                    else:
+                        dpg.add_text(str(stat_value))
+        except Exception as e:
+            print(f"Error updating statistics: {e}")
 
     def _update_chart_data(self, series_key, df):
         """Update chart with series data"""
-        # Clear existing data
-        dpg.delete_item("economic_chart", children_only=True)
+        try:
+            # Clear existing data
+            dpg.delete_item("economic_chart", children_only=True)
 
-        # Recreate chart elements
-        dpg.add_plot_legend(parent="economic_chart")
-        dpg.add_plot_axis(dpg.mvXAxis, label="Time", tag="chart_x_axis_new", time_unit=dpg.mvTimeUnit_Day,
-                          parent="economic_chart")
-        dpg.add_plot_axis(dpg.mvYAxis, label="Value", tag="chart_y_axis_new", parent="economic_chart")
+            # Recreate chart elements
+            dpg.add_plot_legend(parent="economic_chart")
+            dpg.add_plot_axis(dpg.mvXAxis, label="Time", tag="chart_x_axis_new", time_unit=dpg.mvTimeUnit_Day,
+                              parent="economic_chart")
+            dpg.add_plot_axis(dpg.mvYAxis, label="Value", tag="chart_y_axis_new", parent="economic_chart")
 
-        # Add data series
-        if len(df) > 0:
-            timestamps = [dt.timestamp() for dt in df['period']]
-            values = df['value'].astype(float).tolist()
+            # Add data series
+            if len(df) > 0:
+                timestamps = [dt.timestamp() for dt in df['period']]
+                values = df['value'].astype(float).tolist()
 
-            dpg.add_line_series(
-                timestamps,
-                values,
-                label=series_key.split('/')[-1],
-                parent="chart_y_axis_new"
-            )
+                dpg.add_line_series(
+                    timestamps,
+                    values,
+                    label=series_key.split('/')[-1],
+                    parent="chart_y_axis_new"
+                )
+        except Exception as e:
+            print(f"Error updating chart: {e}")
 
     def _get_selected_table_rows(self):
         """Get selected rows from search results table"""
         selected = []
         i = 0
         while dpg.does_item_exist(f"select_{i}"):
-            if dpg.get_value(f"select_{i}"):
-                user_data = dpg.get_item_user_data(f"select_{i}")
-                if user_data:
-                    selected.append(user_data)
+            try:
+                if dpg.get_value(f"select_{i}"):
+                    user_data = dpg.get_item_user_data(f"select_{i}")
+                    if user_data:
+                        selected.append(user_data)
+            except Exception as e:
+                print(f"Error getting selected row {i}: {e}")
             i += 1
         return selected
 
     # Data viewer event handlers
-    def _on_series_selection_change(self):
+    def _on_series_selection_change(self, sender=None, app_data=None):
         """Handle series selection change in data viewer"""
-        selected_series = dpg.get_value("loaded_series_combo")
-        if selected_series and selected_series in self.series_cache:
-            self._display_series_data(selected_series)
+        try:
+            selected_series = dpg.get_value("loaded_series_combo")
+            if selected_series and selected_series in self.series_cache:
+                self._display_series_data(selected_series)
+        except Exception as e:
+            print(f"Series selection change error: {e}")
 
-    def _on_refresh_series(self):
+    def _on_refresh_series(self, sender=None, app_data=None):
         """Refresh current series data"""
         pass  # Implement refresh functionality
 
-    def _on_remove_series(self):
+    def _on_remove_series(self, sender=None, app_data=None):
         """Remove current series from cache"""
-        selected_series = dpg.get_value("loaded_series_combo")
-        if selected_series and selected_series in self.series_cache:
-            del self.series_cache[selected_series]
-            series_names = list(self.series_cache.keys())
-            dpg.configure_item("loaded_series_combo", items=series_names or ["No series loaded"])
+        try:
+            selected_series = dpg.get_value("loaded_series_combo")
+            if selected_series and selected_series in self.series_cache:
+                del self.series_cache[selected_series]
+                series_names = list(self.series_cache.keys())
+                dpg.configure_item("loaded_series_combo", items=series_names or ["No series loaded"])
+        except Exception as e:
+            print(f"Remove series error: {e}")
 
-    def _on_transform_change(self):
+    def _on_transform_change(self, sender=None, app_data=None):
         """Handle data transformation change"""
         pass  # Implement data transformations
 
-    def _on_apply_date_filter(self):
+    def _on_apply_date_filter(self, sender=None, app_data=None):
         """Apply date range filter to current series"""
         pass  # Implement date filtering
 
     # Chart event handlers
-    def _on_chart_type_change(self):
+    def _on_chart_type_change(self, sender=None, app_data=None):
         """Handle chart type change"""
         pass  # Implement different chart types
 
-    def _on_update_chart(self):
+    def _on_update_chart(self, sender=None, app_data=None):
         """Update chart with current settings"""
         pass  # Implement chart updates
 
-    def _on_export_chart(self):
+    def _on_export_chart(self, sender=None, app_data=None):
         """Export current chart"""
         pass  # Implement chart export
 
-    def _on_add_chart_series(self):
+    def _on_add_chart_series(self, sender=None, app_data=None):
         """Add series to chart comparison"""
         pass  # Implement multi-series charts
 
-    def _on_remove_chart_series(self):
+    def _on_remove_chart_series(self, sender=None, app_data=None):
         """Remove series from chart comparison"""
         pass  # Implement series removal
 
-    def _on_clear_chart_series(self):
+    def _on_clear_chart_series(self, sender=None, app_data=None):
         """Clear all series from chart"""
         pass  # Implement chart clearing
 
     # Export event handlers
-    def _on_browse_export_path(self):
+    def _on_browse_export_path(self, sender=None, app_data=None):
         """Browse for export file path"""
+        try:
+            def file_dialog_callback(sender, app_data):
+                if app_data.get('file_path_name'):
+                    dpg.set_value("export_path", app_data['file_path_name'])
 
-        def file_dialog_callback(sender, app_data):
-            if app_data['file_path_name']:
-                dpg.set_value("export_path", app_data['file_path_name'])
+            with dpg.file_dialog(
+                    directory_selector=False,
+                    show=True,
+                    callback=file_dialog_callback,
+                    tag="export_file_dialog",
+                    width=700,
+                    height=400,
+                    default_filename="economic_data"
+            ):
+                dpg.add_file_extension(".*")
+                dpg.add_file_extension(".csv", color=(0, 255, 0, 255))
+                dpg.add_file_extension(".xlsx", color=(255, 255, 0, 255))
+                dpg.add_file_extension(".json", color=(255, 0, 255, 255))
+        except Exception as e:
+            print(f"Browse export path error: {e}")
 
-        with dpg.file_dialog(
-                directory_selector=False,
-                show=True,
-                callback=file_dialog_callback,
-                tag="export_file_dialog",
-                width=700,
-                height=400,
-                default_filename="economic_data"
-        ):
-            dpg.add_file_extension(".*")
-            dpg.add_file_extension(".csv", color=(0, 255, 0, 255))
-            dpg.add_file_extension(".xlsx", color=(255, 255, 0, 255))
-            dpg.add_file_extension(".json", color=(255, 0, 255, 255))
-
-    def _on_export_current(self):
+    def _on_export_current(self, sender=None, app_data=None):
         """Export currently selected series"""
-        selected_series = dpg.get_value("loaded_series_combo")
-        if not selected_series or selected_series not in self.series_cache:
-            self._log_export("No series selected for export")
-            return
+        try:
+            selected_series = dpg.get_value("loaded_series_combo")
+            if not selected_series or selected_series not in self.series_cache:
+                self._log_export("No series selected for export")
+                return
 
-        asyncio.create_task(self._export_series_data([selected_series]))
+            self.executor.submit(self._export_series_data_sync, [selected_series])
+        except Exception as e:
+            print(f"Export current error: {e}")
 
-    def _on_export_all(self):
+    def _on_export_all(self, sender=None, app_data=None):
         """Export all loaded series"""
-        if not self.series_cache:
-            self._log_export("No series loaded for export")
-            return
+        try:
+            if not self.series_cache:
+                self._log_export("No series loaded for export")
+                return
 
-        series_list = list(self.series_cache.keys())
-        asyncio.create_task(self._export_series_data(series_list))
+            series_list = list(self.series_cache.keys())
+            self.executor.submit(self._export_series_data_sync, series_list)
+        except Exception as e:
+            print(f"Export all error: {e}")
 
-    def _on_export_search(self):
+    def _on_export_search(self, sender=None, app_data=None):
         """Export current search results metadata"""
-        selected_rows = self._get_selected_table_rows()
-        if not selected_rows:
-            self._log_export("No search results selected for export")
-            return
+        try:
+            selected_rows = self._get_selected_table_rows()
+            if not selected_rows:
+                self._log_export("No search results selected for export")
+                return
 
-        asyncio.create_task(self._export_search_results(selected_rows))
+            self.executor.submit(self._export_search_results_sync, selected_rows)
+        except Exception as e:
+            print(f"Export search error: {e}")
 
-    async def _export_series_data(self, series_keys):
-        """Export series data to file"""
+    def _export_series_data_sync(self, series_keys):
+        """Export series data to file (synchronous version)"""
         try:
             export_format = dpg.get_value("export_format")
             file_path = dpg.get_value("export_path")
@@ -816,51 +901,45 @@ class DBnomicsTab(BaseTab):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
             if export_format == "CSV":
-                await self._export_to_csv(all_data, file_path, timestamp, include_metadata, include_stats)
+                self._export_to_csv_sync(all_data, file_path, timestamp)
             elif export_format == "Excel":
-                await self._export_to_excel(all_data, metadata, file_path, timestamp, include_metadata, include_stats)
+                self._export_to_excel_sync(all_data, metadata, file_path, timestamp, include_metadata, include_stats)
             elif export_format == "JSON":
-                await self._export_to_json(all_data, metadata, file_path, timestamp, include_metadata, include_stats)
+                self._export_to_json_sync(all_data, metadata, file_path, timestamp, include_metadata, include_stats)
 
             self._log_export(f"Successfully exported {len(all_data)} series to {export_format}")
 
         except Exception as e:
             self._log_export(f"Export failed: {str(e)}")
 
-    async def _export_to_csv(self, all_data, file_path, timestamp, include_metadata, include_stats):
-        """Export data to CSV format"""
+    def _export_to_csv_sync(self, all_data, file_path, timestamp):
+        """Export data to CSV format (synchronous)"""
+        if len(all_data) == 1:
+            # Single series - simple CSV
+            series_key = list(all_data.keys())[0]
+            df = all_data[series_key]
+            output_path = f"{file_path}_{timestamp}.csv"
+            df.to_csv(output_path, index=False)
+        else:
+            # Multiple series - combined CSV with series identifier
+            combined_data = []
+            for series_key, df in all_data.items():
+                df_copy = df.copy()
+                df_copy['series'] = series_key
+                combined_data.append(df_copy)
 
-        def export_csv():
-            if len(all_data) == 1:
-                # Single series - simple CSV
-                series_key = list(all_data.keys())[0]
-                df = all_data[series_key]
-                output_path = f"{file_path}_{timestamp}.csv"
-                df.to_csv(output_path, index=False)
-            else:
-                # Multiple series - combined CSV with series identifier
-                combined_data = []
-                for series_key, df in all_data.items():
-                    df_copy = df.copy()
-                    df_copy['series'] = series_key
-                    combined_data.append(df_copy)
+            combined_df = pd.concat(combined_data, ignore_index=True)
+            output_path = f"{file_path}_{timestamp}.csv"
+            combined_df.to_csv(output_path, index=False)
 
-                combined_df = pd.concat(combined_data, ignore_index=True)
-                output_path = f"{file_path}_{timestamp}.csv"
-                combined_df.to_csv(output_path, index=False)
-
-            return output_path
-
-        output_path = await asyncio.to_thread(export_csv)
         return output_path
 
-    async def _export_to_excel(self, all_data, metadata, file_path, timestamp, include_metadata, include_stats):
-        """Export data to Excel format with multiple sheets"""
+    def _export_to_excel_sync(self, all_data, metadata, file_path, timestamp, include_metadata, include_stats):
+        """Export data to Excel format with multiple sheets (synchronous)"""
+        output_path = f"{file_path}_{timestamp}.xlsx"
 
-        def export_excel():
-            output_path = f"{file_path}_{timestamp}.xlsx"
-
-            with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+        try:
+            with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
                 # Data sheets
                 for series_key, df in all_data.items():
                     sheet_name = series_key.replace('/', '_')[:31]  # Excel sheet name limit
@@ -875,7 +954,7 @@ class DBnomicsTab(BaseTab):
                                       values.std(), values.min(), values.max()]
                         }
                         stats_df = pd.DataFrame(stats_data)
-                        stats_df.to_excel(writer, sheet_name=f"{sheet_name}_stats", index=False)
+                        stats_df.to_excel(writer, sheet_name=f"{sheet_name}_stats"[:31], index=False)
 
                 # Metadata sheet
                 if include_metadata and metadata:
@@ -895,57 +974,55 @@ class DBnomicsTab(BaseTab):
 
                     metadata_df = pd.DataFrame(metadata_rows)
                     metadata_df.to_excel(writer, sheet_name='Metadata', index=False)
+        except ImportError:
+            # Fallback to xlsxwriter if openpyxl not available
+            with pd.ExcelWriter(output_path, engine='xlsxwriter') as writer:
+                for series_key, df in all_data.items():
+                    sheet_name = series_key.replace('/', '_')[:31]
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-            return output_path
-
-        output_path = await asyncio.to_thread(export_excel)
         return output_path
 
-    async def _export_to_json(self, all_data, metadata, file_path, timestamp, include_metadata, include_stats):
-        """Export data to JSON format"""
+    def _export_to_json_sync(self, all_data, metadata, file_path, timestamp, include_metadata, include_stats):
+        """Export data to JSON format (synchronous)"""
+        export_data = {
+            'export_info': {
+                'timestamp': timestamp,
+                'exported_by': 'Fincept Terminal',
+                'series_count': len(all_data)
+            },
+            'series_data': {}
+        }
 
-        def export_json():
-            export_data = {
-                'export_info': {
-                    'timestamp': timestamp,
-                    'exported_by': 'Fincept Terminal',
-                    'series_count': len(all_data)
-                },
-                'series_data': {}
+        for series_key, df in all_data.items():
+            series_export = {
+                'observations': df.to_dict('records')
             }
 
-            for series_key, df in all_data.items():
-                series_export = {
-                    'observations': df.to_dict('records')
+            if include_stats:
+                values = df['value'].astype(float)
+                series_export['statistics'] = {
+                    'count': int(len(values)),
+                    'mean': float(values.mean()),
+                    'median': float(values.median()),
+                    'std_dev': float(values.std()),
+                    'min': float(values.min()),
+                    'max': float(values.max())
                 }
 
-                if include_stats:
-                    values = df['value'].astype(float)
-                    series_export['statistics'] = {
-                        'count': len(values),
-                        'mean': values.mean(),
-                        'median': values.median(),
-                        'std_dev': values.std(),
-                        'min': values.min(),
-                        'max': values.max()
-                    }
+            if include_metadata and series_key in metadata:
+                series_export['metadata'] = metadata[series_key]
 
-                if include_metadata and series_key in metadata:
-                    series_export['metadata'] = metadata[series_key]
+            export_data['series_data'][series_key] = series_export
 
-                export_data['series_data'][series_key] = series_export
+        output_path = f"{file_path}_{timestamp}.json"
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(export_data, f, indent=2, default=str)
 
-            output_path = f"{file_path}_{timestamp}.json"
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(export_data, f, indent=2, default=str)
-
-            return output_path
-
-        output_path = await asyncio.to_thread(export_json)
         return output_path
 
-    async def _export_search_results(self, search_results):
-        """Export search results metadata"""
+    def _export_search_results_sync(self, search_results):
+        """Export search results metadata (synchronous)"""
         try:
             file_path = dpg.get_value("export_path")
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -968,23 +1045,21 @@ class DBnomicsTab(BaseTab):
 
             df = pd.DataFrame(results_data)
             output_path = f"{file_path}_search_results_{timestamp}.csv"
-
-            def save_search_results():
-                df.to_csv(output_path, index=False)
-                return output_path
-
-            saved_path = await asyncio.to_thread(save_search_results)
-            self._log_export(f"Search results exported to {saved_path}")
+            df.to_csv(output_path, index=False)
+            self._log_export(f"Search results exported to {output_path}")
 
         except Exception as e:
             self._log_export(f"Search results export failed: {str(e)}")
 
     def _log_export(self, message):
         """Log export messages"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        current_log = dpg.get_value("export_log")
-        new_log = f"[{timestamp}] {message}\n{current_log}"
-        dpg.set_value("export_log", new_log)
+        try:
+            timestamp = datetime.now().strftime("%H:%M:%S")
+            current_log = dpg.get_value("export_log")
+            new_log = f"[{timestamp}] {message}\n{current_log}"
+            dpg.set_value("export_log", new_log)
+        except Exception as e:
+            print(f"Logging error: {e}")
 
     # Additional utility methods
     def _get_series_metadata(self, series_key):
@@ -1041,18 +1116,21 @@ class DBnomicsTab(BaseTab):
 
     def cleanup(self):
         """Clean up resources"""
-        if hasattr(self, 'executor'):
-            self.executor.shutdown(wait=False)
+        try:
+            if hasattr(self, 'executor'):
+                self.executor.shutdown(wait=False)
 
-        # Clear caches
-        self.providers_cache.clear()
-        self.datasets_cache.clear()
-        self.series_cache.clear()
-        self.search_cache.clear()
+            # Clear caches
+            self.providers_cache.clear()
+            self.datasets_cache.clear()
+            self.series_cache.clear()
+            self.search_cache.clear()
 
-        # Close session
-        if hasattr(self, 'session'):
-            self.session.close()
+            # Close session
+            if hasattr(self, 'session'):
+                self.session.close()
+        except Exception as e:
+            print(f"Cleanup error: {e}")
 
     # Advanced features
     def _apply_data_transformation(self, df, transform_type, window_size=12):
@@ -1066,7 +1144,8 @@ class DBnomicsTab(BaseTab):
             if transform_type == "Percentage Change":
                 df['value'] = df['value'].pct_change() * 100
             elif transform_type == "Log":
-                df['value'] = pd.np.log(df['value'])
+                import numpy as np
+                df['value'] = np.log(df['value'])
             elif transform_type == "Difference":
                 df['value'] = df['value'].diff()
             elif transform_type == "Moving Average":
@@ -1108,45 +1187,67 @@ class DBnomicsTab(BaseTab):
 
     def _create_comparison_chart(self, series_keys):
         """Create a comparison chart with multiple series"""
-        # Clear existing chart
-        dpg.delete_item("economic_chart", children_only=True)
+        try:
+            # Clear existing chart
+            dpg.delete_item("economic_chart", children_only=True)
 
-        # Recreate chart elements
-        dpg.add_plot_legend(parent="economic_chart")
-        dpg.add_plot_axis(dpg.mvXAxis, label="Time", tag="chart_x_comp", time_unit=dpg.mvTimeUnit_Day,
-                          parent="economic_chart")
-        dpg.add_plot_axis(dpg.mvYAxis, label="Value", tag="chart_y_comp", parent="economic_chart")
+            # Recreate chart elements
+            dpg.add_plot_legend(parent="economic_chart")
+            dpg.add_plot_axis(dpg.mvXAxis, label="Time", tag="chart_x_comp", time_unit=dpg.mvTimeUnit_Day,
+                              parent="economic_chart")
+            dpg.add_plot_axis(dpg.mvYAxis, label="Value", tag="chart_y_comp", parent="economic_chart")
 
-        colors = [
-            [255, 0, 0, 255],  # Red
-            [0, 255, 0, 255],  # Green
-            [0, 0, 255, 255],  # Blue
-            [255, 255, 0, 255],  # Yellow
-            [255, 0, 255, 255],  # Magenta
-            [0, 255, 255, 255],  # Cyan
-        ]
+            colors = [
+                [255, 0, 0, 255],  # Red
+                [0, 255, 0, 255],  # Green
+                [0, 0, 255, 255],  # Blue
+                [255, 255, 0, 255],  # Yellow
+                [255, 0, 255, 255],  # Magenta
+                [0, 255, 255, 255],  # Cyan
+            ]
 
-        for i, series_key in enumerate(series_keys):
-            if series_key in self.series_cache:
-                series_data = self.series_cache[series_key]
-                observations = series_data['observations']
+            for i, series_key in enumerate(series_keys):
+                if series_key in self.series_cache:
+                    series_data = self.series_cache[series_key]
+                    observations = series_data['observations']
 
-                if observations:
-                    df = pd.DataFrame(observations)
-                    if 'period' in df.columns and 'value' in df.columns:
-                        df['period'] = pd.to_datetime(df['period'])
-                        df = df.sort_values('period')
-                        df = df.dropna(subset=['value'])
+                    if observations:
+                        df = pd.DataFrame(observations)
+                        if 'period' in df.columns and 'value' in df.columns:
+                            df['period'] = pd.to_datetime(df['period'])
+                            df = df.sort_values('period')
+                            df = df.dropna(subset=['value'])
 
-                        timestamps = [dt.timestamp() for dt in df['period']]
-                        values = df['value'].astype(float).tolist()
+                            timestamps = [dt.timestamp() for dt in df['period']]
+                            values = df['value'].astype(float).tolist()
 
-                        color = colors[i % len(colors)]
-                        label = series_key.split('/')[-1]
+                            color = colors[i % len(colors)]
+                            label = series_key.split('/')[-1]
 
-                        dpg.add_line_series(
-                            timestamps,
-                            values,
-                            label=label,
-                            parent="chart_y_comp"
-                        )
+                            dpg.add_line_series(
+                                timestamps,
+                                values,
+                                label=label,
+                                parent="chart_y_comp"
+                            )
+        except Exception as e:
+            print(f"Error creating comparison chart: {e}")
+
+    def _load_datasets_for_provider(self, provider_code):
+        """Load datasets for a specific provider"""
+
+        def load_datasets():
+            try:
+                response = self.session.get(
+                    f"{self.base_url}/datasets/{provider_code}",
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    datasets = data.get('datasets', {}).get('docs', [])
+                    self.datasets_cache[provider_code] = datasets
+                    print(f"Loaded {len(datasets)} datasets for {provider_code}")
+            except Exception as e:
+                print(f"Failed to load datasets for {provider_code}: {e}")
+
+        self.executor.submit(load_datasets)

@@ -4,8 +4,7 @@ import financedatabase as fd
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from base_tab import BaseTab
-
+from fincept_terminal.Utils.base_tab import BaseTab
 
 class StockResearchTab(BaseTab):
     """Optimized Stock Research tab with faster loading and caching."""

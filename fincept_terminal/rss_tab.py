@@ -2,7 +2,7 @@ import dearpygui.dearpygui as dpg
 import requests
 import xml.etree.ElementTree as ET
 import webbrowser
-from base_tab import BaseTab
+from fincept_terminal.Utils.base_tab import BaseTab
 
 class RssTab(BaseTab):
     """Tab for fetching and displaying NSE RSS announcements."""

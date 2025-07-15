@@ -16,7 +16,7 @@ def main():
     """Main entry point for the fincept command"""
     try:
         # Import and run the main application
-        from main_dashboard import main as run_main
+        from FinceptTerminalStart import main as run_main
         run_main()
     except KeyboardInterrupt:
         print("\n👋 Goodbye!")

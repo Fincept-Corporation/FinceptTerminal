@@ -1,5 +1,5 @@
 import dearpygui.dearpygui as dpg
-from base_tab import BaseTab
+from fincept_terminal.Utils.base_tab import BaseTab
 import requests
 from urllib import parse
 import pandas as pd
