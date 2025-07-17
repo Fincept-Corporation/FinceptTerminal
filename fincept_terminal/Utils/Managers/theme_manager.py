@@ -1,4 +1,4 @@
-# themes/theme_manager.py - Authentic Bloomberg Terminal Theme Manager
+# themes/theme_manager.py - Authentic Bloomberg Terminal Theme Manager with Green Terminal
 import dearpygui.dearpygui as dpg
 
 class AutomaticThemeManager:
@@ -31,6 +31,7 @@ class AutomaticThemeManager:
             print("🎨 Creating authentic Bloomberg Terminal themes...")
             self._create_bloomberg_terminal_theme()
             self._create_dark_gold_theme()
+            self._create_green_terminal_theme()  # New green theme
             self._create_default_theme()
             self.themes_initialized = True
             print(f"✅ {len(self.themes)} Bloomberg themes created")
@@ -39,6 +40,170 @@ class AutomaticThemeManager:
         except Exception as e:
             print(f"❌ Error creating themes: {e}")
             return False
+
+    def _create_green_terminal_theme(self):
+        """Modern Green Terminal theme with #48f050 primary color"""
+        try:
+            if dpg.does_item_exist("green_terminal_theme"):
+                dpg.delete_item("green_terminal_theme")
+
+            with dpg.theme(tag="green_terminal_theme") as theme:
+                # Core styling with proper category specification
+                with dpg.theme_component(dpg.mvAll):
+                    # Green Terminal Colors
+                    TERMINAL_BLACK = [10, 10, 10, 255]  # Deep black background
+                    TERMINAL_DARK_GRAY = [25, 30, 25, 255]  # Dark panels with subtle green tint
+                    TERMINAL_MEDIUM_GRAY = [40, 45, 40, 255]  # Medium elements with green tint
+                    GREEN_PRIMARY = [5, 245, 16, 255]      # #05f510
+                    GREEN_HOVER = [92, 255, 100, 255]  # Brighter green for hover
+                    GREEN_ACTIVE = [52, 220, 60, 255]  # Darker green for active
+                    GREEN_BRIGHT = [100, 255, 110, 255]  # Bright accent green
+                    TERMINAL_WHITE = [240, 255, 245, 255]  # Slightly green-tinted white
+                    TERMINAL_GRAY_TEXT = [180, 220, 185, 255]  # Green-tinted secondary text
+                    TERMINAL_DISABLED = [120, 140, 125, 255]  # Green-tinted disabled elements
+                    TERMINAL_RED = [255, 100, 100, 255]  # Error/negative values
+                    TERMINAL_YELLOW = [255, 255, 120, 255]  # Warning/attention
+                    TERMINAL_BLUE = [120, 200, 255, 255]  # Information/links
+                    TERMINAL_BORDER = [60, 80, 60, 255]  # Green-tinted borders
+                    TERMINAL_SEPARATOR = [80, 120, 85, 255]  # Green-tinted separators
+
+                    # Main backgrounds - Deep black with green tinting
+                    dpg.add_theme_color(dpg.mvThemeCol_WindowBg, TERMINAL_BLACK, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_ChildBg, TERMINAL_BLACK, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_PopupBg, TERMINAL_DARK_GRAY, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, TERMINAL_DARK_GRAY, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_ModalWindowDimBg, [0, 0, 0, 180], category=dpg.mvThemeCat_Core)
+
+                    # Text colors - High contrast with green tinting
+                    dpg.add_theme_color(dpg.mvThemeCol_Text, TERMINAL_WHITE, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, TERMINAL_DISABLED, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TextSelectedBg, [72, 240, 80, 100], category=dpg.mvThemeCat_Core)
+
+                    # Button styling - Green terminal style
+                    dpg.add_theme_color(dpg.mvThemeCol_Button, TERMINAL_MEDIUM_GRAY, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, [72, 240, 80, 120], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, [72, 240, 80, 180], category=dpg.mvThemeCat_Core)
+
+                    # Input fields - Terminal look with green accents
+                    dpg.add_theme_color(dpg.mvThemeCol_FrameBg, TERMINAL_DARK_GRAY, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, [72, 240, 80, 60], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, [72, 240, 80, 100], category=dpg.mvThemeCat_Core)
+
+                    # Table styling - Critical for financial data display
+                    dpg.add_theme_color(dpg.mvThemeCol_Header, [72, 240, 80, 150], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, [72, 240, 80, 180], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, [72, 240, 80, 220], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TableHeaderBg, TERMINAL_MEDIUM_GRAY,
+                                        category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TableBorderStrong, TERMINAL_SEPARATOR,
+                                        category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TableBorderLight, TERMINAL_BORDER, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TableRowBg, [0, 0, 0, 0], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TableRowBgAlt, [15, 25, 15, 255], category=dpg.mvThemeCat_Core)
+
+                    # Selection highlighting
+                    dpg.add_theme_color(dpg.mvThemeCol_NavHighlight, [72, 240, 80, 200], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_NavWindowingHighlight, [72, 240, 80, 150],
+                                        category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_NavWindowingDimBg, [60, 80, 60, 100],
+                                        category=dpg.mvThemeCat_Core)
+
+                    # Tab styling - Terminal workstation look
+                    dpg.add_theme_color(dpg.mvThemeCol_Tab, TERMINAL_DARK_GRAY, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TabHovered, [72, 240, 80, 120], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TabActive, [72, 240, 80, 180], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TabUnfocused, [20, 30, 20, 255], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TabUnfocusedActive, [35, 50, 35, 255],
+                                        category=dpg.mvThemeCat_Core)
+
+                    # Borders and separators - Green tinted
+                    dpg.add_theme_color(dpg.mvThemeCol_Border, TERMINAL_BORDER, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_BorderShadow, [0, 0, 0, 0], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_Separator, TERMINAL_SEPARATOR, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_SeparatorHovered, [72, 240, 80, 150],
+                                        category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_SeparatorActive, [72, 240, 80, 200],
+                                        category=dpg.mvThemeCat_Core)
+
+                    # Scrollbars - Minimal green styling
+                    dpg.add_theme_color(dpg.mvThemeCol_ScrollbarBg, TERMINAL_BLACK, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrab, [72, 240, 80, 120], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabHovered, [72, 240, 80, 160],
+                                        category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabActive, [72, 240, 80, 200],
+                                        category=dpg.mvThemeCat_Core)
+
+                    # Form controls - Green accent
+                    dpg.add_theme_color(dpg.mvThemeCol_CheckMark, GREEN_PRIMARY, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_SliderGrab, [72, 240, 80, 180], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_SliderGrabActive, [72, 240, 80, 220],
+                                        category=dpg.mvThemeCat_Core)
+
+                    # Resize grips - Functional green
+                    dpg.add_theme_color(dpg.mvThemeCol_ResizeGrip, [72, 240, 80, 80], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_ResizeGripHovered, [72, 240, 80, 120],
+                                        category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_ResizeGripActive, [72, 240, 80, 160],
+                                        category=dpg.mvThemeCat_Core)
+
+                    # Title bars - Professional appearance
+                    dpg.add_theme_color(dpg.mvThemeCol_TitleBg, TERMINAL_DARK_GRAY, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, TERMINAL_MEDIUM_GRAY,
+                                        category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_TitleBgCollapsed, TERMINAL_DARK_GRAY,
+                                        category=dpg.mvThemeCat_Core)
+
+                    # Docking colors for professional layout
+                    dpg.add_theme_color(dpg.mvThemeCol_DockingPreview, [72, 240, 80, 100], category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_DockingEmptyBg, TERMINAL_BLACK, category=dpg.mvThemeCat_Core)
+
+                    # Plot colors for financial charts
+                    dpg.add_theme_color(dpg.mvThemeCol_PlotLines, GREEN_PRIMARY, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_PlotLinesHovered, GREEN_HOVER,
+                                        category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_PlotHistogram, GREEN_PRIMARY, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_color(dpg.mvThemeCol_PlotHistogramHovered, GREEN_HOVER,
+                                        category=dpg.mvThemeCat_Core)
+
+                    # Terminal styling - Sharp, professional appearance
+                    dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 0, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_ChildRounding, 0, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 0, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_PopupRounding, 0, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_ScrollbarRounding, 0, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_GrabRounding, 0, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_TabRounding, 0, category=dpg.mvThemeCat_Core)
+
+                    # Border sizes - Visible but not overwhelming
+                    dpg.add_theme_style(dpg.mvStyleVar_WindowBorderSize, 1, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_ChildBorderSize, 1, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_PopupBorderSize, 1, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_FrameBorderSize, 1, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_TabBorderSize, 1, category=dpg.mvThemeCat_Core)
+
+                    # Spacing and padding - Professional layout
+                    dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 8, 8, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_FramePadding, 6, 4, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 6, 4, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_ItemInnerSpacing, 4, 4, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_CellPadding, 4, 2, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_IndentSpacing, 20, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_ScrollbarSize, 14, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_GrabMinSize, 12, category=dpg.mvThemeCat_Core)
+
+                    # Professional spacing and alignment
+                    dpg.add_theme_style(dpg.mvStyleVar_WindowTitleAlign, 0.0, 0.5, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_ButtonTextAlign, 0.5, 0.5, category=dpg.mvThemeCat_Core)
+                    dpg.add_theme_style(dpg.mvStyleVar_SelectableTextAlign, 0.0, 0.0, category=dpg.mvThemeCat_Core)
+
+                    # Additional professional styling
+                    dpg.add_theme_style(dpg.mvStyleVar_Alpha, 1.0, category=dpg.mvThemeCat_Core)  # Full opacity
+
+            self.themes["green_terminal"] = theme
+            print("✅ Green Terminal theme created with #48f050 primary color")
+
+        except Exception as e:
+            print(f"❌ Error creating Green Terminal theme: {e}")
 
     def _create_bloomberg_terminal_theme(self):
         """Authentic Bloomberg Terminal theme - Precise color matching"""
@@ -324,6 +489,9 @@ class AutomaticThemeManager:
                 "bloomberg_terminal": "bloomberg_terminal",
                 "bloomberg": "bloomberg_terminal",
                 "terminal": "bloomberg_terminal",
+                "green_terminal": "green_terminal",
+                "green": "green_terminal",
+                "matrix": "green_terminal",
                 "dark_gold": "dark_gold",
                 "gold": "dark_gold",
                 "default": "default",
@@ -366,6 +534,7 @@ class AutomaticThemeManager:
         """Get comprehensive list of available themes"""
         return {
             "bloomberg_terminal": "🖥️ Bloomberg Terminal - Authentic black/orange professional theme",
+            "green_terminal": "🟢 Green Terminal - Modern terminal with bright green (#48f050) accents",
             "dark_gold": "✨ Dark Gold - Premium dark theme with gold accents",
             "default": "🔵 Default - Clean standard interface theme"
         }
@@ -399,6 +568,17 @@ class AutomaticThemeManager:
                     "background": "Pure Black (#000000)",
                     "text": "White (#FFFFFF)",
                     "accent": "Orange variations"
+                }
+            },
+            "green_terminal": {
+                "name": "🟢 Green Terminal",
+                "description": "Modern terminal theme with bright green primary color and dark background",
+                "style": "Matrix-style financial terminal",
+                "colors": {
+                    "primary": "Bright Green (#48f050)",
+                    "background": "Deep Black (#0A0A0A)",
+                    "text": "Green-tinted White (#F0FFF5)",
+                    "accent": "Green variations"
                 }
             },
             "dark_gold": {
@@ -438,6 +618,17 @@ class AutomaticThemeManager:
                 "success": [0, 255, 100, 255],
                 "warning": [255, 255, 100, 255],
                 "error": [255, 80, 80, 255]
+            }
+        elif self.current_theme == "green_terminal":
+            return {
+                "background": [10, 10, 10, 255],
+                "primary": [72, 240, 80, 255],
+                "text": [240, 255, 245, 255],
+                "secondary": [180, 220, 185, 255],
+                "accent": [100, 255, 110, 255],
+                "success": [72, 240, 80, 255],
+                "warning": [255, 255, 120, 255],
+                "error": [255, 100, 100, 255]
             }
         elif self.current_theme == "dark_gold":
             return {
@@ -512,7 +703,7 @@ class AutomaticThemeManager:
             if not self.themes_initialized:
                 return False, "Themes not initialized"
 
-            required_themes = ["bloomberg_terminal", "dark_gold", "default"]
+            required_themes = ["bloomberg_terminal", "green_terminal", "dark_gold", "default"]
             missing_themes = [t for t in required_themes if t not in self.themes]
 
             if missing_themes:

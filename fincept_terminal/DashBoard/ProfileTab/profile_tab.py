@@ -1,6 +1,8 @@
-# profile_tab.py - Updated for New Fincept API v2.1.0
+# profile_tab.py - Corrected version with logout and working authentication
 import dearpygui.dearpygui as dpg
 import requests
+import webbrowser
+import threading
 from datetime import datetime
 from fincept_terminal.Utils.base_tab import BaseTab
 
@@ -10,7 +12,7 @@ from fincept_terminal.Utils.APIClient.api_client import create_api_client
 
 
 class ProfileTab(BaseTab):
-    """Enhanced profile tab with unified API key authentication"""
+    """Enhanced profile tab with unified API key authentication and logout functionality"""
 
     def __init__(self, app):
         super().__init__(app)
@@ -18,16 +20,17 @@ class ProfileTab(BaseTab):
         self.usage_stats = {}
         self.request_count = 0
         self.api_client = None
+        self.logout_in_progress = False
 
         # Initialize API client with session data
         if hasattr(app, 'get_session_data'):
             session_data = app.get_session_data()
             self.api_client = create_api_client(session_data)
 
-        print(f"🔧 ProfileTab tab initialized with API: {config.get_api_url()}")
+        print(f"🔧 ProfileTab initialized with API: {config.get_api_url()}")
 
     def get_label(self):
-        return "👤 ProfileTab"
+        return "👤 Profile"
 
     def create_content(self):
         """Create profile content with new API awareness"""
@@ -88,10 +91,10 @@ class ProfileTab(BaseTab):
                 # Update session data with fresh profile
                 if hasattr(self.app, 'session_data'):
                     self.app.session_data["user_info"] = result["profile"]
-                print("✅ ProfileTab refreshed from API")
+                print("✅ Profile refreshed from API")
             else:
                 error_msg = self.api_client.handle_api_error(result, "Failed to fetch profile")
-                print(f"⚠️ ProfileTab API error: {error_msg}")
+                print(f"⚠️ Profile API error: {error_msg}")
 
         except Exception as e:
             print(f"❌ Failed to refresh profile: {e}")
@@ -119,13 +122,15 @@ class ProfileTab(BaseTab):
         session_data = self.get_session_data()
         api_key = session_data.get("api_key")
 
-        # Header with refresh indicator
+        # Header with refresh indicator and logout
         with dpg.group(horizontal=True):
-            dpg.add_text("👤 Guest ProfileTab", color=[255, 255, 100])
+            dpg.add_text("👤 Guest Profile", color=[255, 255, 100])
             dpg.add_spacer(width=20)
             dpg.add_text(f"🔄 Refreshed: {self.last_refresh.strftime('%H:%M:%S')}", color=[150, 150, 150])
             dpg.add_spacer(width=20)
-            dpg.add_button(label="🔄 Refresh Now", callback=self.manual_refresh)
+            dpg.add_button(label="🔄 Refresh", callback=self.manual_refresh)
+            dpg.add_spacer(width=10)
+            dpg.add_button(label="🚪 Logout", callback=self.logout_user, tag="logout_btn")
 
         dpg.add_separator()
         dpg.add_spacer(height=20)
@@ -213,9 +218,6 @@ class ProfileTab(BaseTab):
                 else:
                     dpg.add_text("⚠ Limited offline access", color=[255, 200, 100])
 
-                dpg.add_spacer(height=20)
-                dpg.add_button(label="Clear Session & Restart", width=320, callback=self.clear_session)
-
             dpg.add_spacer(width=20)
 
             # Right column - Enhanced Upgrade Options
@@ -293,14 +295,16 @@ class ProfileTab(BaseTab):
         user_info = session_data.get('user_info', {})
         api_key = session_data.get("api_key")
 
-        # Header with refresh indicator
+        # Header with refresh indicator and logout
         username = user_info.get('username', 'User')
         with dpg.group(horizontal=True):
-            dpg.add_text(f"🔑 {username}'s ProfileTab", color=[100, 255, 100])
+            dpg.add_text(f"🔑 {username}'s Profile", color=[100, 255, 100])
             dpg.add_spacer(width=20)
             dpg.add_text(f"🔄 Refreshed: {self.last_refresh.strftime('%H:%M:%S')}", color=[150, 150, 150])
             dpg.add_spacer(width=20)
-            dpg.add_button(label="🔄 Refresh Now", callback=self.manual_refresh)
+            dpg.add_button(label="🔄 Refresh", callback=self.manual_refresh)
+            dpg.add_spacer(width=10)
+            dpg.add_button(label="🚪 Logout", callback=self.logout_user, tag="logout_btn")
 
         dpg.add_separator()
         dpg.add_spacer(height=20)
@@ -357,7 +361,7 @@ class ProfileTab(BaseTab):
                     dpg.add_button(label="Contact Support", width=280, callback=self.show_support_info)
 
                 dpg.add_spacer(height=15)
-                dpg.add_button(label="Change User Account", width=280, callback=self.clear_session)
+                dpg.add_button(label="Switch Account", width=280, callback=self.logout_and_switch)
 
             dpg.add_spacer(width=20)
 
@@ -480,9 +484,6 @@ class ProfileTab(BaseTab):
                 dpg.add_spacer(height=10)
                 dpg.add_text("Daily Progress:")
                 progress = min(1.0, requests_today / daily_limit)
-                progress_color = [100, 255, 100] if progress < 0.8 else [255, 200, 100] if progress < 0.95 else [255,
-                                                                                                                 150,
-                                                                                                                 150]
                 dpg.add_progress_bar(default_value=progress, width=200)
 
             dpg.add_spacer(width=20)
@@ -598,7 +599,12 @@ class ProfileTab(BaseTab):
         print("🔄 Manually refreshing profile data...")
         try:
             self.refresh_profile_data()
-            print("✅ ProfileTab data refreshed")
+
+            # Recreate the content to show updated information
+            self.clear_tab_content()
+            self.create_content()
+
+            print("✅ Profile data refreshed")
             print(f"📊 Request count: {self.request_count}")
             print(f"⏰ Last refresh: {self.last_refresh}")
 
@@ -614,26 +620,36 @@ class ProfileTab(BaseTab):
     def create_unknown_profile(self):
         """Create profile for unknown session state"""
         dpg.add_spacer(height=100)
-        dpg.add_text("❓ Unknown Session State", color=[255, 200, 100])
+
+        with dpg.group(horizontal=True):
+            dpg.add_text("❓ Unknown Session State", color=[255, 200, 100])
+            dpg.add_spacer(width=20)
+            dpg.add_button(label="🚪 Logout", callback=self.logout_user)
+
         dpg.add_separator()
         dpg.add_spacer(height=30)
         dpg.add_text("Unable to determine authentication status")
         dpg.add_text("This may indicate a configuration issue.")
         dpg.add_spacer(height=20)
-        dpg.add_button(label="🔄 Refresh ProfileTab", width=200, callback=self.manual_refresh)
-        dpg.add_button(label="Clear Session & Restart", width=200, callback=self.clear_session)
+        dpg.add_button(label="🔄 Refresh Profile", width=200, callback=self.manual_refresh)
+        dpg.add_button(label="Clear Session & Restart", width=200, callback=self.logout_and_restart)
 
     def create_error_profile(self, error_msg):
         """Create error profile screen"""
         dpg.add_spacer(height=50)
-        dpg.add_text("🚨 ProfileTab Error", color=[255, 100, 100])
+
+        with dpg.group(horizontal=True):
+            dpg.add_text("🚨 Profile Error", color=[255, 100, 100])
+            dpg.add_spacer(width=20)
+            dpg.add_button(label="🚪 Logout", callback=self.logout_user)
+
         dpg.add_separator()
         dpg.add_spacer(height=20)
         dpg.add_text("An error occurred while loading your profile:")
         dpg.add_text(f"Error: {error_msg}", color=[255, 150, 150])
         dpg.add_spacer(height=20)
-        dpg.add_button(label="🔄 Refresh ProfileTab", width=200, callback=self.manual_refresh)
-        dpg.add_button(label="Clear Session & Restart", width=200, callback=self.clear_session)
+        dpg.add_button(label="🔄 Refresh Profile", width=200, callback=self.manual_refresh)
+        dpg.add_button(label="Clear Session & Restart", width=200, callback=self.logout_and_restart)
 
     def format_date(self, date_str):
         """Format date string for display"""
@@ -646,106 +662,550 @@ class ProfileTab(BaseTab):
         except:
             return date_str
 
-    # Enhanced callback methods
-    def clear_session(self):
-        """Clear session and restart authentication"""
-        print("🔄 Clearing session and restarting...")
-        if hasattr(self.app, 'clear_session_and_restart'):
-            self.app.clear_session_and_restart()
-        else:
-            print("Please restart the application to change user")
+    # ============================================
+    # LOGOUT AND AUTHENTICATION METHODS
+    # ============================================
 
-    def logout_all_sessions(self):
-        """Logout from all sessions"""
-        print("📤 Logging out from all sessions...")
-        if hasattr(self.app, 'logout_and_restart'):
-            self.app.logout_and_restart()
-        else:
-            print("Logout functionality not available")
+    def logout_user(self):
+        """Logout current user and return to splash screen (don't close terminal)"""
+        if self.logout_in_progress:
+            print("⚠️ Logout already in progress...")
+            return
 
-    def extend_session(self):
-        """Extend current session"""
+        self.logout_in_progress = True
+
         try:
-            if hasattr(self.app, 'make_api_request'):
-                response = self.app.make_api_request("POST", "/session/extend", json={"extend_hours": 2}, timeout=10)
+            # Update logout button to show progress
+            if dpg.does_item_exist("logout_btn"):
+                dpg.set_item_label("logout_btn", "Logging out...")
+                dpg.disable_item("logout_btn")
 
-                if response and response.status_code == 200:
-                    data = response.json()
-                    if data.get("success"):
-                        print("✅ Session extended by 2 hours")
-                    else:
-                        print(f"❌ Session extension failed: {data.get('message')}")
-                else:
-                    print("❌ Session extension request failed")
-            else:
-                print("Session extension not available")
+            print("🚪 Logging out user...")
+            print("🔄 Returning to splash screen (terminal will remain open)")
+
+            # Perform logout API call if authenticated
+            session_data = self.get_session_data()
+            if self.api_client and session_data.get("user_type") == "registered":
+                self.perform_api_logout()
+
+            # Clear session data but keep terminal open
+            self.clear_session_data()
+
+            # Return to splash screen instead of closing terminal
+            self.return_to_splash_screen()
+
         except Exception as e:
-            print(f"❌ Session extension error: {e}")
+            print(f"❌ Logout error: {e}")
+            # Force return to splash anyway
+            self.return_to_splash_screen()
+        finally:
+            self.logout_in_progress = False
+
+    def return_to_splash_screen(self):
+        """Return to splash screen without closing terminal"""
+        try:
+            print("🔐 Returning to authentication splash screen...")
+
+            # Method 1: Direct app methods (most reliable)
+            if hasattr(self.app, 'show_splash_authentication'):
+                self.app.show_splash_authentication()
+                return
+            elif hasattr(self.app, 'return_to_authentication'):
+                self.app.return_to_authentication()
+                return
+            elif hasattr(self.app, 'show_login_screen'):
+                self.app.show_login_screen()
+                return
+
+            # Method 2: Import splash and show in thread
+            self.show_splash_in_thread()
+
+        except Exception as e:
+            print(f"❌ Error returning to splash: {e}")
+            self.show_fallback_message()
+
+    def show_splash_in_thread(self):
+        """Show splash screen in separate thread"""
+
+        def splash_worker():
+            try:
+                # Import splash authentication
+                from fincept_terminal.Utils.splash_auth import show_authentication_splash
+
+                print("🔐 Opening authentication window...")
+
+                # Show splash and get new session
+                new_session = show_authentication_splash()
+
+                if new_session and new_session.get("authenticated"):
+                    print("✅ Authentication successful! Updating terminal...")
+
+                    # Update app session in main thread
+                    self.update_session_after_auth(new_session)
+
+                else:
+                    print("❌ Authentication was cancelled or failed")
+                    print("💡 You can try logging in again anytime")
+
+            except ImportError as e:
+                print(f"❌ Cannot import splash_auth: {e}")
+                print("💡 Please check your splash_auth module")
+                self.show_fallback_message()
+            except Exception as e:
+                print(f"❌ Splash authentication error: {e}")
+                self.show_fallback_message()
+
+        # Start splash in separate thread
+        threading.Thread(target=splash_worker, daemon=True).start()
+
+    def update_session_after_auth(self, new_session):
+        """Update session data after successful authentication"""
+        try:
+            print("🔄 Updating terminal with new session data...")
+
+            # Update app session data
+            if hasattr(self.app, 'session_data'):
+                self.app.session_data.update(new_session)
+
+            # Update API client
+            self.api_client = create_api_client(new_session)
+
+            # Refresh profile data
+            self.refresh_profile_data()
+
+            # Refresh terminal content
+            if hasattr(self.app, 'refresh_all_tabs'):
+                self.app.refresh_all_tabs()
+            elif hasattr(self.app, 'update_terminal_content'):
+                self.app.update_terminal_content()
+
+            # Refresh current profile tab
+            self.manual_refresh()
+
+            print("✅ Terminal updated with new authentication!")
+
+        except Exception as e:
+            print(f"❌ Error updating session: {e}")
+
+    def show_fallback_message(self):
+        """Show fallback message when splash cannot be opened"""
+        print("=" * 60)
+        print("🔐 AUTHENTICATION REQUIRED")
+        print("=" * 60)
+        print("The splash screen could not be opened automatically.")
+        print("To log in again:")
+        print("1. Restart the terminal application")
+        print("2. Or contact support if this issue persists")
+        print("=" * 60)
+        print("💡 Terminal remains open for any other operations")
+
+    def logout_and_switch(self):
+        """Logout and switch to different account (return to splash)"""
+        print("🔄 Switching account - returning to authentication...")
+        self.logout_user()
+
+    def logout_and_restart(self):
+        """Logout and return to splash (don't close terminal)"""
+        print("🔄 Returning to authentication screen...")
+        self.logout_user()
+
+    def perform_api_logout(self):
+        """Perform API logout if user is authenticated"""
+        try:
+            if not self.api_client:
+                return
+
+            print("🔐 Performing API logout...")
+
+            # Try to logout via API
+            result = self.api_client.logout()
+
+            if result.get("success"):
+                print("✅ API logout successful")
+            else:
+                print(f"⚠️ API logout failed: {result.get('message', 'Unknown error')}")
+
+        except Exception as e:
+            print(f"❌ API logout error: {e}")
+
+    def clear_session_data(self):
+        """Clear all session data"""
+        try:
+            print("🗑️ Clearing session data...")
+
+            # Clear app session data
+            if hasattr(self.app, 'session_data'):
+                self.app.session_data = {
+                    "user_type": None,
+                    "api_key": None,
+                    "device_id": None,
+                    "user_info": {},
+                    "authenticated": False,
+                    "expires_at": None
+                }
+
+            # Clear profile data
+            self.usage_stats = {}
+            self.request_count = 0
+            self.api_client = None
+
+            # Clear any saved credentials
+            if hasattr(self.app, 'clear_saved_credentials'):
+                self.app.clear_saved_credentials()
+
+            print("✅ Session data cleared")
+
+        except Exception as e:
+            print(f"❌ Error clearing session data: {e}")
+
+    def restart_authentication(self):
+        """Restart authentication process - return to splash screen"""
+        try:
+            print("🔄 Returning to splash screen...")
+
+            # Method 1: Use app's show splash method (preferred)
+            if hasattr(self.app, 'show_splash_screen'):
+                self.app.show_splash_screen()
+            elif hasattr(self.app, 'return_to_splash'):
+                self.app.return_to_splash()
+            elif hasattr(self.app, 'restart_authentication'):
+                self.app.restart_authentication()
+
+            # Method 2: Import and show splash directly
+            elif hasattr(self.app, 'session_data'):
+                try:
+                    # Import splash auth
+                    from fincept_terminal.Utils.splash_auth import show_authentication_splash
+
+                    # Hide current terminal window if possible
+                    if hasattr(self.app, 'hide_terminal'):
+                        self.app.hide_terminal()
+
+                    # Show splash in separate thread to avoid blocking
+                    def show_splash():
+                        try:
+                            print("🔐 Showing authentication splash...")
+                            new_session = show_authentication_splash()
+
+                            if new_session and new_session.get("authenticated"):
+                                print("✅ New authentication successful")
+                                # Update app session data
+                                self.app.session_data = new_session
+
+                                # Show terminal again if hidden
+                                if hasattr(self.app, 'show_terminal'):
+                                    self.app.show_terminal()
+
+                                # Refresh all tabs
+                                if hasattr(self.app, 'refresh_all_tabs'):
+                                    self.app.refresh_all_tabs()
+
+                            else:
+                                print("❌ Authentication cancelled or failed")
+                                # Keep terminal hidden or show error
+
+                        except Exception as e:
+                            print(f"❌ Splash screen error: {e}")
+                            if hasattr(self.app, 'show_terminal'):
+                                self.app.show_terminal()
+
+                    # Run splash in thread
+                    threading.Thread(target=show_splash, daemon=True).start()
+
+                except ImportError as e:
+                    print(f"❌ Could not import splash_auth: {e}")
+                    self.fallback_restart()
+
+            # Method 3: Use generic restart methods
+            elif hasattr(self.app, 'show_authentication_splash'):
+                # Run authentication in separate thread to avoid blocking UI
+                threading.Thread(target=self.app.show_authentication_splash, daemon=True).start()
+            elif hasattr(self.app, 'clear_session_and_restart'):
+                self.app.clear_session_and_restart()
+            else:
+                print("⚠️ No splash screen method available. Using fallback...")
+                self.fallback_restart()
+
+        except Exception as e:
+            print(f"❌ Error returning to splash screen: {e}")
+            self.fallback_restart()
+
+    def fallback_restart(self):
+        """Fallback method when splash screen cannot be shown"""
+        try:
+            print("🔄 Using fallback restart method...")
+
+            # Try to reset the terminal to initial state
+            if hasattr(self.app, 'reset_to_initial_state'):
+                self.app.reset_to_initial_state()
+            elif hasattr(self.app, 'show_welcome_screen'):
+                self.app.show_welcome_screen()
+            else:
+                print("⚠️ Please restart the application to log in again.")
+                print("💡 Close the terminal and run the application again.")
+
+        except Exception as e:
+            print(f"❌ Fallback restart error: {e}")
+            print("⚠️ Please restart the application manually.")
+
+    # ============================================
+    # ENHANCED CALLBACK METHODS
+    # ============================================
 
     def show_signup_info(self):
-        """Show enhanced signup information"""
+        """Show enhanced signup information with working callback"""
         print("📝 Create Account Information:")
-        print("To create a free Fincept account with session tokens:")
-        print("1. Restart the application")
+        print("To create a free Fincept account:")
+        print("1. Use the logout button to return to authentication")
         print("2. Choose 'Sign Up' option")
-        print("3. Fill in your details")
-        print("4. Verify your email")
-        print("5. Get instant session token access")
-        print("6. Enjoy enhanced security and features")
+        print("3. Fill in your details (username, email, password)")
+        print("4. Verify your email with the 6-digit code")
+        print("5. Get instant permanent API key access")
+        print("6. Enjoy unlimited features and enhanced security")
+        print("")
+        print("💡 Click 'Logout' button above to start account creation process")
+
+        # Show confirmation dialog
+        if hasattr(self, 'show_confirmation_dialog'):
+            self.show_confirmation_dialog(
+                "Create Account",
+                "Would you like to logout and create a new account?",
+                self.logout_user
+            )
 
     def show_login_info(self):
-        """Show enhanced login information"""
+        """Show enhanced login information with working callback"""
         print("🔑 Sign In Information:")
-        print("To sign in with session token support:")
-        print("1. Restart the application")
+        print("To sign in to your existing account:")
+        print("1. Use the logout button to return to authentication")
         print("2. Choose 'Sign In' option")
-        print("3. Enter your email and password")
-        print("4. Get secure session token")
-        print("5. Access your full account with enhanced security")
+        print("3. Enter your registered email and password")
+        print("4. Get secure permanent API key")
+        print("5. Access your full account with all features")
+        print("")
+        print("💡 Click 'Logout' button above to start sign in process")
+
+        # Show confirmation dialog
+        if hasattr(self, 'show_confirmation_dialog'):
+            self.show_confirmation_dialog(
+                "Sign In",
+                "Would you like to logout and sign in to your account?",
+                self.logout_user
+            )
 
     def regenerate_api_key(self):
         """Regenerate API key for authenticated users"""
-        if hasattr(self.app, 'regenerate_api_key'):
-            self.app.regenerate_api_key()
-            # Refresh profile after API key regeneration
-            self.manual_refresh()
-        else:
-            print("🔄 API key regeneration requested")
+        try:
+            print("🔄 Regenerating API key...")
+
+            if not self.api_client or not self.api_client.is_registered():
+                print("❌ API key regeneration requires authenticated user")
+                return
+
+            # Call API to regenerate key
+            result = self.api_client.regenerate_api_key()
+
+            if result.get("success"):
+                new_api_key = result.get("data", {}).get("api_key")
+                if new_api_key:
+                    # Update session data
+                    session_data = self.get_session_data()
+                    session_data["api_key"] = new_api_key
+
+                    # Update API client
+                    self.api_client = create_api_client(session_data)
+
+                    print("✅ API key regenerated successfully")
+                    print(f"🔑 New API key: {new_api_key[:20]}...")
+
+                    # Refresh profile to show new key
+                    self.manual_refresh()
+                else:
+                    print("❌ No new API key received from server")
+            else:
+                error_msg = result.get("message", "Unknown error")
+                print(f"❌ API key regeneration failed: {error_msg}")
+
+        except Exception as e:
+            print(f"❌ API key regeneration error: {e}")
 
     def view_usage_stats(self):
         """View detailed usage statistics"""
         print("📊 Detailed Usage Statistics:")
+        print("=" * 50)
+
         if self.usage_stats:
             print(f"Total Requests: {self.usage_stats.get('total_requests', 0)}")
             print(f"Credits Used: {self.usage_stats.get('total_credits_used', 0)}")
             print(f"Success Rate: {self.usage_stats.get('success_rate', 100)}%")
+
+            # Show endpoint breakdown if available
+            endpoint_usage = self.usage_stats.get('endpoint_usage', {})
+            if endpoint_usage:
+                print("\nEndpoint Usage Breakdown:")
+                for endpoint, stats in endpoint_usage.items():
+                    print(f"  {endpoint}: {stats.get('count', 0)} requests")
         else:
             print("No usage statistics available")
-        print(f"Current Session Requests: {self.request_count}")
+
+        print(f"\nCurrent Session Requests: {self.request_count}")
 
         session_data = self.get_session_data()
-        print(f"Auth Method: {session_data.get('auth_method', 'unknown')}")
+        auth_method = session_data.get('user_type', 'unknown')
+        print(f"Authentication Method: {auth_method}")
+
+        api_key = session_data.get("api_key")
+        if api_key:
+            if api_key.startswith("fk_user_"):
+                print("API Key Type: Permanent User Key")
+            elif api_key.startswith("fk_guest_"):
+                print("API Key Type: Temporary Guest Key")
+            else:
+                print("API Key Type: Legacy Key")
+        else:
+            print("API Key Type: None (Offline Mode)")
 
     def show_api_docs(self):
         """Show API documentation"""
-        print("📖 Fincept API Documentation:")
-        print("Base URL: https://finceptbackend.share.zrok.io")
-        print("Documentation: /docs (Swagger UI)")
-        print("Session Auth: Supported for enhanced security")
+        print("📖 Opening Fincept API Documentation...")
+        api_docs_url = f"{config.get_api_url()}/docs"
 
-    def download_data(self):
-        """Download data functionality"""
-        print("📥 Data Download features:")
+        try:
+            webbrowser.open(api_docs_url)
+            print(f"✅ Opened API docs: {api_docs_url}")
+        except Exception as e:
+            print(f"❌ Could not open browser: {e}")
+            print(f"📎 Manual URL: {api_docs_url}")
+            print("API Documentation Details:")
+            print(f"Base URL: {config.get_api_url()}")
+            print("Documentation: /docs (Swagger UI)")
+            print("Authentication: API Key based")
+
+    def show_subscription_info(self):
+        """Show subscription information"""
+        print("💳 Subscription Information:")
+        print("=" * 40)
+        print("Current subscription features:")
+
         session_data = self.get_session_data()
-        auth_method = session_data.get("auth_method", "unknown")
+        user_type = session_data.get("user_type", "unknown")
 
-        if auth_method == "session_token":
-            print("✅ Full data export available with session tokens")
+        if user_type == "registered":
+            print("✅ Full account access")
+            print("✅ Unlimited API requests")
+            print("✅ All databases access")
+            print("✅ Premium data feeds")
+            print("✅ Advanced analytics")
+            print("✅ Data export features")
+            print("✅ Priority support")
         else:
-            print("⚠️ Limited export with API key authentication")
-        print("Coming soon!")
+            print("⚠️ Guest access limitations:")
+            daily_limit = session_data.get("daily_limit", 50)
+            print(f"⚠️ {daily_limit} requests per day")
+            print("⚠️ Public databases only")
+            print("⚠️ No data export")
+            print("⚠️ Basic support")
+            print("")
+            print("💡 Create an account for unlimited access!")
+
+    def show_support_info(self):
+        """Show support information"""
+        print("🆘 Support Information:")
+        print("=" * 30)
+        print("For technical support:")
+        print("📧 Email: support@fincept.com")
+        print("📖 Documentation: /docs")
+        print("🔧 API Issues: Check API connectivity")
+        print("💬 Community: Discord/Forums (if available)")
+
+        session_data = self.get_session_data()
+        user_type = session_data.get("user_type", "unknown")
+
+        if user_type == "registered":
+            print("🔑 Priority support available for registered users")
+        else:
+            print("📝 Create account for priority support")
+
+    def show_confirmation_dialog(self, title, message, callback):
+        """Show confirmation dialog (basic implementation)"""
+        print(f"❓ {title}: {message}")
+        print("💡 Use the logout button to proceed")
+
+    def clear_tab_content(self):
+        """Clear current tab content safely"""
+        try:
+            # This method should be implemented based on your BaseTab class
+            # For now, we'll just clear what we can
+            if hasattr(self, 'content_tag') and dpg.does_item_exist(self.content_tag):
+                children = dpg.get_item_children(self.content_tag, 1)
+                for child in children:
+                    if dpg.does_item_exist(child):
+                        dpg.delete_item(child)
+        except Exception as e:
+            print(f"Warning: Could not clear tab content: {e}")
 
     def cleanup(self):
         """Clean up profile resources"""
-        self.usage_stats = {}
-        self.request_count = 0
+        try:
+            self.usage_stats = {}
+            self.request_count = 0
+            self.api_client = None
+            self.logout_in_progress = False
+            print("✅ Profile tab cleanup completed")
+        except Exception as e:
+            print(f"❌ Profile cleanup error: {e}")
+
+    # ============================================
+    # INTEGRATION HELPER METHODS
+    # ============================================
+
+    def get_required_app_methods(self):
+        """Return list of methods the main app should implement for best integration"""
+        return [
+            "show_splash_authentication",  # Preferred: Show splash without closing terminal
+            "return_to_authentication",  # Alternative: Return to auth screen
+            "show_login_screen",  # Alternative: Show login UI
+            "refresh_all_tabs",  # Refresh all tabs after new authentication
+            "update_terminal_content",  # Update terminal content after auth
+            "hide_terminal",  # Optional: Hide terminal during splash
+            "show_terminal",  # Optional: Show terminal after splash
+        ]
+
+    def check_app_integration(self):
+        """Check which integration methods are available in the main app"""
+        methods = self.get_required_app_methods()
+        available = []
+        missing = []
+
+        for method in methods:
+            if hasattr(self.app, method):
+                available.append(method)
+            else:
+                missing.append(method)
+
+        print("🔍 App Integration Check:")
+        print(f"✅ Available methods: {available}")
+        print(f"⚠️ Missing methods: {missing}")
+
+        return available, missing
+
+    def suggest_app_integration(self):
+        """Suggest how to integrate logout functionality in main app"""
+        print("💡 To properly integrate logout functionality, add these methods to your main app:")
+        print("")
+        print("def show_splash_authentication(self):")
+        print("    '''Show splash screen without closing terminal'''")
+        print("    # Hide main terminal window")
+        print("    # Show splash screen")
+        print("    # Update session_data when auth completes")
+        print("    # Show main terminal window again")
+        print("")
+        print("def refresh_all_tabs(self):")
+        print("    '''Refresh all tabs after authentication change'''")
+        print("    # Refresh each tab's content")
+        print("    # Update UI elements")
+        print("")
+        print("def return_to_authentication(self):")
+        print("    '''Alternative method to return to auth'''")
+        print("    # Reset UI to authentication state")
+        print("    # Keep terminal window open")
