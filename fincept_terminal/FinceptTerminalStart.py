@@ -1,4 +1,4 @@
-# main.py - Optimized with Reduced Logging and Faster Loading
+# main.py
 import dearpygui.dearpygui as dpg
 import gc
 import sys
@@ -6,6 +6,7 @@ import requests
 from pathlib import Path
 from datetime import datetime
 
+import fincept_terminal.stock_research_tab
 # Import centralized config
 from fincept_terminal.Utils.config import config, get_api_endpoint, is_strict_mode
 
@@ -41,7 +42,6 @@ def safe_import_tab(tab_name, module_name, class_name):
     except Exception:
         return None
 
-
 # Import tabs safely
 TAB_IMPORTS = [
     ("Dashboard", "fincept_terminal.DashBoard.dashboard_tab", "DashboardTab"),
@@ -49,14 +49,18 @@ TAB_IMPORTS = [
     ("Rss Tab", "rss_tab", "RssTab"),
     ("analytics", "analytics_tab", "AnalyticsTab"),
     ("Portfolio", "portfolio_tab", "PortfolioTab"),
+    ("Chat", "fincept_terminal.DashBoard.ChatTab.chat_tab", "ChatTab"),
+    ("Maps", "maps_tab", "MaritimeMapTab"),
+    ("WorldTradeAnalysisTab", "world_trade_analysis", "WorldTradeAnalysisTab"),
     ("Watchlist", "fincept_terminal.DashBoard.WatchListTab.watchlist_tab", "WatchlistTab"),
     ("database", "database_tab", "DatabaseTab"),
     ("fyers", "fyers_tab", "FyersTab"),
-    #("Technicals", "technical_tab", "TechnicalAnalysisTab"),
-    ("Technicals", "technicals", "TechnicalAnalysisTab"),
+    ("geo", "geo", "GeopoliticalAnalysisTab"),
+    ("Equity Research", "yfdata", "YFinanceDataTab"),
+    #("Technicals", "fincept_terminal.DashBoard.TechnicalsTab.technical_tab", "TechnicalAnalysisTab"),
+    ("Technicals", "fincept_terminal.DashBoard.TechnicalsTab.technicals", "TechnicalAnalysisTab"),
     ("Data Access", "data_access_tab", "DataAccessTab"),
     ("India Data", "indiagov_tab", "DataGovIndiaTab"),
-    ("Equity Research", "stock_research_tab", "StockResearchTab"),
     ("Robo Advisor", "robo_advisor_tab", "RoboAdvisorTab"),
     ("Consumer", "consumer_behaviour_tab", "ConsumerBehaviorTab"),
     ("Dbnomics", "dbnomics_tab", "DBnomicsTab"),
@@ -64,12 +68,12 @@ TAB_IMPORTS = [
     ("Help", "help_tab", "HelpTab"),
 ]
 
+
 # Parallel tab loading for faster startup
 import threading
 
 loading_results = {}
 loading_lock = threading.Lock()
-
 
 def load_tab_worker(tab_id, module_name, class_name):
     """Worker function for parallel tab loading"""
@@ -314,6 +318,8 @@ class MainApplication:
                     with dpg.menu(label="🎨 Themes"):
                         dpg.add_menu_item(label="🖥️ Finance Terminal",
                                           callback=lambda: self.apply_theme_safe("finance_terminal"))
+                        dpg.add_menu_item(label="🟢 Green Terminal",
+                                          callback=lambda: self.apply_theme_safe("green_terminal"))
                         dpg.add_menu_item(label="✨ Dark Gold",
                                           callback=lambda: self.apply_theme_safe("dark_gold"))
                         dpg.add_menu_item(label="🔵 Default",
