@@ -1,6 +1,7 @@
-# forum_tab.py - Updated Forum Tab for Fincept Terminal
+# forum_tab.py - Clean Forum Tab for Fincept Terminal
 import dearpygui.dearpygui as dpg
 import threading
+import time
 from datetime import datetime
 from fincept_terminal.Utils.base_tab import BaseTab
 from fincept_terminal.Utils.APIClient.api_client import create_api_client
@@ -38,7 +39,7 @@ class ForumTab(BaseTab):
         self.BLOOMBERG_PURPLE = [138, 43, 226]
 
     def get_label(self):
-        return "🌐 Global Forum"
+        return "Forum"
 
     def create_content(self):
         """Create forum tab content"""
@@ -125,8 +126,7 @@ class ForumTab(BaseTab):
             dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
 
             # User status
-            user_type = self.api_client.get_user_info().get('user_type', 'guest')
-            if user_type == "registered":
+            if self.api_client.is_registered():
                 user_info = self.api_client.get_user_info()
                 username = user_info.get('username', 'User')
                 dpg.add_text(f"USER: {username.upper()}", color=self.BLOOMBERG_GREEN)
@@ -169,10 +169,10 @@ class ForumTab(BaseTab):
 
             # Forum statistics
             dpg.add_text("FORUM STATISTICS", color=self.BLOOMBERG_YELLOW)
-            dpg.add_text("Loading...", tag="stat_total_users", color=self.BLOOMBERG_WHITE)
+            dpg.add_text("Loading...", tag="stat_total_categories", color=self.BLOOMBERG_WHITE)
             dpg.add_text("Loading...", tag="stat_total_posts", color=self.BLOOMBERG_WHITE)
             dpg.add_text("Loading...", tag="stat_total_comments", color=self.BLOOMBERG_WHITE)
-            dpg.add_text("Loading...", tag="stat_online_users", color=self.BLOOMBERG_GREEN)
+            dpg.add_text("Loading...", tag="stat_total_votes", color=self.BLOOMBERG_GREEN)
 
             dpg.add_separator()
 
@@ -196,8 +196,8 @@ class ForumTab(BaseTab):
                 dpg.add_spacer(width=50)
                 dpg.add_text("SORT:", color=self.BLOOMBERG_GRAY)
                 dpg.add_combo(
-                    ["Latest", "Most Liked", "Most Viewed", "Most Replies"],
-                    default_value="Latest",
+                    ["latest", "popular", "views", "replies"],
+                    default_value="latest",
                     width=120,
                     tag="sort_combo",
                     callback=self.sort_posts_callback
@@ -235,9 +235,8 @@ class ForumTab(BaseTab):
         """Create user information section"""
         dpg.add_text("CURRENT USER", color=self.BLOOMBERG_YELLOW)
 
-        user_info = self.api_client.get_user_info()
-
         if self.api_client.is_registered():
+            user_info = self.api_client.get_user_info()
             username = user_info.get('username', 'User')
             credit_balance = user_info.get('credit_balance', 0)
 
@@ -307,17 +306,27 @@ class ForumTab(BaseTab):
     def create_post_item(self, post_data):
         """Create post item in the posts list"""
         try:
+            # Extract post data
+            post_id = post_data.get("id", "")
             post_uuid = post_data.get("post_uuid", "")
             title = post_data.get("title", "Untitled")
             content = post_data.get("content", "")
-            author = post_data.get("author", {})
-            username = author.get("username", "Unknown")
-            vote_score = post_data.get("vote_score", 0)
-            comment_count = post_data.get("comment_count", 0)
-            view_count = post_data.get("view_count", 0)
+            author_name = post_data.get("author_name", "Unknown")
+            author_display_name = post_data.get("author_display_name", author_name)
+            likes = post_data.get("likes", 0)
+            dislikes = post_data.get("dislikes", 0)
+            reply_count = post_data.get("reply_count", 0)
+            views = post_data.get("views", 0)
             created_at = post_data.get("created_at", "")
-            category_name = post_data.get("category", {}).get("name", "General")
+            category_name = post_data.get("category_name", "General")
             is_pinned = post_data.get("is_pinned", False)
+
+            # Validate UUID
+            if not post_uuid:
+                return
+
+            # Calculate vote score
+            vote_score = likes - dislikes
 
             with dpg.group(parent="posts_list_area"):
                 # Post container
@@ -330,9 +339,13 @@ class ForumTab(BaseTab):
 
                         # Post title (clickable)
                         title_display = title[:50] + "..." if len(title) > 50 else title
+
+                        def view_callback():
+                            self.view_post_details(post_uuid)
+
                         dpg.add_button(
                             label=title_display,
-                            callback=lambda p=post_uuid: self.view_post_details(p),
+                            callback=view_callback,
                             width=350,
                             height=25
                         )
@@ -342,23 +355,26 @@ class ForumTab(BaseTab):
 
                     # Post stats
                     with dpg.group(horizontal=True):
-                        dpg.add_text(f"👁 {view_count}", color=self.BLOOMBERG_GRAY)
+                        dpg.add_text(f"👁 {views}", color=self.BLOOMBERG_GRAY)
                         dpg.add_spacer(width=15)
 
                         vote_color = self.BLOOMBERG_GREEN if vote_score > 0 else self.BLOOMBERG_RED if vote_score < 0 else self.BLOOMBERG_GRAY
                         dpg.add_text(f"👍 {vote_score}", color=vote_color)
                         dpg.add_spacer(width=15)
 
-                        dpg.add_text(f"💬 {comment_count}", color=self.BLOOMBERG_BLUE)
+                        dpg.add_text(f"💬 {reply_count}", color=self.BLOOMBERG_BLUE)
                         dpg.add_spacer(width=15)
 
-                        dpg.add_text(f"By: {username}", color=self.BLOOMBERG_WHITE)
+                        dpg.add_text(f"By: {author_display_name}", color=self.BLOOMBERG_WHITE)
                         dpg.add_spacer(width=15)
 
                         # Format timestamp
                         try:
                             if created_at:
-                                dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                                if created_at.endswith('Z'):
+                                    dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                                else:
+                                    dt = datetime.fromisoformat(created_at)
                                 time_str = dt.strftime("%m/%d %H:%M")
                             else:
                                 time_str = "Recent"
@@ -373,31 +389,295 @@ class ForumTab(BaseTab):
 
                     # Action buttons
                     with dpg.group(horizontal=True):
+                        def view_button_callback():
+                            self.view_post_details(post_uuid)
+
                         dpg.add_button(
                             label="VIEW",
-                            callback=lambda p=post_uuid: self.view_post_details(p),
+                            callback=view_button_callback,
                             width=60,
                             height=20
                         )
 
                         if self.api_client.is_registered():
+                            def vote_up_callback():
+                                self.vote_on_post(post_uuid, "up")
+
+                            def vote_down_callback():
+                                self.vote_on_post(post_uuid, "down")
+
+                            def reply_callback():
+                                self.reply_to_post(post_uuid)
+
                             dpg.add_button(
-                                label="VOTE",
-                                callback=lambda p=post_uuid: self.vote_on_post(p, "up"),
-                                width=60,
+                                label="👍 UP",
+                                callback=vote_up_callback,
+                                width=70,
                                 height=20
                             )
+
+                            dpg.add_button(
+                                label="👎 DOWN",
+                                callback=vote_down_callback,
+                                width=70,
+                                height=20
+                            )
+
                             dpg.add_button(
                                 label="REPLY",
-                                callback=lambda p=post_uuid: self.reply_to_post(p),
+                                callback=reply_callback,
                                 width=60,
                                 height=20
                             )
 
                 dpg.add_spacer(height=5)
 
-        except Exception as e:
-            print(f"Error creating post item: {e}")
+        except Exception:
+            pass
+
+    def vote_on_post(self, post_identifier, vote_type):
+        """Vote on a post with user-friendly popups"""
+        if not self.api_client.is_registered():
+            self.show_notification("❌ Registration Required", "You must be registered to vote on posts.", "error")
+            return
+
+        def vote_thread():
+            try:
+                # Validate identifier
+                if not post_identifier:
+                    self.show_notification("❌ Error", "Invalid post identifier.", "error")
+                    return
+
+                if isinstance(post_identifier, int):
+                    self.show_notification("❌ Error", "Post identifier error. Please refresh and try again.", "error")
+                    return
+
+                if not isinstance(post_identifier, str):
+                    self.show_notification("❌ Error", "Invalid post format. Please refresh and try again.", "error")
+                    return
+
+                if len(post_identifier) < 30:
+                    self.show_notification("❌ Error", "Invalid post UUID format.", "error")
+                    return
+
+                # Make the API request
+                result = self.api_client.make_request("POST", f"/forum/posts/{post_identifier}/vote",
+                                                      data={"vote_type": vote_type})
+
+                if result["success"] and result["data"].get("success"):
+                    vote_action = result["data"]["data"].get("action", "added")
+
+                    if vote_action == "added":
+                        self.show_notification("✅ Vote Recorded", f"Your {vote_type}vote has been added!", "success")
+                    elif vote_action == "removed":
+                        self.show_notification("🔄 Vote Removed", f"Your {vote_type}vote has been removed.", "info")
+                    elif vote_action == "changed":
+                        old_type = result["data"]["data"].get("old_vote_type", "")
+                        new_type = result["data"]["data"].get("new_vote_type", "")
+                        self.show_notification("🔄 Vote Changed", f"Changed from {old_type}vote to {new_type}vote.", "info")
+
+                    # Refresh posts to show updated vote count
+                    self.load_posts(self.current_category)
+                    # Also reload categories to update counts
+                    self.load_categories()
+                else:
+                    error_msg = "Unknown error"
+                    if result.get("data") and isinstance(result["data"], dict):
+                        error_msg = result["data"].get("message", "Unknown error")
+                    elif result.get("error"):
+                        error_msg = result["error"]
+
+                    # Handle specific error cases with user-friendly messages
+                    if "Cannot vote on your own post" in error_msg:
+                        self.show_notification("🚫 Cannot Vote", "You cannot vote on your own posts.", "warning")
+                    elif "Post not found" in error_msg:
+                        self.show_notification("❌ Post Not Found", "This post no longer exists or has been removed.", "error")
+                    elif "already voted" in error_msg.lower():
+                        self.show_notification("ℹ️ Already Voted", "You have already voted on this post.", "info")
+                    else:
+                        self.show_notification("❌ Vote Failed", f"Voting failed: {error_msg}", "error")
+
+            except Exception:
+                self.show_notification("❌ Network Error", "Unable to submit vote. Please check your connection and try again.", "error")
+
+        thread = threading.Thread(target=vote_thread, daemon=True)
+        thread.start()
+
+    def show_notification(self, title, message, notification_type="info"):
+        """Show a user-friendly notification popup"""
+        try:
+            # Generate unique window ID
+            import time
+            window_id = f"notification_{int(time.time() * 1000)}"
+
+            # Choose colors based on notification type
+            if notification_type == "success":
+                title_color = self.BLOOMBERG_GREEN
+                bg_color = [0, 50, 0, 200]
+            elif notification_type == "error":
+                title_color = self.BLOOMBERG_RED
+                bg_color = [50, 0, 0, 200]
+            elif notification_type == "warning":
+                title_color = self.BLOOMBERG_YELLOW
+                bg_color = [50, 50, 0, 200]
+            else:  # info
+                title_color = self.BLOOMBERG_BLUE
+                bg_color = [0, 0, 50, 200]
+
+            # Create notification window
+            with dpg.window(
+                    label=title,
+                    tag=window_id,
+                    width=400,
+                    height=150,
+                    pos=[400, 100],
+                    modal=True,
+                    no_resize=True,
+                    no_move=True,
+                    no_collapse=True
+            ):
+                # Add some styling
+                with dpg.theme() as notification_theme:
+                    with dpg.theme_component(dpg.mvAll):
+                        dpg.add_theme_color(dpg.mvThemeCol_WindowBg, bg_color, category=dpg.mvThemeCat_Core)
+
+                dpg.bind_item_theme(window_id, notification_theme)
+
+                dpg.add_spacer(height=10)
+
+                # Title
+                dpg.add_text(title, color=title_color)
+                dpg.add_separator()
+                dpg.add_spacer(height=10)
+
+                # Message
+                dpg.add_text(message, color=self.BLOOMBERG_WHITE, wrap=350)
+
+                dpg.add_spacer(height=20)
+
+                # Close button
+                with dpg.group(horizontal=True):
+                    dpg.add_spacer(width=150)
+                    dpg.add_button(
+                        label="OK",
+                        callback=lambda: dpg.delete_item(window_id),
+                        width=100,
+                        height=30
+                    )
+
+            # Auto-close after 5 seconds for success/info notifications
+            if notification_type in ["success", "info"]:
+                def auto_close():
+                    import time
+                    time.sleep(5)
+                    if dpg.does_item_exist(window_id):
+                        dpg.delete_item(window_id)
+
+                thread = threading.Thread(target=auto_close, daemon=True)
+                thread.start()
+
+        except Exception:
+            pass
+
+    def view_post_details(self, post_uuid):
+        """View detailed post"""
+        try:
+            # Ensure we're using the UUID string
+            if not post_uuid or not isinstance(post_uuid, str):
+                return
+
+            if not dpg.does_item_exist("post_detail_window"):
+                with dpg.window(
+                        label="POST DETAILS",
+                        tag="post_detail_window",
+                        width=800,
+                        height=600,
+                        pos=[200, 100],
+                        modal=True
+                ):
+                    dpg.add_text("Loading post details...", tag="post_detail_content", color=self.BLOOMBERG_YELLOW)
+
+                    dpg.add_separator()
+
+                    with dpg.group(horizontal=True):
+                        dpg.add_button(label="CLOSE", callback=lambda: dpg.delete_item("post_detail_window"), width=100)
+
+                        if self.api_client.is_registered():
+                            dpg.add_spacer(width=20)
+                            dpg.add_input_text(hint="Add a comment...", width=400, tag="new_comment_input")
+                            dpg.add_button(label="POST COMMENT", callback=lambda: self.add_comment(post_uuid), width=120)
+
+            # Load post details
+            def load_post_details():
+                try:
+                    result = self.api_client.make_request("GET", f"/forum/posts/{post_uuid}")
+                    if result["success"] and result["data"].get("success"):
+                        post_data = result["data"]["data"]
+                        post = post_data.get("post", {})
+                        comments = post_data.get("comments", [])
+
+                        # Update post details content
+                        if dpg.does_item_exist("post_detail_content"):
+                            content_text = f"Title: {post.get('title', 'N/A')}\n\n"
+                            content_text += f"Author: {post.get('author_display_name', 'Unknown')}\n"
+                            content_text += f"Category: {post.get('category_name', 'General')}\n"
+                            content_text += f"Views: {post.get('views', 0)} | "
+                            content_text += f"Likes: {post.get('likes', 0)} | "
+                            content_text += f"Comments: {len(comments)}\n\n"
+                            content_text += f"Content:\n{post.get('content', 'N/A')}\n\n"
+
+                            if comments:
+                                content_text += "Comments:\n"
+                                for comment in comments[:5]:  # Show first 5 comments
+                                    content_text += f"- {comment.get('author_display_name', 'Unknown')}: "
+                                    content_text += f"{comment.get('content', '')[:100]}...\n"
+
+                            dpg.set_value("post_detail_content", content_text)
+
+                except Exception:
+                    pass
+
+            thread = threading.Thread(target=load_post_details, daemon=True)
+            thread.start()
+
+            dpg.show_item("post_detail_window")
+
+        except Exception:
+            pass
+
+    def reply_to_post(self, post_uuid):
+        """Reply to a post"""
+        # Ensure we're using the UUID string
+        if not post_uuid or not isinstance(post_uuid, str):
+            return
+        self.view_post_details(post_uuid)
+
+    def add_comment(self, post_uuid):
+        """Add comment to post"""
+        if not self.api_client.is_registered():
+            return
+
+        # Ensure we're using the UUID string
+        if not post_uuid or not isinstance(post_uuid, str):
+            return
+
+        comment_text = dpg.get_value("new_comment_input") if dpg.does_item_exist("new_comment_input") else ""
+
+        if not comment_text.strip():
+            return
+
+        def add_comment_thread():
+            try:
+                result = self.api_client.make_request("POST", f"/forum/posts/{post_uuid}/comments",
+                                                      data={"content": comment_text.strip()})
+                if result["success"] and result["data"].get("success"):
+                    if dpg.does_item_exist("new_comment_input"):
+                        dpg.set_value("new_comment_input", "")
+            except Exception:
+                pass
+
+        thread = threading.Thread(target=add_comment_thread, daemon=True)
+        thread.start()
 
     # API Integration Methods
     def load_initial_data(self):
@@ -413,12 +693,11 @@ class ForumTab(BaseTab):
                 # Load forum statistics
                 self.load_forum_stats()
 
-                # Load initial posts
+                # Load initial posts (all categories)
                 self.load_posts()
 
                 self.set_loading(False)
-            except Exception as e:
-                print(f"Error loading initial data: {e}")
+            except Exception:
                 self.set_loading(False)
 
         thread = threading.Thread(target=load_data_thread, daemon=True)
@@ -427,25 +706,26 @@ class ForumTab(BaseTab):
     def load_categories(self):
         """Load categories from API"""
         try:
-            result = self.api_client.get_categories()
-            if result["success"]:
-                self.categories = result.get("categories", [])
+            result = self.api_client.make_request("GET", "/forum/categories")
+            if result["success"] and result["data"].get("success"):
+                self.categories = result["data"]["data"].get("categories", [])
 
                 # Update UI on main thread
-                dpg.set_value("posts_loading", "Loading categories...")
+                def update_categories_ui():
+                    # Clear existing categories
+                    if dpg.does_item_exist("categories_list"):
+                        dpg.delete_item("categories_list", children_only=True)
 
-                # Clear existing categories
+                    # Add category items
+                    for category in self.categories:
+                        self.create_category_item(category)
+
+                # Schedule UI update
                 if dpg.does_item_exist("categories_list"):
-                    dpg.delete_item("categories_list", children_only=True)
+                    update_categories_ui()
 
-                # Add category items
-                for category in self.categories:
-                    self.create_category_item(category)
-
-            else:
-                print(f"Failed to load categories: {result.get('error', 'Unknown error')}")
-        except Exception as e:
-            print(f"Error loading categories: {e}")
+        except Exception:
+            pass
 
     def load_posts(self, category_id=None):
         """Load posts from API"""
@@ -456,61 +736,76 @@ class ForumTab(BaseTab):
 
             # Get posts based on current filter
             if category_id:
-                result = self.api_client.get_category_posts(category_id)
-            else:
-                result = self.api_client.get_all_posts()
+                sort_by = dpg.get_value("sort_combo") if dpg.does_item_exist("sort_combo") else "latest"
+                result = self.api_client.make_request("GET", f"/forum/categories/{category_id}/posts",
+                                                      params={"sort_by": sort_by, "limit": 20})
 
-            if result["success"]:
-                self.posts = result.get("posts", [])
+                if result["success"] and result["data"].get("success"):
+                    posts_data = result["data"]["data"]
+                    self.posts = posts_data.get("posts", [])
+                    category_info = posts_data.get("category", {})
+                    category_name = category_info.get("name", "Unknown Category")
 
-                # Clear existing posts
-                if dpg.does_item_exist("posts_list_area"):
-                    dpg.delete_item("posts_list_area", children_only=True)
+                    # Clear existing posts
+                    if dpg.does_item_exist("posts_list_area"):
+                        dpg.delete_item("posts_list_area", children_only=True)
 
-                # Add post items
-                for post in self.posts:
-                    self.create_post_item(post)
+                    # Add post items
+                    for post in self.posts:
+                        self.create_post_item(post)
 
-                # Update category name
-                if category_id and self.categories:
-                    category_name = next(
-                        (cat["name"] for cat in self.categories if cat["id"] == category_id),
-                        "Unknown Category"
-                    )
+                    # Update category name
                     if dpg.does_item_exist("current_category_name"):
                         dpg.set_value("current_category_name", category_name)
-                else:
-                    if dpg.does_item_exist("current_category_name"):
-                        dpg.set_value("current_category_name", "All Categories")
             else:
-                print(f"Failed to load posts: {result.get('error', 'Unknown error')}")
+                # For "all posts", load from the first available category
+                if self.categories:
+                    first_category_id = self.categories[0]["id"]
+                    result = self.api_client.make_request("GET", f"/forum/categories/{first_category_id}/posts",
+                                                          params={"sort_by": "latest", "limit": 20})
+
+                    if result["success"] and result["data"].get("success"):
+                        posts_data = result["data"]["data"]
+                        self.posts = posts_data.get("posts", [])
+                        category_name = "Recent Posts"
+
+                        # Clear existing posts
+                        if dpg.does_item_exist("posts_list_area"):
+                            dpg.delete_item("posts_list_area", children_only=True)
+
+                        # Add post items
+                        for post in self.posts:
+                            self.create_post_item(post)
+
+                        # Update category name
+                        if dpg.does_item_exist("current_category_name"):
+                            dpg.set_value("current_category_name", category_name)
 
             if dpg.does_item_exist("posts_loading"):
                 dpg.hide_item("posts_loading")
 
-        except Exception as e:
-            print(f"Error loading posts: {e}")
+        except Exception:
             if dpg.does_item_exist("posts_loading"):
                 dpg.hide_item("posts_loading")
 
     def load_forum_stats(self):
         """Load forum statistics"""
         try:
-            result = self.api_client.get_forum_stats()
-            if result["success"]:
-                stats = result.get("stats", {})
+            result = self.api_client.make_request("GET", "/forum/stats")
+            if result["success"] and result["data"].get("success"):
+                stats = result["data"]["data"]
 
-                if dpg.does_item_exist("stat_total_users"):
-                    dpg.set_value("stat_total_users", f"Total Users: {stats.get('total_users', 0)}")
+                if dpg.does_item_exist("stat_total_categories"):
+                    dpg.set_value("stat_total_categories", f"Categories: {stats.get('total_categories', 0)}")
                 if dpg.does_item_exist("stat_total_posts"):
                     dpg.set_value("stat_total_posts", f"Total Posts: {stats.get('total_posts', 0)}")
                 if dpg.does_item_exist("stat_total_comments"):
                     dpg.set_value("stat_total_comments", f"Total Comments: {stats.get('total_comments', 0)}")
-                if dpg.does_item_exist("stat_online_users"):
-                    dpg.set_value("stat_online_users", f"Online Now: {stats.get('online_users', 0)}")
+                if dpg.does_item_exist("stat_total_votes"):
+                    dpg.set_value("stat_total_votes", f"Total Votes: {stats.get('total_votes', 0)}")
 
-        except Exception as e:
-            print(f"Error loading forum stats: {e}")
+        except Exception:
+            pass
 
     def set_loading(self, loading):
         """Set loading state"""
@@ -541,10 +836,13 @@ class ForumTab(BaseTab):
                         dpg.show_item("posts_loading")
                         dpg.set_value("posts_loading", f"Searching for '{search_term}'...")
 
-                    result = self.api_client.search_posts(search_term)
+                    result = self.api_client.make_request("GET", "/forum/search",
+                                                          params={"q": search_term, "post_type": "all", "limit": 20})
 
-                    if result["success"]:
-                        posts = result.get("posts", [])
+                    if result["success"] and result["data"].get("success"):
+                        search_data = result["data"]["data"]
+                        results = search_data.get("results", {})
+                        posts = results.get("posts", [])
 
                         # Clear and update posts list
                         if dpg.does_item_exist("posts_list_area"):
@@ -559,131 +857,28 @@ class ForumTab(BaseTab):
                     if dpg.does_item_exist("posts_loading"):
                         dpg.hide_item("posts_loading")
 
-                except Exception as e:
-                    print(f"Search error: {e}")
+                except Exception:
                     if dpg.does_item_exist("posts_loading"):
                         dpg.hide_item("posts_loading")
 
             thread = threading.Thread(target=search_thread, daemon=True)
             thread.start()
 
-        except Exception as e:
-            print(f"Error executing search: {e}")
+        except Exception:
+            pass
 
     def on_search_input_change(self, sender, app_data):
         """Handle search input changes"""
-        # Could implement real-time search here
         pass
 
     def sort_posts_callback(self, sender, app_data):
         """Handle post sorting"""
-        # For now, just reload posts
-        # In a full implementation, you'd pass sort parameters to API
+        # Reload posts with new sorting
         self.load_posts(self.current_category)
-
-    def view_post_details(self, post_uuid):
-        """View detailed post"""
-        try:
-            if not dpg.does_item_exist("post_detail_window"):
-                with dpg.window(
-                        label="POST DETAILS",
-                        tag="post_detail_window",
-                        width=800,
-                        height=600,
-                        pos=[200, 100],
-                        modal=True
-                ):
-                    dpg.add_text("Loading post details...", tag="post_detail_content", color=self.BLOOMBERG_YELLOW)
-
-                    dpg.add_separator()
-
-                    with dpg.group(horizontal=True):
-                        dpg.add_button(label="CLOSE", callback=lambda: dpg.delete_item("post_detail_window"), width=100)
-
-                        if self.api_client.is_registered():
-                            dpg.add_spacer(width=20)
-                            dpg.add_input_text(hint="Add a comment...", width=400, tag="new_comment_input")
-                            dpg.add_button(label="POST COMMENT", callback=lambda: self.add_comment(post_uuid),
-                                           width=120)
-
-            # Load post details
-            def load_post_details():
-                try:
-                    result = self.api_client.get_post_details(post_uuid)
-                    if result["success"]:
-                        post = result.get("post", {})
-                        comments = result.get("comments", [])
-
-                        # Update post details content
-                        if dpg.does_item_exist("post_detail_content"):
-                            dpg.set_value("post_detail_content",
-                                          f"Title: {post.get('title', 'N/A')}\n\nContent: {post.get('content', 'N/A')}")
-
-                except Exception as e:
-                    print(f"Error loading post details: {e}")
-
-            thread = threading.Thread(target=load_post_details, daemon=True)
-            thread.start()
-
-            dpg.show_item("post_detail_window")
-
-        except Exception as e:
-            print(f"Error viewing post details: {e}")
-
-    def vote_on_post(self, post_uuid, vote_type):
-        """Vote on a post"""
-        if not self.api_client.is_registered():
-            print("Voting requires registration")
-            return
-
-        def vote_thread():
-            try:
-                result = self.api_client.vote_on_post(post_uuid, vote_type)
-                if result["success"]:
-                    print(f"Vote submitted successfully")
-                    # Refresh posts to show updated vote count
-                    self.load_posts(self.current_category)
-                else:
-                    print(f"Vote failed: {result.get('error', 'Unknown error')}")
-            except Exception as e:
-                print(f"Error voting: {e}")
-
-        thread = threading.Thread(target=vote_thread, daemon=True)
-        thread.start()
-
-    def reply_to_post(self, post_uuid):
-        """Reply to a post"""
-        self.view_post_details(post_uuid)
-
-    def add_comment(self, post_uuid):
-        """Add comment to post"""
-        if not self.api_client.is_registered():
-            return
-
-        comment_text = dpg.get_value("new_comment_input") if dpg.does_item_exist("new_comment_input") else ""
-
-        if not comment_text.strip():
-            return
-
-        def add_comment_thread():
-            try:
-                result = self.api_client.add_comment_to_post(post_uuid, comment_text.strip())
-                if result["success"]:
-                    print("Comment added successfully")
-                    if dpg.does_item_exist("new_comment_input"):
-                        dpg.set_value("new_comment_input", "")
-                else:
-                    print(f"Comment failed: {result.get('error', 'Unknown error')}")
-            except Exception as e:
-                print(f"Error adding comment: {e}")
-
-        thread = threading.Thread(target=add_comment_thread, daemon=True)
-        thread.start()
 
     def create_new_post(self):
         """Create new post dialog"""
         if not self.api_client.is_registered():
-            print("Creating posts requires registration")
             return
 
         if not dpg.does_item_exist("new_post_window"):
@@ -745,8 +940,14 @@ class ForumTab(BaseTab):
             content = dpg.get_value("new_post_content").strip() if dpg.does_item_exist("new_post_content") else ""
             category_name = dpg.get_value("new_post_category") if dpg.does_item_exist("new_post_category") else ""
 
-            if not title or not content:
-                print("Please fill in all fields")
+            # Validation
+            if not title or len(title) < 3:
+                return
+
+            if not content or len(content) < 10:
+                return
+
+            if not category_name:
                 return
 
             # Find category ID
@@ -757,34 +958,41 @@ class ForumTab(BaseTab):
                     break
 
             if not category_id:
-                print("Please select a valid category")
                 return
 
             def submit_thread():
                 try:
-                    result = self.api_client.create_post(title, content, category_id)
-                    if result["success"]:
-                        print("Post created successfully")
+                    # Prepare post data according to API specification
+                    post_data = {
+                        "title": title,
+                        "content": content,
+                        "category_id": category_id
+                    }
 
+                    result = self.api_client.make_request("POST", f"/forum/categories/{category_id}/posts",
+                                                          data=post_data)
+
+                    if result["success"] and result["data"].get("success"):
                         # Close dialog and refresh
                         if dpg.does_item_exist("new_post_window"):
                             dpg.delete_item("new_post_window")
 
-                        # Refresh posts and categories
-                        self.load_posts(self.current_category)
+                        # Refresh posts and categories to show the new post
                         self.load_categories()
+                        # If we're in the same category, reload it, otherwise switch to it
+                        if self.current_category == category_id:
+                            self.load_posts(category_id)
+                        else:
+                            self.filter_by_category(category_id)
 
-                    else:
-                        print(f"Post creation failed: {result.get('error', 'Unknown error')}")
-
-                except Exception as e:
-                    print(f"Error creating post: {e}")
+                except Exception:
+                    pass
 
             thread = threading.Thread(target=submit_thread, daemon=True)
             thread.start()
 
-        except Exception as e:
-            print(f"Error submitting post: {e}")
+        except Exception:
+            pass
 
     # Function key callbacks
     def show_forum_help(self):
@@ -848,10 +1056,7 @@ class ForumTab(BaseTab):
                 if dpg.does_item_exist("posts_loading"):
                     dpg.hide_item("posts_loading")
 
-                print("Forum refreshed successfully")
-
-            except Exception as e:
-                print(f"Error refreshing forum: {e}")
+            except Exception:
                 if dpg.does_item_exist("posts_loading"):
                     dpg.hide_item("posts_loading")
 
@@ -873,25 +1078,37 @@ class ForumTab(BaseTab):
                     dpg.show_item("posts_loading")
                     dpg.set_value("posts_loading", "Loading trending posts...")
 
-                result = self.api_client.get_trending_posts()
-                if result["success"]:
-                    posts = result.get("posts", [])
+                # Get all posts from all categories and sort by engagement
+                all_posts = []
+                for category in self.categories:
+                    result = self.api_client.make_request("GET", f"/forum/categories/{category['id']}/posts",
+                                                          params={"sort_by": "popular", "limit": 10})
+                    if result["success"] and result["data"].get("success"):
+                        posts_data = result["data"]["data"]
+                        posts = posts_data.get("posts", [])
+                        all_posts.extend(posts)
 
-                    # Clear and update posts list
-                    if dpg.does_item_exist("posts_list_area"):
-                        dpg.delete_item("posts_list_area", children_only=True)
+                # Sort by engagement score (likes + views + comments)
+                def engagement_score(post):
+                    return post.get('likes', 0) * 3 + post.get('views', 0) + post.get('reply_count', 0) * 2
 
-                    for post in posts:
-                        self.create_post_item(post)
+                all_posts.sort(key=engagement_score, reverse=True)
+                trending_posts = all_posts[:20]  # Top 20
 
-                    if dpg.does_item_exist("current_category_name"):
-                        dpg.set_value("current_category_name", "Trending Posts")
+                # Clear and update posts list
+                if dpg.does_item_exist("posts_list_area"):
+                    dpg.delete_item("posts_list_area", children_only=True)
+
+                for post in trending_posts:
+                    self.create_post_item(post)
+
+                if dpg.does_item_exist("current_category_name"):
+                    dpg.set_value("current_category_name", "Trending Posts")
 
                 if dpg.does_item_exist("posts_loading"):
                     dpg.hide_item("posts_loading")
 
-            except Exception as e:
-                print(f"Error loading trending posts: {e}")
+            except Exception:
                 if dpg.does_item_exist("posts_loading"):
                     dpg.hide_item("posts_loading")
 
@@ -911,26 +1128,44 @@ class ForumTab(BaseTab):
                     dpg.show_item("posts_loading")
                     dpg.set_value("posts_loading", "Loading recent posts...")
 
-                # Load all posts sorted by recent
-                result = self.api_client.get_all_posts(sort="recent")
-                if result["success"]:
-                    posts = result.get("posts", [])
+                # Get recent posts from all categories
+                all_posts = []
+                for category in self.categories:
+                    result = self.api_client.make_request("GET", f"/forum/categories/{category['id']}/posts",
+                                                          params={"sort_by": "latest", "limit": 10})
+                    if result["success"] and result["data"].get("success"):
+                        posts_data = result["data"]["data"]
+                        posts = posts_data.get("posts", [])
+                        all_posts.extend(posts)
 
-                    # Clear and update posts list
-                    if dpg.does_item_exist("posts_list_area"):
-                        dpg.delete_item("posts_list_area", children_only=True)
+                # Sort by creation date
+                def parse_date(post):
+                    try:
+                        created_at = post.get('created_at', '')
+                        if created_at.endswith('Z'):
+                            return datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        else:
+                            return datetime.fromisoformat(created_at)
+                    except:
+                        return datetime.min
 
-                    for post in posts:
-                        self.create_post_item(post)
+                all_posts.sort(key=parse_date, reverse=True)
+                recent_posts = all_posts[:20]  # Most recent 20
 
-                    if dpg.does_item_exist("current_category_name"):
-                        dpg.set_value("current_category_name", "Recent Posts")
+                # Clear and update posts list
+                if dpg.does_item_exist("posts_list_area"):
+                    dpg.delete_item("posts_list_area", children_only=True)
+
+                for post in recent_posts:
+                    self.create_post_item(post)
+
+                if dpg.does_item_exist("current_category_name"):
+                    dpg.set_value("current_category_name", "Recent Posts")
 
                 if dpg.does_item_exist("posts_loading"):
                     dpg.hide_item("posts_loading")
 
-            except Exception as e:
-                print(f"Error loading recent posts: {e}")
+            except Exception:
                 if dpg.does_item_exist("posts_loading"):
                     dpg.hide_item("posts_loading")
 
@@ -963,22 +1198,29 @@ class ForumTab(BaseTab):
         # Load profile data
         def load_profile():
             try:
-                result = self.api_client.get_user_profile()
-                if result["success"]:
-                    profile = result.get("profile", {})
+                result = self.api_client.make_request("GET", "/forum/profile")
+                if result["success"] and result["data"].get("success"):
+                    profile_data = result["data"]["data"]
+                    profile = profile_data.get("profile", {})
 
                     profile_text = f"Username: {profile.get('username', 'N/A')}\n"
-                    profile_text += f"Email: {profile.get('email', 'N/A')}\n"
-                    profile_text += f"Credits: {profile.get('credit_balance', 0)}\n"
-                    profile_text += f"Posts: {profile.get('post_count', 0)}\n"
-                    profile_text += f"Comments: {profile.get('comment_count', 0)}\n"
-                    profile_text += f"Joined: {profile.get('created_at', 'N/A')}"
+                    profile_text += f"Display Name: {profile.get('display_name', 'N/A')}\n"
+                    profile_text += f"Bio: {profile.get('bio', 'No bio set')}\n"
+                    profile_text += f"Reputation: {profile.get('reputation', 0)}\n"
+                    profile_text += f"Posts: {profile.get('posts_count', 0)}\n"
+                    profile_text += f"Comments: {profile.get('comments_count', 0)}\n"
+                    profile_text += f"Likes Received: {profile.get('likes_received', 0)}\n"
+                    profile_text += f"Likes Given: {profile.get('likes_given', 0)}\n"
 
                     if dpg.does_item_exist("profile_content"):
                         dpg.set_value("profile_content", profile_text)
+                else:
+                    if dpg.does_item_exist("profile_content"):
+                        dpg.set_value("profile_content", "Error loading profile")
 
-            except Exception as e:
-                print(f"Error loading profile: {e}")
+            except Exception:
+                if dpg.does_item_exist("profile_content"):
+                    dpg.set_value("profile_content", "Error loading profile")
 
         thread = threading.Thread(target=load_profile, daemon=True)
         thread.start()
@@ -996,9 +1238,10 @@ class ForumTab(BaseTab):
                     dpg.show_item("posts_loading")
                     dpg.set_value("posts_loading", "Loading your posts...")
 
-                result = self.api_client.get_user_posts()
-                if result["success"]:
-                    posts = result.get("posts", [])
+                result = self.api_client.make_request("GET", "/forum/user/activity")
+                if result["success"] and result["data"].get("success"):
+                    activity_data = result["data"]["data"]
+                    posts = activity_data.get("posts", [])
 
                     # Clear and update posts list
                     if dpg.does_item_exist("posts_list_area"):
@@ -1013,8 +1256,7 @@ class ForumTab(BaseTab):
                 if dpg.does_item_exist("posts_loading"):
                     dpg.hide_item("posts_loading")
 
-            except Exception as e:
-                print(f"Error loading user posts: {e}")
+            except Exception:
                 if dpg.does_item_exist("posts_loading"):
                     dpg.hide_item("posts_loading")
 
@@ -1028,24 +1270,33 @@ class ForumTab(BaseTab):
 
         def load_activity():
             try:
-                result = self.api_client.get_user_activity()
-                if result["success"]:
-                    activities = result.get("activities", [])
+                result = self.api_client.make_request("GET", "/forum/user/activity")
+                if result["success"] and result["data"].get("success"):
+                    activity_data = result["data"]["data"]
+                    posts = activity_data.get("posts", [])
+                    comments = activity_data.get("comments", [])
+                    reputation = activity_data.get("reputation", 0)
 
                     # Update recent activity panel
                     if dpg.does_item_exist("recent_activity"):
                         dpg.delete_item("recent_activity", children_only=True)
 
                         with dpg.group(parent="recent_activity"):
-                            for activity in activities[:10]:  # Show last 10 activities
-                                activity_text = f"• {activity.get('description', 'Activity')}"
-                                dpg.add_text(activity_text, color=self.BLOOMBERG_WHITE)
+                            dpg.add_text(f"Reputation: {reputation}", color=self.BLOOMBERG_GREEN)
+                            dpg.add_text(f"Posts: {len(posts)}", color=self.BLOOMBERG_BLUE)
+                            dpg.add_text(f"Comments: {len(comments)}", color=self.BLOOMBERG_BLUE)
+                            dpg.add_spacer(height=10)
 
-                            if not activities:
-                                dpg.add_text("No recent activity", color=self.BLOOMBERG_GRAY)
+                            dpg.add_text("Recent Posts:", color=self.BLOOMBERG_YELLOW)
+                            for post in posts[:5]:  # Show last 5 posts
+                                post_title = post.get('title', 'Untitled')[:30]
+                                dpg.add_text(f"• {post_title}...", color=self.BLOOMBERG_WHITE)
 
-            except Exception as e:
-                print(f"Error loading user activity: {e}")
+                            if not posts:
+                                dpg.add_text("No posts yet", color=self.BLOOMBERG_GRAY)
+
+            except Exception:
+                pass
 
         thread = threading.Thread(target=load_activity, daemon=True)
         thread.start()
@@ -1066,10 +1317,8 @@ class ForumTab(BaseTab):
                 dpg.add_text("USER SETTINGS", color=self.BLOOMBERG_ORANGE)
                 dpg.add_separator()
 
-                user_info = self.api_client.get_user_info()
-
                 dpg.add_text("Display Name:")
-                dpg.add_input_text(default_value=user_info.get("username", ""), width=300, tag="settings_display_name")
+                dpg.add_input_text(default_value="", width=300, tag="settings_display_name")
 
                 dpg.add_text("Bio:")
                 dpg.add_input_text(default_value="", width=300, multiline=True, height=60, tag="settings_bio")
@@ -1089,38 +1338,33 @@ class ForumTab(BaseTab):
     def save_user_settings(self):
         """Save user settings"""
         try:
-            display_name = dpg.get_value("settings_display_name") if dpg.does_item_exist(
-                "settings_display_name") else ""
+            display_name = dpg.get_value("settings_display_name") if dpg.does_item_exist("settings_display_name") else ""
             bio = dpg.get_value("settings_bio") if dpg.does_item_exist("settings_bio") else ""
-            avatar_color = dpg.get_value("settings_avatar_color") if dpg.does_item_exist("settings_avatar_color") else [
-                255, 165, 0, 255]
+            avatar_color = dpg.get_value("settings_avatar_color") if dpg.does_item_exist("settings_avatar_color") else [255, 165, 0, 255]
 
             # Convert color to hex
             color_hex = f"#{int(avatar_color[0]):02x}{int(avatar_color[1]):02x}{int(avatar_color[2]):02x}"
 
             def save_settings_thread():
                 try:
-                    result = self.api_client.update_user_profile({
+                    result = self.api_client.make_request("PUT", "/forum/profile", data={
                         "display_name": display_name,
                         "bio": bio,
                         "avatar_color": color_hex
                     })
 
-                    if result["success"]:
-                        print("Settings saved successfully")
+                    if result["success"] and result["data"].get("success"):
                         if dpg.does_item_exist("user_settings_window"):
                             dpg.delete_item("user_settings_window")
-                    else:
-                        print(f"Settings save failed: {result.get('error', 'Unknown error')}")
 
-                except Exception as e:
-                    print(f"Error saving settings: {e}")
+                except Exception:
+                    pass
 
             thread = threading.Thread(target=save_settings_thread, daemon=True)
             thread.start()
 
-        except Exception as e:
-            print(f"Error saving user settings: {e}")
+        except Exception:
+            pass
 
     def show_upgrade_info(self):
         """Show upgrade information for guests"""
@@ -1169,11 +1413,8 @@ class ForumTab(BaseTab):
             self.search_results = []
             self.forum_stats = {}
 
-            # API client cleanup would be handled by the main app
-            print("Forum tab cleaned up")
-
-        except Exception as e:
-            print(f"Error cleaning up forum tab: {e}")
+        except Exception:
+            pass
 
     # Resize support
     def resize_components(self, left_width, center_width, right_width, top_height, bottom_height, cell_height):
@@ -1189,117 +1430,5 @@ class ForumTab(BaseTab):
             if dpg.does_item_exist("user_panel"):
                 dpg.configure_item("user_panel", width=right_width)
 
-        except Exception as e:
-            print(f"Error resizing forum components: {e}")
-
-
-# Additional API methods that need to be added to the API client
-class ForumAPIExtensions:
-    """
-    Additional API methods needed for the forum tab.
-    These should be added to the main API client.
-    """
-
-    @staticmethod
-    def get_categories(api_client):
-        """Get forum categories"""
-        return api_client.make_request("GET", "/forum/categories")
-
-    @staticmethod
-    def get_all_posts(api_client, sort="latest"):
-        """Get all posts"""
-        params = {"sort": sort}
-        return api_client.make_request("GET", "/forum/posts", params=params)
-
-    @staticmethod
-    def get_category_posts(api_client, category_id):
-        """Get posts for specific category"""
-        return api_client.make_request("GET", f"/forum/categories/{category_id}/posts")
-
-    @staticmethod
-    def get_post_details(api_client, post_uuid):
-        """Get detailed post information"""
-        return api_client.make_request("GET", f"/forum/posts/{post_uuid}")
-
-    @staticmethod
-    def get_forum_stats(api_client):
-        """Get forum statistics"""
-        return api_client.make_request("GET", "/forum/stats")
-
-    @staticmethod
-    def search_posts(api_client, query):
-        """Search posts"""
-        params = {"q": query, "post_type": "all"}
-        return api_client.make_request("GET", "/forum/search", params=params)
-
-    @staticmethod
-    def get_trending_posts(api_client, timeframe="week"):
-        """Get trending posts"""
-        params = {"timeframe": timeframe}
-        return api_client.make_request("GET", "/forum/posts/trending", params=params)
-
-    @staticmethod
-    def create_post(api_client, title, content, category_id):
-        """Create new post"""
-        data = {"title": title, "content": content}
-        return api_client.make_request("POST", f"/forum/categories/{category_id}/posts", data=data)
-
-    @staticmethod
-    def vote_on_post(api_client, post_uuid, vote_type):
-        """Vote on post"""
-        data = {"vote_type": vote_type}
-        return api_client.make_request("POST", f"/forum/posts/{post_uuid}/vote", data=data)
-
-    @staticmethod
-    def add_comment_to_post(api_client, post_uuid, content):
-        """Add comment to post"""
-        data = {"content": content}
-        return api_client.make_request("POST", f"/forum/posts/{post_uuid}/comments", data=data)
-
-    @staticmethod
-    def get_user_posts(api_client):
-        """Get current user's posts"""
-        return api_client.make_request("GET", "/forum/user/posts")
-
-    @staticmethod
-    def get_user_activity(api_client):
-        """Get user activity"""
-        return api_client.make_request("GET", "/forum/user/activity")
-
-    @staticmethod
-    def update_user_profile(api_client, profile_data):
-        """Update user profile"""
-        return api_client.make_request("PUT", "/forum/profile", data=profile_data)
-
-
-# Monkey patch the API client to add forum methods
-def add_forum_methods_to_api_client():
-    """Add forum methods to the API client class"""
-    from fincept_terminal.Utils.APIClient.api_client import FinceptAPIClient
-
-    # Add methods to the API client
-    FinceptAPIClient.get_categories = lambda self: ForumAPIExtensions.get_categories(self)
-    FinceptAPIClient.get_all_posts = lambda self, sort="latest": ForumAPIExtensions.get_all_posts(self, sort)
-    FinceptAPIClient.get_category_posts = lambda self, category_id: ForumAPIExtensions.get_category_posts(self,
-                                                                                                          category_id)
-    FinceptAPIClient.get_post_details = lambda self, post_uuid: ForumAPIExtensions.get_post_details(self, post_uuid)
-    FinceptAPIClient.get_forum_stats = lambda self: ForumAPIExtensions.get_forum_stats(self)
-    FinceptAPIClient.search_posts = lambda self, query: ForumAPIExtensions.search_posts(self, query)
-    FinceptAPIClient.get_trending_posts = lambda self, timeframe="week": ForumAPIExtensions.get_trending_posts(self,
-                                                                                                               timeframe)
-    FinceptAPIClient.create_post = lambda self, title, content, category_id: ForumAPIExtensions.create_post(self, title,
-                                                                                                            content,
-                                                                                                            category_id)
-    FinceptAPIClient.vote_on_post = lambda self, post_uuid, vote_type: ForumAPIExtensions.vote_on_post(self, post_uuid,
-                                                                                                       vote_type)
-    FinceptAPIClient.add_comment_to_post = lambda self, post_uuid, content: ForumAPIExtensions.add_comment_to_post(self,
-                                                                                                                   post_uuid,
-                                                                                                                   content)
-    FinceptAPIClient.get_user_posts = lambda self: ForumAPIExtensions.get_user_posts(self)
-    FinceptAPIClient.get_user_activity = lambda self: ForumAPIExtensions.get_user_activity(self)
-    FinceptAPIClient.update_user_profile = lambda self, profile_data: ForumAPIExtensions.update_user_profile(self,
-                                                                                                             profile_data)
-
-
-# Call this when the module is imported
-add_forum_methods_to_api_client()
+        except Exception:
+            pass

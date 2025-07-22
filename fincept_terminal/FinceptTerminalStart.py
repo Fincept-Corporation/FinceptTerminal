@@ -2,11 +2,12 @@
 import dearpygui.dearpygui as dpg
 import gc
 import sys
+
+import fincept_terminal.Brokers.India.fyers.fyers_tab
 import requests
 from pathlib import Path
 from datetime import datetime
 
-import fincept_terminal.stock_research_tab
 # Import centralized config
 from fincept_terminal.Utils.config import config, get_api_endpoint, is_strict_mode
 
@@ -42,19 +43,22 @@ def safe_import_tab(tab_name, module_name, class_name):
     except Exception:
         return None
 
+
 # Import tabs safely
 TAB_IMPORTS = [
     ("Dashboard", "fincept_terminal.DashBoard.dashboard_tab", "DashboardTab"),
     ("Market Tab", "fincept_terminal.DashBoard.market_tab", "MarketTab"),
     ("Rss Tab", "rss_tab", "RssTab"),
     ("analytics", "analytics_tab", "AnalyticsTab"),
-    ("Portfolio", "portfolio_tab", "PortfolioTab"),
+    ("Portfolio", "fincept_terminal.DashBoard.PortfolioTab.portfolio_tab", "PortfolioTab"),
     ("Chat", "fincept_terminal.DashBoard.ChatTab.chat_tab", "ChatTab"),
     ("Maps", "maps_tab", "MaritimeMapTab"),
+    ("Forum", "fincept_terminal.DashBoard.ForumTab.forum_tab", "ForumTab"),
     ("WorldTradeAnalysisTab", "world_trade_analysis", "WorldTradeAnalysisTab"),
     ("Watchlist", "fincept_terminal.DashBoard.WatchListTab.watchlist_tab", "WatchlistTab"),
     ("database", "database_tab", "DatabaseTab"),
-    ("fyers", "fyers_tab", "FyersTab"),
+    ("Wiki", "wiki_tab", "WikipediaSearchTab"),
+    ("fyers", "fincept_terminal.Brokers.India.fyers.fyers_tab", "FyersTab"),
     ("geo", "geo", "GeopoliticalAnalysisTab"),
     ("Equity Research", "yfdata", "YFinanceDataTab"),
     #("Technicals", "fincept_terminal.DashBoard.TechnicalsTab.technical_tab", "TechnicalAnalysisTab"),
