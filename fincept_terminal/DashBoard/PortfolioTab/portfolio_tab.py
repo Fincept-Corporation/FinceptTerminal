@@ -8,7 +8,14 @@ import datetime
 import threading
 import time
 import random
+import csv
+import io
 from collections import defaultdict
+from tkinter import filedialog
+import tkinter as tk
+import yfinance as yf
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import requests
 
 
 def get_settings_path():
@@ -20,7 +27,7 @@ SETTINGS_FILE = get_settings_path()
 
 
 class PortfolioTab(BaseTab):
-    """Bloomberg Terminal style Portfolio Management tab"""
+    """Bloomberg Terminal style Portfolio Management tab with CSV import"""
 
     def __init__(self, main_app=None):
         super().__init__(main_app)
@@ -36,17 +43,41 @@ class PortfolioTab(BaseTab):
         self.BLOOMBERG_BLUE = [100, 150, 250]
         self.BLOOMBERG_BLACK = [0, 0, 0]
 
+        # Price management
+        self.price_cache = {}
+        self.last_price_update = {}
+        self.price_fetch_errors = {}
+        self.daily_change_cache = {}  # Store daily change data
+        self.previous_close_cache = {}  # Store previous close prices
+        self.refresh_thread = None
+        self.refresh_running = False
+        self.price_update_interval = 3600  # 1 hour in seconds
+        self.initial_price_fetch_done = False
+
         # Portfolio data
         self.portfolios = self.load_portfolios()
         self.current_portfolio = None
         self.current_view = "overview"
-        self.price_cache = {}
-        self.last_price_update = {}
-        self.refresh_thread = None
-        self.refresh_running = False
 
-        # Sample market data for demonstration
+        # Country suffix mapping for yfinance
+        self.country_suffixes = {
+            "India": ".NS",
+            "United States": "",
+            "United Kingdom": ".L",
+            "Germany": ".DE",
+            "Japan": ".T",
+            "Australia": ".AX",
+            "Canada": ".TO",
+            "France": ".PA",
+            "Hong Kong": ".HK",
+            "South Korea": ".KS"
+        }
+
+        # Sample market data for demonstration - will be replaced by real data
         self.initialize_sample_data()
+
+        # Start initial price fetch
+        self.fetch_initial_prices()
 
     def get_label(self):
         return "💼 Portfolio"
@@ -70,16 +101,231 @@ class PortfolioTab(BaseTab):
             }
             self.save_portfolios()
 
-        # Initialize price cache with sample data
-        sample_prices = {
-            "AAPL": 175.50, "MSFT": 310.25, "GOOGL": 140.75, "NVDA": 520.80,
-            "JNJ": 165.30, "PG": 152.40, "KO": 61.20, "TSLA": 245.60,
-            "AMZN": 135.90, "META": 380.45
+    def fetch_initial_prices(self):
+        """Fetch initial prices for all stocks in portfolios"""
+        threading.Thread(target=self._fetch_initial_prices_worker, daemon=True).start()
+
+    def _fetch_initial_prices_worker(self):
+        """Background worker to fetch initial prices"""
+        try:
+            print("🔄 Fetching initial stock prices...")
+
+            # Collect all unique symbols from all portfolios
+            all_symbols = set()
+            for portfolio in self.portfolios.values():
+                for symbol in portfolio.keys():
+                    all_symbols.add(symbol)
+
+            if not all_symbols:
+                print("ℹ️ No stocks found in portfolios")
+                self.initial_price_fetch_done = True
+                return
+
+            # Fetch prices in batches for better performance
+            self._fetch_prices_batch(list(all_symbols))
+
+            self.initial_price_fetch_done = True
+            print(f"✅ Initial price fetch completed for {len(all_symbols)} symbols")
+
+            # Update UI if it exists
+            if dpg.does_item_exist("portfolio_last_update"):
+                dpg.set_value("portfolio_last_update", datetime.datetime.now().strftime('%H:%M:%S'))
+
+            # Update navigation summary
+            self.update_navigation_summary()
+
+        except Exception as e:
+            print(f"❌ Error in initial price fetch: {e}")
+            self.initial_price_fetch_done = True
+
+    def _fetch_prices_batch(self, symbols):
+        """Fetch prices for a batch of symbols"""
+        max_workers = 10  # Limit concurrent requests
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit fetch tasks
+            future_to_symbol = {
+                executor.submit(self._fetch_single_price, symbol): symbol
+                for symbol in symbols
+            }
+
+            # Collect results
+            for future in as_completed(future_to_symbol):
+                symbol = future_to_symbol[future]
+                try:
+                    price = future.result(timeout=30)  # 30 second timeout per symbol
+                    if price is not None:
+                        self.price_cache[symbol] = price
+                        self.last_price_update[symbol] = datetime.datetime.now()
+                        self.price_fetch_errors.pop(symbol, None)  # Clear any previous errors
+                        print(f"📈 {symbol}: ${price:.2f}")
+                    else:
+                        self.price_fetch_errors[symbol] = "No price data available"
+                        print(f"⚠️ {symbol}: No price data")
+
+                except Exception as e:
+                    self.price_fetch_errors[symbol] = str(e)
+                    print(f"❌ {symbol}: Error - {e}")
+
+                # Small delay to avoid overwhelming the API
+                time.sleep(0.1)
+
+    def _fetch_single_price(self, symbol):
+        """Fetch price and daily change data for a single symbol using yfinance"""
+        try:
+            # Create ticker object
+            ticker = yf.Ticker(symbol)
+
+            # Get current data
+            info = ticker.info
+
+            # Try different price fields in order of preference
+            price_fields = [
+                'regularMarketPrice',
+                'currentPrice',
+                'previousClose',
+                'regularMarketPreviousClose'
+            ]
+
+            current_price = None
+            previous_close = None
+
+            # Get current price
+            for field in price_fields:
+                if field in info and info[field] is not None:
+                    current_price = float(info[field])
+                    if current_price > 0:  # Valid price
+                        break
+
+            # Get previous close
+            prev_close_fields = ['regularMarketPreviousClose', 'previousClose']
+            for field in prev_close_fields:
+                if field in info and info[field] is not None:
+                    previous_close = float(info[field])
+                    if previous_close > 0:
+                        break
+
+            # If we couldn't get from info, try historical data
+            if current_price is None or previous_close is None:
+                hist = ticker.history(period="2d", interval="1d")
+                if not hist.empty and len(hist) >= 2:
+                    if current_price is None:
+                        current_price = float(hist['Close'].iloc[-1])
+                    if previous_close is None:
+                        previous_close = float(hist['Close'].iloc[-2])
+                elif not hist.empty:
+                    if current_price is None:
+                        current_price = float(hist['Close'].iloc[-1])
+                    if previous_close is None:
+                        previous_close = current_price  # Use same price as fallback
+
+            # Calculate daily change
+            if current_price is not None and previous_close is not None and previous_close > 0:
+                daily_change = current_price - previous_close
+                daily_change_pct = (daily_change / previous_close) * 100
+
+                # Store in caches
+                self.previous_close_cache[symbol] = previous_close
+                self.daily_change_cache[symbol] = {
+                    'change': daily_change,
+                    'change_pct': daily_change_pct
+                }
+
+                return current_price
+
+            return current_price
+
+        except Exception as e:
+            print(f"Error fetching price for {symbol}: {e}")
+            return None
+
+    def get_daily_change(self, symbol):
+        """Get today's change for a symbol"""
+        if symbol in self.daily_change_cache:
+            return self.daily_change_cache[symbol]
+
+        # Calculate from current and previous close if available
+        current_price = self.get_current_price(symbol)
+        previous_close = self.previous_close_cache.get(symbol)
+
+        if current_price and previous_close and previous_close > 0:
+            daily_change = current_price - previous_close
+            daily_change_pct = (daily_change / previous_close) * 100
+            return {
+                'change': daily_change,
+                'change_pct': daily_change_pct
+            }
+
+        # Fallback to zero change
+        return {'change': 0.0, 'change_pct': 0.0}
+
+    def calculate_portfolio_daily_change(self, portfolio_name):
+        """Calculate total daily change for a portfolio"""
+        portfolio = self.portfolios.get(portfolio_name, {})
+        total_change = 0.0
+        total_previous_value = 0.0
+
+        for symbol, data in portfolio.items():
+            if isinstance(data, dict):
+                quantity = data.get('quantity', 0)
+                current_price = self.get_current_price(symbol)
+                previous_close = self.previous_close_cache.get(symbol, current_price)
+
+                # Calculate change for this holding
+                current_value = quantity * current_price
+                previous_value = quantity * previous_close
+                holding_change = current_value - previous_value
+
+                total_change += holding_change
+                total_previous_value += previous_value
+
+        # Calculate percentage change
+        change_pct = (total_change / total_previous_value * 100) if total_previous_value > 0 else 0.0
+
+        return {
+            'change': total_change,
+            'change_pct': change_pct
         }
 
-        for symbol, price in sample_prices.items():
-            self.price_cache[symbol] = price * (1 + random.uniform(-0.05, 0.05))  # Add some variation
-            self.last_price_update[symbol] = datetime.datetime.now()
+    def calculate_total_daily_change(self):
+        """Calculate total daily change across all portfolios"""
+        total_change = 0.0
+        total_previous_value = 0.0
+
+        for portfolio_name in self.portfolios.keys():
+            portfolio_change = self.calculate_portfolio_daily_change(portfolio_name)
+            portfolio_current_value = self.calculate_portfolio_value(portfolio_name)
+            portfolio_previous_value = portfolio_current_value - portfolio_change['change']
+
+            total_change += portfolio_change['change']
+            total_previous_value += portfolio_previous_value
+
+        # Calculate percentage change
+        change_pct = (total_change / total_previous_value * 100) if total_previous_value > 0 else 0.0
+
+        return {
+            'change': total_change,
+            'change_pct': change_pct
+        }
+
+    def get_current_price(self, symbol):
+        """Get current price from cache or return fallback price"""
+        # Return cached price if available
+        if symbol in self.price_cache:
+            return self.price_cache[symbol]
+
+        # If symbol has an error, use average price as fallback
+        if symbol in self.price_fetch_errors:
+            # Try to find avg_price from portfolios
+            for portfolio in self.portfolios.values():
+                if symbol in portfolio and isinstance(portfolio[symbol], dict):
+                    avg_price = portfolio[symbol].get('avg_price', 100)
+                    print(f"⚠️ Using avg_price ${avg_price:.2f} for {symbol} (fetch error)")
+                    return avg_price
+
+        # Default fallback
+        print(f"⚠️ Using default price $100.00 for {symbol}")
+        return 100.0
 
     def create_content(self):
         """Create Bloomberg-style portfolio terminal layout"""
@@ -98,7 +344,7 @@ class PortfolioTab(BaseTab):
 
             # Function keys for portfolio sections
             with dpg.group(horizontal=True):
-                portfolio_functions = ["F1:OVERVIEW", "F2:CREATE", "F3:MANAGE", "F4:ANALYZE", "F5:REPORTS",
+                portfolio_functions = ["F1:OVERVIEW", "F2:CREATE", "F3:MANAGE", "F4:ANALYZE", "F5:IMPORT",
                                        "F6:SETTINGS"]
                 for i, key in enumerate(portfolio_functions):
                     callback_map = {
@@ -106,7 +352,7 @@ class PortfolioTab(BaseTab):
                         1: lambda: self.switch_view("create"),
                         2: lambda: self.switch_view("manage"),
                         3: lambda: self.switch_view("analyze"),
-                        4: lambda: self.show_reports(),
+                        4: lambda: self.switch_view("import"),  # New import view
                         5: lambda: self.show_settings()
                     }
                     dpg.add_button(label=key, width=120, height=25, callback=callback_map.get(i, lambda: None))
@@ -200,8 +446,10 @@ class PortfolioTab(BaseTab):
                 ("➕ Create Portfolio", lambda: self.switch_view("create")),
                 ("📝 Manage Holdings", lambda: self.switch_view("manage")),
                 ("📈 View Analytics", lambda: self.switch_view("analyze")),
+                ("📥 Import CSV", lambda: self.switch_view("import")),  # New import action
                 ("🔄 Refresh Prices", self.refresh_all_prices_now),
-                ("💾 Export Data", self.export_portfolio_data)
+                ("💾 Export Data", self.export_portfolio_data),
+                ("🗑️ Delete Portfolio", self.show_delete_portfolio_dialog)  # New delete option
             ]
 
             for label, callback in quick_actions:
@@ -338,9 +586,386 @@ class PortfolioTab(BaseTab):
             self.create_manage_content()
         elif view_name == "analyze":
             self.create_analyze_content()
+        elif view_name == "import":
+            self.create_import_content()  # New import view
 
         # Update navigation summary
         self.update_navigation_summary()
+
+    def create_import_content(self):
+        """Create CSV import content"""
+        with dpg.group(parent="portfolio_center_panel"):
+            dpg.add_text("CSV PORTFOLIO IMPORT", color=self.BLOOMBERG_ORANGE)
+            dpg.add_separator()
+
+            # Step 1: File Selection
+            dpg.add_text("STEP 1: SELECT CSV FILE", color=self.BLOOMBERG_YELLOW)
+            dpg.add_spacer(height=10)
+
+            with dpg.group(horizontal=True):
+                dpg.add_button(label="📁 SELECT CSV FILE", callback=self.select_csv_file, width=150, height=35)
+                dpg.add_text("No file selected", color=self.BLOOMBERG_GRAY, tag="csv_file_status")
+
+            dpg.add_spacer(height=20)
+
+            # Step 2: Country Selection
+            dpg.add_text("STEP 2: SELECT COUNTRY/EXCHANGE", color=self.BLOOMBERG_YELLOW)
+            dpg.add_spacer(height=10)
+
+            with dpg.group(horizontal=True):
+                dpg.add_text("Country/Exchange:", color=self.BLOOMBERG_WHITE)
+                dpg.add_combo(list(self.country_suffixes.keys()), tag="country_selector",
+                              default_value="India", width=200)
+                dpg.add_text("(This adds appropriate suffix for yfinance)", color=self.BLOOMBERG_GRAY)
+
+            dpg.add_spacer(height=20)
+
+            # Step 3: Portfolio Name
+            dpg.add_text("STEP 3: PORTFOLIO NAME", color=self.BLOOMBERG_YELLOW)
+            dpg.add_spacer(height=10)
+
+            with dpg.group(horizontal=True):
+                dpg.add_text("Portfolio Name:", color=self.BLOOMBERG_WHITE)
+                dpg.add_input_text(tag="import_portfolio_name", hint="Enter portfolio name", width=300)
+
+            dpg.add_spacer(height=20)
+
+            # Step 4: Column Mapping (Initially hidden)
+            dpg.add_group(tag="column_mapping_section", show=False)
+
+            # Step 5: Preview and Import (Initially hidden)
+            dpg.add_group(tag="import_preview_section", show=False)
+
+            # Action buttons
+            dpg.add_spacer(height=20)
+            with dpg.group(horizontal=True):
+                dpg.add_button(label="ANALYZE CSV", callback=self.analyze_csv_file,
+                               width=150, height=35, tag="analyze_csv_btn", show=False)
+                dpg.add_button(label="IMPORT PORTFOLIO", callback=self.import_csv_portfolio,
+                               width=180, height=35, tag="import_portfolio_btn", show=False)
+                dpg.add_button(label="CANCEL", callback=lambda: self.switch_view("overview"),
+                               width=100, height=35)
+
+    def select_csv_file(self):
+        """Open file dialog to select CSV file"""
+        try:
+            # Create a temporary tkinter root window (hidden)
+            root = tk.Tk()
+            root.withdraw()  # Hide the main window
+
+            # Open file dialog
+            file_path = filedialog.askopenfilename(
+                title="Select Portfolio CSV File",
+                filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+            )
+
+            root.destroy()  # Clean up
+
+            if file_path:
+                self.csv_file_path = file_path
+                filename = os.path.basename(file_path)
+
+                # Update status
+                dpg.set_value("csv_file_status", f"Selected: {filename}")
+                dpg.configure_item("csv_file_status", color=self.BLOOMBERG_GREEN)
+                dpg.show_item("analyze_csv_btn")
+
+                self.show_message(f"CSV file selected: {filename}", "success")
+            else:
+                self.show_message("No file selected", "warning")
+
+        except Exception as e:
+            print(f"Error selecting CSV file: {e}")
+            self.show_message("Error selecting file", "error")
+
+    def analyze_csv_file(self):
+        """Analyze the selected CSV file and show column mapping"""
+        try:
+            if not hasattr(self, 'csv_file_path'):
+                self.show_message("Please select a CSV file first", "error")
+                return
+
+            # Read CSV file
+            with open(self.csv_file_path, 'r', encoding='utf-8') as file:
+                # Try to detect delimiter
+                sample = file.read(1024)
+                file.seek(0)
+
+                sniffer = csv.Sniffer()
+                delimiter = sniffer.sniff(sample).delimiter
+
+                reader = csv.reader(file, delimiter=delimiter)
+                rows = list(reader)
+
+            if not rows:
+                self.show_message("CSV file is empty", "error")
+                return
+
+            self.csv_headers = rows[0]
+            self.csv_data = rows[1:] if len(rows) > 1 else []
+
+            # Show column mapping section
+            self.create_column_mapping_ui()
+            dpg.show_item("column_mapping_section")
+
+            self.show_message(f"CSV analyzed: {len(self.csv_data)} rows, {len(self.csv_headers)} columns", "success")
+
+        except Exception as e:
+            print(f"Error analyzing CSV: {e}")
+            self.show_message(f"Error analyzing CSV: {str(e)}", "error")
+
+    def create_column_mapping_ui(self):
+        """Create column mapping interface"""
+        # Clear existing mapping section
+        if dpg.does_item_exist("column_mapping_section"):
+            children = dpg.get_item_children("column_mapping_section", slot=1)
+            for child in children:
+                try:
+                    dpg.delete_item(child)
+                except:
+                    pass
+
+        with dpg.group(parent="column_mapping_section"):
+            dpg.add_text("STEP 4: MAP COLUMNS", color=self.BLOOMBERG_YELLOW)
+            dpg.add_text("Map your CSV columns to portfolio fields:", color=self.BLOOMBERG_WHITE)
+            dpg.add_spacer(height=10)
+
+            # Required field mappings
+            required_fields = [
+                ("symbol", "Stock Symbol/Instrument", "The column containing stock symbols"),
+                ("quantity", "Quantity/Shares", "The column containing number of shares"),
+                ("avg_price", "Average Cost/Purchase Price", "The column containing average purchase price")
+            ]
+
+            # Optional field mappings
+            optional_fields = [
+                ("current_price", "Current Price/LTP", "Current market price (optional)"),
+                ("investment", "Invested Amount", "Total invested amount (optional)"),
+                ("current_value", "Current Value", "Current market value (optional)"),
+                ("pnl", "P&L/Gain-Loss", "Profit/Loss amount (optional)")
+            ]
+
+            # Create mapping table
+            with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True, height=250):
+                dpg.add_table_column(label="Portfolio Field", width_fixed=True, init_width_or_weight=150)
+                dpg.add_table_column(label="Description", width_fixed=True, init_width_or_weight=200)
+                dpg.add_table_column(label="CSV Column", width_fixed=True, init_width_or_weight=200)
+                dpg.add_table_column(label="Required", width_fixed=True, init_width_or_weight=80)
+
+                # Add required fields
+                for field_key, field_name, description in required_fields:
+                    with dpg.table_row():
+                        dpg.add_text(field_name, color=self.BLOOMBERG_WHITE)
+                        dpg.add_text(description, color=self.BLOOMBERG_GRAY)
+
+                        # Try to auto-detect column
+                        auto_detected = self.auto_detect_column(field_key)
+                        dpg.add_combo([""] + self.csv_headers, tag=f"map_{field_key}",
+                                      default_value=auto_detected, width=180)
+                        dpg.add_text("YES", color=self.BLOOMBERG_RED)
+
+                # Add optional fields
+                for field_key, field_name, description in optional_fields:
+                    with dpg.table_row():
+                        dpg.add_text(field_name, color=self.BLOOMBERG_WHITE)
+                        dpg.add_text(description, color=self.BLOOMBERG_GRAY)
+
+                        auto_detected = self.auto_detect_column(field_key)
+                        dpg.add_combo([""] + self.csv_headers, tag=f"map_{field_key}",
+                                      default_value=auto_detected, width=180)
+                        dpg.add_text("NO", color=self.BLOOMBERG_GREEN)
+
+            dpg.add_spacer(height=10)
+            dpg.add_button(label="PREVIEW IMPORT", callback=self.preview_import, width=150, height=30)
+
+    def auto_detect_column(self, field_type):
+        """Auto-detect CSV column based on common naming patterns"""
+        field_patterns = {
+            "symbol": ["symbol", "instrument", "stock", "ticker", "scrip", "name"],
+            "quantity": ["quantity", "qty", "shares", "units", "holding"],
+            "avg_price": ["avg", "average", "cost", "price", "purchase", "buy"],
+            "current_price": ["ltp", "current", "market", "last", "trading"],
+            "investment": ["invested", "investment", "total_cost", "amount"],
+            "current_value": ["current_value", "market_value", "value", "cur"],
+            "pnl": ["pnl", "p&l", "profit", "loss", "gain", "net"]
+        }
+
+        patterns = field_patterns.get(field_type, [])
+
+        for header in self.csv_headers:
+            header_lower = header.lower().replace(" ", "_").replace(".", "").replace("-", "_")
+            for pattern in patterns:
+                if pattern in header_lower:
+                    return header
+
+        return ""
+
+    def preview_import(self):
+        """Preview the import with current column mapping"""
+        try:
+            # Validate required mappings
+            required_mappings = ["symbol", "quantity", "avg_price"]
+            self.column_mapping = {}
+
+            for field in required_mappings:
+                mapped_column = dpg.get_value(f"map_{field}")
+                if not mapped_column:
+                    self.show_message(f"Please map the required field: {field}", "error")
+                    return
+                self.column_mapping[field] = mapped_column
+
+            # Get optional mappings
+            optional_mappings = ["current_price", "investment", "current_value", "pnl"]
+            for field in optional_mappings:
+                mapped_column = dpg.get_value(f"map_{field}")
+                if mapped_column:
+                    self.column_mapping[field] = mapped_column
+
+            # Process preview data
+            self.csv_preview_data = []
+            country_suffix = self.country_suffixes.get(dpg.get_value("country_selector"), "")
+
+            for row in self.csv_data[:10]:  # Preview first 10 rows
+                if len(row) >= len(self.csv_headers):
+                    row_dict = dict(zip(self.csv_headers, row))
+
+                    # Extract mapped data
+                    symbol = str(row_dict.get(self.column_mapping["symbol"], "")).strip()
+                    if not symbol:
+                        continue
+
+                    # Add country suffix for yfinance compatibility
+                    if country_suffix and not symbol.endswith(country_suffix):
+                        symbol_yf = symbol + country_suffix
+                    else:
+                        symbol_yf = symbol
+
+                    try:
+                        quantity = float(row_dict.get(self.column_mapping["quantity"], 0))
+                        avg_price = float(row_dict.get(self.column_mapping["avg_price"], 0))
+                    except (ValueError, TypeError):
+                        continue
+
+                    preview_item = {
+                        "original_symbol": symbol,
+                        "yfinance_symbol": symbol_yf,
+                        "quantity": quantity,
+                        "avg_price": avg_price
+                    }
+
+                    self.csv_preview_data.append(preview_item)
+
+            # Show preview
+            self.create_import_preview()
+            dpg.show_item("import_preview_section")
+            dpg.show_item("import_portfolio_btn")
+
+            self.show_message(f"Preview ready: {len(self.csv_preview_data)} valid rows found", "success")
+
+        except Exception as e:
+            print(f"Error creating preview: {e}")
+            self.show_message(f"Error creating preview: {str(e)}", "error")
+
+    def create_import_preview(self):
+        """Create import preview table"""
+        # Clear existing preview section
+        if dpg.does_item_exist("import_preview_section"):
+            children = dpg.get_item_children("import_preview_section", slot=1)
+            for child in children:
+                try:
+                    dpg.delete_item(child)
+                except:
+                    pass
+
+        with dpg.group(parent="import_preview_section"):
+            dpg.add_text("STEP 5: PREVIEW & IMPORT", color=self.BLOOMBERG_YELLOW)
+            dpg.add_text(f"Preview of {len(self.csv_preview_data)} stocks to be imported:", color=self.BLOOMBERG_WHITE)
+            dpg.add_spacer(height=10)
+
+            # Preview table
+            with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True,
+                           scrollY=True, height=200):
+                dpg.add_table_column(label="Original Symbol", width_fixed=True, init_width_or_weight=120)
+                dpg.add_table_column(label="YFinance Symbol", width_fixed=True, init_width_or_weight=130)
+                dpg.add_table_column(label="Quantity", width_fixed=True, init_width_or_weight=100)
+                dpg.add_table_column(label="Avg Price", width_fixed=True, init_width_or_weight=100)
+                dpg.add_table_column(label="Investment", width_fixed=True, init_width_or_weight=120)
+
+                for item in self.csv_preview_data:
+                    investment = item["quantity"] * item["avg_price"]
+                    with dpg.table_row():
+                        dpg.add_text(item["original_symbol"], color=self.BLOOMBERG_WHITE)
+                        dpg.add_text(item["yfinance_symbol"], color=self.BLOOMBERG_GREEN)
+                        dpg.add_text(f"{item['quantity']:.2f}", color=self.BLOOMBERG_WHITE)
+                        dpg.add_text(f"${item['avg_price']:.2f}", color=self.BLOOMBERG_WHITE)
+                        dpg.add_text(f"${investment:,.2f}", color=self.BLOOMBERG_WHITE)
+
+            dpg.add_spacer(height=10)
+
+            # Summary
+            total_investment = sum(item["quantity"] * item["avg_price"] for item in self.csv_preview_data)
+            unique_stocks = len(self.csv_preview_data)
+
+            with dpg.group(horizontal=True):
+                dpg.add_text("Summary:", color=self.BLOOMBERG_YELLOW)
+                dpg.add_text(f"{unique_stocks} stocks", color=self.BLOOMBERG_WHITE)
+                dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
+                dpg.add_text(f"Total Investment: ${total_investment:,.2f}", color=self.BLOOMBERG_WHITE)
+
+    def import_csv_portfolio(self):
+        """Import the CSV data as a new portfolio"""
+        try:
+            portfolio_name = dpg.get_value("import_portfolio_name").strip()
+            if not portfolio_name:
+                self.show_message("Please enter a portfolio name", "error")
+                return
+
+            if portfolio_name in self.portfolios:
+                self.show_message("Portfolio name already exists", "error")
+                return
+
+            if not self.csv_preview_data:
+                self.show_message("No preview data available. Please analyze CSV first", "error")
+                return
+
+            # Create new portfolio
+            new_portfolio = {}
+
+            for item in self.csv_preview_data:
+                symbol = item["yfinance_symbol"]
+                new_portfolio[symbol] = {
+                    "quantity": item["quantity"],
+                    "avg_price": item["avg_price"],
+                    "last_added": datetime.datetime.now().strftime("%Y-%m-%d"),
+                    "original_symbol": item["original_symbol"]  # Keep original symbol for reference
+                }
+
+                # Update price cache with avg_price as initial current price
+                self.price_cache[symbol] = item["avg_price"] * (1 + random.uniform(-0.05, 0.05))
+
+            # Add to portfolios
+            self.portfolios[portfolio_name] = new_portfolio
+            self.save_portfolios()
+
+            # Fetch real prices for imported symbols
+            imported_symbols = list(new_portfolio.keys())
+            threading.Thread(target=lambda: self._fetch_prices_batch(imported_symbols), daemon=True).start()
+
+            # Clear import data
+            self.csv_data = None
+            self.csv_headers = []
+            self.column_mapping = {}
+            self.csv_preview_data = []
+
+            # Switch to overview
+            self.switch_view("overview")
+
+            success_msg = f"Portfolio '{portfolio_name}' imported successfully with {len(new_portfolio)} stocks! Fetching real-time prices..."
+            self.show_message(success_msg, "success")
+
+        except Exception as e:
+            print(f"Error importing portfolio: {e}")
+            self.show_message(f"Error importing portfolio: {str(e)}", "error")
 
     def create_overview_content(self):
         """Create portfolio overview content"""
@@ -364,8 +989,12 @@ class PortfolioTab(BaseTab):
                 with dpg.child_window(width=280, height=120, border=True):
                     dpg.add_text("📈 TODAY'S CHANGE", color=self.BLOOMBERG_YELLOW)
                     dpg.add_spacer(height=5)
-                    today_change = random.uniform(-1000, 2000)  # Simulated
-                    change_pct = (today_change / total_value * 100) if total_value > 0 else 0
+
+                    # Get real daily change data
+                    daily_change_data = self.calculate_total_daily_change()
+                    today_change = daily_change_data['change']
+                    change_pct = daily_change_data['change_pct']
+
                     change_color = self.BLOOMBERG_GREEN if today_change >= 0 else self.BLOOMBERG_RED
                     dpg.add_text(f"${today_change:+,.2f}", color=change_color)
                     dpg.add_text(f"({change_pct:+.2f}%)", color=change_color)
@@ -404,7 +1033,11 @@ class PortfolioTab(BaseTab):
                     portfolio_pnl = portfolio_value - portfolio_investment
                     portfolio_pnl_pct = (portfolio_pnl / portfolio_investment * 100) if portfolio_investment > 0 else 0
                     allocation_pct = (portfolio_value / total_value * 100) if total_value > 0 else 0
-                    today_change = random.uniform(-200, 300)  # Simulated daily change
+
+                    # Get real daily change for this portfolio
+                    portfolio_daily_change = self.calculate_portfolio_daily_change(portfolio_name)
+                    today_change = portfolio_daily_change['change']
+                    today_change_pct = portfolio_daily_change['change_pct']
 
                     with dpg.table_row():
                         dpg.add_text(portfolio_name, color=self.BLOOMBERG_WHITE)
@@ -414,8 +1047,7 @@ class PortfolioTab(BaseTab):
 
                         # Today's change
                         change_color = self.BLOOMBERG_GREEN if today_change >= 0 else self.BLOOMBERG_RED
-                        change_pct = (today_change / portfolio_value * 100) if portfolio_value > 0 else 0
-                        dpg.add_text(f"${today_change:+,.2f} ({change_pct:+.1f}%)", color=change_color)
+                        dpg.add_text(f"${today_change:+,.2f} ({today_change_pct:+.1f}%)", color=change_color)
 
                         # Total P&L
                         pnl_color = self.BLOOMBERG_GREEN if portfolio_pnl >= 0 else self.BLOOMBERG_RED
@@ -429,6 +1061,8 @@ class PortfolioTab(BaseTab):
                                            callback=lambda p=portfolio_name: self.select_and_manage_portfolio(p))
                             dpg.add_button(label="Analyze", width=60,
                                            callback=lambda p=portfolio_name: self.select_and_analyze_portfolio(p))
+                            dpg.add_button(label="Delete", width=60,
+                                           callback=lambda p=portfolio_name: self.delete_portfolio_confirm(p))
 
     def create_create_content(self):
         """Create portfolio creation content"""
@@ -499,6 +1133,7 @@ class PortfolioTab(BaseTab):
             with dpg.table(tag="manage_holdings_table", header_row=True, borders_innerH=True,
                            borders_outerH=True, scrollY=True, scrollX=True, height=300):
                 dpg.add_table_column(label="Stock", width_fixed=True, init_width_or_weight=80)
+                dpg.add_table_column(label="Original", width_fixed=True, init_width_or_weight=80)
                 dpg.add_table_column(label="Shares", width_fixed=True, init_width_or_weight=80)
                 dpg.add_table_column(label="Avg Cost", width_fixed=True, init_width_or_weight=100)
                 dpg.add_table_column(label="Current Price", width_fixed=True, init_width_or_weight=120)
@@ -536,6 +1171,11 @@ class PortfolioTab(BaseTab):
 
     def create_analytics_charts(self, portfolio_name):
         """Create analytics charts for selected portfolio"""
+        # Ensure portfolio_name is a string
+        if not isinstance(portfolio_name, str):
+            print(f"Error: portfolio_name is not a string: {portfolio_name}")
+            return
+
         # Clear existing content
         if dpg.does_item_exist("analytics_content"):
             children = dpg.get_item_children("analytics_content", slot=1)
@@ -660,7 +1300,7 @@ class PortfolioTab(BaseTab):
                         portfolio_investment = self.calculate_portfolio_investment(portfolio_name)
                         total_return = portfolio_value - portfolio_investment
                         total_return_pct = (
-                                    total_return / portfolio_investment * 100) if portfolio_investment > 0 else 0
+                                total_return / portfolio_investment * 100) if portfolio_investment > 0 else 0
 
                         return_metrics = [
                             ("Total Return:", f"${total_return:+,.2f}"),
@@ -729,14 +1369,23 @@ class PortfolioTab(BaseTab):
         return total_investment
 
     def get_current_price(self, symbol):
-        """Get current price from cache or return simulated price"""
+        """Get current price from cache or return fallback price"""
+        # Return cached price if available
         if symbol in self.price_cache:
-            # Add small random variation for live effect
-            base_price = self.price_cache[symbol]
-            return base_price * (1 + random.uniform(-0.01, 0.01))
+            return self.price_cache[symbol]
 
-        # Return simulated price if not in cache
-        return random.uniform(50, 500)
+        # If symbol has an error, use average price as fallback
+        if symbol in self.price_fetch_errors:
+            # Try to find avg_price from portfolios
+            for portfolio in self.portfolios.values():
+                if symbol in portfolio and isinstance(portfolio[symbol], dict):
+                    avg_price = portfolio[symbol].get('avg_price', 100)
+                    print(f"⚠️ Using avg_price ${avg_price:.2f} for {symbol} (fetch error)")
+                    return avg_price
+
+        # Default fallback
+        print(f"⚠️ Using default price $100.00 for {symbol}")
+        return 100.0
 
     def update_navigation_summary(self):
         """Update navigation panel summary"""
@@ -748,8 +1397,9 @@ class PortfolioTab(BaseTab):
             total_pnl_pct = (total_pnl / total_investment * 100) if total_investment > 0 else 0
 
             # Simulate today's change
-            today_change = random.uniform(-1000, 2000)
-            today_change_pct = (today_change / total_value * 100) if total_value > 0 else 0
+            total_daily_change = self.calculate_total_daily_change()
+            today_change = total_daily_change['change']
+            today_change_pct = total_daily_change['change_pct']
 
             if dpg.does_item_exist("nav_total_portfolios"):
                 dpg.set_value("nav_total_portfolios", str(total_portfolios))
@@ -825,8 +1475,8 @@ class PortfolioTab(BaseTab):
                         }
                     }
 
-                    # Update price cache
-                    self.price_cache[symbol] = price * (1 + random.uniform(-0.05, 0.05))
+                    # Fetch real price for the symbol
+                    threading.Thread(target=lambda: self._fetch_single_price_and_update(symbol), daemon=True).start()
 
                 except ValueError:
                     self.show_message("Invalid quantity or price values.", "error")
@@ -847,7 +1497,7 @@ class PortfolioTab(BaseTab):
 
             success_msg = f"Portfolio '{name}' created successfully!"
             if symbol:
-                success_msg += f" Added {quantity} shares of {symbol} at ${price:.2f}."
+                success_msg += f" Added {quantity} shares of {symbol} at ${price:.2f}. Fetching real-time price..."
 
             self.show_message(success_msg, "success")
 
@@ -922,18 +1572,40 @@ class PortfolioTab(BaseTab):
             self.save_portfolios()
             self.refresh_manage_view()
 
+            # Fetch real price for new symbol
+            threading.Thread(target=lambda: self._fetch_single_price_and_update(symbol), daemon=True).start()
+
             # Clear inputs
             dpg.set_value("manage_stock_symbol", "")
             dpg.set_value("manage_stock_quantity", "")
             dpg.set_value("manage_stock_price", "")
 
-            self.show_message(f"Added {quantity} shares of {symbol} to {self.current_portfolio}.", "success")
+            self.show_message(
+                f"Added {quantity} shares of {symbol} to {self.current_portfolio}. Fetching real-time price...",
+                "success")
 
         except ValueError:
             self.show_message("Invalid quantity or price values.", "error")
         except Exception as e:
             print(f"Error adding stock: {e}")
             self.show_message("Error adding stock", "error")
+
+    def _fetch_single_price_and_update(self, symbol):
+        """Fetch price for a single symbol and update cache"""
+        try:
+            price = self._fetch_single_price(symbol)
+            if price is not None:
+                self.price_cache[symbol] = price
+                self.last_price_update[symbol] = datetime.datetime.now()
+                print(f"✅ Updated price for {symbol}: ${price:.2f}")
+
+                # Update UI if in manage view
+                if self.current_view == "manage":
+                    self.refresh_manage_view()
+            else:
+                print(f"⚠️ Could not fetch price for {symbol}")
+        except Exception as e:
+            print(f"Error fetching price for {symbol}: {e}")
 
     def refresh_manage_view(self):
         """Refresh the manage view content"""
@@ -958,6 +1630,7 @@ class PortfolioTab(BaseTab):
                 if isinstance(data, dict):
                     quantity = data.get("quantity", 0)
                     avg_price = data.get("avg_price", 0)
+                    original_symbol = data.get("original_symbol", symbol)  # Show original symbol if available
                     current_price = self.get_current_price(symbol)
 
                     market_value = quantity * current_price
@@ -967,7 +1640,8 @@ class PortfolioTab(BaseTab):
                     weight_pct = (market_value / portfolio_value * 100) if portfolio_value > 0 else 0
 
                     with dpg.table_row(parent="manage_holdings_table"):
-                        dpg.add_text(symbol, color=self.BLOOMBERG_WHITE)
+                        dpg.add_text(symbol, color=self.BLOOMBERG_WHITE)  # YFinance symbol
+                        dpg.add_text(original_symbol, color=self.BLOOMBERG_GRAY)  # Original symbol
                         dpg.add_text(f"{quantity:.2f}", color=self.BLOOMBERG_WHITE)
                         dpg.add_text(f"${avg_price:.2f}", color=self.BLOOMBERG_WHITE)
                         dpg.add_text(f"${current_price:.2f}", color=self.BLOOMBERG_WHITE)
@@ -1015,43 +1689,158 @@ class PortfolioTab(BaseTab):
         except Exception as e:
             print(f"Error removing stock: {e}")
 
-    # Threading and price management
+    def delete_portfolio_confirm(self, portfolio_name):
+        """Show confirmation dialog for portfolio deletion"""
+        try:
+            # Create confirmation popup
+            with dpg.popup(dpg.last_item(), modal=True, tag=f"delete_confirm_{portfolio_name}"):
+                dpg.add_text(f"Delete Portfolio: {portfolio_name}?", color=self.BLOOMBERG_RED)
+                dpg.add_separator()
+                dpg.add_text("This action cannot be undone!", color=self.BLOOMBERG_YELLOW)
+                dpg.add_spacer(height=10)
+
+                with dpg.group(horizontal=True):
+                    dpg.add_button(label="DELETE", width=80,
+                                   callback=lambda: self.delete_portfolio(portfolio_name))
+                    dpg.add_button(label="CANCEL", width=80,
+                                   callback=lambda: dpg.delete_item(f"delete_confirm_{portfolio_name}"))
+
+        except Exception as e:
+            print(f"Error showing delete confirmation: {e}")
+            # Direct delete if popup fails
+            self.delete_portfolio(portfolio_name)
+
+    def show_delete_portfolio_dialog(self):
+        """Show dialog to select portfolio for deletion"""
+        if not self.portfolios:
+            self.show_message("No portfolios to delete", "warning")
+            return
+
+        try:
+            # Create a simple selection dialog
+            portfolio_names = list(self.portfolios.keys())
+
+            # Create modal window for portfolio selection
+            with dpg.window(label="Delete Portfolio", modal=True, tag="delete_portfolio_window",
+                            width=400, height=200, pos=[300, 200]):
+                dpg.add_text("SELECT PORTFOLIO TO DELETE:", color=self.BLOOMBERG_YELLOW)
+                dpg.add_separator()
+
+                for portfolio_name in portfolio_names:
+                    with dpg.group(horizontal=True):
+                        dpg.add_text(f"• {portfolio_name}", color=self.BLOOMBERG_WHITE)
+                        dpg.add_button(label="DELETE", width=80,
+                                       callback=lambda p=portfolio_name: self.delete_portfolio_from_dialog(p))
+
+                dpg.add_separator()
+                dpg.add_button(label="CANCEL", width=-1, height=30,
+                               callback=lambda: dpg.delete_item("delete_portfolio_window"))
+
+        except Exception as e:
+            print(f"Error showing delete dialog: {e}")
+            self.show_message("Error showing delete dialog", "error")
+
+    def delete_portfolio_from_dialog(self, portfolio_name):
+        """Delete portfolio from selection dialog"""
+        try:
+            # Close dialog first
+            if dpg.does_item_exist("delete_portfolio_window"):
+                dpg.delete_item("delete_portfolio_window")
+
+            # Show confirmation
+            self.delete_portfolio_confirm(portfolio_name)
+
+        except Exception as e:
+            print(f"Error in delete from dialog: {e}")
+
+    def delete_portfolio(self, portfolio_name):
+        """Delete the specified portfolio"""
+        try:
+            if portfolio_name not in self.portfolios:
+                self.show_message("Portfolio not found", "error")
+                return
+
+            # Remove from portfolios
+            del self.portfolios[portfolio_name]
+
+            # Save changes
+            self.save_portfolios()
+
+            # Clear current portfolio if it was the deleted one
+            if self.current_portfolio == portfolio_name:
+                self.current_portfolio = None
+
+            # Close any confirmation dialogs
+            if dpg.does_item_exist(f"delete_confirm_{portfolio_name}"):
+                dpg.delete_item(f"delete_confirm_{portfolio_name}")
+
+            # Refresh UI
+            self.switch_view("overview")
+
+            self.show_message(f"Portfolio '{portfolio_name}' deleted successfully", "success")
+
+        except Exception as e:
+            print(f"Error deleting portfolio: {e}")
+            self.show_message("Error deleting portfolio", "error")
+
     def start_price_refresh_thread(self):
         """Start the auto price refresh thread"""
         if not self.refresh_running:
             self.refresh_running = True
             self.refresh_thread = threading.Thread(target=self._price_refresh_loop, daemon=True)
             self.refresh_thread.start()
+            print("🔄 Started hourly price refresh thread")
 
     def _price_refresh_loop(self):
-        """Background thread for price refresh"""
+        """Background thread for price refresh - runs every hour"""
         while self.refresh_running:
             try:
-                # Update prices every 30 seconds for demo
-                time.sleep(30)
+                # Wait for initial fetch to complete
+                while not self.initial_price_fetch_done and self.refresh_running:
+                    time.sleep(10)
+
+                if not self.refresh_running:
+                    break
+
+                # Sleep for 1 hour (3600 seconds)
+                for _ in range(self.price_update_interval):
+                    if not self.refresh_running:
+                        break
+                    time.sleep(1)
+
                 if self.refresh_running:
+                    print("🔄 Hourly price update starting...")
                     self.refresh_all_prices_background()
+
             except Exception as e:
                 print(f"Error in price refresh loop: {e}")
-                time.sleep(60)
+                time.sleep(300)  # Wait 5 minutes before retrying
 
     def refresh_all_prices_background(self):
         """Refresh all prices in background"""
         try:
-            # Simulate price updates
-            for symbol in self.price_cache:
-                current_price = self.price_cache[symbol]
-                change = random.uniform(-0.02, 0.02)  # ±2% change
-                new_price = current_price * (1 + change)
-                self.price_cache[symbol] = max(new_price, 1.0)  # Minimum $1
-                self.last_price_update[symbol] = datetime.datetime.now()
+            # Collect all unique symbols from all portfolios
+            all_symbols = set()
+            for portfolio in self.portfolios.values():
+                for symbol in portfolio.keys():
+                    all_symbols.add(symbol)
 
-            # Update timestamp
+            if not all_symbols:
+                return
+
+            print(f"🔄 Refreshing prices for {len(all_symbols)} symbols...")
+
+            # Fetch updated prices
+            self._fetch_prices_batch(list(all_symbols))
+
+            # Update timestamp in UI
             if dpg.does_item_exist("portfolio_last_update"):
                 dpg.set_value("portfolio_last_update", datetime.datetime.now().strftime('%H:%M:%S'))
 
             # Update navigation summary
             self.update_navigation_summary()
+
+            print("✅ Price refresh completed")
 
         except Exception as e:
             print(f"Error refreshing prices: {e}")
@@ -1115,18 +1904,48 @@ class PortfolioTab(BaseTab):
         """Search portfolio functionality"""
         print("🔍 Portfolio search functionality")
 
-    def show_reports(self):
-        """Show portfolio reports"""
-        print("📊 Portfolio reports functionality")
-
     def show_settings(self):
         """Show portfolio settings"""
         print("⚙️ Portfolio settings functionality")
 
     def export_portfolio_data(self):
         """Export portfolio data"""
-        print("💾 Export portfolio data functionality")
-        self.show_message("Portfolio data export feature coming soon!", "info")
+        try:
+            # Create CSV export data
+            export_data = []
+            export_data.append(
+                ["Portfolio", "Symbol", "Original_Symbol", "Quantity", "Avg_Price", "Current_Price", "Investment",
+                 "Current_Value", "P&L", "P&L_%"])
+
+            for portfolio_name, stocks in self.portfolios.items():
+                for symbol, data in stocks.items():
+                    if isinstance(data, dict):
+                        quantity = data.get("quantity", 0)
+                        avg_price = data.get("avg_price", 0)
+                        original_symbol = data.get("original_symbol", symbol)
+                        current_price = self.get_current_price(symbol)
+
+                        investment = quantity * avg_price
+                        current_value = quantity * current_price
+                        pnl = current_value - investment
+                        pnl_pct = (pnl / investment * 100) if investment > 0 else 0
+
+                        export_data.append([
+                            portfolio_name, symbol, original_symbol, quantity, avg_price,
+                            current_price, investment, current_value, pnl, pnl_pct
+                        ])
+
+            # Save to CSV file
+            export_filename = f"portfolio_export_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            with open(export_filename, 'w', newline='', encoding='utf-8') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerows(export_data)
+
+            self.show_message(f"Portfolio data exported to {export_filename}", "success")
+
+        except Exception as e:
+            print(f"Error exporting portfolio data: {e}")
+            self.show_message("Error exporting portfolio data", "error")
 
     def show_message(self, message, message_type="info"):
         """Show message to user"""
@@ -1158,6 +1977,15 @@ class PortfolioTab(BaseTab):
             self.current_view = "overview"
             self.price_cache = {}
             self.last_price_update = {}
+
+            # Clear CSV import data
+            self.csv_data = None
+            self.csv_headers = []
+            self.column_mapping = {}
+            self.csv_preview_data = []
+            self.price_fetch_errors = {}
+            self.daily_change_cache = {}
+            self.previous_close_cache = {}
 
             print("✅ Portfolio tab cleanup complete")
         except Exception as e:
