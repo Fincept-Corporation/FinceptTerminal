@@ -35,11 +35,6 @@
 
 ## ✨ Features
 
-<div align="center">
-<table>
-<tr>
-<td width="50%">
-
 ### 📊 **Market Intelligence**
 - 🌍 **Global Asset Coverage** - Stocks, forex, crypto, commodities
 - 📈 **Real-Time Data Streaming** - Live market feeds and updates  
@@ -52,9 +47,6 @@
 - 💡 **Robo Advisor** - Automated portfolio recommendations
 - 🎯 **Stock Scanner** - AI-driven breakout stock detection
 
-</td>
-<td width="50%">
-
 ### 📈 **Professional Tools**
 - 📊 **Technical Analysis** - Advanced charting and indicators
 - 💼 **Fundamental Analysis** - Deep company research
@@ -66,11 +58,6 @@
 - 🏛️ **Economic Indicators** - Central bank and government data
 - 🌍 **Geopolitical Analysis** - Global risk assessment
 - 🔄 **WebSocket Integration** - Real-time data streaming
-
-</td>
-</tr>
-</table>
-</div>
 
 ## 🚀 Installation
 
@@ -116,20 +103,50 @@ fincept  # Single command to launch the GUI
 
 <div align="center">
 
-| Chat Module | Dashboard | Economy |
-|:-----------:|:---------:|:-------:|
-| ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png) | ![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png) | ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) |
-| Interactive AI chat | Real-time market overview | Global economic indicators |
+| Chat Module |
+|:-----------:|
+| ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png) |
+| Interactive AI chat interface |
 
-| Equity Research | Forum | Geopolitics |
-|:---------------:|:-----:|:-----------:|
-| ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) | ![Forum](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Forum.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
-| Comprehensive stock analysis | Community discussions | Global risk assessment |
+| Dashboard |
+|:---------:|
+| ![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png) |
+| Real-time market overview and analytics |
 
-| Global Trade | Markets | Trade Analysis |
-|:------------:|:-------:|:--------------:|
-| ![GlobalTrade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png) | ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png) | ![TradeAnalysis](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/TradeAnalysis.png) |
-| International trade flows | Live market data | Advanced trade analytics |
+| Economy |
+|:-------:|
+| ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) |
+| Global economic indicators and data |
+
+| Equity Research |
+|:---------------:|
+| ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) |
+| Comprehensive stock analysis tools |
+
+| Forum |
+|:-----:|
+| ![Forum](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Forum.png) |
+| Community discussions and insights |
+
+| Geopolitics |
+|:-----------:|
+| ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
+| Global risk assessment and monitoring |
+
+| Global Trade |
+|:------------:|
+| ![GlobalTrade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png) |
+| International trade flow analysis |
+
+| Markets |
+|:-------:|
+| ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png) |
+| Live market data and trading tools |
+
+| Trade Analysis |
+|:--------------:|
+| ![TradeAnalysis](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/TradeAnalysis.png) |
+| Advanced trade analytics and insights |
 
 </div>
 
@@ -190,7 +207,7 @@ fincept  # Single command to launch the GUI
 
 ### 🚀 **Get Started Today**
 
-[**📥 Download Desktop App**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/Production1.0.0/FinceptInvestmentsInstaller.exe) • [**📦 Install via pip**](#-installation) • [**📖 Read Docs**](https://github.com/Fincept-Corporation/FinceptTerminal/wiki)
+[**📥 Download Desktop App**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/Production1.0.0/FinceptInvestmentsInstaller.exe) • [**📦 Install via pip**](#-installation) • [**📖 Read Docs**](https://docs.fincept.in/)
 
 ---
 
