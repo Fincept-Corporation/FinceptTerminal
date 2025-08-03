@@ -152,7 +152,7 @@ fincept  # Single command to launch the GUI
 
 ## 🔥 Upcoming Features
 
-### **🚀 Next Release (Q2 2024)**
+### **🚀 Next Release (Q3 2025)**
 - ✅ **Custom Data Sources** - Integrate your preferred providers
 - ✅ **Enhanced AI Terminal** - More intelligent market analysis  
 - ✅ **Real-Time WebSockets** - Ultra-fast data streaming
