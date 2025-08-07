@@ -63,7 +63,7 @@
 
 ### **Option 1: Install via `pip` (Recommended)**
 ```bash
-pip install fincept-terminal==1.0.10
+pip install fincept-terminal==2.0.3
 ```
 
 ### **Option 2: Virtual Environment Setup**
@@ -77,7 +77,7 @@ fincept-env\Scripts\activate
 source fincept-env/bin/activate
 
 # Install Fincept Terminal
-pip install fincept-terminal==1.0.10
+pip install fincept-terminal==2.0.3
 ```
 
 ### **Option 3: Desktop App** 
@@ -207,7 +207,7 @@ fincept  # Single command to launch the GUI
 
 ### 🚀 **Get Started Today**
 
-[**📥 Download Desktop App**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/Production1.0.0/FinceptInvestmentsInstaller.exe) • [**📦 Install via pip**](#-installation) • [**📖 Read Docs**](https://docs.fincept.in/)
+[**📥 Download Desktop App**](http://product.fincept.in/FinceptTerminalV2Alpha.exe) • [**📦 Install via pip**](#-installation) • [**📖 Read Docs**](https://docs.fincept.in/)
 
 ---
 
