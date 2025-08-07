@@ -6,31 +6,30 @@ import requests
 import pyotp
 import hashlib
 from urllib import parse
-import sys
 import threading
 import datetime
 import os
 import csv
-import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
 import time
+import platform
 from fincept_terminal.Utils.base_tab import BaseTab
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Import new logger module
+from fincept_terminal.Utils.Logging.logger import (
+    info, debug, warning, error, operation, monitor_performance
+)
 
 # Safe import of Fyers WebSocket
 try:
     from fyers_apiv3.FyersWebsocket import data_ws
-
     FYERS_AVAILABLE = True
-    logger.info(" Fyers API successfully imported")
+    info("Fyers API successfully imported")
 except ImportError as e:
-    logger.warning(f" Fyers API not found: {e}")
-    logger.info(" Install with: pip install fyers-apiv3")
+    warning(f"Fyers API not found: {e}")
+    info("Install with: pip install fyers-apiv3")
     FYERS_AVAILABLE = False
 
 
@@ -42,6 +41,10 @@ class FyersTab(BaseTab):
 
         # Generate unique tag prefix for this instance
         self.tag_prefix = f"fyers_{id(self)}_"
+
+        # Initialize config directory
+        self.config_dir = self._get_config_directory()
+        self.config_dir.mkdir(parents=True, exist_ok=True)
 
         # Fyers credentials (will be loaded from UI or config)
         self.credentials = {
@@ -83,6 +86,19 @@ class FyersTab(BaseTab):
         # Load saved token on startup
         self.load_access_token_on_startup()
 
+        info("FyersTab initialized", context={'config_dir': str(self.config_dir)})
+
+    def _get_config_directory(self) -> Path:
+        """Get platform-specific config directory"""
+        system = platform.system()
+        if system == 'Windows':
+            base = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local'))
+            return base / 'FinanceTerminal' / 'fyers'
+        elif system == 'Darwin':
+            return Path.home() / 'Library/Application Support/FinanceTerminal/fyers'
+        else:  # Linux/Unix
+            return Path.home() / '.local/share/finance-terminal/fyers'
+
     def get_label(self):
         return " Fyers Trading"
 
@@ -107,7 +123,7 @@ class FyersTab(BaseTab):
             if dpg.does_item_exist(tag):
                 dpg.set_value(tag, value)
         except Exception as e:
-            logger.warning(f"Error setting value for {tag}: {e}")
+            warning(f"Error setting value for {tag}: {e}")
 
     def safe_configure_item(self, tag: str, **kwargs):
         """Safely configure item with existence check"""
@@ -115,37 +131,39 @@ class FyersTab(BaseTab):
             if dpg.does_item_exist(tag):
                 dpg.configure_item(tag, **kwargs)
         except Exception as e:
-            logger.warning(f"Error configuring item {tag}: {e}")
+            warning(f"Error configuring item {tag}: {e}")
 
+    @monitor_performance
     def create_content(self):
         """Create the Fyers trading interface with error handling"""
-        try:
-            self.cleanup_existing_items()
-            self.add_section_header(" Fyers Trading Platform")
-
-            if not FYERS_AVAILABLE:
-                dpg.add_text(" Fyers API not available!")
-                dpg.add_text("Install with: pip install fyers-apiv3")
-                dpg.add_text("Command: pip install fyers-apiv3")
-                return
-
-            # Create main interface
-            self.create_auth_panel()
-            dpg.add_spacer(height=10)
-            self.create_streaming_panel()
-            dpg.add_spacer(height=10)
-            self.create_data_viewer()
-
-            logger.info(" Fyers tab content created successfully")
-
-        except Exception as e:
-            logger.error(f" Error creating Fyers tab content: {e}")
-            # Fallback error display
+        with operation("create_fyers_content"):
             try:
-                dpg.add_text(f" Error creating interface: {str(e)}")
-                dpg.add_text("Please restart the application or check logs.")
-            except:
-                pass
+                self.cleanup_existing_items()
+                self.add_section_header(" Fyers Trading Platform")
+
+                if not FYERS_AVAILABLE:
+                    dpg.add_text(" Fyers API not available!")
+                    dpg.add_text("Install with: pip install fyers-apiv3")
+                    dpg.add_text("Command: pip install fyers-apiv3")
+                    return
+
+                # Create main interface
+                self.create_auth_panel()
+                dpg.add_spacer(height=10)
+                self.create_streaming_panel()
+                dpg.add_spacer(height=10)
+                self.create_data_viewer()
+
+                info("Fyers tab content created successfully")
+
+            except Exception as e:
+                error("Error creating Fyers tab content", context={'error': str(e)}, exc_info=True)
+                # Fallback error display
+                try:
+                    dpg.add_text(f" Error creating interface: {str(e)}")
+                    dpg.add_text("Please restart the application or check logs.")
+                except:
+                    pass
 
     def cleanup_existing_items(self):
         """Clean up any existing items with our tag prefix"""
@@ -160,7 +178,7 @@ class FyersTab(BaseTab):
                 except:
                     continue
         except Exception as e:
-            logger.warning(f"Warning during cleanup: {e}")
+            warning(f"Warning during cleanup: {e}")
 
     def create_auth_panel(self):
         """Create authentication and token management panel"""
@@ -413,177 +431,179 @@ class FyersTab(BaseTab):
     # Authentication methods with enhanced error handling
     def load_access_token_on_startup(self):
         """Load access token on startup if available"""
-        try:
-            token_path = "access_token.log"
-            if os.path.exists(token_path):
-                with open(token_path, "r", encoding='utf-8') as f:
-                    tokens = [line.strip() for line in f if line.strip()]
-                if tokens:
-                    self.access_token = tokens[-1]
-                    logger.info("Access token loaded on startup")
-        except Exception as e:
-            logger.warning(f"Could not load token on startup: {e}")
+        with operation("load_token_on_startup"):
+            try:
+                token_path = self.config_dir / "access_token.log"
+                if token_path.exists():
+                    with open(token_path, "r", encoding='utf-8') as f:
+                        tokens = [line.strip() for line in f if line.strip()]
+                    if tokens:
+                        self.access_token = tokens[-1]
+                        info("Access token loaded on startup", context={'token_file': str(token_path)})
+            except Exception as e:
+                warning("Could not load token on startup", context={'error': str(e)})
 
+    @monitor_performance
     def save_credentials(self):
         """Save credentials to config file"""
-        try:
-            config = {
-                'client_id': dpg.get_value(self.get_tag("fyers_client_id")),
-                'app_id': dpg.get_value(self.get_tag("fyers_app_id")),
-                'app_type': dpg.get_value(self.get_tag("fyers_app_type")),
-                'redirect_uri': self.credentials['redirect_uri']
-            }
+        with operation("save_credentials"):
+            try:
+                config = {
+                    'client_id': dpg.get_value(self.get_tag("fyers_client_id")),
+                    'app_id': dpg.get_value(self.get_tag("fyers_app_id")),
+                    'app_type': dpg.get_value(self.get_tag("fyers_app_type")),
+                    'redirect_uri': self.credentials['redirect_uri']
+                }
 
-            config_path = "fyers_config.json"
-            with open(config_path, "w", encoding='utf-8') as f:
-                json.dump(config, f, indent=2)
+                config_path = self.config_dir / "fyers_config.json"
+                with open(config_path, "w", encoding='utf-8') as f:
+                    json.dump(config, f, indent=2)
 
-            self.update_auth_log("Credentials saved to fyers_config.json")
-            logger.info("Fyers credentials saved")
+                self.update_auth_log("Credentials saved to fyers_config.json")
+                info("Fyers credentials saved", context={'config_path': str(config_path)})
 
-        except Exception as e:
-            error_msg = f"Error saving credentials: {str(e)}"
-            self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            except Exception as e:
+                error_msg = f"Error saving credentials: {str(e)}"
+                self.update_auth_log(error_msg)
+                error("Failed to save credentials", context={'error': str(e)}, exc_info=True)
 
+    @monitor_performance
     def generate_access_token(self):
         """Generate new access token using Fyers authentication flow"""
 
         def auth_thread():
-            try:
-                with self._lock:
-                    self.update_auth_log(" Starting authentication process...")
+            with operation("generate_access_token"):
+                try:
+                    with self._lock:
+                        self.update_auth_log(" Starting authentication process...")
 
-                    # Get credentials from UI
-                    credentials = {
-                        'client_id': dpg.get_value(self.get_tag("fyers_client_id")),
-                        'pin': dpg.get_value(self.get_tag("fyers_pin")),
-                        'app_id': dpg.get_value(self.get_tag("fyers_app_id")),
-                        'app_type': dpg.get_value(self.get_tag("fyers_app_type")),
-                        'app_secret': dpg.get_value(self.get_tag("fyers_app_secret")),
-                        'totp_secret': dpg.get_value(self.get_tag("fyers_totp_secret"))
-                    }
+                        # Get credentials from UI
+                        credentials = {
+                            'client_id': dpg.get_value(self.get_tag("fyers_client_id")),
+                            'pin': dpg.get_value(self.get_tag("fyers_pin")),
+                            'app_id': dpg.get_value(self.get_tag("fyers_app_id")),
+                            'app_type': dpg.get_value(self.get_tag("fyers_app_type")),
+                            'app_secret': dpg.get_value(self.get_tag("fyers_app_secret")),
+                            'totp_secret': dpg.get_value(self.get_tag("fyers_totp_secret"))
+                        }
 
-                    # Validate inputs
-                    missing_fields = [k for k, v in credentials.items() if not v.strip()]
-                    if missing_fields:
-                        self.update_auth_log(f" Missing fields: {', '.join(missing_fields)}")
-                        return
+                        # Validate inputs
+                        missing_fields = [k for k, v in credentials.items() if not v.strip()]
+                        if missing_fields:
+                            self.update_auth_log(f" Missing fields: {', '.join(missing_fields)}")
+                            return
 
-                    # Authentication flow
-                    steps = [
-                        ("Client ID verification", lambda: self.verify_client_id(credentials['client_id'])),
-                        ("TOTP generation", lambda: self.generate_totp(credentials['totp_secret'])),
-                    ]
+                        # Authentication flow
+                        request_key = None
+                        totp = None
 
-                    request_key = None
-                    totp = None
+                        # Step 1: Verify client ID
+                        status, request_key = self.verify_client_id(credentials['client_id'])
+                        if status != 1:
+                            self.update_auth_log(f"Client ID verification failed: {request_key}")
+                            return
+                        self.update_auth_log(" Client ID verified")
 
-                    # Step 1: Verify client ID
-                    status, request_key = self.verify_client_id(credentials['client_id'])
-                    if status != 1:
-                        self.update_auth_log(f"Client ID verification failed: {request_key}")
-                        return
-                    self.update_auth_log(" Client ID verified")
+                        # Step 2: Generate TOTP
+                        status, totp = self.generate_totp(credentials['totp_secret'])
+                        if status != 1:
+                            self.update_auth_log(f"TOTP generation failed: {totp}")
+                            return
+                        self.update_auth_log(" TOTP generated")
 
-                    # Step 2: Generate TOTP
-                    status, totp = self.generate_totp(credentials['totp_secret'])
-                    if status != 1:
-                        self.update_auth_log(f"TOTP generation failed: {totp}")
-                        return
-                    self.update_auth_log(" TOTP generated")
+                        # Step 3: Verify TOTP
+                        status, request_key = self.verify_totp(request_key, totp)
+                        if status != 1:
+                            self.update_auth_log(f"TOTP verification failed: {request_key}")
+                            return
+                        self.update_auth_log("TOTP verified")
 
-                    # Step 3: Verify TOTP
-                    status, request_key = self.verify_totp(request_key, totp)
-                    if status != 1:
-                        self.update_auth_log(f"TOTP verification failed: {request_key}")
-                        return
-                    self.update_auth_log("TOTP verified")
+                        # Step 4: Verify PIN
+                        status, fyers_access_token = self.verify_pin(request_key, credentials['pin'])
+                        if status != 1:
+                            self.update_auth_log(f"PIN verification failed: {fyers_access_token}")
+                            return
+                        self.update_auth_log("PIN verified")
 
-                    # Step 4: Verify PIN
-                    status, fyers_access_token = self.verify_pin(request_key, credentials['pin'])
-                    if status != 1:
-                        self.update_auth_log(f"PIN verification failed: {fyers_access_token}")
-                        return
-                    self.update_auth_log("PIN verified")
+                        # Step 5: Get auth code
+                        status, auth_code = self.get_token(
+                            credentials['client_id'], credentials['app_id'],
+                            self.credentials['redirect_uri'], credentials['app_type'],
+                            fyers_access_token
+                        )
+                        if status != 1:
+                            self.update_auth_log(f"Token generation failed: {auth_code}")
+                            return
+                        self.update_auth_log("Auth code received")
 
-                    # Step 5: Get auth code
-                    status, auth_code = self.get_token(
-                        credentials['client_id'], credentials['app_id'],
-                        self.credentials['redirect_uri'], credentials['app_type'],
-                        fyers_access_token
-                    )
-                    if status != 1:
-                        self.update_auth_log(f"Token generation failed: {auth_code}")
-                        return
-                    self.update_auth_log("Auth code received")
+                        # Step 6: Validate auth code
+                        status, v3_access = self.validate_authcode(
+                            auth_code, credentials['app_id'],
+                            credentials['app_type'], credentials['app_secret']
+                        )
+                        if status != 1:
+                            self.update_auth_log(f"Auth code validation failed: {v3_access}")
+                            return
+                        self.update_auth_log("Access token validated")
 
-                    # Step 6: Validate auth code
-                    status, v3_access = self.validate_authcode(
-                        auth_code, credentials['app_id'],
-                        credentials['app_type'], credentials['app_secret']
-                    )
-                    if status != 1:
-                        self.update_auth_log(f"Auth code validation failed: {v3_access}")
-                        return
-                    self.update_auth_log("Access token validated")
+                        # Build final token
+                        self.access_token = f"{credentials['app_id']}-{credentials['app_type']}:{v3_access}"
 
-                    # Build final token
-                    self.access_token = f"{credentials['app_id']}-{credentials['app_type']}:{v3_access}"
+                        # Save token to file
+                        self.save_access_token()
 
-                    # Save token to file
-                    self.save_access_token()
+                        # Update UI
+                        self.update_auth_status()
+                        self.update_auth_log(" Authentication completed successfully!")
+                        info("Fyers authentication completed successfully")
 
-                    # Update UI
-                    self.update_auth_status()
-                    self.update_auth_log(" Authentication completed successfully!")
-                    logger.info("Fyers authentication completed successfully")
-
-            except Exception as e:
-                error_msg = f"Authentication error: {str(e)}"
-                self.update_auth_log(error_msg)
-                logger.error(error_msg)
+                except Exception as e:
+                    error_msg = f"Authentication error: {str(e)}"
+                    self.update_auth_log(error_msg)
+                    error("Authentication failed", context={'error': str(e)}, exc_info=True)
 
         threading.Thread(target=auth_thread, daemon=True).start()
 
     def load_access_token(self):
         """Load access token from file"""
-        try:
-            token_path = "access_token.log"
-            if not os.path.exists(token_path):
-                self.update_auth_log("access_token.log file not found")
-                return
+        with operation("load_access_token"):
+            try:
+                token_path = self.config_dir / "access_token.log"
+                if not token_path.exists():
+                    self.update_auth_log("access_token.log file not found")
+                    return
 
-            with open(token_path, "r", encoding='utf-8') as f:
-                tokens = [line.strip() for line in f if line.strip()]
+                with open(token_path, "r", encoding='utf-8') as f:
+                    tokens = [line.strip() for line in f if line.strip()]
 
-            if not tokens:
-                self.update_auth_log("No tokens found in access_token.log")
-                return
+                if not tokens:
+                    self.update_auth_log("No tokens found in access_token.log")
+                    return
 
-            with self._lock:
-                self.access_token = tokens[-1]
+                with self._lock:
+                    self.access_token = tokens[-1]
 
-            self.update_auth_status()
-            self.update_auth_log("Access token loaded from file")
-            logger.info("Access token loaded from file")
+                self.update_auth_status()
+                self.update_auth_log("Access token loaded from file")
+                info("Access token loaded from file", context={'token_file': str(token_path)})
 
-        except Exception as e:
-            error_msg = f" Error loading token: {str(e)}"
-            self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            except Exception as e:
+                error_msg = f" Error loading token: {str(e)}"
+                self.update_auth_log(error_msg)
+                error("Failed to load token", context={'error': str(e)}, exc_info=True)
 
     def save_access_token(self):
         """Save access token to file"""
         try:
-            with open("access_token.log", "a", encoding='utf-8') as f:
+            token_path = self.config_dir / "access_token.log"
+            with open(token_path, "a", encoding='utf-8') as f:
                 f.write(f"{self.access_token}\n")
             self.update_auth_log(" Token saved to access_token.log")
-            logger.info(" Token saved to access_token.log")
+            info("Token saved", context={'token_file': str(token_path)})
         except Exception as e:
             error_msg = f" Error saving token: {str(e)}"
             self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            error("Failed to save token", context={'error': str(e)}, exc_info=True)
 
     # Fyers API methods with enhanced error handling
     def verify_client_id(self, client_id: str) -> Tuple[int, str]:
@@ -595,6 +615,7 @@ class FyersTab(BaseTab):
             if resp.status_code != 200:
                 return [-1, f"HTTP {resp.status_code}: {resp.text}"]
             data = resp.json()
+            debug("Client ID verified successfully", context={'client_id': client_id})
             return [1, data["request_key"]]
         except requests.exceptions.Timeout:
             return [-1, "Request timeout"]
@@ -608,7 +629,9 @@ class FyersTab(BaseTab):
         try:
             if not secret.strip():
                 return [-1, "TOTP secret is empty"]
-            return [1, pyotp.TOTP(secret).now()]
+            totp = pyotp.TOTP(secret).now()
+            debug("TOTP generated successfully")
+            return [1, totp]
         except Exception as e:
             return [-1, f"TOTP generation error: {str(e)}"]
 
@@ -621,6 +644,7 @@ class FyersTab(BaseTab):
             if resp.status_code != 200:
                 return [-1, f"HTTP {resp.status_code}: {resp.text}"]
             data = resp.json()
+            debug("TOTP verified successfully")
             return [1, data["request_key"]]
         except requests.exceptions.Timeout:
             return [-1, "Request timeout"]
@@ -642,6 +666,7 @@ class FyersTab(BaseTab):
             if resp.status_code != 200:
                 return [-1, f"HTTP {resp.status_code}: {resp.text}"]
             data = resp.json()
+            debug("PIN verified successfully")
             return [1, data["data"]["access_token"]]
         except requests.exceptions.Timeout:
             return [-1, "Request timeout"]
@@ -674,6 +699,7 @@ class FyersTab(BaseTab):
             data = resp.json()
             url = data["Url"]
             auth_code = parse.parse_qs(parse.urlparse(url).query)['auth_code'][0]
+            debug("Authorization token received successfully")
             return [1, auth_code]
         except requests.exceptions.Timeout:
             return [-1, "Request timeout"]
@@ -697,6 +723,7 @@ class FyersTab(BaseTab):
             if resp.status_code != 200:
                 return [-1, f"HTTP {resp.status_code}: {resp.text}"]
             data = resp.json()
+            debug("Authorization code validated successfully")
             return [1, data["access_token"]]
         except requests.exceptions.Timeout:
             return [-1, "Request timeout"]
@@ -706,6 +733,7 @@ class FyersTab(BaseTab):
             return [-1, str(e)]
 
     # WebSocket methods with enhanced error handling
+    @monitor_performance
     def connect_websocket(self):
         """Connect to Fyers WebSocket with enhanced error handling"""
         if not self.access_token:
@@ -713,95 +741,97 @@ class FyersTab(BaseTab):
             return
 
         def connect_thread():
-            try:
-                with self._lock:
-                    if self.is_connected:
-                        self.update_auth_log(" Already connected to WebSocket")
-                        return
+            with operation("connect_websocket"):
+                try:
+                    with self._lock:
+                        if self.is_connected:
+                            self.update_auth_log(" Already connected to WebSocket")
+                            return
 
-                self.update_auth_log(" Connecting to WebSocket...")
+                    self.update_auth_log(" Connecting to WebSocket...")
 
-                # Create WebSocket client with enhanced configuration
-                self.websocket_client = data_ws.FyersDataSocket(
-                    access_token=self.access_token,
-                    log_path="",
-                    litemode=False,
-                    write_to_file=False,
-                    reconnect=True,
-                    on_connect=self.on_websocket_open,
-                    on_close=self.on_websocket_close,
-                    on_error=self.on_websocket_error,
-                    on_message=self.on_websocket_message
-                )
+                    # Create WebSocket client with enhanced configuration
+                    self.websocket_client = data_ws.FyersDataSocket(
+                        access_token=self.access_token,
+                        log_path="",
+                        litemode=False,
+                        write_to_file=False,
+                        reconnect=True,
+                        on_connect=self.on_websocket_open,
+                        on_close=self.on_websocket_close,
+                        on_error=self.on_websocket_error,
+                        on_message=self.on_websocket_message
+                    )
 
-                # Set session start time
-                with self._lock:
-                    self.session_start_time = datetime.datetime.now()
-                    self.message_count = 0
+                    # Set session start time
+                    with self._lock:
+                        self.session_start_time = datetime.datetime.now()
+                        self.message_count = 0
 
-                # Connect with timeout handling
-                self.websocket_client.connect()
-                logger.info(" WebSocket connection initiated")
+                    # Connect with timeout handling
+                    self.websocket_client.connect()
+                    info("WebSocket connection initiated")
 
-            except Exception as e:
-                error_msg = f" WebSocket connection failed: {str(e)}"
-                self.update_auth_log(error_msg)
-                logger.error(error_msg)
+                except Exception as e:
+                    error_msg = f" WebSocket connection failed: {str(e)}"
+                    self.update_auth_log(error_msg)
+                    error("WebSocket connection failed", context={'error': str(e)}, exc_info=True)
 
         threading.Thread(target=connect_thread, daemon=True).start()
 
     def disconnect_websocket(self):
         """Enhanced WebSocket disconnection"""
-        try:
-            self.update_auth_log(" Disconnecting WebSocket...")
+        with operation("disconnect_websocket"):
+            try:
+                self.update_auth_log(" Disconnecting WebSocket...")
 
-            with self._lock:
-                # Set flags immediately
-                self.is_connected = False
-                self.is_paused = True
+                with self._lock:
+                    # Set flags immediately
+                    self.is_connected = False
+                    self.is_paused = True
 
-            # Try multiple disconnect approaches
-            if self.websocket_client:
-                disconnect_methods = [
-                    ('disconnect', lambda: self.websocket_client.disconnect()),
-                    ('close', lambda: self.websocket_client.close()),
-                    ('stop', lambda: self.websocket_client.stop()),
-                ]
+                # Try multiple disconnect approaches
+                if self.websocket_client:
+                    disconnect_methods = [
+                        ('disconnect', lambda: self.websocket_client.disconnect()),
+                        ('close', lambda: self.websocket_client.close()),
+                        ('stop', lambda: self.websocket_client.stop()),
+                    ]
 
-                for method_name, method_func in disconnect_methods:
-                    try:
-                        if hasattr(self.websocket_client, method_name):
-                            method_func()
-                            self.update_auth_log(f" Called {method_name}() method")
-                    except Exception as e:
-                        logger.warning(f"Warning calling {method_name}: {e}")
+                    for method_name, method_func in disconnect_methods:
+                        try:
+                            if hasattr(self.websocket_client, method_name):
+                                method_func()
+                                self.update_auth_log(f" Called {method_name}() method")
+                        except Exception as e:
+                            warning(f"Warning calling {method_name}: {e}")
 
-                # Force clear the client reference
-                self.websocket_client = None
-                self.update_auth_log(" WebSocket client reference cleared")
+                    # Force clear the client reference
+                    self.websocket_client = None
+                    self.update_auth_log(" WebSocket client reference cleared")
 
-            # Update UI immediately
-            self.safe_set_value(self.get_tag("ws_status_text"), "Status: Disconnected")
-            self.safe_configure_item(self.get_tag("ws_status_text"), color=(255, 100, 100))
-            self.safe_set_value(self.get_tag("ws_data_type"), "Data Type: None")
-            self.safe_set_value(self.get_tag("ws_symbols"), "Symbols: None")
-            self.safe_set_value(self.get_tag("ws_message_count"), "Messages Received: 0")
-            self.safe_set_value(self.get_tag("pause_button"), " Paused")
+                # Update UI immediately
+                self.safe_set_value(self.get_tag("ws_status_text"), "Status: Disconnected")
+                self.safe_configure_item(self.get_tag("ws_status_text"), color=(255, 100, 100))
+                self.safe_set_value(self.get_tag("ws_data_type"), "Data Type: None")
+                self.safe_set_value(self.get_tag("ws_symbols"), "Symbols: None")
+                self.safe_set_value(self.get_tag("ws_message_count"), "Messages Received: 0")
+                self.safe_set_value(self.get_tag("pause_button"), " Paused")
 
-            self.update_auth_log(" WebSocket disconnected successfully")
-            logger.info(" WebSocket disconnected")
+                self.update_auth_log(" WebSocket disconnected successfully")
+                info("WebSocket disconnected")
 
-        except Exception as e:
-            error_msg = f" Disconnect error: {str(e)}"
-            self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            except Exception as e:
+                error_msg = f" Disconnect error: {str(e)}"
+                self.update_auth_log(error_msg)
+                error("WebSocket disconnect error", context={'error': str(e)}, exc_info=True)
 
-            # Force update UI even if there's an error
-            with self._lock:
-                self.is_connected = False
-                self.is_paused = True
-            self.safe_set_value(self.get_tag("ws_status_text"), "Status: Force Disconnected")
-            self.safe_configure_item(self.get_tag("ws_status_text"), color=(255, 100, 100))
+                # Force update UI even if there's an error
+                with self._lock:
+                    self.is_connected = False
+                    self.is_paused = True
+                self.safe_set_value(self.get_tag("ws_status_text"), "Status: Force Disconnected")
+                self.safe_configure_item(self.get_tag("ws_status_text"), color=(255, 100, 100))
 
     # WebSocket callbacks
     def on_websocket_open(self):
@@ -834,12 +864,13 @@ class FyersTab(BaseTab):
                 self.websocket_client.keep_running()
 
             self.update_auth_log(" WebSocket connected and subscribed")
-            logger.info(" WebSocket connected successfully")
+            info("WebSocket connected successfully",
+                 context={'symbols': len(symbols), 'data_type': data_type})
 
         except Exception as e:
             error_msg = f" WebSocket open callback error: {str(e)}"
             self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            error("WebSocket open callback error", context={'error': str(e)}, exc_info=True)
 
     def on_websocket_close(self, code):
         """WebSocket close callback"""
@@ -854,16 +885,16 @@ class FyersTab(BaseTab):
 
             error_msg = f" WebSocket closed (code: {code})"
             self.update_auth_log(error_msg)
-            logger.warning(error_msg)
+            warning("WebSocket closed", context={'code': code})
 
         except Exception as e:
-            logger.error(f"Error in WebSocket close callback: {e}")
+            error("Error in WebSocket close callback", context={'error': str(e)}, exc_info=True)
 
     def on_websocket_error(self, error):
         """WebSocket error callback"""
         error_msg = f" WebSocket error: {str(error)}"
         self.update_auth_log(error_msg)
-        logger.error(error_msg)
+        error("WebSocket error", context={'error': str(error)})
 
     def on_websocket_message(self, message):
         """Enhanced WebSocket message callback with filtering and throttling"""
@@ -918,7 +949,7 @@ class FyersTab(BaseTab):
         except Exception as e:
             error_msg = f" Message processing error: {str(e)}"
             self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            error("Message processing error", context={'error': str(e)}, exc_info=True)
 
     def safe_encode_text(self, text: Any) -> str:
         """Safely encode text with proper handling"""
@@ -982,12 +1013,12 @@ class FyersTab(BaseTab):
                 self.safe_set_value(self.get_tag("token_validity"), "Valid Until: End of trading day")
 
             # Check token file
-            token_file_status = "access_token.log: Found" if os.path.exists(
-                "access_token.log") else "access_token.log: Not Found"
+            token_file_path = self.config_dir / "access_token.log"
+            token_file_status = f"access_token.log: Found" if token_file_path.exists() else f"access_token.log: Not Found"
             self.safe_set_value(self.get_tag("token_file_status"), token_file_status)
 
         except Exception as e:
-            logger.error(f"Error updating auth status: {e}")
+            error("Error updating auth status", context={'error': str(e)}, exc_info=True)
 
     def update_streaming_stats(self):
         """Update streaming statistics with enhanced calculations"""
@@ -1022,106 +1053,108 @@ class FyersTab(BaseTab):
                 self.safe_set_value(self.get_tag("ws_message_count"), f"Messages Received: {self.message_count}")
 
         except Exception as e:
-            logger.error(f"Error updating streaming stats: {e}")
+            error("Error updating streaming stats", context={'error': str(e)}, exc_info=True)
 
+    @monitor_performance
     def update_data_table(self):
         """Enhanced data table update with better performance and error handling"""
-        try:
-            # Only update if conditions are met
-            if not dpg.get_value(self.get_tag("auto_scroll")) or self.is_paused:
-                return
-
-            with self._lock:
-                if not self.streaming_data:
+        with operation("update_data_table"):
+            try:
+                # Only update if conditions are met
+                if not dpg.get_value(self.get_tag("auto_scroll")) or self.is_paused:
                     return
 
-                # Get recent data for performance (last 100 rows)
-                recent_data = self.streaming_data[-100:] if len(self.streaming_data) > 100 else self.streaming_data
+                with self._lock:
+                    if not self.streaming_data:
+                        return
 
-            if not recent_data:
-                return
+                    # Get recent data for performance (last 100 rows)
+                    recent_data = self.streaming_data[-100:] if len(self.streaming_data) > 100 else self.streaming_data
 
-            # Clear existing table
-            container_tag = self.get_tag("live_data_table_container")
-            if dpg.does_item_exist(container_tag):
-                dpg.delete_item(container_tag, children_only=True)
+                if not recent_data:
+                    return
 
-                # Collect all unique keys from messages for dynamic columns
-                all_keys = set()
-                for row in recent_data[-10:]:  # Sample last 10 for keys
-                    if isinstance(row['data'], dict):
-                        all_keys.update(row['data'].keys())
-
-                # Sort keys for consistent column order
-                sorted_keys = sorted(list(all_keys))
-
-                # Create new table with dynamic columns
-                table_tag = self.get_tag("live_data_table")
-                if dpg.does_item_exist(table_tag):
-                    dpg.delete_item(table_tag)
-
-                with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True,
-                               borders_innerV=True, borders_outerV=True,
-                               parent=container_tag, scrollY=True, scrollX=True, height=400,
-                               tag=table_tag):
-
-                    # Add fixed columns
-                    dpg.add_table_column(label="Time", width_fixed=True, init_width_or_weight=80)
-                    dpg.add_table_column(label="Symbol", width_fixed=True, init_width_or_weight=120)
-                    dpg.add_table_column(label="Type", width_fixed=True, init_width_or_weight=60)
-
-                    # Add dynamic columns for important fields first
-                    priority_fields = ['ltp', 'volume', 'bid_price1', 'ask_price1', 'high_price', 'low_price']
-                    added_fields = set()
-
-                    for field in priority_fields:
-                        if field in sorted_keys:
-                            dpg.add_table_column(label=field, width_fixed=True, init_width_or_weight=100)
-                            added_fields.add(field)
-
-                    # Add remaining fields
-                    for key in sorted_keys:
-                        if key not in ['symbol', 'type'] and key not in added_fields:
-                            dpg.add_table_column(label=key, width_fixed=True, init_width_or_weight=100)
-                            added_fields.add(key)
-
-                    # Add data rows (show newest first, limit to 50 for performance)
-                    display_data = list(reversed(recent_data[-50:]))
-
-                    for row in display_data:
-                        with dpg.table_row():
-                            # Fixed columns
-                            dpg.add_text(row['timestamp'])
-                            dpg.add_text(row['symbol'])
-                            dpg.add_text(row['type'])
-
-                            # Dynamic columns
-                            if isinstance(row['data'], dict):
-                                # Priority fields first
-                                for field in priority_fields:
-                                    if field in added_fields:
-                                        self.add_table_cell(row, field)
-
-                                # Remaining fields
-                                for key in sorted_keys:
-                                    if key not in ['symbol', 'type'] and key not in priority_fields:
-                                        if key in added_fields:
-                                            self.add_table_cell(row, key)
-                            else:
-                                # Fill with empty values if data is not a dict
-                                for _ in added_fields:
-                                    dpg.add_text("")
-
-        except Exception as e:
-            logger.error(f"Error updating data table: {e}")
-            # Try to show error in table
-            try:
+                # Clear existing table
                 container_tag = self.get_tag("live_data_table_container")
                 if dpg.does_item_exist(container_tag):
                     dpg.delete_item(container_tag, children_only=True)
-                    dpg.add_text(f"Table update error: {str(e)}", parent=container_tag)
-            except:
-                pass
+
+                    # Collect all unique keys from messages for dynamic columns
+                    all_keys = set()
+                    for row in recent_data[-10:]:  # Sample last 10 for keys
+                        if isinstance(row['data'], dict):
+                            all_keys.update(row['data'].keys())
+
+                    # Sort keys for consistent column order
+                    sorted_keys = sorted(list(all_keys))
+
+                    # Create new table with dynamic columns
+                    table_tag = self.get_tag("live_data_table")
+                    if dpg.does_item_exist(table_tag):
+                        dpg.delete_item(table_tag)
+
+                    with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True,
+                                   borders_innerV=True, borders_outerV=True,
+                                   parent=container_tag, scrollY=True, scrollX=True, height=400,
+                                   tag=table_tag):
+
+                        # Add fixed columns
+                        dpg.add_table_column(label="Time", width_fixed=True, init_width_or_weight=80)
+                        dpg.add_table_column(label="Symbol", width_fixed=True, init_width_or_weight=120)
+                        dpg.add_table_column(label="Type", width_fixed=True, init_width_or_weight=60)
+
+                        # Add dynamic columns for important fields first
+                        priority_fields = ['ltp', 'volume', 'bid_price1', 'ask_price1', 'high_price', 'low_price']
+                        added_fields = set()
+
+                        for field in priority_fields:
+                            if field in sorted_keys:
+                                dpg.add_table_column(label=field, width_fixed=True, init_width_or_weight=100)
+                                added_fields.add(field)
+
+                        # Add remaining fields
+                        for key in sorted_keys:
+                            if key not in ['symbol', 'type'] and key not in added_fields:
+                                dpg.add_table_column(label=key, width_fixed=True, init_width_or_weight=100)
+                                added_fields.add(key)
+
+                        # Add data rows (show newest first, limit to 50 for performance)
+                        display_data = list(reversed(recent_data[-50:]))
+
+                        for row in display_data:
+                            with dpg.table_row():
+                                # Fixed columns
+                                dpg.add_text(row['timestamp'])
+                                dpg.add_text(row['symbol'])
+                                dpg.add_text(row['type'])
+
+                                # Dynamic columns
+                                if isinstance(row['data'], dict):
+                                    # Priority fields first
+                                    for field in priority_fields:
+                                        if field in added_fields:
+                                            self.add_table_cell(row, field)
+
+                                    # Remaining fields
+                                    for key in sorted_keys:
+                                        if key not in ['symbol', 'type'] and key not in priority_fields:
+                                            if key in added_fields:
+                                                self.add_table_cell(row, key)
+                                else:
+                                    # Fill with empty values if data is not a dict
+                                    for _ in added_fields:
+                                        dpg.add_text("")
+
+            except Exception as e:
+                error("Error updating data table", context={'error': str(e)}, exc_info=True)
+                # Try to show error in table
+                try:
+                    container_tag = self.get_tag("live_data_table_container")
+                    if dpg.does_item_exist(container_tag):
+                        dpg.delete_item(container_tag, children_only=True)
+                        dpg.add_text(f"Table update error: {str(e)}", parent=container_tag)
+                except:
+                    pass
 
     def add_table_cell(self, row: Dict[str, Any], field: str):
         """Add a table cell with proper formatting and color coding"""
@@ -1168,7 +1201,7 @@ class FyersTab(BaseTab):
                 lines = new_log.split('\n')[:15]
                 dpg.set_value(log_tag, '\n'.join(lines))
         except Exception as e:
-            logger.warning(f"Error updating auth log: {e}")
+            warning(f"Error updating auth log: {e}")
 
     def get_price_color(self, symbol: str, field: str, current_value: Any) -> Optional[Tuple[int, int, int]]:
         """Get color for price fields based on movement with enhanced field detection"""
@@ -1214,46 +1247,48 @@ class FyersTab(BaseTab):
             self.update_auth_log(" Not connected to WebSocket")
             return
 
-        try:
-            # Get new settings from UI
-            data_type = dpg.get_value(self.get_tag("stream_data_type"))
-            symbols_text = dpg.get_value(self.get_tag("stream_symbols"))
-            symbols = [s.strip().upper() for s in symbols_text.split(",") if s.strip()]
+        with operation("update_subscription"):
+            try:
+                # Get new settings from UI
+                data_type = dpg.get_value(self.get_tag("stream_data_type"))
+                symbols_text = dpg.get_value(self.get_tag("stream_symbols"))
+                symbols = [s.strip().upper() for s in symbols_text.split(",") if s.strip()]
 
-            if not symbols:
-                self.update_auth_log(" No symbols provided")
-                return
+                if not symbols:
+                    self.update_auth_log(" No symbols provided")
+                    return
 
-            self.update_auth_log(f" Updating subscription to {len(symbols)} symbols...")
+                self.update_auth_log(f" Updating subscription to {len(symbols)} symbols...")
 
-            # Unsubscribe from current symbols first
-            with self._lock:
-                if hasattr(self.websocket_client, 'unsubscribe') and self.current_symbols:
-                    try:
-                        self.websocket_client.unsubscribe(symbols=self.current_symbols,
-                                                          data_type=self.current_data_type)
-                        self.update_auth_log(" Unsubscribed from previous symbols")
-                    except Exception as e:
-                        self.update_auth_log(f" Unsubscribe warning: {str(e)}")
+                # Unsubscribe from current symbols first
+                with self._lock:
+                    if hasattr(self.websocket_client, 'unsubscribe') and self.current_symbols:
+                        try:
+                            self.websocket_client.unsubscribe(symbols=self.current_symbols,
+                                                              data_type=self.current_data_type)
+                            self.update_auth_log(" Unsubscribed from previous symbols")
+                        except Exception as e:
+                            self.update_auth_log(f" Unsubscribe warning: {str(e)}")
 
-                # Subscribe to new symbols
-                self.websocket_client.subscribe(symbols=symbols, data_type=data_type)
+                    # Subscribe to new symbols
+                    self.websocket_client.subscribe(symbols=symbols, data_type=data_type)
 
-                # Update stored settings
-                self.current_symbols = symbols
-                self.current_data_type = data_type
+                    # Update stored settings
+                    self.current_symbols = symbols
+                    self.current_data_type = data_type
 
-            # Update UI
-            self.safe_set_value(self.get_tag("ws_data_type"), f"Data Type: {data_type}")
-            self.safe_set_value(self.get_tag("ws_symbols"), f"Symbols: {', '.join(symbols)}")
+                # Update UI
+                self.safe_set_value(self.get_tag("ws_data_type"), f"Data Type: {data_type}")
+                self.safe_set_value(self.get_tag("ws_symbols"), f"Symbols: {', '.join(symbols)}")
 
-            self.update_auth_log(f" Subscription updated: {data_type} for {len(symbols)} symbols")
-            logger.info(f" Subscription updated to {len(symbols)} symbols")
+                self.update_auth_log(f" Subscription updated: {data_type} for {len(symbols)} symbols")
+                info("Subscription updated",
+                     context={'symbols_count': len(symbols), 'data_type': data_type})
 
-        except Exception as e:
-            error_msg = f" Subscription update failed: {str(e)}"
-            self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            except Exception as e:
+                error_msg = f" Subscription update failed: {str(e)}"
+                self.update_auth_log(error_msg)
+                error("Subscription update failed", context={'error': str(e)}, exc_info=True)
 
     def set_quick_symbols(self, symbol_set: str):
         """Set predefined symbol sets for quick access"""
@@ -1274,11 +1309,12 @@ class FyersTab(BaseTab):
             symbols_text = ",".join(symbols)
             self.safe_set_value(self.get_tag("stream_symbols"), symbols_text)
             self.update_auth_log(f" Set {symbol_set.upper()} symbols")
+            info("Quick symbols set", context={'symbol_set': symbol_set, 'count': len(symbols)})
 
         except Exception as e:
             error_msg = f" Error setting quick symbols: {str(e)}"
             self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            error("Failed to set quick symbols", context={'error': str(e)}, exc_info=True)
 
     def on_max_rows_changed(self, sender, app_data):
         """Handle max rows change with safe conversion"""
@@ -1296,11 +1332,11 @@ class FyersTab(BaseTab):
                     self.streaming_data = self.streaming_data[-max_rows:]
 
             self.update_data_table()
-            logger.info(f" Max rows changed to {max_rows}")
+            info("Max rows changed", context={'max_rows': max_rows})
 
         except (ValueError, TypeError):
             self.max_streaming_rows = 1000
-            logger.warning("Invalid max rows value, using default 1000")
+            warning("Invalid max rows value, using default 1000")
 
     def on_symbol_filter_changed(self, sender, app_data):
         """Handle symbol filter changes"""
@@ -1315,38 +1351,41 @@ class FyersTab(BaseTab):
             if dpg.get_value(self.get_tag("auto_scroll")):
                 self.update_data_table()
 
+            debug("Symbol filter changed", context={'filter': filter_value})
+
         except Exception as e:
-            logger.error(f"Error in symbol filter change: {e}")
+            error("Error in symbol filter change", context={'error': str(e)}, exc_info=True)
 
     def on_update_rate_changed(self, sender, app_data):
         """Handle update rate changes"""
         try:
             self.update_auth_log(f" Update rate changed to: {app_data}")
-            logger.info(f"Update rate changed to: {app_data}")
+            info("Update rate changed", context={'rate': app_data})
         except Exception as e:
-            logger.error(f"Error in update rate change: {e}")
+            error("Error in update rate change", context={'error': str(e)}, exc_info=True)
 
     def clear_streaming_data(self):
         """Clear all streaming data with enhanced cleanup"""
-        try:
-            with self._lock:
-                self.streaming_data.clear()
-                self.previous_prices.clear()
-                self.message_count = 0
+        with operation("clear_streaming_data"):
+            try:
+                with self._lock:
+                    self.streaming_data.clear()
+                    self.previous_prices.clear()
+                    self.message_count = 0
 
-            # Clear table
-            container_tag = self.get_tag("live_data_table_container")
-            if dpg.does_item_exist(container_tag):
-                dpg.delete_item(container_tag, children_only=True)
-                dpg.add_text("Data cleared. Waiting for new messages...", parent=container_tag)
+                # Clear table
+                container_tag = self.get_tag("live_data_table_container")
+                if dpg.does_item_exist(container_tag):
+                    dpg.delete_item(container_tag, children_only=True)
+                    dpg.add_text("Data cleared. Waiting for new messages...", parent=container_tag)
 
-            self.update_auth_log(" All streaming data cleared")
-            logger.info(" Streaming data cleared")
+                self.update_auth_log(" All streaming data cleared")
+                info("Streaming data cleared")
 
-        except Exception as e:
-            error_msg = f" Error clearing data: {str(e)}"
-            self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            except Exception as e:
+                error_msg = f" Error clearing data: {str(e)}"
+                self.update_auth_log(error_msg)
+                error("Failed to clear streaming data", context={'error': str(e)}, exc_info=True)
 
     def toggle_pause(self):
         """Enhanced pause/resume functionality"""
@@ -1364,23 +1403,23 @@ class FyersTab(BaseTab):
                 if self.streaming_data:
                     self.update_data_table()
 
-            logger.info(f" Streaming {'paused' if self.is_paused else 'resumed'}")
+            info(f"Streaming {'paused' if self.is_paused else 'resumed'}")
 
         except Exception as e:
             error_msg = f" Error toggling pause: {str(e)}"
             self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            error("Failed to toggle pause", context={'error': str(e)}, exc_info=True)
 
     def force_refresh_table(self):
         """Force refresh the data table"""
         try:
             self.update_data_table()
             self.update_auth_log(" Table refreshed manually")
-            logger.info(" Table manually refreshed")
+            info("Table manually refreshed")
         except Exception as e:
             error_msg = f" Error refreshing table: {str(e)}"
             self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            error("Failed to refresh table", context={'error': str(e)}, exc_info=True)
 
     def show_detailed_stats(self):
         """Show detailed streaming statistics"""
@@ -1397,43 +1436,49 @@ class FyersTab(BaseTab):
 • Memory Usage: ~{len(str(self.streaming_data)) / 1024:.1f} KB"""
 
             self.update_auth_log(stats_message)
-            logger.info(f"Detailed stats - Messages: {total_messages}, Data: {data_count}, Symbols: {unique_symbols}")
+            info("Detailed stats shown",
+                 context={'messages': total_messages, 'data_points': data_count, 'symbols': unique_symbols})
 
         except Exception as e:
             error_msg = f" Error showing stats: {str(e)}"
             self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            error("Failed to show stats", context={'error': str(e)}, exc_info=True)
 
+    @monitor_performance
     def export_data(self):
         """Enhanced export functionality with multiple formats"""
-        try:
-            with self._lock:
-                if not self.streaming_data:
-                    self.update_auth_log(" No data to export")
-                    return
+        with operation("export_data"):
+            try:
+                with self._lock:
+                    if not self.streaming_data:
+                        self.update_auth_log(" No data to export")
+                        return
 
-                data_to_export = self.streaming_data.copy()
+                    data_to_export = self.streaming_data.copy()
 
-            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
-            # Export to CSV
-            csv_filename = f"fyers_stream_{timestamp}.csv"
-            self.export_to_csv(data_to_export, csv_filename)
+                # Export to CSV
+                csv_filename = f"fyers_stream_{timestamp}.csv"
+                csv_path = self.config_dir / csv_filename
+                self.export_to_csv(data_to_export, csv_path)
 
-            # Export to JSON for detailed analysis
-            json_filename = f"fyers_stream_{timestamp}.json"
-            self.export_to_json(data_to_export, json_filename)
+                # Export to JSON for detailed analysis
+                json_filename = f"fyers_stream_{timestamp}.json"
+                json_path = self.config_dir / json_filename
+                self.export_to_json(data_to_export, json_path)
 
-            export_msg = f" Exported {len(data_to_export)} records to {csv_filename} and {json_filename}"
-            self.update_auth_log(export_msg)
-            logger.info(export_msg)
+                export_msg = f" Exported {len(data_to_export)} records to {csv_filename} and {json_filename}"
+                self.update_auth_log(export_msg)
+                info("Data exported successfully",
+                     context={'records': len(data_to_export), 'csv_file': str(csv_path), 'json_file': str(json_path)})
 
-        except Exception as e:
-            error_msg = f" Export failed: {str(e)}"
-            self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            except Exception as e:
+                error_msg = f" Export failed: {str(e)}"
+                self.update_auth_log(error_msg)
+                error("Data export failed", context={'error': str(e)}, exc_info=True)
 
-    def export_to_csv(self, data: List[Dict], filename: str):
+    def export_to_csv(self, data: List[Dict], filepath: Path):
         """Export data to CSV format"""
         try:
             # Collect all unique keys from all messages
@@ -1444,7 +1489,7 @@ class FyersTab(BaseTab):
 
             sorted_keys = sorted(list(all_keys))
 
-            with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+            with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
                 writer = csv.DictWriter(csvfile, fieldnames=sorted_keys)
                 writer.writeheader()
 
@@ -1463,10 +1508,12 @@ class FyersTab(BaseTab):
 
                     writer.writerow(export_row)
 
+            debug("CSV export completed", context={'filepath': str(filepath), 'rows': len(data)})
+
         except Exception as e:
             raise Exception(f"CSV export error: {str(e)}")
 
-    def export_to_json(self, data: List[Dict], filename: str):
+    def export_to_json(self, data: List[Dict], filepath: Path):
         """Export data to JSON format"""
         try:
             export_data = {
@@ -1483,8 +1530,10 @@ class FyersTab(BaseTab):
                 'data': data
             }
 
-            with open(filename, 'w', encoding='utf-8') as jsonfile:
+            with open(filepath, 'w', encoding='utf-8') as jsonfile:
                 json.dump(export_data, jsonfile, indent=2, ensure_ascii=False)
+
+            debug("JSON export completed", context={'filepath': str(filepath), 'records': len(data)})
 
         except Exception as e:
             raise Exception(f"JSON export error: {str(e)}")
@@ -1518,26 +1567,28 @@ class FyersTab(BaseTab):
                 return health_status
 
         except Exception as e:
-            logger.error(f"Error getting connection health: {e}")
+            error("Error getting connection health", context={'error': str(e)}, exc_info=True)
             return {'error': str(e)}
 
     def reconnect_websocket(self):
         """Reconnect WebSocket with enhanced logic"""
-        try:
-            self.update_auth_log(" Attempting to reconnect WebSocket...")
+        with operation("reconnect_websocket"):
+            try:
+                self.update_auth_log(" Attempting to reconnect WebSocket...")
 
-            # Disconnect first if connected
-            if self.is_connected:
-                self.disconnect_websocket()
-                time.sleep(2)  # Wait before reconnecting
+                # Disconnect first if connected
+                if self.is_connected:
+                    self.disconnect_websocket()
+                    time.sleep(2)  # Wait before reconnecting
 
-            # Reconnect
-            self.connect_websocket()
+                # Reconnect
+                self.connect_websocket()
+                info("WebSocket reconnection attempted")
 
-        except Exception as e:
-            error_msg = f" Reconnection failed: {str(e)}"
-            self.update_auth_log(error_msg)
-            logger.error(error_msg)
+            except Exception as e:
+                error_msg = f" Reconnection failed: {str(e)}"
+                self.update_auth_log(error_msg)
+                error("WebSocket reconnection failed", context={'error': str(e)}, exc_info=True)
 
     def validate_symbols(self, symbols: List[str]) -> Tuple[List[str], List[str]]:
         """Validate symbol format and return valid/invalid lists"""
@@ -1574,19 +1625,20 @@ class FyersTab(BaseTab):
                     self.get_tag("update_rate")) else "Real-time"
             }
 
-            with open("fyers_session_config.json", "w", encoding='utf-8') as f:
+            config_path = self.config_dir / "fyers_session_config.json"
+            with open(config_path, "w", encoding='utf-8') as f:
                 json.dump(config, f, indent=2)
 
-            logger.info(" Session configuration auto-saved")
+            info("Session configuration auto-saved", context={'config_path': str(config_path)})
 
         except Exception as e:
-            logger.warning(f"Warning: Could not auto-save config: {e}")
+            warning("Could not auto-save config", context={'error': str(e)})
 
     def load_session_config(self):
         """Load saved session configuration"""
         try:
-            config_path = "fyers_session_config.json"
-            if os.path.exists(config_path):
+            config_path = self.config_dir / "fyers_session_config.json"
+            if config_path.exists():
                 with open(config_path, "r", encoding='utf-8') as f:
                     config = json.load(f)
 
@@ -1600,39 +1652,41 @@ class FyersTab(BaseTab):
                 if 'max_rows' in config:
                     self.max_streaming_rows = config['max_rows']
 
-                logger.info(" Session configuration loaded")
+                info("Session configuration loaded", context={'config_path': str(config_path)})
                 return True
 
         except Exception as e:
-            logger.warning(f"Warning: Could not load session config: {e}")
+            warning("Could not load session config", context={'error': str(e)})
 
         return False
 
+    @monitor_performance
     def cleanup(self):
         """Enhanced cleanup with auto-save"""
-        try:
-            # Auto-save configuration before cleanup
-            self.auto_save_config()
+        with operation("fyers_tab_cleanup"):
+            try:
+                # Auto-save configuration before cleanup
+                self.auto_save_config()
 
-            # Disconnect WebSocket
-            if self.websocket_client:
-                try:
-                    self.disconnect_websocket()
-                except Exception as e:
-                    logger.warning(f"Warning during WebSocket cleanup: {e}")
+                # Disconnect WebSocket
+                if self.websocket_client:
+                    try:
+                        self.disconnect_websocket()
+                    except Exception as e:
+                        warning("Warning during WebSocket cleanup", context={'error': str(e)})
 
-            # Clear data structures
-            with self._lock:
-                self.streaming_data.clear()
-                self.previous_prices.clear()
+                # Clear data structures
+                with self._lock:
+                    self.streaming_data.clear()
+                    self.previous_prices.clear()
 
-            # Clean up UI items
-            self.cleanup_existing_items()
+                # Clean up UI items
+                self.cleanup_existing_items()
 
-            logger.info(" Fyers tab cleaned up successfully")
+                info("Fyers tab cleaned up successfully")
 
-        except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+            except Exception as e:
+                error("Error during cleanup", context={'error': str(e)}, exc_info=True)
 
     def get_performance_metrics(self) -> Dict[str, Any]:
         """Get performance metrics for monitoring"""
@@ -1660,7 +1714,7 @@ class FyersTab(BaseTab):
                 return metrics
 
         except Exception as e:
-            logger.error(f"Error getting performance metrics: {e}")
+            error("Error getting performance metrics", context={'error': str(e)}, exc_info=True)
             return {'error': str(e)}
 
     # Additional utility methods
@@ -1728,7 +1782,7 @@ class FyersTab(BaseTab):
     def emergency_stop(self):
         """Emergency stop all operations"""
         try:
-            logger.warning("Emergency stop initiated")
+            warning("Emergency stop initiated")
 
             with self._lock:
                 self.is_connected = False
@@ -1743,6 +1797,7 @@ class FyersTab(BaseTab):
             self.safe_configure_item(self.get_tag("ws_status_text"), color=(255, 0, 0))
 
             self.update_auth_log("Emergency stop - All operations halted")
+            error("Emergency stop executed")
 
         except Exception as e:
-            logger.error(f"Error during emergency stop: {e}")
+            error("Error during emergency stop", context={'error': str(e)}, exc_info=True)
