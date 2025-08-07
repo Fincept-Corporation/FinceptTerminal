@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+Consumer Behaviour Tab module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 from fincept_terminal.Utils.base_tab import BaseTab
 import yfinance as yf
 import pandas as pd
@@ -12,6 +18,7 @@ from PyPDF2 import PdfReader
 from io import BytesIO
 import google.generativeai as genai
 import dearpygui.dearpygui as dpg
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 def get_settings_path():
     """Returns settings file path"""
@@ -45,7 +52,7 @@ class ConsumerBehaviorTab(BaseTab):
             dpg.add_spacer(height=20)
 
             # Input section
-            dpg.add_text("🌍 City Analysis", color=[100, 255, 100])
+            dpg.add_text(" City Analysis", color=[100, 255, 100])
             dpg.add_input_text(
                 tag="city_input",
                 hint="Enter city to analyze (e.g., Mumbai, Delhi)",
@@ -55,7 +62,7 @@ class ConsumerBehaviorTab(BaseTab):
 
             with dpg.group(horizontal=True):
                 dpg.add_button(
-                    label="🔍 Analyze City",
+                    label=" Analyze City",
                     callback=self.analyze_city_callback,
                     width=150,
                     height=35
@@ -65,7 +72,7 @@ class ConsumerBehaviorTab(BaseTab):
             dpg.add_spacer(height=20)
 
             # Results section
-            dpg.add_text("📊 Analysis Report", color=[100, 255, 100])
+            dpg.add_text(" Analysis Report", color=[100, 255, 100])
             dpg.add_separator()
 
             with dpg.child_window(
@@ -93,10 +100,10 @@ class ConsumerBehaviorTab(BaseTab):
         """Process consumer behavior analysis"""
         try:
             self.analysis_running = True
-            dpg.set_value("analysis_status", "🔄 Starting analysis...")
+            dpg.set_value("analysis_status", " Starting analysis...")
 
             # Fetch research papers
-            dpg.set_value("analysis_status", f"📚 Fetching papers for {city}...")
+            dpg.set_value("analysis_status", f" Fetching papers for {city}...")
             papers = self.fetch_research_papers(city)
 
             if not papers:
@@ -104,7 +111,7 @@ class ConsumerBehaviorTab(BaseTab):
                 return
 
             # Consolidate content
-            dpg.set_value("analysis_status", "📄 Processing content...")
+            dpg.set_value("analysis_status", " Processing content...")
             content = self.consolidate_content(papers[:3])  # Limit to 3 papers
 
             if not content.strip():
@@ -117,14 +124,14 @@ class ConsumerBehaviorTab(BaseTab):
 
             if report:
                 self.display_report(report)
-                dpg.set_value("analysis_status", "✅ Analysis complete!")
+                dpg.set_value("analysis_status", " Analysis complete!")
                 self.show_message("Analysis completed successfully!", "success")
             else:
                 self.show_message("Error generating report", "error")
 
         except Exception as e:
             self.show_message(f"Analysis error: {e}", "error")
-            dpg.set_value("analysis_status", "❌ Analysis failed")
+            dpg.set_value("analysis_status", " Analysis failed")
         finally:
             self.analysis_running = False
 
@@ -145,7 +152,7 @@ class ConsumerBehaviorTab(BaseTab):
 
             return papers
         except Exception as e:
-            print(f"Error fetching papers: {e}")
+            logger.error(f"Error fetching papers: {e}", module="Consumer_Behaviour_Tab", context={'e': e})
             return []
 
     def consolidate_content(self, papers):
@@ -224,7 +231,7 @@ class ConsumerBehaviorTab(BaseTab):
         if hasattr(self.app, 'show_message'):
             self.app.show_message(message, message_type)
         else:
-            print(f"{message_type.upper()}: {message}")
+            logger.info(f"{message_type.upper()}: {message}", module="Consumer_Behaviour_Tab", context={'message': message})
 
     def cleanup(self):
         """Cleanup resources"""
@@ -240,7 +247,7 @@ class ComparisonAnalysisTab(BaseTab):
         self.analysis_running = False
 
     def get_label(self):
-        return "📊 Comparison"
+        return " Comparison"
 
     def create_content(self):
         """Create comparison analysis interface"""
@@ -251,7 +258,7 @@ class ComparisonAnalysisTab(BaseTab):
                 horizontal_scrollbar=False,
                 border=True
         ):
-            self.add_section_header("📊 Comparison Analysis")
+            self.add_section_header(" Comparison Analysis")
 
             # Navigation
             self.create_navigation()
@@ -266,19 +273,19 @@ class ComparisonAnalysisTab(BaseTab):
         """Create navigation tabs"""
         with dpg.group(horizontal=True):
             dpg.add_button(
-                label="💼 Portfolio",
+                label=" Portfolio",
                 callback=lambda: self.switch_view("portfolio"),
                 tag="portfolio_nav_btn",
                 width=120
             )
             dpg.add_button(
-                label="📈 Index",
+                label=" Index",
                 callback=lambda: self.switch_view("index"),
                 tag="index_nav_btn",
                 width=120
             )
             dpg.add_button(
-                label="📊 Stocks",
+                label=" Stocks",
                 callback=lambda: self.switch_view("stock"),
                 tag="stock_nav_btn",
                 width=120
@@ -324,7 +331,7 @@ class ComparisonAnalysisTab(BaseTab):
     def create_portfolio_content(self):
         """Create portfolio comparison content"""
         with dpg.group(tag="comparison_portfolio_content"):
-            dpg.add_text("💼 Portfolio Comparison", color=[100, 255, 100])
+            dpg.add_text(" Portfolio Comparison", color=[100, 255, 100])
 
             dpg.add_input_text(
                 tag="portfolio_input",
@@ -358,7 +365,7 @@ class ComparisonAnalysisTab(BaseTab):
     def create_index_content(self):
         """Create index comparison content"""
         with dpg.group(tag="comparison_index_content", show=False):
-            dpg.add_text("📈 Index Comparison", color=[100, 255, 100])
+            dpg.add_text(" Index Comparison", color=[100, 255, 100])
 
             dpg.add_input_text(
                 tag="index_input",
@@ -390,7 +397,7 @@ class ComparisonAnalysisTab(BaseTab):
     def create_stock_content(self):
         """Create stock comparison content"""
         with dpg.group(tag="comparison_stock_content", show=False):
-            dpg.add_text("📊 Stock Comparison", color=[100, 255, 100])
+            dpg.add_text(" Stock Comparison", color=[100, 255, 100])
 
             dpg.add_input_text(
                 tag="stock_input",
@@ -619,7 +626,7 @@ class ComparisonAnalysisTab(BaseTab):
         if hasattr(self.app, 'show_message'):
             self.app.show_message(message, message_type)
         else:
-            print(f"{message_type.upper()}: {message}")
+            logger.info(f"{message_type.upper()}: {message}", module="Consumer_Behaviour_Tab", context={'message': message})
 
     def cleanup(self):
         """Cleanup resources"""

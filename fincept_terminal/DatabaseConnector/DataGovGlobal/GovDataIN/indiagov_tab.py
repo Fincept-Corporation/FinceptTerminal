@@ -1,8 +1,14 @@
+"""
+Indiagov Tab module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 import dearpygui.dearpygui as dpg
 import threading
 import os
 import sqlite3
 from datagovindia import DataGovIndia, check_api_key
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 # Store DB and downloads in current working directory
 DB_FILENAME = "datagovindia.db"
@@ -57,30 +63,30 @@ class DataGovIndiaTab:
 
     def _validate_sync(self, key):
         if not key:
-            dpg.set_value("dg_status", "❌ API key is empty.")
+            dpg.set_value("dg_status", " API key is empty.")
             return
         try:
             valid = check_api_key(key)
         except:
             valid = False
-        dpg.set_value("dg_status", "✅ API key validated." if valid else "❌ Invalid API key.")
+        dpg.set_value("dg_status", " API key validated." if valid else " Invalid API key.")
         if valid:
             self.api_key = key
 
     def _on_sync(self, sender, app_data):
         if not self.api_key:
-            dpg.set_value("dg_status", "❌ Please validate API key first.")
+            dpg.set_value("dg_status", " Please validate API key first.")
             return
         threading.Thread(target=self._sync_metadata, daemon=True).start()
 
     def _sync_metadata(self):
-        dpg.set_value("dg_status", "🔄 Syncing metadata... This may take a while.")
+        dpg.set_value("dg_status", " Syncing metadata... This may take a while.")
         datagovin = DataGovIndia(api_key=self.api_key, db_path=DB_PATH)
         try:
             datagovin.sync_metadata()
-            dpg.set_value("dg_status", f"✅ Metadata synced to {DB_PATH}.")
+            dpg.set_value("dg_status", f" Metadata synced to {DB_PATH}.")
         except Exception as e:
-            dpg.set_value("dg_status", f"❌ Sync error: {e}")
+            dpg.set_value("dg_status", f" Sync error: {e}")
         # Load resources from SQLite
         try:
             conn = sqlite3.connect(DB_PATH)
@@ -90,7 +96,7 @@ class DataGovIndiaTab:
             conn.close()
             self.resources = [{"title": r[0], "resource_id": r[1]} for r in rows]
         except Exception as e:
-            dpg.set_value("dg_status", f"❌ DB load error: {e}")
+            dpg.set_value("dg_status", f" DB load error: {e}")
             self.resources = []
         self._update_resources()
 
@@ -151,7 +157,7 @@ class DataGovIndiaTab:
 
     def _on_download(self, sender, app_data):
         if not self.current_resource_id:
-            dpg.set_value("dg_status", "❌ Select a resource.")
+            dpg.set_value("dg_status", " Select a resource.")
             return
         filename = f"resource_{self.current_resource_id}.csv"
         threading.Thread(target=self._download_sync, args=(self.current_resource_id, filename), daemon=True).start()
@@ -160,10 +166,10 @@ class DataGovIndiaTab:
         try:
             df = DataGovIndia(api_key=self.api_key).get_data(res_id)
             if df is None or df.empty:
-                dpg.set_value("dg_status", "❌ No data to download.")
+                dpg.set_value("dg_status", " No data to download.")
                 return
             path = os.path.abspath(filename)
             df.to_csv(path, index=False)
-            dpg.set_value("dg_status", f"✅ Downloaded: {path}")
+            dpg.set_value("dg_status", f" Downloaded: {path}")
         except Exception as e:
-            dpg.set_value("dg_status", f"❌ Download error: {e}")
+            dpg.set_value("dg_status", f" Download error: {e}")

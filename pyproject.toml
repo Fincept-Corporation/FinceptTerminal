@@ -4,65 +4,36 @@ version = "1.0.10"
 description = "A Terminal for Financial Market Analysis and Fetching all kinds of Data."
 readme = "README.md"
 authors = [
-  { name = "Fincept Corporation", email = "dev@fincept.in" }
+    { name = "Fincept Corporation", email = "dev@fincept.in" }
 ]
-
 license = { text = "MIT" }
-
 requires-python = ">=3.11,<3.14"
-
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
 
 dependencies = [
-  "IPython==8.29.0",
-  "PyPDF2==2.12.1",
-  "apscheduler==3.6.3",
-  "click==8.1.8",
-  "datagovindia==1.0.2",
-  "feedparser==6.0.11",
-  "mplfinance>=0.12.0",
-  "pyperclip==1.9.0",
-  "financedatabase>=2.2.3,<2.3.0",
-  "fredapi==0.5.2",
-  "fuzzywuzzy==0.18.0",
-  "fyers_apiv3==3.1.4",
-  "gnews==0.3.7",
-  "deep-translator>=1.9.0",
-  "httpx>=0.23.0,<1",
-  "matplotlib>=3.5.0,<4.0",  # Made more flexible to avoid conflicts
-  "numpy>=1.23.5,<2.0.0",    # Made more flexible for better compatibility
-  "openai>=1.50.0,<2.0.0",   # Made more flexible
-  "osmnx>=1.6.0,<3.0.0",     # Made more flexible
-  "packaging>=20.0",
-  "transformers>=4.30.0,<5.0.0",  # Made more flexible
-  "pandas>=2.0.0,<3.0.0",    # Adjusted minimum version
-  "parse==1.19.0",
-  "passlib==1.7.4",
-  "pdfplumber==0.11.4",
-  "plotly>=5.0.0,<6.0.0",    # Made more flexible
-  "psycopg2-binary==2.9.10",
-  "pydantic>=2.0.0,<3.0.0",  # Made more flexible
-  "pygad==3.3.1",
-  "quantstats>=0.0.60",      # Made more flexible
-  "requests>=2.31.0,<3.0.0", # Extended upper bound
-  "scholarly==1.7.11",
-  "shapely>=2.0.0,<3.0.0",   # Made more flexible
-  "sqlalchemy>=2.0.0,<3.0.0", # Made more flexible
-  "statsmodels>=0.14.0,<1.0.0", # Made more flexible
-  "tqdm>=4.60.0",             # Made more flexible
-  "dearpygui==2.0.0",
-  "typer>=0.9.0,<1.0.0",     # Made more flexible
-  "typing_extensions>=4.0.0", # Made more flexible
-  "ujson>=5.0.0,<6.0.0",     # Made more flexible
-  "vectorbt>=0.25.0,<1.0.0", # Made more flexible
-  "yfinance>=0.2.0,<1.0.0",  # Made more flexible
-  "youtube-search==2.1.2",
-  "youtube_transcript_api==0.6.1",
-  "setuptools>=65.0.0",      # Made more flexible
-  "google-generativeai>=0.8.0,<1.0.0",  # Made more flexible
+    "Pillow==11.2.1",
+    "PyPDF2==2.12.1",
+    "PyQt5==5.15.11",
+    "datagovindia==1.0.2",
+    "dearpygui==2.0.0",
+    "feedparser==6.0.11",
+    "fyers_apiv3==3.1.4",
+    "numpy==2.2.6",
+    "pandas==2.2.3",
+    "psutil==7.0.0",
+    "psycopg2==2.9.10",
+    "pyaudio==0.2.14",
+    "pyotp==2.9.0",
+    "requests==2.31.0",
+    "scholarly==1.7.11",
+    "scipy==1.15.3",
+    "ta==0.11.0",
+    "uuid==1.30",
+    "wikipedia==1.4.0",
+    "yfinance==0.2.61",
 ]
 
 [tool.setuptools.packages.find]

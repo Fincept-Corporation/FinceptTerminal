@@ -81,6 +81,54 @@ class FinceptAPIClient:
             }
         return {"success": False, "authenticated": False}
 
+    def logout(self) -> Dict[str, Any]:
+        """Logout user and clear session"""
+        if not self.is_authenticated():
+            return {"success": False, "error": "User is not authenticated"}
+
+        result = self.make_request("POST", "/auth/logout")
+
+        if result["success"] and result["data"].get("success"):
+            # Clear local session data
+            self.clear_session()
+            return {
+                "success": True,
+                "message": result["data"]["data"].get("message", "Logged out successfully")
+            }
+        return {
+            "success": False,
+            "error": result.get("error", "Failed to logout")
+        }
+
+    def clear_session(self) -> None:
+        """Clear all session data locally"""
+        # Reset session data to default guest state
+        device_id = self.session_data.get("device_id", "unknown")  # Preserve device_id
+
+        self.session_data = {
+            "user_type": "guest",
+            "authenticated": False,
+            "api_key": None,
+            "device_id": device_id,
+            "user_info": {},
+            "expires_at": None,
+            "requests_today": 0,
+            "daily_limit": 50
+        }
+
+        # Reset instance variables
+        self.api_key = None
+        self.user_type = "guest"
+        self.request_count = 0
+
+    def force_logout(self) -> Dict[str, Any]:
+        """Force logout without API call (for offline situations)"""
+        self.clear_session()
+        return {
+            "success": True,
+            "message": "Forced logout completed - session cleared locally"
+        }
+
     # ============================================
     # CHAT ENDPOINTS (NEW)
     # ============================================
@@ -586,13 +634,105 @@ class FinceptAPIClient:
         if self.user_type != "guest":
             return {"success": False, "error": "Only available for guest users"}
 
-        result = self.make_request("GET", "/guest/status")
-        if result["success"] and result["data"].get("success"):
+        # For guest status, we need to send device_id in the request
+        device_id = self.session_data.get("device_id")
+        if not device_id:
+            device_id = self.generate_device_id() if hasattr(self, 'generate_device_id') else None
+
+        headers = self.get_headers()
+        if device_id:
+            headers["X-Device-ID"] = device_id
+
+        # Make request with device identification
+        try:
+            url = f"{self.api_base}/guest/status"
+            response = requests.get(url, headers=headers, timeout=10)
+
             return {
-                "success": True,
-                "status": result["data"]["data"]
+                "success": response.status_code < 400,
+                "status_code": response.status_code,
+                "data": response.json() if response.content else {},
+                "headers": dict(response.headers)
             }
-        return {"success": False, "error": result.get("error", "Failed to get guest status")}
+        except Exception as e:
+            return {"success": False, "error": f"Request error: {str(e)}"}
+
+    def get_or_create_guest_session(self, device_id: str, device_name: str, platform: str,
+                                    hardware_info: Dict[str, Any]) -> Dict[str, Any]:
+        """Get existing guest session or create new one"""
+        try:
+            # First try to get existing session
+            headers = {"Content-Type": "application/json", "X-Device-ID": device_id}
+
+            # Try guest status endpoint first
+            status_response = requests.get(
+                f"{self.api_base}/guest/status",
+                headers=headers,
+                timeout=10
+            )
+
+            if status_response.status_code == 200:
+                data = status_response.json()
+                if data.get("success"):
+                    return {
+                        "success": True,
+                        "data": data.get("data", {}),
+                        "message": "Existing session retrieved"
+                    }
+
+            # If no existing session, try to register
+            register_data = {
+                "device_id": device_id,
+                "device_name": device_name,
+                "platform": platform,
+                "hardware_info": hardware_info
+            }
+
+            register_response = requests.post(
+                f"{self.api_base}/device/register",
+                json=register_data,
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+
+            if register_response.status_code == 200:
+                data = register_response.json()
+                if data.get("success"):
+                    return {
+                        "success": True,
+                        "data": data.get("data", {}),
+                        "message": "New session created"
+                    }
+
+            # Handle conflict (409) - device already exists
+            elif register_response.status_code == 409:
+                # Try to get the existing session again with different approach
+                auth_headers = {"Content-Type": "application/json"}
+
+                # Try auth/status with device info
+                auth_response = requests.get(
+                    f"{self.api_base}/auth/status",
+                    headers=auth_headers,
+                    params={"device_id": device_id},
+                    timeout=10
+                )
+
+                if auth_response.status_code == 200:
+                    auth_data = auth_response.json()
+                    if auth_data.get("success") and auth_data.get("data", {}).get("guest"):
+                        return {
+                            "success": True,
+                            "data": auth_data["data"]["guest"],
+                            "message": "Existing session found via auth"
+                        }
+
+            return {
+                "success": False,
+                "error": f"Failed to get or create session: {register_response.status_code}"
+            }
+
+        except Exception as e:
+            return {"success": False, "error": f"Request error: {str(e)}"}
 
     def extend_guest_session(self) -> Dict[str, Any]:
         """Extend guest session"""

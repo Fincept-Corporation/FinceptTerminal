@@ -1,3 +1,9 @@
+"""
+Maps Tab module for Fincept Terminal
+Updated to use centralized logging system
+Fixed positional arguments errors
+"""
+
 # maps_tab.py - Fixed version
 import dearpygui.dearpygui as dpg
 import subprocess
@@ -7,6 +13,7 @@ import time
 import sys
 from fincept_terminal.Utils.base_tab import BaseTab
 
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 class MaritimeMapTab(BaseTab):
     """Maritime Maps tab that controls separate PyQt process"""
@@ -40,7 +47,7 @@ class MaritimeMapTab(BaseTab):
                 with open(self.markers_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
         except Exception as e:
-            print(f"Load markers error: {e}")
+            logger.error(f"Load markers error: {e}", module="Maps_Tab", context={'e': str(e)})
         return []
 
     def save_markers(self):
@@ -49,7 +56,7 @@ class MaritimeMapTab(BaseTab):
             with open(self.markers_file, 'w', encoding='utf-8') as f:
                 json.dump(self.markers_data, f, indent=2, ensure_ascii=False)
         except Exception as e:
-            print(f"Save error: {e}")
+            logger.error(f"Save error: {e}", module="Maps_Tab", context={'e': str(e)})
 
     def send_command(self, command):
         """Send command to PyQt process"""
@@ -67,7 +74,7 @@ class MaritimeMapTab(BaseTab):
             with open(self.commands_file, 'w', encoding='utf-8') as f:
                 json.dump(commands, f, ensure_ascii=False)
         except Exception as e:
-            print(f"Command send error: {e}")
+            logger.error(f"Command send error: {e}", module="Maps_Tab", context={'e': str(e)})
 
     def get_map_status(self):
         """Get status from PyQt process"""
@@ -77,7 +84,7 @@ class MaritimeMapTab(BaseTab):
                     data = json.load(f)
                     return data.get('status', 'unknown')
         except Exception as e:
-            print(f"Status read error: {e}")
+            logger.error(f"Status read error: {e}", module="Maps_Tab", context={'e': str(e)})
         return 'unknown'
 
     def safe_add_text(self, text, **kwargs):
@@ -92,7 +99,7 @@ class MaritimeMapTab(BaseTab):
 
             return dpg.add_text(text, **kwargs)
         except Exception as e:
-            print(f"Text add error: {e}")
+            logger.error(f"Text add error: {e}", module="Maps_Tab", context={'e': str(e)})
             # Fallback to simple text
             try:
                 return dpg.add_text("Text Error", **kwargs)
@@ -113,13 +120,15 @@ class MaritimeMapTab(BaseTab):
                         dpg.add_button(
                             label="LAUNCH MAP",
                             callback=self.launch_map,
-                            width=150, height=35,
+                            width=150,
+                            height=35,
                             tag="launch_btn"
                         )
                         dpg.add_button(
                             label="CLOSE MAP",
                             callback=self.close_map,
-                            width=120, height=35
+                            width=120,
+                            height=35
                         )
                     else:
                         self.safe_add_text("PyQt5 Required", color=[255, 100, 100])
@@ -147,7 +156,9 @@ class MaritimeMapTab(BaseTab):
                     dpg.add_input_text(hint="Marker Title", width=150, tag="marker_title")
                     dpg.add_combo(
                         items=["Ship", "Port", "Industry", "Bank", "Exchange"],
-                        default_value="Ship", width=100, tag="marker_type",
+                        default_value="Ship",
+                        width=100,
+                        tag="marker_type",
                         callback=self.on_marker_type_changed
                     )
 
@@ -199,19 +210,19 @@ class MaritimeMapTab(BaseTab):
 
                         self.update_markers_table()
                     except Exception as e:
-                        print(f"Table creation error: {e}")
+                        logger.error(f"Table creation error: {e}", module="Maps_Tab", context={'e': str(e)})
                         self.safe_add_text("Table Error - Check Console")
 
         except Exception as e:
-            print(f"Content creation error: {e}")
+            logger.error(f"Content creation error: {e}", module="Maps_Tab", context={'e': str(e)})
             # Create minimal error display
             try:
                 self.safe_add_text(f"Error loading Maps tab: {str(e)}", color=[255, 100, 100])
             except:
                 pass
 
-    def launch_map(self):
-        """Launch PyQt map process"""
+    def launch_map(self, *args, **kwargs):
+        """Launch PyQt map process - Flexible callback signature"""
         if not self.pyqt_available:
             self.update_status("PyQt5 not available")
             return
@@ -234,7 +245,8 @@ class MaritimeMapTab(BaseTab):
                 self.update_status("Launching map...")
 
                 try:
-                    dpg.set_item_label("launch_btn", "MAP RUNNING")
+                    if dpg.does_item_exist("launch_btn"):
+                        dpg.set_item_label("launch_btn", "MAP RUNNING")
                 except:
                     pass
 
@@ -244,15 +256,16 @@ class MaritimeMapTab(BaseTab):
         except Exception as e:
             self.update_status(f"Launch error: {str(e)}")
 
-    def close_map(self):
-        """Close PyQt map process"""
+    def close_map(self, *args, **kwargs):
+        """Close PyQt map process - Flexible callback signature"""
         try:
             if self.map_process and self.map_process.poll() is None:
                 self.map_process.terminate()
                 self.map_process = None
                 self.update_status("Map closed")
                 try:
-                    dpg.set_item_label("launch_btn", "LAUNCH MAP")
+                    if dpg.does_item_exist("launch_btn"):
+                        dpg.set_item_label("launch_btn", "LAUNCH MAP")
                 except:
                     pass
             else:
@@ -260,14 +273,16 @@ class MaritimeMapTab(BaseTab):
         except Exception as e:
             self.update_status(f"Close error: {str(e)}")
 
-    def on_marker_type_changed(self, sender, app_data):
-        """Handle marker type change in DearPyGUI"""
+    def on_marker_type_changed(self, *args, **kwargs):
+        """Handle marker type change in DearPyGUI - Flexible callback signature"""
         try:
-            marker_type = app_data
+            # Extract app_data from args if available
+            app_data = args[1] if len(args) > 1 else kwargs.get('app_data', "Ship")
+            marker_type = app_data if app_data is not None else "Ship"
             self.send_marker_type(marker_type)
             self.update_status(f"Marker type: {marker_type}")
         except Exception as e:
-            print(f"Marker type change error: {e}")
+            logger.error(f"Marker type change error: {e}", module="Maps_Tab", context={'e': str(e)})
 
     def send_marker_type(self, marker_type):
         """Send marker type change to PyQt process"""
@@ -275,17 +290,22 @@ class MaritimeMapTab(BaseTab):
             command = f"set_marker_type:{marker_type}"
             self.send_command(command)
         except Exception as e:
-            print(f"Send marker type error: {e}")
+            logger.error(f"Send marker type error: {e}", module="Maps_Tab", context={'e': str(e)})
 
-    def add_marker(self):
-        """Add marker from inputs"""
+    def add_marker(self, *args, **kwargs):
+        """Add marker from inputs - Flexible callback signature"""
         try:
             title = dpg.get_value("marker_title") or "New Marker"
-            marker_type = dpg.get_value("marker_type")
-            lat = dpg.get_value("lat_input")
-            lng = dpg.get_value("lng_input")
+            marker_type = dpg.get_value("marker_type") or "Ship"
+            lat = dpg.get_value("lat_input") or 0.0
+            lng = dpg.get_value("lng_input") or 0.0
 
-            marker_data = {"lat": lat, "lng": lng, "title": str(title), "type": str(marker_type)}
+            marker_data = {
+                "lat": float(lat),
+                "lng": float(lng),
+                "title": str(title),
+                "type": str(marker_type)
+            }
             self.markers_data.append(marker_data)
             self.save_markers()
 
@@ -293,13 +313,14 @@ class MaritimeMapTab(BaseTab):
             self.update_marker_count()
             self.update_status(f"Added: {title}")
 
-            dpg.set_value("marker_title", "")
+            if dpg.does_item_exist("marker_title"):
+                dpg.set_value("marker_title", "")
 
         except Exception as e:
             self.update_status(f"Add error: {str(e)}")
 
-    def add_preset(self):
-        """Add preset location"""
+    def add_preset(self, *args, **kwargs):
+        """Add preset location - Flexible callback signature"""
         preset_coords = {
             "Mumbai Port": (19.0760, 72.8777, "Port"),
             "Shanghai Port": (31.2304, 121.4737, "Port"),
@@ -308,11 +329,16 @@ class MaritimeMapTab(BaseTab):
         }
 
         try:
-            selected = dpg.get_value("preset_combo")
+            selected = dpg.get_value("preset_combo") or "Mumbai Port"
             if selected in preset_coords:
                 lat, lng, marker_type = preset_coords[selected]
 
-                marker_data = {"lat": lat, "lng": lng, "title": str(selected), "type": str(marker_type)}
+                marker_data = {
+                    "lat": float(lat),
+                    "lng": float(lng),
+                    "title": str(selected),
+                    "type": str(marker_type)
+                }
                 self.markers_data.append(marker_data)
                 self.save_markers()
 
@@ -322,8 +348,8 @@ class MaritimeMapTab(BaseTab):
         except Exception as e:
             self.update_status(f"Preset error: {str(e)}")
 
-    def add_indian_ports(self):
-        """Add Indian ports"""
+    def add_indian_ports(self, *args, **kwargs):
+        """Add Indian ports - Flexible callback signature"""
         ports = [
             (19.0760, 72.8777, "Mumbai Port", "Port"),
             (22.5726, 88.3639, "Kolkata Port", "Port"),
@@ -332,8 +358,8 @@ class MaritimeMapTab(BaseTab):
         ]
         self.add_multiple_markers(ports, "Indian ports")
 
-    def add_financial(self):
-        """Add financial centers"""
+    def add_financial(self, *args, **kwargs):
+        """Add financial centers - Flexible callback signature"""
         centers = [
             (19.1136, 72.8697, "Mumbai Financial District", "Bank"),
             (28.5355, 77.3910, "Delhi Financial District", "Bank"),
@@ -346,7 +372,12 @@ class MaritimeMapTab(BaseTab):
         try:
             added = 0
             for lat, lng, title, marker_type in markers_list:
-                marker_data = {"lat": lat, "lng": lng, "title": str(title), "type": str(marker_type)}
+                marker_data = {
+                    "lat": float(lat),
+                    "lng": float(lng),
+                    "title": str(title),
+                    "type": str(marker_type)
+                }
                 self.markers_data.append(marker_data)
                 added += 1
 
@@ -358,24 +389,24 @@ class MaritimeMapTab(BaseTab):
         except Exception as e:
             self.update_status(f"Bulk add error: {str(e)}")
 
-    def toggle_routes(self):
-        """Toggle trade routes"""
+    def toggle_routes(self, *args, **kwargs):
+        """Toggle trade routes - Flexible callback signature"""
         try:
             self.send_command("toggle_routes")
             self.update_status("Routes toggled")
         except Exception as e:
             self.update_status(f"Routes error: {str(e)}")
 
-    def toggle_ships(self):
-        """Toggle live ships"""
+    def toggle_ships(self, *args, **kwargs):
+        """Toggle live ships - Flexible callback signature"""
         try:
             self.send_command("toggle_ships")
             self.update_status("Ships toggled")
         except Exception as e:
             self.update_status(f"Ships error: {str(e)}")
 
-    def clear_all(self):
-        """Clear all markers"""
+    def clear_all(self, *args, **kwargs):
+        """Clear all markers - Flexible callback signature"""
         try:
             self.markers_data = []
             self.save_markers()
@@ -392,13 +423,17 @@ class MaritimeMapTab(BaseTab):
             if not dpg.does_item_exist("markers_table"):
                 return
 
-            # Clear existing rows
-            children = dpg.get_item_children("markers_table", slot=1)
-            for child in children:
-                try:
-                    dpg.delete_item(child)
-                except:
-                    pass
+            # Clear existing rows safely
+            try:
+                children = dpg.get_item_children("markers_table", slot=1)
+                if children:
+                    for child in children:
+                        try:
+                            dpg.delete_item(child)
+                        except:
+                            pass
+            except:
+                pass
 
             # Add new rows
             for marker in self.markers_data[-6:]:  # Show last 6
@@ -411,10 +446,10 @@ class MaritimeMapTab(BaseTab):
                         self.safe_add_text(str(marker.get('type', 'Unknown')))
                         self.safe_add_text(f"{marker.get('lat', 0):.2f}, {marker.get('lng', 0):.2f}")
                 except Exception as e:
-                    print(f"Row add error: {e}")
+                    logger.error(f"Row add error: {e}", module="Maps_Tab", context={'e': str(e)})
 
         except Exception as e:
-            print(f"Table update error: {e}")
+            logger.error(f"Table update error: {e}", module="Maps_Tab", context={'e': str(e)})
 
     def update_marker_count(self):
         """Update marker count"""
@@ -422,7 +457,7 @@ class MaritimeMapTab(BaseTab):
             if dpg.does_item_exist("marker_count"):
                 dpg.set_value("marker_count", str(len(self.markers_data)))
         except Exception as e:
-            print(f"Count update error: {e}")
+            logger.error(f"Count update error: {e}", module="Maps_Tab", context={'e': str(e)})
 
     def update_status(self, message):
         """Update status"""
@@ -432,9 +467,9 @@ class MaritimeMapTab(BaseTab):
 
             if dpg.does_item_exist("status_text"):
                 dpg.set_value("status_text", message)
-            print(f"Maps: {message}")
+            logger.info(f"Maps: {message}", module="Maps_Tab", context={'message': message})
         except Exception as e:
-            print(f"Status update error: {e}")
+            logger.error(f"Status update error: {e}", module="Maps_Tab", context={'e': str(e)})
 
     def cleanup(self):
         """Cleanup"""
@@ -450,4 +485,4 @@ class MaritimeMapTab(BaseTab):
                 except:
                     pass
         except Exception as e:
-            print(f"Cleanup error: {e}")
+            logger.error(f"Cleanup error: {e}", module="Maps_Tab", context={'e': str(e)})

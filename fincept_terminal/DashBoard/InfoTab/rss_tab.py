@@ -3,6 +3,7 @@ import requests
 import xml.etree.ElementTree as ET
 import webbrowser
 from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 class RssTab(BaseTab):
     """Tab for fetching and displaying NSE RSS announcements."""
@@ -43,7 +44,7 @@ class RssTab(BaseTab):
                 })
             self.feed_items = items
         except Exception as e:
-            print(f"❌ RSS fetch error: {e}")
+            logger.error(f" RSS fetch error: {e}", module="Rss_Tab", context={'e': e})
             self.feed_items = []
 
     def create_content(self):
@@ -77,7 +78,7 @@ class RssTab(BaseTab):
         """Callback to refresh feed with custom URL and update UI."""
         url = dpg.get_value("rss_url_input")
         self.current_url = url or self.DEFAULT_RSS_URL
-        print(f"🔄 Loading RSS feed from: {self.current_url}")
+        logger.info("Loading RSS feed from: {self.current_url}", module="Rss_Tab")
         self.fetch_feed(self.current_url)
 
         # Clear existing entries

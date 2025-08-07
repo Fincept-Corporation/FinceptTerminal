@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+Robo Advisor Tab module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 import dearpygui.dearpygui as dpg
 from fincept_terminal.Utils.base_tab import BaseTab
 import requests
@@ -7,6 +13,7 @@ import yfinance as yf
 import threading
 import time
 
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 class RoboAdvisorTab(BaseTab):
     """AI-Powered Robo-Advisor Interface for Portfolio Creation"""
@@ -55,7 +62,7 @@ class RoboAdvisorTab(BaseTab):
     def create_selection_panels(self):
         """Create the selection panels for country, sector, and industry"""
         # Country Selection Panel
-        with dpg.collapsing_header(label="🌍 Select a Country", default_open=True):
+        with dpg.collapsing_header(label=" Select a Country", default_open=True):
             dpg.add_text("Choose a country to analyze markets:", color=[255, 200, 100])
             dpg.add_spacer(height=5)
 
@@ -66,7 +73,7 @@ class RoboAdvisorTab(BaseTab):
         dpg.add_spacer(height=15)
 
         # Sector Selection Panel
-        with dpg.collapsing_header(label="🏭 Select a Sector", default_open=False):
+        with dpg.collapsing_header(label=" Select a Sector", default_open=False):
             dpg.add_text("Choose a sector for focused analysis:", color=[255, 200, 100])
             dpg.add_spacer(height=5)
 
@@ -77,7 +84,7 @@ class RoboAdvisorTab(BaseTab):
         dpg.add_spacer(height=15)
 
         # Industry Selection Panel
-        with dpg.collapsing_header(label="🏗️ Select an Industry", default_open=False):
+        with dpg.collapsing_header(label=" Select an Industry", default_open=False):
             dpg.add_text("Choose a specific industry for deep analysis:", color=[255, 200, 100])
             dpg.add_spacer(height=5)
 
@@ -87,14 +94,14 @@ class RoboAdvisorTab(BaseTab):
 
     def create_analysis_controls(self):
         """Create analysis control panel"""
-        dpg.add_text("🔬 Portfolio Analysis", color=[100, 255, 100])
+        dpg.add_text(" Portfolio Analysis", color=[100, 255, 100])
         dpg.add_separator()
         dpg.add_spacer(height=10)
 
         with dpg.group(horizontal=True):
             # Analysis button
             dpg.add_button(
-                label="🚀 Run AI Analysis",
+                label=" Run AI Analysis",
                 callback=self.run_analysis_callback,
                 width=180,
                 height=40,
@@ -110,7 +117,7 @@ class RoboAdvisorTab(BaseTab):
 
             # Clear selections button
             dpg.add_button(
-                label="🔄 Clear Selections",
+                label=" Clear Selections",
                 callback=self.clear_selections,
                 width=140,
                 height=40
@@ -120,14 +127,14 @@ class RoboAdvisorTab(BaseTab):
 
         # Selection summary
         with dpg.child_window(height=80, border=True):
-            dpg.add_text("📋 Current Selections:", color=[255, 255, 100])
+            dpg.add_text(" Current Selections:", color=[255, 255, 100])
             dpg.add_text("Country: Not selected", tag="selected_country_text")
             dpg.add_text("Sector: Not selected", tag="selected_sector_text")
             dpg.add_text("Industry: Not selected", tag="selected_industry_text")
 
     def create_results_section(self):
         """Create the portfolio results section"""
-        dpg.add_text("📊 Generated Portfolio", color=[100, 255, 100])
+        dpg.add_text(" Generated Portfolio", color=[100, 255, 100])
         dpg.add_separator()
         dpg.add_spacer(height=10)
 
@@ -149,7 +156,7 @@ class RoboAdvisorTab(BaseTab):
 
         # Portfolio summary
         with dpg.child_window(height=100, border=True, tag="portfolio_summary_container"):
-            dpg.add_text("🎯 Portfolio Summary", color=[255, 200, 100])
+            dpg.add_text(" Portfolio Summary", color=[255, 200, 100])
             dpg.add_text("Run analysis to see portfolio recommendations", color=[200, 200, 200])
 
     # ============================================================================
@@ -352,11 +359,11 @@ class RoboAdvisorTab(BaseTab):
         """Run the complete robo-advisor analysis"""
         try:
             self.analysis_running = True
-            dpg.set_value("analysis_status", "🔄 Starting analysis...")
+            dpg.set_value("analysis_status", " Starting analysis...")
             self.show_message("Running Robo-Advisor Analysis...", "info")
 
             # Step 1: Fetch stocks
-            dpg.set_value("analysis_status", "📊 Fetching stock data...")
+            dpg.set_value("analysis_status", " Fetching stock data...")
             stocks = self.fetch_stocks_by_industry(self.selected_country, self.selected_sector, self.selected_industry)
 
             if stocks.empty:
@@ -374,15 +381,15 @@ class RoboAdvisorTab(BaseTab):
                 return
 
             # Step 3: Display results
-            dpg.set_value("analysis_status", "📈 Generating portfolio...")
+            dpg.set_value("analysis_status", " Generating portfolio...")
             self.display_portfolio_results(portfolio)
 
-            dpg.set_value("analysis_status", "✅ Analysis complete!")
+            dpg.set_value("analysis_status", " Analysis complete!")
             self.show_message("Portfolio generated successfully!", "success")
 
         except Exception as e:
             self.show_message(f"Analysis error: {e}", "error")
-            dpg.set_value("analysis_status", "❌ Analysis failed")
+            dpg.set_value("analysis_status", " Analysis failed")
         finally:
             self.analysis_running = False
 
@@ -399,7 +406,7 @@ class RoboAdvisorTab(BaseTab):
             try:
                 # Update progress
                 progress = f"Analyzing {symbol} ({i + 1}/{total_stocks})"
-                dpg.set_value("analysis_status", f"🔍 {progress}")
+                dpg.set_value("analysis_status", f" {progress}")
 
                 stock = yf.Ticker(symbol)
                 info = stock.info
@@ -450,7 +457,7 @@ class RoboAdvisorTab(BaseTab):
                 time.sleep(0.1)
 
             except Exception as e:
-                print(f"Error analyzing {symbol}: {e}")
+                logger.error(f"Error analyzing {symbol}: {e}", module="Robo_Advisor_Tab", context={'symbol': symbol, 'e': e})
                 continue
 
         # Convert to DataFrame and sort by combined score
@@ -495,16 +502,16 @@ class RoboAdvisorTab(BaseTab):
                     dpg.delete_item(child)
 
             # Add new summary content
-            dpg.add_text("🎯 Portfolio Summary", color=[255, 200, 100], parent="portfolio_summary_container")
+            dpg.add_text(" Portfolio Summary", color=[255, 200, 100], parent="portfolio_summary_container")
 
             if not portfolio.empty:
                 total_stocks = len(portfolio)
                 avg_score = portfolio["Combined Score"].mean()
                 top_stock = portfolio.iloc[0]["Symbol"]
 
-                dpg.add_text(f"📊 Total Recommendations: {total_stocks}", parent="portfolio_summary_container")
-                dpg.add_text(f"⭐ Average Score: {avg_score:.1f}/20", parent="portfolio_summary_container")
-                dpg.add_text(f"🏆 Top Pick: {top_stock}", parent="portfolio_summary_container")
+                dpg.add_text(f" Total Recommendations: {total_stocks}", parent="portfolio_summary_container")
+                dpg.add_text(f" Average Score: {avg_score:.1f}/20", parent="portfolio_summary_container")
+                dpg.add_text(f" Top Pick: {top_stock}", parent="portfolio_summary_container")
             else:
                 dpg.add_text("No recommendations available", parent="portfolio_summary_container",
                              color=[200, 200, 200])
@@ -527,13 +534,13 @@ class RoboAdvisorTab(BaseTab):
             self.app.show_message(message, message_type)
         else:
             type_symbols = {
-                "success": "✅",
-                "error": "❌",
-                "warning": "⚠️",
-                "info": "ℹ️"
+                "success": "",
+                "error": "",
+                "warning": "",
+                "info": ""
             }
-            symbol = type_symbols.get(message_type, "ℹ️")
-            print(f"{symbol} {message}")
+            symbol = type_symbols.get(message_type, "")
+            logger.info(f"{symbol} {message}", module="Robo_Advisor_Tab", context={'symbol': symbol, 'message': message})
 
     def resize_components(self, left_width, center_width, right_width,
                           top_height, bottom_height, cell_height):
@@ -543,7 +550,7 @@ class RoboAdvisorTab(BaseTab):
                 # The child window will automatically resize with parent
                 pass
         except Exception as e:
-            print(f"Error resizing robo-advisor components: {e}")
+            logger.error(f"Error resizing robo-advisor components: {e}", module="Robo_Advisor_Tab", context={'e': e})
 
     def cleanup(self):
         """Clean up robo-advisor tab resources"""
@@ -557,6 +564,6 @@ class RoboAdvisorTab(BaseTab):
             self.selected_sector = None
             self.selected_industry = None
 
-            print("✅ Robo-advisor tab cleaned up")
+            logger.info("Robo-advisor tab cleaned up", module="Robo_Advisor_Tab")
         except Exception as e:
-            print(f"❌ Robo-advisor tab cleanup error: {e}")
+            logger.error(f" Robo-advisor tab cleanup error: {e}", module="Robo_Advisor_Tab", context={'e': e})

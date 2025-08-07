@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
+"""
+World Trade Analysis module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 
 import dearpygui.dearpygui as dpg
 from fincept_terminal.Utils.base_tab import BaseTab
 import random
 import datetime
 
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 class WorldTradeAnalysisTab(BaseTab):
     """Bloomberg Terminal World Trade Analysis & Research Tab"""
@@ -26,7 +32,7 @@ class WorldTradeAnalysisTab(BaseTab):
         self.initialize_trade_data()
 
     def get_label(self):
-        return "🌍 World Trade Analysis"
+        return " World Trade Analysis"
 
     def initialize_trade_data(self):
         """Initialize comprehensive world trade data"""
@@ -121,7 +127,7 @@ class WorldTradeAnalysisTab(BaseTab):
             self.create_workflow_section()
 
         except Exception as e:
-            print(f"Error in create_content: {e}")
+            logger.error(f"Error in create_content: {e}", module="World_Trade_Analysis", context={'e': e})
             dpg.add_text("World Trade Analysis Terminal", color=self.BLOOMBERG_ORANGE)
             dpg.add_text("Loading comprehensive trade data...")
 
@@ -447,7 +453,7 @@ class WorldTradeAnalysisTab(BaseTab):
 
             for report in reports:
                 with dpg.group(horizontal=True):
-                    dpg.add_button(label="📄", width=25, height=20)
+                    dpg.add_button(label="", width=25, height=20)
                     dpg.add_text(report)
 
     def create_workflow_section(self):
@@ -463,7 +469,7 @@ class WorldTradeAnalysisTab(BaseTab):
                     dpg.add_text("• Identify opportunities")
                     dpg.add_text("• Risk assessment")
                     dpg.add_text("• Compliance check")
-                    dpg.add_text("Status: ✓ Complete", color=self.BLOOMBERG_GREEN)
+                    dpg.add_text("Status:  Complete", color=self.BLOOMBERG_GREEN)
 
                 dpg.add_separator()
 
@@ -473,7 +479,7 @@ class WorldTradeAnalysisTab(BaseTab):
                     dpg.add_text("• Optimize logistics")
                     dpg.add_text("• Cost calculation")
                     dpg.add_text("• Timeline planning")
-                    dpg.add_text("Status: 🔄 In Progress", color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text("Status:  In Progress", color=self.BLOOMBERG_YELLOW)
 
                 dpg.add_separator()
 
@@ -498,7 +504,7 @@ class WorldTradeAnalysisTab(BaseTab):
         # Status bar
         dpg.add_separator()
         with dpg.group(horizontal=True):
-            dpg.add_text("●", color=self.BLOOMBERG_GREEN)
+            dpg.add_text("", color=self.BLOOMBERG_GREEN)
             dpg.add_text("TRADE DATA LIVE", color=self.BLOOMBERG_GREEN)
             dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
             dpg.add_text("GLOBAL COVERAGE", color=self.BLOOMBERG_ORANGE)
@@ -517,4 +523,4 @@ class WorldTradeAnalysisTab(BaseTab):
 
     def cleanup(self):
         """Clean up resources"""
-        print("World Trade Analysis tab cleanup completed")
+        logger.info("World Trade Analysis tab cleanup completed", module="World_Trade_Analysis")
