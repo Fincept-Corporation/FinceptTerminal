@@ -1,4 +1,4 @@
-# main.py - High Performance Optimized Version
+# main.py
 
 import sys
 import gc
@@ -21,7 +21,8 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 # PERFORMANCE: Import only essential logging functions, avoid heavy decorators during startup
 from fincept_terminal.Utils.Logging.logger import (
-    info, error, debug, warning, critical, set_debug_mode, setup_gui_logging
+    info, error, debug, warning, critical, set_debug_mode, setup_for_gui,
+    monitor_performance, operation, get_stats, health_check
 )
 
 # Import centralized config
@@ -65,11 +66,12 @@ class PerformantTabImporter:
             self.import_stats['failed'] += 1
             return None
         except Exception as e:
-            error(f"[MAIN] Tab import failed: {tab_name} - {str(e)}")
+            error(f"Tab import failed: {tab_name} - {str(e)}", module='main')
             self.failed_imports[tab_name] = {'error': f"Unexpected error: {str(e)}", 'type': type(e).__name__}
             self.import_stats['failed'] += 1
             return None
 
+    @monitor_performance
     def load_all_tabs_parallel(self) -> Dict[str, Any]:
         """OPTIMIZED: Parallel tab loading with controlled concurrency"""
         TAB_IMPORTS = [
@@ -97,7 +99,6 @@ class PerformantTabImporter:
             ("Help", "fincept_terminal.Utils.HelpTab.help_tab", "HelpTab"),
         ]
 
-        start_time = time.time()
         available_tabs = {}
 
         # PERFORMANCE: Use ThreadPoolExecutor for parallel imports
@@ -118,24 +119,22 @@ class PerformantTabImporter:
                     if tab_class is not None:
                         available_tabs[tab_id] = tab_class
                 except Exception as e:
-                    error(f"[MAIN] Tab loading timeout/error: {tab_id} - {str(e)}")
+                    error(f"Tab loading timeout/error: {tab_id} - {str(e)}", module='main')
 
         # Update statistics
         success_count = len(available_tabs)
         failed_count = len(TAB_IMPORTS) - success_count
-        total_time = time.time() - start_time
 
         self.import_stats.update({
             'successful': success_count,
-            'failed': failed_count,
-            'total_time': total_time
+            'failed': failed_count
         })
 
         # MINIMAL logging - only log summary
-        info(f"[MAIN] Tab loading: {success_count}/{len(TAB_IMPORTS)} tabs loaded in {total_time:.2f}s")
+        info(f"Tab loading: {success_count}/{len(TAB_IMPORTS)} tabs loaded", module='main')
 
         if failed_count > 0:
-            warning(f"[MAIN] {failed_count} tabs failed to load")
+            warning(f"{failed_count} tabs failed to load", module='main')
 
         return available_tabs
 
@@ -174,7 +173,7 @@ class OptimizedThemeManager:
             self.current_theme = theme_name
             return True
         except Exception as e:
-            error(f"[MAIN] Theme application failed: {theme_name} - {str(e)}")
+            error(f"Theme application failed: {theme_name} - {str(e)}", module='theme')
             return False
 
     def get_current_theme(self) -> str:
@@ -238,37 +237,34 @@ class HighPerformanceMainApplication:
         self.tabs_initialized: Set[str] = set()
 
         # PERFORMANCE: Don't initialize tabs here, do it later
-        info(f"[MAIN] Application initialized - User: {self.user_type}")
+        info(f"Application initialized - User: {self.user_type}", module='main')
 
     def _initialize_tabs_optimized(self):
         """OPTIMIZED: Fast tab initialization with parallel loading"""
-        start_time = time.time()
+        with operation("tab_initialization", module='main'):
+            # Load tabs in parallel
+            available_tabs = self.tab_importer.load_all_tabs_parallel()
 
-        # Load tabs in parallel
-        available_tabs = self.tab_importer.load_all_tabs_parallel()
+            if not available_tabs:
+                critical("No tabs available - application cannot continue", module='main')
+                self.safe_exit()
+                return
 
-        if not available_tabs:
-            critical("[MAIN] No tabs available - application cannot continue")
-            self.safe_exit()
-            return
+            # Initialize tab instances with batch processing
+            failed_tabs = []
+            for tab_id, tab_class in available_tabs.items():
+                try:
+                    self.tabs[tab_id] = tab_class(self)
+                    self.tabs_initialized.add(tab_id)
+                except Exception as e:
+                    failed_tabs.append(tab_id)
+                    error(f"Tab init failed: {tab_id} - {str(e)}", module='main')
 
-        # Initialize tab instances with batch processing
-        failed_tabs = []
-        for tab_id, tab_class in available_tabs.items():
-            try:
-                self.tabs[tab_id] = tab_class(self)
-                self.tabs_initialized.add(tab_id)
-            except Exception as e:
-                failed_tabs.append(tab_id)
-                error(f"[MAIN] Tab init failed: {tab_id} - {str(e)}")
+            success_count = len(self.tabs_initialized)
+            info(f"Tab initialization: {success_count} tabs ready", module='main')
 
-        total_time = time.time() - start_time
-        success_count = len(self.tabs_initialized)
-
-        info(f"[MAIN] Tab initialization: {success_count} tabs ready in {total_time:.2f}s")
-
-        if failed_tabs:
-            warning(f"[MAIN] Failed tab inits: {failed_tabs}")
+            if failed_tabs:
+                warning(f"Failed tab inits: {failed_tabs}", module='main')
 
     def calculate_sizes(self):
         """OPTIMIZED: Lightweight size calculation"""
@@ -333,20 +329,20 @@ class HighPerformanceMainApplication:
                 self.calculate_sizes()
 
         except Exception as e:
-            error(f"[MAIN] Resize failed: {str(e)}")
+            error(f"Resize failed: {str(e)}", module='main')
         finally:
             self.resize_lock = False
 
     def safe_exit(self):
         """OPTIMIZED: Fast exit"""
-        info("[MAIN] Application exit requested")
+        info("Application exit requested", module='main')
         self.is_running = False
 
         try:
             if dpg.is_dearpygui_running():
                 dpg.stop_dearpygui()
         except Exception as e:
-            error(f"[MAIN] Exit error: {str(e)}")
+            error(f"Exit error: {str(e)}", module='main')
 
     def create_menu_bar(self):
         """Create enhanced menu bar with tab navigation"""
@@ -499,10 +495,10 @@ class HighPerformanceMainApplication:
             # Show a status message
             start = self.current_visible_tab_start + 1
             end = min(self.current_visible_tab_start + self.tabs_per_view, total_tabs)
-            info(f"[MAIN] Showing tabs {start}-{end} of {total_tabs}")
+            info(f"Showing tabs {start}-{end} of {total_tabs}", module='main')
 
         except Exception as e:
-            error(f"[MAIN] Tab scroll failed: {str(e)}")
+            error(f"Tab scroll failed: {str(e)}", module='main')
 
     def update_tab_visibility(self):
         """Show/hide tabs based on current view"""
@@ -515,7 +511,7 @@ class HighPerformanceMainApplication:
                     else:
                         dpg.hide_item(tab_id)
         except Exception as e:
-            error(f"[MAIN] Tab visibility update failed: {str(e)}")
+            error(f"Tab visibility update failed: {str(e)}", module='main')
 
     def jump_to_specific_tab(self, tab_name):
         """Jump directly to a specific tab"""
@@ -535,13 +531,12 @@ class HighPerformanceMainApplication:
                     dpg.set_value("main_tab_bar", tab_id)
 
         except Exception as e:
-            error(f"[MAIN] Tab jump failed: {tab_name} - {str(e)}")
+            error(f"Tab jump failed: {tab_name} - {str(e)}", module='main')
 
+    @monitor_performance
     def create_tabs(self):
         """OPTIMIZED: Fast tab creation with minimal overhead"""
         try:
-            start_time = time.time()
-
             # Create tab bar
             dpg.add_tab_bar(tag="main_tab_bar", reorderable=True)
 
@@ -589,11 +584,11 @@ class HighPerformanceMainApplication:
                                        callback=lambda s, a, u, tn=tab_name: self.retry_tab_loading(tn))
                         dpg.pop_container_stack()
 
-                        error(f"[MAIN] Tab content creation failed: {tab_name} - {str(content_error)}")
+                        error(f"Tab content creation failed: {tab_name} - {str(content_error)}", module='main')
                         failed_tabs += 1
 
                 except Exception as tab_error:
-                    error(f"[MAIN] Tab creation failed: {tab_name} - {str(tab_error)}")
+                    error(f"Tab creation failed: {tab_name} - {str(tab_error)}", module='main')
                     failed_tabs += 1
 
             # Initialize tab navigation
@@ -605,11 +600,10 @@ class HighPerformanceMainApplication:
             if len(self.tabs) > self.tabs_per_view:
                 self.update_tab_visibility()
 
-            total_time = time.time() - start_time
-            info(f"[MAIN] Tab creation completed: {successful_tabs} tabs in {total_time:.2f}s")
+            info(f"Tab creation completed: {successful_tabs} tabs", module='main')
 
         except Exception as e:
-            critical(f"[MAIN] Critical tab creation error: {str(e)}")
+            critical(f"Critical tab creation error: {str(e)}", module='main')
             # Create minimal emergency interface
             dpg.add_text("Tab System Error", color=[255, 100, 100])
             dpg.add_text("The tab system failed to initialize properly.")
@@ -632,7 +626,7 @@ class HighPerformanceMainApplication:
             self._auth_headers_timestamp = current_time
             return headers
         except Exception as e:
-            error(f"[MAIN] Auth headers generation failed: {str(e)}")
+            error(f"Auth headers generation failed: {str(e)}", module='api')
             return {}
 
     def make_api_request(self, method: str, endpoint: str, **kwargs) -> Optional[requests.Response]:
@@ -653,144 +647,142 @@ class HighPerformanceMainApplication:
             return response
 
         except requests.exceptions.Timeout:
-            warning(f"[MAIN] API timeout: {method} {endpoint}")
+            warning(f"API timeout: {method} {endpoint}", module='api')
             return None
         except requests.exceptions.ConnectionError:
-            warning(f"[MAIN] API connection error: {method} {endpoint}")
+            warning(f"API connection error: {method} {endpoint}", module='api')
             return None
         except Exception as e:
-            error(f"[MAIN] API request failed: {method} {endpoint} - {str(e)}")
+            error(f"API request failed: {method} {endpoint} - {str(e)}", module='api')
             return None
 
     # PERFORMANCE: Lightweight placeholder methods for callbacks
     def retry_tab_loading(self, tab_name: str):
         """Retry loading a specific tab"""
-        info(f"[MAIN] Retrying tab: {tab_name}")
+        info(f"Retrying tab: {tab_name}", module='main')
 
     def new_session(self):
         """Create new session"""
-        info("[MAIN] New session requested")
+        info("New session requested", module='session')
         self.clear_session_and_restart()
 
     def save_configuration(self):
         """Save current configuration"""
-        debug("[MAIN] Configuration save requested")
+        debug("Configuration save requested", module='main')
 
     def load_configuration(self):
         """Load configuration"""
-        debug("[MAIN] Configuration load requested")
+        debug("Configuration load requested", module='main')
 
     def test_api_connection(self):
         """Test API connection"""
         try:
             available = session_manager.is_api_available()
             if available:
-                info("[MAIN] API connection test successful")
+                info("API connection test successful", module='api')
             else:
-                warning("[MAIN] API connection test failed")
+                warning("API connection test failed", module='api')
         except Exception as e:
-            error(f"[MAIN] API connection test error: {str(e)}")
+            error(f"API connection test error: {str(e)}", module='api')
 
     def show_diagnostics(self):
         """Show system diagnostics"""
         try:
-            from fincept_terminal.Utils.Logging.logger import get_stats, health_check
             log_stats = get_stats()
             health = health_check()
-            info(f"[MAIN] System diagnostics - Health: {health['status']}")
+            info(f"System diagnostics - Health: {health['status']}", module='main')
         except Exception as e:
-            error(f"[MAIN] Diagnostics failed: {str(e)}")
+            error(f"Diagnostics failed: {str(e)}", module='main')
 
     def show_performance_monitor(self):
         """Show performance monitoring dashboard"""
         try:
-            from fincept_terminal.Utils.Logging.logger import get_stats
             log_stats = get_stats()
             performance_stats = log_stats.get('performance_stats', {})
-            info(f"[MAIN] Performance monitor - Operations tracked: {len(performance_stats)}")
+            info(f"Performance monitor - Operations tracked: {len(performance_stats)}", module='main')
         except Exception as e:
-            error(f"[MAIN] Performance monitor failed: {str(e)}")
+            error(f"Performance monitor failed: {str(e)}", module='main')
 
     def show_log_viewer(self):
         """Show log viewer interface"""
-        info("[MAIN] Log viewer requested")
+        info("Log viewer requested", module='main')
 
     def show_shortcuts(self):
         """Show keyboard shortcuts"""
-        info("[MAIN] Keyboard shortcuts requested")
+        info("Keyboard shortcuts requested", module='main')
 
     def reset_layout(self):
         """Reset layout to default"""
         try:
-            info("[MAIN] Layout reset requested")
+            info("Layout reset requested", module='main')
             self.calculate_sizes()
             self.resize_callback()
         except Exception as e:
-            error(f"[MAIN] Layout reset failed: {str(e)}")
+            error(f"Layout reset failed: {str(e)}", module='main')
 
     def goto_data_sources_tab(self):
         """Navigate to data sources tab"""
         try:
             if "Data Sources" in self.tabs:
                 dpg.set_value("main_tab_bar", "tab_Data Sources")
-                debug("[MAIN] Navigated to data sources tab")
+                debug("Navigated to data sources tab", module='main')
             else:
-                warning("[MAIN] Data sources tab not available")
+                warning("Data sources tab not available", module='main')
         except Exception as e:
-            error(f"[MAIN] Data sources navigation failed: {str(e)}")
+            error(f"Data sources navigation failed: {str(e)}", module='main')
 
     def toggle_fullscreen(self, sender=None, app_data=None, user_data=None):
         """Toggle fullscreen mode"""
         try:
             dpg.toggle_viewport_fullscreen()
-            debug("[MAIN] Fullscreen mode toggled")
+            debug("Fullscreen mode toggled", module='main')
         except Exception as e:
-            error(f"[MAIN] Fullscreen toggle failed: {str(e)}")
+            error(f"Fullscreen toggle failed: {str(e)}", module='main')
 
     def apply_theme_safe(self, theme_name: str):
         """Safely apply theme"""
         try:
             success = self.theme_manager.apply_theme(theme_name)
             if success:
-                info(f"[MAIN] Theme applied: {theme_name}")
+                info(f"Theme applied: {theme_name}", module='theme')
             else:
-                warning(f"[MAIN] Theme application failed: {theme_name}")
+                warning(f"Theme application failed: {theme_name}", module='theme')
         except Exception as e:
-            error(f"[MAIN] Theme error: {theme_name} - {str(e)}")
+            error(f"Theme error: {theme_name} - {str(e)}", module='theme')
 
     # Session management methods
     def show_session_info(self):
         """Show session information"""
         try:
             info_data = session_manager.get_session_info()
-            info(f"[MAIN] Session info - User: {self.user_type}")
+            info(f"Session info - User: {self.user_type}", module='session')
         except Exception as e:
-            error(f"[MAIN] Session info failed: {str(e)}")
+            error(f"Session info failed: {str(e)}", module='session')
 
     def show_api_status(self):
         """Show API status information"""
         try:
             connectivity = session_manager.check_api_connectivity()
-            info(f"[MAIN] API status - Connected: {connectivity}")
+            info(f"API status - Connected: {connectivity}", module='api')
         except Exception as e:
-            error(f"[MAIN] API status check failed: {str(e)}")
+            error(f"API status check failed: {str(e)}", module='api')
 
     def show_api_config(self):
         """Show API configuration"""
         try:
             config.validate_configuration()
-            debug("[MAIN] API configuration requested")
+            debug("API configuration requested", module='api')
         except Exception as e:
-            error(f"[MAIN] API config validation failed: {str(e)}")
+            error(f"API config validation failed: {str(e)}", module='api')
 
     def enable_strict_mode(self):
         """Enable strict mode"""
         try:
             config.REQUIRE_API_CONNECTION = True
             config.ALLOW_GUEST_FALLBACK = False
-            info("[MAIN] Strict mode enabled")
+            info("Strict mode enabled", module='main')
         except Exception as e:
-            error(f"[MAIN] Strict mode enable failed: {str(e)}")
+            error(f"Strict mode enable failed: {str(e)}", module='main')
 
     def refresh_session_data(self):
         """OPTIMIZED: Fast session refresh with caching"""
@@ -807,40 +799,40 @@ class HighPerformanceMainApplication:
                 self._cached_auth_headers = None
                 self._auth_headers_timestamp = 0
 
-                info(f"[MAIN] Session refreshed - User: {self.user_type}")
+                info(f"Session refreshed - User: {self.user_type}", module='session')
             else:
-                warning("[MAIN] Session refresh failed")
+                warning("Session refresh failed", module='session')
 
         except Exception as e:
-            error(f"[MAIN] Session refresh error: {str(e)}")
+            error(f"Session refresh error: {str(e)}", module='session')
 
     def clear_session_and_restart(self):
         """Clear session and restart"""
         try:
-            info("[MAIN] Clearing session and restarting")
+            info("Clearing session and restarting", module='session')
             session_manager.clear_session()
             self.safe_exit()
         except Exception as e:
-            error(f"[MAIN] Session clear failed: {str(e)}")
+            error(f"Session clear failed: {str(e)}", module='session')
             self.safe_exit()
 
     def logout_and_restart(self):
         """Logout and restart"""
         try:
-            info(f"[MAIN] Logging out - User: {self.user_type}")
+            info(f"Logging out - User: {self.user_type}", module='session')
             session_manager.clear_session()
             self.safe_exit()
         except Exception as e:
-            error(f"[MAIN] Logout failed: {str(e)}")
+            error(f"Logout failed: {str(e)}", module='session')
             self.safe_exit()
 
     def save_current_session(self):
         """Save current session credentials"""
         try:
             session_manager.save_session_credentials(self.session_data)
-            debug("[MAIN] Session credentials saved")
+            debug("Session credentials saved", module='session')
         except Exception as e:
-            error(f"[MAIN] Session save failed: {str(e)}")
+            error(f"Session save failed: {str(e)}", module='session')
 
     # Utility methods
     def is_user_authenticated(self) -> bool:
@@ -859,7 +851,7 @@ class HighPerformanceMainApplication:
         """OPTIMIZED: Fast user profile refresh"""
         try:
             if self.user_type != "registered":
-                debug("[MAIN] Profile refresh skipped - user not registered")
+                debug("Profile refresh skipped - user not registered", module='session')
                 return False
 
             fresh_session = session_manager.get_fresh_session()
@@ -867,14 +859,14 @@ class HighPerformanceMainApplication:
                 self.session_data = fresh_session
                 # Clear auth cache
                 self._cached_auth_headers = None
-                info("[MAIN] User profile refreshed")
+                info("User profile refreshed", module='session')
                 return True
             else:
-                warning("[MAIN] Profile refresh failed")
+                warning("Profile refresh failed", module='session')
                 return False
 
         except Exception as e:
-            error(f"[MAIN] Profile refresh error: {str(e)}")
+            error(f"Profile refresh error: {str(e)}", module='session')
             return False
 
     # Navigation methods
@@ -883,31 +875,32 @@ class HighPerformanceMainApplication:
         try:
             if "Database" in self.tabs:
                 dpg.set_value("main_tab_bar", "tab_Database")
-                debug("[MAIN] Navigated to database tab")
+                debug("Navigated to database tab", module='main')
             else:
-                warning("[MAIN] Database tab not available")
+                warning("Database tab not available", module='main')
         except Exception as e:
-            error(f"[MAIN] Database navigation failed: {str(e)}")
+            error(f"Database navigation failed: {str(e)}", module='main')
 
     def show_profile_info(self):
         """Show profile information"""
         try:
             if "Profile" in self.tabs:
                 dpg.set_value("main_tab_bar", "tab_Profile")
-                debug("[MAIN] Navigated to profile tab")
+                debug("Navigated to profile tab", module='main')
             else:
-                warning("[MAIN] Profile tab not available")
+                warning("Profile tab not available", module='main')
         except Exception as e:
-            error(f"[MAIN] Profile navigation failed: {str(e)}")
+            error(f"Profile navigation failed: {str(e)}", module='main')
 
     def show_upgrade_info(self):
         """Show upgrade information"""
-        info(f"[MAIN] Upgrade info requested - Current: {self.user_type}")
+        info(f"Upgrade info requested - Current: {self.user_type}", module='main')
 
+    @monitor_performance
     def regenerate_api_key(self):
         """OPTIMIZED: Fast API key regeneration"""
         if self.user_type != "registered":
-            warning(f"[MAIN] API key regeneration denied - User: {self.user_type}")
+            warning(f"API key regeneration denied - User: {self.user_type}", module='api')
             return
 
         try:
@@ -928,34 +921,34 @@ class HighPerformanceMainApplication:
 
                     session_manager.save_session_credentials(self.session_data)
 
-                    info(f"[MAIN] API key regenerated: {old_key_type} -> {self.get_api_key_type()}")
+                    info(f"API key regenerated: {old_key_type} -> {self.get_api_key_type()}", module='api')
                 else:
-                    warning(f"[MAIN] API key regeneration failed: {data}")
+                    warning(f"API key regeneration failed: {data}", module='api')
             else:
                 error(
-                    f"[MAIN] API key regeneration request failed: {response.status_code if response else 'No response'}")
+                    f"API key regeneration request failed: {response.status_code if response else 'No response'}", module='api')
 
         except Exception as e:
-            error(f"[MAIN] API key regeneration error: {str(e)}")
+            error(f"API key regeneration error: {str(e)}", module='api')
 
     # Help methods
     def show_documentation(self):
         """Show documentation"""
-        info("[MAIN] Documentation requested")
+        info("Documentation requested", module='main')
 
     def show_support(self):
         """Show support information"""
-        info("[MAIN] Support requested")
+        info("Support requested", module='main')
 
     def show_about(self):
         """Show about information"""
-        info("[MAIN] About dialog requested")
+        info("About dialog requested", module='main')
 
+    @monitor_performance
     def run(self):
         """OPTIMIZED: High-performance application runner"""
         try:
-            start_time = time.time()
-            info("[MAIN] Starting Fincept Terminal application")
+            info("Starting Fincept Terminal application", module='main')
 
             # Create DearPyGUI context
             dpg.create_context()
@@ -1003,15 +996,14 @@ class HighPerformanceMainApplication:
             # Save credentials
             self.save_current_session()
 
-            startup_time = time.time() - start_time
-            info(f"[MAIN] Startup completed in {startup_time:.2f}s - {len(self.tabs)} tabs loaded")
+            info(f"Startup completed - {len(self.tabs)} tabs loaded", module='main')
 
             # Show viewport and start main loop
             dpg.show_viewport()
             dpg.start_dearpygui()
 
         except Exception as e:
-            critical(f"[MAIN] Application startup failed: {str(e)}")
+            critical(f"Application startup failed: {str(e)}", module='main')
             raise
         finally:
             self.cleanup()
@@ -1019,7 +1011,7 @@ class HighPerformanceMainApplication:
     def cleanup(self):
         """OPTIMIZED: Fast cleanup with minimal overhead"""
         try:
-            info("[MAIN] Starting application cleanup")
+            info("Starting application cleanup", module='main')
             self.is_running = False
 
             # Save session quickly
@@ -1039,7 +1031,7 @@ class HighPerformanceMainApplication:
                                 cleanup_count += 1
                             except Exception:
                                 pass  # Silent cleanup
-                    debug(f"[MAIN] Background cleanup: {cleanup_count} tabs cleaned")
+                    debug(f"Background cleanup: {cleanup_count} tabs cleaned", module='main')
 
             # Start background cleanup
             cleanup_thread = threading.Thread(target=cleanup_tabs_background, daemon=True)
@@ -1055,7 +1047,7 @@ class HighPerformanceMainApplication:
             def background_gc():
                 try:
                     collected = gc.collect()
-                    debug(f"[MAIN] GC collected: {collected} objects")
+                    debug(f"GC collected: {collected} objects", module='main')
                 except Exception:
                     pass
 
@@ -1067,14 +1059,14 @@ class HighPerformanceMainApplication:
                 if dpg.is_dearpygui_running():
                     dpg.stop_dearpygui()
                 dpg.destroy_context()
-                debug("[MAIN] DearPyGUI context destroyed")
+                debug("DearPyGUI context destroyed", module='main')
             except Exception as e:
-                error(f"[MAIN] DearPyGUI cleanup failed: {str(e)}")
+                error(f"DearPyGUI cleanup failed: {str(e)}", module='main')
 
-            info("[MAIN] Application cleanup completed")
+            info("Application cleanup completed", module='main')
 
         except Exception as e:
-            error(f"[MAIN] Critical cleanup error: {str(e)}")
+            error(f"Critical cleanup error: {str(e)}", module='main')
 
 
 # OPTIMIZED utility functions
@@ -1096,10 +1088,10 @@ def check_api_availability() -> bool:
         setattr(check_api_availability, cache_key, available)
         setattr(check_api_availability, cache_time_key, time.time())
 
-        info(f"[MAIN] API availability: {available}")
+        info(f"API availability: {available}", module='main')
         return available
     except Exception as e:
-        error(f"[MAIN] API availability check failed: {str(e)}")
+        error(f"API availability check failed: {str(e)}", module='main')
         return False
 
 
@@ -1109,7 +1101,7 @@ def check_saved_credentials() -> Optional[Dict[str, Any]]:
         # In strict mode, always check API first
         if is_strict_mode():
             if not check_api_availability():
-                warning("[MAIN] API unavailable in strict mode")
+                warning("API unavailable in strict mode", module='main')
                 return None
 
         # Get fresh session from API
@@ -1118,35 +1110,33 @@ def check_saved_credentials() -> Optional[Dict[str, Any]]:
         if fresh_session:
             user_type = fresh_session.get('user_type', 'unknown')
             authenticated = fresh_session.get('authenticated', False)
-            info(f"[MAIN] Fresh session obtained - User: {user_type}, Auth: {authenticated}")
+            info(f"Fresh session obtained - User: {user_type}, Auth: {authenticated}", module='main')
         else:
-            warning("[MAIN] No fresh session available")
+            warning("No fresh session available", module='main')
 
         return fresh_session
 
     except Exception as e:
-        error(f"[MAIN] Credential check failed: {str(e)}")
+        error(f"Credential check failed: {str(e)}", module='main')
         return None
 
 
+@monitor_performance
 def main():
     """OPTIMIZED: High-performance main entry point"""
     try:
-        startup_start = time.time()
-
         # PERFORMANCE: Configure logging for GUI mode with minimal overhead
-        setup_gui_logging()
+        setup_for_gui()
         set_debug_mode(False)  # Disable debug logging for performance
 
         # Log application startup with tab-specific prefix
-        info("[MAIN] Fincept Terminal starting up")
+        info("Fincept Terminal starting up", module='main')
 
         # PERFORMANCE: Quick health check without detailed logging
         try:
-            from fincept_terminal.Utils.Logging.logger import health_check
             health = health_check()
             if health['status'] != 'healthy':
-                warning(f"[MAIN] Logging system health: {health['status']}")
+                warning(f"Logging system health: {health['status']}", module='logger')
         except Exception:
             pass  # Silent health check
 
@@ -1155,51 +1145,48 @@ def main():
 
         if fresh_session:
             session_data = fresh_session
-            info("[MAIN] Using fresh session data")
+            info("Using fresh session data", module='main')
         else:
             # Show authentication splash
             try:
                 from fincept_terminal.Utils.Authentication.splash_auth import show_authentication_splash
                 is_first_time = session_manager.is_first_time_user()
-                info(f"[MAIN] Showing authentication splash - First time: {is_first_time}")
+                info(f"Showing authentication splash - First time: {is_first_time}", module='main')
                 session_data = show_authentication_splash(is_first_time_user=is_first_time)
             except ImportError as e:
-                critical(f"[MAIN] Authentication module unavailable: {str(e)}")
+                critical(f"Authentication module unavailable: {str(e)}", module='main')
                 return
             except Exception as e:
-                error(f"[MAIN] Authentication splash failed: {str(e)}")
+                error(f"Authentication splash failed: {str(e)}", module='main')
                 return
 
         # Validate authentication result
         if not session_data or not session_data.get("authenticated"):
-            warning("[MAIN] Authentication failed or cancelled")
+            warning("Authentication failed or cancelled", module='main')
             return
 
         # Save credentials for next startup
         try:
             session_manager.save_session_credentials(session_data)
-            debug("[MAIN] Session credentials saved")
+            debug("Session credentials saved", module='session')
         except Exception as e:
-            warning(f"[MAIN] Session save failed: {str(e)}")
+            warning(f"Session save failed: {str(e)}", module='session')
 
         # PERFORMANCE: Launch optimized application
-        auth_time = time.time() - startup_start
-        info(f"[MAIN] Authentication completed in {auth_time:.2f}s - Launching application")
+        info("Authentication completed - Launching application", module='main')
 
         app = HighPerformanceMainApplication(session_data)
         app.run()
 
     except KeyboardInterrupt:
-        info("[MAIN] Application interrupted by user (Ctrl+C)")
+        info("Application interrupted by user (Ctrl+C)", module='main')
     except Exception as e:
-        critical(f"[MAIN] Application failed to start: {str(e)}")
+        critical(f"Application failed to start: {str(e)}", module='main')
         raise
     finally:
         # Final cleanup
         try:
-            info("[MAIN] Application shutdown initiated")
-            from fincept_terminal.Utils.Logging.logger import cleanup_logger
-            cleanup_logger()
+            info("Application shutdown initiated", module='main')
         except Exception as e:
             print(f"[CRITICAL] Final cleanup failed: {e}")
 
