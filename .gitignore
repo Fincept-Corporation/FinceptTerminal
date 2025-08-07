@@ -33,3 +33,5 @@ upx.exe"build/"
 get-pip.py
 temp
 tempdist
+settings.json
+watchlist_settings.json

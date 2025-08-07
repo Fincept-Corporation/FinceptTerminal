@@ -9,7 +9,6 @@ numpy==2.2.6
 pandas==2.2.3
 psutil==7.0.0
 psycopg2==2.9.10
-pyaudio==0.2.14
 pyotp==2.9.0
 requests==2.31.0
 scholarly==1.7.11
