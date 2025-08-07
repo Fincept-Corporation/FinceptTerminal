@@ -1,5 +1,11 @@
+"""
+Settings Tab module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 import sys
 from fyers_apiv3.FyersWebsocket import data_ws
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 def load_access_token(log_path="access_token.log"):
     try:
@@ -10,10 +16,10 @@ def load_access_token(log_path="access_token.log"):
             raise ValueError("No access tokens found in log.")
         return tokens[-1]
     except FileNotFoundError:
-        print(f"Error: '{log_path}' not found.")
+        logger.error("Value: %s", module="Settings_Tab", context={"value": f"Error: '{log_path}' not found."})
         sys.exit(1)
     except Exception as e:
-        print(f"Error loading access token: {e}")
+        logger.error(f"Error loading access token: {e}", module="Settings_Tab", context={'e': e})
         sys.exit(1)
 
 

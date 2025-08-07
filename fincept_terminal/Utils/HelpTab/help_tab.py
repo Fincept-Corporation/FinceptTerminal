@@ -4,6 +4,7 @@ import dearpygui.dearpygui as dpg
 from fincept_terminal.Utils.base_tab import BaseTab
 import datetime
 
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 class HelpTab(BaseTab):
     """Bloomberg Terminal style Help and About tab"""
@@ -24,7 +25,7 @@ class HelpTab(BaseTab):
         self.BLOOMBERG_BLACK = [0, 0, 0]
 
     def get_label(self):
-        return "❓ Help & About"
+        return " Help & About"
 
     def create_content(self):
         """Create Bloomberg-style help terminal layout"""
@@ -66,7 +67,7 @@ class HelpTab(BaseTab):
             self.create_help_status_bar()
 
         except Exception as e:
-            print(f"Error creating help content: {e}")
+            logger.error(f"Error creating help content: {e}", module="Help_Tab", context={'e': e})
             # Fallback content
             dpg.add_text("HELP TERMINAL", color=self.BLOOMBERG_ORANGE)
             dpg.add_text("Error loading help content. Please try again.")
@@ -131,7 +132,7 @@ class HelpTab(BaseTab):
             # System status
             dpg.add_text("SYSTEM STATUS", color=self.BLOOMBERG_YELLOW)
             with dpg.group(horizontal=True):
-                dpg.add_text("●", color=self.BLOOMBERG_GREEN)
+                dpg.add_text("", color=self.BLOOMBERG_GREEN)
                 dpg.add_text("ALL SYSTEMS OPERATIONAL", color=self.BLOOMBERG_GREEN)
 
     def create_center_help_panel(self):
@@ -267,14 +268,14 @@ class HelpTab(BaseTab):
                             dpg.add_spacer(height=10)
 
                             support_buttons = [
-                                ("📧 Email Support", self.contact_email_support),
-                                ("💬 Live Chat", self.open_live_chat),
-                                ("📞 Phone Support", self.contact_phone_support),
-                                ("📖 Documentation", self.open_documentation),
-                                ("🎥 Video Tutorials", self.open_tutorials),
-                                ("🌐 Community Forum", self.open_community),
-                                ("🐛 Report Bug", self.report_bug),
-                                ("💡 Feature Request", self.request_feature)
+                                (" Email Support", self.contact_email_support),
+                                (" Live Chat", self.open_live_chat),
+                                (" Phone Support", self.contact_phone_support),
+                                (" Documentation", self.open_documentation),
+                                (" Video Tutorials", self.open_tutorials),
+                                (" Community Forum", self.open_community),
+                                (" Report Bug", self.report_bug),
+                                (" Feature Request", self.request_feature)
                             ]
 
                             for label, callback in support_buttons:
@@ -326,14 +327,14 @@ class HelpTab(BaseTab):
 
             # Quick action buttons
             quick_actions = [
-                ("📞 Contact Support", self.contact_support),
-                ("📧 Send Feedback", self.send_feedback),
-                ("📖 User Manual", self.open_manual),
-                ("🎥 Watch Tutorials", self.open_tutorials),
-                ("💬 Join Community", self.open_community),
-                ("🔄 Check Updates", self.check_updates),
-                ("⚙️ System Settings", self.open_settings),
-                ("🐛 Report Issue", self.report_bug)
+                (" Contact Support", self.contact_support),
+                (" Send Feedback", self.send_feedback),
+                (" User Manual", self.open_manual),
+                (" Watch Tutorials", self.open_tutorials),
+                (" Join Community", self.open_community),
+                (" Check Updates", self.check_updates),
+                (" System Settings", self.open_settings),
+                (" Report Issue", self.report_bug)
             ]
 
             for label, callback in quick_actions:
@@ -410,77 +411,77 @@ class HelpTab(BaseTab):
         }
 
         target_tab = section_map.get(section_key, "About")
-        print(f"Navigating to help section: {target_tab}")
+        logger.info(f"Navigating to help section: {target_tab}", module="Help_Tab", context={'target_tab': target_tab})
 
     def search_help(self):
         """Search help topics"""
-        print("🔍 Help search functionality")
+        logger.info("Help search functionality", module="Help_Tab")
 
     # Support callback methods
     def contact_support(self):
         """Contact support"""
-        print("📞 Contacting support team...")
-        print("Support: support@fincept.in | Phone: +1 (555) 123-4567")
+        logger.info("Contacting support team...", module="Help_Tab")
+        logger.info("Support: support@fincept.in | Phone: +1 (555) 123-4567", module="Help_Tab")
 
     def contact_email_support(self):
         """Contact email support"""
-        print("📧 Opening email support: support@fincept.in")
+        logger.info("Opening email support: support@fincept.in", module="Help_Tab")
 
     def open_live_chat(self):
         """Open live chat"""
-        print("💬 Opening live chat support...")
+        logger.info("Opening live chat support...", module="Help_Tab")
 
     def contact_phone_support(self):
         """Contact phone support"""
-        print("📞 Phone support: +1 (555) 123-4567")
+        logger.info("Phone support: +1 (555) 123-4567", module="Help_Tab")
 
     def send_feedback(self):
         """Send feedback"""
-        print("📧 Opening feedback form...")
+        logger.info("Opening feedback form...", module="Help_Tab")
 
     def open_manual(self):
         """Open user manual"""
-        print("📖 Opening user manual...")
+        logger.info("Opening user manual...", module="Help_Tab")
 
     def open_documentation(self):
         """Open documentation"""
-        print("📖 Opening documentation...")
+        logger.info("Opening documentation...", module="Help_Tab")
 
     def open_tutorials(self):
         """Open video tutorials"""
-        print("🎥 Opening video tutorials...")
+        logger.info("Opening video tutorials...", module="Help_Tab")
 
     def open_community(self):
         """Open community forum"""
-        print("💬 Opening community forum...")
+        logger.info("Opening community forum...", module="Help_Tab")
 
     def check_updates(self):
         """Check for updates"""
-        print("🔄 Checking for updates...")
+        logger.info("Checking for updates...", module="Help_Tab")
 
     def open_settings(self):
         """Open settings"""
-        print("⚙️ Opening system settings...")
+        logger.info("Opening system settings...", module="Help_Tab")
 
     def report_bug(self):
         """Report a bug"""
-        print("🐛 Opening bug report form...")
+        logger.info("Opening bug report form...", module="Help_Tab")
 
     def request_feature(self):
         """Request a feature"""
-        print("💡 Opening feature request form...")
+        logger.info("Opening feature request form...", module="Help_Tab")
 
     def back_to_dashboard(self):
         """Navigate back to dashboard"""
         try:
             if hasattr(self.main_app, 'tabs') and 'dashboard' in self.main_app.tabs:
-                print("🔄 Returning to Dashboard...")
+                logger.info("Returning to Dashboard...", module="Help_Tab")
                 # Navigate to dashboard tab if available
                 dpg.set_value("main_tab_bar", "tab_dashboard")
             else:
-                print("Dashboard not available")
+                logger.info("Dashboard not available", module="Help_Tab")
         except Exception as e:
-            print(f"Error navigating to dashboard: {e}")
+            logger.error(f"Error navigating to dashboard: {e}", module="Help_Tab", context={'e': e})
 
     def resize_components(self, left_width, center_width, right_width, top_height, bottom_height, cell_height):
         """Handle component resizing"""
@@ -490,8 +491,8 @@ class HelpTab(BaseTab):
     def cleanup(self):
         """Clean up help tab resources"""
         try:
-            print("🧹 Cleaning up help tab...")
+            logger.info("🧹 Cleaning up help tab...", module="Help_Tab")
             self.scroll_position = 0
-            print("✅ Help tab cleanup complete")
+            logger.info("Help tab cleanup complete", module="Help_Tab")
         except Exception as e:
-            print(f"Error in help cleanup: {e}")
+            logger.error(f"Error in help cleanup: {e}", module="Help_Tab", context={'e': e})

@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+"""
+Database Tab module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 
 import dearpygui.dearpygui as dpg
 from fincept_terminal.Utils.base_tab import BaseTab
@@ -9,6 +14,7 @@ import traceback
 import datetime
 import csv
 
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 class DatabaseTab(BaseTab):
     """Bloomberg Terminal style PostgreSQL Database Management Tab with exact original functionality"""
@@ -95,7 +101,7 @@ class DatabaseTab(BaseTab):
             self.create_db_status_bar()
 
         except Exception as e:
-            print(f"Error creating database content: {e}")
+            logger.error(f"Error creating database content: {e}", module="Database_Tab", context={'e': e})
             # Fallback content
             dpg.add_text("DATABASE TERMINAL", color=self.BLOOMBERG_ORANGE)
             dpg.add_text("Error loading database interface. Please try again.")
@@ -597,7 +603,7 @@ class DatabaseTab(BaseTab):
 
             except Exception as e:
                 error_msg = f"Error loading data: {str(e)}"
-                print(f"Debug - Full error: {traceback.format_exc()}")  # Debug info
+                logger.error("Debug - Full error: {traceback.format_exc()}", module="Database_Tab")  # Debug info
                 self.update_log(error_msg)
                 dpg.set_value("data_status", "Error loading data")
             finally:
@@ -813,6 +819,6 @@ class DatabaseTab(BaseTab):
                 self.cursor.close()
             if self.connection:
                 self.connection.close()
-            print("Database connections cleaned up")
+            logger.info("Database connections cleaned up", module="Database_Tab")
         except:
             pass
