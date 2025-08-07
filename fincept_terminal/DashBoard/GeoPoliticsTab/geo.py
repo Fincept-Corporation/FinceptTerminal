@@ -1,3 +1,8 @@
+"""
+Geo module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 # geopolitical_analysis.py - Comprehensive Bloomberg Terminal Geopolitical Analysis Dashboard
 # -*- coding: utf-8 -*-
 
@@ -8,6 +13,7 @@ import math
 import json
 from fincept_terminal.Utils.base_tab import BaseTab
 
+from fincept_terminal.Utils.Logging.logger import logger
 
 class GeopoliticalAnalysisTab(BaseTab):
     """Comprehensive Geopolitical Analysis Dashboard for Financial Markets"""
@@ -228,13 +234,16 @@ class GeopoliticalAnalysisTab(BaseTab):
             # Enhanced function keys
             self.create_advanced_function_keys()
 
-            # Top section - Critical metrics and alerts
+            # Bottom section - Advanced analytics
             with dpg.group(horizontal=True):
-                self.create_global_threat_matrix()
-                self.create_real_time_alerts_panel()
-                self.create_market_impact_summary()
+                self.create_predictive_analytics_panel()
+                self.create_sanctions_monitoring_panel()
+                self.create_trade_route_analysis_panel()
 
             dpg.add_separator()
+
+            # Final section - Intelligence dashboard
+            self.create_intelligence_dashboard()
 
             # Main analysis section
             with dpg.group(horizontal=True):
@@ -249,19 +258,16 @@ class GeopoliticalAnalysisTab(BaseTab):
 
             dpg.add_separator()
 
-            # Bottom section - Advanced analytics
+            # Top section - Critical metrics and alerts
             with dpg.group(horizontal=True):
-                self.create_predictive_analytics_panel()
-                self.create_sanctions_monitoring_panel()
-                self.create_trade_route_analysis_panel()
+                self.create_global_threat_matrix()
+                self.create_real_time_alerts_panel()
+                self.create_market_impact_summary()
 
             dpg.add_separator()
 
-            # Final section - Intelligence dashboard
-            self.create_intelligence_dashboard()
-
         except Exception as e:
-            print(f"Error creating comprehensive geopolitical content: {e}")
+            logger.error(f"Error creating comprehensive geopolitical content: {e}", module="Geo", context={'e': e})
             dpg.add_text("GEOPOLITICAL ANALYSIS SYSTEM", color=self.BLOOMBERG_ORANGE)
             dpg.add_text("Initializing comprehensive intelligence systems...")
 
@@ -939,4 +945,4 @@ class GeopoliticalAnalysisTab(BaseTab):
 
     def cleanup(self):
         """Clean up geopolitical analysis resources"""
-        print("Comprehensive Geopolitical Analysis tab cleanup completed")
+        logger.info("Comprehensive Geopolitical Analysis tab cleanup completed", module="Geo")

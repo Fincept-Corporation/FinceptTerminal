@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+"""
+Portfolio Tab module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 
 import dearpygui.dearpygui as dpg
 from fincept_terminal.Utils.base_tab import BaseTab
@@ -17,6 +22,7 @@ import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 def get_settings_path():
     """Returns a consistent settings file path"""
@@ -80,7 +86,7 @@ class PortfolioTab(BaseTab):
         self.fetch_initial_prices()
 
     def get_label(self):
-        return "💼 Portfolio"
+        return " Portfolio"
 
     def initialize_sample_data(self):
         """Initialize sample portfolio data for demonstration"""
@@ -108,7 +114,7 @@ class PortfolioTab(BaseTab):
     def _fetch_initial_prices_worker(self):
         """Background worker to fetch initial prices"""
         try:
-            print("🔄 Fetching initial stock prices...")
+            logger.info("Fetching initial stock prices...", module="Portfolio_Tab")
 
             # Collect all unique symbols from all portfolios
             all_symbols = set()
@@ -117,7 +123,7 @@ class PortfolioTab(BaseTab):
                     all_symbols.add(symbol)
 
             if not all_symbols:
-                print("ℹ️ No stocks found in portfolios")
+                logger.info("No stocks found in portfolios", module="Portfolio_Tab")
                 self.initial_price_fetch_done = True
                 return
 
@@ -125,7 +131,7 @@ class PortfolioTab(BaseTab):
             self._fetch_prices_batch(list(all_symbols))
 
             self.initial_price_fetch_done = True
-            print(f"✅ Initial price fetch completed for {len(all_symbols)} symbols")
+            logger.info(f" Initial price fetch completed for {len(all_symbols)} symbols", module="Portfolio_Tab", context={'len(all_symbols)': len(all_symbols)})
 
             # Update UI if it exists
             if dpg.does_item_exist("portfolio_last_update"):
@@ -135,7 +141,7 @@ class PortfolioTab(BaseTab):
             self.update_navigation_summary()
 
         except Exception as e:
-            print(f"❌ Error in initial price fetch: {e}")
+            logger.error(f" Error in initial price fetch: {e}", module="Portfolio_Tab", context={'e': e})
             self.initial_price_fetch_done = True
 
     def _fetch_prices_batch(self, symbols):
@@ -158,14 +164,14 @@ class PortfolioTab(BaseTab):
                         self.price_cache[symbol] = price
                         self.last_price_update[symbol] = datetime.datetime.now()
                         self.price_fetch_errors.pop(symbol, None)  # Clear any previous errors
-                        print(f"📈 {symbol}: ${price:.2f}")
+                        logger.info(f" {symbol}: ${price:.2f}", module="Portfolio_Tab", context={'symbol': symbol})
                     else:
                         self.price_fetch_errors[symbol] = "No price data available"
-                        print(f"⚠️ {symbol}: No price data")
+                        logger.info(f" {symbol}: No price data", module="Portfolio_Tab", context={'symbol': symbol})
 
                 except Exception as e:
                     self.price_fetch_errors[symbol] = str(e)
-                    print(f"❌ {symbol}: Error - {e}")
+                    logger.error(f" {symbol}: Error - {e}", module="Portfolio_Tab", context={'symbol': symbol, 'e': e})
 
                 # Small delay to avoid overwhelming the API
                 time.sleep(0.1)
@@ -236,7 +242,7 @@ class PortfolioTab(BaseTab):
             return current_price
 
         except Exception as e:
-            print(f"Error fetching price for {symbol}: {e}")
+            logger.error(f"Error fetching price for {symbol}: {e}", module="Portfolio_Tab", context={'symbol': symbol, 'e': e})
             return None
 
     def get_daily_change(self, symbol):
@@ -320,11 +326,11 @@ class PortfolioTab(BaseTab):
             for portfolio in self.portfolios.values():
                 if symbol in portfolio and isinstance(portfolio[symbol], dict):
                     avg_price = portfolio[symbol].get('avg_price', 100)
-                    print(f"⚠️ Using avg_price ${avg_price:.2f} for {symbol} (fetch error)")
+                    logger.error(f" Using avg_price ${avg_price:.2f} for {symbol} (fetch error)", module="Portfolio_Tab", context={'symbol': symbol})
                     return avg_price
 
         # Default fallback
-        print(f"⚠️ Using default price $100.00 for {symbol}")
+        logger.info(f" Using default price $100.00 for {symbol}", module="Portfolio_Tab", context={'symbol': symbol})
         return 100.0
 
     def create_content(self):
@@ -379,7 +385,7 @@ class PortfolioTab(BaseTab):
             self.start_price_refresh_thread()
 
         except Exception as e:
-            print(f"Error creating portfolio content: {e}")
+            logger.error(f"Error creating portfolio content: {e}", module="Portfolio_Tab", context={'e': e})
             # Fallback content
             dpg.add_text("PORTFOLIO TERMINAL", color=self.BLOOMBERG_ORANGE)
             dpg.add_text("Error loading portfolio content. Please try again.")
@@ -442,14 +448,14 @@ class PortfolioTab(BaseTab):
             # Quick actions
             dpg.add_text("QUICK ACTIONS", color=self.BLOOMBERG_YELLOW)
             quick_actions = [
-                ("📊 View Overview", lambda: self.switch_view("overview")),
-                ("➕ Create Portfolio", lambda: self.switch_view("create")),
-                ("📝 Manage Holdings", lambda: self.switch_view("manage")),
-                ("📈 View Analytics", lambda: self.switch_view("analyze")),
-                ("📥 Import CSV", lambda: self.switch_view("import")),  # New import action
-                ("🔄 Refresh Prices", self.refresh_all_prices_now),
-                ("💾 Export Data", self.export_portfolio_data),
-                ("🗑️ Delete Portfolio", self.show_delete_portfolio_dialog)  # New delete option
+                (" View Overview", lambda: self.switch_view("overview")),
+                (" Create Portfolio", lambda: self.switch_view("create")),
+                (" Manage Holdings", lambda: self.switch_view("manage")),
+                (" View Analytics", lambda: self.switch_view("analyze")),
+                (" Import CSV", lambda: self.switch_view("import")),  # New import action
+                (" Refresh Prices", self.refresh_all_prices_now),
+                (" Export Data", self.export_portfolio_data),
+                (" Delete Portfolio", self.show_delete_portfolio_dialog)  # New delete option
             ]
 
             for label, callback in quick_actions:
@@ -603,7 +609,7 @@ class PortfolioTab(BaseTab):
             dpg.add_spacer(height=10)
 
             with dpg.group(horizontal=True):
-                dpg.add_button(label="📁 SELECT CSV FILE", callback=self.select_csv_file, width=150, height=35)
+                dpg.add_button(label=" SELECT CSV FILE", callback=self.select_csv_file, width=150, height=35)
                 dpg.add_text("No file selected", color=self.BLOOMBERG_GRAY, tag="csv_file_status")
 
             dpg.add_spacer(height=20)
@@ -675,7 +681,7 @@ class PortfolioTab(BaseTab):
                 self.show_message("No file selected", "warning")
 
         except Exception as e:
-            print(f"Error selecting CSV file: {e}")
+            logger.error(f"Error selecting CSV file: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message("Error selecting file", "error")
 
     def analyze_csv_file(self):
@@ -711,7 +717,7 @@ class PortfolioTab(BaseTab):
             self.show_message(f"CSV analyzed: {len(self.csv_data)} rows, {len(self.csv_headers)} columns", "success")
 
         except Exception as e:
-            print(f"Error analyzing CSV: {e}")
+            logger.error(f"Error analyzing CSV: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message(f"Error analyzing CSV: {str(e)}", "error")
 
     def create_column_mapping_ui(self):
@@ -863,7 +869,7 @@ class PortfolioTab(BaseTab):
             self.show_message(f"Preview ready: {len(self.csv_preview_data)} valid rows found", "success")
 
         except Exception as e:
-            print(f"Error creating preview: {e}")
+            logger.error(f"Error creating preview: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message(f"Error creating preview: {str(e)}", "error")
 
     def create_import_preview(self):
@@ -964,7 +970,7 @@ class PortfolioTab(BaseTab):
             self.show_message(success_msg, "success")
 
         except Exception as e:
-            print(f"Error importing portfolio: {e}")
+            logger.error(f"Error importing portfolio: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message(f"Error importing portfolio: {str(e)}", "error")
 
     def create_overview_content(self):
@@ -977,7 +983,7 @@ class PortfolioTab(BaseTab):
             with dpg.group(horizontal=True):
                 # Total portfolio value card
                 with dpg.child_window(width=280, height=120, border=True):
-                    dpg.add_text("💰 TOTAL PORTFOLIO VALUE", color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text(" TOTAL PORTFOLIO VALUE", color=self.BLOOMBERG_YELLOW)
                     dpg.add_spacer(height=5)
                     total_value = sum(self.calculate_portfolio_value(name) for name in self.portfolios.keys())
                     dpg.add_text(f"${total_value:,.2f}", color=self.BLOOMBERG_WHITE)
@@ -987,7 +993,7 @@ class PortfolioTab(BaseTab):
 
                 # Today's change card
                 with dpg.child_window(width=280, height=120, border=True):
-                    dpg.add_text("📈 TODAY'S CHANGE", color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text(" TODAY'S CHANGE", color=self.BLOOMBERG_YELLOW)
                     dpg.add_spacer(height=5)
 
                     # Get real daily change data
@@ -1003,7 +1009,7 @@ class PortfolioTab(BaseTab):
 
                 # Total P&L card
                 with dpg.child_window(width=280, height=120, border=True):
-                    dpg.add_text("💎 TOTAL GAIN/LOSS", color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text(" TOTAL GAIN/LOSS", color=self.BLOOMBERG_YELLOW)
                     dpg.add_spacer(height=5)
                     total_investment = sum(self.calculate_portfolio_investment(name) for name in self.portfolios.keys())
                     total_pnl = total_value - total_investment
@@ -1173,7 +1179,7 @@ class PortfolioTab(BaseTab):
         """Create analytics charts for selected portfolio"""
         # Ensure portfolio_name is a string
         if not isinstance(portfolio_name, str):
-            print(f"Error: portfolio_name is not a string: {portfolio_name}")
+            logger.error(f"Error: portfolio_name is not a string: {portfolio_name}", module="Portfolio_Tab", context={'portfolio_name': portfolio_name})
             return
 
         # Clear existing content
@@ -1194,7 +1200,7 @@ class PortfolioTab(BaseTab):
             with dpg.group(horizontal=True):
                 # Portfolio composition chart
                 with dpg.child_window(width=420, height=300, border=True):
-                    dpg.add_text("📊 PORTFOLIO COMPOSITION", color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text(" PORTFOLIO COMPOSITION", color=self.BLOOMBERG_YELLOW)
                     dpg.add_separator()
 
                     # Create simple bar chart for portfolio composition
@@ -1226,7 +1232,7 @@ class PortfolioTab(BaseTab):
 
                 # Performance tracking chart
                 with dpg.child_window(width=420, height=300, border=True):
-                    dpg.add_text("📈 PERFORMANCE TRACKING", color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text(" PERFORMANCE TRACKING", color=self.BLOOMBERG_YELLOW)
                     dpg.add_separator()
 
                     with dpg.plot(height=220, width=-1):
@@ -1259,7 +1265,7 @@ class PortfolioTab(BaseTab):
             with dpg.group(horizontal=True):
                 # Risk metrics table
                 with dpg.child_window(width=280, height=250, border=True):
-                    dpg.add_text("⚠️ RISK METRICS", color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text(" RISK METRICS", color=self.BLOOMBERG_YELLOW)
                     dpg.add_separator()
 
                     with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
@@ -1288,7 +1294,7 @@ class PortfolioTab(BaseTab):
 
                 # Return metrics table
                 with dpg.child_window(width=280, height=250, border=True):
-                    dpg.add_text("💰 RETURN METRICS", color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text(" RETURN METRICS", color=self.BLOOMBERG_YELLOW)
                     dpg.add_separator()
 
                     with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
@@ -1323,7 +1329,7 @@ class PortfolioTab(BaseTab):
 
                 # Sector allocation
                 with dpg.child_window(width=280, height=250, border=True):
-                    dpg.add_text("🏢 SECTOR ALLOCATION", color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text(" SECTOR ALLOCATION", color=self.BLOOMBERG_YELLOW)
                     dpg.add_separator()
 
                     # Sample sector data
@@ -1380,11 +1386,11 @@ class PortfolioTab(BaseTab):
             for portfolio in self.portfolios.values():
                 if symbol in portfolio and isinstance(portfolio[symbol], dict):
                     avg_price = portfolio[symbol].get('avg_price', 100)
-                    print(f"⚠️ Using avg_price ${avg_price:.2f} for {symbol} (fetch error)")
+                    logger.error(f" Using avg_price ${avg_price:.2f} for {symbol} (fetch error)", module="Portfolio_Tab", context={'symbol': symbol})
                     return avg_price
 
         # Default fallback
-        print(f"⚠️ Using default price $100.00 for {symbol}")
+        logger.info(f" Using default price $100.00 for {symbol}", module="Portfolio_Tab", context={'symbol': symbol})
         return 100.0
 
     def update_navigation_summary(self):
@@ -1415,7 +1421,7 @@ class PortfolioTab(BaseTab):
                 dpg.set_value("nav_today_change", change_text)
 
         except Exception as e:
-            print(f"Error updating navigation summary: {e}")
+            logger.error(f"Error updating navigation summary: {e}", module="Portfolio_Tab", context={'e': e})
 
     # Callback methods
     def create_portfolio_simple(self):
@@ -1441,7 +1447,7 @@ class PortfolioTab(BaseTab):
             self.show_message(f"Portfolio '{name}' created successfully!", "success")
 
         except Exception as e:
-            print(f"Error creating portfolio: {e}")
+            logger.error(f"Error creating portfolio: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message("Error creating portfolio", "error")
 
     def create_portfolio_with_stock(self):
@@ -1502,7 +1508,7 @@ class PortfolioTab(BaseTab):
             self.show_message(success_msg, "success")
 
         except Exception as e:
-            print(f"Error creating portfolio with stock: {e}")
+            logger.error(f"Error creating portfolio with stock: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message("Error creating portfolio", "error")
 
     def on_portfolio_select(self):
@@ -1513,7 +1519,7 @@ class PortfolioTab(BaseTab):
                 self.current_portfolio = selected
                 self.refresh_manage_view()
         except Exception as e:
-            print(f"Error in portfolio select: {e}")
+            logger.error(f"Error in portfolio select: {e}", module="Portfolio_Tab", context={'e': e})
 
     def on_analyze_portfolio_select(self):
         """Handle portfolio selection in analyze view"""
@@ -1523,7 +1529,7 @@ class PortfolioTab(BaseTab):
                 self.current_portfolio = selected
                 threading.Thread(target=lambda: self.create_analytics_charts(selected), daemon=True).start()
         except Exception as e:
-            print(f"Error in analyze portfolio select: {e}")
+            logger.error(f"Error in analyze portfolio select: {e}", module="Portfolio_Tab", context={'e': e})
 
     def add_stock_simple(self):
         """Add stock to selected portfolio"""
@@ -1587,7 +1593,7 @@ class PortfolioTab(BaseTab):
         except ValueError:
             self.show_message("Invalid quantity or price values.", "error")
         except Exception as e:
-            print(f"Error adding stock: {e}")
+            logger.error(f"Error adding stock: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message("Error adding stock", "error")
 
     def _fetch_single_price_and_update(self, symbol):
@@ -1597,15 +1603,15 @@ class PortfolioTab(BaseTab):
             if price is not None:
                 self.price_cache[symbol] = price
                 self.last_price_update[symbol] = datetime.datetime.now()
-                print(f"✅ Updated price for {symbol}: ${price:.2f}")
+                logger.info(f" Updated price for {symbol}: ${price:.2f}", module="Portfolio_Tab", context={'symbol': symbol})
 
                 # Update UI if in manage view
                 if self.current_view == "manage":
                     self.refresh_manage_view()
             else:
-                print(f"⚠️ Could not fetch price for {symbol}")
+                logger.info(f" Could not fetch price for {symbol}", module="Portfolio_Tab", context={'symbol': symbol})
         except Exception as e:
-            print(f"Error fetching price for {symbol}: {e}")
+            logger.error(f"Error fetching price for {symbol}: {e}", module="Portfolio_Tab", context={'symbol': symbol, 'e': e})
 
     def refresh_manage_view(self):
         """Refresh the manage view content"""
@@ -1657,7 +1663,7 @@ class PortfolioTab(BaseTab):
                                        callback=lambda s=symbol: self.remove_stock_from_portfolio(s))
 
         except Exception as e:
-            print(f"Error refreshing manage view: {e}")
+            logger.error(f"Error refreshing manage view: {e}", module="Portfolio_Tab", context={'e': e})
 
     def select_and_manage_portfolio(self, portfolio_name):
         """Select portfolio and switch to manage view"""
@@ -1687,7 +1693,7 @@ class PortfolioTab(BaseTab):
 
             self.show_message(f"Removed {symbol} from {self.current_portfolio}.", "success")
         except Exception as e:
-            print(f"Error removing stock: {e}")
+            logger.error(f"Error removing stock: {e}", module="Portfolio_Tab", context={'e': e})
 
     def delete_portfolio_confirm(self, portfolio_name):
         """Show confirmation dialog for portfolio deletion"""
@@ -1706,7 +1712,7 @@ class PortfolioTab(BaseTab):
                                    callback=lambda: dpg.delete_item(f"delete_confirm_{portfolio_name}"))
 
         except Exception as e:
-            print(f"Error showing delete confirmation: {e}")
+            logger.error(f"Error showing delete confirmation: {e}", module="Portfolio_Tab", context={'e': e})
             # Direct delete if popup fails
             self.delete_portfolio(portfolio_name)
 
@@ -1737,7 +1743,7 @@ class PortfolioTab(BaseTab):
                                callback=lambda: dpg.delete_item("delete_portfolio_window"))
 
         except Exception as e:
-            print(f"Error showing delete dialog: {e}")
+            logger.error(f"Error showing delete dialog: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message("Error showing delete dialog", "error")
 
     def delete_portfolio_from_dialog(self, portfolio_name):
@@ -1751,7 +1757,7 @@ class PortfolioTab(BaseTab):
             self.delete_portfolio_confirm(portfolio_name)
 
         except Exception as e:
-            print(f"Error in delete from dialog: {e}")
+            logger.error(f"Error in delete from dialog: {e}", module="Portfolio_Tab", context={'e': e})
 
     def delete_portfolio(self, portfolio_name):
         """Delete the specified portfolio"""
@@ -1780,7 +1786,7 @@ class PortfolioTab(BaseTab):
             self.show_message(f"Portfolio '{portfolio_name}' deleted successfully", "success")
 
         except Exception as e:
-            print(f"Error deleting portfolio: {e}")
+            logger.error(f"Error deleting portfolio: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message("Error deleting portfolio", "error")
 
     def start_price_refresh_thread(self):
@@ -1789,7 +1795,7 @@ class PortfolioTab(BaseTab):
             self.refresh_running = True
             self.refresh_thread = threading.Thread(target=self._price_refresh_loop, daemon=True)
             self.refresh_thread.start()
-            print("🔄 Started hourly price refresh thread")
+            logger.info("Started hourly price refresh thread", module="Portfolio_Tab")
 
     def _price_refresh_loop(self):
         """Background thread for price refresh - runs every hour"""
@@ -1809,11 +1815,11 @@ class PortfolioTab(BaseTab):
                     time.sleep(1)
 
                 if self.refresh_running:
-                    print("🔄 Hourly price update starting...")
+                    logger.info("Hourly price update starting...", module="Portfolio_Tab")
                     self.refresh_all_prices_background()
 
             except Exception as e:
-                print(f"Error in price refresh loop: {e}")
+                logger.error(f"Error in price refresh loop: {e}", module="Portfolio_Tab", context={'e': e})
                 time.sleep(300)  # Wait 5 minutes before retrying
 
     def refresh_all_prices_background(self):
@@ -1828,7 +1834,7 @@ class PortfolioTab(BaseTab):
             if not all_symbols:
                 return
 
-            print(f"🔄 Refreshing prices for {len(all_symbols)} symbols...")
+            logger.info(f" Refreshing prices for {len(all_symbols)} symbols...", module="Portfolio_Tab", context={'len(all_symbols)': len(all_symbols)})
 
             # Fetch updated prices
             self._fetch_prices_batch(list(all_symbols))
@@ -1840,10 +1846,10 @@ class PortfolioTab(BaseTab):
             # Update navigation summary
             self.update_navigation_summary()
 
-            print("✅ Price refresh completed")
+            logger.info("Price refresh completed", module="Portfolio_Tab")
 
         except Exception as e:
-            print(f"Error refreshing prices: {e}")
+            logger.error(f"Error refreshing prices: {e}", module="Portfolio_Tab", context={'e': e})
 
     def refresh_all_prices_now(self):
         """Refresh all prices immediately"""
@@ -1865,7 +1871,7 @@ class PortfolioTab(BaseTab):
 
                     return portfolios
             except (json.JSONDecodeError, IOError):
-                print("Error loading portfolios: Corrupted settings.json file.")
+                logger.error("Error loading portfolios: Corrupted settings.json file.", module="Portfolio_Tab")
                 return {}
         return {}
 
@@ -1893,20 +1899,20 @@ class PortfolioTab(BaseTab):
             with open(SETTINGS_FILE, "w") as file:
                 json.dump(settings, file, indent=4)
 
-            print("Portfolios saved successfully.")
+            logger.info("Portfolios saved successfully.", module="Portfolio_Tab")
 
         except Exception as e:
-            print(f"Error saving portfolios: {e}")
+            logger.error(f"Error saving portfolios: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message(f"Error saving portfolios: {e}", "error")
 
     # Additional callback methods
     def search_portfolio(self):
         """Search portfolio functionality"""
-        print("🔍 Portfolio search functionality")
+        logger.info("Portfolio search functionality", module="Portfolio_Tab")
 
     def show_settings(self):
         """Show portfolio settings"""
-        print("⚙️ Portfolio settings functionality")
+        logger.info("Portfolio settings functionality", module="Portfolio_Tab")
 
     def export_portfolio_data(self):
         """Export portfolio data"""
@@ -1944,19 +1950,19 @@ class PortfolioTab(BaseTab):
             self.show_message(f"Portfolio data exported to {export_filename}", "success")
 
         except Exception as e:
-            print(f"Error exporting portfolio data: {e}")
+            logger.error(f"Error exporting portfolio data: {e}", module="Portfolio_Tab", context={'e': e})
             self.show_message("Error exporting portfolio data", "error")
 
     def show_message(self, message, message_type="info"):
         """Show message to user"""
         type_symbols = {
-            "success": "✅",
-            "error": "❌",
-            "warning": "⚠️",
-            "info": "ℹ️"
+            "success": "",
+            "error": "",
+            "warning": "",
+            "info": ""
         }
-        symbol = type_symbols.get(message_type, "ℹ️")
-        print(f"{symbol} {message}")
+        symbol = type_symbols.get(message_type, "")
+        logger.info(f"{symbol} {message}", module="Portfolio_Tab", context={'symbol': symbol, 'message': message})
 
     def resize_components(self, left_width, center_width, right_width, top_height, bottom_height, cell_height):
         """Handle component resizing"""
@@ -1966,7 +1972,7 @@ class PortfolioTab(BaseTab):
     def cleanup(self):
         """Clean up portfolio tab resources"""
         try:
-            print("🧹 Cleaning up portfolio tab...")
+            logger.info("🧹 Cleaning up portfolio tab...", module="Portfolio_Tab")
             self.refresh_running = False
 
             if hasattr(self, 'portfolios'):
@@ -1987,6 +1993,6 @@ class PortfolioTab(BaseTab):
             self.daily_change_cache = {}
             self.previous_close_cache = {}
 
-            print("✅ Portfolio tab cleanup complete")
+            logger.info("Portfolio tab cleanup complete", module="Portfolio_Tab")
         except Exception as e:
-            print(f"Error in portfolio cleanup: {e}")
+            logger.error(f"Error in portfolio cleanup: {e}", module="Portfolio_Tab", context={'e': e})

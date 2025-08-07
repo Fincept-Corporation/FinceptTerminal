@@ -1,5 +1,6 @@
 import dearpygui.dearpygui as dpg
 
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 class BaseTab:
     """Base class for all tabs in the application"""

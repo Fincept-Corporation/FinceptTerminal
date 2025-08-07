@@ -1,10 +1,15 @@
+"""
+Leaflet Map Ui module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 # leaflet_map_ui.py - Standalone PyQt Maritime Map Process (Fixed)
 import sys
 import json
 import os
 import time
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, \
-    QLineEdit, QComboBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QLineEdit, QComboBox
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import Qt, QUrl, QTimer
 
@@ -34,7 +39,7 @@ class MaritimeMapWindow(QMainWindow):
 
     def init_ui(self):
         """Initialize UI with enhanced controls"""
-        self.setWindowTitle("🚢 FINCEPT MARITIME MAP")
+        self.setWindowTitle(" FINCEPT MARITIME MAP")
         self.setGeometry(100, 100, 600, 600)
         self.setWindowFlags(Qt.WindowStaysOnTopHint)
 
@@ -49,7 +54,7 @@ class MaritimeMapWindow(QMainWindow):
         control_widget.setMaximumHeight(50)
         control_layout = QHBoxLayout(control_widget)
 
-        control_layout.addWidget(QLabel("🚢 MARITIME:"))
+        control_layout.addWidget(QLabel(" MARITIME:"))
 
         self.marker_title = QLineEdit()
         self.marker_title.setPlaceholderText("Marker Title")
@@ -108,7 +113,7 @@ class MaritimeMapWindow(QMainWindow):
         status_widget.setMaximumHeight(30)
         status_layout = QHBoxLayout(status_widget)
 
-        self.status_label = QLabel("● LOADING MARITIME MAP...")
+        self.status_label = QLabel(" LOADING MARITIME MAP...")
         self.status_label.setStyleSheet("color: #00ff00; font-weight: bold; font-size: 10px;")
         status_layout.addWidget(self.status_label)
 
@@ -192,7 +197,7 @@ class MaritimeMapWindow(QMainWindow):
             attribution: 'FINCEPT MARITIME TERMINAL'
         }});
         satelliteLayer.addTo(map);
-        console.log('✅ Satellite layer added');
+        console.log(' Satellite layer added');
 
         // Variables
         var markerCluster = L.markerClusterGroup();
@@ -213,14 +218,14 @@ class MaritimeMapWindow(QMainWindow):
         // Custom marker icons using CSS and Unicode symbols
         function createCustomIcon(type, size = 24) {{
             var iconConfig = {{
-                'Ship': {{ symbol: '🚢', color: '#1e90ff', bg: '#ffffff' }},
-                'Port': {{ symbol: '⚓', color: '#8b4513', bg: '#ffffff' }},
-                'Industry': {{ symbol: '🏭', color: '#ff4500', bg: '#ffffff' }},
-                'House': {{ symbol: '🏠', color: '#32cd32', bg: '#ffffff' }},
-                'Bank': {{ symbol: '🏦', color: '#ffd700', bg: '#ffffff' }},
-                'Exchange': {{ symbol: '📈', color: '#ff1493', bg: '#ffffff' }},
-                'Warehouse': {{ symbol: '📦', color: '#8a2be2', bg: '#ffffff' }},
-                'Airport': {{ symbol: '✈️', color: '#00ced1', bg: '#ffffff' }}
+                'Ship': {{ symbol: '', color: '#1e90ff', bg: '#ffffff' }},
+                'Port': {{ symbol: '', color: '#8b4513', bg: '#ffffff' }},
+                'Industry': {{ symbol: '', color: '#ff4500', bg: '#ffffff' }},
+                'House': {{ symbol: '', color: '#32cd32', bg: '#ffffff' }},
+                'Bank': {{ symbol: '', color: '#ffd700', bg: '#ffffff' }},
+                'Exchange': {{ symbol: '', color: '#ff1493', bg: '#ffffff' }},
+                'Warehouse': {{ symbol: '', color: '#8a2be2', bg: '#ffffff' }},
+                'Airport': {{ symbol: '', color: '#00ced1', bg: '#ffffff' }}
             }};
 
             var config = iconConfig[type] || iconConfig['Ship'];
@@ -287,13 +292,13 @@ class MaritimeMapWindow(QMainWindow):
             for (let marker of markers) {{
                 var existingKey = `${{marker.lat.toFixed(4)}}_${{marker.lng.toFixed(4)}}`;
                 if (existingKey === key) {{
-                    console.log('❌ DUPLICATE: Marker already exists near this location');
-                    alert('⚠️ A marker already exists at this location!\\nExisting: ' + marker.title);
+                    console.log(' DUPLICATE: Marker already exists near this location');
+                    alert(' A marker already exists at this location!\\nExisting: ' + marker.title);
                     return false;
                 }}
             }}
 
-            console.log('✅ Creating new marker:', type, 'at', lat, lng, 'Key:', key);
+            console.log(' Creating new marker:', type, 'at', lat, lng, 'Key:', key);
             existingMarkers.add(key);
 
             var marker = L.marker([lat, lng], {{ 
@@ -308,7 +313,7 @@ class MaritimeMapWindow(QMainWindow):
                     <p style="margin:5px 0;"><strong>Location:</strong> ${{lat.toFixed(4)}}, ${{lng.toFixed(4)}}</p>
                     <button onclick="deleteMarker('${{key}}')" 
                             style="background:#ff4444;color:#fff;border:none;padding:8px 12px;border-radius:4px;cursor:pointer;margin-top:10px;font-weight:bold;">
-                        🗑️ Delete Marker
+                         Delete Marker
                     </button>
                 </div>
             `;
@@ -331,7 +336,7 @@ class MaritimeMapWindow(QMainWindow):
             markerObjects.push(marker);
             heatmapData.push([lat, lng, 1]);
 
-            console.log('✅ Marker added successfully:', title, 'Total markers:', markers.length);
+            console.log(' Marker added successfully:', title, 'Total markers:', markers.length);
             updateMarkerCount();
             return true;
         }}
@@ -347,7 +352,7 @@ class MaritimeMapWindow(QMainWindow):
                 existingMarkers.delete(key);
                 updateHeatmap();
                 updateMarkerCount();
-                console.log('❌ Marker deleted:', key);
+                console.log(' Marker deleted:', key);
             }}
         }}
 
@@ -401,7 +406,7 @@ class MaritimeMapWindow(QMainWindow):
 
                     ship.bindPopup(`
                         <div style="background:#1e1e1e;color:#fff;padding:10px;border-radius:8px;">
-                            <h3 style="color:#ff8c00;margin:0 0 10px 0;">🚢 Live Cargo Ship</h3>
+                            <h3 style="color:#ff8c00;margin:0 0 10px 0;"> Live Cargo Ship</h3>
                             <p><strong>Route:</strong> ${{route.name.split(' via ')[0]}}</p>
                             <p><strong>Status:</strong> In Transit</p>
                             <p><strong>Speed:</strong> ${{Math.floor(Math.random() * 10 + 15)}} knots</p>
@@ -419,7 +424,7 @@ class MaritimeMapWindow(QMainWindow):
         map.on('click', function(e) {{
             if (deleteMode) return;
 
-            console.log('🖱️ Map clicked at:', e.latlng.lat, e.latlng.lng);
+            console.log(' Map clicked at:', e.latlng.lat, e.latlng.lng);
 
             // Check for nearby markers BEFORE showing prompt
             var clickLat = e.latlng.lat;
@@ -439,19 +444,19 @@ class MaritimeMapWindow(QMainWindow):
             }}
 
             if (nearbyMarker) {{
-                alert('⚠️ Duplicate Location!\\n\\nA marker already exists nearby:\\n"' + nearbyMarker.title + '" (' + nearbyMarker.type + ')\\n\\nPlease click elsewhere to add a new marker.');
-                console.log('❌ Blocked duplicate marker near:', nearbyMarker.title);
+                alert(' Duplicate Location!\\n\\nA marker already exists nearby:\\n"' + nearbyMarker.title + '" (' + nearbyMarker.type + ')\\n\\nPlease click elsewhere to add a new marker.');
+                console.log(' Blocked duplicate marker near:', nearbyMarker.title);
                 return;
             }}
 
-            var title = prompt("🚢 Enter marker name (or Cancel to skip):");
+            var title = prompt(" Enter marker name (or Cancel to skip):");
 
             // Only add marker if user provides a valid name
             if (title && title.trim() !== '' && title.trim().toLowerCase() !== 'null') {{
                 title = title.trim();
                 var type = window.currentMarkerType || "Ship";
 
-                console.log('📍 Adding marker:', title, 'Type:', type);
+                console.log(' Adding marker:', title, 'Type:', type);
 
                 if (addMarker(clickLat, clickLng, title, type)) {{
                     updateHeatmap();
@@ -467,15 +472,15 @@ class MaritimeMapWindow(QMainWindow):
                             timestamp: Date.now()
                         }});
                         localStorage.setItem('clickMarkers', JSON.stringify(clickMarkers));
-                        console.log('💾 Saved to localStorage for Qt');
+                        console.log(' Saved to localStorage for Qt');
                     }} catch(e) {{
-                        console.error('❌ LocalStorage error:', e);
+                        console.error(' LocalStorage error:', e);
                     }}
                 }} else {{
-                    console.log('⚠️ Failed to add marker');
+                    console.log(' Failed to add marker');
                 }}
             }} else {{
-                console.log('❌ Marker creation cancelled - no valid name provided');
+                console.log(' Marker creation cancelled - no valid name provided');
             }}
         }});
 
@@ -493,12 +498,12 @@ class MaritimeMapWindow(QMainWindow):
 
         // Update marker count
         function updateMarkerCount() {{
-            console.log('📊 Current marker count:', markers.length);
+            console.log(' Current marker count:', markers.length);
         }}
 
         // Global functions for Qt integration
         window.addMarkerFromQt = function(lat, lng, title, type) {{
-            console.log('🔗 Adding marker from Qt:', lat, lng, title, type);
+            console.log(' Adding marker from Qt:', lat, lng, title, type);
             var result = addMarker(lat, lng, title, type);
             if (result) {{
                 updateHeatmap();
@@ -509,11 +514,11 @@ class MaritimeMapWindow(QMainWindow):
 
         window.setCurrentMarkerType = function(type) {{
             window.currentMarkerType = type;
-            console.log('🎯 Marker type set to:', type);
+            console.log(' Marker type set to:', type);
         }};
 
         window.clearAllMarkers = function() {{
-            console.log('🗑️ Clearing all markers');
+            console.log(' Clearing all markers');
             markerCluster.clearLayers();
             markers = [];
             markerObjects = [];
@@ -526,30 +531,30 @@ class MaritimeMapWindow(QMainWindow):
         window.toggleHeatmap = function() {{
             if (map.hasLayer(heatLayer)) {{
                 map.removeLayer(heatLayer);
-                console.log('🔥 Heatmap hidden');
+                console.log(' Heatmap hidden');
             }} else if (heatLayer) {{
                 map.addLayer(heatLayer);
-                console.log('🔥 Heatmap shown');
+                console.log(' Heatmap shown');
             }}
         }};
 
         window.toggleTradeRoutes = function() {{
             if (map.hasLayer(routesLayer)) {{
                 map.removeLayer(routesLayer);
-                console.log('🚢 Routes hidden');
+                console.log(' Routes hidden');
             }} else {{
                 createOceanRoutes();
-                console.log('🚢 Routes shown');
+                console.log(' Routes shown');
             }}
         }};
 
         window.toggleLiveShips = function() {{
             if (map.hasLayer(liveShipsLayer)) {{
                 map.removeLayer(liveShipsLayer);
-                console.log('⚓ Ships hidden');
+                console.log(' Ships hidden');
             }} else {{
                 createLiveShips();
-                console.log('⚓ Ships shown');
+                console.log(' Ships shown');
             }}
         }};
 
@@ -557,10 +562,10 @@ class MaritimeMapWindow(QMainWindow):
             deleteMode = mode;
             if (mode) {{
                 map.getContainer().classList.add('delete-cursor');
-                console.log('❌ Delete mode ON');
+                console.log(' Delete mode ON');
             }} else {{
                 map.getContainer().classList.remove('delete-cursor');
-                console.log('✅ Delete mode OFF');
+                console.log(' Delete mode OFF');
             }}
         }};
 
@@ -569,10 +574,10 @@ class MaritimeMapWindow(QMainWindow):
             try {{
                 var clickMarkers = JSON.parse(localStorage.getItem('clickMarkers') || '[]');
                 localStorage.removeItem('clickMarkers');
-                console.log('📤 Retrieved', clickMarkers.length, 'click markers for Qt');
+                console.log(' Retrieved', clickMarkers.length, 'click markers for Qt');
                 return clickMarkers;
             }} catch(e) {{
-                console.error('❌ Error getting click markers:', e);
+                console.error(' Error getting click markers:', e);
                 return [];
             }}
         }};
@@ -584,8 +589,8 @@ class MaritimeMapWindow(QMainWindow):
         updateHeatmap();
         updateMarkerCount();
 
-        console.log('✅ Maritime map loaded with', markers.length, 'markers');
-        console.log('🗺️ Satellite view active, click map to add markers');
+        console.log(' Maritime map loaded with', markers.length, 'markers');
+        console.log(' Satellite view active, click map to add markers');
     </script>
 </body>
 </html>
@@ -598,30 +603,30 @@ class MaritimeMapWindow(QMainWindow):
 
         self.web_view.loadFinished.connect(self.on_loaded)
         self.web_view.load(QUrl.fromLocalFile(os.path.abspath(html_path)))
-        print(f"🌐 Loading map from: {html_path}")
+        logger.info(f" Loading map from: {html_path}", module="Leaflet_Map_Ui", context={'html_path': html_path})
 
     def on_marker_type_changed(self, marker_type):
         """Handle marker type change"""
         self.selected_marker_type = marker_type
         js_code = f"if(window.setCurrentMarkerType) window.setCurrentMarkerType('{marker_type}');"
         self.web_view.page().runJavaScript(js_code)
-        self.status_label.setText(f"● Selected: {marker_type}")
+        self.status_label.setText(f" Selected: {marker_type}")
 
     def toggle_delete_mode(self):
         """Toggle delete mode"""
         self.delete_mode = not self.delete_mode
         if self.delete_mode:
-            self.status_label.setText("● DELETE MODE | Click markers to remove")
+            self.status_label.setText(" DELETE MODE | Click markers to remove")
             self.web_view.page().runJavaScript("if(window.setDeleteMode) window.setDeleteMode(true);")
         else:
-            self.status_label.setText("● ADD MODE | Click map to add markers")
+            self.status_label.setText(" ADD MODE | Click map to add markers")
             self.web_view.page().runJavaScript("if(window.setDeleteMode) window.setDeleteMode(false);")
 
     def on_loaded(self, success):
         """Map loaded callback"""
         if success:
-            print("✅ Map loaded successfully")
-            self.status_label.setText("✅ MARITIME MAP READY")
+            logger.info("Map loaded successfully", module="Leaflet_Map_Ui")
+            self.status_label.setText(" MARITIME MAP READY")
 
             # Set initial marker type
             js_code = f"if(window.setCurrentMarkerType) window.setCurrentMarkerType('{self.selected_marker_type}');"
@@ -630,10 +635,10 @@ class MaritimeMapWindow(QMainWindow):
             self.update_marker_count()
             self.write_status("ready")
 
-            QTimer.singleShot(2000, lambda: self.status_label.setText("● Ready | Click map to add markers"))
+            QTimer.singleShot(2000, lambda: self.status_label.setText(" Ready | Click map to add markers"))
         else:
-            print("❌ Map failed to load")
-            self.status_label.setText("❌ MAP LOAD FAILED")
+            logger.error("Map failed to load", module="Leaflet_Map_Ui")
+            self.status_label.setText(" MAP LOAD FAILED")
             self.write_status("error")
 
     def start_file_watcher(self):
@@ -668,7 +673,7 @@ class MaritimeMapWindow(QMainWindow):
                     json.dump({'commands': []}, f)
 
         except Exception as e:
-            print(f"File check error: {e}")
+            logger.error(f"File check error: {e}", module="Leaflet_Map_Ui", context={'e': e})
 
     def check_click_markers(self):
         """Check for markers added by clicking"""
@@ -676,7 +681,7 @@ class MaritimeMapWindow(QMainWindow):
             js_code = "if(window.getClickMarkers) window.getClickMarkers(); else [];"
             self.web_view.page().runJavaScript(js_code, self.process_click_markers)
         except Exception as e:
-            print(f"Check click markers error: {e}")
+            logger.error(f"Check click markers error: {e}", module="Leaflet_Map_Ui", context={'e': e})
 
     def process_click_markers(self, click_markers):
         """Process click markers from JavaScript with duplicate prevention"""
@@ -697,7 +702,8 @@ class MaritimeMapWindow(QMainWindow):
                         lng_diff = abs(existing['lng'] - marker['lng'])
                         if lat_diff < 0.0005 and lng_diff < 0.0005:
                             is_duplicate = True
-                            print(f"❌ Skipping duplicate marker: {marker['title']} (near {existing['title']})")
+                            logger.info("Value: %s", module="Leaflet_Map_Ui", context={
+                                "value": f"Skipping duplicate marker: {marker['title']} (near {existing['title']})"})
                             break
 
                     if not is_duplicate:
@@ -709,25 +715,24 @@ class MaritimeMapWindow(QMainWindow):
                         }
                         existing_markers.append(marker_data)
                         added_count += 1
-                        print(f"✅ Added click marker: {marker['title']}")
+                        logger.info("Value: %s", module="Leaflet_Map_Ui", context={"value": f" Added click marker: {marker['title']}"})
 
                 if added_count > 0:
                     # Save updated markers
                     with open(self.markers_file, 'w') as f:
                         json.dump(existing_markers, f, indent=2)
 
-                    print(
-                        f"📁 Saved {added_count} new markers to file (skipped {len(click_markers) - added_count} duplicates)")
+                    logger.info(f" Saved {added_count} new markers to file (skipped {len(click_markers) - added_count} duplicates)", module="Leaflet_Map_Ui", context={'added_count': added_count, 'len(click_markers) - added_count': len(click_markers) - added_count})
                 else:
-                    print("⚠️ No new markers added - all were duplicates")
+                    logger.info("No new markers added - all were duplicates", module="Leaflet_Map_Ui")
 
         except Exception as e:
-            print(f"Process click markers error: {e}")
+            logger.error(f"Process click markers error: {e}", module="Leaflet_Map_Ui", context={'e': e})
 
     def closeEvent(self, event):
         """Handle window close event"""
         try:
-            print("🔴 Window close event triggered")
+            logger.info("Window close event triggered", module="Leaflet_Map_Ui")
             self.close_application()
         except:
             # Force close if there's an error
@@ -761,10 +766,10 @@ class MaritimeMapWindow(QMainWindow):
 
                 self.markers_data = data
                 self.update_marker_count()
-                print(f"📍 Loaded {len(data)} markers from file")
+                logger.info(f" Loaded {len(data)} markers from file", module="Leaflet_Map_Ui", context={'len(data)': len(data)})
                 return data
         except Exception as e:
-            print(f"Load markers error: {e}")
+            logger.error(f"Load markers error: {e}", module="Leaflet_Map_Ui", context={'e': e})
         return []
 
     def execute_command(self, cmd):
@@ -786,9 +791,9 @@ class MaritimeMapWindow(QMainWindow):
                 js_code = f"if(window.setCurrentMarkerType) window.setCurrentMarkerType('{marker_type}');"
                 self.web_view.page().runJavaScript(js_code)
                 self.selected_marker_type = marker_type
-                print(f"🎯 Set marker type to: {marker_type}")
+                logger.info(f" Set marker type to: {marker_type}", module="Leaflet_Map_Ui", context={'marker_type': marker_type})
         except Exception as e:
-            print(f"Command error: {e}")
+            logger.error(f"Command error: {e}", module="Leaflet_Map_Ui", context={'e': e})
 
     def clear_all_markers(self):
         """Clear all markers"""
@@ -803,25 +808,25 @@ class MaritimeMapWindow(QMainWindow):
             # Clear on map
             self.web_view.page().runJavaScript("if(window.clearAllMarkers) window.clearAllMarkers();")
             self.update_marker_count()
-            self.status_label.setText("● CLEARED | All markers removed")
-            print("🗑️ All markers cleared")
+            self.status_label.setText(" CLEARED | All markers removed")
+            logger.info("All markers cleared", module="Leaflet_Map_Ui")
         except Exception as e:
-            print(f"Clear markers error: {e}")
+            logger.error(f"Clear markers error: {e}", module="Leaflet_Map_Ui", context={'e': e})
 
     def toggle_heatmap(self):
         """Toggle heatmap"""
         self.web_view.page().runJavaScript("if(window.toggleHeatmap) window.toggleHeatmap();")
-        self.status_label.setText("● HEATMAP | Toggled")
+        self.status_label.setText(" HEATMAP | Toggled")
 
     def toggle_trade_routes(self):
         """Toggle ocean trade routes"""
         self.web_view.page().runJavaScript("if(window.toggleTradeRoutes) window.toggleTradeRoutes();")
-        self.status_label.setText("● ROUTES | Toggled")
+        self.status_label.setText(" ROUTES | Toggled")
 
     def toggle_live_ships(self):
         """Toggle live ships"""
         self.web_view.page().runJavaScript("if(window.toggleLiveShips) window.toggleLiveShips();")
-        self.status_label.setText("● SHIPS | Toggled")
+        self.status_label.setText(" SHIPS | Toggled")
 
     def update_marker_count(self):
         """Update marker count display"""
@@ -839,8 +844,8 @@ class MaritimeMapWindow(QMainWindow):
     def close_application(self):
         """Properly close the application"""
         try:
-            print("🔴 Closing maritime map application...")
-            self.status_label.setText("● CLOSING...")
+            logger.info("Closing maritime map application...", module="Leaflet_Map_Ui")
+            self.status_label.setText(" CLOSING...")
 
             # Write closed status
             self.write_status("closed")
@@ -854,9 +859,9 @@ class MaritimeMapWindow(QMainWindow):
                 for f in ["maritime_map.html", self.commands_file, self.status_file]:
                     if os.path.exists(f):
                         os.remove(f)
-                        print(f"🗑️ Removed: {f}")
+                        logger.info(f" Removed: {f}", module="Leaflet_Map_Ui", context={'f': f})
             except Exception as e:
-                print(f"⚠️ Cleanup warning: {e}")
+                logger.warning(f" Cleanup warning: {e}", module="Leaflet_Map_Ui", context={'e': e})
 
             # Close the window and quit application
             self.close()
@@ -864,7 +869,7 @@ class MaritimeMapWindow(QMainWindow):
             sys.exit(0)
 
         except Exception as e:
-            print(f"❌ Close error: {e}")
+            logger.error(f" Close error: {e}", module="Leaflet_Map_Ui", context={'e': e})
             # Force exit if normal close fails
             sys.exit(1)
 

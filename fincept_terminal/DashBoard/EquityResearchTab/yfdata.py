@@ -1,3 +1,8 @@
+"""
+Yfdata module for Fincept Terminal
+Updated to use centralized logging system
+"""
+
 # yfinance_data_tab.py - Fixed Version with Text Encoding Resolution
 # -*- coding: utf-8 -*-
 
@@ -10,6 +15,7 @@ import threading
 import time
 from fincept_terminal.Utils.Managers.theme_manager import AutomaticThemeManager
 
+from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
 class YFinanceDataTab:
     """Fixed Bloomberg Terminal YFinance Data Tab with Text Encoding Resolution"""
@@ -52,7 +58,7 @@ class YFinanceDataTab:
 
             return dpg.add_text(text, **kwargs)
         except Exception as e:
-            print(f"Text add error: {e}")
+            logger.error(f"Text add error: {e}", module="Yfdata", context={'e': e})
             try:
                 return dpg.add_text("Text Error", **kwargs)
             except:
@@ -73,7 +79,7 @@ class YFinanceDataTab:
             if dpg.does_item_exist(tag):
                 dpg.set_value(tag, value)
         except Exception as e:
-            print(f"Set value error for {tag}: {e}")
+            logger.error(f"Set value error for {tag}: {e}", module="Yfdata", context={'tag': tag, 'e': e})
             # Try with simple fallback
             try:
                 if dpg.does_item_exist(tag):
@@ -115,7 +121,7 @@ class YFinanceDataTab:
             threading.Timer(1.0, self.load_default_ticker).start()
 
         except Exception as e:
-            print(f"Error creating YFinance content: {e}")
+            logger.error(f"Error creating YFinance content: {e}", module="Yfdata", context={'e': e})
             self.safe_add_text(f"ERROR: {e}", color=self.BLOOMBERG_RED)
 
     def load_default_ticker(self):
@@ -124,7 +130,7 @@ class YFinanceDataTab:
             dpg.set_value("ticker_search_input", "AAPL")
             self.handle_search()
         except Exception as e:
-            print(f"Error loading default ticker: {e}")
+            logger.error(f"Error loading default ticker: {e}", module="Yfdata", context={'e': e})
 
     def create_header_section(self):
         """Create header with search functionality"""
@@ -168,7 +174,7 @@ class YFinanceDataTab:
                     self.safe_add_text("", tag="current_stock_change", color=self.BLOOMBERG_GREEN)
                 dpg.add_separator()
         except Exception as e:
-            print(f"Error creating header: {e}")
+            logger.error(f"Error creating header: {e}", module="Yfdata", context={'e': e})
 
     def create_company_overview_section(self):
         """Create company overview section"""
@@ -196,7 +202,7 @@ class YFinanceDataTab:
                         self.safe_add_text("Loading AAPL data...",
                                            color=[240, 128, 128], tag="key_metrics_text")
         except Exception as e:
-            print(f"Error creating company overview: {e}")
+            logger.error(f"Error creating company overview: {e}", module="Yfdata", context={'e': e})
 
     def create_market_data_section(self):
         """Create market data section"""
@@ -227,7 +233,7 @@ class YFinanceDataTab:
                         dpg.add_separator()
                         self.safe_add_text("Loading AAPL data...", color=self.BLOOMBERG_YELLOW, tag="executives_text")
         except Exception as e:
-            print(f"Error creating market data: {e}")
+            logger.error(f"Error creating market data: {e}", module="Yfdata", context={'e': e})
 
     def create_price_and_returns_section(self):
         """Create price chart and returns section"""
@@ -290,7 +296,7 @@ class YFinanceDataTab:
                                                        color=self.BLOOMBERG_YELLOW)
                                     self.safe_add_text("--", tag=f"return_status_{i}", color=self.BLOOMBERG_GRAY)
         except Exception as e:
-            print(f"Error creating price/returns section: {e}")
+            logger.error(f"Error creating price/returns section: {e}", module="Yfdata", context={'e': e})
 
     def create_financial_statements_section(self):
         """Create financial statements section"""
@@ -324,7 +330,7 @@ class YFinanceDataTab:
                             self.safe_add_text("Loading AAPL financial data...",
                                                color=self.BLOOMBERG_YELLOW, tag="cash_flow_placeholder")
         except Exception as e:
-            print(f"Error creating financial statements: {e}")
+            logger.error(f"Error creating financial statements: {e}", module="Yfdata", context={'e': e})
 
     def create_financial_charts_section(self):
         """Create financial analysis charts section"""
@@ -384,14 +390,14 @@ class YFinanceDataTab:
                         with dpg.group(tag="ratios_chart_container"):
                             self.safe_add_text("Loading AAPL financial charts...", color=self.BLOOMBERG_YELLOW)
         except Exception as e:
-            print(f"Error creating financial charts: {e}")
+            logger.error(f"Error creating financial charts: {e}", module="Yfdata", context={'e': e})
 
     def create_status_bar(self):
         """Create status bar"""
         try:
             dpg.add_separator()
             with dpg.group(horizontal=True):
-                dpg.add_text("●", color=self.BLOOMBERG_GREEN)
+                dpg.add_text("", color=self.BLOOMBERG_GREEN)
                 dpg.add_text("DATA SERVICE ONLINE", color=self.BLOOMBERG_GREEN)
                 dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
                 dpg.add_text("STATUS:", color=self.BLOOMBERG_YELLOW)
@@ -400,7 +406,7 @@ class YFinanceDataTab:
                 dpg.add_text("LAST UPDATE:", color=self.BLOOMBERG_YELLOW)
                 dpg.add_text("LOADING", color=self.BLOOMBERG_WHITE, tag="last_update_time")
         except Exception as e:
-            print(f"Error creating status bar: {e}")
+            logger.error(f"Error creating status bar: {e}", module="Yfdata", context={'e': e})
 
     def handle_search(self, sender=None, app_data=None):
         """Handle search functionality"""
@@ -423,7 +429,7 @@ class YFinanceDataTab:
 
             threading.Thread(target=self.load_complete_stock_data, args=(ticker,), daemon=True).start()
         except Exception as e:
-            print(f"Error handling search: {e}")
+            logger.error(f"Error handling search: {e}", module="Yfdata", context={'e': e})
 
     def load_complete_stock_data(self, ticker):
         """Load complete stock data including financials"""
@@ -461,7 +467,7 @@ class YFinanceDataTab:
         except Exception as e:
             error_msg = str(e)[:30] + "..." if len(str(e)) > 30 else str(e)
             self.safe_set_value("main_status_text", f"ERROR: {error_msg}")
-            print(f"Error loading {ticker}: {e}")
+            logger.error(f"Error loading {ticker}: {e}", module="Yfdata", context={'ticker': ticker, 'e': e})
 
         finally:
             self.is_loading = False
@@ -502,7 +508,7 @@ class YFinanceDataTab:
             self.update_returns_table()
 
         except Exception as e:
-            print(f"Error updating data sections: {e}")
+            logger.error(f"Error updating data sections: {e}", module="Yfdata", context={'e': e})
 
     def update_company_information(self, info):
         """Update company information section - FIXED VERSION"""
@@ -567,7 +573,7 @@ Profit Margin: {safe_format(info.get('profitMargins'), is_percentage=True)}"""
             dpg.configure_item("key_metrics_text", color=[240, 128, 128])
 
         except Exception as e:
-            print(f"Error updating company information: {e}")
+            logger.error(f"Error updating company information: {e}", module="Yfdata", context={'e': e})
 
     def update_market_data_info(self, info):
         """Update market data information"""
@@ -647,7 +653,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
                 dpg.configure_item("executives_text", color=self.BLOOMBERG_YELLOW)
 
         except Exception as e:
-            print(f"Error updating market data: {e}")
+            logger.error(f"Error updating market data: {e}", module="Yfdata", context={'e': e})
 
     def update_price_chart(self, sender=None, app_data=None):
         """Update price chart with historical data"""
@@ -744,7 +750,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
                         dpg.set_axis_limits(y_axis, price_min, price_max)
 
         except Exception as e:
-            print(f"Error updating price chart: {e}")
+            logger.error(f"Error updating price chart: {e}", module="Yfdata", context={'e': e})
             if dpg.does_item_exist("chart_container"):
                 dpg.delete_item("chart_container", children_only=True)
                 self.safe_add_text(f"Chart Error: {str(e)[:50]}...",
@@ -767,10 +773,10 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
 
                         if return_pct > 0:
                             color = self.BLOOMBERG_GREEN
-                            status = "▲"
+                            status = ""
                         elif return_pct < 0:
                             color = self.BLOOMBERG_RED
-                            status = "▼"
+                            status = ""
                         else:
                             color = self.BLOOMBERG_WHITE
                             status = "="
@@ -789,7 +795,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
                     dpg.configure_item(f"return_value_{i}", color=self.BLOOMBERG_RED)
 
         except Exception as e:
-            print(f"Error updating returns table: {e}")
+            logger.error(f"Error updating returns table: {e}", module="Yfdata", context={'e': e})
 
     def load_financial_data(self, stock):
         """Load and display financial statements"""
@@ -815,7 +821,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
             self.update_financial_charts()
 
         except Exception as e:
-            print(f"Error loading financial data: {e}")
+            logger.error(f"Error loading financial data: {e}", module="Yfdata", context={'e': e})
             # Update placeholders with error messages
             self.safe_set_value("income_statement_placeholder", f"Error loading income statement: {str(e)[:50]}...")
             self.safe_set_value("balance_sheet_placeholder", f"Error loading balance sheet: {str(e)[:50]}...")
@@ -874,7 +880,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
                                 self.safe_add_text("Error", color=self.BLOOMBERG_RED)
 
         except Exception as e:
-            print(f"Error creating financial table for {title}: {e}")
+            logger.error(f"Error creating financial table for {title}: {e}", module="Yfdata", context={'title': title, 'e': e})
 
     def update_financial_charts(self, sender=None, app_data=None):
         """Update all financial analysis charts"""
@@ -893,7 +899,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
             self.create_financial_ratios_chart(years_selection)
 
         except Exception as e:
-            print(f"Error updating financial charts: {e}")
+            logger.error(f"Error updating financial charts: {e}", module="Yfdata", context={'e': e})
 
     def create_revenue_profitability_chart(self, years_selection):
         """Create revenue and profitability trends chart"""
@@ -965,7 +971,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
                         break
 
         except Exception as e:
-            print(f"Error creating revenue chart: {e}")
+            logger.error(f"Error creating revenue chart: {e}", module="Yfdata", context={'e': e})
 
     def create_balance_sheet_trends_chart(self, years_selection):
         """Create balance sheet trends chart"""
@@ -1013,7 +1019,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
                             dpg.add_line_series(list(years), list(values), label=labels[i], parent=y_axis)
 
         except Exception as e:
-            print(f"Error creating balance sheet chart: {e}")
+            logger.error(f"Error creating balance sheet chart: {e}", module="Yfdata", context={'e': e})
 
     def create_cash_flow_analysis_chart(self, years_selection):
         """Create cash flow analysis chart"""
@@ -1061,7 +1067,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
                             dpg.add_line_series(list(years), list(values), label=labels[i], parent=y_axis)
 
         except Exception as e:
-            print(f"Error creating cash flow chart: {e}")
+            logger.error(f"Error creating cash flow chart: {e}", module="Yfdata", context={'e': e})
 
     def create_financial_ratios_chart(self, years_selection):
         """Create financial ratios and margins chart"""
@@ -1157,7 +1163,7 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
                         dpg.add_line_series(list(years), list(margin_values), label="Profit Margin (%)", parent=y_axis)
 
         except Exception as e:
-            print(f"Error creating ratios chart: {e}")
+            logger.error(f"Error creating ratios chart: {e}", module="Yfdata", context={'e': e})
 
     def start_time_updater(self):
         """Start background time updater"""
@@ -1177,6 +1183,6 @@ Target Price: {safe_format_value(info.get('targetMeanPrice'))}"""
     def cleanup(self):
         """Cleanup resources"""
         try:
-            print("YFinance Data Tab cleanup completed")
+            logger.info("YFinance Data Tab cleanup completed", module="Yfdata")
         except:
             pass
