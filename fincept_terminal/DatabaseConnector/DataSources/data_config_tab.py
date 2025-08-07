@@ -1,4 +1,6 @@
-# data_config_tab.py - Data Configuration Tab for Universal Data Source Management
+# -*- coding: utf-8 -*-
+# data_config_tab.py
+
 import dearpygui.dearpygui as dpg
 import json
 import os

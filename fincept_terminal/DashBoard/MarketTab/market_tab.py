@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Enhanced Market Tab module for Fincept Terminal
-Production-grade with comprehensive logging, error handling, and performance optimization
-"""
+# market_tab.py
 
 import dearpygui.dearpygui as dpg
 from fincept_terminal.Utils.base_tab import BaseTab

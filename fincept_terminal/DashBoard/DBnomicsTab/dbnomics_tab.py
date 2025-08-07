@@ -1,7 +1,5 @@
-"""
-DBnomics Terminal Tab - Bloomberg Terminal Style - Production Version
-Clean implementation with proper logging integration
-"""
+# -*- coding: utf-8 -*-
+# dbnomics_tab.py
 
 import dearpygui.dearpygui as dpg
 import requests
@@ -11,7 +9,7 @@ from datetime import datetime
 import json
 import traceback
 from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import logger, log_operation, performance_monitor
+from fincept_terminal.Utils.Logging.logger import info, error, warning, debug, monitor_performance, operation
 
 
 class DBnomicsTab(BaseTab):
@@ -21,7 +19,7 @@ class DBnomicsTab(BaseTab):
         super().__init__(main_app, *args, **kwargs)
         self.main_app = main_app
 
-        logger.info("Initializing DBnomicsTab", module="DBnomics")
+        info("Initializing DBnomics tab")
 
         # Bloomberg Terminal Colors
         self.BLOOMBERG_ORANGE = [255, 165, 0]
@@ -32,16 +30,17 @@ class DBnomicsTab(BaseTab):
         self.BLOOMBERG_GRAY = [120, 120, 120]
         self.BLOOMBERG_BLUE = [100, 180, 255]
 
-        # API Setup
+        # API Setup with connection pooling
         self.base_url = "https://api.db.nomics.world/v22"
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'Fincept-Terminal/1.0'})
 
-        # Data storage
+        # Data storage with caching
         self.providers = []
         self.datasets = []
         self.series_list = []
         self.current_data = None
+        self._cache = {}  # Response cache for performance
 
         # Current selections
         self.current_provider = None
@@ -55,16 +54,16 @@ class DBnomicsTab(BaseTab):
         self.data_points = [None, None, None, None, None, None]
         self.data_point_names = ["Empty", "Empty", "Empty", "Empty", "Empty", "Empty"]
 
-        logger.info("DBnomicsTab initialization complete", module="DBnomics")
+        info("DBnomics tab initialization complete")
 
     def get_label(self, *args, **kwargs):
         return "DBnomics"
 
-    @performance_monitor
+    @monitor_performance
     def create_content(self, *args, **kwargs):
         """Create content with proper error handling"""
         try:
-            with log_operation("create_content", module="DBnomics"):
+            with operation("create_content"):
                 # Header section
                 with dpg.group(horizontal=True):
                     dpg.add_text("DBNOMICS", color=self.BLOOMBERG_ORANGE)
@@ -94,11 +93,10 @@ class DBnomicsTab(BaseTab):
                     with dpg.child_window(width=-1, height=900, border=True):
                         self.create_data_panel()
 
-                logger.info("Content creation completed successfully", module="DBnomics")
+                info("DBnomics content creation completed successfully")
 
         except Exception as e:
-            logger.error(f"Error in create_content: {str(e)}", module="DBnomics",
-                        context={'error_type': type(e).__name__}, exc_info=True)
+            error("Error in create_content", context={"error": str(e)}, exc_info=True)
             # Create minimal error display
             dpg.add_text(f"ERROR: {str(e)}", color=self.BLOOMBERG_RED)
 
@@ -156,10 +154,10 @@ class DBnomicsTab(BaseTab):
             dpg.add_text("STATUS:", color=self.BLOOMBERG_GRAY)
             dpg.add_text("Ready", tag="main_status", color=self.BLOOMBERG_GREEN)
 
-            logger.debug("Navigation panel created successfully", module="DBnomics")
+            debug("Navigation panel created successfully")
 
         except Exception as e:
-            logger.error(f"Error in create_navigation_panel: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in create_navigation_panel", context={"error": str(e)}, exc_info=True)
 
     def create_data_panel(self, *args, **kwargs):
         """Create data panel"""
@@ -185,10 +183,10 @@ class DBnomicsTab(BaseTab):
                     with dpg.child_window(height=520, tag="comparison_data_area", horizontal_scrollbar=True):
                         self.create_comparison_layout()
 
-            logger.debug("Data panel created successfully", module="DBnomics")
+            debug("Data panel created successfully")
 
         except Exception as e:
-            logger.error(f"Error in create_data_panel: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in create_data_panel", context={"error": str(e)}, exc_info=True)
 
     def create_comparison_layout(self, *args, **kwargs):
         """Create comparison layout"""
@@ -220,10 +218,10 @@ class DBnomicsTab(BaseTab):
                 with dpg.child_window(width=450, height=240, border=True, tag="slot_area_5"):
                     dpg.add_text("SLOT 6: Empty", color=self.BLOOMBERG_GRAY)
 
-            logger.debug("Comparison layout created successfully", module="DBnomics")
+            debug("Comparison layout created successfully")
 
         except Exception as e:
-            logger.error(f"Error in create_comparison_layout: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in create_comparison_layout", context={"error": str(e)}, exc_info=True)
 
     # Individual slot callback methods
     def add_to_slot_0(self, *args, **kwargs):
@@ -246,118 +244,129 @@ class DBnomicsTab(BaseTab):
 
     # Button callbacks
     def btn_load_providers(self, *args, **kwargs):
-        logger.info("Load providers button clicked", module="DBnomics")
+        info("Load providers button clicked")
         self.update_status("Loading providers...")
         thread = threading.Thread(target=self.load_providers_thread, daemon=True)
         thread.start()
 
     def btn_refresh(self, *args, **kwargs):
         if self.current_series:
-            logger.info("Refresh button clicked", module="DBnomics",
-                       context={'current_series': self.current_series})
+            info("Refresh button clicked", context={"current_series": self.current_series})
             self.update_status("Refreshing...")
             thread = threading.Thread(target=self.load_current_series_data, daemon=True)
             thread.start()
         else:
-            logger.warning("Refresh clicked but no series selected", module="DBnomics")
+            warning("Refresh clicked but no series selected")
             self.update_status("No series selected")
 
     def btn_table_view(self, *args, **kwargs):
-        logger.debug("Table view selected", module="DBnomics")
+        debug("Table view selected")
         self.view_mode = "table"
         if dpg.does_item_exist("view_mode_display"):
             dpg.set_value("view_mode_display", "TABLE")
         self.refresh_displays()
 
     def btn_chart_view(self, *args, **kwargs):
-        logger.debug("Chart view selected", module="DBnomics")
+        debug("Chart view selected")
         self.view_mode = "chart"
         if dpg.does_item_exist("view_mode_display"):
             dpg.set_value("view_mode_display", "CHART")
         self.refresh_displays()
 
     def btn_export(self, *args, **kwargs):
-        logger.info("Export button clicked", module="DBnomics")
+        info("Export button clicked")
         self.export_data()
 
-    # API Methods
-    @performance_monitor
+    # API Methods with caching
+    @monitor_performance
     def load_providers_thread(self, *args, **kwargs):
         try:
-            with log_operation("load_providers", module="DBnomics"):
+            with operation("load_providers"):
+                # Check cache first
+                cache_key = "providers"
+                if cache_key in self._cache:
+                    cached_time, cached_data = self._cache[cache_key]
+                    if datetime.now().timestamp() - cached_time < 3600:  # 1 hour cache
+                        self._process_providers_response(cached_data, from_cache=True)
+                        return
+
                 url = f"{self.base_url}/providers"
-                logger.debug(f"Requesting providers from: {url}", module="DBnomics")
+                debug(f"Requesting providers from: {url}")
 
                 response = self.session.get(url, timeout=15)
-                logger.debug(f"Provider response status: {response.status_code}", module="DBnomics")
 
                 if response.status_code == 200:
                     data = response.json()
-                    providers_data = data.get('providers', {}).get('docs', [])
-                    logger.info(f"Found {len(providers_data)} providers", module="DBnomics")
-
-                    self.providers = []
-                    provider_items = []
-
-                    for provider in providers_data:
-                        code = provider.get('code', '')
-                        name = provider.get('name', code)
-                        self.providers.append({'code': code, 'name': name})
-                        display_item = f"{code} - {name[:35]}"
-                        provider_items.append(display_item)
-
-                    dpg.set_frame_callback(
-                        dpg.get_frame_count() + 1,
-                        lambda: self.update_providers_list(provider_items)
-                    )
+                    # Cache the response
+                    self._cache[cache_key] = (datetime.now().timestamp(), data)
+                    self._process_providers_response(data)
                 else:
-                    logger.warning(f"Failed to load providers: HTTP {response.status_code}", module="DBnomics")
+                    error("Failed to load providers", context={"status_code": response.status_code})
                     dpg.set_frame_callback(
                         dpg.get_frame_count() + 1,
                         lambda: self.update_status(f"Failed to load providers: {response.status_code}")
                     )
 
         except Exception as e:
-            logger.error(f"Error in load_providers_thread: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in load_providers_thread", context={"error": str(e)}, exc_info=True)
             dpg.set_frame_callback(
                 dpg.get_frame_count() + 1,
                 lambda: self.update_status(f"Provider error: {str(e)}")
             )
 
-    def update_providers_list(self, provider_items, *args, **kwargs):
+    def _process_providers_response(self, data, from_cache=False):
+        """Process providers response data"""
+        try:
+            providers_data = data.get('providers', {}).get('docs', [])
+            info(f"Found {len(providers_data)} providers", context={"from_cache": from_cache})
+
+            self.providers = []
+            provider_items = []
+
+            for provider in providers_data:
+                code = provider.get('code', '')
+                name = provider.get('name', code)
+                self.providers.append({'code': code, 'name': name})
+                display_item = f"{code} - {name[:35]}"
+                provider_items.append(display_item)
+
+            cache_info = " (cached)" if from_cache else ""
+            dpg.set_frame_callback(
+                dpg.get_frame_count() + 1,
+                lambda: self.update_providers_list(provider_items, cache_info)
+            )
+
+        except Exception as e:
+            error("Error processing providers response", context={"error": str(e)}, exc_info=True)
+
+    def update_providers_list(self, provider_items, cache_info="", *args, **kwargs):
         try:
             if dpg.does_item_exist("providers_listbox"):
                 dpg.configure_item("providers_listbox", items=provider_items)
-                logger.debug("Providers listbox updated", module="DBnomics")
             else:
-                logger.error("providers_listbox does not exist", module="DBnomics")
+                error("providers_listbox does not exist")
 
             if dpg.does_item_exist("provider_count"):
                 dpg.set_value("provider_count", f"PROVIDERS: {len(provider_items)}")
-                logger.debug("Provider count updated", module="DBnomics")
-            else:
-                logger.error("provider_count does not exist", module="DBnomics")
 
-            self.update_status(f"Loaded {len(provider_items)} providers")
+            self.update_status(f"Loaded {len(provider_items)} providers{cache_info}")
         except Exception as e:
-            logger.error(f"Error in update_providers_list: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in update_providers_list", context={"error": str(e)}, exc_info=True)
 
     def on_provider_selected(self, sender, app_data, *args, **kwargs):
         try:
             selected_value = dpg.get_value("providers_listbox")
-            logger.debug(f"Provider selected: {selected_value}", module="DBnomics",
-                        context={'type': type(selected_value).__name__})
 
             if isinstance(selected_value, str):
                 provider_code = selected_value.split(" - ")[0]
             elif isinstance(selected_value, int) and 0 <= selected_value < len(self.providers):
                 provider_code = self.providers[selected_value]['code']
             else:
-                logger.warning(f"Invalid provider selection: {selected_value}", module="DBnomics")
+                warning(f"Invalid provider selection: {selected_value}")
                 self.update_status("Invalid provider selection")
                 return
 
-            logger.info(f"Selected provider: {provider_code}", module="DBnomics")
+            info(f"Selected provider: {provider_code}")
             self.current_provider = provider_code
             self.update_status(f"Loading datasets for {provider_code}...")
 
@@ -372,79 +381,101 @@ class DBnomicsTab(BaseTab):
             thread.start()
 
         except Exception as e:
-            logger.error(f"Error in on_provider_selected: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in on_provider_selected", context={"error": str(e)}, exc_info=True)
             self.update_status(f"Provider selection error: {str(e)}")
 
-    @performance_monitor
+    @monitor_performance
     def load_datasets_thread(self, provider_code, *args, **kwargs):
         try:
-            with log_operation(f"load_datasets_{provider_code}", module="DBnomics"):
+            with operation(f"load_datasets_{provider_code}"):
+                # Check cache first
+                cache_key = f"datasets_{provider_code}"
+                if cache_key in self._cache:
+                    cached_time, cached_data = self._cache[cache_key]
+                    if datetime.now().timestamp() - cached_time < 1800:  # 30 minutes cache
+                        self._process_datasets_response(cached_data, provider_code, from_cache=True)
+                        return
+
                 url = f"{self.base_url}/datasets/{provider_code}"
-                logger.debug(f"Requesting datasets from: {url}", module="DBnomics")
+                debug(f"Requesting datasets from: {url}")
 
                 response = self.session.get(url, timeout=15)
-                logger.debug(f"Dataset response status: {response.status_code}", module="DBnomics")
 
                 if response.status_code == 200:
                     data = response.json()
-                    datasets_data = data.get('datasets', {}).get('docs', [])
-                    logger.info(f"Found {len(datasets_data)} datasets for {provider_code}", module="DBnomics")
-
-                    self.datasets = []
-                    dataset_items = []
-
-                    for dataset in datasets_data:
-                        code = dataset.get('code', '')
-                        name = dataset.get('name', code)
-                        self.datasets.append({'code': code, 'name': name})
-                        display_item = f"{code} - {name[:40]}"
-                        dataset_items.append(display_item)
-
-                    dpg.set_frame_callback(
-                        dpg.get_frame_count() + 1,
-                        lambda: self.update_datasets_list(dataset_items)
-                    )
+                    # Cache the response
+                    self._cache[cache_key] = (datetime.now().timestamp(), data)
+                    self._process_datasets_response(data, provider_code)
                 else:
-                    logger.warning(f"Failed to load datasets: HTTP {response.status_code}", module="DBnomics")
+                    error("Failed to load datasets", context={
+                        "provider_code": provider_code,
+                        "status_code": response.status_code
+                    })
                     dpg.set_frame_callback(
                         dpg.get_frame_count() + 1,
                         lambda: self.update_status(f"Failed to load datasets: {response.status_code}")
                     )
 
         except Exception as e:
-            logger.error(f"Error in load_datasets_thread: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in load_datasets_thread", context={
+                "provider_code": provider_code,
+                "error": str(e)
+            }, exc_info=True)
             dpg.set_frame_callback(
                 dpg.get_frame_count() + 1,
                 lambda: self.update_status(f"Dataset error: {str(e)}")
             )
 
-    def update_datasets_list(self, dataset_items, *args, **kwargs):
+    def _process_datasets_response(self, data, provider_code, from_cache=False):
+        """Process datasets response data"""
+        try:
+            datasets_data = data.get('datasets', {}).get('docs', [])
+            info(f"Found {len(datasets_data)} datasets for {provider_code}", context={"from_cache": from_cache})
+
+            self.datasets = []
+            dataset_items = []
+
+            for dataset in datasets_data:
+                code = dataset.get('code', '')
+                name = dataset.get('name', code)
+                self.datasets.append({'code': code, 'name': name})
+                display_item = f"{code} - {name[:40]}"
+                dataset_items.append(display_item)
+
+            cache_info = " (cached)" if from_cache else ""
+            dpg.set_frame_callback(
+                dpg.get_frame_count() + 1,
+                lambda: self.update_datasets_list(dataset_items, cache_info)
+            )
+
+        except Exception as e:
+            error("Error processing datasets response", context={"provider_code": provider_code, "error": str(e)}, exc_info=True)
+
+    def update_datasets_list(self, dataset_items, cache_info="", *args, **kwargs):
         try:
             if dpg.does_item_exist("datasets_listbox"):
                 dpg.configure_item("datasets_listbox", items=dataset_items)
-                logger.debug("Datasets listbox updated", module="DBnomics")
+                debug("Datasets listbox updated")
             else:
-                logger.error("datasets_listbox does not exist", module="DBnomics")
-            self.update_status(f"Loaded {len(dataset_items)} datasets")
+                error("datasets_listbox does not exist")
+            self.update_status(f"Loaded {len(dataset_items)} datasets{cache_info}")
         except Exception as e:
-            logger.error(f"Error in update_datasets_list: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in update_datasets_list", context={"error": str(e)}, exc_info=True)
 
     def on_dataset_selected(self, sender, app_data, *args, **kwargs):
         try:
             selected_value = dpg.get_value("datasets_listbox")
-            logger.debug(f"Dataset selected: {selected_value}", module="DBnomics",
-                        context={'type': type(selected_value).__name__})
 
             if isinstance(selected_value, str):
                 dataset_code = selected_value.split(" - ")[0]
             elif isinstance(selected_value, int) and 0 <= selected_value < len(self.datasets):
                 dataset_code = self.datasets[selected_value]['code']
             else:
-                logger.warning(f"Invalid dataset selection: {selected_value}", module="DBnomics")
+                warning(f"Invalid dataset selection: {selected_value}")
                 self.update_status("Invalid dataset selection")
                 return
 
-            logger.info(f"Selected dataset: {dataset_code}", module="DBnomics")
+            info(f"Selected dataset: {dataset_code}")
             self.current_dataset = dataset_code
             self.update_status(f"Loading series for {dataset_code}...")
 
@@ -458,75 +489,99 @@ class DBnomicsTab(BaseTab):
             thread.start()
 
         except Exception as e:
-            logger.error(f"Error in on_dataset_selected: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in on_dataset_selected", context={"error": str(e)}, exc_info=True)
             self.update_status(f"Dataset selection error: {str(e)}")
 
-    @performance_monitor
+    @monitor_performance
     def load_series_thread(self, provider_code, dataset_code, *args, **kwargs):
         try:
-            with log_operation(f"load_series_{provider_code}_{dataset_code}", module="DBnomics"):
+            with operation(f"load_series_{provider_code}_{dataset_code}"):
+                # Check cache first
+                cache_key = f"series_{provider_code}_{dataset_code}"
+                if cache_key in self._cache:
+                    cached_time, cached_data = self._cache[cache_key]
+                    if datetime.now().timestamp() - cached_time < 1800:  # 30 minutes cache
+                        self._process_series_response(cached_data, provider_code, from_cache=True)
+                        return
+
                 url = f"{self.base_url}/series/{provider_code}/{dataset_code}"
                 params = {'limit': 50, 'observations': 'false'}
-                logger.debug(f"Requesting series from: {url}", module="DBnomics", context=params)
+                debug(f"Requesting series from: {url}")
 
                 response = self.session.get(url, params=params, timeout=15)
-                logger.debug(f"Series response status: {response.status_code}", module="DBnomics")
 
                 if response.status_code == 200:
                     data = response.json()
-                    series_data = data.get('series', {}).get('docs', [])
-                    logger.info(f"Found {len(series_data)} series", module="DBnomics")
-
-                    self.series_list = []
-                    series_items = []
-
-                    for series in series_data:
-                        code = series.get('series_code', '')
-                        name = series.get('series_name', code)
-                        full_id = f"{provider_code}/{dataset_code}/{code}"
-
-                        self.series_list.append({
-                            'code': code,
-                            'name': name,
-                            'full_id': full_id
-                        })
-                        display_item = f"{code} - {name[:45]}"
-                        series_items.append(display_item)
-
-                    dpg.set_frame_callback(
-                        dpg.get_frame_count() + 1,
-                        lambda: self.update_series_list(series_items)
-                    )
+                    # Cache the response
+                    self._cache[cache_key] = (datetime.now().timestamp(), data)
+                    self._process_series_response(data, provider_code)
                 else:
-                    logger.warning(f"Failed to load series: HTTP {response.status_code}", module="DBnomics")
+                    error("Failed to load series", context={
+                        "provider_code": provider_code,
+                        "dataset_code": dataset_code,
+                        "status_code": response.status_code
+                    })
                     dpg.set_frame_callback(
                         dpg.get_frame_count() + 1,
                         lambda: self.update_status(f"Failed to load series: {response.status_code}")
                     )
 
         except Exception as e:
-            logger.error(f"Error in load_series_thread: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in load_series_thread", context={
+                "provider_code": provider_code,
+                "dataset_code": dataset_code,
+                "error": str(e)
+            }, exc_info=True)
             dpg.set_frame_callback(
                 dpg.get_frame_count() + 1,
                 lambda: self.update_status(f"Series error: {str(e)}")
             )
 
-    def update_series_list(self, series_items, *args, **kwargs):
+    def _process_series_response(self, data, provider_code, from_cache=False):
+        """Process series response data"""
+        try:
+            series_data = data.get('series', {}).get('docs', [])
+            info(f"Found {len(series_data)} series", context={"from_cache": from_cache})
+
+            self.series_list = []
+            series_items = []
+
+            for series in series_data:
+                code = series.get('series_code', '')
+                name = series.get('series_name', code)
+                full_id = f"{provider_code}/{self.current_dataset}/{code}"
+
+                self.series_list.append({
+                    'code': code,
+                    'name': name,
+                    'full_id': full_id
+                })
+                display_item = f"{code} - {name[:45]}"
+                series_items.append(display_item)
+
+            cache_info = " (cached)" if from_cache else ""
+            dpg.set_frame_callback(
+                dpg.get_frame_count() + 1,
+                lambda: self.update_series_list(series_items, cache_info)
+            )
+
+        except Exception as e:
+            error("Error processing series response", context={"provider_code": provider_code, "error": str(e)}, exc_info=True)
+
+    def update_series_list(self, series_items, cache_info="", *args, **kwargs):
         try:
             if dpg.does_item_exist("series_listbox"):
                 dpg.configure_item("series_listbox", items=series_items)
-                logger.debug("Series listbox updated", module="DBnomics")
+                debug("Series listbox updated")
             else:
-                logger.error("series_listbox does not exist", module="DBnomics")
-            self.update_status(f"Loaded {len(series_items)} series")
+                error("series_listbox does not exist")
+            self.update_status(f"Loaded {len(series_items)} series{cache_info}")
         except Exception as e:
-            logger.error(f"Error in update_series_list: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in update_series_list", context={"error": str(e)}, exc_info=True)
 
     def on_series_selected(self, sender, app_data, *args, **kwargs):
         try:
             selected_value = dpg.get_value("series_listbox")
-            logger.debug(f"Series selected: {selected_value}", module="DBnomics",
-                        context={'type': type(selected_value).__name__})
 
             if isinstance(selected_value, str):
                 series_code = selected_value.split(" - ")[0]
@@ -536,17 +591,17 @@ class DBnomicsTab(BaseTab):
                         selected_series = series
                         break
                 if not selected_series:
-                    logger.warning(f"Series not found: {series_code}", module="DBnomics")
+                    warning(f"Series not found: {series_code}")
                     self.update_status("Series not found")
                     return
             elif isinstance(selected_value, int) and 0 <= selected_value < len(self.series_list):
                 selected_series = self.series_list[selected_value]
             else:
-                logger.warning(f"Invalid series selection: {selected_value}", module="DBnomics")
+                warning(f"Invalid series selection: {selected_value}")
                 self.update_status("Invalid series selection")
                 return
 
-            logger.info(f"Selected series: {selected_series['full_id']}", module="DBnomics")
+            info(f"Selected series: {selected_series['full_id']}")
             self.current_series = selected_series['full_id']
             self.update_status(f"Loading data for {selected_series['name'][:30]}...")
 
@@ -556,25 +611,23 @@ class DBnomicsTab(BaseTab):
             thread.start()
 
         except Exception as e:
-            logger.error(f"Error in on_series_selected: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in on_series_selected", context={"error": str(e)}, exc_info=True)
             self.update_status(f"Series selection error: {str(e)}")
 
-    @performance_monitor
+    @monitor_performance
     def load_series_data_thread(self, full_series_id, series_name, *args, **kwargs):
         try:
-            with log_operation(f"load_series_data_{full_series_id}", module="DBnomics"):
+            with operation(f"load_series_data_{full_series_id}"):
                 provider_code, dataset_code, series_code = full_series_id.split('/')
                 url = f"{self.base_url}/series/{provider_code}/{dataset_code}/{series_code}"
                 params = {'observations': '1', 'format': 'json'}
-                logger.debug(f"Requesting data: {url}", module="DBnomics", context=params)
+                debug(f"Requesting data: {url}")
 
                 response = self.session.get(url, params=params, timeout=20)
-                logger.debug(f"Data response status: {response.status_code}", module="DBnomics")
 
                 if response.status_code == 200:
                     data = response.json()
                     series_docs = data.get('series', {}).get('docs', [])
-                    logger.debug(f"Found {len(series_docs)} series docs", module="DBnomics")
 
                     if series_docs:
                         first_series = series_docs[0]
@@ -583,7 +636,6 @@ class DBnomicsTab(BaseTab):
                         if 'period' in first_series and 'value' in first_series:
                             periods = first_series['period']
                             values = first_series['value']
-                            logger.debug(f"Found {len(periods)} periods and {len(values)} values", module="DBnomics")
 
                             for i in range(min(len(periods), len(values))):
                                 if values[i] is not None:
@@ -593,10 +645,9 @@ class DBnomicsTab(BaseTab):
                                     })
                         elif 'observations' in first_series:
                             observations = first_series['observations']
-                            logger.debug(f"Found {len(observations)} observations", module="DBnomics")
 
                         if observations:
-                            logger.info(f"Loaded {len(observations)} observations for {series_name}", module="DBnomics")
+                            info(f"Loaded {len(observations)} observations for {series_name}")
                             self.current_data = {
                                 'series_id': full_series_id,
                                 'series_name': series_name,
@@ -609,15 +660,17 @@ class DBnomicsTab(BaseTab):
                             )
                             return
 
-                logger.warning("No data found for series", module="DBnomics",
-                             context={'series_id': full_series_id})
+                warning("No data found for series", context={"series_id": full_series_id})
                 dpg.set_frame_callback(
                     dpg.get_frame_count() + 1,
                     lambda: self.update_status("No data found")
                 )
 
         except Exception as e:
-            logger.error(f"Error in load_series_data_thread: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in load_series_data_thread", context={
+                "series_id": full_series_id,
+                "error": str(e)
+            }, exc_info=True)
             dpg.set_frame_callback(
                 dpg.get_frame_count() + 1,
                 lambda: self.update_status(f"Data load error: {str(e)}")
@@ -629,22 +682,21 @@ class DBnomicsTab(BaseTab):
             if len(parts) == 3:
                 self.load_series_data_thread(self.current_series, "Current Series")
 
-    # Display Methods
     def display_current_data(self, *args, **kwargs):
         if not self.current_data:
-            logger.warning("No current data to display", module="DBnomics")
+            warning("No current data to display")
             return
 
         observations = self.current_data['observations']
         series_name = self.current_data['series_name']
-        logger.info(f"Displaying {len(observations)} observations for {series_name}", module="DBnomics")
+        info(f"Displaying {len(observations)} observations for {series_name}")
 
         self.update_status(f"Loaded {len(observations)} data points")
         self.show_single_series_data(observations, series_name)
 
     def show_single_series_data(self, observations, series_name, *args, **kwargs):
         if not dpg.does_item_exist("single_data_area"):
-            logger.error("single_data_area does not exist", module="DBnomics")
+            error("single_data_area does not exist")
             return
 
         try:
@@ -657,11 +709,11 @@ class DBnomicsTab(BaseTab):
                 self.create_single_chart(observations, series_name)
 
         except Exception as e:
-            logger.error(f"Error in show_single_series_data: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in show_single_series_data", context={"error": str(e)}, exc_info=True)
 
     def create_single_table(self, observations, series_name, *args, **kwargs):
         try:
-            with log_operation(f"create_table_{len(observations)}_rows", module="DBnomics"):
+            with operation(f"create_table_{len(observations)}_rows"):
                 table_id = dpg.add_table(header_row=True, borders_innerH=True, borders_outerH=True,
                                         height=480, scrollY=True, parent="single_data_area")
 
@@ -670,13 +722,11 @@ class DBnomicsTab(BaseTab):
                 dpg.add_table_column(label="Series", width_stretch=True, parent=table_id)
 
                 df = pd.DataFrame(observations)
-                logger.debug(f"Created DataFrame with shape: {df.shape}", module="DBnomics")
 
                 if not df.empty:
                     df['period'] = pd.to_datetime(df['period'], errors='coerce')
                     df['value'] = pd.to_numeric(df['value'], errors='coerce')
                     df = df.dropna().sort_values('period')
-                    logger.debug(f"Processed DataFrame, final shape: {df.shape}", module="DBnomics")
 
                     row_count = 0
                     for _, row in df.iterrows():
@@ -686,30 +736,27 @@ class DBnomicsTab(BaseTab):
                             dpg.add_text(series_name)
                         row_count += 1
 
-                    logger.info(f"Table created with {row_count} rows", module="DBnomics")
+                    info(f"Table created with {row_count} rows")
                 else:
-                    logger.warning("DataFrame is empty", module="DBnomics")
+                    warning("DataFrame is empty")
 
         except Exception as e:
-            logger.error(f"Error in create_single_table: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in create_single_table", context={"error": str(e)}, exc_info=True)
             dpg.add_text(f"Table error: {str(e)}", color=self.BLOOMBERG_RED, parent="single_data_area")
 
     def create_single_chart(self, observations, series_name, *args, **kwargs):
         try:
-            with log_operation(f"create_chart_{len(observations)}_points", module="DBnomics"):
+            with operation(f"create_chart_{len(observations)}_points"):
                 df = pd.DataFrame(observations)
-                logger.debug(f"Created DataFrame with shape: {df.shape}", module="DBnomics")
 
                 if not df.empty:
                     df['period'] = pd.to_datetime(df['period'], errors='coerce')
                     df['value'] = pd.to_numeric(df['value'], errors='coerce')
                     df = df.dropna().sort_values('period')
-                    logger.debug(f"Processed DataFrame, final shape: {df.shape}", module="DBnomics")
 
                     if len(df) > 0:
                         timestamps = list(range(len(df)))
                         values = df['value'].tolist()
-                        logger.debug(f"Created {len(timestamps)} timestamps and {len(values)} values", module="DBnomics")
 
                         with dpg.plot(label=series_name, height=480, width=-1, parent="single_data_area"):
                             dpg.add_plot_legend()
@@ -717,22 +764,22 @@ class DBnomicsTab(BaseTab):
                             y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Value")
                             dpg.add_line_series(timestamps, values, label=series_name[:40], parent=y_axis)
 
-                        logger.info("Chart created successfully", module="DBnomics")
+                        info("Chart created successfully")
                     else:
-                        logger.warning("No valid data for chart", module="DBnomics")
+                        warning("No valid data for chart")
                         dpg.add_text("No valid data", color=self.BLOOMBERG_RED, parent="single_data_area")
                 else:
-                    logger.warning("DataFrame is empty for chart", module="DBnomics")
+                    warning("DataFrame is empty for chart")
                     dpg.add_text("No data available", color=self.BLOOMBERG_RED, parent="single_data_area")
 
         except Exception as e:
-            logger.error(f"Error in create_single_chart: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in create_single_chart", context={"error": str(e)}, exc_info=True)
             dpg.add_text(f"Chart error: {str(e)}", color=self.BLOOMBERG_RED, parent="single_data_area")
 
     # Slot Management
     def add_data_to_slot(self, slot_index, *args, **kwargs):
         if not self.current_data:
-            logger.warning("No current data to add to slot", module="DBnomics")
+            warning("No current data to add to slot")
             self.update_status("No data to add")
             return
 
@@ -740,22 +787,21 @@ class DBnomicsTab(BaseTab):
             self.data_points[slot_index] = self.current_data.copy()
             short_name = self.current_data['series_name'][:25]
             self.data_point_names[slot_index] = short_name
-            logger.info(f"Added data to slot {slot_index}: {short_name}", module="DBnomics")
+            info(f"Added data to slot {slot_index}: {short_name}")
 
             # Update status display
             if dpg.does_item_exist(f"slot_status_{slot_index}"):
                 dpg.set_value(f"slot_status_{slot_index}", short_name)
                 dpg.configure_item(f"slot_status_{slot_index}", color=self.BLOOMBERG_GREEN)
-                logger.debug(f"Updated slot status display for slot {slot_index}", module="DBnomics")
             else:
-                logger.error(f"slot_status_{slot_index} does not exist", module="DBnomics")
+                error(f"slot_status_{slot_index} does not exist")
 
             self.update_comparison_display()
             self.update_status(f"Added to slot {slot_index + 1}")
 
     def clear_all_slots(self, *args, **kwargs):
         try:
-            logger.info("Clearing all slots", module="DBnomics")
+            info("Clearing all slots")
             for i in range(6):
                 self.data_points[i] = None
                 self.data_point_names[i] = "Empty"
@@ -766,16 +812,15 @@ class DBnomicsTab(BaseTab):
 
             self.update_comparison_display()
             self.update_status("All slots cleared")
-            logger.info("All slots cleared successfully", module="DBnomics")
+            info("All slots cleared successfully")
         except Exception as e:
-            logger.error(f"Error in clear_all_slots: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in clear_all_slots", context={"error": str(e)}, exc_info=True)
 
     def update_comparison_display(self, *args, **kwargs):
         try:
-            with log_operation("update_comparison_display", module="DBnomics"):
+            with operation("update_comparison_display"):
                 for slot_index in range(6):
                     slot_area_id = f"slot_area_{slot_index}"
-                    logger.debug(f"Updating slot area {slot_index}", module="DBnomics")
 
                     if dpg.does_item_exist(slot_area_id):
                         dpg.delete_item(slot_area_id, children_only=True)
@@ -788,7 +833,6 @@ class DBnomicsTab(BaseTab):
                         else:
                             series_name = data_point['series_name']
                             observations = data_point['observations']
-                            logger.debug(f"Slot {slot_index} has data: {series_name} with {len(observations)} observations", module="DBnomics")
 
                             dpg.add_text(f"SLOT {slot_index + 1}: {series_name[:30]}",
                                         color=self.BLOOMBERG_YELLOW, parent=slot_area_id)
@@ -799,11 +843,11 @@ class DBnomicsTab(BaseTab):
                             else:
                                 self.create_slot_chart(observations, series_name, slot_area_id)
                     else:
-                        logger.error(f"slot_area_{slot_index} does not exist", module="DBnomics")
+                        error(f"slot_area_{slot_index} does not exist")
 
-                logger.debug("Comparison display update completed", module="DBnomics")
+                debug("Comparison display update completed")
         except Exception as e:
-            logger.error(f"Error in update_comparison_display: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in update_comparison_display", context={"error": str(e)}, exc_info=True)
 
     def create_slot_table(self, observations, parent_id, *args, **kwargs):
         try:
@@ -821,17 +865,14 @@ class DBnomicsTab(BaseTab):
 
                 # Show last 10 rows
                 display_data = df.tail(10)
-                logger.debug(f"Displaying {len(display_data)} rows in slot table", module="DBnomics")
 
                 for _, row in display_data.iterrows():
                     with dpg.table_row(parent=table_id):
                         dpg.add_text(row['period'].strftime('%Y-%m-%d'))
                         dpg.add_text(f"{row['value']:.4f}")
 
-            logger.debug(f"Slot table creation completed for {parent_id}", module="DBnomics")
-
         except Exception as e:
-            logger.error(f"Error in create_slot_table: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in create_slot_table", context={"error": str(e)}, exc_info=True)
             dpg.add_text(f"Table error: {str(e)}", color=self.BLOOMBERG_RED, parent=parent_id)
 
     def create_slot_chart(self, observations, series_name, parent_id, *args, **kwargs):
@@ -851,27 +892,25 @@ class DBnomicsTab(BaseTab):
                         dpg.add_plot_axis(dpg.mvXAxis, label="Time")
                         y_axis = dpg.add_plot_axis(dpg.mvYAxis, label="Value")
                         dpg.add_line_series(timestamps, values, label=series_name[:25], parent=y_axis)
-
-                    logger.debug(f"Slot chart creation completed for {parent_id}", module="DBnomics")
                 else:
                     dpg.add_text("No valid data", color=self.BLOOMBERG_RED, parent=parent_id)
             else:
                 dpg.add_text("No data available", color=self.BLOOMBERG_RED, parent=parent_id)
 
         except Exception as e:
-            logger.error(f"Error in create_slot_chart: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in create_slot_chart", context={"error": str(e)}, exc_info=True)
             dpg.add_text(f"Chart error: {str(e)}", color=self.BLOOMBERG_RED, parent=parent_id)
 
     # Utility Methods
     def refresh_displays(self, *args, **kwargs):
         try:
-            logger.debug("Refreshing displays", module="DBnomics")
+            debug("Refreshing displays")
             if self.current_data:
                 self.display_current_data()
             self.update_comparison_display()
-            logger.debug("Display refresh completed", module="DBnomics")
+            debug("Display refresh completed")
         except Exception as e:
-            logger.error(f"Error in refresh_displays: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in refresh_displays", context={"error": str(e)}, exc_info=True)
 
     def update_status(self, message, *args, **kwargs):
         try:
@@ -883,40 +922,42 @@ class DBnomicsTab(BaseTab):
                     dpg.configure_item("main_status", color=self.BLOOMBERG_RED)
                 else:
                     dpg.configure_item("main_status", color=self.BLOOMBERG_WHITE)
-                logger.debug(f"Status updated: {message}", module="DBnomics")
             else:
-                logger.error("main_status does not exist", module="DBnomics")
+                error("main_status does not exist")
         except Exception as e:
-            logger.error(f"Error in update_status: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in update_status", context={"error": str(e)}, exc_info=True)
 
-    @performance_monitor
+    @monitor_performance
     def export_data(self, *args, **kwargs):
         try:
             if not self.current_data:
-                logger.warning("No current data to export", module="DBnomics")
+                warning("No current data to export")
                 self.update_status("No data to export")
                 return
 
-            with log_operation("export_data", module="DBnomics"):
+            with operation("export_data"):
                 df = pd.DataFrame(self.current_data['observations'])
                 if not df.empty:
                     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                     filename = f"dbnomics_export_{timestamp}.csv"
                     df.to_csv(filename, index=False)
-                    logger.info(f"Data exported to: {filename}", module="DBnomics",
-                               context={'rows': len(df), 'filename': filename})
+                    info(f"Data exported to: {filename}", context={
+                        "rows": len(df),
+                        "filename": filename
+                    })
                     self.update_status(f"Exported: {filename}")
                 else:
-                    logger.warning("No data to export - DataFrame is empty", module="DBnomics")
+                    warning("No data to export - DataFrame is empty")
                     self.update_status("No data to export")
         except Exception as e:
-            logger.error(f"Error in export_data: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in export_data", context={"error": str(e)}, exc_info=True)
             self.update_status(f"Export failed: {str(e)}")
 
     def cleanup(self, *args, **kwargs):
         try:
-            logger.info("Starting DBnomics tab cleanup", module="DBnomics")
+            info("Starting DBnomics tab cleanup")
             self.session.close()
-            logger.info("DBnomics tab cleanup completed", module="DBnomics")
+            self._cache.clear()  # Clear cache to free memory
+            info("DBnomics tab cleanup completed")
         except Exception as e:
-            logger.error(f"Error in cleanup: {str(e)}", module="DBnomics", exc_info=True)
+            error("Error in cleanup", context={"error": str(e)}, exc_info=True)

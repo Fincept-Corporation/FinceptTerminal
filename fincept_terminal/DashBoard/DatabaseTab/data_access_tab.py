@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
-"""
-Data Access Tab module for Fincept Terminal
-Updated to use centralized logging system
-"""
+# data_access_tab.py
 
 import dearpygui.dearpygui as dpg
 import requests
 import json
 from datetime import datetime
 from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import logger, log_operation
+from fincept_terminal.Utils.Logging.logger import info, error, warning, monitor_performance, operation
 
 
 class DataAccessTab(BaseTab):
@@ -20,6 +17,9 @@ class DataAccessTab(BaseTab):
         self.api_base = "https://finceptbackend.share.zrok.io"
         self.databases = []
         self.loading = False
+        self._request_cache = {}  # Cache for API responses
+
+        info("Data Access tab initialized", context={"api_base": self.api_base})
 
     def get_label(self):
         return "📊 Data Access"
@@ -34,7 +34,7 @@ class DataAccessTab(BaseTab):
                 self.create_simple_data_screen()
 
         except Exception as e:
-            logger.error(f"Data access error: {e}", module="Data_Access_Tab", context={'e': str(e)})
+            error("Data access content creation failed", context={"error": str(e)}, exc_info=True)
             # Absolute fallback - create minimal interface
             self.create_fallback_interface()
 
@@ -48,8 +48,11 @@ class DataAccessTab(BaseTab):
             dpg.add_button(label="Test API Connection", callback=self.test_connection)
             dpg.add_spacer(height=10)
             dpg.add_text("Status: Ready", tag="fallback_status", color=[100, 255, 100])
+
+            warning("Using fallback interface due to initialization error")
+
         except Exception as e:
-            logger.error(f"Fallback interface creation failed: {e}", module="Data_Access_Tab")
+            error("Fallback interface creation failed", context={"error": str(e)}, exc_info=True)
 
     def create_simple_auth_screen(self):
         """Simple authentication required screen"""
@@ -65,8 +68,9 @@ class DataAccessTab(BaseTab):
             dpg.add_button(label="Restart & Authenticate", callback=self.restart_auth)
             dpg.add_spacer(height=10)
             dpg.add_button(label="Test API Connection", callback=self.test_connection)
+
         except Exception as e:
-            logger.error(f"Auth screen creation failed: {e}", module="Data_Access_Tab")
+            error("Auth screen creation failed", context={"error": str(e)}, exc_info=True)
             self.create_fallback_interface()
 
     def create_simple_data_screen(self):
@@ -140,10 +144,13 @@ class DataAccessTab(BaseTab):
                 default_value="Welcome to Data Access!\n\nClick 'Load Databases' to start exploring financial data.\n\nAPI Endpoint: " + self.api_base
             )
 
+            info("Data access interface created successfully", context={"user_type": user_type})
+
         except Exception as e:
-            logger.error(f"Data screen creation failed: {e}", module="Data_Access_Tab")
+            error("Data screen creation failed", context={"error": str(e)}, exc_info=True)
             self.create_fallback_interface()
 
+    @monitor_performance
     def load_databases_simple(self):
         """Load databases with minimal complexity"""
         if self.loading:
@@ -151,83 +158,117 @@ class DataAccessTab(BaseTab):
             return
 
         self.loading = True
-        self.update_simple_status("🔄 Loading databases...")
 
-        try:
-            headers = self.get_auth_headers()
+        with operation("load_databases", context={"api_base": self.api_base}):
+            self.update_simple_status("🔄 Loading databases...")
 
-            # Add timeout and better error handling
-            response = requests.get(
-                f"{self.api_base}/databases",
-                headers=headers,
-                timeout=15
-            )
+            try:
+                # Check cache first
+                cache_key = "databases"
+                if cache_key in self._request_cache:
+                    cached_time, cached_data = self._request_cache[cache_key]
+                    if datetime.now().timestamp() - cached_time < 300:  # 5 minutes cache
+                        self._process_databases_response(cached_data, from_cache=True)
+                        return
 
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('success'):
-                    self.databases = data.get('data', {}).get('databases', [])
+                headers = self.get_auth_headers()
 
-                    if self.databases:
-                        db_names = [db.get('display_name', db.get('database_name', 'Unnamed')) for db in self.databases]
+                # Add timeout and better error handling
+                response = requests.get(
+                    f"{self.api_base}/databases",
+                    headers=headers,
+                    timeout=15
+                )
 
-                        # Update listbox safely
-                        if dpg.does_item_exist("simple_db_list"):
-                            dpg.configure_item("simple_db_list", items=db_names)
+                if response.status_code == 200:
+                    data = response.json()
+                    # Cache the response
+                    self._request_cache[cache_key] = (datetime.now().timestamp(), data)
+                    self._process_databases_response(data)
 
-                        self.update_simple_status(f"✅ Loaded {len(self.databases)} databases")
+                elif response.status_code == 401:
+                    warning("Authentication required for database access")
+                    self.update_simple_status("🔐 Authentication required")
+                    self.update_output(
+                        "Authentication error: Please check your credentials or restart the application.")
 
-                        output_text = f"Found {len(self.databases)} databases:\n\n"
-                        for i, db in enumerate(self.databases, 1):
-                            output_text += f"{i}. {db.get('display_name', 'Unnamed')}\n"
-                        output_text += f"\nLoaded at: {datetime.now().strftime('%H:%M:%S')}"
+                elif response.status_code == 403:
+                    warning("Access forbidden for database listing")
+                    self.update_simple_status("⛔ Access forbidden")
+                    self.update_output("Access denied: You don't have permission to access databases.")
 
-                        self.update_output(output_text)
-                    else:
-                        self.update_simple_status("ℹ️ No databases found")
-                        self.update_output("No databases available in your account.")
                 else:
-                    error_msg = data.get('message', 'Failed to load databases')
-                    self.update_simple_status(f"❌ {error_msg}")
-                    self.update_output(f"API Error: {error_msg}")
+                    error("Database loading HTTP error", context={"status_code": response.status_code})
+                    self.update_simple_status(f"❌ HTTP {response.status_code}")
+                    self.update_output(f"HTTP Error {response.status_code}: {response.text[:200]}")
 
-            elif response.status_code == 401:
-                self.update_simple_status("🔐 Authentication required")
-                self.update_output("Authentication error: Please check your credentials or restart the application.")
+            except requests.exceptions.Timeout:
+                warning("Database loading request timeout")
+                self.update_simple_status("⏰ Request timeout")
+                self.update_output(
+                    "Error: Request timeout - the server is taking too long to respond.\nPlease check your internet connection.")
 
-            elif response.status_code == 403:
-                self.update_simple_status("⛔ Access forbidden")
-                self.update_output("Access denied: You don't have permission to access databases.")
+            except requests.exceptions.ConnectionError:
+                error("Database loading connection error")
+                self.update_simple_status("🌐 Connection error")
+                self.update_output(
+                    "Error: Cannot connect to the API server.\nPlease check your internet connection and try again.")
 
+            except requests.exceptions.RequestException as e:
+                error("Database loading network error", context={"error": str(e)}, exc_info=True)
+                self.update_simple_status("❌ Network error")
+                self.update_output(f"Network error: {str(e)}")
+
+            except json.JSONDecodeError:
+                error("Invalid JSON response from database API")
+                self.update_simple_status("❌ Invalid response")
+                self.update_output("Error: Received invalid response from server.")
+
+            except Exception as e:
+                error("Unexpected database loading error", context={"error": str(e)}, exc_info=True)
+                self.update_simple_status(f"❌ Error: {str(e)[:50]}")
+                self.update_output(f"Unexpected error: {str(e)}")
+
+            finally:
+                self.loading = False
+
+    def _process_databases_response(self, data, from_cache=False):
+        """Process databases response data"""
+        try:
+            if data.get('success'):
+                self.databases = data.get('data', {}).get('databases', [])
+
+                if self.databases:
+                    db_names = [db.get('display_name', db.get('database_name', 'Unnamed')) for db in self.databases]
+
+                    # Update listbox safely
+                    if dpg.does_item_exist("simple_db_list"):
+                        dpg.configure_item("simple_db_list", items=db_names)
+
+                    cache_info = " (cached)" if from_cache else ""
+                    self.update_simple_status(f"✅ Loaded {len(self.databases)} databases{cache_info}")
+
+                    output_text = f"Found {len(self.databases)} databases{cache_info}:\n\n"
+                    for i, db in enumerate(self.databases, 1):
+                        output_text += f"{i}. {db.get('display_name', 'Unnamed')}\n"
+                    output_text += f"\nLoaded at: {datetime.now().strftime('%H:%M:%S')}"
+
+                    self.update_output(output_text)
+                    info("Databases loaded successfully", context={
+                        "count": len(self.databases),
+                        "from_cache": from_cache
+                    })
+                else:
+                    self.update_simple_status("ℹ️ No databases found")
+                    self.update_output("No databases available in your account.")
             else:
-                self.update_simple_status(f"❌ HTTP {response.status_code}")
-                self.update_output(f"HTTP Error {response.status_code}: {response.text[:200]}")
-
-        except requests.exceptions.Timeout:
-            self.update_simple_status("⏰ Request timeout")
-            self.update_output(
-                "Error: Request timeout - the server is taking too long to respond.\nPlease check your internet connection.")
-
-        except requests.exceptions.ConnectionError:
-            self.update_simple_status("🌐 Connection error")
-            self.update_output(
-                "Error: Cannot connect to the API server.\nPlease check your internet connection and try again.")
-
-        except requests.exceptions.RequestException as e:
-            self.update_simple_status("❌ Network error")
-            self.update_output(f"Network error: {str(e)}")
-
-        except json.JSONDecodeError:
-            self.update_simple_status("❌ Invalid response")
-            self.update_output("Error: Received invalid response from server.")
+                error_msg = data.get('message', 'Failed to load databases')
+                error("Database API returned error", context={"message": error_msg})
+                self.update_simple_status(f"❌ {error_msg}")
+                self.update_output(f"API Error: {error_msg}")
 
         except Exception as e:
-            self.update_simple_status(f"❌ Error: {str(e)[:50]}")
-            self.update_output(f"Unexpected error: {str(e)}")
-            logger.error(f"Database loading error: {e}", module="Data_Access_Tab")
-
-        finally:
-            self.loading = False
+            error("Error processing databases response", context={"error": str(e)}, exc_info=True)
 
     def on_simple_db_select(self, sender, selection):
         """Handle simple database selection"""
@@ -246,12 +287,14 @@ class DataAccessTab(BaseTab):
                 self.update_simple_status(f"📂 Selected: {selection}")
                 self.load_tables_simple(selected_db)
             else:
+                warning("Selected database not found", context={"selection": selection})
                 self.update_simple_status("❌ Database not found")
 
         except Exception as e:
-            logger.error(f"Database selection error: {e}", module="Data_Access_Tab")
+            error("Database selection error", context={"error": str(e)}, exc_info=True)
             self.update_simple_status("❌ Selection error")
 
+    @monitor_performance
     def load_tables_simple(self, database):
         """Load tables for selected database"""
         if self.loading:
@@ -260,51 +303,84 @@ class DataAccessTab(BaseTab):
 
         self.loading = True
         db_name = database.get('database_name', database.get('display_name', 'unknown'))
-        self.update_simple_status(f"🔄 Loading tables for {db_name}...")
 
-        try:
-            headers = self.get_auth_headers()
-            response = requests.get(
-                f"{self.api_base}/database/{db_name}/tables",
-                headers=headers,
-                timeout=15
-            )
+        with operation("load_tables", context={"database": db_name}):
+            self.update_simple_status(f"🔄 Loading tables for {db_name}...")
 
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('success'):
-                    tables = data.get('data', {}).get('tables', [])
+            try:
+                # Check cache first
+                cache_key = f"tables_{db_name}"
+                if cache_key in self._request_cache:
+                    cached_time, cached_data = self._request_cache[cache_key]
+                    if datetime.now().timestamp() - cached_time < 300:  # 5 minutes cache
+                        self._process_tables_response(cached_data, database, from_cache=True)
+                        return
 
-                    if tables:
-                        # Update table listbox
-                        if dpg.does_item_exist("simple_table_list"):
-                            dpg.configure_item("simple_table_list", items=tables)
+                headers = self.get_auth_headers()
+                response = requests.get(
+                    f"{self.api_base}/database/{db_name}/tables",
+                    headers=headers,
+                    timeout=15
+                )
 
-                        self.update_simple_status(f"✅ Found {len(tables)} tables")
-
-                        output_text = f"Tables in {database.get('display_name', db_name)}:\n\n"
-                        for i, table in enumerate(tables, 1):
-                            output_text += f"{i}. {table}\n"
-                        output_text += f"\nLoaded at: {datetime.now().strftime('%H:%M:%S')}"
-
-                        self.update_output(output_text)
-                    else:
-                        self.update_simple_status("ℹ️ No tables found")
-                        self.update_output(f"No tables found in database: {database.get('display_name', db_name)}")
+                if response.status_code == 200:
+                    data = response.json()
+                    # Cache the response
+                    self._request_cache[cache_key] = (datetime.now().timestamp(), data)
+                    self._process_tables_response(data, database)
                 else:
-                    error_msg = data.get('message', 'Failed to load tables')
-                    self.update_simple_status(f"❌ {error_msg}")
-                    self.update_output(f"Table loading error: {error_msg}")
+                    error("Table loading HTTP error", context={
+                        "status_code": response.status_code,
+                        "database": db_name
+                    })
+                    self.update_simple_status(f"❌ HTTP {response.status_code}")
+                    self.update_output(f"Table loading HTTP error: {response.status_code}")
+
+            except Exception as e:
+                error("Table loading error", context={"database": db_name, "error": str(e)}, exc_info=True)
+                self.update_simple_status(f"❌ Error: {str(e)[:50]}")
+                self.update_output(f"Table loading error: {str(e)}")
+            finally:
+                self.loading = False
+
+    def _process_tables_response(self, data, database, from_cache=False):
+        """Process tables response data"""
+        try:
+            db_name = database.get('database_name', database.get('display_name', 'unknown'))
+
+            if data.get('success'):
+                tables = data.get('data', {}).get('tables', [])
+
+                if tables:
+                    # Update table listbox
+                    if dpg.does_item_exist("simple_table_list"):
+                        dpg.configure_item("simple_table_list", items=tables)
+
+                    cache_info = " (cached)" if from_cache else ""
+                    self.update_simple_status(f"✅ Found {len(tables)} tables{cache_info}")
+
+                    output_text = f"Tables in {database.get('display_name', db_name)}{cache_info}:\n\n"
+                    for i, table in enumerate(tables, 1):
+                        output_text += f"{i}. {table}\n"
+                    output_text += f"\nLoaded at: {datetime.now().strftime('%H:%M:%S')}"
+
+                    self.update_output(output_text)
+                    info("Tables loaded successfully", context={
+                        "database": db_name,
+                        "count": len(tables),
+                        "from_cache": from_cache
+                    })
+                else:
+                    self.update_simple_status("ℹ️ No tables found")
+                    self.update_output(f"No tables found in database: {database.get('display_name', db_name)}")
             else:
-                self.update_simple_status(f"❌ HTTP {response.status_code}")
-                self.update_output(f"Table loading HTTP error: {response.status_code}")
+                error_msg = data.get('message', 'Failed to load tables')
+                error("Tables API returned error", context={"database": db_name, "message": error_msg})
+                self.update_simple_status(f"❌ {error_msg}")
+                self.update_output(f"Table loading error: {error_msg}")
 
         except Exception as e:
-            self.update_simple_status(f"❌ Error: {str(e)[:50]}")
-            self.update_output(f"Table loading error: {str(e)}")
-            logger.error(f"Table loading error: {e}", module="Data_Access_Tab")
-        finally:
-            self.loading = False
+            error("Error processing tables response", context={"database": db_name, "error": str(e)}, exc_info=True)
 
     def on_simple_table_select(self, sender, selection):
         """Handle simple table selection"""
@@ -313,18 +389,20 @@ class DataAccessTab(BaseTab):
                 self.update_simple_status(f"📋 Selected table: {selection}")
                 self.update_output(
                     f"Selected table: {selection}\n\nClick 'Load Sample Data' to fetch sample data from this table.\n\nTable selected at: {datetime.now().strftime('%H:%M:%S')}")
+                info("Table selected", context={"table": selection})
         except Exception as e:
-            logger.error(f"Table selection error: {e}", module="Data_Access_Tab")
+            error("Table selection error", context={"error": str(e)}, exc_info=True)
 
     def load_sample_data(self):
         """Load sample data"""
         try:
-            self.update_simple_status("📋 Loading sample data...")
+            with operation("load_sample_data"):
+                self.update_simple_status("📋 Loading sample data...")
 
-            # Generate sample financial data with current timestamp
-            current_time = datetime.now()
+                # Generate sample financial data with current timestamp
+                current_time = datetime.now()
 
-            sample_data = f"""📊 Sample Financial Data
+                sample_data = f"""📊 Sample Financial Data
 
 🍎 AAPL (Apple Inc.)
    Price: $150.25 (+2.15%)
@@ -360,24 +438,27 @@ class DataAccessTab(BaseTab):
 Note: This is sample data for demonstration purposes.
 Connect to real data sources through the Data Sources tab."""
 
-            self.update_output(sample_data)
-            self.update_simple_status("✅ Sample data loaded")
+                self.update_output(sample_data)
+                self.update_simple_status("✅ Sample data loaded")
+                info("Sample data loaded successfully")
 
         except Exception as e:
-            logger.error(f"Sample data loading error: {e}", module="Data_Access_Tab")
+            error("Sample data loading error", context={"error": str(e)}, exc_info=True)
             self.update_simple_status("❌ Sample data error")
 
+    @monitor_performance
     def test_connection(self):
         """Test API connection"""
-        try:
-            self.update_simple_status("🧪 Testing connection...")
+        with operation("test_api_connection", context={"endpoint": f"{self.api_base}/health"}):
+            try:
+                self.update_simple_status("🧪 Testing connection...")
 
-            response = requests.get(f"{self.api_base}/health", timeout=10)
+                response = requests.get(f"{self.api_base}/health", timeout=10)
 
-            if response.status_code == 200:
-                self.update_simple_status("✅ Connection successful")
+                if response.status_code == 200:
+                    self.update_simple_status("✅ Connection successful")
 
-                test_result = f"""🧪 API Connection Test Results
+                    test_result = f"""🧪 API Connection Test Results
 
 ✅ Status: SUCCESS
 🌐 Endpoint: {self.api_base}
@@ -388,25 +469,30 @@ Connect to real data sources through the Data Sources tab."""
 Server is reachable and responding normally.
 You can proceed with data operations."""
 
-                self.update_output(test_result)
-            else:
-                self.update_simple_status(f"⚠️ HTTP {response.status_code}")
+                    self.update_output(test_result)
+                    info("API connection test successful", context={"status_code": response.status_code})
+                else:
+                    warning("API connection test returned error", context={"status_code": response.status_code})
+                    self.update_simple_status(f"⚠️ HTTP {response.status_code}")
+                    self.update_output(
+                        f"🧪 API Connection Test: PARTIAL\n\nReceived HTTP {response.status_code}\nServer is reachable but returned an error.")
+
+            except requests.exceptions.Timeout:
+                warning("API connection test timeout")
+                self.update_simple_status("⏰ Connection timeout")
                 self.update_output(
-                    f"🧪 API Connection Test: PARTIAL\n\nReceived HTTP {response.status_code}\nServer is reachable but returned an error.")
+                    "🧪 API Connection Test: TIMEOUT\n\nThe server took too long to respond.\nPlease check your internet connection.")
 
-        except requests.exceptions.Timeout:
-            self.update_simple_status("⏰ Connection timeout")
-            self.update_output(
-                "🧪 API Connection Test: TIMEOUT\n\nThe server took too long to respond.\nPlease check your internet connection.")
+            except requests.exceptions.ConnectionError:
+                error("API connection test failed - connection error")
+                self.update_simple_status("❌ Connection failed")
+                self.update_output(
+                    "🧪 API Connection Test: FAILED\n\nCannot reach the API server.\nPlease check your internet connection and firewall settings.")
 
-        except requests.exceptions.ConnectionError:
-            self.update_simple_status("❌ Connection failed")
-            self.update_output(
-                "🧪 API Connection Test: FAILED\n\nCannot reach the API server.\nPlease check your internet connection and firewall settings.")
-
-        except Exception as e:
-            self.update_simple_status("❌ Test failed")
-            self.update_output(f"🧪 API Connection Test: ERROR\n\nUnexpected error: {str(e)}")
+            except Exception as e:
+                error("API connection test error", context={"error": str(e)}, exc_info=True)
+                self.update_simple_status("❌ Test failed")
+                self.update_output(f"🧪 API Connection Test: ERROR\n\nUnexpected error: {str(e)}")
 
     def update_simple_status(self, message):
         """Update status safely"""
@@ -416,45 +502,41 @@ You can proceed with data operations."""
             elif dpg.does_item_exist("fallback_status"):
                 dpg.set_value("fallback_status", message)
 
-            logger.info(f"Data Access Status: {message}", module="Data_Access_Tab", context={'message': message})
-
         except Exception as e:
-            logger.info(f"Data Access Status: {message}", module="Data_Access_Tab",
-                        context={'message': message, 'error': str(e)})
+            # Log status updates only for significant events or errors
+            if "error" in message.lower() or "failed" in message.lower():
+                error("Status update failed", context={"message": message, "error": str(e)})
 
     def update_output(self, message):
         """Update output area safely"""
         try:
             if dpg.does_item_exist("simple_output"):
                 dpg.set_value("simple_output", message)
-            else:
-                # Log the output if UI element doesn't exist
-                logger.info(f"Data Output: {message[:100]}...", module="Data_Access_Tab")
 
         except Exception as e:
-            logger.info(f"Data Output: {message[:100]}...", module="Data_Access_Tab", context={'error': str(e)})
+            error("Output update failed", context={"error": str(e)})
 
     def restart_auth(self):
         """Restart authentication"""
         try:
             if hasattr(self.app, 'clear_session_and_restart'):
+                info("Restarting authentication via app method")
                 self.app.clear_session_and_restart()
             else:
                 self.update_output(
                     "🔄 Please restart the application to authenticate.\n\nClose the terminal and run it again to access the authentication screen.")
-                logger.info("Please restart the application to authenticate", module="Data_Access_Tab")
+                info("Authentication restart requested - manual restart required")
         except Exception as e:
-            logger.error(f"Restart auth error: {e}", module="Data_Access_Tab")
+            error("Restart auth error", context={"error": str(e)}, exc_info=True)
 
     def is_user_authenticated(self):
         """Check authentication from session"""
         try:
             session_data = self.get_session_data()
             authenticated = session_data.get("authenticated", False)
-            logger.info(f"Authentication check: {authenticated}", module="Data_Access_Tab")
             return authenticated
         except Exception as e:
-            logger.error(f"Authentication check error: {e}", module="Data_Access_Tab")
+            error("Authentication check error", context={"error": str(e)}, exc_info=True)
             return False
 
     def get_auth_headers(self):
@@ -475,7 +557,7 @@ You can proceed with data operations."""
             return headers
 
         except Exception as e:
-            logger.error(f"Auth headers error: {e}", module="Data_Access_Tab")
+            error("Auth headers generation error", context={"error": str(e)}, exc_info=True)
             return {"Content-Type": "application/json", "User-Agent": "Fincept-Terminal/1.0"}
 
     def cleanup(self):
@@ -483,6 +565,7 @@ You can proceed with data operations."""
         try:
             self.databases = []
             self.loading = False
-            logger.info("Data Access tab cleanup completed", module="Data_Access_Tab")
+            self._request_cache.clear()  # Clear cache to free memory
+            info("Data Access tab cleanup completed")
         except Exception as e:
-            logger.error(f"Cleanup error: {e}", module="Data_Access_Tab")
+            error("Cleanup error", context={"error": str(e)}, exc_info=True)
