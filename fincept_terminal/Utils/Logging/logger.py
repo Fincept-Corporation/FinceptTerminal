@@ -1,16 +1,4 @@
-# logger.py - Production-Ready Finance Terminal Logger
-"""
-Optimized logging module for finance terminal applications.
-Focus: Performance, Simplicity, Reliability, Thread Safety.
-
-Key Features:
-- Tab-specific prefixes for GUI debugging
-- Minimal overhead design
-- Thread-safe operations
-- Automatic log rotation
-- Environment-based configuration
-- Memory-efficient buffering
-"""
+# logger.py
 
 import os
 import sys
@@ -18,6 +6,7 @@ import logging
 import logging.handlers
 import threading
 import time
+import inspect
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Union
@@ -26,10 +15,11 @@ from collections import deque
 from contextlib import contextmanager
 import json
 import platform
+import re
 
 
 class LogConfig:
-    """Simplified configuration with sensible defaults"""
+    """Simplified configuration with automatic class detection"""
 
     def __init__(self):
         # Core settings from environment
@@ -43,32 +33,39 @@ class LogConfig:
         self.retention_days = int(os.getenv('FINCEPT_RETENTION_DAYS', '30'))
 
         # Performance settings
-        self.buffer_size = 1000  # Reasonable buffer size
-        self.flush_interval = 30.0  # Seconds
+        self.buffer_size = 1000
+        self.flush_interval = 30.0
 
-        # Tab prefix mapping (simplified)
-        self.tab_prefixes = {
-            'chat': 'CHAT',
-            'forum': 'FORUM',
-            'dashboard': 'DASH',
-            'market': 'MARKET',
-            'analytics': 'ANALYTICS',
-            'database': 'DB',
-            'api': 'API',
-            'session': 'SESSION',
-            'theme': 'THEME',
-            'main': 'MAIN',
-            'logger': 'LOG'
-        }
-
-    @lru_cache(maxsize=128)
-    def get_tab_prefix(self, module: Optional[str]) -> str:
-        """Fast cached prefix lookup"""
-        if not module:
+    @lru_cache(maxsize=256)
+    def get_class_prefix(self, class_name: Optional[str]) -> str:
+        """Generate intelligent prefix from class name with caching"""
+        if not class_name:
             return 'APP'
 
-        module_key = module.lower().split('_')[0]  # Take first part
-        return self.tab_prefixes.get(module_key, 'APP')
+        # Handle common patterns and convert to readable prefix
+        class_name = class_name.strip()
+
+        # Remove common suffixes
+        suffixes_to_remove = ['Tab', 'Manager', 'Handler', 'Service', 'Client', 'Controller', 'Helper']
+        for suffix in suffixes_to_remove:
+            if class_name.endswith(suffix):
+                class_name = class_name[:-len(suffix)]
+                break
+
+        # Handle camelCase/PascalCase by extracting meaningful parts
+        # e.g., "HelpTab" -> "HELP", "MarketDataTab" -> "MARKET_DATA", "SessionManager" -> "SESSION"
+        words = re.findall(r'[A-Z][a-z]*', class_name)
+        if words:
+            if len(words) == 1:
+                return words[0].upper()
+            elif len(words) <= 3:  # Avoid very long prefixes
+                return '_'.join(word.upper() for word in words)
+            else:
+                # Take first and last word for very long class names
+                return f"{words[0].upper()}_{words[-1].upper()}"
+
+        # Fallback for non-standard naming
+        return class_name.upper()[:10]  # Limit length
 
     def get_logs_dir(self) -> Path:
         """Determine logs directory with fallback chain"""
@@ -94,19 +91,23 @@ class PerformanceMetrics:
         self.start_time = time.time()
         self.log_counts = {'DEBUG': 0, 'INFO': 0, 'WARNING': 0, 'ERROR': 0, 'CRITICAL': 0}
         self.recent_errors = deque(maxlen=20)
+        self.class_usage = {}  # Track which classes are logging
         self._lock = threading.RLock()
 
-    def record_log(self, level_name: str, message: str = None, module: str = None):
+    def record_log(self, level_name: str, message: str = None, class_name: str = None):
         """Record log entry with minimal overhead"""
         with self._lock:
             self.log_counts[level_name] = self.log_counts.get(level_name, 0) + 1
+
+            if class_name:
+                self.class_usage[class_name] = self.class_usage.get(class_name, 0) + 1
 
             if level_name in ('ERROR', 'CRITICAL') and message:
                 self.recent_errors.append({
                     'timestamp': time.time(),
                     'level': level_name,
-                    'message': message[:200],  # Truncate long messages
-                    'module': module or 'unknown'
+                    'message': message[:200],
+                    'class': class_name or 'unknown'
                 })
 
     def get_summary(self) -> Dict[str, Any]:
@@ -116,30 +117,81 @@ class PerformanceMetrics:
                 'uptime_seconds': time.time() - self.start_time,
                 'log_counts': self.log_counts.copy(),
                 'recent_errors': len(self.recent_errors),
-                'total_logs': sum(self.log_counts.values())
+                'total_logs': sum(self.log_counts.values()),
+                'active_classes': len(self.class_usage),
+                'top_logging_classes': sorted(self.class_usage.items(), key=lambda x: x[1], reverse=True)[:10]
             }
 
 
-class TabFormatter(logging.Formatter):
-    """Optimized formatter with tab prefixes"""
+class AutoDetectFormatter(logging.Formatter):
+    """Formatter with automatic class detection"""
 
     def __init__(self, config: LogConfig):
         self.config = config
-        # Pre-compile format string for performance
         super().__init__(
-            fmt='%(asctime)s [%(levelname)7s] [%(tab_prefix)s] %(message)s',
+            fmt='%(asctime)s [%(levelname)7s] [%(class_prefix)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
 
     def format(self, record):
-        # Add tab prefix to record
-        module = getattr(record, 'module', getattr(record, 'name', None))
-        record.tab_prefix = self.config.get_tab_prefix(module)
+        # Get class prefix from the record (set by logger)
+        class_name = getattr(record, 'detected_class', None)
+        record.class_prefix = self.config.get_class_prefix(class_name)
         return super().format(record)
 
 
+class StackInspector:
+    """Efficient stack inspection for class detection"""
+
+    @staticmethod
+    @lru_cache(maxsize=512)
+    def get_caller_class_name(skip_frames: int = 3) -> Optional[str]:
+        """
+        Get the class name of the calling code with caching.
+        skip_frames: number of frames to skip (logger internals)
+        """
+        try:
+            # Get the current stack
+            frame = inspect.currentframe()
+
+            # Skip logger internal frames
+            for _ in range(skip_frames):
+                if frame is None:
+                    return None
+                frame = frame.f_back
+
+            if frame is None:
+                return None
+
+            # Look for 'self' in local variables (indicates instance method)
+            local_vars = frame.f_locals
+            if 'self' in local_vars:
+                return local_vars['self'].__class__.__name__
+
+            # Fallback: try to get class from the code object
+            code = frame.f_code
+            if code.co_name != '<module>':
+                # Look for class in global variables
+                global_vars = frame.f_globals
+                for name, obj in global_vars.items():
+                    if inspect.isclass(obj) and hasattr(obj, code.co_name):
+                        return name
+
+            # Last resort: use module name
+            module_name = frame.f_globals.get('__name__', '')
+            if module_name:
+                return module_name.split('.')[-1]
+
+            return None
+
+        except Exception:
+            return None
+        finally:
+            del frame  # Prevent reference cycles
+
+
 class FinanceTerminalLogger:
-    """Production-ready logger for finance terminal"""
+    """Production-ready logger with automatic class detection"""
 
     _instance = None
     _lock = threading.RLock()
@@ -158,12 +210,11 @@ class FinanceTerminalLogger:
         self._initialized = True
         self.config = LogConfig()
         self.metrics = PerformanceMetrics()
+        self.stack_inspector = StackInspector()
 
         # Setup logger
         self.logger = logging.getLogger('finance_terminal')
         self.logger.setLevel(logging.DEBUG)
-
-        # Clear any existing handlers
         self.logger.handlers.clear()
 
         # Setup handlers
@@ -171,14 +222,11 @@ class FinanceTerminalLogger:
         if self.config.console_enabled:
             self._setup_console_handler()
 
-        # Prevent propagation to root logger
         self.logger.propagate = False
-
-        # Start background maintenance
         self._start_maintenance_thread()
 
-        # Log initialization
-        self.info("Finance terminal logger initialized", module='logger')
+        # Log initialization without recursion
+        self._direct_log(logging.INFO, "Finance terminal logger initialized", "FinanceTerminalLogger")
 
     def _setup_file_handler(self):
         """Setup rotating file handler"""
@@ -187,8 +235,6 @@ class FinanceTerminalLogger:
             logs_dir.mkdir(parents=True, exist_ok=True)
 
             log_file = logs_dir / 'finance_terminal.log'
-
-            # Use RotatingFileHandler for automatic rotation
             file_handler = logging.handlers.RotatingFileHandler(
                 log_file,
                 maxBytes=self.config.max_file_size,
@@ -196,26 +242,20 @@ class FinanceTerminalLogger:
                 encoding='utf-8'
             )
 
-            file_handler.setFormatter(TabFormatter(self.config))
+            file_handler.setFormatter(AutoDetectFormatter(self.config))
             file_handler.setLevel(logging.DEBUG)
-
             self.logger.addHandler(file_handler)
             self.file_handler = file_handler
 
         except Exception as e:
-            # Fallback to console only
             print(f"Failed to setup file logging: {e}")
 
     def _setup_console_handler(self):
         """Setup console handler"""
         console_handler = logging.StreamHandler(sys.stdout)
-        console_formatter = TabFormatter(self.config)
-        console_handler.setFormatter(console_formatter)
-
-        # Set console level based on config
+        console_handler.setFormatter(AutoDetectFormatter(self.config))
         level = logging.DEBUG if self.config.debug_mode else logging.INFO
         console_handler.setLevel(level)
-
         self.logger.addHandler(console_handler)
         self.console_handler = console_handler
 
@@ -225,11 +265,11 @@ class FinanceTerminalLogger:
         def maintenance():
             while True:
                 try:
-                    time.sleep(300)  # Run every 5 minutes
+                    time.sleep(300)
                     self._cleanup_old_logs()
                     self._flush_handlers()
                 except Exception:
-                    pass  # Silent maintenance
+                    pass
 
         thread = threading.Thread(target=maintenance, daemon=True, name='LogMaintenance')
         thread.start()
@@ -239,11 +279,9 @@ class FinanceTerminalLogger:
         try:
             logs_dir = self.config.get_logs_dir()
             cutoff = datetime.now() - timedelta(days=self.config.retention_days)
-
             for log_file in logs_dir.glob('*.log*'):
                 if log_file.stat().st_mtime < cutoff.timestamp():
                     log_file.unlink()
-
         except Exception:
             pass
 
@@ -255,18 +293,16 @@ class FinanceTerminalLogger:
         except Exception:
             pass
 
-    def _log(self, level: int, message: str, module: Optional[str] = None,
-             context: Optional[Dict[str, Any]] = None, exc_info: bool = False):
-        """Core logging method"""
+    def _direct_log(self, level: int, message: str, class_name: str,
+                    context: Optional[Dict[str, Any]] = None, exc_info: bool = False):
+        """Direct logging method without stack inspection"""
         try:
-            # Format message with context
             if context:
                 context_str = ' | '.join(f"{k}={v}" for k, v in context.items())
                 full_message = f"{message} | {context_str}"
             else:
                 full_message = message
 
-            # Create log record
             record = self.logger.makeRecord(
                 name=self.logger.name,
                 level=level,
@@ -276,21 +312,31 @@ class FinanceTerminalLogger:
                 exc_info=sys.exc_info() if exc_info else None
             )
 
-            # Add module info
-            record.module = module
-
-            # Handle the record
+            record.detected_class = class_name
             self.logger.handle(record)
 
-            # Update metrics
             level_name = logging.getLevelName(level)
-            self.metrics.record_log(level_name, full_message, module)
+            self.metrics.record_log(level_name, full_message, class_name)
 
         except Exception:
-            # Silent failure to prevent logging loops
             pass
 
-    # Public logging methods
+    def _log(self, level: int, message: str, module: Optional[str] = None,
+             context: Optional[Dict[str, Any]] = None, exc_info: bool = False):
+        """Core logging method with automatic class detection"""
+        try:
+            # Auto-detect class name if not provided
+            if module:
+                class_name = module
+            else:
+                class_name = self.stack_inspector.get_caller_class_name()
+
+            self._direct_log(level, message, class_name, context, exc_info)
+
+        except Exception:
+            pass
+
+    # Public logging methods - same interface as before!
     def debug(self, message: str, module: Optional[str] = None,
               context: Optional[Dict[str, Any]] = None):
         """Log debug message"""
@@ -339,8 +385,12 @@ class FinanceTerminalLogger:
 
         @wraps(func)
         def wrapper(*args, **kwargs):
-            module_name = func.__module__.split('.')[-1] if func.__module__ else 'unknown'
-            with self.operation(func.__name__, module=module_name):
+            # Try to get class name from self parameter
+            class_name = None
+            if args and hasattr(args[0], '__class__'):
+                class_name = args[0].__class__.__name__
+
+            with self.operation(func.__name__, module=class_name):
                 return func(*args, **kwargs)
 
         return wrapper
@@ -382,8 +432,7 @@ class FinanceTerminalLogger:
         """Check logger health"""
         try:
             test_message = f"Health check at {datetime.now().isoformat()}"
-            self.debug(test_message, module='logger')
-
+            self._direct_log(logging.DEBUG, test_message, "HealthCheck")
             return {
                 'status': 'healthy',
                 'logs_directory': str(self.config.get_logs_dir()),
@@ -400,7 +449,7 @@ class FinanceTerminalLogger:
 logger = FinanceTerminalLogger()
 
 
-# Convenience functions
+# Convenience functions - SAME INTERFACE AS BEFORE!
 def debug(message: str, module: Optional[str] = None, context: Optional[Dict[str, Any]] = None):
     logger.debug(message, module, context)
 
@@ -451,21 +500,21 @@ def setup_for_development():
     """Configure for development"""
     set_debug_mode(True)
     logger.enable_console(True)
-    info("Development logging configured", module='logger')
+    logger._direct_log(logging.INFO, "Development logging configured", "Setup")
 
 
 def setup_for_production():
     """Configure for production"""
     set_debug_mode(False)
     logger.enable_console(False)
-    info("Production logging configured", module='logger')
+    logger._direct_log(logging.INFO, "Production logging configured", "Setup")
 
 
 def setup_for_gui():
     """Configure for GUI application"""
     set_debug_mode(False)
-    logger.enable_console(False)  # No console in GUI
-    info("GUI logging configured", module='logger')
+    logger.enable_console(False)
+    logger._direct_log(logging.INFO, "GUI logging configured", "Setup")
 
 
 # Export main components
