@@ -1,8 +1,5 @@
-# data_source_manager.py - Universal Data Source Manager
-"""
-Universal Data Source Manager for Fincept Terminal
-This acts as the central router for ALL data requests across the entire terminal
-"""
+# -*- coding: utf-8 -*-
+# data_source_manager.py
 
 import json
 import requests
@@ -107,13 +104,13 @@ class DataSourceManager:
             if self.config_file.exists():
                 with open(self.config_file, 'r') as f:
                     config = json.load(f)
-                print("✅ Data source configuration loaded")
+                print(" Data source configuration loaded")
                 return config
             else:
-                print("📝 No configuration found, using defaults")
+                print(" No configuration found, using defaults")
                 return {"data_mappings": self.default_sources.copy(), "source_configs": {}}
         except Exception as e:
-            print(f"❌ Error loading configuration: {e}")
+            print(f" Error loading configuration: {e}")
             return {"data_mappings": self.default_sources.copy(), "source_configs": {}}
 
     def save_configuration(self):

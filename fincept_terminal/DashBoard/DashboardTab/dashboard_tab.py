@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Dashboard Tab module for Fincept Terminal
-Updated to use centralized logging system
-"""
+
 
 import dearpygui.dearpygui as dpg
 from fincept_terminal.Utils.base_tab import BaseTab

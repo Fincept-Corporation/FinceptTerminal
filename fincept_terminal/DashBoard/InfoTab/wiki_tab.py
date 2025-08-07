@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Wikipedia Tab module for Fincept Terminal
-Provides Wikipedia search and article viewing functionality
-"""
+# wiki_tab.py
 
 import dearpygui.dearpygui as dpg
 import threading
@@ -11,14 +8,13 @@ import requests
 from PIL import Image
 import io
 import numpy as np
+from datetime import datetime
+import webbrowser
 from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import logger, log_operation
+from fincept_terminal.Utils.Logging.logger import info, error, warning, debug, monitor_performance, operation
+
 
 class WikipediaTab(BaseTab):
-    """
-    Wikipedia tab that provides search and article viewing functionality
-    Follows the same structure as other terminal tabs
-    """
 
     def __init__(self, app):
         super().__init__(app)
@@ -38,29 +34,40 @@ class WikipediaTab(BaseTab):
         self.current_article = None
         self.search_history = []
         self.bookmarked_articles = []
+        self._search_cache = {}  # Cache for search results
+        self._article_cache = {}  # Cache for article content
 
         # Initialize Wikipedia settings
         wikipedia.set_lang("en")
 
-        logger.info("Wikipedia tab initialized", module="Wikipedia_Tab")
+        info("Wikipedia tab initialized", context={"language": "en"})
 
     def get_label(self):
         return "📚 Wikipedia"
 
     def create_content(self):
         """Create Wikipedia interface content"""
-        self.add_section_header("📚 Wikipedia Search & Research")
+        try:
+            self.add_section_header("📚 Wikipedia Search & Research")
 
-        # Status and control panel
-        self.create_status_panel()
-        dpg.add_spacer(height=10)
+            # Status and control panel
+            self.create_status_panel()
+            dpg.add_spacer(height=10)
 
-        # Search interface
-        self.create_search_panel()
-        dpg.add_spacer(height=15)
+            # Search interface
+            self.create_search_panel()
+            dpg.add_spacer(height=15)
 
-        # Main layout with proper 20-60-20 split
-        self.create_main_layout()
+            # Main layout with proper 20-60-20 split
+            self.create_main_layout()
+
+            info("Wikipedia tab content created successfully")
+
+        except Exception as e:
+            error("Error creating Wikipedia tab content", context={"error": str(e)}, exc_info=True)
+            # Fallback UI
+            dpg.add_text("Error loading Wikipedia interface", color=self.RED)
+            dpg.add_button(label="Retry", callback=lambda: self.create_content())
 
     def create_status_panel(self):
         """Show Wikipedia status and statistics"""
@@ -109,8 +116,8 @@ class WikipediaTab(BaseTab):
             dpg.add_checkbox(label="Auto-load images", tag="auto_load_images", default_value=True)
             dpg.add_spacer(width=20)
             dpg.add_combo(["English", "Spanish", "French", "German", "Italian"],
-                         default_value="English", tag="wiki_language",
-                         callback=self.on_language_changed, width=100)
+                          default_value="English", tag="wiki_language",
+                          callback=self.on_language_changed, width=100)
             dpg.add_spacer(width=20)
             dpg.add_button(label="📖 History", callback=self.show_search_history)
             dpg.add_button(label="⭐ Bookmarks", callback=self.show_bookmarks)
@@ -180,9 +187,9 @@ class WikipediaTab(BaseTab):
                 dpg.add_text("Select an article from results", tag="article_title", color=self.WHITE)
                 dpg.add_spacer(width=20)
                 dpg.add_button(label="⭐", width=30, tag="bookmark_btn",
-                              callback=self.bookmark_article, show=False)
+                               callback=self.bookmark_article, show=False)
                 dpg.add_button(label="🔗", width=30, tag="open_web_btn",
-                              callback=self.open_in_browser, show=False)
+                               callback=self.open_in_browser, show=False)
 
             dpg.add_separator()
             dpg.add_child_window(height=-1, border=False, tag="article_content")
@@ -214,17 +221,20 @@ class WikipediaTab(BaseTab):
         """Execute quick search for predefined terms"""
         dpg.set_value("wiki_search_input", term)
         self.execute_search()
+        debug(f"Quick search executed: {term}")
 
     def clear_search(self):
         """Clear search input and results"""
         dpg.set_value("wiki_search_input", "")
         dpg.delete_item("results_list", children_only=True)
         dpg.set_value("results_status", "Search cleared")
-        logger.info("Search cleared", module="Wikipedia_Tab")
+        info("Search cleared")
 
+    @monitor_performance
     def execute_search(self):
-        """Execute Wikipedia search with threading"""
+        """Execute Wikipedia search with threading and caching"""
         if self.loading:
+            warning("Search already in progress")
             return
 
         search_term = dpg.get_value("wiki_search_input")
@@ -235,47 +245,82 @@ class WikipediaTab(BaseTab):
         def search_thread():
             try:
                 self.loading = True
-                dpg.set_value("results_status", f"🔍 Searching '{search_term}'...")
-                dpg.delete_item("results_list", children_only=True)
 
-                # Clear suggestions
-                dpg.delete_item("suggestions_list", children_only=True)
-                dpg.set_value("suggestions_status", "Search for an article first")
+                with operation("wikipedia_search", context={"search_term": search_term}):
+                    dpg.set_value("results_status", f"🔍 Searching '{search_term}'...")
+                    dpg.delete_item("results_list", children_only=True)
 
-                # Perform search
-                results = wikipedia.search(search_term, results=15)
+                    # Clear suggestions
+                    dpg.delete_item("suggestions_list", children_only=True)
+                    dpg.set_value("suggestions_status", "Search for an article first")
 
-                # Add to search history
-                if search_term not in self.search_history:
-                    self.search_history.append(search_term)
-                    if len(self.search_history) > 20:
-                        self.search_history.pop(0)
+                    # Check cache first (10 minute cache for searches)
+                    cache_key = search_term.lower()
+                    if cache_key in self._search_cache:
+                        cached_time, cached_results = self._search_cache[cache_key]
+                        if datetime.now().timestamp() - cached_time < 600:  # 10 minutes
+                            results = cached_results
+                            info("Wikipedia search loaded from cache", context={
+                                "search_term": search_term,
+                                "results_count": len(results)
+                            })
+                        else:
+                            # Cache expired, remove it
+                            del self._search_cache[cache_key]
+                            results = None
+                    else:
+                        results = None
 
-                if results:
-                    dpg.set_value("results_status", f"✅ Found {len(results)} results")
-                    for i, result in enumerate(results):
-                        self.create_result_item(result, i)
+                    # Perform search if not cached
+                    if results is None:
+                        results = wikipedia.search(search_term, results=15)
+                        # Cache the results
+                        self._search_cache[cache_key] = (datetime.now().timestamp(), results)
 
-                    # Update search count
-                    current_count = len(self.search_history)
-                    dpg.set_value("search_count", f"Articles Searched: {current_count}")
-                else:
-                    dpg.set_value("results_status", "❌ No results found")
+                    # Add to search history
+                    if search_term not in self.search_history:
+                        self.search_history.append(search_term)
+                        if len(self.search_history) > 20:
+                            self.search_history.pop(0)
+
+                    if results:
+                        dpg.set_value("results_status", f"✅ Found {len(results)} results")
+                        for i, result in enumerate(results):
+                            self.create_result_item(result, i)
+
+                        # Update search count
+                        current_count = len(self.search_history)
+                        dpg.set_value("search_count", f"Articles Searched: {current_count}")
+
+                        info("Wikipedia search completed successfully", context={
+                            "search_term": search_term,
+                            "results_count": len(results)
+                        })
+                    else:
+                        dpg.set_value("results_status", "❌ No results found")
+                        info("Wikipedia search returned no results", context={"search_term": search_term})
 
             except wikipedia.exceptions.DisambiguationError as e:
                 dpg.set_value("results_status", "🔀 Multiple matches found")
                 dpg.delete_item("results_list", children_only=True)
                 for i, option in enumerate(e.options[:15]):
                     self.create_result_item(option, i)
+                info("Wikipedia disambiguation handled", context={
+                    "search_term": search_term,
+                    "options_count": len(e.options[:15])
+                })
             except Exception as e:
                 error_msg = f"❌ Search error: {str(e)[:30]}"
                 dpg.set_value("results_status", error_msg)
-                logger.error(f"Wikipedia search error: {e}", module="Wikipedia_Tab")
+                error("Wikipedia search error", context={
+                    "search_term": search_term,
+                    "error": str(e)
+                }, exc_info=True)
             finally:
                 self.loading = False
 
         threading.Thread(target=search_thread, daemon=True).start()
-        logger.info(f"Searching Wikipedia for: {search_term}", module="Wikipedia_Tab")
+        info(f"Wikipedia search started", context={"search_term": search_term})
 
     def create_result_item(self, title, index):
         """Create search result item"""
@@ -289,92 +334,132 @@ class WikipediaTab(BaseTab):
             )
             dpg.add_spacer(height=3)
 
+    @monitor_performance
     def load_article(self, title):
-        """Load Wikipedia article with comprehensive error handling"""
+        """Load Wikipedia article with comprehensive error handling and caching"""
         if self.loading:
+            warning("Article loading already in progress")
             return
 
         def load_thread():
             try:
                 self.loading = True
                 self.current_article = title
-                dpg.set_value("article_title", f"📄 Loading {title}...")
-                dpg.delete_item("article_content", children_only=True)
 
-                # Update current article status
-                dpg.set_value("current_article_status", f"Current Article: {title[:30]}...")
+                with operation("load_wikipedia_article", context={"title": title}):
+                    dpg.set_value("article_title", f"📄 Loading {title}...")
+                    dpg.delete_item("article_content", children_only=True)
 
-                # Get page with fallback handling
-                try:
-                    page = wikipedia.page(title)
-                except wikipedia.exceptions.DisambiguationError as e:
-                    page = wikipedia.page(e.options[0])
-                except wikipedia.exceptions.PageError:
-                    search_results = wikipedia.search(title, results=1)
-                    if search_results:
-                        page = wikipedia.page(search_results[0])
+                    # Update current article status
+                    dpg.set_value("current_article_status", f"Current Article: {title[:30]}...")
+
+                    # Check article cache first (30 minute cache)
+                    cache_key = title.lower()
+                    if cache_key in self._article_cache:
+                        cached_time, cached_page = self._article_cache[cache_key]
+                        if datetime.now().timestamp() - cached_time < 1800:  # 30 minutes
+                            page = cached_page
+                            info("Wikipedia article loaded from cache", context={"title": title})
+                        else:
+                            # Cache expired, remove it
+                            del self._article_cache[cache_key]
+                            page = None
                     else:
-                        raise
+                        page = None
 
-                # Update article title with tools
-                dpg.set_value("article_title", f"📄 {page.title}")
-                dpg.configure_item("bookmark_btn", show=True)
-                dpg.configure_item("open_web_btn", show=True)
+                    # Load page if not cached
+                    if page is None:
+                        # Get page with fallback handling
+                        try:
+                            page = wikipedia.page(title)
+                        except wikipedia.exceptions.DisambiguationError as e:
+                            page = wikipedia.page(e.options[0])
+                            info("Wikipedia disambiguation resolved", context={
+                                "original_title": title,
+                                "resolved_title": e.options[0]
+                            })
+                        except wikipedia.exceptions.PageError:
+                            search_results = wikipedia.search(title, results=1)
+                            if search_results:
+                                page = wikipedia.page(search_results[0])
+                                info("Wikipedia page found via search", context={
+                                    "original_title": title,
+                                    "found_title": search_results[0]
+                                })
+                            else:
+                                raise
 
-                # Store page URL for browser opening
-                self.current_page_url = page.url
+                        # Cache the page
+                        self._article_cache[cache_key] = (datetime.now().timestamp(), page)
 
-                dpg.delete_item("article_content", children_only=True)
+                    # Update article title with tools
+                    dpg.set_value("article_title", f"📄 {page.title}")
+                    dpg.configure_item("bookmark_btn", show=True)
+                    dpg.configure_item("open_web_btn", show=True)
 
-                with dpg.group(parent="article_content"):
-                    # Article metadata
-                    dpg.add_text("📊 Article Information:", color=self.BLUE)
-                    dpg.add_text(f"URL: {page.url}", color=self.WHITE, wrap=0)
+                    # Store page URL for browser opening
+                    self.current_page_url = page.url
 
-                    # Calculate article stats
-                    content_length = len(page.content)
-                    word_count = len(page.content.split())
-                    read_time = max(1, word_count // 200)  # Average reading speed
+                    dpg.delete_item("article_content", children_only=True)
 
-                    dpg.set_value("word_count", f"Word count: {word_count:,}")
-                    dpg.set_value("read_time", f"Read time: {read_time} min")
+                    with dpg.group(parent="article_content"):
+                        # Article metadata
+                        dpg.add_text("📊 Article Information:", color=self.BLUE)
+                        dpg.add_text(f"URL: {page.url}", color=self.WHITE, wrap=0)
 
-                    dpg.add_spacer(height=10)
+                        # Calculate article stats
+                        content_length = len(page.content)
+                        word_count = len(page.content.split())
+                        read_time = max(1, word_count // 200)  # Average reading speed
 
-                    # Load main image if enabled
-                    if dpg.get_value("auto_load_images"):
-                        self.load_main_image(page)
+                        dpg.set_value("word_count", f"Word count: {word_count:,}")
+                        dpg.set_value("read_time", f"Read time: {read_time} min")
 
-                    # Summary section
-                    dpg.add_text("📝 SUMMARY", color=self.YELLOW)
-                    try:
-                        summary = wikipedia.summary(page.title, sentences=4)
-                        dpg.add_text(summary, color=self.WHITE, wrap=0)
-                    except:
-                        dpg.add_text("Summary not available", color=self.GRAY)
+                        dpg.add_spacer(height=10)
 
-                    dpg.add_spacer(height=15)
+                        # Load main image if enabled
+                        if dpg.get_value("auto_load_images"):
+                            self.load_main_image(page)
 
-                    # Full content
-                    dpg.add_text("📖 FULL CONTENT", color=self.YELLOW)
-                    self.process_content(page)
+                        # Summary section
+                        dpg.add_text("📝 SUMMARY", color=self.YELLOW)
+                        try:
+                            summary = wikipedia.summary(page.title, sentences=4)
+                            dpg.add_text(summary, color=self.WHITE, wrap=0)
+                        except:
+                            dpg.add_text("Summary not available", color=self.GRAY)
 
-                    # Load related content
-                    self.load_suggestions(page)
+                        dpg.add_spacer(height=15)
+
+                        # Full content
+                        dpg.add_text("📖 FULL CONTENT", color=self.YELLOW)
+                        self.process_content(page)
+
+                        # Load related content
+                        self.load_suggestions(page)
+
+                    info("Wikipedia article loaded successfully", context={
+                        "title": page.title,
+                        "word_count": word_count,
+                        "read_time": read_time
+                    })
 
             except Exception as e:
                 dpg.delete_item("article_content", children_only=True)
                 with dpg.group(parent="article_content"):
                     dpg.add_text(f"❌ Error loading article: {str(e)}", color=self.RED)
-                logger.error(f"Error loading Wikipedia article: {e}", module="Wikipedia_Tab")
+                error("Error loading Wikipedia article", context={
+                    "title": title,
+                    "error": str(e)
+                }, exc_info=True)
             finally:
                 self.loading = False
 
         threading.Thread(target=load_thread, daemon=True).start()
-        logger.info(f"Loading Wikipedia article: {title}", module="Wikipedia_Tab")
+        info(f"Wikipedia article loading started", context={"title": title})
 
     def load_suggestions(self, page):
-        """Load related articles and categories"""
+        """Load related articles and categories with error handling"""
         try:
             dpg.delete_item("suggestions_list", children_only=True)
             dpg.set_value("suggestions_status", "Loading related content...")
@@ -406,13 +491,17 @@ class WikipediaTab(BaseTab):
                         dpg.add_spacer(height=3)
 
             dpg.set_value("suggestions_status", "✅ Related content loaded")
+            debug("Wikipedia suggestions loaded successfully", context={
+                "links_count": len(page.links[:10]) if hasattr(page, 'links') and page.links else 0,
+                "categories_count": len(page.categories[:8]) if hasattr(page, 'categories') and page.categories else 0
+            })
 
         except Exception as e:
             dpg.set_value("suggestions_status", "❌ No suggestions available")
-            logger.error(f"Error loading suggestions: {e}", module="Wikipedia_Tab")
+            error("Error loading Wikipedia suggestions", context={"error": str(e)}, exc_info=True)
 
     def load_main_image(self, page):
-        """Load and display main image"""
+        """Load and display main image with caching"""
         try:
             if hasattr(page, 'images') and page.images:
                 for img_url in page.images[:3]:
@@ -424,7 +513,7 @@ class WikipediaTab(BaseTab):
                         dpg.add_spacer(height=10)
                         break
         except Exception as e:
-            logger.error(f"Error loading image: {e}", module="Wikipedia_Tab")
+            error("Error loading Wikipedia image", context={"error": str(e)}, exc_info=True)
 
     def is_suitable_image(self, img_url):
         """Check if image is suitable for display"""
@@ -440,7 +529,7 @@ class WikipediaTab(BaseTab):
         return any(fmt in img_lower for fmt in ['.jpg', '.jpeg', '.png', '.gif', '.webp'])
 
     def load_and_display_image(self, img_url, max_width=400, max_height=250):
-        """Load and display image with caching"""
+        """Load and display image with caching and error handling"""
         try:
             # Check cache
             if img_url in self.loaded_images:
@@ -478,12 +567,17 @@ class WikipediaTab(BaseTab):
             dpg.add_image(texture_tag)
             dpg.add_text(f"Size: {img.width}x{img.height}", color=self.GRAY)
 
+            debug("Wikipedia image loaded successfully", context={
+                "img_url": img_url[:100],
+                "size": f"{img.width}x{img.height}"
+            })
+
         except Exception as e:
             dpg.add_text("❌ Failed to load image", color=self.RED)
-            logger.error(f"Error loading image: {e}", module="Wikipedia_Tab")
+            error("Error loading Wikipedia image", context={"img_url": img_url[:100], "error": str(e)}, exc_info=True)
 
     def process_content(self, page):
-        """Process and display article content"""
+        """Process and display article content with error handling"""
         try:
             content = page.content
             paragraphs = content.split('\n\n')
@@ -510,7 +604,7 @@ class WikipediaTab(BaseTab):
                                 break
         except Exception as e:
             dpg.add_text("❌ Content not available", color=self.GRAY)
-            logger.error(f"Error processing content: {e}", module="Wikipedia_Tab")
+            error("Error processing Wikipedia content", context={"error": str(e)}, exc_info=True)
 
     # Callback methods
     def on_language_changed(self, sender, app_data):
@@ -525,7 +619,12 @@ class WikipediaTab(BaseTab):
 
         lang_code = lang_map.get(app_data, "en")
         wikipedia.set_lang(lang_code)
-        logger.info(f"Changed Wikipedia language to: {app_data}", module="Wikipedia_Tab")
+
+        # Clear caches when language changes
+        self._search_cache.clear()
+        self._article_cache.clear()
+
+        info(f"Wikipedia language changed", context={"language": app_data, "code": lang_code})
 
     def bookmark_article(self):
         """Bookmark current article"""
@@ -533,29 +632,34 @@ class WikipediaTab(BaseTab):
             if self.current_article not in self.bookmarked_articles:
                 self.bookmarked_articles.append(self.current_article)
                 dpg.set_value("bookmark_count", f"Bookmarks: {len(self.bookmarked_articles)}")
-                logger.info(f"Bookmarked article: {self.current_article}", module="Wikipedia_Tab")
+                info(f"Article bookmarked", context={"title": self.current_article})
+            else:
+                info(f"Article already bookmarked", context={"title": self.current_article})
 
     def open_in_browser(self):
         """Open current article in web browser"""
         if hasattr(self, 'current_page_url'):
-            import webbrowser
-            webbrowser.open(self.current_page_url)
-            logger.info(f"Opened article in browser: {self.current_page_url}", module="Wikipedia_Tab")
+            try:
+                webbrowser.open(self.current_page_url)
+                info(f"Article opened in browser", context={"url": self.current_page_url})
+            except Exception as e:
+                error("Failed to open article in browser", context={"url": self.current_page_url, "error": str(e)},
+                      exc_info=True)
 
     def show_search_history(self):
         """Show search history"""
-        history_text = "Recent searches:\n" + "\n".join(f"• {term}" for term in self.search_history[-10:])
-        logger.info("Showing search history", module="Wikipedia_Tab")
+        history_count = len(self.search_history)
+        info("Search history requested", context={"history_count": history_count})
 
     def show_bookmarks(self):
         """Show bookmarked articles"""
-        bookmarks_text = "Bookmarked articles:\n" + "\n".join(f"• {article}" for article in self.bookmarked_articles)
-        logger.info("Showing bookmarks", module="Wikipedia_Tab")
+        bookmarks_count = len(self.bookmarked_articles)
+        info("Bookmarks requested", context={"bookmarks_count": bookmarks_count})
 
     def export_article(self):
         """Export current article"""
         if self.current_article:
-            logger.info(f"Exporting article: {self.current_article}", module="Wikipedia_Tab")
+            info(f"Article export requested", context={"title": self.current_article})
 
     def update_layout(self):
         """Update layout on window resize"""
@@ -572,22 +676,32 @@ class WikipediaTab(BaseTab):
                 dpg.configure_item("suggestions_panel", width=suggestions_width, height=content_height)
 
         except Exception as e:
-            logger.error(f"Error updating layout: {e}", module="Wikipedia_Tab")
+            error("Error updating Wikipedia layout", context={"error": str(e)}, exc_info=True)
 
     def cleanup(self):
         """Clean up Wikipedia tab resources"""
         try:
+            info("Starting Wikipedia tab cleanup")
+
             # Clean up loaded images
             for texture_tag in self.loaded_images.values():
                 if dpg.does_item_exist(texture_tag):
                     dpg.delete_item(texture_tag)
             self.loaded_images.clear()
 
+            # Clear caches to free memory
+            self._search_cache.clear()
+            self._article_cache.clear()
+
             # Clear data
             self.search_history.clear()
             self.bookmarked_articles.clear()
             self.current_article = None
 
-            logger.info("Wikipedia tab cleanup completed", module="Wikipedia_Tab")
+            info("Wikipedia tab cleanup completed", context={
+                "images_cleared": len(self.loaded_images),
+                "history_items": len(self.search_history),
+                "bookmarks": len(self.bookmarked_articles)
+            })
         except Exception as e:
-            logger.error(f"Error during cleanup: {e}", module="Wikipedia_Tab")
+            error("Error during Wikipedia cleanup", context={"error": str(e)}, exc_info=True)
