@@ -1,16 +1,11 @@
 # -*- coding: utf-8 -*-
 # themes/theme_manager.py
-"""
-Authentic Bloomberg Terminal theme manager with precise color matching
-and professional styling that matches the real Bloomberg Terminal interface.
-"""
 
 import dearpygui.dearpygui as dpg
 from typing import Dict, Any, Optional, Tuple
 from fincept_terminal.Utils.Logging.logger import (
     info, error, debug, warning, critical, monitor_performance, operation
 )
-
 
 class AutomaticThemeManager:
 
