@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# themes/theme_manager.py - Authentic Bloomberg Terminal Theme Manager with Green Terminal
+# themes/theme_manager.py
 """
 Authentic Bloomberg Terminal theme manager with precise color matching
 and professional styling that matches the real Bloomberg Terminal interface.
@@ -7,14 +7,12 @@ and professional styling that matches the real Bloomberg Terminal interface.
 
 import dearpygui.dearpygui as dpg
 from typing import Dict, Any, Optional, Tuple
-from fincept_terminal.Utils.Logging.logger import logger, log_operation
+from fincept_terminal.Utils.Logging.logger import (
+    info, error, debug, warning, critical, monitor_performance, operation
+)
 
 
 class AutomaticThemeManager:
-    """
-    Authentic Bloomberg Terminal theme manager with precise color matching
-    and professional styling that matches the real Bloomberg Terminal interface.
-    """
 
     def __init__(self):
         self.current_theme = "bloomberg_terminal"
@@ -22,7 +20,7 @@ class AutomaticThemeManager:
         self.theme_applied = False
         self.cleanup_performed = False
         self.themes_initialized = False
-        logger.info("Bloomberg Terminal theme manager initialized", module="ThemeManager")
+        info("Bloomberg Terminal theme manager initialized", module="theme")
 
     def _ensure_themes_created(self) -> bool:
         """Create themes only when DearPyGUI context is ready"""
@@ -34,10 +32,10 @@ class AutomaticThemeManager:
             try:
                 dpg.get_viewport_width()
             except Exception:
-                logger.warning("DearPyGUI context not ready", module="ThemeManager")
+                warning("DearPyGUI context not ready", module="theme")
                 return False
 
-            logger.info("Creating authentic Bloomberg Terminal themes", module="ThemeManager")
+            info("Creating authentic Bloomberg Terminal themes", module="theme")
             self._create_bloomberg_terminal_theme()
             self._create_dark_gold_theme()
             self._create_green_terminal_theme()
@@ -45,13 +43,13 @@ class AutomaticThemeManager:
             self.themes_initialized = True
 
             theme_count = len(self.themes)
-            logger.info("Bloomberg themes creation completed", module="ThemeManager",
-                        context={'themes_created': theme_count})
+            info("Bloomberg themes creation completed", module="theme",
+                 context={'themes_created': theme_count})
             return True
 
         except Exception as e:
-            logger.error("Error creating themes", module="ThemeManager",
-                         context={'error': str(e)}, exc_info=True)
+            error("Error creating themes", module="theme",
+                  context={'error': str(e)}, exc_info=True)
             return False
 
     def _create_green_terminal_theme(self):
@@ -211,12 +209,12 @@ class AutomaticThemeManager:
                     dpg.add_theme_style(dpg.mvStyleVar_Alpha, 1.0, category=dpg.mvThemeCat_Core)  # Full opacity
 
             self.themes["green_terminal"] = theme
-            logger.info("Green Terminal theme created with primary color", module="ThemeManager",
-                        context={'primary_color': '#48f050'})
+            info("Green Terminal theme created with primary color", module="theme",
+                 context={'primary_color': '#48f050'})
 
         except Exception as e:
-            logger.error("Error creating Green Terminal theme", module="ThemeManager",
-                         context={'error': str(e)}, exc_info=True)
+            error("Error creating Green Terminal theme", module="theme",
+                  context={'error': str(e)}, exc_info=True)
 
     def _create_bloomberg_terminal_theme(self):
         """Authentic Bloomberg Terminal theme - Precise color matching"""
@@ -377,11 +375,11 @@ class AutomaticThemeManager:
                     dpg.add_theme_style(dpg.mvStyleVar_Alpha, 1.0, category=dpg.mvThemeCat_Core)  # Full opacity
 
             self.themes["bloomberg_terminal"] = theme
-            logger.info("Authentic Bloomberg Terminal theme created", module="ThemeManager")
+            info("Authentic Bloomberg Terminal theme created", module="theme")
 
         except Exception as e:
-            logger.error("Error creating Bloomberg Terminal theme", module="ThemeManager",
-                         context={'error': str(e)}, exc_info=True)
+            error("Error creating Bloomberg Terminal theme", module="theme",
+                  context={'error': str(e)}, exc_info=True)
 
     def _create_dark_gold_theme(self):
         """Enhanced dark theme with premium gold accents"""
@@ -460,11 +458,11 @@ class AutomaticThemeManager:
                     dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing, 6, 4)
 
             self.themes["dark_gold"] = theme
-            logger.info("Enhanced Dark Gold theme created", module="ThemeManager")
+            info("Enhanced Dark Gold theme created", module="theme")
 
         except Exception as e:
-            logger.error("Error creating Dark Gold theme", module="ThemeManager",
-                         context={'error': str(e)}, exc_info=True)
+            error("Error creating Dark Gold theme", module="theme",
+                  context={'error': str(e)}, exc_info=True)
 
     def _create_default_theme(self):
         """Improved default theme"""
@@ -490,12 +488,13 @@ class AutomaticThemeManager:
                     dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 3)
 
             self.themes["default"] = theme
-            logger.info("Improved Default theme created", module="ThemeManager")
+            info("Improved Default theme created", module="theme")
 
         except Exception as e:
-            logger.error("Error creating Default theme", module="ThemeManager",
-                         context={'error': str(e)}, exc_info=True)
+            error("Error creating Default theme", module="theme",
+                  context={'error': str(e)}, exc_info=True)
 
+    @monitor_performance
     def apply_theme_globally(self, theme_name: str) -> bool:
         """Apply theme with enhanced error handling and feedback"""
         try:
@@ -517,24 +516,24 @@ class AutomaticThemeManager:
             actual_theme = theme_map.get(theme_name.lower(), "bloomberg_terminal")
 
             if not self._ensure_themes_created():
-                logger.warning("Cannot apply theme - DearPyGUI context not ready", module="ThemeManager",
-                               context={'requested_theme': theme_name})
+                warning("Cannot apply theme - DearPyGUI context not ready", module="theme",
+                        context={'requested_theme': theme_name})
                 return False
 
             if actual_theme not in self.themes:
                 available_themes = list(self.themes.keys())
-                logger.warning("Theme not found in available themes", module="ThemeManager",
-                               context={'requested_theme': actual_theme, 'available_themes': available_themes})
+                warning("Theme not found in available themes", module="theme",
+                        context={'requested_theme': actual_theme, 'available_themes': available_themes})
                 return False
 
             # Unbind previous theme if applied
             if self.theme_applied:
                 try:
                     dpg.bind_theme(0)  # Unbind current theme
-                    logger.debug("Unbound previous theme", module="ThemeManager")
+                    debug("Unbound previous theme", module="theme")
                 except Exception as e:
-                    logger.warning("Warning unbinding previous theme", module="ThemeManager",
-                                   context={'error': str(e)})
+                    warning("Warning unbinding previous theme", module="theme",
+                            context={'error': str(e)})
 
             # Apply new theme
             dpg.bind_theme(self.themes[actual_theme])
@@ -542,13 +541,13 @@ class AutomaticThemeManager:
             self.theme_applied = True
 
             theme_info = self.get_theme_info()
-            logger.info("Successfully applied theme", module="ThemeManager",
-                        context={'theme_name': theme_info['name'], 'description': theme_info['description']})
+            info("Successfully applied theme", module="theme",
+                 context={'theme_name': theme_info['name'], 'description': theme_info['description']})
             return True
 
         except Exception as e:
-            logger.error("Critical error applying theme", module="ThemeManager",
-                         context={'theme_name': theme_name, 'error': str(e)}, exc_info=True)
+            error("Critical error applying theme", module="theme",
+                  context={'theme_name': theme_name, 'error': str(e)}, exc_info=True)
             return False
 
     def get_available_themes(self) -> Dict[str, str]:
@@ -573,11 +572,11 @@ class AutomaticThemeManager:
         try:
             success = self.apply_theme_globally(app_data)
             if not success:
-                logger.error("Failed to apply theme from selector", module="ThemeManager",
-                             context={'theme': app_data})
+                error("Failed to apply theme from selector", module="theme",
+                      context={'theme': app_data})
         except Exception as e:
-            logger.error("Theme selector callback error", module="ThemeManager",
-                         context={'error': str(e)}, exc_info=True)
+            error("Theme selector callback error", module="theme",
+                  context={'error': str(e)}, exc_info=True)
 
     def get_theme_info(self) -> Dict[str, Any]:
         """Get comprehensive information about current theme"""
@@ -675,7 +674,7 @@ class AutomaticThemeManager:
             return
 
         try:
-            logger.info("Cleaning up Bloomberg Terminal themes", module="ThemeManager")
+            info("Cleaning up Bloomberg Terminal themes", module="theme")
             self.cleanup_performed = True
 
             # Unbind current theme
@@ -683,10 +682,10 @@ class AutomaticThemeManager:
                 try:
                     dpg.bind_theme(0)
                     self.theme_applied = False
-                    logger.info("Theme unbound successfully", module="ThemeManager")
+                    info("Theme unbound successfully", module="theme")
                 except Exception as e:
-                    logger.warning("Warning unbinding theme", module="ThemeManager",
-                                   context={'error': str(e)})
+                    warning("Warning unbinding theme", module="theme",
+                            context={'error': str(e)})
 
             # Delete all themes
             themes_deleted = 0
@@ -696,17 +695,17 @@ class AutomaticThemeManager:
                         dpg.delete_item(theme)
                         themes_deleted += 1
                 except Exception as e:
-                    logger.warning("Warning deleting theme", module="ThemeManager",
-                                   context={'theme_name': theme_name, 'error': str(e)})
+                    warning("Warning deleting theme", module="theme",
+                            context={'theme_name': theme_name, 'error': str(e)})
 
             self.themes.clear()
             self.themes_initialized = False
-            logger.info("Themes cleaned up successfully", module="ThemeManager",
-                        context={'themes_deleted': themes_deleted})
+            info("Themes cleaned up successfully", module="theme",
+                 context={'themes_deleted': themes_deleted})
 
         except Exception as e:
-            logger.error("Theme cleanup error", module="ThemeManager",
-                         context={'error': str(e)}, exc_info=True)
+            error("Theme cleanup error", module="theme",
+                  context={'error': str(e)}, exc_info=True)
 
     def __del__(self):
         """Enhanced destructor with error handling"""
@@ -714,16 +713,16 @@ class AutomaticThemeManager:
             if not self.cleanup_performed:
                 self.cleanup()
         except Exception as e:
-            logger.warning("Warning in theme manager destructor", module="ThemeManager",
-                           context={'error': str(e)})
+            warning("Warning in theme manager destructor", module="theme",
+                    context={'error': str(e)})
 
     def reset_to_default(self) -> bool:
         """Reset to default theme safely"""
         try:
             return self.apply_theme_globally("default")
         except Exception as e:
-            logger.error("Error resetting to default theme", module="ThemeManager",
-                         context={'error': str(e)}, exc_info=True)
+            error("Error resetting to default theme", module="theme",
+                  context={'error': str(e)}, exc_info=True)
             return False
 
     def validate_theme_integrity(self) -> Tuple[bool, str]:

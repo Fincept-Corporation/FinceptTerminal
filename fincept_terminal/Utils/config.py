@@ -8,8 +8,11 @@ import os
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
-# Import logger
-from fincept_terminal.Utils.Logging.logger import logger
+# Import the new logger module
+from fincept_terminal.Utils.Logging.logger import (
+    logger, info, debug, error, warning,
+    set_debug_mode, operation, monitor_performance
+)
 
 
 class APIConfig:
@@ -56,32 +59,34 @@ class APIConfig:
     def __init__(self):
         """Initialize configuration"""
         self._setup_directories()
-        logger.info("API configuration initialized", module="Config",
-                    context={'api_url': self.get_api_url(), 'version': self.API_VERSION})
+        info("API configuration initialized", module="config",
+             context={'api_url': self.get_api_url(), 'version': self.API_VERSION})
 
+    @monitor_performance
     def _setup_directories(self):
         """Setup configuration directories"""
-        try:
-            home_dir = Path.home()
-            self._config_dir = home_dir / self.CONFIG_DIR_NAME
-            self._config_dir.mkdir(exist_ok=True)
+        with operation("setup_config_directories", module="config"):
+            try:
+                home_dir = Path.home()
+                self._config_dir = home_dir / self.CONFIG_DIR_NAME
+                self._config_dir.mkdir(exist_ok=True)
 
-            self._credentials_path = self._config_dir / self.CREDENTIALS_FILE
-            self._cache_path = self._config_dir / self.CACHE_FILE
+                self._credentials_path = self._config_dir / self.CREDENTIALS_FILE
+                self._cache_path = self._config_dir / self.CACHE_FILE
 
-            logger.debug("Configuration directories setup completed", module="Config",
-                         context={'config_dir': str(self._config_dir)})
+                debug("Configuration directories setup completed", module="config",
+                      context={'config_dir': str(self._config_dir)})
 
-        except Exception as e:
-            logger.error("Failed to setup configuration directories", module="Config",
-                         context={'error': str(e)}, exc_info=True)
-            raise
+            except Exception as e:
+                error("Failed to setup configuration directories", module="config",
+                      context={'error': str(e)}, exc_info=True)
+                raise
 
     @classmethod
     def get_api_url(cls) -> str:
         """Get the primary API URL"""
         url = cls.API_BASE_URL.rstrip('/')
-        logger.debug("Retrieved API URL", module="Config", context={'url': url})
+        debug("Retrieved API URL", module="config", context={'url': url})
         return url
 
     @classmethod
@@ -91,35 +96,36 @@ class APIConfig:
             endpoint = '/' + endpoint
 
         full_url = f"{cls.get_api_url()}{endpoint}"
-        logger.debug("Generated full URL", module="Config",
-                     context={'endpoint': endpoint, 'full_url': full_url})
+        debug("Generated full URL", module="config",
+              context={'endpoint': endpoint, 'full_url': full_url})
         return full_url
 
     @classmethod
     def get_fallback_urls(cls) -> List[str]:
         """Get list of fallback URLs"""
         urls = [url.rstrip('/') for url in cls.FALLBACK_URLS]
-        logger.debug("Retrieved fallback URLs", module="Config",
-                     context={'count': len(urls)})
+        debug("Retrieved fallback URLs", module="config",
+              context={'count': len(urls)})
         return urls
 
     @classmethod
     def validate_configuration(cls) -> Dict[str, Any]:
         """Validate current configuration"""
-        config_data = {
-            "api_url": cls.get_api_url(),
-            "api_version": cls.API_VERSION,
-            "require_connection": cls.REQUIRE_API_CONNECTION,
-            "allow_guest_fallback": cls.ALLOW_GUEST_FALLBACK,
-            "request_timeout": cls.REQUEST_TIMEOUT,
-            "connection_timeout": cls.CONNECTION_TIMEOUT,
-            "max_retries": cls.MAX_RETRIES,
-            "debug_mode": cls.DEBUG_MODE,
-            "fallback_urls_count": len(cls.FALLBACK_URLS)
-        }
+        with operation("validate_configuration", module="config"):
+            config_data = {
+                "api_url": cls.get_api_url(),
+                "api_version": cls.API_VERSION,
+                "require_connection": cls.REQUIRE_API_CONNECTION,
+                "allow_guest_fallback": cls.ALLOW_GUEST_FALLBACK,
+                "request_timeout": cls.REQUEST_TIMEOUT,
+                "connection_timeout": cls.CONNECTION_TIMEOUT,
+                "max_retries": cls.MAX_RETRIES,
+                "debug_mode": cls.DEBUG_MODE,
+                "fallback_urls_count": len(cls.FALLBACK_URLS)
+            }
 
-        logger.info("Configuration validated", module="Config", context=config_data)
-        return config_data
+            info("Configuration validated", module="config", context=config_data)
+            return config_data
 
     @classmethod
     def set_api_url(cls, new_url: str):
@@ -127,21 +133,20 @@ class APIConfig:
         old_url = cls.API_BASE_URL
         cls.API_BASE_URL = new_url.rstrip('/')
 
-        logger.info("API URL updated", module="Config",
-                    context={'old_url': old_url, 'new_url': cls.API_BASE_URL})
+        info("API URL updated", module="config",
+             context={'old_url': old_url, 'new_url': cls.API_BASE_URL})
 
     @classmethod
-    def set_debug_mode(cls, debug: bool):
+    def set_debug_mode(cls, debug_enabled: bool):
         """Set debug mode"""
         old_debug = cls.DEBUG_MODE
-        cls.DEBUG_MODE = debug
+        cls.DEBUG_MODE = debug_enabled
 
-        # Update logger debug mode
-        from fincept_terminal.Utils.Logging.logger import set_debug_mode
-        set_debug_mode(debug)
+        # Update logger debug mode using the new logger's function
+        set_debug_mode(debug_enabled)
 
-        logger.info("Debug mode changed", module="Config",
-                    context={'old_debug': old_debug, 'new_debug': debug})
+        info("Debug mode changed", module="config",
+             context={'old_debug': old_debug, 'new_debug': debug_enabled})
 
     @classmethod
     def set_strict_mode(cls, strict: bool):
@@ -150,8 +155,8 @@ class APIConfig:
         cls.REQUIRE_API_CONNECTION = strict
         cls.ALLOW_GUEST_FALLBACK = not strict
 
-        logger.info("Strict mode changed", module="Config",
-                    context={'old_strict': old_strict, 'new_strict': strict})
+        info("Strict mode changed", module="config",
+             context={'old_strict': old_strict, 'new_strict': strict})
 
     def get_config_dir(self) -> Path:
         """Get configuration directory path"""
@@ -178,22 +183,25 @@ class APIConfig:
         if api_key:
             headers["X-API-Key"] = api_key
 
-        logger.debug("Generated request headers", module="Config",
-                     context={'has_api_key': bool(api_key)})
+        debug("Generated request headers", module="config",
+              context={'has_api_key': bool(api_key)})
         return headers
 
     @classmethod
     def get_timeout_config(cls) -> Dict[str, float]:
         """Get timeout configuration"""
-        return {
+        timeout_config = {
             'connect': cls.CONNECTION_TIMEOUT,
             'read': cls.REQUEST_TIMEOUT,
             'total': cls.REQUEST_TIMEOUT + cls.CONNECTION_TIMEOUT
         }
+        debug("Generated timeout configuration", module="config", context=timeout_config)
+        return timeout_config
 
     def cleanup(self):
         """Cleanup configuration resources"""
-        logger.info("Configuration cleanup completed", module="Config")
+        with operation("config_cleanup", module="config"):
+            info("Configuration cleanup completed", module="config")
 
 
 # Global configuration instance
@@ -203,49 +211,78 @@ config = APIConfig()
 # Helper functions for backward compatibility
 def get_api_base() -> str:
     """Get API base URL"""
-    return config.get_api_url()
+    url = config.get_api_url()
+    debug("Retrieved API base URL", module="config", context={'url': url})
+    return url
 
 
 def get_api_endpoint(endpoint: str) -> str:
     """Get full API endpoint URL"""
-    return config.get_full_url(endpoint)
+    full_url = config.get_full_url(endpoint)
+    debug("Retrieved API endpoint URL", module="config",
+          context={'endpoint': endpoint, 'full_url': full_url})
+    return full_url
 
 
 def is_strict_mode() -> bool:
     """Check if strict API mode is enabled"""
-    return config.REQUIRE_API_CONNECTION
+    strict = config.REQUIRE_API_CONNECTION
+    debug("Checked strict mode", module="config", context={'strict_mode': strict})
+    return strict
 
 
 def allow_offline_fallback() -> bool:
     """Check if offline fallback is allowed"""
-    return not config.REQUIRE_API_CONNECTION or config.ALLOW_GUEST_FALLBACK
+    fallback_allowed = not config.REQUIRE_API_CONNECTION or config.ALLOW_GUEST_FALLBACK
+    debug("Checked offline fallback", module="config",
+          context={'fallback_allowed': fallback_allowed})
+    return fallback_allowed
 
 
 def get_config_directory() -> Path:
     """Get configuration directory"""
-    return config.get_config_dir()
+    config_dir = config.get_config_dir()
+    debug("Retrieved configuration directory", module="config",
+          context={'config_dir': str(config_dir)})
+    return config_dir
 
 
 def get_credentials_file() -> Path:
     """Get credentials file path"""
-    return config.get_credentials_path()
+    creds_path = config.get_credentials_path()
+    debug("Retrieved credentials file path", module="config",
+          context={'credentials_path': str(creds_path)})
+    return creds_path
 
 
+@monitor_performance
 def validate_config() -> Dict[str, Any]:
     """Validate configuration"""
-    return config.validate_configuration()
+    with operation("validate_config_helper", module="config"):
+        config_data = config.validate_configuration()
+        debug("Configuration validation completed", module="config",
+              context={'validation_items': len(config_data)})
+        return config_data
 
 
-def set_debug_mode(debug: bool):
+def set_debug_mode_global(debug_enabled: bool):
     """Set debug mode globally"""
-    config.set_debug_mode(debug)
+    with operation("set_debug_mode_global", module="config"):
+        config.set_debug_mode(debug_enabled)
+        info("Global debug mode updated", module="config",
+             context={'debug_enabled': debug_enabled})
 
 
-def set_strict_mode(strict: bool):
+def set_strict_mode_global(strict: bool):
     """Set strict mode globally"""
-    config.set_strict_mode(strict)
+    with operation("set_strict_mode_global", module="config"):
+        config.set_strict_mode(strict)
+        info("Global strict mode updated", module="config",
+             context={'strict_mode': strict})
 
 
 def cleanup_config():
     """Cleanup configuration"""
-    config.cleanup()
+    with operation("cleanup_config_global", module="config"):
+        config.cleanup()
+        info("Global configuration cleanup completed", module="config")

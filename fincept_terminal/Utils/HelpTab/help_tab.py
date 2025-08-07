@@ -4,7 +4,11 @@ import dearpygui.dearpygui as dpg
 from fincept_terminal.Utils.base_tab import BaseTab
 import datetime
 
-from fincept_terminal.Utils.Logging.logger import logger, log_operation
+# Import new logger module
+from fincept_terminal.Utils.Logging.logger import (
+    info, debug, warning, error, operation, monitor_performance
+)
+
 
 class HelpTab(BaseTab):
     """Bloomberg Terminal style Help and About tab"""
@@ -14,7 +18,7 @@ class HelpTab(BaseTab):
         self.main_app = main_app
         self.scroll_position = 0
 
-        # Bloomberg color scheme
+        # Bloomberg color scheme - Pre-computed for performance
         self.BLOOMBERG_ORANGE = [255, 165, 0]
         self.BLOOMBERG_WHITE = [255, 255, 255]
         self.BLOOMBERG_RED = [255, 0, 0]
@@ -24,379 +28,438 @@ class HelpTab(BaseTab):
         self.BLOOMBERG_BLUE = [100, 150, 250]
         self.BLOOMBERG_BLACK = [0, 0, 0]
 
+        # Cache frequently used data for performance
+        self._cached_datetime = None
+        self._datetime_cache_time = 0
+
+        debug("HelpTab initialized", module="help",
+              context={'main_app_available': bool(main_app)})
+
     def get_label(self):
         return " Help & About"
 
+    def _get_current_time_cached(self):
+        """Get current time with caching for performance"""
+        import time
+        current_time = time.time()
+        # Update cache every 5 seconds
+        if current_time - self._datetime_cache_time > 5:
+            self._cached_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self._datetime_cache_time = current_time
+        return self._cached_datetime
+
+    @monitor_performance
     def create_content(self):
         """Create Bloomberg-style help terminal layout"""
-        try:
-            # Top bar with Bloomberg branding
-            with dpg.group(horizontal=True):
-                dpg.add_text("FINCEPT", color=self.BLOOMBERG_ORANGE)
-                dpg.add_text("HELP TERMINAL", color=self.BLOOMBERG_WHITE)
-                dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
-                dpg.add_input_text(label="", default_value="Search Help Topics", width=300)
-                dpg.add_button(label="SEARCH", width=80, callback=self.search_help)
-                dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
-                dpg.add_text(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        with operation("create_help_content", module="help"):
+            try:
+                # Top bar with Bloomberg branding
+                with dpg.group(horizontal=True):
+                    dpg.add_text("FINCEPT", color=self.BLOOMBERG_ORANGE)
+                    dpg.add_text("HELP TERMINAL", color=self.BLOOMBERG_WHITE)
+                    dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
+                    dpg.add_input_text(label="", default_value="Search Help Topics", width=300)
+                    dpg.add_button(label="SEARCH", width=80, callback=self.search_help)
+                    dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
+                    dpg.add_text(self._get_current_time_cached())
 
-            dpg.add_separator()
+                dpg.add_separator()
 
-            # Function keys for help sections
-            with dpg.group(horizontal=True):
-                help_functions = ["F1:ABOUT", "F2:FEATURES", "F3:SUPPORT", "F4:CONTACT", "F5:FEEDBACK", "F6:DOCS"]
-                for key in help_functions:
-                    dpg.add_button(label=key, width=100, height=25,
-                                   callback=lambda s, a, u, k=key: self.navigate_section(k))
+                # Function keys for help sections
+                with dpg.group(horizontal=True):
+                    help_functions = ["F1:ABOUT", "F2:FEATURES", "F3:SUPPORT", "F4:CONTACT", "F5:FEEDBACK", "F6:DOCS"]
+                    for key in help_functions:
+                        dpg.add_button(label=key, width=100, height=25,
+                                       callback=lambda s, a, u, k=key: self.navigate_section(k))
 
-            dpg.add_separator()
+                dpg.add_separator()
 
-            # Main help layout - Three columns like Bloomberg
-            with dpg.group(horizontal=True):
-                # Left panel - Help Navigator
-                self.create_left_help_panel()
+                # Main help layout - Three columns like Bloomberg
+                with dpg.group(horizontal=True):
+                    # Left panel - Help Navigator
+                    self.create_left_help_panel()
 
-                # Center panel - Main Help Content
-                self.create_center_help_panel()
+                    # Center panel - Main Help Content
+                    self.create_center_help_panel()
 
-                # Right panel - Quick Actions
-                self.create_right_help_panel()
+                    # Right panel - Quick Actions
+                    self.create_right_help_panel()
 
-            # Bottom status bar
-            dpg.add_separator()
-            self.create_help_status_bar()
+                # Bottom status bar
+                dpg.add_separator()
+                self.create_help_status_bar()
 
-        except Exception as e:
-            logger.error(f"Error creating help content: {e}", module="Help_Tab", context={'e': e})
-            # Fallback content
-            dpg.add_text("HELP TERMINAL", color=self.BLOOMBERG_ORANGE)
-            dpg.add_text("Error loading help content. Please try again.")
+                info("Help content created successfully", module="help")
 
+            except Exception as e:
+                error("Error creating help content", module="help",
+                      context={'error': str(e)}, exc_info=True)
+                # Fallback content
+                dpg.add_text("HELP TERMINAL", color=self.BLOOMBERG_ORANGE)
+                dpg.add_text("Error loading help content. Please try again.")
+
+    @monitor_performance
     def create_left_help_panel(self):
         """Create left help navigation panel"""
-        with dpg.child_window(width=350, height=650, border=True):
-            dpg.add_text("HELP NAVIGATOR", color=self.BLOOMBERG_ORANGE)
-            dpg.add_separator()
+        with operation("create_left_help_panel", module="help"):
+            with dpg.child_window(width=350, height=650, border=True):
+                dpg.add_text("HELP NAVIGATOR", color=self.BLOOMBERG_ORANGE)
+                dpg.add_separator()
 
-            # Help sections table
-            with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True,
-                           scrollY=True, height=300):
-                dpg.add_table_column(label="Section", width_fixed=True, init_width_or_weight=120)
-                dpg.add_table_column(label="Status", width_fixed=True, init_width_or_weight=80)
-                dpg.add_table_column(label="Action", width_fixed=True, init_width_or_weight=100)
+                # Help sections table
+                with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True,
+                               scrollY=True, height=300):
+                    dpg.add_table_column(label="Section", width_fixed=True, init_width_or_weight=120)
+                    dpg.add_table_column(label="Status", width_fixed=True, init_width_or_weight=80)
+                    dpg.add_table_column(label="Action", width_fixed=True, init_width_or_weight=100)
 
-                help_sections = [
-                    ("ABOUT FINCEPT", "AVAILABLE", "VIEW"),
-                    ("FEATURES", "AVAILABLE", "VIEW"),
-                    ("MARKET DATA", "AVAILABLE", "VIEW"),
-                    ("PORTFOLIO", "AVAILABLE", "VIEW"),
-                    ("ANALYTICS", "AVAILABLE", "VIEW"),
-                    ("SUPPORT", "AVAILABLE", "CONTACT"),
-                    ("TUTORIALS", "COMING SOON", "NOTIFY"),
-                    ("API DOCS", "AVAILABLE", "OPEN"),
-                    ("COMMUNITY", "AVAILABLE", "JOIN"),
-                    ("FEEDBACK", "AVAILABLE", "SEND")
-                ]
+                    # Pre-defined help sections for performance
+                    help_sections = [
+                        ("ABOUT FINCEPT", "AVAILABLE", "VIEW"),
+                        ("FEATURES", "AVAILABLE", "VIEW"),
+                        ("MARKET DATA", "AVAILABLE", "VIEW"),
+                        ("PORTFOLIO", "AVAILABLE", "VIEW"),
+                        ("ANALYTICS", "AVAILABLE", "VIEW"),
+                        ("SUPPORT", "AVAILABLE", "CONTACT"),
+                        ("TUTORIALS", "COMING SOON", "NOTIFY"),
+                        ("API DOCS", "AVAILABLE", "OPEN"),
+                        ("COMMUNITY", "AVAILABLE", "JOIN"),
+                        ("FEEDBACK", "AVAILABLE", "SEND")
+                    ]
 
-                for section, status, action in help_sections:
-                    with dpg.table_row():
-                        dpg.add_text(section, color=self.BLOOMBERG_WHITE)
-                        status_color = self.BLOOMBERG_GREEN if status == "AVAILABLE" else self.BLOOMBERG_YELLOW
-                        dpg.add_text(status, color=status_color)
-                        action_color = self.BLOOMBERG_BLUE if action in ["VIEW", "OPEN"] else self.BLOOMBERG_ORANGE
-                        dpg.add_text(action, color=action_color)
+                    for section, status, action in help_sections:
+                        with dpg.table_row():
+                            dpg.add_text(section, color=self.BLOOMBERG_WHITE)
+                            status_color = self.BLOOMBERG_GREEN if status == "AVAILABLE" else self.BLOOMBERG_YELLOW
+                            dpg.add_text(status, color=status_color)
+                            action_color = self.BLOOMBERG_BLUE if action in ["VIEW", "OPEN"] else self.BLOOMBERG_ORANGE
+                            dpg.add_text(action, color=action_color)
 
-            dpg.add_separator()
+                dpg.add_separator()
 
-            # Quick stats
-            dpg.add_text("HELP STATISTICS", color=self.BLOOMBERG_YELLOW)
-            with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
-                dpg.add_table_column()
-                dpg.add_table_column()
+                # Quick stats
+                dpg.add_text("HELP STATISTICS", color=self.BLOOMBERG_YELLOW)
+                with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
+                    dpg.add_table_column()
+                    dpg.add_table_column()
 
-                with dpg.table_row():
-                    dpg.add_text("Total Help Topics:")
-                    dpg.add_text("47", color=self.BLOOMBERG_WHITE)
-                with dpg.table_row():
-                    dpg.add_text("Video Tutorials:")
-                    dpg.add_text("12", color=self.BLOOMBERG_WHITE)
-                with dpg.table_row():
-                    dpg.add_text("FAQ Articles:")
-                    dpg.add_text("25", color=self.BLOOMBERG_WHITE)
-                with dpg.table_row():
-                    dpg.add_text("API Endpoints:")
-                    dpg.add_text("156", color=self.BLOOMBERG_WHITE)
+                    # Pre-computed stats for performance
+                    stats = [
+                        ("Total Help Topics:", "47"),
+                        ("Video Tutorials:", "12"),
+                        ("FAQ Articles:", "25"),
+                        ("API Endpoints:", "156")
+                    ]
 
-            dpg.add_separator()
+                    for label, value in stats:
+                        with dpg.table_row():
+                            dpg.add_text(label)
+                            dpg.add_text(value, color=self.BLOOMBERG_WHITE)
 
-            # System status
-            dpg.add_text("SYSTEM STATUS", color=self.BLOOMBERG_YELLOW)
-            with dpg.group(horizontal=True):
-                dpg.add_text("", color=self.BLOOMBERG_GREEN)
-                dpg.add_text("ALL SYSTEMS OPERATIONAL", color=self.BLOOMBERG_GREEN)
+                dpg.add_separator()
 
+                # System status
+                dpg.add_text("SYSTEM STATUS", color=self.BLOOMBERG_YELLOW)
+                with dpg.group(horizontal=True):
+                    dpg.add_text("●", color=self.BLOOMBERG_GREEN)
+                    dpg.add_text("ALL SYSTEMS OPERATIONAL", color=self.BLOOMBERG_GREEN)
+
+                debug("Left help panel created", module="help")
+
+    @monitor_performance
     def create_center_help_panel(self):
         """Create center help content panel"""
-        with dpg.child_window(width=900, height=650, border=True):
-            with dpg.tab_bar():
-                # About Tab
-                with dpg.tab(label="About"):
-                    dpg.add_text("ABOUT FINCEPT TERMINAL", color=self.BLOOMBERG_ORANGE)
-                    dpg.add_separator()
+        with operation("create_center_help_panel", module="help"):
+            with dpg.child_window(width=900, height=650, border=True):
+                with dpg.tab_bar():
+                    # About Tab
+                    with dpg.tab(label="About"):
+                        self._create_about_tab()
 
-                    # Company info in Bloomberg style
-                    with dpg.group(horizontal=True):
-                        with dpg.group():
-                            dpg.add_text("Fincept Financial Terminal", color=self.BLOOMBERG_ORANGE)
-                            dpg.add_text("Professional Trading & Analytics Platform")
-                            dpg.add_spacer(height=10)
+                    # Features Tab
+                    with dpg.tab(label="Features"):
+                        self._create_features_tab()
 
-                            with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
-                                dpg.add_table_column()
-                                dpg.add_table_column()
+                    # Support Tab
+                    with dpg.tab(label="Support"):
+                        self._create_support_tab()
 
-                                with dpg.table_row():
-                                    dpg.add_text("Version:")
-                                    dpg.add_text("4.2.1 Professional", color=self.BLOOMBERG_WHITE)
-                                with dpg.table_row():
-                                    dpg.add_text("Build:")
-                                    dpg.add_text("20250115.1", color=self.BLOOMBERG_WHITE)
-                                with dpg.table_row():
-                                    dpg.add_text("License:")
-                                    dpg.add_text("Enterprise", color=self.BLOOMBERG_GREEN)
-                                with dpg.table_row():
-                                    dpg.add_text("Data Sources:")
-                                    dpg.add_text("Real-time", color=self.BLOOMBERG_GREEN)
-                                with dpg.table_row():
-                                    dpg.add_text("API Status:")
-                                    dpg.add_text("Connected", color=self.BLOOMBERG_GREEN)
+                    # API Documentation Tab
+                    with dpg.tab(label="API Docs"):
+                        self._create_api_docs_tab()
 
-                        with dpg.group():
-                            dpg.add_text("Core Features", color=self.BLOOMBERG_YELLOW)
-                            dpg.add_text("• Real-time market data & analytics")
-                            dpg.add_text("• Portfolio management & tracking")
-                            dpg.add_text("• Advanced charting & technical analysis")
-                            dpg.add_text("• Financial news & sentiment analysis")
-                            dpg.add_text("• Risk management tools")
-                            dpg.add_text("• Algorithmic trading support")
-                            dpg.add_text("• Multi-asset class coverage")
-                            dpg.add_text("• Professional-grade security")
+                debug("Center help panel created", module="help")
 
-                    dpg.add_spacer(height=20)
+    def _create_about_tab(self):
+        """Create about tab content"""
+        dpg.add_text("ABOUT FINCEPT TERMINAL", color=self.BLOOMBERG_ORANGE)
+        dpg.add_separator()
 
-                    # Description
-                    about_text = (
-                        "Fincept Terminal is a cutting-edge financial analysis platform designed to provide "
-                        "real-time market data, portfolio management, and actionable insights to investors, traders, "
-                        "and financial professionals. Our platform integrates advanced analytics, AI-driven sentiment analysis, "
-                        "and the latest market trends to help you make well-informed investment decisions."
-                    )
-                    dpg.add_text(about_text, wrap=850, color=self.BLOOMBERG_WHITE)
+        # Company info in Bloomberg style
+        with dpg.group(horizontal=True):
+            with dpg.group():
+                dpg.add_text("Fincept Financial Terminal", color=self.BLOOMBERG_ORANGE)
+                dpg.add_text("Professional Trading & Analytics Platform")
+                dpg.add_spacer(height=10)
 
-                # Features Tab
-                with dpg.tab(label="Features"):
-                    dpg.add_text("TERMINAL FEATURES & CAPABILITIES", color=self.BLOOMBERG_ORANGE)
-                    dpg.add_separator()
+                with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
+                    dpg.add_table_column()
+                    dpg.add_table_column()
 
-                    # Features in Bloomberg table style
-                    with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True,
-                                   scrollY=True, height=400):
-                        dpg.add_table_column(label="Feature Category", width_fixed=True, init_width_or_weight=200)
-                        dpg.add_table_column(label="Description", width_fixed=True, init_width_or_weight=400)
-                        dpg.add_table_column(label="Status", width_fixed=True, init_width_or_weight=100)
-                        dpg.add_table_column(label="Access Level", width_fixed=True, init_width_or_weight=120)
+                    # Pre-computed version info
+                    version_info = [
+                        ("Version:", "4.2.1 Professional"),
+                        ("Build:", "20250115.1"),
+                        ("License:", "Enterprise"),
+                        ("Data Sources:", "Real-time"),
+                        ("API Status:", "Connected")
+                    ]
 
-                        features = [
-                            ("Market Data", "Real-time quotes, indices, forex, commodities", "ACTIVE", "ALL USERS"),
-                            ("Portfolio Mgmt", "Track holdings, P&L, asset allocation", "ACTIVE", "ALL USERS"),
-                            ("Technical Analysis", "Advanced charting, indicators, overlays", "ACTIVE", "PRO"),
-                            ("News & Sentiment", "Financial news aggregation, sentiment scoring", "ACTIVE", "PRO"),
-                            ("Risk Analytics", "VaR, stress testing, correlation analysis", "ACTIVE", "ENTERPRISE"),
-                            ("Algo Trading", "Strategy backtesting, execution algorithms", "BETA", "ENTERPRISE"),
-                            ("Options Analytics", "Greeks, volatility surface, strategies", "ACTIVE", "PRO"),
-                            ("Fixed Income", "Bond analytics, yield curves, duration", "ACTIVE", "ENTERPRISE"),
-                            ("ESG Analytics", "Sustainability metrics, ESG scoring", "COMING SOON", "PRO"),
-                            ("AI Insights", "Machine learning predictions, pattern recognition", "BETA", "ENTERPRISE")
-                        ]
+                    for label, value in version_info:
+                        with dpg.table_row():
+                            dpg.add_text(label)
+                            value_color = self.BLOOMBERG_GREEN if value in ["Enterprise", "Real-time",
+                                                                            "Connected"] else self.BLOOMBERG_WHITE
+                            dpg.add_text(value, color=value_color)
 
-                        for feature, description, status, access in features:
-                            with dpg.table_row():
-                                dpg.add_text(feature, color=self.BLOOMBERG_YELLOW)
-                                dpg.add_text(description, color=self.BLOOMBERG_WHITE)
+            with dpg.group():
+                dpg.add_text("Core Features", color=self.BLOOMBERG_YELLOW)
+                features = [
+                    "• Real-time market data & analytics",
+                    "• Portfolio management & tracking",
+                    "• Advanced charting & technical analysis",
+                    "• Financial news & sentiment analysis",
+                    "• Risk management tools",
+                    "• Algorithmic trading support",
+                    "• Multi-asset class coverage",
+                    "• Professional-grade security"
+                ]
+                for feature in features:
+                    dpg.add_text(feature)
 
-                                status_color = (self.BLOOMBERG_GREEN if status == "ACTIVE" else
-                                                self.BLOOMBERG_YELLOW if status == "BETA" else self.BLOOMBERG_ORANGE)
-                                dpg.add_text(status, color=status_color)
+        dpg.add_spacer(height=20)
 
-                                access_color = (self.BLOOMBERG_GREEN if access == "ALL USERS" else
-                                                self.BLOOMBERG_BLUE if access == "PRO" else self.BLOOMBERG_ORANGE)
-                                dpg.add_text(access, color=access_color)
+        # Description
+        about_text = (
+            "Fincept Terminal is a cutting-edge financial analysis platform designed to provide "
+            "real-time market data, portfolio management, and actionable insights to investors, traders, "
+            "and financial professionals. Our platform integrates advanced analytics, AI-driven sentiment analysis, "
+            "and the latest market trends to help you make well-informed investment decisions."
+        )
+        dpg.add_text(about_text, wrap=850, color=self.BLOOMBERG_WHITE)
 
-                # Support Tab
-                with dpg.tab(label="Support"):
-                    dpg.add_text("CUSTOMER SUPPORT & ASSISTANCE", color=self.BLOOMBERG_ORANGE)
-                    dpg.add_separator()
+    def _create_features_tab(self):
+        """Create features tab content"""
+        dpg.add_text("TERMINAL FEATURES & CAPABILITIES", color=self.BLOOMBERG_ORANGE)
+        dpg.add_separator()
 
-                    # Support options
-                    with dpg.group(horizontal=True):
-                        with dpg.group():
-                            dpg.add_text("Contact Information", color=self.BLOOMBERG_YELLOW)
-                            dpg.add_spacer(height=10)
+        # Features in Bloomberg table style
+        with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True,
+                       scrollY=True, height=400):
+            dpg.add_table_column(label="Feature Category", width_fixed=True, init_width_or_weight=200)
+            dpg.add_table_column(label="Description", width_fixed=True, init_width_or_weight=400)
+            dpg.add_table_column(label="Status", width_fixed=True, init_width_or_weight=100)
+            dpg.add_table_column(label="Access Level", width_fixed=True, init_width_or_weight=120)
 
-                            with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
-                                dpg.add_table_column()
-                                dpg.add_table_column()
-
-                                with dpg.table_row():
-                                    dpg.add_text("Email Support:")
-                                    dpg.add_text("support@fincept.in", color=self.BLOOMBERG_BLUE)
-                                with dpg.table_row():
-                                    dpg.add_text("Phone Support:")
-                                    dpg.add_text("+1 (555) 123-4567", color=self.BLOOMBERG_WHITE)
-                                with dpg.table_row():
-                                    dpg.add_text("Live Chat:")
-                                    dpg.add_text("Available 24/7", color=self.BLOOMBERG_GREEN)
-                                with dpg.table_row():
-                                    dpg.add_text("Response Time:")
-                                    dpg.add_text("< 2 hours", color=self.BLOOMBERG_GREEN)
-                                with dpg.table_row():
-                                    dpg.add_text("Support Hours:")
-                                    dpg.add_text("24/7/365", color=self.BLOOMBERG_WHITE)
-
-                        with dpg.group():
-                            dpg.add_text("Support Channels", color=self.BLOOMBERG_YELLOW)
-                            dpg.add_spacer(height=10)
-
-                            support_buttons = [
-                                (" Email Support", self.contact_email_support),
-                                (" Live Chat", self.open_live_chat),
-                                (" Phone Support", self.contact_phone_support),
-                                (" Documentation", self.open_documentation),
-                                (" Video Tutorials", self.open_tutorials),
-                                (" Community Forum", self.open_community),
-                                (" Report Bug", self.report_bug),
-                                (" Feature Request", self.request_feature)
-                            ]
-
-                            for label, callback in support_buttons:
-                                dpg.add_button(label=label, callback=callback, width=200)
-                                dpg.add_spacer(height=5)
-
-                # API Documentation Tab
-                with dpg.tab(label="API Docs"):
-                    dpg.add_text("API DOCUMENTATION & ENDPOINTS", color=self.BLOOMBERG_ORANGE)
-                    dpg.add_separator()
-
-                    # API endpoints table
-                    with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True,
-                                   scrollY=True, height=500):
-                        dpg.add_table_column(label="Endpoint", width_fixed=True, init_width_or_weight=200)
-                        dpg.add_table_column(label="Method", width_fixed=True, init_width_or_weight=80)
-                        dpg.add_table_column(label="Description", width_fixed=True, init_width_or_weight=300)
-                        dpg.add_table_column(label="Rate Limit", width_fixed=True, init_width_or_weight=100)
-                        dpg.add_table_column(label="Auth Required", width_fixed=True, init_width_or_weight=120)
-
-                        api_endpoints = [
-                            ("/api/v1/market/quotes", "GET", "Real-time market quotes", "1000/min", "YES"),
-                            ("/api/v1/portfolio/holdings", "GET", "Portfolio holdings data", "100/min", "YES"),
-                            ("/api/v1/news/latest", "GET", "Latest financial news", "500/min", "NO"),
-                            ("/api/v1/analytics/technical", "POST", "Technical analysis calculations", "50/min", "YES"),
-                            ("/api/v1/market/history", "GET", "Historical market data", "200/min", "YES"),
-                            ("/api/v1/user/profile", "GET", "User profile information", "10/min", "YES"),
-                            ("/api/v1/orders/submit", "POST", "Submit trading orders", "100/min", "YES"),
-                            ("/api/v1/market/screener", "POST", "Stock screening criteria", "50/min", "YES"),
-                            ("/api/v1/research/reports", "GET", "Research reports access", "20/min", "YES"),
-                            ("/api/v1/alerts/manage", "POST", "Manage price alerts", "100/min", "YES")
-                        ]
-
-                        for endpoint, method, description, rate_limit, auth in api_endpoints:
-                            with dpg.table_row():
-                                dpg.add_text(endpoint, color=self.BLOOMBERG_BLUE)
-                                method_color = self.BLOOMBERG_GREEN if method == "GET" else self.BLOOMBERG_ORANGE
-                                dpg.add_text(method, color=method_color)
-                                dpg.add_text(description, color=self.BLOOMBERG_WHITE)
-                                dpg.add_text(rate_limit, color=self.BLOOMBERG_YELLOW)
-                                auth_color = self.BLOOMBERG_RED if auth == "YES" else self.BLOOMBERG_GREEN
-                                dpg.add_text(auth, color=auth_color)
-
-    def create_right_help_panel(self):
-        """Create right quick actions panel"""
-        with dpg.child_window(width=350, height=650, border=True):
-            dpg.add_text("QUICK ACTIONS", color=self.BLOOMBERG_ORANGE)
-            dpg.add_separator()
-
-            # Quick action buttons
-            quick_actions = [
-                (" Contact Support", self.contact_support),
-                (" Send Feedback", self.send_feedback),
-                (" User Manual", self.open_manual),
-                (" Watch Tutorials", self.open_tutorials),
-                (" Join Community", self.open_community),
-                (" Check Updates", self.check_updates),
-                (" System Settings", self.open_settings),
-                (" Report Issue", self.report_bug)
+            # Pre-computed features data
+            features = [
+                ("Market Data", "Real-time quotes, indices, forex, commodities", "ACTIVE", "ALL USERS"),
+                ("Portfolio Mgmt", "Track holdings, P&L, asset allocation", "ACTIVE", "ALL USERS"),
+                ("Technical Analysis", "Advanced charting, indicators, overlays", "ACTIVE", "PRO"),
+                ("News & Sentiment", "Financial news aggregation, sentiment scoring", "ACTIVE", "PRO"),
+                ("Risk Analytics", "VaR, stress testing, correlation analysis", "ACTIVE", "ENTERPRISE"),
+                ("Algo Trading", "Strategy backtesting, execution algorithms", "BETA", "ENTERPRISE"),
+                ("Options Analytics", "Greeks, volatility surface, strategies", "ACTIVE", "PRO"),
+                ("Fixed Income", "Bond analytics, yield curves, duration", "ACTIVE", "ENTERPRISE"),
+                ("ESG Analytics", "Sustainability metrics, ESG scoring", "COMING SOON", "PRO"),
+                ("AI Insights", "Machine learning predictions, pattern recognition", "BETA", "ENTERPRISE")
             ]
 
-            for label, callback in quick_actions:
-                dpg.add_button(label=label, callback=callback, width=-1, height=35)
-                dpg.add_spacer(height=5)
+            for feature, description, status, access in features:
+                with dpg.table_row():
+                    dpg.add_text(feature, color=self.BLOOMBERG_YELLOW)
+                    dpg.add_text(description, color=self.BLOOMBERG_WHITE)
 
-            dpg.add_separator()
+                    status_color = (self.BLOOMBERG_GREEN if status == "ACTIVE" else
+                                    self.BLOOMBERG_YELLOW if status == "BETA" else self.BLOOMBERG_ORANGE)
+                    dpg.add_text(status, color=status_color)
 
-            # System information
-            dpg.add_text("SYSTEM INFORMATION", color=self.BLOOMBERG_YELLOW)
-            with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
-                dpg.add_table_column()
-                dpg.add_table_column()
+                    access_color = (self.BLOOMBERG_GREEN if access == "ALL USERS" else
+                                    self.BLOOMBERG_BLUE if access == "PRO" else self.BLOOMBERG_ORANGE)
+                    dpg.add_text(access, color=access_color)
 
-                system_info = [
-                    ("Terminal Version:", "4.2.1"),
-                    ("Build Date:", "2025-01-15"),
-                    ("Platform:", "Windows 11"),
-                    ("Memory Usage:", "2.4 GB"),
-                    ("CPU Usage:", "12%"),
-                    ("Network Status:", "Connected"),
-                    ("Data Feed:", "Live"),
-                    ("Session Time:", "02:34:12")
+    def _create_support_tab(self):
+        """Create support tab content"""
+        dpg.add_text("CUSTOMER SUPPORT & ASSISTANCE", color=self.BLOOMBERG_ORANGE)
+        dpg.add_separator()
+
+        # Support options
+        with dpg.group(horizontal=True):
+            with dpg.group():
+                dpg.add_text("Contact Information", color=self.BLOOMBERG_YELLOW)
+                dpg.add_spacer(height=10)
+
+                with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
+                    dpg.add_table_column()
+                    dpg.add_table_column()
+
+                    contact_info = [
+                        ("Email Support:", "support@fincept.in"),
+                        ("Phone Support:", "+1 (555) 123-4567"),
+                        ("Live Chat:", "Available 24/7"),
+                        ("Response Time:", "< 2 hours"),
+                        ("Support Hours:", "24/7/365")
+                    ]
+
+                    for label, value in contact_info:
+                        with dpg.table_row():
+                            dpg.add_text(label)
+                            value_color = (self.BLOOMBERG_BLUE if "support@" in value else
+                                           self.BLOOMBERG_GREEN if "Available" in value or "< 2" in value or "24/7" in value
+                                           else self.BLOOMBERG_WHITE)
+                            dpg.add_text(value, color=value_color)
+
+            with dpg.group():
+                dpg.add_text("Support Channels", color=self.BLOOMBERG_YELLOW)
+                dpg.add_spacer(height=10)
+
+                support_buttons = [
+                    ("📧 Email Support", self.contact_email_support),
+                    ("💬 Live Chat", self.open_live_chat),
+                    ("📞 Phone Support", self.contact_phone_support),
+                    ("📖 Documentation", self.open_documentation),
+                    ("🎥 Video Tutorials", self.open_tutorials),
+                    ("👥 Community Forum", self.open_community),
+                    ("🐛 Report Bug", self.report_bug),
+                    ("💡 Feature Request", self.request_feature)
                 ]
 
-                for label, value in system_info:
-                    with dpg.table_row():
-                        dpg.add_text(label, color=self.BLOOMBERG_GRAY)
-                        value_color = self.BLOOMBERG_GREEN if "Connected" in value or "Live" in value else self.BLOOMBERG_WHITE
-                        dpg.add_text(value, color=value_color)
+                for label, callback in support_buttons:
+                    dpg.add_button(label=label, callback=callback, width=200)
+                    dpg.add_spacer(height=5)
 
-            dpg.add_separator()
+    def _create_api_docs_tab(self):
+        """Create API documentation tab content"""
+        dpg.add_text("API DOCUMENTATION & ENDPOINTS", color=self.BLOOMBERG_ORANGE)
+        dpg.add_separator()
 
-            # Recent help topics
-            dpg.add_text("RECENT HELP TOPICS", color=self.BLOOMBERG_YELLOW)
-            recent_topics = [
-                "How to create portfolios",
-                "Setting up price alerts",
-                "Understanding P&L calculations",
-                "Using technical indicators",
-                "Exporting data to Excel"
+        # API endpoints table
+        with dpg.table(header_row=True, borders_innerH=True, borders_outerH=True,
+                       scrollY=True, height=500):
+            dpg.add_table_column(label="Endpoint", width_fixed=True, init_width_or_weight=200)
+            dpg.add_table_column(label="Method", width_fixed=True, init_width_or_weight=80)
+            dpg.add_table_column(label="Description", width_fixed=True, init_width_or_weight=300)
+            dpg.add_table_column(label="Rate Limit", width_fixed=True, init_width_or_weight=100)
+            dpg.add_table_column(label="Auth Required", width_fixed=True, init_width_or_weight=120)
+
+            # Pre-computed API endpoints data
+            api_endpoints = [
+                ("/api/v1/market/quotes", "GET", "Real-time market quotes", "1000/min", "YES"),
+                ("/api/v1/portfolio/holdings", "GET", "Portfolio holdings data", "100/min", "YES"),
+                ("/api/v1/news/latest", "GET", "Latest financial news", "500/min", "NO"),
+                ("/api/v1/analytics/technical", "POST", "Technical analysis calculations", "50/min", "YES"),
+                ("/api/v1/market/history", "GET", "Historical market data", "200/min", "YES"),
+                ("/api/v1/user/profile", "GET", "User profile information", "10/min", "YES"),
+                ("/api/v1/orders/submit", "POST", "Submit trading orders", "100/min", "YES"),
+                ("/api/v1/market/screener", "POST", "Stock screening criteria", "50/min", "YES"),
+                ("/api/v1/research/reports", "GET", "Research reports access", "20/min", "YES"),
+                ("/api/v1/alerts/manage", "POST", "Manage price alerts", "100/min", "YES")
             ]
 
-            for topic in recent_topics:
-                with dpg.group(horizontal=True):
-                    dpg.add_text("•", color=self.BLOOMBERG_ORANGE)
-                    dpg.add_text(topic, color=self.BLOOMBERG_WHITE, wrap=300)
+            for endpoint, method, description, rate_limit, auth in api_endpoints:
+                with dpg.table_row():
+                    dpg.add_text(endpoint, color=self.BLOOMBERG_BLUE)
+                    method_color = self.BLOOMBERG_GREEN if method == "GET" else self.BLOOMBERG_ORANGE
+                    dpg.add_text(method, color=method_color)
+                    dpg.add_text(description, color=self.BLOOMBERG_WHITE)
+                    dpg.add_text(rate_limit, color=self.BLOOMBERG_YELLOW)
+                    auth_color = self.BLOOMBERG_RED if auth == "YES" else self.BLOOMBERG_GREEN
+                    dpg.add_text(auth, color=auth_color)
+
+    @monitor_performance
+    def create_right_help_panel(self):
+        """Create right quick actions panel"""
+        with operation("create_right_help_panel", module="help"):
+            with dpg.child_window(width=350, height=650, border=True):
+                dpg.add_text("QUICK ACTIONS", color=self.BLOOMBERG_ORANGE)
+                dpg.add_separator()
+
+                # Quick action buttons - pre-computed for performance
+                quick_actions = [
+                    ("📞 Contact Support", self.contact_support),
+                    ("📝 Send Feedback", self.send_feedback),
+                    ("📚 User Manual", self.open_manual),
+                    ("🎥 Watch Tutorials", self.open_tutorials),
+                    ("👥 Join Community", self.open_community),
+                    ("🔄 Check Updates", self.check_updates),
+                    ("⚙️ System Settings", self.open_settings),
+                    ("🐛 Report Issue", self.report_bug)
+                ]
+
+                for label, callback in quick_actions:
+                    dpg.add_button(label=label, callback=callback, width=-1, height=35)
+                    dpg.add_spacer(height=5)
+
+                dpg.add_separator()
+
+                # System information
+                dpg.add_text("SYSTEM INFORMATION", color=self.BLOOMBERG_YELLOW)
+                with dpg.table(header_row=False, borders_innerH=False, borders_outerH=False):
+                    dpg.add_table_column()
+                    dpg.add_table_column()
+
+                    # Pre-computed system info for performance
+                    system_info = [
+                        ("Terminal Version:", "4.2.1"),
+                        ("Build Date:", "2025-01-15"),
+                        ("Platform:", "Windows 11"),
+                        ("Memory Usage:", "2.4 GB"),
+                        ("CPU Usage:", "12%"),
+                        ("Network Status:", "Connected"),
+                        ("Data Feed:", "Live"),
+                        ("Session Time:", "02:34:12")
+                    ]
+
+                    for label, value in system_info:
+                        with dpg.table_row():
+                            dpg.add_text(label, color=self.BLOOMBERG_GRAY)
+                            value_color = self.BLOOMBERG_GREEN if "Connected" in value or "Live" in value else self.BLOOMBERG_WHITE
+                            dpg.add_text(value, color=value_color)
+
+                dpg.add_separator()
+
+                # Recent help topics
+                dpg.add_text("RECENT HELP TOPICS", color=self.BLOOMBERG_YELLOW)
+                recent_topics = [
+                    "How to create portfolios",
+                    "Setting up price alerts",
+                    "Understanding P&L calculations",
+                    "Using technical indicators",
+                    "Exporting data to Excel"
+                ]
+
+                for topic in recent_topics:
+                    with dpg.group(horizontal=True):
+                        dpg.add_text("•", color=self.BLOOMBERG_ORANGE)
+                        dpg.add_text(topic, color=self.BLOOMBERG_WHITE, wrap=300)
+
+                debug("Right help panel created", module="help")
 
     def create_help_status_bar(self):
         """Create help status bar"""
         with dpg.group(horizontal=True):
-            dpg.add_text("HELP STATUS:", color=self.BLOOMBERG_GRAY)
-            dpg.add_text("ONLINE", color=self.BLOOMBERG_GREEN)
-            dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
-            dpg.add_text("SUPPORT AVAILABLE:", color=self.BLOOMBERG_GRAY)
-            dpg.add_text("24/7", color=self.BLOOMBERG_GREEN)
-            dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
-            dpg.add_text("LAST UPDATED:", color=self.BLOOMBERG_GRAY)
-            dpg.add_text("2025-01-15", color=self.BLOOMBERG_WHITE)
-            dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
-            dpg.add_text("HELP VERSION:", color=self.BLOOMBERG_GRAY)
-            dpg.add_text("4.2.1", color=self.BLOOMBERG_WHITE)
+            status_items = [
+                ("HELP STATUS:", "ONLINE", self.BLOOMBERG_GRAY, self.BLOOMBERG_GREEN),
+                ("SUPPORT AVAILABLE:", "24/7", self.BLOOMBERG_GRAY, self.BLOOMBERG_GREEN),
+                ("LAST UPDATED:", "2025-01-15", self.BLOOMBERG_GRAY, self.BLOOMBERG_WHITE),
+                ("HELP VERSION:", "4.2.1", self.BLOOMBERG_GRAY, self.BLOOMBERG_WHITE)
+            ]
+
+            for i, (label, value, label_color, value_color) in enumerate(status_items):
+                if i > 0:
+                    dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
+                dpg.add_text(label, color=label_color)
+                dpg.add_text(value, color=value_color)
 
     # Navigation and callback methods
     def navigate_section(self, section_key):
@@ -411,88 +474,101 @@ class HelpTab(BaseTab):
         }
 
         target_tab = section_map.get(section_key, "About")
-        logger.info(f"Navigating to help section: {target_tab}", module="Help_Tab", context={'target_tab': target_tab})
+        info("Navigating to help section", module="help",
+             context={'section_key': section_key, 'target_tab': target_tab})
 
     def search_help(self):
         """Search help topics"""
-        logger.info("Help search functionality", module="Help_Tab")
+        with operation("search_help", module="help"):
+            info("Help search functionality activated", module="help")
 
     # Support callback methods
     def contact_support(self):
         """Contact support"""
-        logger.info("Contacting support team...", module="Help_Tab")
-        logger.info("Support: support@fincept.in | Phone: +1 (555) 123-4567", module="Help_Tab")
+        info("Contacting support team", module="help",
+             context={'email': 'support@fincept.in', 'phone': '+1 (555) 123-4567'})
 
     def contact_email_support(self):
         """Contact email support"""
-        logger.info("Opening email support: support@fincept.in", module="Help_Tab")
+        info("Opening email support", module="help",
+             context={'email': 'support@fincept.in'})
 
     def open_live_chat(self):
         """Open live chat"""
-        logger.info("Opening live chat support...", module="Help_Tab")
+        info("Opening live chat support", module="help")
 
     def contact_phone_support(self):
         """Contact phone support"""
-        logger.info("Phone support: +1 (555) 123-4567", module="Help_Tab")
+        info("Initiating phone support", module="help",
+             context={'phone': '+1 (555) 123-4567'})
 
     def send_feedback(self):
         """Send feedback"""
-        logger.info("Opening feedback form...", module="Help_Tab")
+        info("Opening feedback form", module="help")
 
     def open_manual(self):
         """Open user manual"""
-        logger.info("Opening user manual...", module="Help_Tab")
+        info("Opening user manual", module="help")
 
     def open_documentation(self):
         """Open documentation"""
-        logger.info("Opening documentation...", module="Help_Tab")
+        info("Opening documentation", module="help")
 
     def open_tutorials(self):
         """Open video tutorials"""
-        logger.info("Opening video tutorials...", module="Help_Tab")
+        info("Opening video tutorials", module="help")
 
     def open_community(self):
         """Open community forum"""
-        logger.info("Opening community forum...", module="Help_Tab")
+        info("Opening community forum", module="help")
 
     def check_updates(self):
         """Check for updates"""
-        logger.info("Checking for updates...", module="Help_Tab")
+        info("Checking for updates", module="help")
 
     def open_settings(self):
         """Open settings"""
-        logger.info("Opening system settings...", module="Help_Tab")
+        info("Opening system settings", module="help")
 
     def report_bug(self):
         """Report a bug"""
-        logger.info("Opening bug report form...", module="Help_Tab")
+        info("Opening bug report form", module="help")
 
     def request_feature(self):
         """Request a feature"""
-        logger.info("Opening feature request form...", module="Help_Tab")
+        info("Opening feature request form", module="help")
 
+    @monitor_performance
     def back_to_dashboard(self):
         """Navigate back to dashboard"""
-        try:
-            if hasattr(self.main_app, 'tabs') and 'dashboard' in self.main_app.tabs:
-                logger.info("Returning to Dashboard...", module="Help_Tab")
-                # Navigate to dashboard tab if available
-                dpg.set_value("main_tab_bar", "tab_dashboard")
-            else:
-                logger.info("Dashboard not available", module="Help_Tab")
-        except Exception as e:
-            logger.error(f"Error navigating to dashboard: {e}", module="Help_Tab", context={'e': e})
+        with operation("back_to_dashboard", module="help"):
+            try:
+                if hasattr(self.main_app, 'tabs') and 'dashboard' in self.main_app.tabs:
+                    info("Returning to Dashboard", module="help")
+                    # Navigate to dashboard tab if available
+                    dpg.set_value("main_tab_bar", "tab_dashboard")
+                else:
+                    warning("Dashboard not available", module="help")
+            except Exception as e:
+                error("Error navigating to dashboard", module="help",
+                      context={'error': str(e)}, exc_info=True)
 
     def resize_components(self, left_width, center_width, right_width, top_height, bottom_height, cell_height):
         """Handle component resizing"""
         # Bloomberg terminal has fixed layout
-        pass
+        debug("Component resize requested - using fixed Bloomberg layout", module="help",
+              context={'left_width': left_width, 'center_width': center_width})
 
+    @monitor_performance
     def cleanup(self):
         """Clean up help tab resources"""
-        try:
-            logger.info("🧹 Cleaning up help tab...", module="Help_Tab")
-            self.scroll_position = 0
-            logger.info("Help tab cleanup complete", module="Help_Tab")
-        except Exception as e:
-            logger.error(f"Error in help cleanup: {e}", module="Help_Tab", context={'e': e})
+        with operation("help_tab_cleanup", module="help"):
+            try:
+                info("Cleaning up help tab resources", module="help")
+                self.scroll_position = 0
+                self._cached_datetime = None
+                self._datetime_cache_time = 0
+                info("Help tab cleanup complete", module="help")
+            except Exception as e:
+                error("Error in help cleanup", module="help",
+                      context={'error': str(e)}, exc_info=True)
