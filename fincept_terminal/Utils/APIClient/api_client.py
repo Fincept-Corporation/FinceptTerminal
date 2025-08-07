@@ -1,16 +1,11 @@
-# api_client.py - Complete API Client for Fincept API v2.1.0
-"""
-Complete API Client helper for Fincept API v2.1.0
-Provides easy methods for DearPyGUI tabs to interact with the new API
-Includes all endpoints: Chat, Database, User, Support, Payment, etc.
-"""
+# api_client.py
 
 import requests
 from typing import Dict, Any, List
+from fincept_terminal.Utils.Logging.logger import info, error, warning, monitor_performance
 
 
 class FinceptAPIClient:
-    """Complete API client for Fincept API v2.1.0 with all endpoints"""
 
     def __init__(self, session_data: Dict[str, Any]):
         self.api_base = "https://finceptbackend.share.zrok.io"
@@ -18,6 +13,8 @@ class FinceptAPIClient:
         self.api_key = session_data.get("api_key")
         self.user_type = session_data.get("user_type", "guest")
         self.request_count = 0
+
+        info("API client initialized", context={"user_type": self.user_type, "has_api_key": bool(self.api_key)})
 
     def get_headers(self) -> Dict[str, str]:
         """Get authentication headers"""
@@ -29,7 +26,7 @@ class FinceptAPIClient:
         return headers
 
     def make_request(self, method: str, endpoint: str, data: dict = None, params: dict = None, timeout: int = 10) -> \
-    Dict[str, Any]:
+            Dict[str, Any]:
         """Make authenticated API request"""
         try:
             url = f"{self.api_base}{endpoint}"
@@ -47,7 +44,16 @@ class FinceptAPIClient:
             elif method.upper() == "DELETE":
                 response = requests.delete(url, headers=headers, timeout=timeout)
             else:
+                error("Unsupported HTTP method", context={"method": method, "endpoint": endpoint})
                 return {"success": False, "error": f"Unsupported method: {method}"}
+
+            # Log failed requests only
+            if response.status_code >= 400:
+                error("API request failed", context={
+                    "method": method,
+                    "endpoint": endpoint,
+                    "status_code": response.status_code
+                })
 
             return {
                 "success": response.status_code < 400,
@@ -57,12 +63,16 @@ class FinceptAPIClient:
             }
 
         except requests.exceptions.Timeout:
+            warning("API request timeout", context={"endpoint": endpoint, "timeout": timeout})
             return {"success": False, "error": "Request timeout"}
         except requests.exceptions.ConnectionError:
+            error("API connection error", context={"endpoint": endpoint})
             return {"success": False, "error": "Connection error - API server not available"}
         except requests.exceptions.RequestException as e:
+            error("API request exception", context={"endpoint": endpoint, "error": str(e)})
             return {"success": False, "error": f"Request error: {str(e)}"}
         except Exception as e:
+            error("Unexpected API error", context={"endpoint": endpoint, "error": str(e)})
             return {"success": False, "error": f"Unexpected error: {str(e)}"}
 
     # ============================================
@@ -89,12 +99,14 @@ class FinceptAPIClient:
         result = self.make_request("POST", "/auth/logout")
 
         if result["success"] and result["data"].get("success"):
-            # Clear local session data
+            info("User logged out successfully", context={"user_type": self.user_type})
             self.clear_session()
             return {
                 "success": True,
                 "message": result["data"]["data"].get("message", "Logged out successfully")
             }
+
+        error("Logout failed", context={"user_type": self.user_type})
         return {
             "success": False,
             "error": result.get("error", "Failed to logout")
@@ -123,6 +135,7 @@ class FinceptAPIClient:
 
     def force_logout(self) -> Dict[str, Any]:
         """Force logout without API call (for offline situations)"""
+        info("Force logout executed", context={"user_type": self.user_type})
         self.clear_session()
         return {
             "success": True,
@@ -268,6 +281,7 @@ class FinceptAPIClient:
         result = self.make_request("DELETE", "/chat/sessions/bulk-delete", data)
 
         if result["success"] and result["data"].get("success"):
+            info("Bulk chat sessions deleted", context={"count": result["data"]["data"]["deleted_count"]})
             return {
                 "success": True,
                 "deleted_count": result["data"]["data"]["deleted_count"],
@@ -290,6 +304,7 @@ class FinceptAPIClient:
         result = self.make_request("POST", "/chat/export", data)
 
         if result["success"] and result["data"].get("success"):
+            info("Chat sessions exported", context={"format": format_type, "count": len(session_uuids or [])})
             return {
                 "success": True,
                 "export_data": result["data"]["data"]
@@ -393,6 +408,7 @@ class FinceptAPIClient:
             }
         return {"success": False, "error": result.get("error", "Failed to get usage")}
 
+    @monitor_performance
     def regenerate_api_key(self) -> Dict[str, Any]:
         """Regenerate user API key"""
         if self.user_type != "registered":
@@ -404,11 +420,14 @@ class FinceptAPIClient:
             # Update our stored API key
             self.api_key = new_api_key
             self.session_data["api_key"] = new_api_key
+            info("API key regenerated successfully")
             return {
                 "success": True,
                 "api_key": new_api_key,
                 "message": result["data"]["data"].get("message", "API key regenerated")
             }
+
+        error("API key regeneration failed")
         return {"success": False, "error": result.get("error", "Failed to regenerate API key")}
 
     def get_user_transactions(self) -> Dict[str, Any]:
@@ -460,6 +479,7 @@ class FinceptAPIClient:
         data = {"enable": enable}
         result = self.make_request("POST", "/user/toggle-2fa", data)
         if result["success"] and result["data"].get("success"):
+            info("2FA toggled", context={"enabled": enable})
             return {
                 "success": True,
                 "message": result["data"]["data"].get("message", "2FA toggled")
@@ -478,6 +498,7 @@ class FinceptAPIClient:
         data = {"database_name": database_name}
         result = self.make_request("POST", "/database/subscribe", data)
         if result["success"] and result["data"].get("success"):
+            info("Database subscription successful", context={"database": database_name})
             return {
                 "success": True,
                 "message": result["data"].get("message", "Subscription successful")
@@ -502,6 +523,7 @@ class FinceptAPIClient:
         }
         result = self.make_request("POST", "/device/bind", data)
         if result["success"] and result["data"].get("success"):
+            info("Device bound successfully", context={"device_name": device_name, "platform": platform})
             return {
                 "success": True,
                 "device_id": result["data"]["data"]["device_id"],
@@ -542,6 +564,8 @@ class FinceptAPIClient:
 
         result = self.make_request("POST", "/support/ticket", data)
         if result["success"] and result["data"].get("success"):
+            info("Support ticket created",
+                 context={"category": category, "ticket_id": result["data"]["data"]["ticket_id"]})
             return {
                 "success": True,
                 "ticket_id": result["data"]["data"]["ticket_id"],
@@ -619,6 +643,7 @@ class FinceptAPIClient:
         data = {"amount_inr": amount_inr}
         result = self.make_request("POST", "/payment/create-order", data)
         if result["success"] and result["data"].get("success"):
+            info("Payment order created", context={"amount_inr": amount_inr})
             return {
                 "success": True,
                 "order": result["data"]["data"]
@@ -655,6 +680,7 @@ class FinceptAPIClient:
                 "headers": dict(response.headers)
             }
         except Exception as e:
+            error("Guest status request failed", context={"error": str(e)})
             return {"success": False, "error": f"Request error: {str(e)}"}
 
     def get_or_create_guest_session(self, device_id: str, device_name: str, platform: str,
@@ -698,6 +724,7 @@ class FinceptAPIClient:
             if register_response.status_code == 200:
                 data = register_response.json()
                 if data.get("success"):
+                    info("New guest session created", context={"device_name": device_name})
                     return {
                         "success": True,
                         "data": data.get("data", {}),
@@ -726,12 +753,17 @@ class FinceptAPIClient:
                             "message": "Existing session found via auth"
                         }
 
+            error("Failed to get or create guest session", context={
+                "status_code": register_response.status_code,
+                "device_id": device_id
+            })
             return {
                 "success": False,
                 "error": f"Failed to get or create session: {register_response.status_code}"
             }
 
         except Exception as e:
+            error("Guest session request exception", context={"error": str(e)})
             return {"success": False, "error": f"Request error: {str(e)}"}
 
     def extend_guest_session(self) -> Dict[str, Any]:
@@ -741,6 +773,9 @@ class FinceptAPIClient:
 
         result = self.make_request("POST", "/guest/extend")
         if result["success"] and result["data"].get("success"):
+            info("Guest session extended", context={
+                "hours_added": result["data"]["data"]["hours_added"]
+            })
             return {
                 "success": True,
                 "message": result["data"]["data"]["message"],
@@ -875,13 +910,9 @@ class FinceptAPIClient:
         else:
             return error
 
-    def get_error_context(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Get detailed error context for debugging"""
+    def get_error_context(self) -> Dict[str, Any]:
+        """Get error context for debugging"""
         return {
-            "success": result.get("success", False),
-            "status_code": result.get("status_code"),
-            "error": result.get("error"),
-            "headers": result.get("headers", {}),
             "request_count": self.request_count,
             "user_type": self.user_type,
             "api_key_present": bool(self.api_key),
@@ -908,6 +939,9 @@ class FinceptAPIClient:
                 "request": req,
                 "result": result
             })
+
+        if len(requests) > 5:  # Only log for larger batches
+            info("Batch API request completed", context={"count": len(requests)})
 
         return results
 
@@ -938,6 +972,7 @@ class FinceptAPIClient:
             "session_start": getattr(self, '_session_start', 'unknown')
         }
 
+    @monitor_performance
     def benchmark_endpoint(self, endpoint: str, iterations: int = 5) -> Dict[str, Any]:
         """Benchmark an endpoint performance"""
         import time
@@ -959,6 +994,12 @@ class FinceptAPIClient:
         # Calculate statistics
         response_times = [r["response_time"] for r in results]
         success_count = sum(1 for r in results if r["success"])
+
+        info("Endpoint benchmark completed", context={
+            "endpoint": endpoint,
+            "success_rate": success_count / iterations,
+            "avg_response_time": sum(response_times) / len(response_times)
+        })
 
         return {
             "endpoint": endpoint,
