@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional, Tuple
 
 # Import enhanced logging system
 from fincept_terminal.Utils.Logging.logger import (
-    info, error, debug, warning, log_operation, performance_monitor
+    info, error, debug, warning, operation, monitor_performance
 )
 
 # Try to import yfinance with proper error handling
@@ -94,7 +94,7 @@ class MarketTab(BaseTab):
         super().__init__(main_app)
 
         try:
-            with log_operation("market_tab_initialization", module="MarketTab"):
+            with operation("market_tab_initialization", module="MarketTab"):
                 info("Initializing Market Tab", module="MarketTab")
 
                 self.main_app = main_app
@@ -145,11 +145,11 @@ class MarketTab(BaseTab):
         """Get tab label"""
         return "Markets"
 
-    @performance_monitor
+    @monitor_performance
     def initialize_market_data(self):
         """Initialize market data with enhanced error handling and logging"""
         try:
-            with log_operation("initialize_market_data", module="MarketTab"):
+            with operation("initialize_market_data", module="MarketTab"):
                 debug("Initializing market data", module="MarketTab")
 
                 with self.data_lock:
@@ -200,11 +200,11 @@ class MarketTab(BaseTab):
             # Initialize with empty data to prevent further errors
             self.market_data = {}
 
-    @performance_monitor
+    @monitor_performance
     def initialize_regional_data(self):
         """Initialize regional stock data with enhanced error handling"""
         try:
-            with log_operation("initialize_regional_data", module="MarketTab"):
+            with operation("initialize_regional_data", module="MarketTab"):
                 debug("Initializing regional data", module="MarketTab")
 
                 with self.data_lock:
@@ -306,7 +306,7 @@ class MarketTab(BaseTab):
                   context={'symbols_count': len(symbols), 'error': str(e)}, exc_info=True)
             return {}
 
-    @performance_monitor
+    @monitor_performance
     def get_real_stock_data_batch(self, symbols: List[str], timeout: int = 15) -> Dict[str, Dict[str, Any]]:
         """Get real stock data using yfinance with comprehensive error handling and optimization"""
         if not YFINANCE_AVAILABLE:
@@ -314,7 +314,7 @@ class MarketTab(BaseTab):
             return self.get_fallback_regional_data(symbols)
 
         try:
-            with log_operation("fetch_real_stock_data", module="MarketTab"):
+            with operation("fetch_real_stock_data", module="MarketTab"):
                 info(f"Fetching real data for {len(symbols)} symbols", module="MarketTab",
                      context={'symbols': symbols[:5], 'timeout': timeout})  # Don't log all symbols
 
@@ -432,7 +432,7 @@ class MarketTab(BaseTab):
 
         return should_update
 
-    @performance_monitor
+    @monitor_performance
     def update_regional_data_background(self):
         """Update regional data in background with comprehensive error handling"""
         if self.data_loading or self.shutdown_requested:
@@ -441,7 +441,7 @@ class MarketTab(BaseTab):
 
         def fetch_regional_data():
             try:
-                with log_operation("background_regional_data_update", module="MarketTab"):
+                with operation("background_regional_data_update", module="MarketTab"):
                     self.data_loading = True
                     info("Starting background regional data update", module="MarketTab")
 
@@ -563,11 +563,11 @@ class MarketTab(BaseTab):
             error("Failed to start background update system", module="MarketTab",
                   context={'error': str(e)}, exc_info=True)
 
-    @performance_monitor
+    @monitor_performance
     def create_content(self):
         """Create Bloomberg-style market terminal layout with comprehensive error handling"""
         try:
-            with log_operation("create_market_content", module="MarketTab"):
+            with operation("create_market_content", module="MarketTab"):
                 info("Creating market tab content", module="MarketTab")
 
                 # Top bar with branding and search
@@ -906,7 +906,7 @@ class MarketTab(BaseTab):
             error("Failed to create status bar", module="MarketTab",
                   context={'error': str(e)}, exc_info=True)
 
-    @performance_monitor
+    @monitor_performance
     def update_market_data(self):
         """Update market data with simulated changes and comprehensive error handling"""
         try:
@@ -1009,7 +1009,7 @@ class MarketTab(BaseTab):
     def refresh_callback(self):
         """Manual refresh callback with comprehensive error handling"""
         try:
-            with log_operation("manual_refresh", module="MarketTab"):
+            with operation("manual_refresh", module="MarketTab"):
                 info("Manual refresh requested", module="MarketTab")
 
                 # Reinitialize market data
@@ -1059,7 +1059,7 @@ class MarketTab(BaseTab):
     def retry_callback(self):
         """Retry loading data after error"""
         try:
-            with log_operation("retry_data_load", module="MarketTab"):
+            with operation("retry_data_load", module="MarketTab"):
                 info("Retry data load requested", module="MarketTab")
 
                 self.initialize_market_data()
@@ -1085,11 +1085,11 @@ class MarketTab(BaseTab):
             warning("Resize handling failed", module="MarketTab",
                     context={'error': str(e)})
 
-    @performance_monitor
+    @monitor_performance
     def cleanup(self):
         """Clean up resources with comprehensive error handling"""
         try:
-            with log_operation("market_tab_cleanup", module="MarketTab"):
+            with operation("market_tab_cleanup", module="MarketTab"):
                 info("Starting Market Tab cleanup", module="MarketTab")
 
                 # Signal shutdown

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 import dearpygui.dearpygui as dpg
 from fincept_terminal.Utils.base_tab import BaseTab
 import datetime
@@ -8,32 +7,33 @@ import threading
 import time
 import requests
 import json
-import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Any
-from fincept_terminal.Utils.Logging.logger import logger, log_operation
 
-# Configure logging to handle encoding issues
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Import new logging system
+from fincept_terminal.Utils.Logging.logger import (
+    logger, debug, info, warning, error, operation, monitor_performance
+)
 
 # Try to import yfinance, fallback if not available
 try:
     import yfinance as yf
 
     YFINANCE_AVAILABLE = True
+    info("yfinance library loaded successfully")
 except ImportError:
     YFINANCE_AVAILABLE = False
-    logger.warning("yfinance not available - using fallback data")
+    warning("yfinance not available - using fallback data")
 
 # Try to import feedparser, fallback if not available
 try:
     import feedparser
 
     FEEDPARSER_AVAILABLE = True
+    info("feedparser library loaded successfully")
 except ImportError:
     FEEDPARSER_AVAILABLE = False
-    logger.warning("feedparser not available - using fallback news")
+    warning("feedparser not available - using fallback news")
 
 
 class DashboardTab(BaseTab):
@@ -41,27 +41,40 @@ class DashboardTab(BaseTab):
 
     def __init__(self, main_app=None):
         super().__init__(main_app)
-        self.main_app = main_app
 
-        # Bloomberg color scheme
-        self.BLOOMBERG_ORANGE = [255, 165, 0]
-        self.BLOOMBERG_WHITE = [255, 255, 255]
-        self.BLOOMBERG_RED = [255, 0, 0]
-        self.BLOOMBERG_GREEN = [0, 200, 0]
-        self.BLOOMBERG_YELLOW = [255, 255, 0]
-        self.BLOOMBERG_GRAY = [120, 120, 120]
+        try:
+            with logger.operation("dashboard_tab_initialization"):
+                info("Initializing Dashboard Tab")
 
-        # Data refresh control
-        self.last_update = None
-        self.update_interval = 3600  # 1 hour in seconds
-        self.data_loading = False
-        self._lock = threading.Lock()  # Thread safety
+                self.main_app = main_app
 
-        # Initialize data
-        self.initialize_data()
+                # Bloomberg color scheme
+                self.BLOOMBERG_ORANGE = [255, 165, 0]
+                self.BLOOMBERG_WHITE = [255, 255, 255]
+                self.BLOOMBERG_RED = [255, 0, 0]
+                self.BLOOMBERG_GREEN = [0, 200, 0]
+                self.BLOOMBERG_YELLOW = [255, 255, 0]
+                self.BLOOMBERG_GRAY = [120, 120, 120]
 
-        # Start immediate background fetch (non-blocking)
-        self.start_background_updates()
+                # Data refresh control
+                self.last_update = None
+                self.update_interval = 3600  # 1 hour in seconds
+                self.data_loading = False
+                self._lock = threading.Lock()
+
+                # Initialize data
+                self.initialize_data()
+
+                # Start immediate background fetch (non-blocking)
+                self.start_background_updates()
+
+                info("Dashboard Tab initialized successfully",
+                     context={'yfinance_available': YFINANCE_AVAILABLE,
+                              'feedparser_available': FEEDPARSER_AVAILABLE})
+
+        except Exception as e:
+            error("Dashboard Tab initialization failed", context={'error': str(e)}, exc_info=True)
+            raise
 
     def get_label(self):
         return "Fincept Terminal"
@@ -79,7 +92,7 @@ class DashboardTab(BaseTab):
                 value = ''.join(c for c in value if c.isdigit() or c in '.-')
             return float(value) if value else default
         except (ValueError, TypeError, UnicodeDecodeError) as e:
-            logger.warning(f"Error converting value to float: {value}, error: {e}")
+            warning(f"Error converting value to float", context={'value': str(value), 'error': str(e)})
             return default
 
     def safe_int_conversion(self, value: Any, default: int = 0) -> int:
@@ -94,12 +107,14 @@ class DashboardTab(BaseTab):
                 value = ''.join(c for c in value if c.isdigit())
             return int(float(value)) if value else default
         except (ValueError, TypeError, UnicodeDecodeError) as e:
-            logger.warning(f"Error converting value to int: {value}, error: {e}")
+            warning(f"Error converting value to int", context={'value': str(value), 'error': str(e)})
             return default
 
+    @monitor_performance
     def get_stock_data_optimized(self, symbols: List[str], timeout: int = 10) -> Dict[str, Dict[str, Any]]:
         """Optimized stock data fetch using yfinance history method and concurrent processing"""
         if not YFINANCE_AVAILABLE:
+            debug("yfinance not available, using fallback data")
             return self.get_fallback_stock_data(symbols)
 
         result = {}
@@ -114,7 +129,7 @@ class DashboardTab(BaseTab):
                 hist = ticker.history(period="5d", interval="1d", timeout=timeout)
 
                 if hist.empty or len(hist) < 2:
-                    logger.warning(f"Insufficient data for {symbol}, using fallback")
+                    warning(f"Insufficient data for {symbol}, using fallback")
                     return symbol, self.get_fallback_stock_data([symbol])[symbol]
 
                 # Get the most recent data
@@ -141,31 +156,46 @@ class DashboardTab(BaseTab):
                     "open": round(open_price, 2)
                 }
 
+                debug(f"Successfully fetched data for {symbol}",
+                      context={'price': current_price, 'change_pct': change_pct})
+
                 return symbol, stock_data
 
             except Exception as e:
-                logger.error(f"Error fetching data for {symbol}: {e}")
+                warning(f"Error fetching data for {symbol}", context={'error': str(e)})
                 return symbol, self.get_fallback_stock_data([symbol])[symbol]
 
         # Use ThreadPoolExecutor for concurrent fetching
         try:
-            with ThreadPoolExecutor(max_workers=min(10, len(symbols))) as executor:
-                # Submit all tasks
-                future_to_symbol = {executor.submit(fetch_single_stock, symbol): symbol
-                                    for symbol in symbols}
+            with logger.operation("concurrent_stock_fetch"):
+                info(f"Fetching stock data for {len(symbols)} symbols concurrently")
 
-                # Collect results as they complete
-                for future in as_completed(future_to_symbol, timeout=timeout + 5):
-                    try:
-                        symbol, data = future.result(timeout=5)
-                        result[symbol] = data
-                    except Exception as e:
-                        symbol = future_to_symbol[future]
-                        logger.error(f"Failed to get data for {symbol}: {e}")
-                        result[symbol] = self.get_fallback_stock_data([symbol])[symbol]
+                with ThreadPoolExecutor(max_workers=min(10, len(symbols))) as executor:
+                    # Submit all tasks
+                    future_to_symbol = {executor.submit(fetch_single_stock, symbol): symbol
+                                        for symbol in symbols}
+
+                    # Collect results as they complete
+                    successful_fetches = 0
+                    failed_fetches = 0
+
+                    for future in as_completed(future_to_symbol, timeout=timeout + 5):
+                        try:
+                            symbol, data = future.result(timeout=5)
+                            result[symbol] = data
+                            successful_fetches += 1
+                        except Exception as e:
+                            symbol = future_to_symbol[future]
+                            error(f"Failed to get data for {symbol}", context={'error': str(e)})
+                            result[symbol] = self.get_fallback_stock_data([symbol])[symbol]
+                            failed_fetches += 1
+
+                info("Concurrent stock fetch completed",
+                     context={'successful': successful_fetches, 'failed': failed_fetches,
+                              'success_rate': f"{(successful_fetches / (successful_fetches + failed_fetches) * 100):.1f}%"})
 
         except Exception as e:
-            logger.error(f"Error in concurrent stock data fetch: {e}")
+            error("Error in concurrent stock data fetch", context={'error': str(e)}, exc_info=True)
             return self.get_fallback_stock_data(symbols)
 
         # Ensure all symbols have data
@@ -207,7 +237,7 @@ class DashboardTab(BaseTab):
                     "open": round(price * 0.995, 2)
                 }
             except Exception as e:
-                logger.error(f"Error generating fallback data for {symbol}: {e}")
+                error(f"Error generating fallback data for {symbol}", context={'error': str(e)}, exc_info=True)
                 result[symbol] = {
                     "price": 100.0, "change_pct": 0.0, "change_val": 0.0,
                     "volume": 1000000, "high": 103.0, "low": 97.0, "open": 99.5
@@ -215,9 +245,11 @@ class DashboardTab(BaseTab):
 
         return result
 
+    @monitor_performance
     def get_indices_data_optimized(self, timeout: int = 10) -> Dict[str, Dict[str, float]]:
         """Optimized index data fetch with better error handling"""
         if not YFINANCE_AVAILABLE:
+            debug("yfinance not available, using fallback indices data")
             return self.get_fallback_indices_data()
 
         symbols = ["^GSPC", "^DJI", "^IXIC", "^FTSE", "^GDAXI", "^N225"]
@@ -231,6 +263,7 @@ class DashboardTab(BaseTab):
                 hist = ticker.history(period="5d", interval="1d", timeout=timeout)
 
                 if hist.empty or len(hist) < 2:
+                    warning(f"Insufficient data for index {name}", context={'symbol': symbol})
                     fallback = self.get_fallback_indices_data()
                     return name, fallback[name]
 
@@ -238,33 +271,47 @@ class DashboardTab(BaseTab):
                 prev_value = self.safe_float_conversion(hist['Close'].iloc[-2])
                 change_pct = ((current_value - prev_value) / prev_value) * 100 if prev_value != 0 else 0
 
+                debug(f"Successfully fetched index data for {name}",
+                      context={'value': current_value, 'change': change_pct})
+
                 return name, {
                     "value": round(current_value, 2),
                     "change": round(change_pct, 2)
                 }
 
             except Exception as e:
-                logger.error(f"Error fetching index {name} ({symbol}): {e}")
+                error(f"Error fetching index {name}", context={'symbol': symbol, 'error': str(e)})
                 fallback = self.get_fallback_indices_data()
                 return name, fallback[name]
 
         try:
-            with ThreadPoolExecutor(max_workers=6) as executor:
-                future_to_name = {executor.submit(fetch_single_index, symbol, name): name
-                                  for symbol, name in zip(symbols, names)}
+            with logger.operation("concurrent_indices_fetch"):
+                info(f"Fetching indices data concurrently")
 
-                for future in as_completed(future_to_name, timeout=timeout + 5):
-                    try:
-                        name, data = future.result(timeout=5)
-                        result[name] = data
-                    except Exception as e:
-                        name = future_to_name[future]
-                        logger.error(f"Failed to get index data for {name}: {e}")
-                        fallback = self.get_fallback_indices_data()
-                        result[name] = fallback[name]
+                with ThreadPoolExecutor(max_workers=6) as executor:
+                    future_to_name = {executor.submit(fetch_single_index, symbol, name): name
+                                      for symbol, name in zip(symbols, names)}
+
+                    successful_fetches = 0
+                    failed_fetches = 0
+
+                    for future in as_completed(future_to_name, timeout=timeout + 5):
+                        try:
+                            name, data = future.result(timeout=5)
+                            result[name] = data
+                            successful_fetches += 1
+                        except Exception as e:
+                            name = future_to_name[future]
+                            error(f"Failed to get index data for {name}", context={'error': str(e)})
+                            fallback = self.get_fallback_indices_data()
+                            result[name] = fallback[name]
+                            failed_fetches += 1
+
+                info("Indices data fetch completed",
+                     context={'successful': successful_fetches, 'failed': failed_fetches})
 
         except Exception as e:
-            logger.error(f"Error in concurrent index data fetch: {e}")
+            error("Error in concurrent index data fetch", context={'error': str(e)}, exc_info=True)
             return self.get_fallback_indices_data()
 
         return result
@@ -284,70 +331,79 @@ class DashboardTab(BaseTab):
                            "change": round(random.uniform(-1, 1), 2)}
         }
 
+    @monitor_performance
     def get_news_optimized(self, timeout: int = 15) -> List[str]:
         """Optimized news fetch with better encoding handling"""
         if not FEEDPARSER_AVAILABLE:
+            debug("feedparser not available, using fallback news")
             return self.get_fallback_news()
 
         try:
-            # Use more reliable news sources
-            feeds = [
-                "https://feeds.finance.yahoo.com/rss/2.0/headline",
-                "https://www.cnbc.com/id/100003114/device/rss/rss.html",
-                "https://feeds.marketwatch.com/marketwatch/topstories/"
-            ]
+            with logger.operation("news_fetch"):
+                info("Fetching news headlines from multiple sources")
 
-            news_headlines = []
+                # Use more reliable news sources
+                feeds = [
+                    "https://feeds.finance.yahoo.com/rss/2.0/headline",
+                    "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+                    "https://feeds.marketwatch.com/marketwatch/topstories/"
+                ]
 
-            def fetch_feed(feed_url: str) -> List[str]:
-                """Fetch headlines from a single feed"""
-                try:
-                    feed = feedparser.parse(feed_url)
-                    headlines = []
+                news_headlines = []
 
-                    if feed.entries:
-                        for entry in feed.entries[:3]:  # Get max 3 from each feed
-                            try:
-                                title = entry.title.strip()
-                                # Handle encoding issues
-                                if isinstance(title, bytes):
-                                    title = title.decode('utf-8', errors='ignore')
+                def fetch_feed(feed_url: str) -> List[str]:
+                    """Fetch headlines from a single feed"""
+                    try:
+                        debug(f"Fetching from feed: {feed_url}")
+                        feed = feedparser.parse(feed_url)
+                        headlines = []
 
-                                # Clean up title
-                                title = title.encode('ascii', errors='ignore').decode('ascii')
+                        if feed.entries:
+                            for entry in feed.entries[:3]:  # Get max 3 from each feed
+                                try:
+                                    title = entry.title.strip()
+                                    # Handle encoding issues
+                                    if isinstance(title, bytes):
+                                        title = title.decode('utf-8', errors='ignore')
 
-                                if len(title) > 80:
-                                    title = title[:77] + "..."
+                                    # Clean up title
+                                    title = title.encode('ascii', errors='ignore').decode('ascii')
 
-                                if title:  # Only add non-empty titles
-                                    headlines.append(title)
-                            except Exception as e:
-                                logger.warning(f"Error processing news entry: {e}")
-                                continue
+                                    if len(title) > 80:
+                                        title = title[:77] + "..."
 
-                    return headlines
-                except Exception as e:
-                    logger.error(f"Error parsing feed {feed_url}: {e}")
-                    return []
+                                    if title:  # Only add non-empty titles
+                                        headlines.append(title)
+                                except Exception as e:
+                                    warning(f"Error processing news entry", context={'error': str(e)})
+                                    continue
 
-            # Try feeds in order, stop when we get enough news
-            for feed_url in feeds:
-                try:
-                    headlines = fetch_feed(feed_url)
-                    news_headlines.extend(headlines)
-                    if len(news_headlines) >= 6:
-                        break
-                except Exception as e:
-                    logger.error(f"Error fetching from {feed_url}: {e}")
-                    continue
+                        debug(f"Fetched {len(headlines)} headlines from feed")
+                        return headlines
+                    except Exception as e:
+                        warning(f"Error parsing feed", context={'feed_url': feed_url, 'error': str(e)})
+                        return []
 
-            if not news_headlines:
-                return self.get_fallback_news()
+                # Try feeds in order, stop when we get enough news
+                for feed_url in feeds:
+                    try:
+                        headlines = fetch_feed(feed_url)
+                        news_headlines.extend(headlines)
+                        if len(news_headlines) >= 6:
+                            break
+                    except Exception as e:
+                        error(f"Error fetching from feed", context={'feed_url': feed_url, 'error': str(e)})
+                        continue
 
-            return news_headlines[:6]
+                if not news_headlines:
+                    warning("No news headlines fetched, using fallback")
+                    return self.get_fallback_news()
+
+                info(f"Successfully fetched {len(news_headlines)} news headlines")
+                return news_headlines[:6]
 
         except Exception as e:
-            logger.error(f"Error fetching news: {e}")
+            error("Error fetching news", context={'error': str(e)}, exc_info=True)
             return self.get_fallback_news()
 
     def get_fallback_news(self) -> List[str]:
@@ -363,92 +419,125 @@ class DashboardTab(BaseTab):
 
     def initialize_data(self):
         """Initialize with fallback data for immediate display"""
-        # Stock tickers - optimized list
-        self.tickers = ["AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "NVDA", "JPM", "V", "JNJ",
-                        "BAC", "PG", "MA", "UNH", "HD", "INTC", "VZ", "DIS", "PYPL", "NFLX"]
+        try:
+            with logger.operation("data_initialization"):
+                info("Initializing dashboard data")
 
-        # Initialize with fallback data for immediate display
-        with self._lock:
-            self.stock_data = self.get_fallback_stock_data(self.tickers)
-            self.indices = self.get_fallback_indices_data()
-            self.news_headlines = self.get_fallback_news()
+                # Stock tickers - optimized list
+                self.tickers = ["AAPL", "MSFT", "AMZN", "GOOGL", "META", "TSLA", "NVDA", "JPM", "V", "JNJ",
+                                "BAC", "PG", "MA", "UNH", "HD", "INTC", "VZ", "DIS", "PYPL", "NFLX"]
 
-        # Economic indicators (keeping static for now as they need specialized APIs)
-        self.economic_indicators = {
-            "US 10Y Treasury": {"value": 4.35, "change": 0.05},
-            "US GDP Growth": {"value": 2.8, "change": 0.1},
-            "US Unemployment": {"value": 3.6, "change": -0.1},
-            "EUR/USD": {"value": 1.084, "change": -0.002},
-            "Gold": {"value": 2312.80, "change": 15.60},
-            "WTI Crude": {"value": 78.35, "change": -1.25}
-        }
+                # Initialize with fallback data for immediate display
+                with self._lock:
+                    self.stock_data = self.get_fallback_stock_data(self.tickers)
+                    self.indices = self.get_fallback_indices_data()
+                    self.news_headlines = self.get_fallback_news()
+
+                # Economic indicators (keeping static for now as they need specialized APIs)
+                self.economic_indicators = {
+                    "US 10Y Treasury": {"value": 4.35, "change": 0.05},
+                    "US GDP Growth": {"value": 2.8, "change": 0.1},
+                    "US Unemployment": {"value": 3.6, "change": -0.1},
+                    "EUR/USD": {"value": 1.084, "change": -0.002},
+                    "Gold": {"value": 2312.80, "change": 15.60},
+                    "WTI Crude": {"value": 78.35, "change": -1.25}
+                }
+
+                info("Dashboard data initialized successfully",
+                     context={'stocks_count': len(self.stock_data),
+                              'indices_count': len(self.indices),
+                              'news_count': len(self.news_headlines)})
+
+        except Exception as e:
+            error("Failed to initialize dashboard data", context={'error': str(e)}, exc_info=True)
 
     def should_update_data(self) -> bool:
         """Check if data should be updated (every hour)"""
         if self.last_update is None:
+            debug("No previous update, data refresh needed")
             return True
 
         time_since_update = time.time() - self.last_update
-        return time_since_update >= self.update_interval
+        should_update = time_since_update >= self.update_interval
 
+        if should_update:
+            debug(f"Update interval exceeded",
+                  context={'hours_since_update': time_since_update / 3600})
+
+        return should_update
+
+    @monitor_performance
     def update_data_background(self):
         """Update data in background thread with optimizations"""
         if self.data_loading:
-            return  # Already updating
+            debug("Data update already in progress, skipping")
+            return
 
         def fetch_all_data():
             try:
-                with self._lock:
-                    self.data_loading = True
+                with logger.operation("background_data_update"):
+                    with self._lock:
+                        self.data_loading = True
 
-                logger.info("Starting optimized background data update...")
+                    info("Starting optimized background data update")
 
-                # Fetch stock data using optimized method
-                stock_data = self.get_stock_data_optimized(self.tickers, timeout=15)
+                    # Fetch stock data using optimized method
+                    stock_data = self.get_stock_data_optimized(self.tickers, timeout=15)
 
-                # Fetch indices data using optimized method
-                indices_data = self.get_indices_data_optimized(timeout=15)
+                    # Fetch indices data using optimized method
+                    indices_data = self.get_indices_data_optimized(timeout=15)
 
-                # Fetch news using optimized method
-                news_data = self.get_news_optimized(timeout=15)
+                    # Fetch news using optimized method
+                    news_data = self.get_news_optimized(timeout=15)
 
-                # Update data atomically
-                with self._lock:
-                    self.stock_data.update(stock_data)
-                    self.indices = indices_data
-                    self.news_headlines = news_data
-                    self.last_update = time.time()
+                    # Update data atomically
+                    with self._lock:
+                        self.stock_data.update(stock_data)
+                        self.indices = indices_data
+                        self.news_headlines = news_data
+                        self.last_update = time.time()
 
-                logger.info("Optimized background data update completed successfully!")
+                    info("Optimized background data update completed successfully")
 
             except Exception as e:
-                logger.error(f"Error in background data update: {e}")
+                error("Error in background data update", context={'error': str(e)}, exc_info=True)
             finally:
                 with self._lock:
                     self.data_loading = False
 
         # Start background thread
-        thread = threading.Thread(target=fetch_all_data, daemon=True)
+        thread = threading.Thread(target=fetch_all_data, daemon=True, name="DashboardDataUpdater")
         thread.start()
 
     def start_background_updates(self):
         """Start the background update system with better scheduling"""
+        try:
+            info("Starting background update system")
 
-        def update_loop():
-            # Initial update after a short delay
-            time.sleep(2)
-            self.update_data_background()
-
-            # Periodic updates every hour
-            while True:
-                time.sleep(300)  # Check every 5 minutes
-                if self.should_update_data() and not self.data_loading:
-                    logger.info("Starting scheduled hourly data update...")
+            def update_loop():
+                try:
+                    # Initial update after a short delay
+                    time.sleep(2)
                     self.update_data_background()
 
-        # Start the update loop in a daemon thread
-        update_thread = threading.Thread(target=update_loop, daemon=True)
-        update_thread.start()
+                    # Periodic updates every hour
+                    while True:
+                        time.sleep(300)  # Check every 5 minutes
+                        if self.should_update_data() and not self.data_loading:
+                            info("Starting scheduled hourly data update")
+                            self.update_data_background()
+
+                except Exception as e:
+                    error("Error in background update loop", context={'error': str(e)}, exc_info=True)
+
+            # Start the update loop in a daemon thread
+            update_thread = threading.Thread(target=update_loop, daemon=True, name="DashboardUpdateLoop")
+            update_thread.start()
+
+            info("Background update system started successfully")
+
+        except Exception as e:
+            error("Failed to start background update system", context={'error': str(e)}, exc_info=True)
 
     def safe_text_display(self, text: Any) -> str:
         """Safely display text with encoding handling"""
@@ -462,49 +551,55 @@ class DashboardTab(BaseTab):
             else:
                 return str(text).encode('ascii', errors='ignore').decode('ascii')
         except Exception as e:
-            logger.warning(f"Error displaying text: {e}")
+            warning(f"Error displaying text", context={'error': str(e)})
             return "N/A"
 
+    @monitor_performance
     def create_content(self):
         """Create the Bloomberg Terminal layout with error handling"""
         try:
-            # Top bar with branding and search
-            with dpg.group(horizontal=True):
-                dpg.add_text("FINCEPT", color=self.BLOOMBERG_ORANGE)
-                dpg.add_text("PROFESSIONAL", color=self.BLOOMBERG_WHITE)
-                dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
-                dpg.add_input_text(label="", default_value="Enter Command", width=300)
-                dpg.add_button(label="Search", width=80)
-                dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
-                dpg.add_text(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            with logger.operation("create_dashboard_content"):
+                info("Creating dashboard tab content")
 
-            dpg.add_separator()
+                # Top bar with branding and search
+                with dpg.group(horizontal=True):
+                    dpg.add_text("FINCEPT", color=self.BLOOMBERG_ORANGE)
+                    dpg.add_text("PROFESSIONAL", color=self.BLOOMBERG_WHITE)
+                    dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
+                    dpg.add_input_text(label="", default_value="Enter Command", width=300)
+                    dpg.add_button(label="Search", width=80)
+                    dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
+                    dpg.add_text(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
-            # Function keys
-            with dpg.group(horizontal=True):
-                function_keys = ["F1:HELP", "F2:MARKETS", "F3:NEWS", "F4:PORT", "F5:MOVERS", "F6:ECON"]
-                for key in function_keys:
-                    dpg.add_button(label=key, width=80, height=25)
+                dpg.add_separator()
 
-            dpg.add_separator()
+                # Function keys
+                with dpg.group(horizontal=True):
+                    function_keys = ["F1:HELP", "F2:MARKETS", "F3:NEWS", "F4:PORT", "F5:MOVERS", "F6:ECON"]
+                    for key in function_keys:
+                        dpg.add_button(label=key, width=80, height=25)
 
-            # Main terminal area
-            with dpg.group(horizontal=True):
-                # Left panel - Market Monitor
-                self.create_left_panel()
+                dpg.add_separator()
 
-                # Center panel - Market Data
-                self.create_center_panel()
+                # Main terminal area
+                with dpg.group(horizontal=True):
+                    # Left panel - Market Monitor
+                    self.create_left_panel()
 
-                # Right panel - Command Line
-                self.create_right_panel()
+                    # Center panel - Market Data
+                    self.create_center_panel()
 
-            # Bottom section
-            dpg.add_separator()
-            self.create_bottom_section()
+                    # Right panel - Command Line
+                    self.create_right_panel()
+
+                # Bottom section
+                dpg.add_separator()
+                self.create_bottom_section()
+
+                info("Dashboard tab content created successfully")
 
         except Exception as e:
-            logger.error(f"Error in create_content: {e}")
+            error("Error in create_content", context={'error': str(e)}, exc_info=True)
             # Fallback content
             dpg.add_text("Bloomberg Terminal", color=self.BLOOMBERG_ORANGE)
             dpg.add_text("Terminal is loading... Please wait.")
@@ -730,7 +825,7 @@ class DashboardTab(BaseTab):
                 status_color = self.BLOOMBERG_ORANGE if self.data_loading else self.BLOOMBERG_GREEN
                 status_text = "UPDATING" if self.data_loading else "CONNECTED"
 
-            dpg.add_text("", color=status_color)
+            dpg.add_text("●", color=status_color)
             dpg.add_text(status_text, color=status_color)
             dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
             dpg.add_text("LIVE DATA", color=self.BLOOMBERG_ORANGE)
@@ -760,107 +855,158 @@ class DashboardTab(BaseTab):
 
     def resize_components(self, left_width, center_width, right_width, top_height, bottom_height, cell_height):
         """Resize components - simplified"""
-        pass
+        try:
+            debug("Dashboard resize requested", context={
+                'left_width': left_width,
+                'center_width': center_width,
+                'right_width': right_width
+            })
+        except Exception as e:
+            warning("Resize handling failed", context={'error': str(e)})
 
+    @monitor_performance
     def cleanup(self):
         """Clean up resources"""
-        logger.info("Bloomberg Terminal tab cleanup completed")
+        try:
+            with logger.operation("dashboard_cleanup"):
+                info("Starting Dashboard Tab cleanup")
+
+                # Clear data
+                with self._lock:
+                    self.stock_data = {}
+                    self.indices = {}
+                    self.news_headlines = []
+                    self.data_loading = False
+
+                info("Dashboard Tab cleanup completed successfully")
+
+        except Exception as e:
+            error("Dashboard Tab cleanup failed", context={'error': str(e)}, exc_info=True)
 
     def force_refresh(self):
         """Force refresh all data - useful for manual updates"""
-        if not self.data_loading:
-            logger.info("Force refreshing data...")
-            self.update_data_background()
-        else:
-            logger.info("Data update already in progress...")
+        try:
+            if not self.data_loading:
+                info("Force refreshing data")
+                self.update_data_background()
+            else:
+                info("Data update already in progress")
+        except Exception as e:
+            error("Force refresh failed", context={'error': str(e)}, exc_info=True)
 
     def get_market_status(self) -> Dict[str, Any]:
         """Get current market status information"""
-        current_time = datetime.datetime.now()
-        current_hour = current_time.hour
+        try:
+            current_time = datetime.datetime.now()
+            current_hour = current_time.hour
 
-        # Simple market hours check (can be enhanced with timezone and holiday logic)
-        is_market_open = 9 <= current_hour < 16
+            # Simple market hours check (can be enhanced with timezone and holiday logic)
+            is_market_open = 9 <= current_hour < 16
 
-        with self._lock:
-            status = {
-                "is_open": is_market_open,
-                "last_update": self.last_update,
-                "data_loading": self.data_loading,
-                "stocks_count": len(self.stock_data),
-                "indices_count": len(self.indices),
-                "news_count": len(self.news_headlines)
-            }
+            with self._lock:
+                status = {
+                    "is_open": is_market_open,
+                    "last_update": self.last_update,
+                    "data_loading": self.data_loading,
+                    "stocks_count": len(self.stock_data),
+                    "indices_count": len(self.indices),
+                    "news_count": len(self.news_headlines)
+                }
 
-        return status
+            return status
+        except Exception as e:
+            error("Failed to get market status", context={'error': str(e)}, exc_info=True)
+            return {'error': str(e)}
 
     def get_stock_by_symbol(self, symbol: str) -> Optional[Dict[str, Any]]:
         """Get stock data for a specific symbol"""
-        with self._lock:
-            return self.stock_data.get(symbol.upper())
+        try:
+            with self._lock:
+                return self.stock_data.get(symbol.upper())
+        except Exception as e:
+            error(f"Failed to get stock data for symbol", context={'symbol': symbol, 'error': str(e)}, exc_info=True)
+            return None
 
     def add_custom_ticker(self, symbol: str):
         """Add a custom ticker to the watch list"""
-        symbol = symbol.upper()
-        if symbol not in self.tickers:
-            self.tickers.append(symbol)
-            # Fetch data for the new symbol
-            if not self.data_loading:
-                try:
-                    new_data = self.get_stock_data_optimized([symbol], timeout=10)
-                    with self._lock:
-                        self.stock_data.update(new_data)
-                    logger.info(f"Added ticker {symbol} to watch list")
-                except Exception as e:
-                    logger.error(f"Error adding ticker {symbol}: {e}")
+        try:
+            symbol = symbol.upper()
+            if symbol not in self.tickers:
+                self.tickers.append(symbol)
+                # Fetch data for the new symbol
+                if not self.data_loading:
+                    try:
+                        new_data = self.get_stock_data_optimized([symbol], timeout=10)
+                        with self._lock:
+                            self.stock_data.update(new_data)
+                        info(f"Added ticker to watch list", context={'symbol': symbol})
+                    except Exception as e:
+                        error(f"Error adding ticker", context={'symbol': symbol, 'error': str(e)}, exc_info=True)
+        except Exception as e:
+            error(f"Failed to add custom ticker", context={'symbol': symbol, 'error': str(e)}, exc_info=True)
 
     def remove_ticker(self, symbol: str):
         """Remove a ticker from the watch list"""
-        symbol = symbol.upper()
-        if symbol in self.tickers:
-            self.tickers.remove(symbol)
-            with self._lock:
-                if symbol in self.stock_data:
-                    del self.stock_data[symbol]
-            logger.info(f"Removed ticker {symbol} from watch list")
+        try:
+            symbol = symbol.upper()
+            if symbol in self.tickers:
+                self.tickers.remove(symbol)
+                with self._lock:
+                    if symbol in self.stock_data:
+                        del self.stock_data[symbol]
+                info(f"Removed ticker from watch list", context={'symbol': symbol})
+        except Exception as e:
+            error(f"Failed to remove ticker", context={'symbol': symbol, 'error': str(e)}, exc_info=True)
 
     def export_data_to_json(self) -> str:
         """Export current data to JSON format"""
         try:
-            with self._lock:
-                export_data = {
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "stock_data": self.stock_data,
-                    "indices": self.indices,
-                    "news_headlines": self.news_headlines,
-                    "economic_indicators": self.economic_indicators
-                }
+            with logger.operation("data_export"):
+                info("Exporting dashboard data to JSON")
 
-            return json.dumps(export_data, indent=2)
+                with self._lock:
+                    export_data = {
+                        "timestamp": datetime.datetime.now().isoformat(),
+                        "stock_data": self.stock_data,
+                        "indices": self.indices,
+                        "news_headlines": self.news_headlines,
+                        "economic_indicators": self.economic_indicators
+                    }
+
+                json_data = json.dumps(export_data, indent=2)
+                info("Dashboard data exported successfully", context={'data_size': len(json_data)})
+                return json_data
+
         except Exception as e:
-            logger.error(f"Error exporting data: {e}")
+            error("Error exporting data", context={'error': str(e)}, exc_info=True)
             return "{}"
 
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics"""
-        with self._lock:
-            gainers = [ticker for ticker, data in self.stock_data.items()
-                       if data.get('change_pct', 0) > 0]
-            losers = [ticker for ticker, data in self.stock_data.items()
-                      if data.get('change_pct', 0) < 0]
+        try:
+            with self._lock:
+                gainers = [ticker for ticker, data in self.stock_data.items()
+                           if data.get('change_pct', 0) > 0]
+                losers = [ticker for ticker, data in self.stock_data.items()
+                          if data.get('change_pct', 0) < 0]
 
-            total_volume = sum(data.get('volume', 0) for data in self.stock_data.values())
+                total_volume = sum(data.get('volume', 0) for data in self.stock_data.values())
 
-            stats = {
-                "total_stocks": len(self.stock_data),
-                "gainers": len(gainers),
-                "losers": len(losers),
-                "unchanged": len(self.stock_data) - len(gainers) - len(losers),
-                "total_volume": total_volume,
-                "top_gainer": max(self.stock_data.items(),
-                                  key=lambda x: x[1].get('change_pct', 0))[0] if self.stock_data else None,
-                "top_loser": min(self.stock_data.items(),
-                                 key=lambda x: x[1].get('change_pct', 0))[0] if self.stock_data else None
-            }
+                stats = {
+                    "total_stocks": len(self.stock_data),
+                    "gainers": len(gainers),
+                    "losers": len(losers),
+                    "unchanged": len(self.stock_data) - len(gainers) - len(losers),
+                    "total_volume": total_volume,
+                    "top_gainer": max(self.stock_data.items(),
+                                      key=lambda x: x[1].get('change_pct', 0))[0] if self.stock_data else None,
+                    "top_loser": min(self.stock_data.items(),
+                                     key=lambda x: x[1].get('change_pct', 0))[0] if self.stock_data else None
+                }
 
-        return stats
+            debug("Performance stats calculated", context=stats)
+            return stats
+
+        except Exception as e:
+            error("Failed to get performance stats", context={'error': str(e)}, exc_info=True)
+            return {'error': str(e)}
