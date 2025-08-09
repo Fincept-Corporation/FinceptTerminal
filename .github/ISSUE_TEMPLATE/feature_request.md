@@ -1,47 +1,128 @@
 ---
-name: Feature Request
-about: Suggest a new feature or functionality for this project
-title: "[FEATURE]"
-labels: 'type:feature'
-assignees: ''
-
+name: 🌟 Feature Request
+about: Suggest a new feature or enhancement for Fincept Terminal
+title: "[FEATURE] "
+labels: "type:feature, status:triage"
+assignees: ""
 ---
+
+## Preliminary Checks
+<!-- Please confirm you've done the following by checking the boxes -->
+- [ ] I have searched existing issues to ensure this feature hasn't been requested before
+- [ ] I have checked the project roadmap/documentation
+- [ ] I understand this is for requesting new functionality
+
+## Feature Information
+
+### Feature Category
+<!-- Select the most appropriate category -->
+- [ ] UI/UX Enhancement
+- [ ] Performance Improvement
+- [ ] New Functionality
+- [ ] Integration/API
+- [ ] Documentation
+- [ ] Developer Experience
+- [ ] Security
+- [ ] Other: ___________
+
+### Priority Level
+<!-- Select the priority level -->
+- [ ] Low - Nice to have
+- [ ] Medium - Would improve workflow
+- [ ] High - Significantly impacts productivity
+- [ ] Critical - Blocking current work
 
 ## 🌟 Feature Description
-Provide a clear and concise description of the feature you are requesting. Include any relevant context or background.
+<!-- Provide a clear and detailed description of the feature -->
 
----
 
-## 🛠️ Use Case
-Explain why this feature is important and how it would be used. Who will benefit from it, and what problem does it solve?
+## 🛠️ Use Case & Problem Statement
+<!-- Explain the problem this feature solves and who benefits from it -->
 
----
+**What problem does this solve?**
 
-## 🎯 Expected Behavior
-Describe how you expect the feature to work. Include details about its behavior, functionality, and any specific requirements.
 
----
+**Who will use this feature?**
 
-## 📚 Additional Resources
-Provide any resources, links, or references that could help in understanding or implementing the feature. Examples might include:
-- Relevant documentation or articles
-- Similar features in other projects
-- Mockups or designs (if available)
 
----
+**How often would it be used?**
+
+
+**What's the impact of not having this feature?**
+
+
+## 🎯 Detailed Feature Specification
+<!-- Describe exactly how you expect the feature to work -->
+
+**Step-by-step workflow:**
+1. 
+2. 
+3. 
+
+**User interactions:**
+
+
+**Expected outputs/results:**
+
+
+**Integration points:**
+
+
+**Configuration options:**
+
+
+## ✅ Acceptance Criteria
+<!-- Define what "done" looks like for this feature -->
+- [ ] User can perform action X
+- [ ] System responds with Y
+- [ ] Feature works on platforms A, B, C
+- [ ] Documentation is updated
+- [ ] Tests are included
 
 ## 🔄 Alternatives Considered
-(Optional) Share any alternative solutions you considered and explain why this proposed feature is the best approach.
+<!-- What alternative solutions have you considered? -->
 
----
+**Alternative approach 1:**
 
-## 📷 Visuals or Screenshots (Optional)
-Attach any visuals, diagrams, or screenshots to illustrate your feature request.
 
----
+**Alternative approach 2:**
 
-## 💡 Additional Context
-Add any other relevant information about the feature request, such as constraints, dependencies, or potential challenges.
+
+**Why the proposed solution is better:**
+
+
+## 📚 Additional Context & Resources
+<!-- Any additional information, links, or resources -->
+
+**Links to relevant documentation:**
+
+
+**Examples from other projects:**
+
+
+**Research or articles:**
+
+
+**Dependencies or constraints:**
+
+
+**Technical specifications:**
+
+
+## 🤝 Implementation
+<!-- Are you willing to help implement this feature? -->
+- [ ] Yes, I can implement this feature
+- [ ] Yes, I can help with implementation
+- [ ] I can provide guidance/review
+- [ ] I can help with testing
+- [ ] No, but I can provide feedback
+
+## 🖥️ Environment Information
+<!-- Your current environment (if relevant) -->
+- **OS:** [e.g. Ubuntu 20.04, macOS 13.0, Windows 11]
+- **Python Version:** [e.g. 3.11.0]
+- **Fincept Terminal Version:** [e.g. 1.2.3]
+- **Docker Version:** [e.g. 20.10.17]
 
 ---
 

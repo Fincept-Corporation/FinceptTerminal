@@ -68,20 +68,14 @@ class LogConfig:
         return class_name.upper()[:10]  # Limit length
 
     def get_logs_dir(self) -> Path:
-        """Determine logs directory with fallback chain"""
+        """Get logs directory - uses .fincept/logs folder"""
         # 1. Environment variable (highest priority)
         if env_dir := os.getenv('FINCEPT_LOGS_DIR'):
             return Path(env_dir).expanduser()
 
-        # 2. Application data directory
-        system = platform.system()
-        if system == 'Windows':
-            base = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local'))
-            return base / 'FinanceTerminal' / 'logs'
-        elif system == 'Darwin':
-            return Path.home() / 'Library/Application Support/FinanceTerminal/logs'
-        else:  # Linux/Unix
-            return Path.home() / '.local/share/finance-terminal/logs'
+        # 2. Use .fincept/logs folder at home directory for all platforms
+        logs_dir = Path.home() / '.fincept' / 'logs'
+        return logs_dir
 
 
 class PerformanceMetrics:

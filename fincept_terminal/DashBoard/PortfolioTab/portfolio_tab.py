@@ -21,14 +21,15 @@ from functools import lru_cache
 
 # Import the new logger
 from fincept_terminal.Utils.Logging.logger import logger, operation, monitor_performance
+from pathlib import Path
 
+def get_portfolio_config_path():
+    """Get portfolio configuration file path in .fincept directory"""
+    config_dir = Path.home() / '.fincept'
+    config_dir.mkdir(exist_ok=True)
+    return config_dir / 'portfolio_settings.json'
 
-def get_settings_path():
-    """Returns a consistent settings file path"""
-    return "settings.json"
-
-
-SETTINGS_FILE = get_settings_path()
+PORTFOLIO_CONFIG_FILE = get_portfolio_config_path()
 
 
 class PortfolioTab(BaseTab):
@@ -2004,10 +2005,10 @@ class PortfolioTab(BaseTab):
     @monitor_performance
     def load_portfolios(self):
         """Load portfolios from settings file - optimized"""
-        if os.path.exists(SETTINGS_FILE):
+        if PORTFOLIO_CONFIG_FILE.exists():
             try:
                 with operation("load_portfolios"):
-                    with open(SETTINGS_FILE, "r") as file:
+                    with open(PORTFOLIO_CONFIG_FILE, "r") as file:
                         settings = json.load(file)
                         portfolios = settings.get("portfolios", {})
 
@@ -2017,7 +2018,7 @@ class PortfolioTab(BaseTab):
 
                         return portfolios
             except (json.JSONDecodeError, IOError) as e:
-                logger.error(f"Error loading portfolios: Corrupted settings.json file - {e}")
+                logger.error(f"Error loading portfolios: Corrupted portfolio_settings.json file - {e}")
                 return {}
         return {}
 
@@ -2028,9 +2029,9 @@ class PortfolioTab(BaseTab):
             with operation("save_portfolios"):
                 # Load existing settings
                 settings = {}
-                if os.path.exists(SETTINGS_FILE):
+                if PORTFOLIO_CONFIG_FILE.exists():
                     try:
-                        with open(SETTINGS_FILE, "r") as file:
+                        with open(PORTFOLIO_CONFIG_FILE, "r") as file:
                             settings = json.load(file)
                     except json.JSONDecodeError:
                         settings = {}
@@ -2044,13 +2045,13 @@ class PortfolioTab(BaseTab):
                     settings["portfolios"][portfolio_name] = portfolio_data
 
                 # Save back to file atomically
-                temp_file = SETTINGS_FILE + ".tmp"
+                temp_file = str(PORTFOLIO_CONFIG_FILE) + ".tmp"
                 with open(temp_file, "w") as file:
                     json.dump(settings, file, indent=4)
 
                 # Atomic rename
                 import shutil
-                shutil.move(temp_file, SETTINGS_FILE)
+                shutil.move(temp_file, str(PORTFOLIO_CONFIG_FILE))
 
                 logger.debug("Portfolios saved successfully")
 

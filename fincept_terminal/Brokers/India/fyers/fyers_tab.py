@@ -89,15 +89,10 @@ class FyersTab(BaseTab):
         info("FyersTab initialized", context={'config_dir': str(self.config_dir)})
 
     def _get_config_directory(self) -> Path:
-        """Get platform-specific config directory"""
-        system = platform.system()
-        if system == 'Windows':
-            base = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local'))
-            return base / 'FinanceTerminal' / 'fyers'
-        elif system == 'Darwin':
-            return Path.home() / 'Library/Application Support/FinanceTerminal/fyers'
-        else:  # Linux/Unix
-            return Path.home() / '.local/share/finance-terminal/fyers'
+        """Get platform-specific config directory - uses .fincept folder"""
+        # Use .fincept folder at home directory for all platforms
+        config_dir = Path.home() / '.fincept' / 'fyers'
+        return config_dir
 
     def get_label(self):
         return " Fyers Trading"
