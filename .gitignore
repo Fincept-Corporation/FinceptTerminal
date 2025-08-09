@@ -11,7 +11,8 @@ build.txt
 cmder
 reqgen.py
 fincept_env
-fincept_terminal/testing
+python
+testing
 fincept_terminal/fyers_session_config.json
 fincept_terminal/backup_20250730_072611
 .pdm-build
@@ -19,10 +20,12 @@ fincept_terminal.egg-info
 FinceptTerminal.spec
 fincept_terminal_structure.txt
 Output
+launcher.cpp
 te
+.venv
 fincept.bat
 pdm.lock
-vin
+FinceptTerminal.exe
 fincept_terminal/settings.json
 fincept_terminal/watchlist_settings.json
 upx.exe

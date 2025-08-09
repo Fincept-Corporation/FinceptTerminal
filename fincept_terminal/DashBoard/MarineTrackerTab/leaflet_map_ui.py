@@ -1,15 +1,15 @@
 """
 Leaflet Map Ui module for Fincept Terminal
-Updated to use centralized logging system
+Updated to use centralized logging system with automatic class detection
 """
 
-# leaflet_map_ui.py - Standalone PyQt Maritime Map Process (Fixed)
+# leaflet_map_ui.py - Standalone PyQt Maritime Map Process
 import sys
 import json
 import os
 import time
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QLineEdit, QComboBox
-from fincept_terminal.Utils.Logging.logger import logger, log_operation
+from fincept_terminal.Utils.Logging.logger import logger, operation, monitor_performance
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import Qt, QUrl, QTimer
 
@@ -33,124 +33,132 @@ class MaritimeMapWindow(QMainWindow):
             key = f"{marker['lat']:.6f}_{marker['lng']:.6f}"
             self.existing_markers.add(key)
 
+        logger.info("Maritime map window initialized")
+
         self.init_ui()
         self.create_map()
         self.start_file_watcher()
 
+    @monitor_performance
     def init_ui(self):
         """Initialize UI with enhanced controls"""
-        self.setWindowTitle(" FINCEPT MARITIME MAP")
-        self.setGeometry(100, 100, 600, 600)
-        self.setWindowFlags(Qt.WindowStaysOnTopHint)
+        with operation("init_ui"):
+            self.setWindowTitle(" FINCEPT MARITIME MAP")
+            self.setGeometry(100, 100, 600, 600)
+            self.setWindowFlags(Qt.WindowStaysOnTopHint)
 
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(2, 2, 2, 2)
-        main_layout.setSpacing(2)
+            central_widget = QWidget()
+            self.setCentralWidget(central_widget)
+            main_layout = QVBoxLayout(central_widget)
+            main_layout.setContentsMargins(2, 2, 2, 2)
+            main_layout.setSpacing(2)
 
-        # Enhanced control panel
-        control_widget = QWidget()
-        control_widget.setMaximumHeight(50)
-        control_layout = QHBoxLayout(control_widget)
+            # Enhanced control panel
+            control_widget = QWidget()
+            control_widget.setMaximumHeight(50)
+            control_layout = QHBoxLayout(control_widget)
 
-        control_layout.addWidget(QLabel(" MARITIME:"))
+            control_layout.addWidget(QLabel(" MARITIME:"))
 
-        self.marker_title = QLineEdit()
-        self.marker_title.setPlaceholderText("Marker Title")
-        self.marker_title.setMaximumWidth(120)
-        control_layout.addWidget(self.marker_title)
+            self.marker_title = QLineEdit()
+            self.marker_title.setPlaceholderText("Marker Title")
+            self.marker_title.setMaximumWidth(120)
+            control_layout.addWidget(self.marker_title)
 
-        self.marker_type = QComboBox()
-        self.marker_type.addItems(["Ship", "Port", "Industry", "House", "Bank", "Exchange", "Warehouse", "Airport"])
-        self.marker_type.currentTextChanged.connect(self.on_marker_type_changed)
-        self.marker_type.setMaximumWidth(80)
-        control_layout.addWidget(self.marker_type)
+            self.marker_type = QComboBox()
+            self.marker_type.addItems(["Ship", "Port", "Industry", "House", "Bank", "Exchange", "Warehouse", "Airport"])
+            self.marker_type.currentTextChanged.connect(self.on_marker_type_changed)
+            self.marker_type.setMaximumWidth(80)
+            control_layout.addWidget(self.marker_type)
 
-        # Action buttons
-        clear_btn = QPushButton("CLEAR")
-        clear_btn.clicked.connect(self.clear_all_markers)
-        clear_btn.setMaximumWidth(60)
-        control_layout.addWidget(clear_btn)
+            # Action buttons
+            clear_btn = QPushButton("CLEAR")
+            clear_btn.clicked.connect(self.clear_all_markers)
+            clear_btn.setMaximumWidth(60)
+            control_layout.addWidget(clear_btn)
 
-        close_btn = QPushButton("CLOSE")
-        close_btn.clicked.connect(self.close_application)
-        close_btn.setMaximumWidth(60)
-        close_btn.setStyleSheet(
-            "QPushButton { background-color: #ff4444; } QPushButton:hover { background-color: #ff6666; }")
-        control_layout.addWidget(close_btn)
+            close_btn = QPushButton("CLOSE")
+            close_btn.clicked.connect(self.close_application)
+            close_btn.setMaximumWidth(60)
+            close_btn.setStyleSheet(
+                "QPushButton { background-color: #ff4444; } QPushButton:hover { background-color: #ff6666; }")
+            control_layout.addWidget(close_btn)
 
-        delete_mode_btn = QPushButton("DELETE")
-        delete_mode_btn.clicked.connect(self.toggle_delete_mode)
-        delete_mode_btn.setObjectName("delete_mode_btn")
-        delete_mode_btn.setMaximumWidth(60)
-        control_layout.addWidget(delete_mode_btn)
+            delete_mode_btn = QPushButton("DELETE")
+            delete_mode_btn.clicked.connect(self.toggle_delete_mode)
+            delete_mode_btn.setObjectName("delete_mode_btn")
+            delete_mode_btn.setMaximumWidth(60)
+            control_layout.addWidget(delete_mode_btn)
 
-        heatmap_btn = QPushButton("HEAT")
-        heatmap_btn.clicked.connect(self.toggle_heatmap)
-        heatmap_btn.setMaximumWidth(50)
-        control_layout.addWidget(heatmap_btn)
+            heatmap_btn = QPushButton("HEAT")
+            heatmap_btn.clicked.connect(self.toggle_heatmap)
+            heatmap_btn.setMaximumWidth(50)
+            control_layout.addWidget(heatmap_btn)
 
-        routes_btn = QPushButton("ROUTES")
-        routes_btn.clicked.connect(self.toggle_trade_routes)
-        routes_btn.setMaximumWidth(60)
-        control_layout.addWidget(routes_btn)
+            routes_btn = QPushButton("ROUTES")
+            routes_btn.clicked.connect(self.toggle_trade_routes)
+            routes_btn.setMaximumWidth(60)
+            control_layout.addWidget(routes_btn)
 
-        ships_btn = QPushButton("SHIPS")
-        ships_btn.clicked.connect(self.toggle_live_ships)
-        ships_btn.setMaximumWidth(50)
-        control_layout.addWidget(ships_btn)
+            ships_btn = QPushButton("SHIPS")
+            ships_btn.clicked.connect(self.toggle_live_ships)
+            ships_btn.setMaximumWidth(50)
+            control_layout.addWidget(ships_btn)
 
-        control_layout.addStretch()
-        main_layout.addWidget(control_widget)
+            control_layout.addStretch()
+            main_layout.addWidget(control_widget)
 
-        # Web view
-        self.web_view = QWebEngineView()
-        main_layout.addWidget(self.web_view)
+            # Web view
+            self.web_view = QWebEngineView()
+            main_layout.addWidget(self.web_view)
 
-        # Status bar
-        status_widget = QWidget()
-        status_widget.setMaximumHeight(30)
-        status_layout = QHBoxLayout(status_widget)
+            # Status bar
+            status_widget = QWidget()
+            status_widget.setMaximumHeight(30)
+            status_layout = QHBoxLayout(status_widget)
 
-        self.status_label = QLabel(" LOADING MARITIME MAP...")
-        self.status_label.setStyleSheet("color: #00ff00; font-weight: bold; font-size: 10px;")
-        status_layout.addWidget(self.status_label)
+            self.status_label = QLabel(" LOADING MARITIME MAP...")
+            self.status_label.setStyleSheet("color: #00ff00; font-weight: bold; font-size: 10px;")
+            status_layout.addWidget(self.status_label)
 
-        status_layout.addStretch()
+            status_layout.addStretch()
 
-        self.marker_count_label = QLabel("Markers: 0")
-        self.marker_count_label.setStyleSheet("color: #ff8c00; font-weight: bold; font-size: 10px;")
-        status_layout.addWidget(self.marker_count_label)
+            self.marker_count_label = QLabel("Markers: 0")
+            self.marker_count_label.setStyleSheet("color: #ff8c00; font-weight: bold; font-size: 10px;")
+            status_layout.addWidget(self.marker_count_label)
 
-        main_layout.addWidget(status_widget)
+            main_layout.addWidget(status_widget)
 
-        # Enhanced dark theme
-        self.setStyleSheet("""
-            QMainWindow { background-color: #0a0a0a; color: #ffffff; }
-            QWidget { background-color: #0a0a0a; color: #ffffff; font-family: 'Arial', sans-serif; font-size: 10px; }
-            QPushButton { 
-                background-color: #ff8c00; color: #000000; border: none; padding: 6px 12px; 
-                border-radius: 4px; font-weight: bold; font-size: 9px;
-            }
-            QPushButton:hover { background-color: #ffa500; }
-            QPushButton:pressed { background-color: #ff7700; }
-            QPushButton#delete_mode_btn { background-color: #ff4444; }
-            QPushButton#delete_mode_btn:hover { background-color: #ff6666; }
-            QLineEdit, QComboBox { 
-                background-color: #2d2d2d; color: #ffffff; border: 2px solid #ff8c00; 
-                padding: 6px; border-radius: 4px; font-size: 9px;
-            }
-            QLabel { color: #ffffff; font-weight: bold; }
-        """)
+            # Enhanced dark theme
+            self.setStyleSheet("""
+                QMainWindow { background-color: #0a0a0a; color: #ffffff; }
+                QWidget { background-color: #0a0a0a; color: #ffffff; font-family: 'Arial', sans-serif; font-size: 10px; }
+                QPushButton { 
+                    background-color: #ff8c00; color: #000000; border: none; padding: 6px 12px; 
+                    border-radius: 4px; font-weight: bold; font-size: 9px;
+                }
+                QPushButton:hover { background-color: #ffa500; }
+                QPushButton:pressed { background-color: #ff7700; }
+                QPushButton#delete_mode_btn { background-color: #ff4444; }
+                QPushButton#delete_mode_btn:hover { background-color: #ff6666; }
+                QLineEdit, QComboBox { 
+                    background-color: #2d2d2d; color: #ffffff; border: 2px solid #ff8c00; 
+                    padding: 6px; border-radius: 4px; font-size: 9px;
+                }
+                QLabel { color: #ffffff; font-weight: bold; }
+            """)
 
-        self.delete_mode = False
+            self.delete_mode = False
+            logger.info("UI initialization completed")
 
+    @monitor_performance
     def create_map(self):
         """Create enhanced Leaflet map based on original working code"""
-        markers_json = json.dumps(self.markers_data)
+        with operation("create_map"):
+            try:
+                markers_json = json.dumps(self.markers_data)
 
-        html_content = f"""
+                html_content = f"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -594,55 +602,66 @@ class MaritimeMapWindow(QMainWindow):
     </script>
 </body>
 </html>
-        """
+                """
 
-        # Save and load HTML
-        html_path = "maritime_map.html"
-        with open(html_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
+                # Save and load HTML
+                html_path = "maritime_map.html"
+                with open(html_path, 'w', encoding='utf-8') as f:
+                    f.write(html_content)
 
-        self.web_view.loadFinished.connect(self.on_loaded)
-        self.web_view.load(QUrl.fromLocalFile(os.path.abspath(html_path)))
-        logger.info(f" Loading map from: {html_path}", module="Leaflet_Map_Ui", context={'html_path': html_path})
+                self.web_view.loadFinished.connect(self.on_loaded)
+                self.web_view.load(QUrl.fromLocalFile(os.path.abspath(html_path)))
+                logger.info(f"Map HTML created and loading from: {html_path}")
+
+            except Exception as e:
+                logger.error(f"Failed to create map: {e}", exc_info=True)
+                raise
 
     def on_marker_type_changed(self, marker_type):
         """Handle marker type change"""
-        self.selected_marker_type = marker_type
-        js_code = f"if(window.setCurrentMarkerType) window.setCurrentMarkerType('{marker_type}');"
-        self.web_view.page().runJavaScript(js_code)
-        self.status_label.setText(f" Selected: {marker_type}")
+        with operation("marker_type_change", marker_type=marker_type):
+            self.selected_marker_type = marker_type
+            js_code = f"if(window.setCurrentMarkerType) window.setCurrentMarkerType('{marker_type}');"
+            self.web_view.page().runJavaScript(js_code)
+            self.status_label.setText(f" Selected: {marker_type}")
+            logger.debug(f"Marker type changed to: {marker_type}")
 
     def toggle_delete_mode(self):
         """Toggle delete mode"""
-        self.delete_mode = not self.delete_mode
-        if self.delete_mode:
-            self.status_label.setText(" DELETE MODE | Click markers to remove")
-            self.web_view.page().runJavaScript("if(window.setDeleteMode) window.setDeleteMode(true);")
-        else:
-            self.status_label.setText(" ADD MODE | Click map to add markers")
-            self.web_view.page().runJavaScript("if(window.setDeleteMode) window.setDeleteMode(false);")
+        with operation("toggle_delete_mode"):
+            self.delete_mode = not self.delete_mode
+            if self.delete_mode:
+                self.status_label.setText(" DELETE MODE | Click markers to remove")
+                self.web_view.page().runJavaScript("if(window.setDeleteMode) window.setDeleteMode(true);")
+                logger.info("Delete mode enabled")
+            else:
+                self.status_label.setText(" ADD MODE | Click map to add markers")
+                self.web_view.page().runJavaScript("if(window.setDeleteMode) window.setDeleteMode(false);")
+                logger.info("Delete mode disabled")
 
     def on_loaded(self, success):
         """Map loaded callback"""
-        if success:
-            logger.info("Map loaded successfully", module="Leaflet_Map_Ui")
-            self.status_label.setText(" MARITIME MAP READY")
+        with operation("map_load", success=success):
+            if success:
+                logger.info("Map loaded successfully")
+                self.status_label.setText(" MARITIME MAP READY")
 
-            # Set initial marker type
-            js_code = f"if(window.setCurrentMarkerType) window.setCurrentMarkerType('{self.selected_marker_type}');"
-            self.web_view.page().runJavaScript(js_code)
+                # Set initial marker type
+                js_code = f"if(window.setCurrentMarkerType) window.setCurrentMarkerType('{self.selected_marker_type}');"
+                self.web_view.page().runJavaScript(js_code)
 
-            self.update_marker_count()
-            self.write_status("ready")
+                self.update_marker_count()
+                self.write_status("ready")
 
-            QTimer.singleShot(2000, lambda: self.status_label.setText(" Ready | Click map to add markers"))
-        else:
-            logger.error("Map failed to load", module="Leaflet_Map_Ui")
-            self.status_label.setText(" MAP LOAD FAILED")
-            self.write_status("error")
+                QTimer.singleShot(2000, lambda: self.status_label.setText(" Ready | Click map to add markers"))
+            else:
+                logger.error("Map failed to load")
+                self.status_label.setText(" MAP LOAD FAILED")
+                self.write_status("error")
 
     def start_file_watcher(self):
         """Watch for file changes"""
+        logger.debug("Starting file watcher timer")
         self.timer = QTimer()
         self.timer.timeout.connect(self.check_files)
         self.timer.start(500)
@@ -655,6 +674,7 @@ class MaritimeMapWindow(QMainWindow):
                 mtime = os.path.getmtime(self.markers_file)
                 if mtime > self.last_modified:
                     self.last_modified = mtime
+                    logger.debug("Markers file was modified, reloading")
                     self.load_markers()
 
             # Check for click-added markers
@@ -673,7 +693,7 @@ class MaritimeMapWindow(QMainWindow):
                     json.dump({'commands': []}, f)
 
         except Exception as e:
-            logger.error(f"File check error: {e}", module="Leaflet_Map_Ui", context={'e': e})
+            logger.error(f"Error checking files: {e}", exc_info=True)
 
     def check_click_markers(self):
         """Check for markers added by clicking"""
@@ -681,60 +701,61 @@ class MaritimeMapWindow(QMainWindow):
             js_code = "if(window.getClickMarkers) window.getClickMarkers(); else [];"
             self.web_view.page().runJavaScript(js_code, self.process_click_markers)
         except Exception as e:
-            logger.error(f"Check click markers error: {e}", module="Leaflet_Map_Ui", context={'e': e})
+            logger.error(f"Failed to check click markers: {e}", exc_info=True)
 
     def process_click_markers(self, click_markers):
         """Process click markers from JavaScript with duplicate prevention"""
-        try:
-            if click_markers and len(click_markers) > 0:
-                # Load existing markers
-                existing_markers = self.load_markers_data()
+        with operation("process_click_markers", count=len(click_markers) if click_markers else 0):
+            try:
+                if click_markers and len(click_markers) > 0:
+                    # Load existing markers
+                    existing_markers = self.load_markers_data()
 
-                added_count = 0
+                    added_count = 0
 
-                # Add new click markers with duplicate checking
-                for marker in click_markers:
-                    # Check for duplicates in existing markers
-                    is_duplicate = False
-                    for existing in existing_markers:
-                        # Check if coordinates are too close (within ~50 meters)
-                        lat_diff = abs(existing['lat'] - marker['lat'])
-                        lng_diff = abs(existing['lng'] - marker['lng'])
-                        if lat_diff < 0.0005 and lng_diff < 0.0005:
-                            is_duplicate = True
-                            logger.info("Value: %s", module="Leaflet_Map_Ui", context={
-                                "value": f"Skipping duplicate marker: {marker['title']} (near {existing['title']})"})
-                            break
+                    # Add new click markers with duplicate checking
+                    for marker in click_markers:
+                        # Check for duplicates in existing markers
+                        is_duplicate = False
+                        for existing in existing_markers:
+                            # Check if coordinates are too close (within ~50 meters)
+                            lat_diff = abs(existing['lat'] - marker['lat'])
+                            lng_diff = abs(existing['lng'] - marker['lng'])
+                            if lat_diff < 0.0005 and lng_diff < 0.0005:
+                                is_duplicate = True
+                                logger.debug(f"Skipping duplicate marker: {marker['title']} (near {existing['title']})")
+                                break
 
-                    if not is_duplicate:
-                        marker_data = {
-                            'lat': marker['lat'],
-                            'lng': marker['lng'],
-                            'title': marker['title'],
-                            'type': marker['type']
-                        }
-                        existing_markers.append(marker_data)
-                        added_count += 1
-                        logger.info("Value: %s", module="Leaflet_Map_Ui", context={"value": f" Added click marker: {marker['title']}"})
+                        if not is_duplicate:
+                            marker_data = {
+                                'lat': marker['lat'],
+                                'lng': marker['lng'],
+                                'title': marker['title'],
+                                'type': marker['type']
+                            }
+                            existing_markers.append(marker_data)
+                            added_count += 1
+                            logger.info(f"Added click marker: {marker['title']}")
 
-                if added_count > 0:
-                    # Save updated markers
-                    with open(self.markers_file, 'w') as f:
-                        json.dump(existing_markers, f, indent=2)
+                    if added_count > 0:
+                        # Save updated markers
+                        with open(self.markers_file, 'w') as f:
+                            json.dump(existing_markers, f, indent=2)
 
-                    logger.info(f" Saved {added_count} new markers to file (skipped {len(click_markers) - added_count} duplicates)", module="Leaflet_Map_Ui", context={'added_count': added_count, 'len(click_markers) - added_count': len(click_markers) - added_count})
-                else:
-                    logger.info("No new markers added - all were duplicates", module="Leaflet_Map_Ui")
+                        logger.info(f"Saved {added_count} new markers to file (skipped {len(click_markers) - added_count} duplicates)")
+                    else:
+                        logger.debug("No new markers added - all were duplicates")
 
-        except Exception as e:
-            logger.error(f"Process click markers error: {e}", module="Leaflet_Map_Ui", context={'e': e})
+            except Exception as e:
+                logger.error(f"Failed to process click markers: {e}", exc_info=True)
 
     def closeEvent(self, event):
         """Handle window close event"""
         try:
-            logger.info("Window close event triggered", module="Leaflet_Map_Ui")
+            logger.info("Window close event triggered")
             self.close_application()
-        except:
+        except Exception as e:
+            logger.error(f"Error in close event: {e}", exc_info=True)
             # Force close if there's an error
             event.accept()
             sys.exit(0)
@@ -744,142 +765,180 @@ class MaritimeMapWindow(QMainWindow):
         try:
             if os.path.exists(self.markers_file):
                 with open(self.markers_file, 'r') as f:
-                    return json.load(f)
-        except:
-            pass
+                    data = json.load(f)
+                    logger.debug(f"Loaded {len(data)} markers from data file")
+                    return data
+        except Exception as e:
+            logger.error(f"Failed to load markers data: {e}", exc_info=True)
         return []
 
     def load_markers(self):
         """Load markers from file"""
-        try:
-            if os.path.exists(self.markers_file):
-                with open(self.markers_file, 'r') as f:
-                    data = json.load(f)
+        with operation("load_markers"):
+            try:
+                if os.path.exists(self.markers_file):
+                    with open(self.markers_file, 'r') as f:
+                        data = json.load(f)
 
-                # Clear existing markers on map
-                self.web_view.page().runJavaScript("if(window.clearAllMarkers) window.clearAllMarkers();")
+                    # Clear existing markers on map
+                    self.web_view.page().runJavaScript("if(window.clearAllMarkers) window.clearAllMarkers();")
 
-                # Add all markers to map
-                for marker in data:
-                    js = f"if(window.addMarkerFromQt) window.addMarkerFromQt({marker['lat']}, {marker['lng']}, '{marker['title']}', '{marker['type']}');"
-                    self.web_view.page().runJavaScript(js)
+                    # Add all markers to map
+                    for marker in data:
+                        js = f"if(window.addMarkerFromQt) window.addMarkerFromQt({marker['lat']}, {marker['lng']}, '{marker['title']}', '{marker['type']}');"
+                        self.web_view.page().runJavaScript(js)
 
-                self.markers_data = data
-                self.update_marker_count()
-                logger.info(f" Loaded {len(data)} markers from file", module="Leaflet_Map_Ui", context={'len(data)': len(data)})
-                return data
-        except Exception as e:
-            logger.error(f"Load markers error: {e}", module="Leaflet_Map_Ui", context={'e': e})
-        return []
+                    self.markers_data = data
+                    self.update_marker_count()
+                    logger.info(f"Loaded {len(data)} markers from file")
+                    return data
+                else:
+                    logger.debug("No markers file found, starting with empty list")
+                    return []
+            except Exception as e:
+                logger.error(f"Failed to load markers: {e}", exc_info=True)
+                return []
 
     def execute_command(self, cmd):
         """Execute map command"""
-        try:
-            if cmd == 'toggle_routes':
-                self.web_view.page().runJavaScript("if(window.toggleTradeRoutes) window.toggleTradeRoutes();")
-            elif cmd == 'toggle_ships':
-                self.web_view.page().runJavaScript("if(window.toggleLiveShips) window.toggleLiveShips();")
-            elif cmd == 'clear_all':
-                self.web_view.page().runJavaScript("if(window.clearAllMarkers) window.clearAllMarkers();")
-                # Also clear the file
-                with open(self.markers_file, 'w') as f:
-                    json.dump([], f)
-                self.markers_data = []
-                self.existing_markers.clear()
-            elif cmd.startswith('set_marker_type:'):
-                marker_type = cmd.split(':', 1)[1]
-                js_code = f"if(window.setCurrentMarkerType) window.setCurrentMarkerType('{marker_type}');"
-                self.web_view.page().runJavaScript(js_code)
-                self.selected_marker_type = marker_type
-                logger.info(f" Set marker type to: {marker_type}", module="Leaflet_Map_Ui", context={'marker_type': marker_type})
-        except Exception as e:
-            logger.error(f"Command error: {e}", module="Leaflet_Map_Ui", context={'e': e})
+        with operation("execute_command", command=cmd):
+            try:
+                if cmd == 'toggle_routes':
+                    self.web_view.page().runJavaScript("if(window.toggleTradeRoutes) window.toggleTradeRoutes();")
+                    logger.debug("Toggled trade routes")
+                elif cmd == 'toggle_ships':
+                    self.web_view.page().runJavaScript("if(window.toggleLiveShips) window.toggleLiveShips();")
+                    logger.debug("Toggled live ships")
+                elif cmd == 'clear_all':
+                    self.web_view.page().runJavaScript("if(window.clearAllMarkers) window.clearAllMarkers();")
+                    # Also clear the file
+                    with open(self.markers_file, 'w') as f:
+                        json.dump([], f)
+                    self.markers_data = []
+                    self.existing_markers.clear()
+                    logger.info("Cleared all markers")
+                elif cmd.startswith('set_marker_type:'):
+                    marker_type = cmd.split(':', 1)[1]
+                    js_code = f"if(window.setCurrentMarkerType) window.setCurrentMarkerType('{marker_type}');"
+                    self.web_view.page().runJavaScript(js_code)
+                    self.selected_marker_type = marker_type
+                    logger.info(f"Set marker type to: {marker_type}")
+                else:
+                    logger.warning(f"Unknown command: {cmd}")
+            except Exception as e:
+                logger.error(f"Failed to execute command '{cmd}': {e}", exc_info=True)
 
     def clear_all_markers(self):
         """Clear all markers"""
-        try:
-            self.markers_data = []
-            self.existing_markers.clear()
+        with operation("clear_all_markers"):
+            try:
+                self.markers_data = []
+                self.existing_markers.clear()
 
-            # Save empty file
-            with open(self.markers_file, 'w') as f:
-                json.dump([], f)
+                # Save empty file
+                with open(self.markers_file, 'w') as f:
+                    json.dump([], f)
 
-            # Clear on map
-            self.web_view.page().runJavaScript("if(window.clearAllMarkers) window.clearAllMarkers();")
-            self.update_marker_count()
-            self.status_label.setText(" CLEARED | All markers removed")
-            logger.info("All markers cleared", module="Leaflet_Map_Ui")
-        except Exception as e:
-            logger.error(f"Clear markers error: {e}", module="Leaflet_Map_Ui", context={'e': e})
+                # Clear on map
+                self.web_view.page().runJavaScript("if(window.clearAllMarkers) window.clearAllMarkers();")
+                self.update_marker_count()
+                self.status_label.setText(" CLEARED | All markers removed")
+                logger.info("All markers cleared successfully")
+            except Exception as e:
+                logger.error(f"Failed to clear markers: {e}", exc_info=True)
 
     def toggle_heatmap(self):
         """Toggle heatmap"""
-        self.web_view.page().runJavaScript("if(window.toggleHeatmap) window.toggleHeatmap();")
-        self.status_label.setText(" HEATMAP | Toggled")
+        try:
+            self.web_view.page().runJavaScript("if(window.toggleHeatmap) window.toggleHeatmap();")
+            self.status_label.setText(" HEATMAP | Toggled")
+            logger.debug("Toggled heatmap")
+        except Exception as e:
+            logger.error(f"Failed to toggle heatmap: {e}", exc_info=True)
 
     def toggle_trade_routes(self):
         """Toggle ocean trade routes"""
-        self.web_view.page().runJavaScript("if(window.toggleTradeRoutes) window.toggleTradeRoutes();")
-        self.status_label.setText(" ROUTES | Toggled")
+        try:
+            self.web_view.page().runJavaScript("if(window.toggleTradeRoutes) window.toggleTradeRoutes();")
+            self.status_label.setText(" ROUTES | Toggled")
+            logger.debug("Toggled trade routes")
+        except Exception as e:
+            logger.error(f"Failed to toggle routes: {e}", exc_info=True)
 
     def toggle_live_ships(self):
         """Toggle live ships"""
-        self.web_view.page().runJavaScript("if(window.toggleLiveShips) window.toggleLiveShips();")
-        self.status_label.setText(" SHIPS | Toggled")
+        try:
+            self.web_view.page().runJavaScript("if(window.toggleLiveShips) window.toggleLiveShips();")
+            self.status_label.setText(" SHIPS | Toggled")
+            logger.debug("Toggled live ships")
+        except Exception as e:
+            logger.error(f"Failed to toggle ships: {e}", exc_info=True)
 
     def update_marker_count(self):
         """Update marker count display"""
-        count = len(self.markers_data)
-        self.marker_count_label.setText(f"Markers: {count}")
+        try:
+            count = len(self.markers_data)
+            self.marker_count_label.setText(f"Markers: {count}")
+            logger.debug(f"Updated marker count to {count}")
+        except Exception as e:
+            logger.error(f"Failed to update marker count: {e}", exc_info=True)
 
     def write_status(self, status):
         """Write status to file"""
         try:
             with open(self.status_file, 'w') as f:
                 json.dump({'status': status, 'timestamp': time.time()}, f)
-        except:
-            pass
+            logger.debug(f"Status written: {status}")
+        except Exception as e:
+            logger.error(f"Failed to write status: {e}", exc_info=True)
 
     def close_application(self):
         """Properly close the application"""
-        try:
-            logger.info("Closing maritime map application...", module="Leaflet_Map_Ui")
-            self.status_label.setText(" CLOSING...")
-
-            # Write closed status
-            self.write_status("closed")
-
-            # Stop file watcher
-            if hasattr(self, 'timer'):
-                self.timer.stop()
-
-            # Clean up temp files
+        with operation("close_application"):
             try:
-                for f in ["maritime_map.html", self.commands_file, self.status_file]:
-                    if os.path.exists(f):
-                        os.remove(f)
-                        logger.info(f" Removed: {f}", module="Leaflet_Map_Ui", context={'f': f})
+                logger.info("Closing maritime map application...")
+                self.status_label.setText(" CLOSING...")
+
+                # Write closed status
+                self.write_status("closed")
+
+                # Stop file watcher
+                if hasattr(self, 'timer'):
+                    self.timer.stop()
+                    logger.debug("File watcher timer stopped")
+
+                # Clean up temp files
+                temp_files = ["maritime_map.html", self.commands_file, self.status_file]
+                for file_path in temp_files:
+                    try:
+                        if os.path.exists(file_path):
+                            os.remove(file_path)
+                            logger.debug(f"Removed temp file: {file_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove temp file {file_path}: {e}")
+
+                logger.info("Maritime map application closed successfully")
+
+                # Close the window and quit application
+                self.close()
+                QApplication.quit()
+                sys.exit(0)
+
             except Exception as e:
-                logger.warning(f" Cleanup warning: {e}", module="Leaflet_Map_Ui", context={'e': e})
-
-            # Close the window and quit application
-            self.close()
-            QApplication.quit()
-            sys.exit(0)
-
-        except Exception as e:
-            logger.error(f" Close error: {e}", module="Leaflet_Map_Ui", context={'e': e})
-            # Force exit if normal close fails
-            sys.exit(1)
+                logger.error(f"Error during application close: {e}", exc_info=True)
+                # Force exit if normal close fails
+                sys.exit(1)
 
 
 def main():
     """Main function"""
-    app = QApplication(sys.argv)
-    window = MaritimeMapWindow()
-    window.show()
-    sys.exit(app.exec_())
+    with operation("main"):
+        logger.info("Starting maritime map application")
+        app = QApplication(sys.argv)
+        window = MaritimeMapWindow()
+        window.show()
+        logger.info("Maritime map window displayed, entering event loop")
+        sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
