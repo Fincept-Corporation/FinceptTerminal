@@ -77,7 +77,8 @@ class PerformantTabImporter:
         """OPTIMIZED: Parallel tab loading with controlled concurrency"""
         TAB_IMPORTS = [
             ("Dashboard", "fincept_terminal.DashBoard.DashboardTab.dashboard_tab", "DashboardTab"),
-            ("Market Tab", "fincept_terminal.DashBoard.MarketTab.market_tab", "MarketTab"),
+            ("Markets", "fincept_terminal.DashBoard.MarketTab.market_tab", "MarketTab"),
+            ("News", "fincept_terminal.DashBoard.NewsAnalysisTab.news_analysis_tab", "NewsAnalysisTab"),
             ("Analytics", "fincept_terminal.DashBoard.AnalyticsTab.data_viewer_tab", "DataViewerTab"),
             ("NSE India", "fincept_terminal.DashBoard.InfoTab.rss_tab", "RssTab"),
             ("Forum", "fincept_terminal.DashBoard.ForumTab.forum_tab", "ForumTab"),
