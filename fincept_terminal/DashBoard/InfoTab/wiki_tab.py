@@ -43,7 +43,7 @@ class WikipediaTab(BaseTab):
         info("Wikipedia tab initialized", context={"language": "en"})
 
     def get_label(self):
-        return "📚 Wikipedia"
+        return "Wikipedia"
 
     def create_content(self):
         """Create Wikipedia interface content"""
