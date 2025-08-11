@@ -670,16 +670,24 @@ class DataViewerTab(BaseTab):
         params = {}
 
         try:
-            # Common parameters
-            if symbol:
+            # Common parameters for methods that need symbols
+            if symbol and category not in ["Economic Indicators", "Market Intelligence", "Commodities"]:
                 params['symbol'] = symbol
 
-            # Get additional parameters from UI
-            if dpg.does_item_exist(f"period_combo_{self.tab_id}"):
-                params['period'] = dpg.get_value(f"period_combo_{self.tab_id}")
+            # Only add period/interval for time-series data methods
+            time_series_methods = [
+                "Time Series Daily", "Time Series Intraday", "Time Series Weekly",
+                "Time Series Monthly", "Daily Adjusted", "Weekly Adjusted",
+                "Monthly Adjusted", "FX Daily", "FX Intraday", "FX Weekly",
+                "FX Monthly", "Crypto Daily", "Crypto Intraday",
+                "Digital Currency Weekly", "Digital Currency Monthly"
+            ]
 
-            if dpg.does_item_exist(f"interval_combo_{self.tab_id}"):
-                params['interval'] = dpg.get_value(f"interval_combo_{self.tab_id}")
+            if data_type in time_series_methods:
+                if dpg.does_item_exist(f"period_combo_{self.tab_id}"):
+                    params['period'] = dpg.get_value(f"period_combo_{self.tab_id}")
+                if dpg.does_item_exist(f"interval_combo_{self.tab_id}"):
+                    params['interval'] = dpg.get_value(f"interval_combo_{self.tab_id}")
 
             # Category-specific parameters
             if category == "Technical Indicators":
@@ -687,6 +695,9 @@ class DataViewerTab(BaseTab):
                     params['time_period'] = dpg.get_value(f"time_period_{self.tab_id}")
                 if dpg.does_item_exist(f"series_type_{self.tab_id}"):
                     params['series_type'] = dpg.get_value(f"series_type_{self.tab_id}")
+                # Add interval for technical indicators
+                if dpg.does_item_exist(f"interval_combo_{self.tab_id}"):
+                    params['interval'] = dpg.get_value(f"interval_combo_{self.tab_id}")
 
             elif category == "Forex":
                 if data_type == "Currency Exchange Rate":
@@ -694,28 +705,79 @@ class DataViewerTab(BaseTab):
                         f"from_currency_{self.tab_id}") else "USD"
                     params['to_currency'] = dpg.get_value(f"to_currency_{self.tab_id}") if dpg.does_item_exist(
                         f"to_currency_{self.tab_id}") else "EUR"
+                    # Remove symbol for exchange rate
+                    params.pop('symbol', None)
                 elif data_type in ["FX Daily", "FX Intraday", "FX Weekly", "FX Monthly"]:
                     params['from_symbol'] = dpg.get_value(f"from_currency_{self.tab_id}") if dpg.does_item_exist(
                         f"from_currency_{self.tab_id}") else "USD"
                     params['to_symbol'] = dpg.get_value(f"to_currency_{self.tab_id}") if dpg.does_item_exist(
                         f"to_currency_{self.tab_id}") else "EUR"
+                    # Remove symbol for FX methods
+                    params.pop('symbol', None)
+
+            elif category == "Cryptocurrency":
+                # Crypto methods need symbol as crypto symbol
+                if data_type in ["Crypto Intraday", "Digital Currency Weekly", "Digital Currency Monthly"]:
+                    params['market'] = "USD"  # Default market
 
             elif category == "Economic Indicators":
-                # Economic indicators might need specific parameters
+                # Remove symbol for economic indicators
+                params.pop('symbol', None)
                 if data_type == "Treasury Yield":
-                    params['maturity'] = "10year"  # Default maturity
+                    params['maturity'] = "10year"
+                    params['interval'] = "monthly"
+                elif data_type in ["Real GDP", "CPI", "Federal Funds Rate"]:
+                    params['interval'] = dpg.get_value(f"interval_combo_{self.tab_id}") if dpg.does_item_exist(
+                        f"interval_combo_{self.tab_id}") else "monthly"
+
+            elif category == "Commodities":
+                # Remove symbol for commodities
+                params.pop('symbol', None)
+                if dpg.does_item_exist(f"interval_combo_{self.tab_id}"):
+                    params['interval'] = dpg.get_value(f"interval_combo_{self.tab_id}")
+                else:
                     params['interval'] = "monthly"
 
-            # Remove None values and symbol for methods that don't need it
-            if data_type in ["Top Gainers/Losers", "Real GDP", "Unemployment", "CPI"]:
-                params.pop('symbol', None)
+            elif category == "Market Intelligence":
+                # Special handling for market intelligence
+                if data_type == "Top Gainers/Losers":
+                    params.pop('symbol', None)
+                elif data_type == "News Sentiment":
+                    if symbol:
+                        params['tickers'] = symbol
+                    params.pop('symbol', None)
+                elif data_type == "Insider Transactions":
+                    # Keep symbol for insider transactions
+                    pass
 
-            print(f"🔧 DEBUG: Prepared parameters: {params}")
+            # Fundamental data methods only need symbol - remove other parameters
+            fundamental_methods = [
+                "Company Overview", "Income Statement", "Balance Sheet",
+                "Cash Flow", "Earnings", "Earnings Estimates", "Dividends", "Splits"
+            ]
+            if data_type in fundamental_methods:
+                # Keep only symbol for fundamental data
+                params = {k: v for k, v in params.items() if k == 'symbol'}
+
+            # Stock data methods - clean up parameters
+            stock_methods = [
+                "Time Series Daily", "Time Series Intraday", "Time Series Weekly",
+                "Time Series Monthly", "Daily Adjusted", "Weekly Adjusted",
+                "Monthly Adjusted", "Global Quote", "Symbol Search"
+            ]
+            if data_type == "Symbol Search":
+                # For symbol search, use symbol as keywords
+                if symbol:
+                    params = {'keywords': symbol}
+                else:
+                    params = {'keywords': 'apple'}
+
+            print(f"🔧 DEBUG: Prepared parameters for {category}/{data_type}: {params}")
             return params
 
         except Exception as e:
             print(f"❌ DEBUG: Error preparing parameters: {str(e)}")
-            return {}
+            return {'symbol': symbol} if symbol else {}
 
     def update_all_displays(self, data: Dict[str, Any], category: str, data_type: str, symbol: str):
         """Update all display tabs with fetched data"""
