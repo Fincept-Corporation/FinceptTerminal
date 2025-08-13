@@ -52,7 +52,7 @@ class ProfileTab(BaseTab):
             logger.error("Failed to initialize API client", exc_info=True)
 
     def get_label(self):
-        return "👤 Profile"
+        return "Profile"
 
     @lru_cache(maxsize=1)
     def get_cached_session_data(self):

@@ -50,7 +50,7 @@ class SettingsManager:
         """Get default settings structure"""
         return {
             "providers": {
-                "alpha_vantage": {
+                "alpha_vantage_data": {
                     "api_key": "",
                     "rate_limit": 5,
                     "enabled": False,
@@ -137,7 +137,7 @@ class SettingsTab(BaseTab):
         self.settings_manager = SettingsManager()
         self.verification_results = {}
         self.providers = {
-            "alpha_vantage": {
+            "alpha_vantage_data": {
                 "name": "Alpha Vantage",
                 "description": "Premium financial data provider",
                 "requires_api_key": True,
@@ -160,7 +160,7 @@ class SettingsTab(BaseTab):
         info(f"Settings will be stored at: {self.settings_manager.settings_file}", module="SettingsTab")
 
     def get_label(self):
-        return "⚙️ Settings"
+        return "Settings"
 
     def create_content(self):
         """Create the settings interface"""
@@ -245,7 +245,7 @@ class SettingsTab(BaseTab):
                     )
 
             # Provider-specific settings
-            if provider_id == "alpha_vantage":
+            if provider_id == "alpha_vantage_data":
                 self.create_alpha_vantage_settings(config, provider_id)
             elif provider_id == "yahoo_finance":
                 self.create_yahoo_finance_settings(config, provider_id)
@@ -521,7 +521,7 @@ class SettingsTab(BaseTab):
     def verify_api_key(self, provider_id: str):
         """Verify API key for a provider (no async)"""
         try:
-            if provider_id == "alpha_vantage":
+            if provider_id == "alpha_vantage_data":
                 # Use threading for verification instead of async
                 thread = threading.Thread(target=self._verify_alpha_vantage_key_sync)
                 thread.daemon = True
@@ -534,9 +534,9 @@ class SettingsTab(BaseTab):
     def _verify_alpha_vantage_key_sync(self):
         """Verify Alpha Vantage API key synchronously"""
         try:
-            api_key = self.settings_manager.get_api_key("alpha_vantage")
+            api_key = self.settings_manager.get_api_key("alpha_vantage_data")
             if not api_key:
-                self.verification_results["alpha_vantage"] = {"valid": False, "error": "No API key provided"}
+                self.verification_results["alpha_vantage_data"] = {"valid": False, "error": "No API key provided"}
                 return
 
             # Simple HTTP request for verification
@@ -563,7 +563,7 @@ class SettingsTab(BaseTab):
                 elif "Time Series (Daily)" in data:
                     result = {"valid": True, "message": "API key verified successfully"}
                     # Update last verified timestamp
-                    self.settings_manager.update_provider_config("alpha_vantage", {
+                    self.settings_manager.update_provider_config("alpha_vantage_data", {
                         "last_verified": datetime.now().isoformat()
                     })
                 else:
@@ -571,7 +571,7 @@ class SettingsTab(BaseTab):
             else:
                 result = {"valid": False, "error": f"HTTP {response.status_code}"}
 
-            self.verification_results["alpha_vantage"] = result
+            self.verification_results["alpha_vantage_data"] = result
 
             if result["valid"]:
                 info("Alpha Vantage API key verified successfully", module="SettingsTab")
@@ -579,10 +579,10 @@ class SettingsTab(BaseTab):
                 error(f"Alpha Vantage verification failed: {result['error']}", module="SettingsTab")
 
         except requests.Timeout:
-            self.verification_results["alpha_vantage"] = {"valid": False, "error": "API request timeout"}
+            self.verification_results["alpha_vantage_data"] = {"valid": False, "error": "API request timeout"}
         except Exception as e:
             error(f"Alpha Vantage verification error: {str(e)}", module="SettingsTab")
-            self.verification_results["alpha_vantage"] = {"valid": False, "error": str(e)}
+            self.verification_results["alpha_vantage_data"] = {"valid": False, "error": str(e)}
 
     def save_all_settings(self):
         """Save all current settings"""
@@ -623,7 +623,7 @@ class SettingsTab(BaseTab):
 
                 # Alpha Vantage specific
                 rate_limit_tag = f"settings_{provider_id}_rate_limit"
-                if provider_id == "alpha_vantage" and dpg.does_item_exist(rate_limit_tag):
+                if provider_id == "alpha_vantage_data" and dpg.does_item_exist(rate_limit_tag):
                     config_updates["rate_limit"] = dpg.get_value(rate_limit_tag)
 
                 # Yahoo Finance specific
@@ -696,7 +696,7 @@ class SettingsTab(BaseTab):
         """Get credentials for a provider (for use by data source manager)"""
         config = self.settings_manager.get_provider_config(provider_name)
 
-        if provider_name == "alpha_vantage":
+        if provider_name == "alpha_vantage_data":
             return {"alpha_vantage_api_key": config.get("api_key", "")}
         elif provider_name == "fincept_api":
             return {"fincept_api_key": config.get("api_key", "")}

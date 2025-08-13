@@ -77,7 +77,7 @@ class DataSourceManager:
                         "requires_auth": True,
                         "real_time": True
                     },
-                    "alpha_vantage": {
+                    "alpha_vantage_data": {
                         "name": "Alpha Vantage",
                         "type": "api",
                         "supports": ["stocks", "forex", "crypto"],
@@ -154,7 +154,7 @@ class DataSourceManager:
         if cache_key in self._provider_cache:
             return self._provider_cache[cache_key]
 
-        if provider_name == "alpha_vantage":
+        if provider_name == "alpha_vantage_data":
             api_key = ""
 
             # Try credentials first
@@ -165,12 +165,12 @@ class DataSourceManager:
             if not api_key:
                 settings_manager = self.get_settings_manager()
                 if settings_manager:
-                    api_key = settings_manager.get_api_key("alpha_vantage")
+                    api_key = settings_manager.get_api_key("alpha_vantage_data")
                     debug(f"Got API key from settings: {len(api_key)} chars", module="DataSourceManager")
 
             if api_key and len(api_key) > 5:  # Basic validation
                 try:
-                    from fincept_terminal.DatabaseConnector.DataSources.Alpha_vantage.alpha_vantage_provider import \
+                    from fincept_terminal.DatabaseConnector.DataSources.alpha_vantage_data.alpha_vantage_provider import \
                         AlphaVantageProvider
                     provider = AlphaVantageProvider(api_key)
                     self._provider_cache[cache_key] = provider
@@ -271,11 +271,11 @@ class DataSourceManager:
                     return default_provider
 
                 # If Alpha Vantage is enabled and supports the data type, prioritize it
-                if (settings_manager.is_provider_enabled("alpha_vantage") and
-                        data_type in self.available_sources["alpha_vantage"]["supports"] and
-                        settings_manager.get_api_key("alpha_vantage")):
+                if (settings_manager.is_provider_enabled("alpha_vantage_data") and
+                        data_type in self.available_sources["alpha_vantage_data"]["supports"] and
+                        settings_manager.get_api_key("alpha_vantage_data")):
                     debug(f"Using Alpha Vantage for {data_type} (enabled with API key)", module="DataSourceManager")
-                    return "alpha_vantage"
+                    return "alpha_vantage_data"
 
             except Exception as e:
                 debug(f"Error checking settings for data source: {str(e)}", module="DataSourceManager")
@@ -350,7 +350,7 @@ class DataSourceManager:
                     data = self._get_yfinance_stock_data(symbol, period, interval)
                 elif source == "fincept_api":
                     data = self._get_fincept_stock_data(symbol, period, interval)
-                elif source == "alpha_vantage":
+                elif source == "alpha_vantage_data":
                     data = asyncio.run(self._get_alpha_vantage_stock_data(symbol, period, interval))
                 else:
                     data = self._get_fallback_stock_data(symbol, period, interval)
@@ -381,63 +381,63 @@ class DataSourceManager:
     async def _get_alpha_vantage_stock_data(self, symbol: str, period: str, interval: str) -> Dict[str, Any]:
         """Get stock data from Alpha Vantage provider"""
         try:
-            provider = self._get_provider_instance("alpha_vantage")
+            provider = self._get_provider_instance("alpha_vantage_data")
             if not provider:
-                return {"success": False, "error": "Alpha Vantage provider not configured", "source": "alpha_vantage"}
+                return {"success": False, "error": "Alpha Vantage provider not configured", "source": "alpha_vantage_data"}
 
             return await provider.get_stock_data(symbol, period, interval)
 
         except Exception as e:
             logger.error("Alpha Vantage stock data error",
                          context={"symbol": symbol, "error": str(e)}, exc_info=True)
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     # STOCK DATA METHODS
     async def get_weekly_data(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get weekly stock data from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_stock_data(symbol, interval="W")
 
     async def get_monthly_data(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get monthly stock data from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_stock_data(symbol, interval="M")
 
     async def get_daily_adjusted(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get daily adjusted stock data from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_daily_adjusted(symbol)
 
     async def get_weekly_adjusted(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get weekly adjusted stock data from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_weekly_adjusted(symbol)
 
     async def get_monthly_adjusted(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get monthly adjusted stock data from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_monthly_adjusted(symbol)
 
     async def get_global_quote(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get global quote from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_global_quote(symbol)
 
     async def search_symbols(self, keywords: str, **kwargs) -> Dict[str, Any]:
         """Search symbols from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.search_symbols(keywords)
@@ -445,56 +445,56 @@ class DataSourceManager:
     # FUNDAMENTAL DATA METHODS
     async def get_company_overview(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get company overview from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_company_overview(symbol)
 
     async def get_income_statement(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get income statement from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_income_statement(symbol)
 
     async def get_balance_sheet(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get balance sheet from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_balance_sheet(symbol)
 
     async def get_cash_flow(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get cash flow from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_cash_flow(symbol)
 
     async def get_earnings(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get earnings from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_earnings(symbol)
 
     async def get_earnings_estimates(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get earnings estimates from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_earnings_estimates(symbol)
 
     async def get_dividends(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get dividends from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_dividends(symbol)
 
     async def get_splits(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get splits from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_splits(symbol)
@@ -503,7 +503,7 @@ class DataSourceManager:
     async def get_sma(self, symbol: str, interval: str = "daily", time_period: int = 14, series_type: str = "close",
                       **kwargs) -> Dict[str, Any]:
         """Get Simple Moving Average from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_sma(symbol, interval, time_period, series_type)
@@ -511,7 +511,7 @@ class DataSourceManager:
     async def get_ema(self, symbol: str, interval: str = "daily", time_period: int = 14, series_type: str = "close",
                       **kwargs) -> Dict[str, Any]:
         """Get Exponential Moving Average from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_ema(symbol, interval, time_period, series_type)
@@ -519,7 +519,7 @@ class DataSourceManager:
     async def get_rsi(self, symbol: str, interval: str = "daily", time_period: int = 14, series_type: str = "close",
                       **kwargs) -> Dict[str, Any]:
         """Get RSI from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_rsi(symbol, interval, time_period, series_type)
@@ -527,7 +527,7 @@ class DataSourceManager:
     async def get_macd(self, symbol: str, interval: str = "daily", series_type: str = "close", **kwargs) -> Dict[
         str, Any]:
         """Get MACD from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_macd(symbol, interval, series_type)
@@ -535,28 +535,28 @@ class DataSourceManager:
     async def get_bbands(self, symbol: str, interval: str = "daily", time_period: int = 20, series_type: str = "close",
                          **kwargs) -> Dict[str, Any]:
         """Get Bollinger Bands from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_bbands(symbol, interval, time_period, series_type)
 
     async def get_stoch(self, symbol: str, interval: str = "daily", **kwargs) -> Dict[str, Any]:
         """Get Stochastic from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_stoch(symbol, interval)
 
     async def get_adx(self, symbol: str, interval: str = "daily", time_period: int = 14, **kwargs) -> Dict[str, Any]:
         """Get ADX from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_adx(symbol, interval, time_period)
 
     async def get_vwap(self, symbol: str, interval: str = "15min", **kwargs) -> Dict[str, Any]:
         """Get VWAP from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_vwap(symbol, interval)
@@ -565,7 +565,7 @@ class DataSourceManager:
     async def get_currency_exchange_rate(self, from_currency: str = "USD", to_currency: str = "EUR", **kwargs) -> Dict[
         str, Any]:
         """Get currency exchange rate from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_currency_exchange_rate(from_currency, to_currency)
@@ -573,21 +573,21 @@ class DataSourceManager:
     async def get_fx_intraday(self, from_symbol: str = "USD", to_symbol: str = "EUR", interval: str = "5min",
                               **kwargs) -> Dict[str, Any]:
         """Get FX intraday from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_fx_intraday(from_symbol, to_symbol, interval)
 
     async def get_fx_weekly(self, from_symbol: str = "USD", to_symbol: str = "EUR", **kwargs) -> Dict[str, Any]:
         """Get FX weekly from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_fx_weekly(from_symbol, to_symbol)
 
     async def get_fx_monthly(self, from_symbol: str = "USD", to_symbol: str = "EUR", **kwargs) -> Dict[str, Any]:
         """Get FX monthly from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_fx_monthly(from_symbol, to_symbol)
@@ -596,21 +596,21 @@ class DataSourceManager:
     async def get_crypto_intraday(self, symbol: str, market: str = "USD", interval: str = "5min", **kwargs) -> Dict[
         str, Any]:
         """Get crypto intraday from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_crypto_intraday(symbol, market, interval)
 
     async def get_digital_currency_weekly(self, symbol: str, market: str = "USD", **kwargs) -> Dict[str, Any]:
         """Get digital currency weekly from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_digital_currency_weekly(symbol, market)
 
     async def get_digital_currency_monthly(self, symbol: str, market: str = "USD", **kwargs) -> Dict[str, Any]:
         """Get digital currency monthly from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_digital_currency_monthly(symbol, market)
@@ -618,35 +618,35 @@ class DataSourceManager:
     # COMMODITIES METHODS
     async def get_wti_oil(self, interval: str = "monthly", **kwargs) -> Dict[str, Any]:
         """Get WTI oil from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_wti_oil(interval)
 
     async def get_brent_oil(self, interval: str = "monthly", **kwargs) -> Dict[str, Any]:
         """Get Brent oil from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_brent_oil(interval)
 
     async def get_natural_gas(self, interval: str = "monthly", **kwargs) -> Dict[str, Any]:
         """Get Natural gas from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_natural_gas(interval)
 
     async def get_copper(self, interval: str = "monthly", **kwargs) -> Dict[str, Any]:
         """Get Copper from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_copper(interval)
 
     async def get_aluminum(self, interval: str = "monthly", **kwargs) -> Dict[str, Any]:
         """Get Aluminum from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_aluminum(interval)
@@ -654,35 +654,35 @@ class DataSourceManager:
     # ECONOMIC INDICATORS METHODS
     async def get_real_gdp(self, interval: str = "annual", **kwargs) -> Dict[str, Any]:
         """Get Real GDP from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_real_gdp(interval)
 
     async def get_unemployment(self, **kwargs) -> Dict[str, Any]:
         """Get Unemployment from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_unemployment()
 
     async def get_cpi(self, interval: str = "monthly", **kwargs) -> Dict[str, Any]:
         """Get CPI from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_cpi(interval)
 
     async def get_treasury_yield(self, interval: str = "monthly", maturity: str = "10year", **kwargs) -> Dict[str, Any]:
         """Get Treasury yield from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_treasury_yield(interval, maturity)
 
     async def get_federal_funds_rate(self, interval: str = "monthly", **kwargs) -> Dict[str, Any]:
         """Get Federal funds rate from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_federal_funds_rate(interval)
@@ -690,21 +690,21 @@ class DataSourceManager:
     # MARKET INTELLIGENCE METHODS
     async def get_news_sentiment(self, tickers: str = None, topics: str = None, **kwargs) -> Dict[str, Any]:
         """Get news sentiment from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_news_sentiment(tickers, topics)
 
     async def get_top_gainers_losers(self, **kwargs) -> Dict[str, Any]:
         """Get top gainers/losers from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_top_gainers_losers()
 
     async def get_insider_transactions(self, symbol: str, **kwargs) -> Dict[str, Any]:
         """Get insider transactions from Alpha Vantage"""
-        provider = self._get_provider_instance("alpha_vantage")
+        provider = self._get_provider_instance("alpha_vantage_data")
         if not provider:
             return {"success": False, "error": "Alpha Vantage provider not configured"}
         return await provider.get_insider_transactions(symbol)
@@ -730,7 +730,7 @@ class DataSourceManager:
                     data = self._get_yfinance_forex_data(pair, period)
                 elif source == "fincept_api":
                     data = self._get_fincept_forex_data(pair, period)
-                elif source == "alpha_vantage":
+                elif source == "alpha_vantage_data":
                     data = asyncio.run(self._get_alpha_vantage_forex_data(pair, period))
                 else:
                     data = self._get_fallback_forex_data(pair, period)
@@ -760,16 +760,16 @@ class DataSourceManager:
     async def _get_alpha_vantage_forex_data(self, pair: str, period: str) -> Dict[str, Any]:
         """Get forex data from Alpha Vantage provider"""
         try:
-            provider = self._get_provider_instance("alpha_vantage")
+            provider = self._get_provider_instance("alpha_vantage_data")
             if not provider:
-                return {"success": False, "error": "Alpha Vantage provider not configured", "source": "alpha_vantage"}
+                return {"success": False, "error": "Alpha Vantage provider not configured", "source": "alpha_vantage_data"}
 
             return await provider.get_forex_data(pair, period)
 
         except Exception as e:
             logger.error("Alpha Vantage forex data error",
                          context={"pair": pair, "error": str(e)}, exc_info=True)
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     @monitor_performance
     def get_news_data(self, category: str = "financial", limit: int = 20) -> Dict[str, Any]:
@@ -836,7 +836,7 @@ class DataSourceManager:
 
                 if source == "fincept_api":
                     data = self._get_fincept_crypto_data(symbol, period)
-                elif source == "alpha_vantage":
+                elif source == "alpha_vantage_data":
                     data = asyncio.run(self._get_alpha_vantage_crypto_data(symbol, period))
                 else:
                     data = self._get_fallback_crypto_data(symbol, period)
@@ -866,16 +866,16 @@ class DataSourceManager:
     async def _get_alpha_vantage_crypto_data(self, symbol: str, period: str) -> Dict[str, Any]:
         """Get crypto data from Alpha Vantage provider"""
         try:
-            provider = self._get_provider_instance("alpha_vantage")
+            provider = self._get_provider_instance("alpha_vantage_data")
             if not provider:
-                return {"success": False, "error": "Alpha Vantage provider not configured", "source": "alpha_vantage"}
+                return {"success": False, "error": "Alpha Vantage provider not configured", "source": "alpha_vantage_data"}
 
             return await provider.get_crypto_data(symbol, period)
 
         except Exception as e:
             logger.error("Alpha Vantage crypto data error",
                          context={"symbol": symbol, "error": str(e)}, exc_info=True)
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     @monitor_performance
     def get_economic_data(self, indicator: str, country: str = "US") -> Dict[str, Any]:
@@ -1185,12 +1185,12 @@ class DataSourceManager:
                         "message": "YFinance connection successful" if success else result.get("error"),
                         "response_time": "< 1s"
                     }
-                elif source_name == "alpha_vantage":
+                elif source_name == "alpha_vantage_data":
                     # Test Alpha Vantage
-                    provider = self._get_provider_instance("alpha_vantage")
+                    provider = self._get_provider_instance("alpha_vantage_data")
                     if provider:
                         result = asyncio.run(provider.verify_api_key())
-                        logger.info("alpha_vantage test completed", context={"success": result.get("valid", False)})
+                        logger.info("alpha_vantage_data test completed", context={"success": result.get("valid", False)})
                         return {
                             "success": result.get("valid", False),
                             "message": result.get("message", result.get("error", "Unknown")),
@@ -1488,7 +1488,7 @@ class DataSourceManager:
                     health_status["issues"].extend(validation["issues"])
 
                 # Test primary sources
-                primary_sources = ["yfinance", "alpha_vantage"]
+                primary_sources = ["yfinance", "alpha_vantage_data"]
                 for source in primary_sources:
                     try:
                         test_result = self.test_data_source(source)
