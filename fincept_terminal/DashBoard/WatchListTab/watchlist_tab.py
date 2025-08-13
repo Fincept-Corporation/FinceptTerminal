@@ -8,10 +8,12 @@ import datetime
 import threading
 import time
 import random
-import json
-import os
+import duckdb
+from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 from functools import lru_cache
+from decimal import Decimal, ROUND_HALF_UP
+
 
 # Try to import yfinance for real data, fallback to simulated data
 try:
@@ -24,15 +26,15 @@ except ImportError:
     logger.warning("yfinance not available, using simulated data")
 
 # Constants
-SETTINGS_FILE = "watchlist_settings.json"
 UPDATE_INTERVAL = 4.0  # seconds
 PRICE_CHANGE_LIMIT = 0.015  # ±1.5% max simulated change
 MAX_RETRIES = 3
 REQUEST_DELAY = 0.1  # delay between API requests
+DB_FILE = "watchlist.db"
 
 
 class WatchlistTab(BaseTab):
-    """Bloomberg Terminal style Watchlist tab - Enhanced with performance optimizations"""
+    """Bloomberg Terminal style Watchlist tab - Enhanced with DuckDB storage"""
 
     def __init__(self, main_app=None):
         logger.info("Initializing WatchlistTab")
@@ -46,7 +48,6 @@ class WatchlistTab(BaseTab):
 
             # Core data structures
             self.watchlist: Dict[str, Dict[str, Any]] = {}
-            self.settings: Dict[str, Any] = {}
             self.auto_update = True
             self.refresh_running = False
             self.selected_ticker: Optional[str] = None
@@ -60,10 +61,21 @@ class WatchlistTab(BaseTab):
             # Unique identifier for this instance
             self.instance_id = str(id(self))
 
-            # Initialize data
+            # Database connection
+            self.db_path = self.get_config_directory() / "watchlist" / DB_FILE
+            self.db_connection = None
+
+            # Initialize database and data
+            self._initialize_database()
             self._initialize_data()
 
         logger.info("WatchlistTab initialization completed", context={"instance_id": self.instance_id})
+
+    def get_config_directory(self) -> Path:
+        """Get platform-specific config directory - uses .fincept folder"""
+        # Use .fincept folder at home directory for all platforms
+        config_dir = Path.home() / '.fincept' / 'watchlist'
+        return config_dir
 
     def _init_colors(self):
         """Initialize Bloomberg color scheme - cached for performance"""
@@ -74,97 +86,281 @@ class WatchlistTab(BaseTab):
         self.BLOOMBERG_YELLOW = [255, 255, 0]
         self.BLOOMBERG_GRAY = [120, 120, 120]
 
+    def _initialize_database(self):
+        """Initialize DuckDB database and create tables"""
+        try:
+            with operation("Database initialization"):
+                # Create watchlist directory if it doesn't exist
+                self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # Initialize database connection
+                self.db_connection = duckdb.connect(str(self.db_path))
+
+                # Create watchlist table
+                self.db_connection.execute("""
+                    CREATE TABLE IF NOT EXISTS watchlist (
+                        ticker VARCHAR PRIMARY KEY,
+                        quantity DOUBLE NOT NULL,
+                        avg_price DOUBLE NOT NULL,
+                        alert_price DOUBLE,
+                        current_price DOUBLE DEFAULT 0,
+                        change_1d DOUBLE DEFAULT 0,
+                        change_pct_1d DOUBLE DEFAULT 0,
+                        change_pct_7d DOUBLE DEFAULT 0,
+                        change_pct_30d DOUBLE DEFAULT 0,
+                        last_updated VARCHAR DEFAULT '',
+                        total_value DOUBLE DEFAULT 0,
+                        unrealized_pnl DOUBLE DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Create settings table for general settings
+                self.db_connection.execute("""
+                    CREATE TABLE IF NOT EXISTS settings (
+                        key VARCHAR PRIMARY KEY,
+                        value VARCHAR,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+
+                # Create price history table for caching
+                self.db_connection.execute("""
+                    CREATE TABLE IF NOT EXISTS price_history (
+                        ticker VARCHAR,
+                        price DOUBLE,
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        PRIMARY KEY (ticker, timestamp)
+                    )
+                """)
+
+                logger.info("Database initialized successfully", context={"db_path": str(self.db_path)})
+
+        except Exception as e:
+            logger.error("Failed to initialize database", context={"error": str(e), "db_path": str(self.db_path)},
+                         exc_info=True)
+            raise
+
     def _initialize_data(self):
-        """Initialize settings and watchlist data"""
+        """Initialize watchlist data from database"""
         with operation("Data initialization"):
-            self.load_settings()
-            self.initialize_watchlist()
+            self.load_watchlist_from_database()
 
     def get_label(self) -> str:
         return "Watchlist"
 
-    @monitor_performance
-    def load_settings(self):
-        """Load settings from file with error handling"""
-        if not os.path.exists(SETTINGS_FILE):
-            logger.debug("Settings file does not exist, using defaults")
-            self.settings = {}
-            return
+    # Add these helper methods to the class first (if not already added)
+    def _round_currency(self, value: float) -> float:
+        """Round currency values to 2 decimal places consistently"""
+        if value is None:
+            return 0.0
+        return float(Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
 
+    def _round_percentage(self, value: float) -> float:
+        """Round percentage values to 4 decimal places for precision"""
+        if value is None:
+            return 0.0
+        return float(Decimal(str(value)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP))
+
+    def _safe_float(self, value, default=0.0) -> float:
+        """Safely convert value to float with default fallback"""
+        if value is None:
+            return default
         try:
-            with open(SETTINGS_FILE, "r", encoding='utf-8') as f:
-                self.settings = json.load(f)
-            logger.debug("Settings loaded successfully", context={"file": SETTINGS_FILE})
-        except (json.JSONDecodeError, IOError) as e:
-            logger.error("Failed to load settings file", context={"error": str(e)}, exc_info=True)
-            self.settings = {}
+            return float(value)
+        except (ValueError, TypeError):
+            return default
 
-    @monitor_performance
-    def save_settings(self):
-        """Save settings to file with atomic write"""
-        temp_file = f"{SETTINGS_FILE}.tmp"
+    # Replace the watchlist dictionary creation with this corrected version:
+    def load_watchlist_from_database(self):
+        """Load watchlist from DuckDB database with proper precision and validation"""
         try:
-            with open(temp_file, "w", encoding='utf-8') as f:
-                json.dump(self.settings, f, indent=2, ensure_ascii=False)
+            with operation("Load watchlist from database"):
+                if not self.db_connection:
+                    logger.error("Database connection not available")
+                    return
 
-            # Atomic rename
-            if os.path.exists(SETTINGS_FILE):
-                os.remove(SETTINGS_FILE)
-            os.rename(temp_file, SETTINGS_FILE)
+                # Load watchlist data
+                result = self.db_connection.execute("SELECT * FROM watchlist").fetchall()
+                columns = [desc[0] for desc in self.db_connection.description]
 
-            logger.debug("Settings saved successfully")
-        except IOError as e:
-            logger.error("Failed to save settings", context={"error": str(e)}, exc_info=True)
-            # Clean up temp file on error
-            if os.path.exists(temp_file):
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
+                self.watchlist.clear()
 
-    def initialize_watchlist(self):
-        """Initialize watchlist from settings or with sample data"""
-        with operation("Watchlist initialization"):
-            # Load from settings if available
-            if self._load_watchlist_from_settings():
-                logger.info("Watchlist loaded from settings",
-                            context={"positions": len(self.watchlist)})
-            else:
-                logger.info("Initializing with sample watchlist data")
-                self.initialize_sample_watchlist()
+                if result:
+                    for row in result:
+                        row_dict = dict(zip(columns, row))
+                        ticker = row_dict['ticker']
 
-    def _load_watchlist_from_settings(self) -> bool:
-        """Load watchlist from settings, return True if successful"""
-        try:
-            portfolio_data = self.settings.get("portfolios", {}).get("watchlist", {})
-            if not portfolio_data:
-                return False
+                        # Extract and validate core values
+                        quantity = self._safe_float(row_dict.get('quantity'), 0.0)
+                        avg_price = self._safe_float(row_dict.get('avg_price'), 0.0)
+                        alert_price = self._safe_float(row_dict.get('alert_price')) if row_dict.get(
+                            'alert_price') is not None else None
 
-            self.watchlist = {}
-            for ticker, data in portfolio_data.items():
-                self.watchlist[ticker] = {
-                    "quantity": data.get("quantity", 0),
-                    "avg_price": data.get("avg_price", 0),
-                    "alert_price": data.get("alert_price"),
-                    "current_price": data.get("avg_price", 0),
-                    "change_1d": 0.0,
-                    "change_pct_1d": 0.0,
-                    "change_pct_7d": 0.0,
-                    "change_pct_30d": 0.0,
-                    "last_updated": "",
-                    "total_value": 0.0,
-                    "unrealized_pnl": 0.0
-                }
-            return True
+                        # Handle current price with fallback to avg_price
+                        current_price = self._safe_float(row_dict.get('current_price'))
+                        if current_price == 0.0 and avg_price > 0.0:
+                            current_price = avg_price
+
+                        # Handle change values with proper defaults
+                        change_1d = self._safe_float(row_dict.get('change_1d'), 0.0)
+                        change_pct_1d = self._safe_float(row_dict.get('change_pct_1d'), 0.0)
+                        change_pct_7d = self._safe_float(row_dict.get('change_pct_7d'), 0.0)
+                        change_pct_30d = self._safe_float(row_dict.get('change_pct_30d'), 0.0)
+
+                        # Handle string values
+                        last_updated = row_dict.get('last_updated') or ""
+                        if isinstance(last_updated, datetime.datetime):
+                            last_updated = last_updated.strftime("%H:%M:%S")
+
+                        # Calculate derived values for consistency (don't trust stored values)
+                        total_value = self._round_currency(current_price * quantity) if quantity > 0 else 0.0
+                        unrealized_pnl = self._round_currency((current_price - avg_price) * quantity) if abs(
+                            avg_price) > 1e-10 and quantity > 0 else 0.0
+
+                        # Validate data integrity
+                        if quantity <= 0:
+                            logger.warning(f"Invalid quantity for {ticker}: {quantity}, skipping")
+                            continue
+
+                        if avg_price < 0:
+                            logger.warning(f"Invalid avg_price for {ticker}: {avg_price}, skipping")
+                            continue
+
+                        # Create watchlist entry with proper precision
+                        self.watchlist[ticker] = {
+                            "quantity": quantity,
+                            "avg_price": self._round_currency(avg_price),
+                            "alert_price": self._round_currency(alert_price) if alert_price is not None else None,
+                            "current_price": self._round_currency(current_price),
+                            "change_1d": self._round_currency(change_1d),
+                            "change_pct_1d": self._round_percentage(change_pct_1d),
+                            "change_pct_7d": self._round_percentage(change_pct_7d),
+                            "change_pct_30d": self._round_percentage(change_pct_30d),
+                            "last_updated": str(last_updated),
+                            "total_value": total_value,
+                            "unrealized_pnl": unrealized_pnl
+                        }
+
+                    logger.info("Watchlist loaded from database", context={"positions": len(self.watchlist)})
+                else:
+                    logger.info("No watchlist data found in database, initializing with sample data")
+                    self.initialize_sample_watchlist()
+
         except Exception as e:
-            logger.error("Error exporting portfolio", context={"error": str(e)}, exc_info=True)
+            logger.error("Error loading watchlist from database", context={"error": str(e)}, exc_info=True)
+            # Fallback to sample data
+            self.initialize_sample_watchlist()
+
+    @monitor_performance
+    def save_watchlist_to_database(self):
+        """Save watchlist data to DuckDB database"""
+        try:
+            if not self.db_connection:
+                logger.error("Database connection not available")
+                return
+
+            with operation("Save watchlist to database"):
+                current_timestamp = datetime.datetime.now()
+
+                # Clear existing data and insert new data
+                self.db_connection.execute("DELETE FROM watchlist")
+
+                if self.watchlist:
+                    # Prepare data for batch insert
+                    data_rows = []
+                    for ticker, data in self.watchlist.items():
+                        data_rows.append((
+                            ticker,
+                            data['quantity'],
+                            data['avg_price'],
+                            data.get('alert_price'),
+                            data['current_price'],
+                            data['change_1d'],
+                            data['change_pct_1d'],
+                            data['change_pct_7d'],
+                            data['change_pct_30d'],
+                            data['last_updated'],
+                            data['total_value'],
+                            data['unrealized_pnl'],
+                            current_timestamp,
+                            current_timestamp
+                        ))
+
+                    # Batch insert
+                    self.db_connection.executemany("""
+                        INSERT INTO watchlist (
+                            ticker, quantity, avg_price, alert_price, current_price,
+                            change_1d, change_pct_1d, change_pct_7d, change_pct_30d,
+                            last_updated, total_value, unrealized_pnl, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, data_rows)
+
+                    logger.debug("Watchlist saved to database", context={"positions": len(self.watchlist)})
+
+        except Exception as e:
+            logger.error("Error saving watchlist to database", context={"error": str(e)}, exc_info=True)
+
+    def get_setting(self, key: str, default: Any = None) -> Any:
+        """Get setting value from database"""
+        try:
+            if not self.db_connection:
+                return default
+
+            result = self.db_connection.execute("SELECT value FROM settings WHERE key = ?", [key]).fetchone()
+            return result[0] if result else default
+        except Exception as e:
+            logger.error("Error getting setting", context={"key": key, "error": str(e)})
+            return default
+
+    def set_setting(self, key: str, value: str):
+        """Set setting value in database"""
+        try:
+            if not self.db_connection:
+                return
+
+            self.db_connection.execute("""
+                INSERT OR REPLACE INTO settings (key, value, updated_at) 
+                VALUES (?, ?, CURRENT_TIMESTAMP)
+            """, [key, value])
+        except Exception as e:
+            logger.error("Error setting value", context={"key": key, "error": str(e)})
+
+    def _create_status_bar(self):
+        """Create status bar"""
+        try:
+            dpg.add_separator()
+            with dpg.group(horizontal=True):
+                dpg.add_text("WATCHLIST STATUS:", color=self.BLOOMBERG_GRAY)
+                dpg.add_text("ACTIVE", color=self.BLOOMBERG_GREEN)
+                dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
+                dpg.add_text("POSITIONS:", color=self.BLOOMBERG_GRAY)
+                dpg.add_text(f"{len(self.watchlist)}", color=self.BLOOMBERG_YELLOW,
+                             tag=self.get_tag("status_positions"))
+                dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
+                dpg.add_text("AUTO-UPDATE:", color=self.BLOOMBERG_GRAY)
+                status_text = "ON" if self.auto_update else "OFF"
+                status_color = self.BLOOMBERG_GREEN if self.auto_update else self.BLOOMBERG_RED
+                dpg.add_text(status_text, color=status_color, tag=self.get_tag("auto_status"))
+                dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
+                dpg.add_text("SELECTED:", color=self.BLOOMBERG_GRAY)
+                dpg.add_text("None", color=self.BLOOMBERG_GRAY, tag=self.get_tag("selected_ticker_text"))
+        except Exception as e:
+            logger.error("Error creating status bar", context={"error": str(e)}, exc_info=True)
 
     def reset_watchlist(self, sender, app_data):
         """Reset watchlist to default"""
         try:
             with operation("Reset watchlist"):
                 self.watchlist.clear()
-                self.settings.clear()
+
+                # Clear database tables
+                if self.db_connection:
+                    self.db_connection.execute("DELETE FROM watchlist")
+                    self.db_connection.execute("DELETE FROM settings")
+                    self.db_connection.execute("DELETE FROM price_history")
+
                 self.initialize_sample_watchlist()
                 self.update_display()
 
@@ -200,6 +396,25 @@ class WatchlistTab(BaseTab):
         except Exception as e:
             logger.error("Error generating portfolio report", context={"error": str(e)}, exc_info=True)
 
+    def redirect_to_equity_research(self, ticker: str):
+        """Redirect to Equity Research tab with selected ticker - MINIMAL IMPLEMENTATION"""
+        try:
+            logger.info("Redirecting to Equity Research tab", context={"ticker": ticker})
+
+            # Check if main_app exists and has the required method
+            if self.main_app and hasattr(self.main_app, 'switch_to_tab_with_ticker'):
+                success = self.main_app.switch_to_tab_with_ticker("Equity Research", ticker)
+                if success:
+                    logger.info(f"Successfully redirected to Equity Research with {ticker}")
+                else:
+                    logger.warning(f"Failed to redirect to Equity Research with {ticker}")
+            else:
+                logger.warning("Cannot redirect: main_app not properly configured")
+
+        except Exception as e:
+            logger.error("Error redirecting to Equity Research tab",
+                         context={"ticker": ticker, "error": str(e)}, exc_info=True)
+
     # ============================================================================
     # CORE WATCHLIST METHODS
     # ============================================================================
@@ -232,7 +447,7 @@ class WatchlistTab(BaseTab):
 
                 # Clear cache and update
                 self.calculate_portfolio_metrics.cache_clear()
-                self.save_watchlist_to_settings()
+                self.save_watchlist_to_database()
                 self.update_display()
 
                 # Fetch real price if yfinance is available
@@ -250,12 +465,9 @@ class WatchlistTab(BaseTab):
                 if ticker in self.watchlist:
                     del self.watchlist[ticker]
 
-                # Remove from settings
-                portfolio_settings = self.settings.setdefault("portfolios", {}).setdefault("watchlist", {})
-                if ticker in portfolio_settings:
-                    del portfolio_settings[ticker]
-
-                self.save_settings()
+                # Remove from database
+                if self.db_connection:
+                    self.db_connection.execute("DELETE FROM watchlist WHERE ticker = ?", [ticker])
 
                 # Clear cache and update display
                 self.calculate_portfolio_metrics.cache_clear()
@@ -300,11 +512,19 @@ class WatchlistTab(BaseTab):
                     # Cache the price
                     self._price_cache[ticker] = (last_price, current_time)
 
+                    # Store price in database
+                    if self.db_connection:
+                        self.db_connection.execute("""
+                            INSERT INTO price_history (ticker, price, timestamp) 
+                            VALUES (?, ?, CURRENT_TIMESTAMP)
+                        """, [ticker, last_price])
+
                     # Calculate changes
                     if len(data) >= 2:
                         prev_price = float(data["Close"].iloc[-2])
                         change = last_price - prev_price
-                        change_pct = (change / prev_price * 100) if prev_price != 0 else 0
+                        change_pct = (change / prev_price * 100) if abs(prev_price) > 1e-10 else 0.0
+                        change_pct = self._round_percentage(change_pct)
                     else:
                         change = 0.0
                         change_pct = 0.0
@@ -322,7 +542,7 @@ class WatchlistTab(BaseTab):
                                 "change_pct_1d": round(change_pct, 2),
                                 "last_updated": datetime.datetime.now().strftime("%H:%M:%S"),
                                 "total_value": round(last_price * quantity, 2),
-                                "unrealized_pnl": round((last_price - avg_price) * quantity, 2) if avg_price > 0 else 0
+                                "unrealized_pnl": self._round_currency((last_price - avg_price) * quantity) if abs(avg_price) > 1e-10 else 0.0
                             })
 
                             # Schedule display update if not already pending
@@ -371,7 +591,7 @@ class WatchlistTab(BaseTab):
                     if i < len(tickers) - 1:  # Don't sleep after the last request
                         time.sleep(REQUEST_DELAY)
 
-                self.save_watchlist_to_settings()
+                self.save_watchlist_to_database()
                 logger.info("Price refresh completed")
 
         except Exception as e:
@@ -379,47 +599,63 @@ class WatchlistTab(BaseTab):
 
     @monitor_performance
     def update_watchlist_data(self):
-        """Update watchlist data with simulated changes - optimized"""
+        """Update watchlist data with simulated changes - fixed precision"""
         try:
             with self._update_lock:
                 current_time = datetime.datetime.now().strftime("%H:%M:%S")
 
-                # Pre-generate random values for all tickers at once
                 ticker_count = len(self.watchlist)
                 if ticker_count == 0:
                     return
 
-                # Batch random generation for better performance
+                # Generate random changes with proper bounds
                 change_factors = [1 + random.uniform(-PRICE_CHANGE_LIMIT, PRICE_CHANGE_LIMIT)
                                   for _ in range(ticker_count)]
-                weekly_changes = [random.uniform(-0.5, 0.5) for _ in range(ticker_count)]
-                monthly_changes = [random.uniform(-0.2, 0.2) for _ in range(ticker_count)]
 
                 for i, ticker in enumerate(self.watchlist):
                     data = self.watchlist[ticker]
 
-                    # Apply small price movement
+                    # Apply price movement with precision
                     old_price = data['current_price']
-                    new_price = old_price * change_factors[i]
-                    new_change_1d = new_price - old_price
-                    new_change_pct_1d = (new_change_1d / old_price) * 100
+                    new_price = self._round_currency(old_price * change_factors[i])
+                    new_change_1d = self._round_currency(new_price - old_price)
 
-                    # Update all values at once
+                    # Calculate percentage change with protection
+                    new_change_pct_1d = 0.0
+                    if abs(old_price) > 1e-10:
+                        new_change_pct_1d = self._round_percentage((new_change_1d / old_price) * 100)
+
+                    # Recalculate derived values with precision
+                    quantity = data['quantity']
+                    avg_price = data['avg_price']
+                    new_total_value = self._round_currency(new_price * quantity)
+                    new_unrealized_pnl = 0.0
+                    if abs(avg_price) > 1e-10:
+                        new_unrealized_pnl = self._round_currency((new_price - avg_price) * quantity)
+
+                    # Update weekly/monthly changes more realistically (don't accumulate)
+                    # Base changes on the current day's performance
+                    base_change = new_change_pct_1d
+                    weekly_factor = random.uniform(3.0, 7.0)  # Weekly is typically 3-7x daily
+                    monthly_factor = random.uniform(8.0, 15.0)  # Monthly is typically 8-15x daily
+
+                    new_change_pct_7d = self._round_percentage(base_change * weekly_factor + random.uniform(-2, 2))
+                    new_change_pct_30d = self._round_percentage(base_change * monthly_factor + random.uniform(-5, 5))
+
+                    # Update all values atomically
                     self.watchlist[ticker].update({
-                        'current_price': round(new_price, 2),
-                        'change_1d': round(new_change_1d, 2),
-                        'change_pct_1d': round(new_change_pct_1d, 2),
-                        'change_pct_7d': round(data['change_pct_7d'] + weekly_changes[i], 2),
-                        'change_pct_30d': round(data['change_pct_30d'] + monthly_changes[i], 2),
+                        'current_price': new_price,
+                        'change_1d': new_change_1d,
+                        'change_pct_1d': new_change_pct_1d,
+                        'change_pct_7d': new_change_pct_7d,
+                        'change_pct_30d': new_change_pct_30d,
                         'last_updated': current_time,
-                        'total_value': round(new_price * data['quantity'], 2),
-                        'unrealized_pnl': round((new_price - data['avg_price']) * data['quantity'], 2)
+                        'total_value': new_total_value,
+                        'unrealized_pnl': new_unrealized_pnl
                     })
 
-                # Update timestamps in UI
                 self._update_time_displays(current_time)
-
-                logger.debug("Watchlist data updated", context={"ticker_count": ticker_count})
+                logger.debug("Watchlist data updated with precision", context={"ticker_count": ticker_count})
 
         except Exception as e:
             logger.error("Error updating watchlist data", context={"error": str(e)}, exc_info=True)
@@ -512,37 +748,6 @@ class WatchlistTab(BaseTab):
             logger.info("Auto-update thread started", context={"thread_name": update_thread.name})
 
     @monitor_performance
-    def save_watchlist_to_settings(self):
-        """Save current watchlist state to settings with optimized structure"""
-        try:
-            # Ensure nested structure exists
-            if "portfolios" not in self.settings:
-                self.settings["portfolios"] = {}
-            if "watchlist" not in self.settings["portfolios"]:
-                self.settings["portfolios"]["watchlist"] = {}
-
-            current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-
-            # Only save essential data to reduce file size
-            for ticker, data in self.watchlist.items():
-                self.settings["portfolios"]["watchlist"][ticker] = {
-                    "quantity": data.get("quantity", 0),
-                    "avg_price": data.get("avg_price", 0),
-                    "alert_price": data.get("alert_price"),
-                    "last_added": current_date
-                }
-
-            self.save_settings()
-
-        except Exception as e:
-            logger.error("Error saving watchlist to settings", context={"error": str(e)}, exc_info=True)
-
-    def resize_components(self, left_width, center_width, right_width, top_height, bottom_height, cell_height):
-        """Handle resize events - optimized to do minimal work"""
-        # Fixed layout for stability - no dynamic resizing
-        pass
-
-    @monitor_performance
     def cleanup(self):
         """Clean up resources with comprehensive error handling"""
         try:
@@ -553,7 +758,12 @@ class WatchlistTab(BaseTab):
             self.refresh_running = False
 
             # Save current state before cleanup
-            self.save_watchlist_to_settings()
+            self.save_watchlist_to_database()
+
+            # Close database connection
+            if self.db_connection:
+                self.db_connection.close()
+                self.db_connection = None
 
             # Clear caches
             self.get_tag.cache_clear()
@@ -566,15 +776,12 @@ class WatchlistTab(BaseTab):
             # Clear data structures
             with self._update_lock:
                 self.watchlist.clear()
-                self.settings.clear()
                 self.selected_ticker = None
 
             logger.info("Watchlist tab cleanup completed successfully")
 
         except Exception as e:
-            logger.error("Error during cleanup", context={"error": str(e)}, exc_info=True).error(
-                "Error loading watchlist from settings", context={"error": str(e)})
-            return False
+            logger.error("Error during cleanup", context={"error": str(e)}, exc_info=True)
 
     def initialize_sample_watchlist(self):
         """Initialize with optimized sample watchlist data"""
@@ -618,8 +825,8 @@ class WatchlistTab(BaseTab):
                 "unrealized_pnl": round((current_price - avg_price) * quantity, 2)
             }
 
-        # Save to settings
-        self.save_watchlist_to_settings()
+        # Save to database
+        self.save_watchlist_to_database()
 
     @lru_cache(maxsize=128)
     def get_tag(self, base_name: str) -> str:
@@ -736,6 +943,14 @@ class WatchlistTab(BaseTab):
                 # Populate table
                 self.populate_watchlist_table()
 
+    def view_selected_details_callback(self, sender, app_data):
+        """Callback for view selected details button"""
+        if not self.selected_ticker:
+            logger.warning("View details failed: no ticker selected")
+            return
+
+        self.redirect_to_equity_research(self.selected_ticker)
+
     def create_summary_panel(self):
         """Create portfolio summary panel"""
         with dpg.child_window(width=450, height=550, border=True):
@@ -782,6 +997,12 @@ class WatchlistTab(BaseTab):
 
             # Quick actions
             dpg.add_text("QUICK ACTIONS", color=self.BLOOMBERG_YELLOW)
+            dpg.add_button(
+                label="VIEW SELECTED DETAILS",
+                width=-1,
+                callback=self.view_selected_details_callback
+            )
+            dpg.add_spacer(height=5)
             dpg.add_button(label="EXPORT PORTFOLIO", width=-1, callback=self.export_portfolio)
             dpg.add_spacer(height=5)
             dpg.add_button(label="RESET WATCHLIST", width=-1, callback=self.reset_watchlist)
@@ -789,35 +1010,57 @@ class WatchlistTab(BaseTab):
             dpg.add_button(label="PORTFOLIO REPORT", width=-1, callback=self.portfolio_report)
 
     def update_top_holdings(self, total_value: float):
-        """Update top holdings display with performance optimization"""
-        holdings_tag = self.get_tag("top_holdings_group")
-        if not dpg.does_item_exist(holdings_tag):
-            return
+        """Update top holdings display with performance optimization - FIXED"""
+        try:
+            holdings_tag = self.get_tag("top_holdings_group")
+            if not dpg.does_item_exist(holdings_tag):
+                logger.warning(f"Holdings group does not exist: {holdings_tag}")
+                return
 
-        # Clear existing holdings efficiently
-        children = dpg.get_item_children(holdings_tag, slot=1)
-        if children:
-            for child in children:
+            # Clear existing holdings efficiently with error handling
+            try:
+                children = dpg.get_item_children(holdings_tag, slot=1)
+                if children:
+                    for child in children:
+                        try:
+                            if dpg.does_item_exist(child):
+                                dpg.delete_item(child)
+                        except Exception as delete_error:
+                            logger.debug(f"Failed to delete child item {child}: {delete_error}")
+            except Exception as clear_error:
+                logger.debug(f"Error clearing holdings: {clear_error}")
+
+            # Add new holdings - limit to top 6 for performance
+            if total_value > 0 and self.watchlist:
                 try:
-                    dpg.delete_item(child)
-                except:
-                    pass
+                    sorted_holdings = sorted(
+                        self.watchlist.items(),
+                        key=lambda x: x[1]["total_value"],
+                        reverse=True
+                    )[:6]
 
-        # Add new holdings - limit to top 6 for performance
-        if total_value > 0:
-            sorted_holdings = sorted(
-                self.watchlist.items(),
-                key=lambda x: x[1]["total_value"],
-                reverse=True
-            )[:6]
+                    for ticker, data in sorted_holdings:
+                        try:
+                            # Verify parent still exists before adding
+                            if not dpg.does_item_exist(holdings_tag):
+                                logger.warning(f"Holdings group disappeared: {holdings_tag}")
+                                break
 
-            for ticker, data in sorted_holdings:
-                percentage = (data['total_value'] / total_value) * 100
-                dpg.add_text(
-                    f"{ticker}: ${data['total_value']:,.0f} ({percentage:.1f}%)",
-                    color=self.BLOOMBERG_WHITE,
-                    parent=holdings_tag
-                )
+                            percentage = (data['total_value'] / total_value) * 100
+                            dpg.add_text(
+                                f"{ticker}: ${data['total_value']:,.0f} ({percentage:.1f}%)",
+                                color=self.BLOOMBERG_WHITE,
+                                parent=holdings_tag
+                            )
+                        except Exception as add_error:
+                            logger.debug(f"Failed to add holding text for {ticker}: {add_error}")
+                            continue
+
+                except Exception as sort_error:
+                    logger.error(f"Error sorting holdings: {sort_error}")
+
+        except Exception as e:
+            logger.error(f"Error in update_top_holdings: {e}", exc_info=True)
 
     def create_status_bar(self):
         """Create status bar"""
@@ -839,80 +1082,224 @@ class WatchlistTab(BaseTab):
 
     @monitor_performance
     def populate_watchlist_table(self):
-        """Populate the watchlist table with current data - optimized"""
+        """Populate the watchlist table with current data - optimized with clickable symbols"""
+        table_tag = None
+
         try:
             table_tag = self.get_tag("watchlist_table")
             if not dpg.does_item_exist(table_tag):
+                logger.warning("Watchlist table does not exist", context={"table_tag": table_tag})
+                return
+
+            # Verify table is still valid before proceeding
+            try:
+                dpg.get_item_info(table_tag)
+            except Exception as info_error:
+                logger.warning(f"Table tag invalid: {table_tag}, error: {info_error}")
                 return
 
             # Clear existing table data efficiently
-            children = dpg.get_item_children(table_tag, slot=1)
-            if children:
-                for child in children:
-                    try:
-                        dpg.delete_item(child)
-                    except:
-                        pass
+            try:
+                children = dpg.get_item_children(table_tag, slot=1)
+                if children:
+                    for child in children:
+                        try:
+                            if dpg.does_item_exist(child):
+                                dpg.delete_item(child)
+                        except Exception as delete_error:
+                            logger.debug("Failed to delete table child",
+                                         context={"child": child, "error": str(delete_error)})
+            except Exception as clear_error:
+                logger.debug(f"Error clearing table: {clear_error}")
 
             # Sort tickers once for better performance
             sorted_tickers = sorted(self.watchlist.keys())
 
             # Add rows with pre-calculated colors
             for ticker in sorted_tickers:
-                data = self.watchlist[ticker]
+                try:
+                    # Verify table still exists before each row
+                    if not dpg.does_item_exist(table_tag):
+                        logger.warning(f"Table disappeared during population: {table_tag}")
+                        break
 
-                with dpg.table_row(parent=table_tag):
-                    # Symbol - make it selectable
-                    symbol_selectable = dpg.add_selectable(label=ticker, span_columns=False)
-                    dpg.set_item_callback(symbol_selectable, lambda s, a, u=ticker: self.select_ticker(u))
+                    data = self.watchlist[ticker]
 
-                    # Quantity
-                    dpg.add_text(f"{data['quantity']:,}", color=self.BLOOMBERG_WHITE)
+                    with dpg.table_row(parent=table_tag):
+                        try:
+                            # Symbol - make it selectable and clickable for Equity Research redirection
+                            symbol_selectable = dpg.add_selectable(
+                                label=ticker,
+                                span_columns=False,
+                                callback=self.on_ticker_selected,
+                                user_data=ticker  # Pass ticker as user_data
+                            )
 
-                    # Average price
-                    dpg.add_text(f"${data['avg_price']:.2f}", color=self.BLOOMBERG_GRAY)
+                            # Add tooltip to indicate it's clickable and will redirect
+                            try:
+                                with dpg.tooltip(symbol_selectable):
+                                    dpg.add_text(f"Click {ticker} to view detailed analysis")
+                                    dpg.add_text("→ Opens in Equity Research tab", color=self.BLOOMBERG_YELLOW)
+                            except Exception as tooltip_error:
+                                logger.debug(f"Failed to add tooltip for {ticker}: {tooltip_error}")
 
-                    # Current price
-                    dpg.add_text(f"${data['current_price']:.2f}", color=self.BLOOMBERG_WHITE)
+                        except Exception as symbol_error:
+                            logger.debug(f"Failed to add symbol selectable for {ticker}: {symbol_error}")
+                            # Fallback to simple text
+                            try:
+                                dpg.add_text(ticker, color=self.BLOOMBERG_WHITE)
+                            except Exception as fallback_error:
+                                logger.debug(f"Failed to add fallback text for {ticker}: {fallback_error}")
 
-                    # 1D Change
-                    change_color = self.BLOOMBERG_GREEN if data['change_1d'] >= 0 else self.BLOOMBERG_RED
-                    dpg.add_text(f"${data['change_1d']:+.2f}", color=change_color)
+                        # Quantity
+                        try:
+                            dpg.add_text(f"{data['quantity']:,}", color=self.BLOOMBERG_WHITE)
+                        except Exception as qty_error:
+                            logger.debug(f"Failed to add quantity for {ticker}: {qty_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
 
-                    # 1D Change %
-                    pct_color = self.BLOOMBERG_GREEN if data['change_pct_1d'] >= 0 else self.BLOOMBERG_RED
-                    dpg.add_text(f"{data['change_pct_1d']:+.2f}%", color=pct_color)
+                        # Average price
+                        try:
+                            dpg.add_text(f"${data['avg_price']:.2f}", color=self.BLOOMBERG_GRAY)
+                        except Exception as avg_error:
+                            logger.debug(f"Failed to add avg_price for {ticker}: {avg_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
 
-                    # 7D Change %
-                    pct_7d_color = self.BLOOMBERG_GREEN if data['change_pct_7d'] >= 0 else self.BLOOMBERG_RED
-                    dpg.add_text(f"{data['change_pct_7d']:+.2f}%", color=pct_7d_color)
+                        # Current price
+                        try:
+                            dpg.add_text(f"${data['current_price']:.2f}", color=self.BLOOMBERG_WHITE)
+                        except Exception as price_error:
+                            logger.debug(f"Failed to add current_price for {ticker}: {price_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
 
-                    # 30D Change %
-                    pct_30d_color = self.BLOOMBERG_GREEN if data['change_pct_30d'] >= 0 else self.BLOOMBERG_RED
-                    dpg.add_text(f"{data['change_pct_30d']:+.2f}%", color=pct_30d_color)
+                        # 1D Change
+                        try:
+                            change_color = self.BLOOMBERG_GREEN if data['change_1d'] >= 0 else self.BLOOMBERG_RED
+                            dpg.add_text(f"${data['change_1d']:+.2f}", color=change_color)
+                        except Exception as change_error:
+                            logger.debug(f"Failed to add change_1d for {ticker}: {change_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
 
-                    # Total value
-                    dpg.add_text(f"${data['total_value']:,.2f}", color=self.BLOOMBERG_WHITE)
+                        # 1D Change %
+                        try:
+                            pct_color = self.BLOOMBERG_GREEN if data['change_pct_1d'] >= 0 else self.BLOOMBERG_RED
+                            dpg.add_text(f"{data['change_pct_1d']:+.2f}%", color=pct_color)
+                        except Exception as pct_error:
+                            logger.debug(f"Failed to add change_pct_1d for {ticker}: {pct_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
 
-                    # P&L
-                    pnl_color = self.BLOOMBERG_GREEN if data['unrealized_pnl'] >= 0 else self.BLOOMBERG_RED
-                    dpg.add_text(f"${data['unrealized_pnl']:+,.2f}", color=pnl_color)
+                        # 7D Change %
+                        try:
+                            pct_7d_color = self.BLOOMBERG_GREEN if data['change_pct_7d'] >= 0 else self.BLOOMBERG_RED
+                            dpg.add_text(f"{data['change_pct_7d']:+.2f}%", color=pct_7d_color)
+                        except Exception as pct_7d_error:
+                            logger.debug(f"Failed to add change_pct_7d for {ticker}: {pct_7d_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
 
-                    # Alert
-                    alert_text = f"${data['alert_price']:.2f}" if data['alert_price'] else ""
-                    dpg.add_text(alert_text, color=self.BLOOMBERG_YELLOW)
+                        # 30D Change %
+                        try:
+                            pct_30d_color = self.BLOOMBERG_GREEN if data['change_pct_30d'] >= 0 else self.BLOOMBERG_RED
+                            dpg.add_text(f"{data['change_pct_30d']:+.2f}%", color=pct_30d_color)
+                        except Exception as pct_30d_error:
+                            logger.debug(f"Failed to add change_pct_30d for {ticker}: {pct_30d_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
+
+                        # Total value
+                        try:
+                            dpg.add_text(f"${data['total_value']:,.2f}", color=self.BLOOMBERG_WHITE)
+                        except Exception as total_error:
+                            logger.debug(f"Failed to add total_value for {ticker}: {total_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
+
+                        # P&L (Profit & Loss)
+                        try:
+                            pnl_color = self.BLOOMBERG_GREEN if data['unrealized_pnl'] >= 0 else self.BLOOMBERG_RED
+                            dpg.add_text(f"${data['unrealized_pnl']:+,.2f}", color=pnl_color)
+                        except Exception as pnl_error:
+                            logger.debug(f"Failed to add unrealized_pnl for {ticker}: {pnl_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
+
+                        # Alert price
+                        try:
+                            alert_text = f"${data['alert_price']:.2f}" if data['alert_price'] else ""
+                            dpg.add_text(alert_text, color=self.BLOOMBERG_YELLOW)
+                        except Exception as alert_error:
+                            logger.debug(f"Failed to add alert_price for {ticker}: {alert_error}")
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
+
+                except Exception as row_error:
+                    logger.debug(f"Error adding row for {ticker}: {row_error}")
+                    # Try to add an error row if possible
+                    try:
+                        if dpg.does_item_exist(table_tag):
+                            with dpg.table_row(parent=table_tag):
+                                dpg.add_text(f"ERROR: {ticker}", color=self.BLOOMBERG_RED)
+                                for _ in range(10):  # Fill remaining columns
+                                    dpg.add_text("--", color=self.BLOOMBERG_GRAY)
+                    except Exception as error_row_error:
+                        logger.debug(f"Failed to create error row for {ticker}: {error_row_error}")
+                    continue
+
+            logger.debug("Watchlist table populated successfully",
+                         context={"ticker_count": len(sorted_tickers)})
 
         except Exception as e:
             logger.error("Error populating watchlist table", context={"error": str(e)}, exc_info=True)
 
+            # Create error row if table exists and is valid
+            if table_tag and dpg.does_item_exist(table_tag):
+                try:
+                    with dpg.table_row(parent=table_tag):
+                        dpg.add_text("CRITICAL ERROR", color=self.BLOOMBERG_RED)
+                        for _ in range(10):  # Fill remaining columns
+                            dpg.add_text("--", color=self.BLOOMBERG_GRAY)
+                except Exception as fallback_error:
+                    logger.error("Failed to create critical error row", context={"error": str(fallback_error)})
+
+    def on_ticker_selected(self, sender, app_data, user_data):
+        """Handle ticker selection with proper data passing"""
+        ticker = user_data  # Get ticker from user_data
+        if ticker:
+            logger.debug(f"Ticker selected via callback: {ticker}")
+            self.select_ticker(ticker)
+        else:
+            logger.warning("No ticker data received in callback")
+
     @lru_cache(maxsize=1)
     def calculate_portfolio_metrics(self) -> Tuple[float, float, float]:
-        """Calculate portfolio summary metrics with caching"""
+        """Calculate portfolio summary metrics with high precision"""
         try:
-            total_value = sum(data['total_value'] for data in self.watchlist.values())
-            total_pnl = sum(data['unrealized_pnl'] for data in self.watchlist.values())
-            day_pnl = sum(data['change_1d'] * data['quantity'] for data in self.watchlist.values())
+            if not self.watchlist:
+                return 0.0, 0.0, 0.0
+
+            # Use Decimal for high precision calculations
+            total_value_decimal = Decimal('0')
+            total_pnl_decimal = Decimal('0')
+            day_pnl_decimal = Decimal('0')
+
+            for ticker, data in self.watchlist.items():
+                # Recalculate values to ensure consistency
+                current_price = Decimal(str(data['current_price']))
+                avg_price = Decimal(str(data['avg_price']))
+                quantity = Decimal(str(data['quantity']))
+                change_1d = Decimal(str(data['change_1d']))
+
+                # Calculate with precision
+                position_value = current_price * quantity
+                position_pnl = (current_price - avg_price) * quantity
+                position_day_pnl = change_1d * quantity
+
+                total_value_decimal += position_value
+                total_pnl_decimal += position_pnl
+                day_pnl_decimal += position_day_pnl
+
+            # Convert back to float with proper rounding
+            total_value = self._round_currency(float(total_value_decimal))
+            total_pnl = self._round_currency(float(total_pnl_decimal))
+            day_pnl = self._round_currency(float(day_pnl_decimal))
+
             return total_value, total_pnl, day_pnl
+
         except Exception as e:
             logger.error("Error calculating portfolio metrics", context={"error": str(e)})
             return 0.0, 0.0, 0.0
@@ -922,12 +1309,16 @@ class WatchlistTab(BaseTab):
     # ============================================================================
 
     def select_ticker(self, ticker: str):
-        """Select a ticker from the table"""
+        """Select a ticker from the table and redirect to Equity Research tab"""
         self.selected_ticker = ticker
         selected_tag = self.get_tag("selected_ticker_text")
         if dpg.does_item_exist(selected_tag):
             dpg.set_value(selected_tag, ticker)
+
         logger.debug("Ticker selected", context={"ticker": ticker})
+
+        # Auto-redirect to Equity Research tab for detailed analysis
+        self.redirect_to_equity_research(ticker)
 
     def add_to_watchlist_callback(self, sender, app_data):
         """Callback for add to watchlist button"""
@@ -1032,26 +1423,60 @@ class WatchlistTab(BaseTab):
 
     @monitor_performance
     def export_portfolio(self, sender, app_data):
-        """Export portfolio to file"""
+        """Export portfolio to DuckDB file or CSV"""
         try:
             with operation("Export portfolio"):
-                total_value, total_pnl, _ = self.calculate_portfolio_metrics()
+                if not self.db_connection:
+                    logger.error("Database connection not available for export")
+                    return
 
-                export_data = {
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "watchlist": self.watchlist,
-                    "portfolio_metrics": {
-                        "total_value": total_value,
-                        "total_pnl": total_pnl,
-                        "positions_count": len(self.watchlist)
-                    }
-                }
+                # Export to CSV file
+                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                csv_filename = f"portfolio_export_{timestamp}.csv"
 
-                filename = f"portfolio_export_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                with open(filename, 'w', encoding='utf-8') as f:
-                    json.dump(export_data, f, indent=2, ensure_ascii=False)
+                # Create export query
+                export_query = """
+                    COPY (
+                        SELECT 
+                            ticker,
+                            quantity,
+                            avg_price,
+                            current_price,
+                            (current_price - avg_price) * quantity as unrealized_pnl,
+                            current_price * quantity as total_value,
+                            change_pct_1d,
+                            change_pct_7d,
+                            change_pct_30d,
+                            last_updated,
+                            created_at
+                        FROM watchlist
+                        ORDER BY total_value DESC
+                    ) TO ? WITH (HEADER, DELIMITER ',')
+                """
 
-                logger.info("Portfolio exported successfully", context={"filename": filename})
+                self.db_connection.execute(export_query, [csv_filename])
+
+                # Also create a summary file
+                total_value, total_pnl, day_pnl = self.calculate_portfolio_metrics()
+
+                summary_filename = f"portfolio_summary_{timestamp}.txt"
+                with open(summary_filename, 'w') as f:
+                    f.write("=== PORTFOLIO EXPORT SUMMARY ===\n")
+                    f.write(f"Export Date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    f.write(f"Total Positions: {len(self.watchlist)}\n")
+                    f.write(f"Total Value: ${total_value:,.2f}\n")
+                    f.write(f"Unrealized P&L: ${total_pnl:+,.2f}\n")
+                    f.write(f"Day P&L: ${day_pnl:+,.2f}\n")
+                    f.write("================================\n")
+                    f.write(f"Detailed data exported to: {csv_filename}\n")
+
+                logger.info("Portfolio exported successfully",
+                            context={"csv_file": csv_filename, "summary_file": summary_filename})
 
         except Exception as e:
-            logger
+            logger.error("Error exporting portfolio", context={"error": str(e)}, exc_info=True)
+
+    def resize_components(self, left_width, center_width, right_width, top_height, bottom_height, cell_height):
+        """Handle resize events - optimized to do minimal work"""
+        # Fixed layout for stability - no dynamic resizing
+        pass

@@ -15,6 +15,9 @@ from concurrent.futures import ThreadPoolExecutor
 import dearpygui.dearpygui as dpg
 import requests
 
+import fincept_terminal.DashBoard.WatchListTab.watchlist_tab
+from fincept_terminal.menu_toolbar import MenuToolbarManager
+
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -80,6 +83,8 @@ class PerformantTabImporter:
             ("Markets", "fincept_terminal.DashBoard.MarketTab.market_tab", "MarketTab"),
             ("News", "fincept_terminal.DashBoard.NewsAnalysisTab.news_analysis_tab", "NewsAnalysisTab"),
             ("Analytics", "fincept_terminal.DashBoard.AnalyticsTab.data_viewer_tab", "DataViewerTab"),
+            ("Watchlist", "fincept_terminal.DashBoard.WatchListTab.watchlist_tab", "WatchlistTab"),
+            ("oecd", "fincept_terminal.DashBoard.AnalyticsTab.oecd_data_tab", "OECDDataTab"),
             ("NSE India", "fincept_terminal.DashBoard.InfoTab.rss_tab", "RssTab"),
             ("Forum", "fincept_terminal.DashBoard.ForumTab.forum_tab", "ForumTab"),
             ("Chat", "fincept_terminal.DashBoard.ChatTab.chat_tab", "ChatTab"),
@@ -207,6 +212,8 @@ class HighPerformanceMainApplication:
         self.resize_lock = False
         self.api_request_count = 0
         self.last_resize_time = 0
+        self.menu_toolbar_manager = MenuToolbarManager(self)
+
 
         # Store session data
         self.session_data = session_data
@@ -346,138 +353,59 @@ class HighPerformanceMainApplication:
         except Exception as e:
             error(f"Exit error: {str(e)}", module='main')
 
-    def create_menu_bar(self):
-        """Create enhanced menu bar with tab navigation"""
-        with dpg.menu_bar():
-            # Your existing menus (keep them all)
-            with dpg.menu(label="File"):
-                dpg.add_menu_item(label="New Session", callback=self.new_session)
-                dpg.add_menu_item(label="Save Configuration", callback=self.save_configuration)
-                dpg.add_menu_item(label="Load Configuration", callback=self.load_configuration)
-                dpg.add_separator()
-                dpg.add_menu_item(label="Toggle Full Screen (F11)", callback=self.toggle_fullscreen)
-                dpg.add_menu_item(label="Exit", callback=self.safe_exit)
+    def switch_to_tab_with_ticker(self, tab_label: str, ticker: str):
+        """Switch to a specific tab and load ticker data - MINIMAL IMPLEMENTATION"""
+        try:
+            # Find the tab by label
+            target_tab = None
+            target_tab_key = None
 
-            # Tab Navigation menu
-            with dpg.menu(label="Tabs"):
-                dpg.add_menu_item(label="<< Previous Tabs", callback=lambda: self.scroll_tab_view(-1))
-                dpg.add_menu_item(label="Next Tabs >>", callback=lambda: self.scroll_tab_view(1))
-                dpg.add_separator()
-                dpg.add_text("Quick Jump:")
-                # Add quick jump to each tab
-                for tab_name in self.tabs.keys():
-                    dpg.add_menu_item(label=tab_name,
-                                      callback=lambda s, a, u, tn=tab_name: self.jump_to_specific_tab(tn))
+            for tab_name, tab_instance in self.tabs.items():
+                # Check if tab has the matching label
+                if hasattr(tab_instance, 'get_label'):
+                    if tab_instance.get_label() == tab_label:
+                        target_tab = tab_instance
+                        target_tab_key = tab_name
+                        break
+                elif tab_name == tab_label:  # Fallback to tab name
+                    target_tab = tab_instance
+                    target_tab_key = tab_name
+                    break
 
-            # Session menu
-            with dpg.menu(label="Session"):
-                self._create_session_menu()
+            if not target_tab:
+                warning(f"Tab '{tab_label}' not found", module='main')
+                return False
 
-            # API Configuration menu
-            with dpg.menu(label="API"):
-                dpg.add_menu_item(label="Connection Status", callback=self.show_api_status)
-                dpg.add_menu_item(label="Configuration", callback=self.show_api_config)
-                dpg.add_menu_item(label="Test Connection", callback=self.test_api_connection)
-                if not is_strict_mode():
-                    dpg.add_menu_item(label="Enable Strict Mode", callback=self.enable_strict_mode)
+            # Switch to the tab in the tab bar
+            tab_id = f"tab_{target_tab_key}"
+            if dpg.does_item_exist("main_tab_bar") and dpg.does_item_exist(tab_id):
+                dpg.set_value("main_tab_bar", tab_id)
 
-            # Database menu
-            if 'Database' in self.tabs:
-                with dpg.menu(label="Database"):
-                    dpg.add_menu_item(label="Browse Databases", callback=self.goto_database_tab)
-                    dpg.add_menu_item(label="Data Sources", callback=self.goto_data_sources_tab)
-
-            # View menu with enhanced theme support
-            with dpg.menu(label="View"):
-                self._create_view_menu()
-
-            # Tools menu
-            with dpg.menu(label="Tools"):
-                dpg.add_menu_item(label="System Diagnostics", callback=self.show_diagnostics)
-                dpg.add_menu_item(label="Performance Monitor", callback=self.show_performance_monitor)
-                dpg.add_menu_item(label="Log Viewer", callback=self.show_log_viewer)
-
-            # Help menu
-            with dpg.menu(label="Help"):
-                dpg.add_menu_item(label="Documentation", callback=self.show_documentation)
-                dpg.add_menu_item(label="Keyboard Shortcuts", callback=self.show_shortcuts)
-                dpg.add_menu_item(label="Support", callback=self.show_support)
-                dpg.add_separator()
-                dpg.add_menu_item(label="About", callback=self.show_about)
-
-            # Enhanced user status indicator
-            self._create_status_indicator()
-
-    def _create_session_menu(self):
-        """Create session menu items based on user type"""
-        if self.user_type == "guest":
-            dpg.add_menu_item(label="Guest Mode", callback=self.show_profile_info)
-            dpg.add_menu_item(label="Create Account", callback=self.show_upgrade_info)
-            dpg.add_separator()
-            dpg.add_menu_item(label="Change User", callback=self.clear_session_and_restart)
-        elif self.user_type == "registered":
-            user_info = self.session_data.get('user_info', {})
-            username = user_info.get('username', 'User')
-            dpg.add_menu_item(label=f"User: {username}", callback=self.show_profile_info)
-            dpg.add_menu_item(label="Regenerate API Key", callback=self.regenerate_api_key)
-            dpg.add_separator()
-            dpg.add_menu_item(label="Change User", callback=self.clear_session_and_restart)
-            dpg.add_menu_item(label="Logout", callback=self.logout_and_restart)
-
-        dpg.add_separator()
-        dpg.add_menu_item(label="Session Information", callback=self.show_session_info)
-        dpg.add_menu_item(label="Refresh Session", callback=self.refresh_session_data)
-
-    def _create_view_menu(self):
-        """Create view menu with theme options"""
-        if self.theme_manager.themes_available:
-            with dpg.menu(label="Themes"):
-                available_themes = self.theme_manager.get_available_themes()
-                for theme in available_themes:
-                    theme_label = theme.replace('_', ' ').title()
-                    dpg.add_menu_item(
-                        label=theme_label,
-                        callback=lambda s, a, u, t=theme: self.apply_theme_safe(t)
-                    )
-
-        dpg.add_separator()
-        dpg.add_menu_item(label="Fullscreen", callback=self.toggle_fullscreen)
-        dpg.add_menu_item(label="Reset Layout", callback=self.reset_layout)
-
-    def _create_status_indicator(self):
-        """Create enhanced status indicator"""
-        with dpg.group(horizontal=True):
-            dpg.add_spacer(width=20)
-
-            # User status
-            if self.user_type == "guest":
-                expires_at = self.session_data.get("expires_at")
-                if expires_at:
-                    try:
-                        expiry = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                        hours_left = max(0, int((expiry.replace(tzinfo=None) - datetime.now()).total_seconds() / 3600))
-                        auth_text = f"Guest ({hours_left}h remaining)"
-                    except Exception:
-                        auth_text = "Guest (Temp Access)"
-                else:
-                    auth_text = "Guest Mode"
-                dpg.add_text(auth_text, color=[255, 255, 100])
-            elif self.user_type == "registered":
-                user_info = self.session_data.get('user_info', {})
-                username = user_info.get('username', 'User')
-                credit_balance = user_info.get('credit_balance', 0)
-                auth_text = f"{username} ({credit_balance} credits)"
-                dpg.add_text(auth_text, color=[100, 255, 100])
-
-            # API status indicator
-            dpg.add_spacer(width=10)
-            api_type = self.get_api_key_type()
-            if api_type == "Offline":
-                dpg.add_text("●", color=[255, 100, 100])  # Red for offline
-            elif api_type == "Guest":
-                dpg.add_text("●", color=[255, 255, 100])  # Yellow for guest
+            # Load ticker data in the target tab
+            if hasattr(target_tab, 'load_ticker_from_external'):
+                target_tab.load_ticker_from_external(ticker)
+                info(f"Switched to {tab_label} with ticker {ticker}", module='main')
+                return True
             else:
-                dpg.add_text("●", color=[100, 255, 100])  # Green for authenticated
+                warning(f"Tab {tab_label} doesn't support external ticker loading", module='main')
+                return False
+
+        except Exception as e:
+            error(f"Tab switch failed: {tab_label} with {ticker} - {str(e)}", module='main')
+            return False
+
+    def get_tab_by_label(self, label: str):
+        """Get tab instance by label - UTILITY METHOD"""
+        for tab_name, tab_instance in self.tabs.items():
+            if hasattr(tab_instance, 'get_label') and tab_instance.get_label() == label:
+                return tab_name, tab_instance
+            elif tab_name == label:  # Fallback
+                return tab_name, tab_instance
+        return None, None
+
+    def create_menu_bar(self):
+        """Create enhanced menu bar with tab navigation - delegated to MenuToolbarManager"""
+        self.menu_toolbar_manager.create_menu_bar()
 
     # Tab navigation methods
     def scroll_tab_view(self, direction):
