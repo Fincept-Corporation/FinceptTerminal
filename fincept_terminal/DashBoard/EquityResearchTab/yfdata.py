@@ -9,10 +9,12 @@ from datetime import datetime, timedelta
 import threading
 import time
 from fincept_terminal.Utils.Managers.theme_manager import AutomaticThemeManager
+from pathlib import Path
+import csv
+import os
 
-# Import new logger module
 from fincept_terminal.Utils.Logging.logger import (
-    info, debug, warning, error, operation, monitor_performance
+    info as log_info, debug, warning, error, operation, monitor_performance
 )
 
 
@@ -28,18 +30,28 @@ class YFinanceDataTab:
         self.is_loading = False
 
         # Bloomberg Terminal Colors - Pre-computed for performance
-        self.BLOOMBERG_ORANGE = [255, 165, 0]
-        self.BLOOMBERG_WHITE = [255, 255, 255]
-        self.BLOOMBERG_RED = [255, 0, 0]
-        self.BLOOMBERG_GREEN = [0, 200, 0]
-        self.BLOOMBERG_YELLOW = [255, 255, 0]
-        self.BLOOMBERG_GRAY = [120, 120, 120]
-        self.BLOOMBERG_BLUE = [0, 128, 255]
+        self.BLOOMBERG_ORANGE = (255, 165, 0)
+        self.BLOOMBERG_WHITE = (255, 255, 255)
+        self.BLOOMBERG_RED = (255, 0, 0)
+        self.BLOOMBERG_GREEN = (0, 200, 0)
+        self.BLOOMBERG_YELLOW = (255, 255, 0)
+        self.BLOOMBERG_GRAY = (120, 120, 120)
+        self.BLOOMBERG_BLUE = (0, 128, 255)
 
         # Performance optimization caches
         self._data_cache = {}
         self._chart_cache = {}
+        self._search_cache = {}  # Add search cache for faster lookups
         self._last_update_time = None
+
+        self.dropdown_items = []
+        self.dropdown_created = False
+        self.search_timer = None
+        self.equities_data = None
+        self.equities_df = None  # Store as DataFrame for fast searching
+        self.finance_db_available = False
+
+        self.initialize_equities_database()
 
         # Initialize theme manager
         try:
@@ -49,29 +61,246 @@ class YFinanceDataTab:
             warning("Theme manager initialization failed", context={'error': str(e)})
             self.theme_manager = None
 
-        info("YFinanceDataTab initialized")
+        log_info("YFinanceDataTab initialized")
 
     def get_label(self):
         return "Equity Research"
+
+    def get_config_directory(self) -> Path:
+        """Get platform-specific config directory - uses .fincept folder"""
+        # Use .fincept folder at home directory for all platforms
+        config_dir = Path.home() / '.fincept' / 'cache'
+        # Ensure directory exists
+        config_dir.mkdir(parents=True, exist_ok=True)
+        return config_dir
+
+    def initialize_equities_database(self):
+        """Initialize the global equities database with proper DataFrame handling"""
+        try:
+            try:
+                import financedatabase as fd
+                log_info("Loading complete equities database...")
+                equities = fd.Equities()
+
+                # Get the data and ensure it's a DataFrame
+                equity_data = equities.select(exclude_exchanges=False)
+
+                if isinstance(equity_data, dict):
+                    # Convert dict to DataFrame if necessary
+                    self.equities_df = pd.DataFrame.from_dict(equity_data, orient='index')
+                elif isinstance(equity_data, pd.DataFrame):
+                    self.equities_df = equity_data
+                else:
+                    # Fallback - try to convert to DataFrame
+                    self.equities_df = pd.DataFrame(equity_data)
+
+                # Store both formats for compatibility
+                self.equities_data = equity_data
+                self.finance_db_available = True
+
+                # Create search index for faster lookups
+                self._create_search_index()
+
+                log_info(
+                    f"✅ Loaded {len(self.equities_df)} equities from {self.equities_df['exchange'].nunique() if 'exchange' in self.equities_df.columns else 'multiple'} exchanges")
+
+            except ImportError:
+                warning("financedatabase not available. Install with: pip install financedatabase")
+                self.finance_db_available = False
+                self.equities_data = None
+                self.equities_df = None
+            except Exception as e:
+                error("Error initializing equities database", context={'error': str(e)}, exc_info=True)
+                self.finance_db_available = False
+                self.equities_data = None
+                self.equities_df = None
+
+        except Exception as outer_e:
+            error("Outer error in initialize_equities_database", context={'error': str(outer_e)}, exc_info=True)
+            self.finance_db_available = False
+            self.equities_data = None
+            self.equities_df = None
+
+    def _create_search_index(self):
+        """Create optimized search index for faster lookups"""
+        try:
+            if self.equities_df is None or self.equities_df.empty:
+                return
+
+            # Create lowercase search columns for faster searching
+            search_data = []
+            for idx, row in self.equities_df.iterrows():
+                symbol = str(idx).upper()
+                name = str(row.get('name', '')).lower()
+                sector = str(row.get('sector', 'N/A'))
+                country = str(row.get('country', 'N/A'))
+                exchange = str(row.get('exchange', 'N/A'))
+
+                search_entry = {
+                    'symbol': symbol,
+                    'symbol_lower': symbol.lower(),
+                    'name_lower': name,
+                    'display_name': str(row.get('name', 'N/A'))[:35],
+                    'sector': sector[:15],
+                    'country': country[:10],
+                    'exchange': exchange[:10]
+                }
+                search_data.append(search_entry)
+
+            self._search_index = search_data
+            debug(f"Search index created with {len(search_data)} entries")
+
+        except Exception as e:
+            error("Error creating search index", context={'error': str(e)}, exc_info=True)
+            self._search_index = []
+
+    def load_ticker_from_external(self, ticker: str):
+        """Load ticker data when called from external source (like watchlist) - MINIMAL IMPLEMENTATION"""
+        try:
+            with operation("load_ticker_from_external", context={'ticker': ticker}):
+                log_info("Loading ticker from external source", context={'ticker': ticker})
+
+                # Update the search input if it exists
+                if dpg.does_item_exist("ticker_search_input"):
+                    dpg.set_value("ticker_search_input", ticker)
+
+                # Update status to show external source
+                self.safe_set_value("search_status_text", f"🔄 Loading {ticker} from Watchlist...")
+
+                # Set current ticker and trigger data loading
+                self.current_ticker = ticker.upper()
+
+                # Load data in background thread
+                threading.Thread(
+                    target=self._load_external_ticker_data,
+                    args=(ticker.upper(),),
+                    daemon=True
+                ).start()
+
+        except Exception as e:
+            error("Error loading ticker from external source",
+                  context={'ticker': ticker, 'error': str(e)}, exc_info=True)
+
+    def _load_external_ticker_data(self, ticker: str):
+        """Helper method to load ticker data from external source"""
+        try:
+            # Set loading state
+            self.is_loading = True
+            self.safe_configure_item("search_button", enabled=False)
+
+            # Load the complete stock data
+            self.load_complete_stock_data(ticker)
+
+            # Update status to show it came from external source
+            current_status = dpg.get_value("search_status_text") if dpg.does_item_exist("search_status_text") else ""
+            if "✅" in current_status and "loaded successfully" in current_status:
+                self.safe_set_value("search_status_text", current_status + " (from Watchlist)")
+
+        except Exception as e:
+            error("Error in external ticker data loading",
+                  context={'ticker': ticker, 'error': str(e)}, exc_info=True)
+        finally:
+            self.is_loading = False
+            self.safe_configure_item("search_button", enabled=True)
 
     def safe_add_text(self, text, **kwargs):
         """Safely add text with encoding error handling and performance optimization"""
         try:
             # Ensure text is a string and handle encoding efficiently
-            if not isinstance(text, str):
+            if text is None:
+                text = "N/A"
+            elif not isinstance(text, str):
                 text = str(text)
 
-            # More efficient character filtering using translate
-            # Remove problematic characters while preserving performance
-            text = text.encode('ascii', 'replace').decode('ascii')
+            # Clean the text more efficiently
+            text = text.encode('ascii', 'ignore').decode('ascii')
+
+            # Replace common problematic characters
+            replacements = {
+                '…': '...',
+                '–': '-',
+                '—': '-',
+                '"': '"',
+                '"': '"',
+                ''': "'",
+                ''': "'",
+                '€': 'EUR',
+                '£': 'GBP',
+                '¥': 'JPY'
+            }
+
+            for old, new in replacements.items():
+                text = text.replace(old, new)
+
+            if not text.strip():
+                text = "N/A"
+
+            # FIX: Ensure color parameter is properly formatted
+            if 'color' in kwargs:
+                color = kwargs['color']
+                # Convert list to tuple
+                if isinstance(color, list):
+                    if len(color) >= 3:
+                        kwargs['color'] = (int(color[0]), int(color[1]), int(color[2]))
+                    else:
+                        kwargs['color'] = (255, 255, 255)  # Default white
+                elif isinstance(color, tuple):
+                    if len(color) >= 3:
+                        kwargs['color'] = (int(color[0]), int(color[1]), int(color[2]))
+                    else:
+                        kwargs['color'] = (255, 255, 255)  # Default white
+                elif isinstance(color, (int, float)):
+                    # Handle single values that should be tuples
+                    val = int(color)
+                    kwargs['color'] = (val, val, val)
+                else:
+                    # Fallback to white if color format is unknown
+                    kwargs['color'] = (255, 255, 255)
+
+            # FIX: Handle tag conflicts by checking if item exists first
+            if 'tag' in kwargs:
+                tag = kwargs['tag']
+                # Generate unique tag if it already exists
+                if dpg.does_item_exist(tag):
+                    import time
+                    kwargs['tag'] = f"{tag}_{int(time.time() * 1000000) % 1000000}"
 
             return dpg.add_text(text, **kwargs)
+
         except Exception as e:
-            error("Text add error", context={'error': str(e), 'text_length': len(str(text))}, exc_info=True)
+            error("Text add error", context={'error': str(e), 'text_preview': str(text)[:50] if text else "None"},
+                  exc_info=True)
             try:
-                return dpg.add_text("Text Error", **kwargs)
-            except:
+                # Fallback with minimal text and safe color
+                fallback_kwargs = {k: v for k, v in kwargs.items() if k not in ['color']}
+                return dpg.add_text("Data Error", color=(255, 0, 0), **fallback_kwargs)
+            except Exception as fallback_error:
+                error("Fallback text add failed", context={'error': str(fallback_error)})
                 return None
+
+    def safe_configure_item(self, tag, **kwargs):
+        """Safely configure item with error handling"""
+        try:
+            if dpg.does_item_exist(tag):
+                # Fix color parameters if present
+                if 'color' in kwargs:
+                    color = kwargs['color']
+                    if isinstance(color, list):
+                        if len(color) >= 3:
+                            kwargs['color'] = (int(color[0]), int(color[1]), int(color[2]))
+                        else:
+                            kwargs['color'] = (255, 255, 255)
+                    elif isinstance(color, tuple):
+                        if len(color) >= 3:
+                            kwargs['color'] = (int(color[0]), int(color[1]), int(color[2]))
+                        else:
+                            kwargs['color'] = (255, 255, 255)
+
+                dpg.configure_item(tag, **kwargs)
+            else:
+                debug(f"Item {tag} does not exist for configuration")
+        except Exception as e:
+            debug(f"Error configuring item {tag}", context={'error': str(e)})
 
     def safe_set_value(self, tag, value):
         """Safely set value with encoding handling and performance optimization"""
@@ -89,6 +318,8 @@ class YFinanceDataTab:
 
             if dpg.does_item_exist(tag):
                 dpg.set_value(tag, value)
+            else:
+                debug(f"Tag {tag} does not exist for value setting")
         except Exception as e:
             error("Set value error", context={'tag': tag, 'error': str(e)}, exc_info=True)
             # Try with simple fallback
@@ -133,7 +364,7 @@ class YFinanceDataTab:
                 # Load AAPL by default after a short delay to ensure UI is ready
                 threading.Timer(1.0, self.load_default_ticker).start()
 
-                info("YFinance content created successfully")
+                log_info("YFinance content created successfully")
 
             except Exception as e:
                 error("Error creating YFinance content", context={'error': str(e)}, exc_info=True)
@@ -150,22 +381,29 @@ class YFinanceDataTab:
                 error("Error loading default ticker", context={'error': str(e)}, exc_info=True)
 
     def create_header_section(self):
-        """Create header with search functionality"""
+        """Create header with enhanced search functionality"""
         try:
-            with dpg.group(horizontal=True):
-                self.safe_add_text("FINCEPT", color=self.BLOOMBERG_ORANGE)
-                self.safe_add_text("MARKET DATA", color=self.BLOOMBERG_WHITE)
-                self.safe_add_text(" | ", color=self.BLOOMBERG_GRAY)
+            import time
+            unique_suffix = int(time.time() * 1000) % 1000
 
-                self.safe_add_text("TICKER:", color=self.BLOOMBERG_YELLOW)
+            with dpg.group(horizontal=True):
+                self.safe_add_text("FINCEPT", color=(255, 165, 0), tag=f"fincept_label_{unique_suffix}")
+                self.safe_add_text("MARKET DATA", color=(255, 255, 255), tag=f"market_data_label_{unique_suffix}")
+                self.safe_add_text(" | ", color=(120, 120, 120))
+
+                self.safe_add_text("TICKER:", color=(255, 255, 0), tag=f"ticker_label_{unique_suffix}")
+
+                # Enhanced search input with real-time search
                 dpg.add_input_text(
-                    width=120,
-                    hint="Enter ticker",
+                    width=200,
+                    hint="Search global equities...",
                     tag="ticker_search_input",
-                    on_enter=True,
-                    callback=self.handle_search,
+                    callback=self.search_callback,
+                    on_enter=True,  # Allow enter key to trigger search
                     default_value="AAPL"
                 )
+
+                # Add the search button back to fix the error
                 dpg.add_button(
                     label="SEARCH",
                     callback=self.handle_search,
@@ -174,27 +412,46 @@ class YFinanceDataTab:
                     tag="search_button"
                 )
 
-                self.safe_add_text(" | ", color=self.BLOOMBERG_GRAY)
-                self.safe_add_text("TIME:", color=self.BLOOMBERG_YELLOW)
-                self.safe_add_text(datetime.now().strftime('%H:%M:%S'), tag="header_time", color=self.BLOOMBERG_WHITE)
+                dpg.add_button(
+                    label="CLEAR",
+                    callback=self.clear_search,
+                    width=60,
+                    height=25,
+                    tag=f"clear_button_{unique_suffix}"
+                )
+
+                self.safe_add_text(" | ", color=(120, 120, 120))
+
+                # Database status indicator
+                if self.finance_db_available and self.equities_df is not None:
+                    self.safe_add_text("🌍", color=(0, 200, 0), tag=f"db_icon_{unique_suffix}")
+                    self.safe_add_text(f"{len(self.equities_df):,} symbols", color=(0, 200, 0),
+                                       tag=f"db_count_{unique_suffix}")
+                else:
+                    self.safe_add_text("❌", color=(255, 0, 0), tag=f"db_error_icon_{unique_suffix}")
+                    self.safe_add_text("Local DB only", color=(255, 0, 0), tag=f"db_error_text_{unique_suffix}")
+
+                self.safe_add_text(" | ", color=(120, 120, 120))
+                self.safe_add_text("TIME:", color=(255, 255, 0), tag=f"time_label_{unique_suffix}")
+                self.safe_add_text(datetime.now().strftime('%H:%M:%S'), tag="header_time", color=(255, 255, 255))
 
             dpg.add_separator()
+
+            # Search status
+            with dpg.group(horizontal=True):
+                self.safe_add_text("", tag="search_status_text", color=(255, 255, 0))
 
             # Current stock display
             with dpg.group(tag="current_stock_display", show=False):
                 with dpg.group(horizontal=True):
-                    display_items = [
-                        ("CURRENT:", "current_stock_name", self.BLOOMBERG_YELLOW, self.BLOOMBERG_WHITE),
-                        ("PRICE:", "current_stock_price", self.BLOOMBERG_YELLOW, self.BLOOMBERG_GREEN),
-                        ("", "current_stock_change", None, self.BLOOMBERG_GREEN)
-                    ]
+                    self.safe_add_text("CURRENT:", color=(255, 255, 0), tag=f"current_label_{unique_suffix}")
+                    self.safe_add_text("", tag="current_stock_name", color=(255, 255, 255))
+                    self.safe_add_text(" | ", color=(120, 120, 120))
 
-                    for i, (label, tag, label_color, text_color) in enumerate(display_items):
-                        if i > 0:
-                            self.safe_add_text(" | ", color=self.BLOOMBERG_GRAY)
-                        if label:
-                            self.safe_add_text(label, color=label_color)
-                        self.safe_add_text("", tag=tag, color=text_color)
+                    self.safe_add_text("PRICE:", color=(255, 255, 0), tag=f"price_label_{unique_suffix}")
+                    self.safe_add_text("", tag="current_stock_price", color=(0, 200, 0))
+
+                    self.safe_add_text("", tag="current_stock_change", color=(0, 200, 0))
 
                 dpg.add_separator()
         except Exception as e:
@@ -383,69 +640,242 @@ class YFinanceDataTab:
             error("Error creating financial charts", context={'error': str(e)}, exc_info=True)
 
     def create_status_bar(self):
-        """Create status bar"""
+        """Create status bar with fixed color parameters"""
         try:
             dpg.add_separator()
             with dpg.group(horizontal=True):
-                status_items = [
-                    ("●", "DATA SERVICE ONLINE", self.BLOOMBERG_GREEN, self.BLOOMBERG_GREEN),
-                    ("STATUS:", "INITIALIZING", self.BLOOMBERG_YELLOW, self.BLOOMBERG_YELLOW),
-                    ("LAST UPDATE:", "LOADING", self.BLOOMBERG_YELLOW, self.BLOOMBERG_WHITE)
-                ]
+                # FIX: Use consistent color format and unique tags
+                import time
+                unique_suffix = int(time.time() * 1000) % 1000
 
-                for i, (label, text, label_color, text_color) in enumerate(status_items):
-                    if i > 0:
-                        dpg.add_text(" | ", color=self.BLOOMBERG_GRAY)
-                    dpg.add_text(label, color=label_color)
+                # Status items with properly formatted colors
+                self.safe_add_text("●", color=(0, 200, 0), tag=f"status_dot_{unique_suffix}")
+                self.safe_add_text("DATA SERVICE ONLINE", color=(0, 200, 0), tag=f"data_service_{unique_suffix}")
+                self.safe_add_text(" | ", color=(120, 120, 120))
 
-                    tag = None
-                    if "STATUS" in text:
-                        tag = "main_status_text"
-                    elif "LOADING" in text:
-                        tag = "last_update_time"
+                self.safe_add_text("STATUS:", color=(255, 255, 0), tag=f"status_label_{unique_suffix}")
+                self.safe_add_text("INITIALIZING", color=(255, 255, 0), tag="main_status_text")
+                self.safe_add_text(" | ", color=(120, 120, 120))
 
-                    dpg.add_text(text, color=text_color, tag=tag)
+                self.safe_add_text("LAST UPDATE:", color=(255, 255, 0), tag=f"update_label_{unique_suffix}")
+                self.safe_add_text("LOADING", color=(255, 255, 255), tag="last_update_time")
 
         except Exception as e:
             error("Error creating status bar", context={'error': str(e)}, exc_info=True)
 
     @monitor_performance
     def handle_search(self, sender=None, app_data=None):
-        """Handle search functionality"""
+        """Handle search functionality with enhanced global search"""
         with operation("handle_search"):
             try:
                 ticker = dpg.get_value("ticker_search_input").strip().upper()
 
                 if not ticker:
-                    self.safe_set_value("main_status_text", "ERROR: ENTER TICKER")
+                    self.safe_set_value("search_status_text", "❌ Enter ticker symbol")
                     return
 
                 if self.is_loading:
-                    self.safe_set_value("main_status_text", "LOADING IN PROGRESS...")
+                    self.safe_set_value("search_status_text", "⏳ Loading in progress...")
                     return
+
+                # Hide dropdown when manual search is triggered
+                self.hide_dropdown()
 
                 # Check cache first for performance
                 cache_key = f"{ticker}_basic_data"
                 if cache_key in self._data_cache:
                     cached_time = self._data_cache[cache_key].get('timestamp', 0)
-                    # Use cache if data is less than 5 minutes old
-                    if time.time() - cached_time < 300:
+                    if time.time() - cached_time < 300:  # 5 minute cache
                         debug("Using cached data", context={'ticker': ticker})
                         self.stock_data = self._data_cache[cache_key]['data']
                         self.update_all_data_sections(self.stock_data)
+                        self.safe_set_value("search_status_text", f"✅ {ticker} (cached)")
                         return
 
                 self.is_loading = True
                 self.current_ticker = ticker
 
-                self.safe_set_value("main_status_text", f"LOADING {ticker}...")
-                dpg.configure_item("search_button", enabled=False)
+                self.safe_set_value("search_status_text", f"📈 Loading {ticker}...")
+                # Use safe configuration method
+                self.safe_configure_item("search_button", enabled=False)
 
-                info("Stock search initiated", context={'ticker': ticker})
+                log_info("Direct stock search initiated", context={'ticker': ticker})
+
                 threading.Thread(target=self.load_complete_stock_data, args=(ticker,), daemon=True).start()
 
             except Exception as e:
                 error("Error handling search", context={'error': str(e)}, exc_info=True)
+                self.safe_set_value("search_status_text", "❌ Search error")
+
+    def search_equities(self, query):
+        """Fast search through global equities database using optimized index"""
+        if not self.finance_db_available or not hasattr(self, '_search_index') or not self._search_index:
+            return [f"{query.upper()} | Search in progress... | N/A (Local)"]
+
+        query = query.lower().strip()
+        if len(query) < 1:
+            return []
+
+        # Check cache first
+        cache_key = f"search_{query}"
+        if cache_key in self._search_cache:
+            cached_time = self._search_cache[cache_key].get('timestamp', 0)
+            if time.time() - cached_time < 60:  # 1 minute cache for searches
+                return self._search_cache[cache_key]['results']
+
+        results = []
+        count = 0
+
+        try:
+            # Use the optimized search index
+            for entry in self._search_index:
+                if count >= 8:  # Show more results
+                    break
+
+                # Fast string matching on pre-processed lowercase strings
+                if (query in entry['symbol_lower'] or
+                        query in entry['name_lower']):
+                    result_line = f"{entry['symbol']} | {entry['display_name']} | {entry['sector']} ({entry['country']}-{entry['exchange']})"
+                    results.append(result_line)
+                    count += 1
+
+            # Always include the direct query as first option if it's a valid format
+            if len(query) >= 1 and query.replace('.', '').replace('-', '').isalnum():
+                direct_option = f"{query.upper()} | Direct Search | Manual Entry (Direct)"
+                if direct_option not in results:
+                    results.insert(0, direct_option)
+
+            # Cache the results
+            self._search_cache[cache_key] = {
+                'results': results,
+                'timestamp': time.time()
+            }
+
+            return results if results else [f"{query.upper()} | No matches found | Try direct search"]
+
+        except Exception as e:
+            error("Error searching equities", context={'error': str(e)}, exc_info=True)
+            return [f"{query.upper()} | Search error | Try direct entry"]
+
+    def delayed_search(self):
+        """Perform search with delay to avoid excessive API calls"""
+        try:
+            search_text = dpg.get_value("ticker_search_input").strip()
+
+            if len(search_text) < 1:
+                self.hide_dropdown()
+                self.safe_set_value("search_status_text", "")
+                return
+
+            self.safe_set_value("search_status_text", "🔍 Searching global database...")
+            matches = self.search_equities(search_text)
+            self.dropdown_items = matches
+            self.show_dropdown()
+
+            status_msg = f"✅ {len(matches)} results found" if matches else "❌ No results"
+            self.safe_set_value("search_status_text", status_msg)
+
+        except Exception as e:
+            error("Error in delayed search", context={'error': str(e)}, exc_info=True)
+            self.safe_set_value("search_status_text", "❌ Search error")
+
+    def search_callback(self, sender=None, app_data=None):
+        """Handle search input with debouncing"""
+        try:
+            # Cancel previous timer
+            if self.search_timer and self.search_timer.is_alive():
+                self.search_timer.cancel()
+
+            # Start new search with delay
+            self.search_timer = threading.Timer(0.2, self.delayed_search)  # Reduced delay for better UX
+            self.search_timer.start()
+
+        except Exception as e:
+            error("Error in search callback", context={'error': str(e)}, exc_info=True)
+
+    def show_dropdown(self):
+        """Show search results dropdown"""
+        try:
+            if not self.dropdown_created:
+                with dpg.window(
+                        label="##search_dropdown",
+                        tag="search_dropdown_window",
+                        no_title_bar=True,
+                        no_resize=True,
+                        no_move=True,
+                        no_collapse=True,
+                        no_close=True,
+                        show=False,
+                        modal=False,
+                        popup=True
+                ):
+                    pass
+                self.dropdown_created = True
+
+            # Clear existing items
+            dpg.delete_item("search_dropdown_window", children_only=True)
+
+            # Add search results
+            for i, item in enumerate(self.dropdown_items[:8]):  # Limit to 8 items
+                dpg.add_button(
+                    label=item,
+                    parent="search_dropdown_window",
+                    callback=self.select_search_item,
+                    user_data=item,
+                    width=650,
+                    height=30
+                )
+
+            # Position dropdown below search input
+            if dpg.does_item_exist("ticker_search_input"):
+                input_pos = dpg.get_item_pos("ticker_search_input")
+                dpg.set_item_pos("search_dropdown_window", [input_pos[0], input_pos[1] + 35])
+                dpg.show_item("search_dropdown_window")
+
+        except Exception as e:
+            error("Error showing dropdown", context={'error': str(e)}, exc_info=True)
+
+    def hide_dropdown(self):
+        """Hide search dropdown"""
+        try:
+            if dpg.does_item_exist("search_dropdown_window"):
+                dpg.hide_item("search_dropdown_window")
+        except Exception as e:
+            debug("Error hiding dropdown", context={'error': str(e)})
+
+    def select_search_item(self, sender, app_data, user_data):
+        """Handle selection from dropdown"""
+        try:
+            # Extract symbol from the selected item
+            symbol = user_data.split(" | ")[0].strip()
+
+            # Update search input
+            dpg.set_value("ticker_search_input", symbol)
+
+            # Hide dropdown
+            self.hide_dropdown()
+
+            # Clear search status
+            self.safe_set_value("search_status_text", f"Selected: {symbol}")
+
+            # Trigger data loading for selected symbol
+            self.current_ticker = symbol
+            log_info("Symbol selected from search", context={'symbol': symbol})
+
+            # Load data for selected symbol
+            threading.Thread(target=self.load_complete_stock_data, args=(symbol,), daemon=True).start()
+
+        except Exception as e:
+            error("Error selecting search item", context={'error': str(e)}, exc_info=True)
+
+    def clear_search(self):
+        """Clear search input and hide dropdown"""
+        try:
+            dpg.set_value("ticker_search_input", "")
+            self.safe_set_value("search_status_text", "")
+            self.hide_dropdown()
+        except Exception as e:
+            error("Error clearing search", context={'error': str(e)}, exc_info=True)
 
     @monitor_performance
     def load_complete_stock_data(self, ticker):
@@ -455,7 +885,7 @@ class YFinanceDataTab:
                 stock = yf.Ticker(ticker)
 
                 # Get basic info
-                self.safe_set_value("main_status_text", f"LOADING {ticker} INFO...")
+                self.safe_set_value("search_status_text", f"📊 Loading {ticker} info...")
                 info_start_time = time.time()
                 info = stock.info
                 info_load_time = time.time() - info_start_time
@@ -473,7 +903,7 @@ class YFinanceDataTab:
                 }
 
                 # Get historical data
-                self.safe_set_value("main_status_text", f"LOADING {ticker} PRICE HISTORY...")
+                self.safe_set_value("search_status_text", f"📈 Loading {ticker} price history...")
                 history_start_time = time.time()
                 history = stock.history(period="2y")
                 history_load_time = time.time() - history_start_time
@@ -487,32 +917,34 @@ class YFinanceDataTab:
                 self.update_all_data_sections(info)
 
                 # Load financial statements
-                self.safe_set_value("main_status_text", f"LOADING {ticker} FINANCIALS...")
+                self.safe_set_value("search_status_text", f"💰 Loading {ticker} financials...")
                 financials_start_time = time.time()
                 self.load_financial_data(stock)
                 financials_load_time = time.time() - financials_start_time
 
-                self.safe_set_value("main_status_text", f"{ticker} LOADED")
+                self.safe_set_value("search_status_text", f"✅ {ticker} loaded successfully")
                 self.safe_set_value("last_update_time", datetime.now().strftime('%H:%M:%S'))
                 self._last_update_time = time.time()
 
-                info("Stock data loaded successfully",
-                     context={
-                         'ticker': ticker,
-                         'info_load_time_ms': f"{info_load_time * 1000:.1f}",
-                         'history_load_time_ms': f"{history_load_time * 1000:.1f}",
-                         'financials_load_time_ms': f"{financials_load_time * 1000:.1f}"
-                     })
+                from fincept_terminal.Utils.Logging.logger import info as log_info
+                log_info("Stock data loaded successfully",
+                         context={
+                             'ticker': ticker,
+                             'info_load_time_ms': f"{info_load_time * 1000:.1f}",
+                             'history_load_time_ms': f"{history_load_time * 1000:.1f}",
+                             'financials_load_time_ms': f"{financials_load_time * 1000:.1f}"
+                         })
 
             except Exception as e:
-                error_msg = str(e)[:30] + "..." if len(str(e)) > 30 else str(e)
-                self.safe_set_value("main_status_text", f"ERROR: {error_msg}")
+                error_msg = str(e)[:50] + "..." if len(str(e)) > 50 else str(e)
+                self.safe_set_value("search_status_text", f"❌ Error: {error_msg}")
                 error("Error loading stock data",
                       context={'ticker': ticker, 'error': str(e)}, exc_info=True)
 
             finally:
                 self.is_loading = False
-                dpg.configure_item("search_button", enabled=True)
+                # Use safe configuration method instead
+                self.safe_configure_item("search_button", enabled=True)
 
     def update_all_data_sections(self, info):
         """Update all data sections with stock info"""
@@ -1247,9 +1679,21 @@ class YFinanceDataTab:
         """Cleanup resources with performance optimization"""
         with operation("yfinance_tab_cleanup"):
             try:
+                # Cancel any running search timer
+                if self.search_timer and self.search_timer.is_alive():
+                    self.search_timer.cancel()
+
+                # Hide dropdown
+                self.hide_dropdown()
+
                 # Clear caches
                 self._data_cache.clear()
                 self._chart_cache.clear()
+                self._search_cache.clear()
+
+                # Clear search index
+                if hasattr(self, '_search_index'):
+                    del self._search_index
 
                 # Clear data structures
                 self.financials_data.clear()
@@ -1257,8 +1701,11 @@ class YFinanceDataTab:
                     del self.history_data
                 if hasattr(self, 'stock_data') and self.stock_data is not None:
                     del self.stock_data
+                if hasattr(self, 'equities_data') and self.equities_data is not None:
+                    del self.equities_data
+                if hasattr(self, 'equities_df') and self.equities_df is not None:
+                    del self.equities_df
 
-                info("YFinance Data Tab cleanup completed",
-                     context={'caches_cleared': 2, 'data_structures_cleared': 3})
+                log_info("YFinance Data Tab cleanup completed")
             except Exception as e:
                 error("Error during cleanup", context={'error': str(e)}, exc_info=True)

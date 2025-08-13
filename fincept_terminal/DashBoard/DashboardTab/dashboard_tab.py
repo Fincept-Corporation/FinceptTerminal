@@ -77,7 +77,7 @@ class DashboardTab(BaseTab):
             raise
 
     def get_label(self):
-        return "Fincept Terminal"
+        return "Dashboard"
 
     def safe_float_conversion(self, value: Any, default: float = 0.0) -> float:
         """Safely convert value to float with encoding handling"""

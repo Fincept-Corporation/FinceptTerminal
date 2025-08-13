@@ -29,7 +29,7 @@ class RoboAdvisorTab(BaseTab):
         logger.info("Robo Advisor tab initialized")
 
     def get_label(self):
-        return "🤖 Robo-Advisor"
+        return "Robo-Advisor"
 
     @monitor_performance
     def create_content(self):

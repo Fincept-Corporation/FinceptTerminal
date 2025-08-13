@@ -69,20 +69,20 @@ class AlphaVantageProvider:
                     return await response.json()
                 else:
                     error(f"Alpha Vantage API HTTP error: {response.status}", module="AlphaVantageProvider")
-                    return {"success": False, "error": f"HTTP {response.status}", "source": "alpha_vantage"}
+                    return {"success": False, "error": f"HTTP {response.status}", "source": "alpha_vantage_data"}
         except Exception as e:
             error(f"Alpha Vantage API request error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     def _check_api_errors(self, data: Dict) -> Optional[Dict[str, Any]]:
         """Check for common API errors"""
         if "Error Message" in data:
-            return {"success": False, "error": data["Error Message"], "source": "alpha_vantage"}
+            return {"success": False, "error": data["Error Message"], "source": "alpha_vantage_data"}
         if "Note" in data:
-            return {"success": False, "error": "API rate limit exceeded", "source": "alpha_vantage"}
+            return {"success": False, "error": "API rate limit exceeded", "source": "alpha_vantage_data"}
         if "Information" in data:
             warn(data["Information"])
-            return {"success": False, "error": data["Information"], "source": "alpha_vantage"}
+            return {"success": False, "error": data["Information"], "source": "alpha_vantage_data"}
         return None
 
 
@@ -117,7 +117,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Alpha Vantage stock data error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     def _transform_exchange_rate(self, data: Dict, from_currency: str, to_currency: str) -> Dict[str, Any]:
         """Transform currency exchange rate response"""
@@ -128,11 +128,11 @@ class AlphaVantageProvider:
 
             exchange_data = data.get("Realtime Currency Exchange Rate", {})
             if not exchange_data:
-                return {"success": False, "error": "No exchange rate data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No exchange rate data found", "source": "alpha_vantage_data"}
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "from_currency": from_currency,
                 "to_currency": to_currency,
                 "data": {
@@ -150,7 +150,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming exchange rate: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Exchange rate transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
     @monitor_performance
     async def get_fx_intraday(self, from_symbol: str, to_symbol: str, interval: str = "5min",
@@ -174,7 +174,7 @@ class AlphaVantageProvider:
                 return self._transform_fx_intraday(data, from_symbol, to_symbol, interval)
         except Exception as e:
             error(f"FX intraday error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     def _transform_fx_intraday(self, data: Dict, from_symbol: str, to_symbol: str, interval: str) -> Dict[str, Any]:
         """Transform FX intraday response"""
@@ -187,7 +187,7 @@ class AlphaVantageProvider:
             time_series = data.get(time_series_key, {})
 
             if not time_series:
-                return {"success": False, "error": "No FX intraday data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No FX intraday data found", "source": "alpha_vantage_data"}
 
             timestamps = []
             opens = []
@@ -205,7 +205,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "from_symbol": from_symbol,
                 "to_symbol": to_symbol,
                 "interval": interval,
@@ -222,7 +222,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming FX intraday: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"FX intraday transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"FX intraday transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
     @monitor_performance
     async def get_fx_weekly(self, from_symbol: str, to_symbol: str) -> Dict[str, Any]:
@@ -243,7 +243,7 @@ class AlphaVantageProvider:
                 return self._transform_fx_weekly_monthly(data, from_symbol, to_symbol, "weekly")
         except Exception as e:
             error(f"FX weekly error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     @monitor_performance
     async def get_fx_monthly(self, from_symbol: str, to_symbol: str) -> Dict[str, Any]:
@@ -264,7 +264,7 @@ class AlphaVantageProvider:
                 return self._transform_fx_weekly_monthly(data, from_symbol, to_symbol, "monthly")
         except Exception as e:
             error(f"FX monthly error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     def _transform_fx_weekly_monthly(self, data: Dict, from_symbol: str, to_symbol: str, interval: str) -> Dict[
         str, Any]:
@@ -278,7 +278,7 @@ class AlphaVantageProvider:
             time_series = data.get(time_series_key, {})
 
             if not time_series:
-                return {"success": False, "error": f"No FX {interval} data found", "source": "alpha_vantage"}
+                return {"success": False, "error": f"No FX {interval} data found", "source": "alpha_vantage_data"}
 
             timestamps = []
             opens = []
@@ -296,7 +296,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "from_symbol": from_symbol,
                 "to_symbol": to_symbol,
                 "interval": interval,
@@ -314,7 +314,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming FX {interval}: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"FX {interval} transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
     # EXTENDED CRYPTO METHODS
     @monitor_performance
@@ -339,7 +339,7 @@ class AlphaVantageProvider:
                 return self._transform_crypto_intraday(data, symbol, market, interval)
         except Exception as e:
             error(f"Crypto intraday error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     def _transform_crypto_intraday(self, data: Dict, symbol: str, market: str, interval: str) -> Dict[str, Any]:
         """Transform crypto intraday response"""
@@ -352,7 +352,7 @@ class AlphaVantageProvider:
             time_series = data.get(time_series_key, {})
 
             if not time_series:
-                return {"success": False, "error": "No crypto intraday data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No crypto intraday data found", "source": "alpha_vantage_data"}
 
             timestamps = []
             opens = []
@@ -372,7 +372,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "market": market,
                 "interval": interval,
@@ -391,7 +391,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming crypto intraday: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Crypto intraday transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
     @monitor_performance
     async def get_digital_currency_weekly(self, symbol: str, market: str = "USD") -> Dict[str, Any]:
@@ -412,7 +412,7 @@ class AlphaVantageProvider:
                 return self._transform_digital_currency_weekly_monthly(data, symbol, market, "weekly")
         except Exception as e:
             error(f"Digital currency weekly error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     @monitor_performance
     async def get_digital_currency_monthly(self, symbol: str, market: str = "USD") -> Dict[str, Any]:
@@ -433,7 +433,7 @@ class AlphaVantageProvider:
                 return self._transform_digital_currency_weekly_monthly(data, symbol, market, "monthly")
         except Exception as e:
             error(f"Digital currency monthly error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     def _transform_digital_currency_weekly_monthly(self, data: Dict, symbol: str, market: str, interval: str) -> Dict[
         str, Any]:
@@ -448,7 +448,7 @@ class AlphaVantageProvider:
 
             if not time_series:
                 return {"success": False, "error": f"No digital currency {interval} data found",
-                        "source": "alpha_vantage"}
+                        "source": "alpha_vantage_data"}
 
             timestamps = []
             opens_market = []
@@ -476,7 +476,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "market": market,
                 "interval": interval,
@@ -499,7 +499,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming digital currency {interval}: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Digital currency {interval} transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
     # COMMODITIES METHODS
     @monitor_performance
@@ -520,7 +520,7 @@ class AlphaVantageProvider:
                 return self._transform_commodity_data(data, function, interval)
         except Exception as e:
             error(f"Commodity {function} error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     def _transform_commodity_data(self, data: Dict, function: str, interval: str) -> Dict[str, Any]:
         """Transform commodity data response"""
@@ -537,11 +537,11 @@ class AlphaVantageProvider:
                     break
 
             if not data_key:
-                return {"success": False, "error": "No commodity data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No commodity data found", "source": "alpha_vantage_data"}
 
             commodity_data = data[data_key]
             if not commodity_data:
-                return {"success": False, "error": "Empty commodity data", "source": "alpha_vantage"}
+                return {"success": False, "error": "Empty commodity data", "source": "alpha_vantage_data"}
 
             timestamps = []
             values = []
@@ -558,7 +558,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "commodity": function,
                 "interval": interval,
                 "data": {
@@ -571,7 +571,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming commodity data: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Commodity transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Commodity transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
     # Individual commodity methods
     async def get_wti_oil(self, interval: str = "monthly") -> Dict[str, Any]:
@@ -641,7 +641,7 @@ class AlphaVantageProvider:
                 return self._transform_economic_data(data, function, interval)
         except Exception as e:
             error(f"Economic indicator {function} error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     def _transform_economic_data(self, data: Dict, function: str, interval: str) -> Dict[str, Any]:
         """Transform economic indicator response"""
@@ -658,11 +658,11 @@ class AlphaVantageProvider:
                     break
 
             if not data_key:
-                return {"success": False, "error": "No economic data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No economic data found", "source": "alpha_vantage_data"}
 
             economic_data = data[data_key]
             if not economic_data:
-                return {"success": False, "error": "Empty economic data", "source": "alpha_vantage"}
+                return {"success": False, "error": "Empty economic data", "source": "alpha_vantage_data"}
 
             timestamps = []
             values = []
@@ -679,7 +679,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "indicator": function,
                 "interval": interval,
                 "data": {
@@ -693,7 +693,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming economic data: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Economic data transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
     # Individual economic indicator methods
     async def get_real_gdp(self, interval: str = "annual") -> Dict[str, Any]:
@@ -765,7 +765,7 @@ class AlphaVantageProvider:
                 return self._transform_technical_indicator(data, function, symbol, interval)
         except Exception as e:
             error(f"Technical indicator {function} error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
     def _transform_technical_indicator(self, data: Dict, function: str, symbol: str, interval: str) -> Dict[str, Any]:
         """Transform technical indicator response"""
@@ -782,11 +782,11 @@ class AlphaVantageProvider:
                     break
 
             if not tech_key:
-                return {"success": False, "error": "No technical indicator data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No technical indicator data found", "source": "alpha_vantage_data"}
 
             tech_data = data[tech_key]
             if not tech_data:
-                return {"success": False, "error": "Empty technical indicator data", "source": "alpha_vantage"}
+                return {"success": False, "error": "Empty technical indicator data", "source": "alpha_vantage_data"}
 
             timestamps = []
             values = {}
@@ -803,7 +803,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "function": function,
                 "symbol": symbol,
                 "interval": interval,
@@ -817,7 +817,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming technical indicator: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Technical indicator transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
     # Popular technical indicators (individual methods)
     async def get_sma(self, symbol: str, interval: str, time_period: int, series_type: str = "close") -> Dict[str, Any]:
@@ -1103,12 +1103,12 @@ class AlphaVantageProvider:
                     break
 
             if not time_series_key:
-                return {"success": False, "error": "No time series data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No time series data found", "source": "alpha_vantage_data"}
 
             time_series = data[time_series_key]
 
             if not time_series:
-                return {"success": False, "error": "Empty time series data", "source": "alpha_vantage"}
+                return {"success": False, "error": "Empty time series data", "source": "alpha_vantage_data"}
 
             timestamps = []
             opens = []
@@ -1132,7 +1132,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": {
                     "timestamps": timestamps,
@@ -1148,7 +1148,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming Alpha Vantage data: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Data transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Data transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1168,7 +1168,7 @@ class AlphaVantageProvider:
                         to_symbol = parts[3:]
                     else:
                         return {"success": False, "error": f"Invalid forex pair format: {pair}",
-                                "source": "alpha_vantage"}
+                                "source": "alpha_vantage_data"}
 
                 params = {
                     "function": "FX_DAILY",
@@ -1186,7 +1186,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Alpha Vantage forex data error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_forex_data(self, data: Dict, pair: str) -> Dict[str, Any]:
@@ -1199,7 +1199,7 @@ class AlphaVantageProvider:
             time_series = data.get("Time Series FX (Daily)", {})
 
             if not time_series:
-                return {"success": False, "error": "No forex data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No forex data found", "source": "alpha_vantage_data"}
 
             timestamps = []
             rates = []
@@ -1211,7 +1211,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "pair": pair,
                 "data": {
                     "timestamps": timestamps,
@@ -1223,7 +1223,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming forex data: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Forex data transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Forex data transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1246,7 +1246,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Alpha Vantage crypto data error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_crypto_data(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -1259,7 +1259,7 @@ class AlphaVantageProvider:
             time_series = data.get("Time Series (Digital Currency Daily)", {})
 
             if not time_series:
-                return {"success": False, "error": "No crypto data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No crypto data found", "source": "alpha_vantage_data"}
 
             timestamps = []
             prices = []
@@ -1271,7 +1271,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": {
                     "timestamps": timestamps,
@@ -1283,7 +1283,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming crypto data: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Crypto data transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Crypto data transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1345,7 +1345,7 @@ class AlphaVantageProvider:
                 return self._transform_adjusted_data(data, symbol, "daily")
         except Exception as e:
             error(f"Daily adjusted data error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1366,7 +1366,7 @@ class AlphaVantageProvider:
                 return self._transform_adjusted_data(data, symbol, "weekly")
         except Exception as e:
             error(f"Weekly adjusted data error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1387,7 +1387,7 @@ class AlphaVantageProvider:
                 return self._transform_adjusted_data(data, symbol, "monthly")
         except Exception as e:
             error(f"Monthly adjusted data error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_adjusted_data(self, data: Dict, symbol: str, interval: str) -> Dict[str, Any]:
@@ -1405,11 +1405,11 @@ class AlphaVantageProvider:
                     break
 
             if not time_series_key:
-                return {"success": False, "error": "No time series data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No time series data found", "source": "alpha_vantage_data"}
 
             time_series = data[time_series_key]
             if not time_series:
-                return {"success": False, "error": "Empty time series data", "source": "alpha_vantage"}
+                return {"success": False, "error": "Empty time series data", "source": "alpha_vantage_data"}
 
             timestamps = []
             opens = []
@@ -1433,7 +1433,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "interval": interval,
                 "data": {
@@ -1452,7 +1452,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming adjusted data: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Data transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Data transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1473,7 +1473,7 @@ class AlphaVantageProvider:
                 return self._transform_global_quote(data, symbol)
         except Exception as e:
             error(f"Global quote error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_global_quote(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -1485,11 +1485,11 @@ class AlphaVantageProvider:
 
             quote_data = data.get("Global Quote", {})
             if not quote_data:
-                return {"success": False, "error": "No quote data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No quote data found", "source": "alpha_vantage_data"}
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": {
                     "symbol": quote_data.get("01. symbol", symbol),
@@ -1508,7 +1508,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming global quote: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Quote transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Quote transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1535,7 +1535,7 @@ class AlphaVantageProvider:
                 return self._transform_bulk_quotes(data, symbols)
         except Exception as e:
             error(f"Bulk quotes error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_bulk_quotes(self, data: Dict, symbols: List[str]) -> Dict[str, Any]:
@@ -1547,7 +1547,7 @@ class AlphaVantageProvider:
 
             quotes = data.get("quotes", [])
             if not quotes:
-                return {"success": False, "error": "No quotes data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No quotes data found", "source": "alpha_vantage_data"}
 
             transformed_quotes = []
             for quote in quotes:
@@ -1564,7 +1564,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbols": symbols,
                 "data": transformed_quotes,
                 "fetched_at": datetime.now().isoformat()
@@ -1572,7 +1572,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming bulk quotes: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Bulk quotes transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Bulk quotes transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1593,7 +1593,7 @@ class AlphaVantageProvider:
                 return self._transform_search_results(data, keywords)
         except Exception as e:
             error(f"Symbol search error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_search_results(self, data: Dict, keywords: str) -> Dict[str, Any]:
@@ -1621,7 +1621,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "keywords": keywords,
                 "data": results,
                 "fetched_at": datetime.now().isoformat()
@@ -1629,7 +1629,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming search results: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Search transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Search transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1649,7 +1649,7 @@ class AlphaVantageProvider:
                 return self._transform_market_status(data)
         except Exception as e:
             error(f"Market status error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_market_status(self, data: Dict) -> Dict[str, Any]:
@@ -1663,14 +1663,14 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "data": markets,
                 "fetched_at": datetime.now().isoformat()
             }
 
         except Exception as e:
             error(f"Error transforming market status: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Market status transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Market status transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     # OPTIONS DATA METHODS
@@ -1696,7 +1696,7 @@ class AlphaVantageProvider:
                 return self._transform_options_data(data, symbol)
         except Exception as e:
             error(f"Realtime options error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1720,7 +1720,7 @@ class AlphaVantageProvider:
                 return self._transform_options_data(data, symbol)
         except Exception as e:
             error(f"Historical options error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_options_data(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -1734,7 +1734,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": options_data,
                 "fetched_at": datetime.now().isoformat()
@@ -1742,7 +1742,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming options data: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Options transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Options transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     # ALPHA INTELLIGENCE METHODS
@@ -1775,7 +1775,7 @@ class AlphaVantageProvider:
                 return self._transform_news_sentiment(data)
         except Exception as e:
             error(f"News sentiment error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_news_sentiment(self, data: Dict) -> Dict[str, Any]:
@@ -1787,14 +1787,14 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "data": data,
                 "fetched_at": datetime.now().isoformat()
             }
 
         except Exception as e:
             error(f"Error transforming news sentiment: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"News sentiment transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"News sentiment transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1816,7 +1816,7 @@ class AlphaVantageProvider:
                 return self._transform_earnings_transcript(data, symbol, quarter)
         except Exception as e:
             error(f"Earnings transcript error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_earnings_transcript(self, data: Dict, symbol: str, quarter: str) -> Dict[str, Any]:
@@ -1828,7 +1828,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "quarter": quarter,
                 "data": data,
@@ -1838,7 +1838,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming earnings transcript: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Earnings transcript transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1858,7 +1858,7 @@ class AlphaVantageProvider:
                 return self._transform_top_gainers_losers(data)
         except Exception as e:
             error(f"Top gainers losers error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_top_gainers_losers(self, data: Dict) -> Dict[str, Any]:
@@ -1870,7 +1870,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "data": {
                     "metadata": data.get("metadata", ""),
                     "last_updated": data.get("last_updated", ""),
@@ -1884,7 +1884,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming top gainers losers: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Top gainers losers transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1905,7 +1905,7 @@ class AlphaVantageProvider:
                 return self._transform_insider_transactions(data, symbol)
         except Exception as e:
             error(f"Insider transactions error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_insider_transactions(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -1917,7 +1917,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": data,
                 "fetched_at": datetime.now().isoformat()
@@ -1926,7 +1926,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming insider transactions: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Insider transactions transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1954,7 +1954,7 @@ class AlphaVantageProvider:
                 return self._transform_analytics_data(data, "fixed_window")
         except Exception as e:
             error(f"Analytics fixed window error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -1984,7 +1984,7 @@ class AlphaVantageProvider:
                 return self._transform_analytics_data(data, "sliding_window")
         except Exception as e:
             error(f"Analytics sliding window error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_analytics_data(self, data: Dict, window_type: str) -> Dict[str, Any]:
@@ -1996,7 +1996,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "window_type": window_type,
                 "data": data,
                 "fetched_at": datetime.now().isoformat()
@@ -2004,7 +2004,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming analytics data: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Analytics transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Analytics transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     # FUNDAMENTAL DATA METHODS
@@ -2026,7 +2026,7 @@ class AlphaVantageProvider:
                 return self._transform_company_overview(data, symbol)
         except Exception as e:
             error(f"Company overview error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_company_overview(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -2038,7 +2038,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": data,
                 "fetched_at": datetime.now().isoformat()
@@ -2047,7 +2047,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming company overview: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Company overview transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2068,7 +2068,7 @@ class AlphaVantageProvider:
                 return self._transform_etf_profile(data, symbol)
         except Exception as e:
             error(f"ETF profile error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_etf_profile(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -2080,7 +2080,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": data,
                 "fetched_at": datetime.now().isoformat()
@@ -2088,7 +2088,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming ETF profile: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"ETF profile transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"ETF profile transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2109,7 +2109,7 @@ class AlphaVantageProvider:
                 return self._transform_dividends(data, symbol)
         except Exception as e:
             error(f"Dividends error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_dividends(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -2121,7 +2121,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": data,
                 "fetched_at": datetime.now().isoformat()
@@ -2129,7 +2129,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming dividends: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Dividends transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Dividends transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2150,7 +2150,7 @@ class AlphaVantageProvider:
                 return self._transform_splits(data, symbol)
         except Exception as e:
             error(f"Splits error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_splits(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -2162,7 +2162,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": data,
                 "fetched_at": datetime.now().isoformat()
@@ -2170,7 +2170,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming splits: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Splits transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Splits transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2191,7 +2191,7 @@ class AlphaVantageProvider:
                 return self._transform_financial_statement(data, symbol, "income_statement")
         except Exception as e:
             error(f"Income statement error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2212,7 +2212,7 @@ class AlphaVantageProvider:
                 return self._transform_financial_statement(data, symbol, "balance_sheet")
         except Exception as e:
             error(f"Balance sheet error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2233,7 +2233,7 @@ class AlphaVantageProvider:
                 return self._transform_financial_statement(data, symbol, "cash_flow")
         except Exception as e:
             error(f"Cash flow error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_financial_statement(self, data: Dict, symbol: str, statement_type: str) -> Dict[str, Any]:
@@ -2245,7 +2245,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "statement_type": statement_type,
                 "data": data,
@@ -2255,7 +2255,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming financial statement: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Financial statement transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2276,7 +2276,7 @@ class AlphaVantageProvider:
                 return self._transform_earnings(data, symbol)
         except Exception as e:
             error(f"Earnings error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_earnings(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -2288,7 +2288,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": data,
                 "fetched_at": datetime.now().isoformat()
@@ -2296,7 +2296,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming earnings: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Earnings transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Earnings transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2317,7 +2317,7 @@ class AlphaVantageProvider:
                 return self._transform_earnings_estimates(data, symbol)
         except Exception as e:
             error(f"Earnings estimates error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_earnings_estimates(self, data: Dict, symbol: str) -> Dict[str, Any]:
@@ -2329,7 +2329,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "data": data,
                 "fetched_at": datetime.now().isoformat()
@@ -2338,7 +2338,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming earnings estimates: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Earnings estimates transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2362,11 +2362,11 @@ class AlphaVantageProvider:
                         csv_data = await response.text()
                         return self._transform_listing_status(csv_data, date, state)
                     else:
-                        return {"success": False, "error": f"HTTP {response.status}", "source": "alpha_vantage"}
+                        return {"success": False, "error": f"HTTP {response.status}", "source": "alpha_vantage_data"}
 
         except Exception as e:
             error(f"Listing status error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_listing_status(self, csv_data: str, date: str, state: str) -> Dict[str, Any]:
@@ -2374,7 +2374,7 @@ class AlphaVantageProvider:
         try:
             lines = csv_data.strip().split('\n')
             if len(lines) < 2:
-                return {"success": False, "error": "No listing data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No listing data found", "source": "alpha_vantage_data"}
 
             headers = lines[0].split(',')
             data_rows = []
@@ -2387,7 +2387,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "date": date,
                 "state": state,
                 "data": data_rows,
@@ -2396,7 +2396,7 @@ class AlphaVantageProvider:
 
         except Exception as e:
             error(f"Error transforming listing status: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"Listing status transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"Listing status transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2420,11 +2420,11 @@ class AlphaVantageProvider:
                         csv_data = await response.text()
                         return self._transform_earnings_calendar(csv_data, symbol, horizon)
                     else:
-                        return {"success": False, "error": f"HTTP {response.status}", "source": "alpha_vantage"}
+                        return {"success": False, "error": f"HTTP {response.status}", "source": "alpha_vantage_data"}
 
         except Exception as e:
             error(f"Earnings calendar error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_earnings_calendar(self, csv_data: str, symbol: str, horizon: str) -> Dict[str, Any]:
@@ -2432,7 +2432,7 @@ class AlphaVantageProvider:
         try:
             lines = csv_data.strip().split('\n')
             if len(lines) < 2:
-                return {"success": False, "error": "No earnings calendar data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No earnings calendar data found", "source": "alpha_vantage_data"}
 
             headers = lines[0].split(',')
             data_rows = []
@@ -2445,7 +2445,7 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "symbol": symbol,
                 "horizon": horizon,
                 "data": data_rows,
@@ -2455,7 +2455,7 @@ class AlphaVantageProvider:
         except Exception as e:
             error(f"Error transforming earnings calendar: {str(e)}", module="AlphaVantageProvider")
             return {"success": False, "error": f"Earnings calendar transformation error: {str(e)}",
-                    "source": "alpha_vantage"}
+                    "source": "alpha_vantage_data"}
 
 
     @monitor_performance
@@ -2475,11 +2475,11 @@ class AlphaVantageProvider:
                         csv_data = await response.text()
                         return self._transform_ipo_calendar(csv_data)
                     else:
-                        return {"success": False, "error": f"HTTP {response.status}", "source": "alpha_vantage"}
+                        return {"success": False, "error": f"HTTP {response.status}", "source": "alpha_vantage_data"}
 
         except Exception as e:
             error(f"IPO calendar error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
 
 
     def _transform_ipo_calendar(self, csv_data: str) -> Dict[str, Any]:
@@ -2487,7 +2487,7 @@ class AlphaVantageProvider:
         try:
             lines = csv_data.strip().split('\n')
             if len(lines) < 2:
-                return {"success": False, "error": "No IPO calendar data found", "source": "alpha_vantage"}
+                return {"success": False, "error": "No IPO calendar data found", "source": "alpha_vantage_data"}
 
             headers = lines[0].split(',')
             data_rows = []
@@ -2500,14 +2500,14 @@ class AlphaVantageProvider:
 
             return {
                 "success": True,
-                "source": "alpha_vantage",
+                "source": "alpha_vantage_data",
                 "data": data_rows,
                 "fetched_at": datetime.now().isoformat()
             }
 
         except Exception as e:
             error(f"Error transforming IPO calendar: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": f"IPO calendar transformation error: {str(e)}", "source": "alpha_vantage"}
+            return {"success": False, "error": f"IPO calendar transformation error: {str(e)}", "source": "alpha_vantage_data"}
 
 
     # EXTENDED FOREX METHODS
@@ -2530,4 +2530,4 @@ class AlphaVantageProvider:
                 return self._transform_exchange_rate(data, from_currency, to_currency)
         except Exception as e:
             error(f"Exchange rate error: {str(e)}", module="AlphaVantageProvider")
-            return {"success": False, "error": str(e), "source": "alpha_vantage"}
+            return {"success": False, "error": str(e), "source": "alpha_vantage_data"}
