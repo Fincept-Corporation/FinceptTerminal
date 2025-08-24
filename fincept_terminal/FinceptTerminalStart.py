@@ -97,7 +97,7 @@ class PerformantTabImporter:
             ("Equity Research", "fincept_terminal.DashBoard.EquityResearchTab.yfdata", "YFinanceDataTab"),
             ("Fyers", "fincept_terminal.Brokers.India.fyers.fyers_tab", "FyersTab"),
             ("Geopolitical", "fincept_terminal.DashBoard.GeoPoliticsTab.geo", "GeopoliticalAnalysisTab"),
-            ("Technicals", "fincept_terminal.DashBoard.TechnicalsTab.technical_tab", "EnhancedNodeEditorTab"),
+            ("Technicals", "fincept_terminal.DashBoard.TechnicalsTab.technical_tab", "AdvancedNodeEditorTab"),
             ("India Data", "fincept_terminal.DatabaseConnector.DataGovGlobal.GovDataIN.indiagov_tab", "DataGovIndiaTab"),
             ("Robo Advisor", "fincept_terminal.DashBoard.RoboAdvisorTab.robo_advisor_tab", "RoboAdvisorTab"),
             ("Consumer", "fincept_terminal.DashBoard.EquityResearchTab.consumer_behaviour_tab", "ConsumerBehaviorTab"),
