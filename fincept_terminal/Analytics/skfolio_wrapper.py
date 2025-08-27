@@ -34,14 +34,14 @@ from skfolio.distribution import VineCopula
 from skfolio.model_selection import CombinatorialPurgedCV, WalkForward, cross_val_predict
 from skfolio.moments import (
     DenoiseCovariance, DetoneCovariance, EWMu, GerberCovariance,
-    ShrunkMu, LedoitWolf, OracleApproximatingShrinkage
+    ShrunkMu, LedoitWolf
 )
 from skfolio.optimization import (
     MeanRisk, HierarchicalRiskParity, NestedClustersOptimization,
     ObjectiveFunction, RiskBudgeting, MaximumDiversification,
     EqualWeighted, InverseVolatility, Random
 )
-from skfolio.pre_selection import SelectKExtremes, DropHighlyCorrelated
+from skfolio.pre_selection import SelectKExtremes
 from skfolio.preprocessing import prices_to_returns
 from skfolio.prior import (
     BlackLitterman, EmpiricalPrior, EntropyPooling, FactorModel,
@@ -50,7 +50,6 @@ from skfolio.prior import (
 from skfolio.uncertainty_set import BootstrapMuUncertaintySet
 
 warnings.filterwarnings('ignore')
-
 
 @dataclass
 class PortfolioConfig:
@@ -187,8 +186,7 @@ class PortfolioAnalyticsEngine:
             "ledoit_wolf": LedoitWolf(),
             "gerber": GerberCovariance(),
             "denoise": DenoiseCovariance(),
-            "detone": DetoneCovariance(),
-            "oracle": OracleApproximatingShrinkage()
+            "detone": DetoneCovariance()
         }
 
         # Mu estimators
@@ -257,9 +255,7 @@ class PortfolioAnalyticsEngine:
         }
 
         prior_estimator = self._build_prior_estimator()
-        uncertainty_set = BootstrapMuUncertaintySet(
-            n_samples=self.config.bootstrap_samples
-        ) if self.config.use_uncertainty_set else None
+        uncertainty_set = BootstrapMuUncertaintySet() if self.config.use_uncertainty_set else None
 
         # Build model based on optimization method
         if self.config.optimization_method == "mean_risk":
@@ -310,8 +306,8 @@ class PortfolioAnalyticsEngine:
         return model
 
     def optimize_portfolio(self,
-                           train_size: float = None,
-                           verbose: bool = True) -> Dict[str, Any]:
+                          train_size: float = None,
+                          verbose: bool = True) -> Dict[str, Any]:
         """
         Optimize portfolio using configured parameters
 
@@ -328,11 +324,11 @@ class PortfolioAnalyticsEngine:
         if self.factor_returns is not None:
             X_train, X_test, factors_train, factors_test = train_test_split(
                 self.returns, self.factor_returns,
-                test_size=1 - train_size, shuffle=False
+                test_size=1-train_size, shuffle=False
             )
         else:
             X_train, X_test = train_test_split(
-                self.returns, test_size=1 - train_size, shuffle=False
+                self.returns, test_size=1-train_size, shuffle=False
             )
             factors_train = factors_test = None
 
@@ -383,10 +379,10 @@ class PortfolioAnalyticsEngine:
         return results
 
     def hyperparameter_tuning(self,
-                              param_grid: Dict = None,
-                              cv_method: str = None,
-                              scoring: str = 'sharpe_ratio',
-                              n_jobs: int = -1) -> Dict[str, Any]:
+                             param_grid: Dict = None,
+                             cv_method: str = None,
+                             scoring = None,
+                             n_jobs: int = -1) -> Dict[str, Any]:
         """
         Perform hyperparameter tuning using grid search or random search
 
@@ -412,7 +408,7 @@ class PortfolioAnalyticsEngine:
         cv_method = cv_method or self.config.cv_method
         if cv_method == "walk_forward":
             cv = WalkForward(train_size=self.config.lookback_window,
-                             test_size=self.config.rebalance_frequency)
+                           test_size=self.config.rebalance_frequency)
         elif cv_method == "combinatorial_purged":
             cv = CombinatorialPurgedCV(n_folds=self.config.cv_folds)
         else:
@@ -423,7 +419,6 @@ class PortfolioAnalyticsEngine:
             estimator=self._build_model(),
             param_grid=param_grid,
             cv=cv,
-            scoring=scoring,
             n_jobs=n_jobs,
             verbose=1
         )
@@ -443,10 +438,10 @@ class PortfolioAnalyticsEngine:
         }
 
     def backtest_strategy(self,
-                          rebalance_freq: int = None,
-                          window_size: int = None,
-                          start_date: str = None,
-                          end_date: str = None) -> pd.DataFrame:
+                         rebalance_freq: int = None,
+                         window_size: int = None,
+                         start_date: str = None,
+                         end_date: str = None) -> pd.DataFrame:
         """
         Backtest the portfolio strategy using walk-forward analysis
 
@@ -480,14 +475,14 @@ class PortfolioAnalyticsEngine:
 
         for i in range(window_size, len(returns_data), rebalance_freq):
             # Training window
-            train_data = returns_data.iloc[i - window_size:i]
+            train_data = returns_data.iloc[i-window_size:i]
 
             # Build and fit model
             model = self._build_model()
 
             try:
                 if self.factor_returns is not None:
-                    factor_data = self.factor_returns.iloc[i - window_size:i]
+                    factor_data = self.factor_returns.iloc[i-window_size:i]
                     model.fit(train_data, factor_data)
                 else:
                     model.fit(train_data)
@@ -518,7 +513,7 @@ class PortfolioAnalyticsEngine:
         # Calculate performance metrics
         backtest_df['cumulative_return'] = (1 + backtest_df['portfolio_return']).cumprod()
         backtest_df['drawdown'] = (backtest_df['cumulative_return'] /
-                                   backtest_df['cumulative_return'].expanding().max() - 1)
+                                  backtest_df['cumulative_return'].expanding().max() - 1)
 
         self.backtest_results = {
             'returns': backtest_df,
@@ -529,8 +524,8 @@ class PortfolioAnalyticsEngine:
         return backtest_df
 
     def stress_test(self,
-                    scenarios: Dict[str, Dict] = None,
-                    n_simulations: int = 10000) -> Dict[str, Any]:
+                   scenarios: Dict[str, Dict] = None,
+                   n_simulations: int = 10000) -> Dict[str, Any]:
         """
         Perform stress testing using various scenarios
 
@@ -568,7 +563,7 @@ class PortfolioAnalyticsEngine:
                     # Generate stressed scenarios
                     conditioning = scenario_params if 'market_shock' in scenario_params else None
                     synthetic_returns = vine.sample(n_samples=n_simulations,
-                                                    conditioning=conditioning)
+                                                  conditioning=conditioning)
 
                     # Calculate portfolio performance under stress
                     stressed_portfolio = self.model.predict(synthetic_returns)
@@ -579,7 +574,7 @@ class PortfolioAnalyticsEngine:
                         'portfolio_var': np.percentile(stressed_portfolio.returns, 5),
                         'portfolio_cvar': stressed_portfolio.returns[
                             stressed_portfolio.returns <= np.percentile(stressed_portfolio.returns, 5)
-                            ].mean()
+                        ].mean()
                     }
 
                 except Exception as e:
@@ -604,8 +599,7 @@ class PortfolioAnalyticsEngine:
             'sharpe_ratio': returns_annual / volatility_annual if volatility_annual > 0 else 0,
             'max_drawdown': drawdown.min(),
             'calmar_ratio': returns_annual / abs(drawdown.min()) if drawdown.min() < 0 else 0,
-            'sortino_ratio': returns_annual / (returns[returns < 0].std() * np.sqrt(252)) if len(
-                returns[returns < 0]) > 0 else 0,
+            'sortino_ratio': returns_annual / (returns[returns < 0].std() * np.sqrt(252)) if len(returns[returns < 0]) > 0 else 0,
             'skewness': returns.skew(),
             'kurtosis': returns.kurt(),
             'var_95': np.percentile(returns, 5),
@@ -651,8 +645,8 @@ class PortfolioAnalyticsEngine:
 
         # Generate efficient frontier
         returns_range = np.linspace(self.returns.mean().min() * 252,
-                                    self.returns.mean().max() * 252,
-                                    n_portfolios)
+                                   self.returns.mean().max() * 252,
+                                   n_portfolios)
 
         risks = []
         returns_list = []
@@ -662,7 +656,7 @@ class PortfolioAnalyticsEngine:
                 model = MeanRisk(
                     objective_function=ObjectiveFunction.MINIMIZE_RISK,
                     risk_measure=RiskMeasure.VARIANCE,
-                    min_return=target_return / 252
+                    min_return=target_return/252
                 )
                 model.fit(self.returns)
 
@@ -686,8 +680,7 @@ class PortfolioAnalyticsEngine:
         # Add current portfolio point if available
         if self.model is not None:
             current_return = self.portfolio.annualized_mean if hasattr(self.portfolio, 'annualized_mean') else 0
-            current_risk = self.portfolio.annualized_volatility if hasattr(self.portfolio,
-                                                                           'annualized_volatility') else 0
+            current_risk = self.portfolio.annualized_volatility if hasattr(self.portfolio, 'annualized_volatility') else 0
 
             fig.add_trace(go.Scatter(
                 x=[current_risk], y=[current_return],
@@ -723,15 +716,15 @@ class PortfolioAnalyticsEngine:
         # Cumulative returns
         fig.add_trace(
             go.Scatter(x=df.index, y=df['cumulative_return'],
-                       name='Portfolio', line=dict(color='blue')),
+                      name='Portfolio', line=dict(color='blue')),
             row=1, col=1
         )
 
         # Drawdown
         fig.add_trace(
             go.Scatter(x=df.index, y=df['drawdown'],
-                       name='Drawdown', fill='tonexty',
-                       line=dict(color='red')),
+                      name='Drawdown', fill='tonexty',
+                      line=dict(color='red')),
             row=2, col=1
         )
 
@@ -852,8 +845,8 @@ class PortfolioAnalyticsEngine:
         return filename
 
     def compare_strategies(self,
-                           strategies: List[Dict[str, Any]],
-                           metric: str = 'sharpe_ratio') -> pd.DataFrame:
+                          strategies: List[Dict[str, Any]],
+                          metric: str = 'sharpe_ratio') -> pd.DataFrame:
         """
         Compare multiple optimization strategies
 
@@ -879,12 +872,12 @@ class PortfolioAnalyticsEngine:
 
                 # Optimize
                 result = temp_engine.optimize_portfolio(verbose=False)
-                result['strategy_id'] = f"Strategy_{i + 1}"
+                result['strategy_id'] = f"Strategy_{i+1}"
                 result['config'] = strategy_config
                 results.append(result)
 
             except Exception as e:
-                print(f"Error in strategy {i + 1}: {e}")
+                print(f"Error in strategy {i+1}: {e}")
                 continue
 
         # Create comparison DataFrame
@@ -988,7 +981,7 @@ class PortfolioAnalyticsEngine:
                     'volatility': portfolio_returns.std() * np.sqrt(252),
                     'sharpe_ratio': (portfolio_returns.mean() * 252) / (portfolio_returns.std() * np.sqrt(252)),
                     'max_drawdown': ((1 + portfolio_returns).cumprod() /
-                                     (1 + portfolio_returns).cumprod().expanding().max() - 1).min(),
+                                   (1 + portfolio_returns).cumprod().expanding().max() - 1).min(),
                     'var_95': np.percentile(portfolio_returns, 5),
                     'cvar_95': portfolio_returns[portfolio_returns <= np.percentile(portfolio_returns, 5)].mean(),
                     'worst_day': portfolio_returns.min(),
@@ -1022,7 +1015,6 @@ def create_sample_config() -> PortfolioConfig:
         cv_folds=5,
         use_uncertainty_set=True
     )
-
 
 def demo_portfolio_analytics():
     """Demonstration of the portfolio analytics engine"""
@@ -1065,8 +1057,7 @@ def demo_portfolio_analytics():
     print("\nRisk attribution analysis...")
     risk_attrib = engine.risk_attribution()
     print("Top 5 risk contributors:")
-    print(risk_attrib['asset_attribution'][['Asset', 'Weight_Pct', 'Risk_Contribution_Pct']].head().to_string(
-        index=False))
+    print(risk_attrib['asset_attribution'][['Asset', 'Weight_Pct', 'Risk_Contribution_Pct']].head().to_string(index=False))
 
     # Generate and save report
     print("\nGenerating comprehensive report...")
@@ -1077,7 +1068,6 @@ def demo_portfolio_analytics():
     print(f"Files generated: {report_file}, {weights_file}")
 
     return engine
-
 
 if __name__ == "__main__":
     # Run demonstration
