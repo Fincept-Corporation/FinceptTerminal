@@ -7,12 +7,8 @@ import datetime
 import threading
 import time
 import random
-
-# Import the new logger
 from fincept_terminal.Utils.Logging.logger import logger, operation, monitor_performance
-
-# Import the business logic
-from .portfolio_business import PortfolioBusinessLogic
+from fincept_terminal.DashBoard.PortfolioTab.portfolio_business import PortfolioBusinessLogic
 
 
 class PortfolioTab(BaseTab):

@@ -15,7 +15,6 @@ from concurrent.futures import ThreadPoolExecutor
 import dearpygui.dearpygui as dpg
 import requests
 
-import fincept_terminal.DashBoard.WatchListTab.watchlist_tab
 from fincept_terminal.menu_toolbar import MenuToolbarManager
 
 # Suppress warnings for cleaner output
