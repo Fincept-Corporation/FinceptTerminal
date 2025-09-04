@@ -1,2 +1,2 @@
-__version__ = "2.0.5"
+__version__ = "2.0.8"
 __all__ = ["FinceptTerminalStart"]
