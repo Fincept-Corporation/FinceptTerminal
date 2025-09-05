@@ -112,7 +112,7 @@ class DataViewerTab(BaseTab):
             raise
 
     def get_label(self):
-        return "📊 Advanced Data Viewer"
+        return "Data Viewer"
 
     def safe_add_item(self, add_function, *args, **kwargs):
         """Safely add DPG items with error handling"""
