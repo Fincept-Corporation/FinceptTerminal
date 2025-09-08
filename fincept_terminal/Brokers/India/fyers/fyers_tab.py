@@ -15,10 +15,10 @@ from typing import Dict, List, Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
 import time
 import platform
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 
 # Import new logger module
-from fincept_terminal.Utils.Logging.logger import (
+from fincept_terminal.utils.Logging.logger import (
     info, debug, warning, error, operation, monitor_performance
 )
 

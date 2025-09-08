@@ -4,7 +4,7 @@ Consumer Behaviour Tab module for Fincept Terminal
 Updated with new centralized logging system and performance improvements
 """
 
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 import yfinance as yf
 import pandas as pd
 import json
@@ -22,7 +22,7 @@ from functools import lru_cache
 import concurrent.futures
 
 # Import new logging system
-from fincept_terminal.Utils.Logging.logger import (
+from fincept_terminal.utils.Logging.logger import (
     logger, debug, info, warning, error, critical,
     operation, monitor_performance
 )

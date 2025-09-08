@@ -8,12 +8,12 @@ import numpy as np
 from datetime import datetime, timedelta
 import threading
 import time
-from fincept_terminal.Utils.Managers.theme_manager import AutomaticThemeManager
+from fincept_terminal.utils.Managers.theme_manager import AutomaticThemeManager
 from pathlib import Path
 import csv
 import os
 
-from fincept_terminal.Utils.Logging.logger import (
+from fincept_terminal.utils.Logging.logger import (
     info as log_info, debug, warning, error, operation, monitor_performance
 )
 
@@ -926,7 +926,7 @@ class YFinanceDataTab:
                 self.safe_set_value("last_update_time", datetime.now().strftime('%H:%M:%S'))
                 self._last_update_time = time.time()
 
-                from fincept_terminal.Utils.Logging.logger import info as log_info
+                from fincept_terminal.utils.Logging.logger import info as log_info
                 log_info("Stock data loaded successfully",
                          context={
                              'ticker': ticker,

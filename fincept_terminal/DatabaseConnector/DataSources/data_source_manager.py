@@ -16,7 +16,7 @@ import time
 from functools import lru_cache
 
 # Import our new logger
-from fincept_terminal.Utils.Logging.logger import info, debug, warning, error, operation, monitor_performance, logger
+from fincept_terminal.utils.Logging.logger import info, debug, warning, error, operation, monitor_performance, logger
 
 
 class DataSourceManager:

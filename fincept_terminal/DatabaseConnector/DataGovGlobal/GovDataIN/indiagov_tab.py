@@ -5,7 +5,7 @@ import threading
 import os
 import sqlite3
 from datagovindia import DataGovIndia, check_api_key
-from fincept_terminal.Utils.Logging.logger import info, error, warning, monitor_performance, operation
+from fincept_terminal.utils.Logging.logger import info, error, warning, monitor_performance, operation
 
 # Store DB and downloads in current working directory
 DB_FILENAME = "datagovindia.db"

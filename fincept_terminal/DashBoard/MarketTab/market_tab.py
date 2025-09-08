@@ -2,7 +2,7 @@
 # market_tab.py
 
 import dearpygui.dearpygui as dpg
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 import threading
 import time
 import datetime
@@ -10,7 +10,7 @@ import random
 from typing import Dict, Any, List, Optional, Tuple
 
 # Import logging system (reduced usage)
-from fincept_terminal.Utils.Logging.logger import (
+from fincept_terminal.utils.Logging.logger import (
     info, error, warning
 )
 

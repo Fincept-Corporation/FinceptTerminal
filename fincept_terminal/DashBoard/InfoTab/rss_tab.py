@@ -4,8 +4,8 @@ import xml.etree.ElementTree as ET
 import webbrowser
 import threading
 from datetime import datetime
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import info, error, warning, monitor_performance, operation
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import info, error, warning, monitor_performance, operation
 
 
 class RssTab(BaseTab):

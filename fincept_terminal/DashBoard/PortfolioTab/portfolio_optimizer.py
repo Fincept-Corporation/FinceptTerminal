@@ -50,7 +50,7 @@ except ImportError as e:
     PYPFOPT_AVAILABLE = False
 
 # Import logging
-from fincept_terminal.Utils.Logging.logger import logger, operation, monitor_performance
+from fincept_terminal.utils.Logging.logger import logger, operation, monitor_performance
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')

@@ -7,9 +7,9 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 # PERFORMANCE: Import only essential logging functions
-from fincept_terminal.Utils.Logging.logger import info, error, debug, warning
+from fincept_terminal.utils.Logging.logger import info, error, debug, warning
 
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 
 
 class ForumTab(BaseTab):
@@ -73,7 +73,7 @@ class ForumTab(BaseTab):
     def _initialize_api_client(self):
         """PERFORMANCE: Initialize API client only when needed"""
         try:
-            from fincept_terminal.Utils.APIClient.api_client import create_api_client
+            from fincept_terminal.utils.APIClient.api_client import create_api_client
             session_data = self.app.get_session_data()
             self._api_client = create_api_client(session_data)
             self._api_client_initialized = True
