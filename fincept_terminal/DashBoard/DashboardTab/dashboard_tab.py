@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import dearpygui.dearpygui as dpg
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 import datetime
 import threading
 import time
@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Optional, Any
 
 # Import new logging system
-from fincept_terminal.Utils.Logging.logger import (
+from fincept_terminal.utils.Logging.logger import (
     logger, debug, info, warning, error, operation, monitor_performance
 )
 

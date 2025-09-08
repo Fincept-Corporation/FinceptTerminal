@@ -12,6 +12,7 @@ cmder
 reqgen.py
 fincept_env
 python
+treeview.py
 testing
 fincept_terminal/fyers_session_config.json
 fincept_terminal/backup_20250730_072611

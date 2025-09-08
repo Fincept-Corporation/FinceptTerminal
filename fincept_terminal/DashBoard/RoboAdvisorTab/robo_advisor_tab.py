@@ -5,7 +5,7 @@ Updated to use centralized logging system with automatic class detection
 """
 
 import dearpygui.dearpygui as dpg
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 import requests
 from urllib import parse
 import pandas as pd
@@ -13,7 +13,7 @@ import yfinance as yf
 import threading
 import time
 
-from fincept_terminal.Utils.Logging.logger import logger, operation, monitor_performance
+from fincept_terminal.utils.Logging.logger import logger, operation, monitor_performance
 
 
 class RoboAdvisorTab(BaseTab):

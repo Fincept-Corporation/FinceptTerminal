@@ -8,10 +8,10 @@ from datetime import datetime
 from functools import lru_cache
 from typing import Dict, Any, Optional
 
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import logger, operation, monitor_performance
-from fincept_terminal.Utils.config import config
-from fincept_terminal.Utils.APIClient.api_client import create_api_client
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import logger, operation, monitor_performance
+from fincept_terminal.utils.config import config
+from fincept_terminal.utils.APIClient.api_client import create_api_client
 
 
 class ProfileConstants:
@@ -573,7 +573,7 @@ class ProfileTab(BaseTab):
     def _clear_saved_credentials(self):
         """Clear saved credentials"""
         try:
-            from fincept_terminal.Utils.Managers.session_manager import session_manager
+            from fincept_terminal.utils.Managers.session_manager import session_manager
             session_manager.clear_credentials()
             logger.info("Saved credentials cleared")
         except ImportError:

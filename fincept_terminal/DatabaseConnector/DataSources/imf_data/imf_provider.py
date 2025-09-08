@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 
 try:
-    from fincept_terminal.Utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
+    from fincept_terminal.utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
 except ImportError:
     # Fallback logging if module not available
     def info(msg, **kwargs):

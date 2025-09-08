@@ -12,8 +12,8 @@ import re
 from urllib.parse import urlparse
 import duckdb
 from pathlib import Path
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import logger
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import logger
 
 # Try to import required libraries
 try:

@@ -27,8 +27,8 @@ import io
 import base64
 
 # Import base utilities
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import logger
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import logger
 
 # Suppress warnings for production
 warnings.filterwarnings('ignore')

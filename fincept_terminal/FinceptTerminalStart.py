@@ -16,6 +16,7 @@ import dearpygui.dearpygui as dpg
 import requests
 
 from fincept_terminal.menu_toolbar import MenuToolbarManager
+from fincept_terminal.utils.Managers.theme_manager import AutomaticThemeManager
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -23,16 +24,16 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 # PERFORMANCE: Import only essential logging functions, avoid heavy decorators during startup
-from fincept_terminal.Utils.Logging.logger import (
+from fincept_terminal.utils.Logging.logger import (
     info, error, debug, warning, critical, set_debug_mode, setup_for_gui,
     monitor_performance, operation, get_stats, health_check
 )
 
 # Import centralized config
-from fincept_terminal.Utils.config import config, get_api_endpoint, is_strict_mode
+from fincept_terminal.utils.config import config, get_api_endpoint, is_strict_mode
 
 # Import session manager
-from fincept_terminal.Utils.Managers.session_manager import session_manager
+from fincept_terminal.utils.Managers.session_manager import session_manager
 
 
 class PerformantTabImporter:
@@ -144,62 +145,6 @@ class PerformantTabImporter:
 
         return available_tabs
 
-
-class OptimizedThemeManager:
-    """OPTIMIZED: Lightweight theme manager with lazy loading"""
-
-    def __init__(self):
-        self.theme_manager = None
-        self.themes_available = False
-        self.current_theme = "default"
-        self._initialization_attempted = False
-
-    def _lazy_initialize(self):
-        """PERFORMANCE: Only initialize when first used"""
-        if self._initialization_attempted:
-            return
-
-        self._initialization_attempted = True
-        try:
-            from fincept_terminal.Utils.Managers.theme_manager import AutomaticThemeManager
-            self.theme_manager = AutomaticThemeManager()
-            self.themes_available = True
-        except Exception:
-            self.themes_available = False
-
-    def apply_theme(self, theme_name: str) -> bool:
-        """OPTIMIZED: Apply theme with lazy initialization"""
-        self._lazy_initialize()
-
-        if not self.themes_available or not self.theme_manager:
-            return False
-
-        try:
-            self.theme_manager.apply_theme_globally(theme_name)
-            self.current_theme = theme_name
-            return True
-        except Exception as e:
-            error(f"Theme application failed: {theme_name} - {str(e)}", module='theme')
-            return False
-
-    def get_current_theme(self) -> str:
-        return self.current_theme
-
-    def get_available_themes(self) -> list:
-        self._lazy_initialize()
-        if not self.themes_available:
-            return []
-        return ["finance_terminal", "green_terminal", "dark_gold", "default"]
-
-    def cleanup(self):
-        """OPTIMIZED: Lightweight cleanup"""
-        try:
-            if self.theme_manager and hasattr(self.theme_manager, 'cleanup'):
-                self.theme_manager.cleanup()
-        except Exception:
-            pass  # Silent cleanup
-
-
 class HighPerformanceMainApplication:
     """OPTIMIZED: High-performance main application with minimal overhead"""
 
@@ -234,7 +179,8 @@ class HighPerformanceMainApplication:
         self.MIN_HEIGHT = 600
 
         # PERFORMANCE: Initialize managers with lazy loading
-        self.theme_manager = OptimizedThemeManager()
+        self.theme_manager = AutomaticThemeManager()
+        self.themes_available = False
         self.tab_importer = PerformantTabImporter()
 
         # Calculate responsive sizes
@@ -472,6 +418,16 @@ class HighPerformanceMainApplication:
             successful_tabs = 0
             failed_tabs = 0
 
+            # ADD FONT TEST BEFORE CREATING TABS
+            if hasattr(self.theme_manager, 'terminal_font') and self.theme_manager.terminal_font:
+                try:
+                    # Test: Create a text element and explicitly bind font to it
+                    dpg.add_text("FONT TEST - This should be Oswald2", tag="font_test_text")
+                    dpg.bind_item_font("font_test_text", self.theme_manager.terminal_font)
+                    print(f"[FONT DEBUG] Explicitly bound font to test text: {self.theme_manager.terminal_font}")
+                except Exception as e:
+                    print(f"[FONT DEBUG] Item font binding failed: {e}")
+
             # Create tabs efficiently
             for tab_name, tab_instance in self.tabs.items():
                 try:
@@ -488,6 +444,17 @@ class HighPerformanceMainApplication:
                     # Add content with error protection
                     try:
                         dpg.push_container_stack(tab_id)
+
+                        # FONT DEBUG: Try to apply font to tab content
+                        if hasattr(self.theme_manager, 'terminal_font') and self.theme_manager.terminal_font:
+                            try:
+                                # Apply font to the tab container
+                                dpg.bind_item_font(tab_id, self.theme_manager.terminal_font)
+                                print(
+                                    f"[FONT DEBUG] Applied font to tab {tab_name}: {self.theme_manager.terminal_font}")
+                            except Exception as font_error:
+                                print(f"[FONT DEBUG] Failed to apply font to tab {tab_name}: {font_error}")
+
                         tab_instance.create_content()
                         dpg.pop_container_stack()
                         successful_tabs += 1
@@ -519,6 +486,27 @@ class HighPerformanceMainApplication:
                 except Exception as tab_error:
                     error(f"Tab creation failed: {tab_name} - {str(tab_error)}", module='main')
                     failed_tabs += 1
+
+            # AGGRESSIVE FONT APPLICATION AFTER ALL TABS ARE CREATED
+            print("[FONT DEBUG] Applying fonts to all created elements...")
+            if hasattr(self.theme_manager, 'terminal_font') and self.theme_manager.terminal_font:
+                try:
+                    # Re-bind global font after all tabs are created
+                    dpg.bind_font(self.theme_manager.terminal_font)
+                    print(f"[FONT DEBUG] Re-applied global font after tab creation: {self.theme_manager.terminal_font}")
+
+                    # Try to bind font to specific elements
+                    for tab_name in self.tabs.keys():
+                        tab_id = f"tab_{tab_name}"
+                        try:
+                            if dpg.does_item_exist(tab_id):
+                                dpg.bind_item_font(tab_id, self.theme_manager.terminal_font)
+                                print(f"[FONT DEBUG] Applied font to existing tab {tab_name}")
+                        except Exception as e:
+                            print(f"[FONT DEBUG] Failed to apply font to tab {tab_name}: {e}")
+
+                except Exception as e:
+                    print(f"[FONT DEBUG] Global font re-application failed: {e}")
 
             # Initialize tab navigation
             self.current_visible_tab_start = 0
@@ -671,7 +659,11 @@ class HighPerformanceMainApplication:
     def apply_theme_safe(self, theme_name: str):
         """Safely apply theme"""
         try:
-            success = self.theme_manager.apply_theme(theme_name)
+            # Try to setup fonts first
+            if not hasattr(self.theme_manager, 'font_registry_created'):
+                self.theme_manager.setup_fonts()
+
+            success = self.theme_manager.apply_theme_globally(theme_name)
             if success:
                 info(f"Theme applied: {theme_name}", module='theme')
             else:
@@ -910,13 +902,15 @@ class HighPerformanceMainApplication:
                 min_width=self.MIN_WIDTH,
                 min_height=self.MIN_HEIGHT,
                 resizable=True,
-                vsync=True
+                vsync=True,
+                small_icon="fincept.ico",  # For window title bar
+                large_icon="fincept.ico"  # For taskbar
             )
 
             dpg.setup_dearpygui()
             dpg.set_primary_window("Primary Window", True)
 
-            # PERFORMANCE: Apply theme after main UI is ready (lazy loading)
+            # Apply theme (which will handle font setup internally)
             self.apply_theme_safe("finance_terminal")
 
             # Set up callbacks
@@ -927,8 +921,34 @@ class HighPerformanceMainApplication:
 
             info(f"Startup completed - {len(self.tabs)} tabs loaded", module='main')
 
-            # Show viewport and start main loop
+            # Show viewport
             dpg.show_viewport()
+
+            # FINAL FONT APPLICATION - After everything is ready
+            def apply_font_when_ready():
+                try:
+                    import time
+                    time.sleep(0.1)  # Small delay to let DearPyGUI settle
+
+                    # Ensure font is applied after everything is loaded
+                    if hasattr(self.theme_manager, 'ensure_font_applied'):
+                        success = self.theme_manager.ensure_font_applied()
+                        if success:
+                            print("[FONT DEBUG] Final font application successful")
+                        else:
+                            print("[FONT DEBUG] Final font application failed")
+                    else:
+                        print("[FONT DEBUG] ensure_font_applied method not available")
+
+                except Exception as e:
+                    print(f"[FONT DEBUG] Final font application failed: {e}")
+
+            # Apply font in background thread to avoid blocking UI
+            import threading
+            font_thread = threading.Thread(target=apply_font_when_ready, daemon=True)
+            font_thread.start()
+
+            # Start main loop
             dpg.start_dearpygui()
 
         except Exception as e:
@@ -968,7 +988,8 @@ class HighPerformanceMainApplication:
 
             # Cleanup theme manager
             try:
-                self.theme_manager.cleanup()
+                if self.theme_manager and hasattr(self.theme_manager, 'cleanup'):
+                    self.theme_manager.cleanup()
             except Exception:
                 pass
 

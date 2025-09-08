@@ -11,9 +11,9 @@ import random
 import datetime
 import math
 import json
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 
-from fincept_terminal.Utils.Logging.logger import logger
+from fincept_terminal.utils.Logging.logger import logger
 
 class GeopoliticalAnalysisTab(BaseTab):
     """Comprehensive Geopolitical Analysis Dashboard for Financial Markets"""

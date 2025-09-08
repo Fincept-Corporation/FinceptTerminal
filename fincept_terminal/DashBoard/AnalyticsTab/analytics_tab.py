@@ -2,7 +2,7 @@
 # analytics_tab.py (Permanent Fix - All logging issues resolved)
 
 import dearpygui.dearpygui as dpg
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 from fincept_terminal.DatabaseConnector.DataSources.data_source_manager import get_data_source_manager
 
 # PERMANENT FIX: Set up global debug function before any other imports
@@ -13,7 +13,7 @@ import builtins
 def safe_info(msg, module=None, context=None):
     """Safe info logging that never fails"""
     try:
-        from fincept_terminal.Utils.Logging.logger import info
+        from fincept_terminal.utils.Logging.logger import info
         info(msg, module, context)
     except:
         pass
@@ -22,7 +22,7 @@ def safe_info(msg, module=None, context=None):
 def safe_debug(msg, module=None, context=None):
     """Safe debug logging that never fails"""
     try:
-        from fincept_terminal.Utils.Logging.logger import debug
+        from fincept_terminal.utils.Logging.logger import debug
         debug(msg, module, context)
     except:
         pass
@@ -31,7 +31,7 @@ def safe_debug(msg, module=None, context=None):
 def safe_warning(msg, module=None, context=None):
     """Safe warning logging that never fails"""
     try:
-        from fincept_terminal.Utils.Logging.logger import warning
+        from fincept_terminal.utils.Logging.logger import warning
         warning(msg, module, context)
     except:
         pass
@@ -40,7 +40,7 @@ def safe_warning(msg, module=None, context=None):
 def safe_error(msg, module=None, context=None, exc_info=False):
     """Safe error logging that never fails"""
     try:
-        from fincept_terminal.Utils.Logging.logger import error
+        from fincept_terminal.utils.Logging.logger import error
         error(msg, module, context, exc_info)
     except:
         pass
@@ -49,7 +49,7 @@ def safe_error(msg, module=None, context=None, exc_info=False):
 def safe_operation(name, module=None, **kwargs):
     """Safe operation context that never fails"""
     try:
-        from fincept_terminal.Utils.Logging.logger import operation
+        from fincept_terminal.utils.Logging.logger import operation
         return operation(name, module, **kwargs)
     except:
         from contextlib import contextmanager
@@ -63,7 +63,7 @@ def safe_operation(name, module=None, **kwargs):
 def safe_monitor_performance(func):
     """Safe performance monitor that never fails"""
     try:
-        from fincept_terminal.Utils.Logging.logger import monitor_performance
+        from fincept_terminal.utils.Logging.logger import monitor_performance
         return monitor_performance(func)
     except:
         return func

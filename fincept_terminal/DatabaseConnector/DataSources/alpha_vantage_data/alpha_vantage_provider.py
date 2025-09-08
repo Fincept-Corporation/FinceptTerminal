@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional, List
 from warnings import warn
 
-from fincept_terminal.Utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
+from fincept_terminal.utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
 
 
 class AlphaVantageProvider:
