@@ -19,7 +19,7 @@ from functools import lru_cache
 from pathlib import Path
 
 # Import the new logger
-from fincept_terminal.Utils.Logging.logger import logger, operation, monitor_performance
+from fincept_terminal.utils.Logging.logger import logger, operation, monitor_performance
 
 def get_portfolio_config_path():
     """Get portfolio configuration file path in .fincept directory"""

@@ -10,8 +10,8 @@ import io
 import numpy as np
 from datetime import datetime
 import webbrowser
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import info, error, warning, debug, monitor_performance, operation
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import info, error, warning, debug, monitor_performance, operation
 
 
 class WikipediaTab(BaseTab):

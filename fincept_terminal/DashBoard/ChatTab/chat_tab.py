@@ -6,10 +6,10 @@ import threading
 from datetime import datetime
 import uuid
 import re
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 
 # PERFORMANCE: Import only essential logging functions
-from fincept_terminal.Utils.Logging.logger import info, error, debug, warning
+from fincept_terminal.utils.Logging.logger import info, error, debug, warning
 
 
 class ChatTab(BaseTab):
@@ -65,7 +65,7 @@ class ChatTab(BaseTab):
     def _initialize_api_client(self):
         """PERFORMANCE: Initialize API client only when needed"""
         try:
-            from fincept_terminal.Utils.APIClient.api_client import create_api_client
+            from fincept_terminal.utils.APIClient.api_client import create_api_client
             self._api_client = create_api_client(self.app.get_session_data())
             self._api_client_initialized = True
             if self._api_client:

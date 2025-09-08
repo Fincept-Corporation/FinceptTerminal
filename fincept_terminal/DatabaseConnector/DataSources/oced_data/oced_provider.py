@@ -10,7 +10,7 @@ import ssl
 from io import StringIO
 import pandas as pd
 
-from fincept_terminal.Utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
+from fincept_terminal.utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
 from fincept_terminal.DatabaseConnector.DataSources.oced_data.constants import (
     COUNTRY_TO_CODE_GDP, CODE_TO_COUNTRY_GDP,
     COUNTRY_TO_CODE_CPI, CODE_TO_COUNTRY_CPI,

@@ -10,8 +10,8 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
 from fincept_terminal.DatabaseConnector.DataSources.data_source_manager import get_data_source_manager
 
 

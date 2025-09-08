@@ -2,8 +2,8 @@
 # watchlist_tab.py
 
 import dearpygui.dearpygui as dpg
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import logger, monitor_performance, operation
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import logger, monitor_performance, operation
 import datetime
 import threading
 import time

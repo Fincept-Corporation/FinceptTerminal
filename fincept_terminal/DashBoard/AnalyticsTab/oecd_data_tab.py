@@ -12,8 +12,8 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 import json
 
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
 
 
 def _fetch_data_in_process(indicator_config, params):

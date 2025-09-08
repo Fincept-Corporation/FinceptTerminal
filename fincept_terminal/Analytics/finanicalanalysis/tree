@@ -1,0 +1,34 @@
+financial_analysis/
+├── __init__.py
+├── core/
+│   ├── __init__.py
+│   ├── data_processor.py
+│   └── base_analyzer.py
+├── statement_analyzers/
+│   ├── __init__.py
+│   ├── income_statement.py        # Revenue/expense recognition, EPS, non-recurring items
+│   ├── balance_sheet.py           # Assets, liabilities, equity, common-size analysis
+│   ├── cash_flow.py              # Direct/indirect, IFRS vs GAAP, FCF
+│   └── comprehensive_analyzer.py  # Multi-statement integration
+├── specialized_analysis/
+│   ├── __init__.py
+│   ├── inventory_analysis.py      # Lower of cost/NRV, inflation effects
+│   ├── asset_analysis.py          # PPE, intangibles, impairment, leases
+│   ├── tax_analysis.py            # Deferred tax, effective vs statutory rates
+│   ├── quality_analysis.py        # Earnings quality, manipulation detection
+│   ├── intercorporate_investments.py  # Business combinations, associates, SPEs
+│   ├── employee_compensation.py    # Post-employment benefits, share-based comp
+│   ├── multinational_operations.py # Currency translation, hyperinflation
+│   └── financial_institutions.py   # CAMELS, bank/insurance analysis
+├── financial_modeling/
+│   ├── __init__.py
+│   ├── ratio_calculator.py        # All ratios: activity, liquidity, solvency, profitability
+│   ├── dupont_analysis.py         # ROE decomposition
+│   └── forecasting_models.py      # Pro forma, Porter's 5 forces, sales forecasting
+├── reporting/
+│   ├── __init__.py
+│   └── report_generator.py
+└── utils/
+    ├── __init__.py
+    ├── validators.py
+    └── constants.py

@@ -9,7 +9,7 @@ import json
 import os
 import time
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QPushButton, QLabel, QLineEdit, QComboBox
-from fincept_terminal.Utils.Logging.logger import logger, operation, monitor_performance
+from fincept_terminal.utils.Logging.logger import logger, operation, monitor_performance
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import Qt, QUrl, QTimer
 

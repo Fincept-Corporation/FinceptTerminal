@@ -2,12 +2,12 @@
 # portfolio_tab.py
 
 import dearpygui.dearpygui as dpg
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 import datetime
 import threading
 import time
 import random
-from fincept_terminal.Utils.Logging.logger import logger, operation, monitor_performance
+from fincept_terminal.utils.Logging.logger import logger, operation, monitor_performance
 from fincept_terminal.DashBoard.PortfolioTab.portfolio_business import PortfolioBusinessLogic
 
 

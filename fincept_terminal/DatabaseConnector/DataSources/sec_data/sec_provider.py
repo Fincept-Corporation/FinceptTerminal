@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, List, Union, Literal
 from warnings import warn
 import json
 
-from fincept_terminal.Utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
+from fincept_terminal.utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
 
 # Import utility functions
 from fincept_terminal.DatabaseConnector.DataSources.sec_data.utils.helpers import (

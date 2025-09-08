@@ -8,8 +8,8 @@ import threading
 from datetime import datetime
 import json
 import traceback
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import info, error, warning, debug, monitor_performance, operation
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import info, error, warning, debug, monitor_performance, operation
 
 
 class DBnomicsTab(BaseTab):

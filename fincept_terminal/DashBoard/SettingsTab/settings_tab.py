@@ -11,8 +11,8 @@ from datetime import datetime
 import threading
 import time
 
-from fincept_terminal.Utils.base_tab import BaseTab
-from fincept_terminal.Utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
+from fincept_terminal.utils.base_tab import BaseTab
+from fincept_terminal.utils.Logging.logger import info, debug, warning, error, operation, monitor_performance
 
 
 class SettingsManager:

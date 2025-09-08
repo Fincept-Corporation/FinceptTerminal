@@ -3,8 +3,8 @@
 
 import dearpygui.dearpygui as dpg
 from datetime import datetime
-from fincept_terminal.Utils.config import is_strict_mode
-from fincept_terminal.Utils.Logging.logger import info, warning, error, debug
+from fincept_terminal.utils.config import is_strict_mode
+from fincept_terminal.utils.Logging.logger import info, warning, error, debug
 
 
 class MenuToolbarManager:

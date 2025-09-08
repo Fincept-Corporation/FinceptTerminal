@@ -2,7 +2,7 @@
 # database_tab.py
 
 import dearpygui.dearpygui as dpg
-from fincept_terminal.Utils.base_tab import BaseTab
+from fincept_terminal.utils.base_tab import BaseTab
 import psycopg2
 import psycopg2.extras
 import threading
@@ -11,7 +11,7 @@ import datetime
 import csv
 
 # Import new logger module
-from fincept_terminal.Utils.Logging.logger import (
+from fincept_terminal.utils.Logging.logger import (
     info, debug, warning, error, operation, monitor_performance
 )
 
