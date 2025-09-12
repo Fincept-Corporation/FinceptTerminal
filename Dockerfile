@@ -1,40 +1,70 @@
-# Use the official Python image with Python 3.11
-FROM python:3.11-slim
+# Multi-stage build to reduce final image size
+FROM python:3.11-slim as builder
 
-ENV GDAL_VERSION=3.6.3
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app/finceptTerminal
+ENV DEBIAN_FRONTEND=noninteractive
 
-WORKDIR /app
-
-# Install system dependencies (REMOVED qt5-default)
+# Install build dependencies in builder stage
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    gdal-bin \
-    libgdal-dev \
-    libpq-dev \
-    libmariadb-dev \
+    g++ \
     python3-dev \
     build-essential \
     pkg-config \
-    libqt5webkit5-dev \
-    libqt5webengine5 \
-    libqt5webenginewidgets5 \
+    libpq-dev \
+    libmariadb-dev \
     curl \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
-# Install PDM for pyproject.toml-based dependency management
+# Install PDM
 RUN pip install --no-cache-dir pdm
 
-# Copy pyproject only
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files
 COPY pyproject.toml README.md ./
 
-# Install dependencies via PDM
-RUN pdm install --no-editable --prod
+# Install dependencies to a specific location
+RUN pdm install --no-editable --prod --no-self
 
-# Copy the full project
+# Final stage - runtime image
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+ENV DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /app
+
+# Install only runtime dependencies (much smaller list)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libmariadb3 \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/cache/apt/archives/* \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
+
+# Copy Python packages from builder stage
+COPY --from=builder /app/.venv /app/.venv
+
+# Copy application code
 COPY . .
 
-# Run the app
-CMD ["pdm", "run", "python", "-m", "fincept_terminal.FinceptTerminalStart"]
+# Make sure we can run the virtual environment
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Create non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# Run the application
+CMD ["python", "-m", "fincept_terminal.FinceptTerminalStart"]

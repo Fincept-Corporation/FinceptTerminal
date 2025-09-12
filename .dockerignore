@@ -1,17 +1,34 @@
+# Git files
+.git/
+.gitignore
+.gitattributes
+.gitmodules
+
+# Documentation
+README.md
+*.md
+docs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
 
 # Distribution / packaging
 build/
 dist/
 *.egg-info/
+*.egg
+MANIFEST
 
 # Virtual environments
 finceptvenv/
 .venv/
 env/
 ENV/
+venv/
+.env
 
 # Installer logs
 pip-log.txt
@@ -21,24 +38,41 @@ pip-delete-this-directory.txt
 htmlcov/
 .tox/
 .coverage
+.coverage.*
 .cache
 nosetests.xml
 coverage.xml
+*.cover
+*.log
+.hypothesis/
+.pytest_cache/
 
 # PyInstaller
 *.spec
 
 # macOS specific files
 .DS_Store
+.AppleDouble
+.LSOverride
 
 # Windows specific files
 Thumbs.db
 desktop.ini
+*.tmp
+*.temp
+
+# Linux specific files
+*~
 
 # Tools and editors
 .idea/
 .vscode/
 cmder/
+*.swp
+*.swo
+.vim/
+.emacs.d/
+*.sublime-*
 
 # Output directories
 Output/
@@ -49,4 +83,82 @@ setup.py
 FinceptTerminal.exe
 launcher.cpp
 
+# Docker files (don't copy these into the image)
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
 
+# Development and testing
+tests/
+test/
+.pytest_cache/
+.mypy_cache/
+.bandit
+.flake8
+
+# Logs and databases
+*.log
+*.sqlite
+*.sqlite3
+*.db
+logs/
+*.pid
+
+# Runtime data
+data/
+cache/
+tmp/
+temp/
+
+# PDM specific (since you're using PDM)
+.pdm.toml
+.pdm-python
+__pypackages__/
+.pdm-build/
+
+# Node.js (if you have any JS assets)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Environment variables (security)
+.env*
+!.env.example
+
+# OS generated files
+*.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and editors
+*.sublime-project
+*.sublime-workspace
+.vscode/
+.idea/
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Compiled extensions
+*.o
+*.a
+*.la
+*.lo
+*.lai
+*.so.*
+
+# Temporary files
+*.tmp
+*.temp
+*~
