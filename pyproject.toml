@@ -14,26 +14,42 @@ classifiers = [
 ]
 
 dependencies = [
-    "Pillow==11.2.1",
-    "PyPDF2==2.12.1",
-    "PyQt5==5.15.11",
-    "datagovindia==1.0.2",
-    "dearpygui==2.0.0",
-    "feedparser==6.0.11",
-    "fyers_apiv3==3.1.4",
-    "numpy==2.2.6",
-    "pandas==2.2.3",
-    "psutil==7.0.0",
-    "psycopg2==2.9.10",
-    "pyotp==2.9.0",
-    "requests==2.31.0",
-    "scholarly==1.7.11",
-    "scipy==1.15.3",
-    "ta==0.11.0",
-    "uuid==1.30",
-    "wikipedia==1.4.0",
-    "yfinance==0.2.61",
-    "duckdb==1.3.2"
+    "Pillow>=11.0.0,<12.0.0",
+    "PyPDF2>=2.12.0,<4.0.0",
+    "PyQt5>=5.15.0,<6.0.0",
+    "datagovindia>=1.0.0,<2.0.0",
+    "dearpygui>=2.0.0,<3.0.0",
+    "feedparser>=6.0.0,<7.0.0",
+    "fyers_apiv3>=3.1.0,<4.0.0",
+    "numpy>=1.24.0,<3.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "psutil>=5.9.0,<8.0.0",
+    "psycopg2-binary>=2.9.0,<3.0.0",
+    "pyotp>=2.9.0,<3.0.0",
+    "requests>=2.31.0,<3.0.0",
+    "scholarly>=1.7.0,<2.0.0",
+    "scipy>=1.10.0,<2.0.0",
+    "ta>=0.11.0,<1.0.0",
+    "uuid>=1.30,<2.0.0",
+    "wikipedia>=1.4.0,<2.0.0",
+    "yfinance>=0.2.0,<1.0.0",
+    "duckdb>=1.0.0,<2.0.0",
+    # Additional dependencies for the AI hedge fund system
+    "asyncio-mqtt>=0.16.0,<1.0.0",
+    "aiohttp>=3.8.0,<4.0.0",
+    "redis>=5.0.0,<6.0.0",
+    "openai>=1.0.0,<2.0.0",
+    "textblob>=0.17.0,<1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -45,3 +61,14 @@ fincept = "fincept_terminal.FinceptTerminalStart:start_terminal"
 [build-system]
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 100
