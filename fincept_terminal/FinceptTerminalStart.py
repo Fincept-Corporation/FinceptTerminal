@@ -1099,7 +1099,7 @@ def main():
         else:
             # Show authentication splash
             try:
-                from fincept_terminal.Utils.Authentication.splash_auth import show_authentication_splash
+                from fincept_terminal.utils.Authentication.splash_auth import show_authentication_splash
                 is_first_time = session_manager.is_first_time_user()
                 info(f"Showing authentication splash - First time: {is_first_time}", module='main')
                 session_data = show_authentication_splash(is_first_time_user=is_first_time)
