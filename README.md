@@ -63,7 +63,7 @@
 
 ### **Option 1: Install via `pip` (Recommended)**
 ```bash
-pip install fincept-terminal==2.0.3
+pip install fincept-terminal
 ```
 
 ### **Option 2: Virtual Environment Setup**
@@ -77,7 +77,7 @@ fincept-env\Scripts\activate
 source fincept-env/bin/activate
 
 # Install Fincept Terminal
-pip install fincept-terminal==2.0.3
+pip install fincept-terminal
 ```
 
 ### **Option 3: Desktop App** 
