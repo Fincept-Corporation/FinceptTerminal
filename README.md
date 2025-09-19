@@ -10,6 +10,40 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/) [![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/) [![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/) [![Instagram](https://img.shields.io/badge/-Instagram-E4405F?style=flat-square&logo=instagram&logoColor=white)](https://www.instagram.com/) [![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal) [![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
+
+## 🚀 Major Platform Upgrade: Moving to Tauri
+
+> **Important Update:** Fincept Terminal is transitioning from DearPyGUI to **Tauri** for enhanced performance and development capabilities.
+
+### Why the Switch?
+
+| DearPyGUI | Tauri |
+|-----------|-------|
+| Python-based GUI | Modern web technologies (React + Rust) |
+| Limited styling options | Full CSS customization |
+| Desktop-only | Cross-platform (Windows, macOS, Linux) |
+| Single-threaded | Multi-threaded performance |
+
+### What This Means for Users
+
+- **🎨 Modern UI/UX** - Sleek, professional interface with advanced styling
+- **⚡ Better Performance** - Faster rendering and data processing
+- **📱 Future Mobile Support** - Foundation for mobile companion app
+- **🔧 Enhanced Features** - More development flexibility for advanced tools
+
+### Migration Timeline
+
+- **Current**: DearPyGUI version remains fully supported
+- **Q3 2025**: Tauri beta release alongside existing version
+- **Q4 2025**: Complete migration with feature parity + new capabilities
+
+**[Try the new Tauri version →](https://github.com/Fincept-Corporation/FinceptTerminal/tree/tauri-migration)** *(Development branch)*
+
+
+
+
+
+
 ### *Professional Financial Analysis Platform*
 **The GUI-powered investment terminal that brings Bloomberg-level insights to everyone**
 
