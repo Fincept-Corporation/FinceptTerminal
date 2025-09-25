@@ -64,7 +64,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 ## Reporting Guidelines
 
 ### How to Report
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at [INSERT EMAIL].
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at support@fincept.in 
 
 ### What to Include
 When reporting, please include:
@@ -106,7 +106,7 @@ Community leaders will follow these Community Impact Guidelines in determining t
 
 If you believe you have been unfairly accused or sanctioned, you may appeal the decision by:
 
-1. Sending an email to [INSERT APPEALS EMAIL] within 14 days
+1. Sending an email to support@fincept.in within 14 days
 2. Including your full name, the incident in question, and reason for appeal
 3. Providing any additional context or evidence
 
