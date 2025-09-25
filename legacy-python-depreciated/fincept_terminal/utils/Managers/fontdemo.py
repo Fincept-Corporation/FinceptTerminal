@@ -5,10 +5,10 @@ dpg.create_context()
 
 # Check if font files exist
 oswald_exists = os.path.exists("oswald.ttf")
-oswald2_exists = os.path.exists("oswald2.ttf")
+oswald2_exists = os.path.exists("oswald2222.ttf")
 
 print(f"oswald.ttf exists: {oswald_exists}")
-print(f"oswald2.ttf exists: {oswald2_exists}")
+print(f"oswald2222.ttf exists: {oswald2_exists}")
 
 try:
     with dpg.font_registry():
@@ -18,8 +18,8 @@ try:
             oswald_large = dpg.add_font("oswald.ttf", 24)
 
         if oswald2_exists:
-            oswald2_font = dpg.add_font("oswald2.ttf", 16)
-            oswald2_large = dpg.add_font("oswald2.ttf", 24)
+            oswald2_font = dpg.add_font("oswald2222.ttf", 16)
+            oswald2_large = dpg.add_font("oswald2222.ttf", 24)
 
     with dpg.window(label="Font Demo", width=400, height=300):
         dpg.add_text("Default Font: The quick brown fox jumps over the lazy dog")
@@ -40,7 +40,7 @@ try:
             dpg.add_text("Oswald2 24px: Financial Terminal Text")
             dpg.bind_item_font(dpg.last_item(), oswald2_large)
         else:
-            dpg.add_text("oswald2.ttf NOT FOUND", color=[255, 0, 0])
+            dpg.add_text("oswald2222.ttf NOT FOUND", color=[255, 0, 0])
 
 except Exception as e:
     with dpg.window(label="Font Error", width=400, height=200):
