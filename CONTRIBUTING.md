@@ -1,288 +1,252 @@
-# Contributing to Fincept Terminals
+# Contributing to Fincept Terminal
 
 Welcome to the Fincept Terminal community! Your contributions help build the future of open-source financial technology.
 
-## Project Architecture Overview
+## 🏗️ Tech Stack
 
-Fincept Terminal uses a **Hybrid MVP (Model-View-Presenter) + Services** architecture designed for massive scalability and modular development. This architecture allows thousands of developers to contribute independently without breaking existing functionality.
+- **Frontend**: React + TypeScript + shadcn/ui
+- **Desktop**: Tauri (Rust)
+- **Backend**: Python/Node.js sidecar processes
+- **Heavy Processing**: Rust (when needed)
 
-### Why This Architecture?
-
-- **Modularity**: Add new features without affecting existing code
-- **Team Collaboration**: Different teams can work on different layers simultaneously  
-- **Easy Testing**: Each layer can be tested in isolation
-- **Beginner Friendly**: Clear separation makes it easy to understand and contribute
-- **Bloomberg Scale**: Designed to handle thousands of data sources and features
-
-## Directory Structure
+## 📁 Project Structure
 
 ```
-/fincept_terminal
-├── /models               # Data structures and entities
-│   ├── /analytics
-│   │   └── analytics_models.py
-│   ├── /dashboard
-│   │   └── dashboard_models.py
-│   ├── /portfolio
-│   │   └── portfolio_models.py
-│   ├── /watchlist
-│   │   └── watchlist_models.py
-│   └── /shared          # Models used by 2+ modules
-│       └── common_models.py
-├── /services            # Data fetching and processing
-│   ├── /analytics
-│   │   └── analytics_service.py
-│   ├── /dashboard
-│   │   └── dashboard_service.py
-│   ├── /portfolio
-│   │   └── portfolio_service.py
-│   ├── /watchlist
-│   │   └── watchlist_service.py
-│   └── /shared          # Services used by 2+ modules
-│       └── api_service.py
-├── /presenters          # Business logic and coordination
-│   ├── /analytics
-│   │   └── analytics_presenter.py
-│   ├── /dashboard
-│   │   └── dashboard_presenter.py
-│   ├── /portfolio
-│   │   └── portfolio_presenter.py
-│   ├── /watchlist
-│   │   └── watchlist_presenter.py
-│   └── /shared          # Inter-module communication
-│       └── event_bus.py
-├── /views               # User interface components
-│   ├── /analytics
-│   │   └── analytics_view.py
-│   ├── /dashboard
-│   │   └── dashboard_view.py
-│   ├── /portfolio
-│   │   └── portfolio_view.py
-│   ├── /watchlist
-│   │   └── watchlist_view.py
-│   └── /shared          # Reusable UI components
-│       ├── chart_components.py
-│       └── common_widgets.py
-├── /utils               # Global utilities (logging, validation, etc.)
-│   ├── logging.py
-│   ├── validators.py
-│   └── formatters.py
-└── /core                # Framework core and base classes
-    ├── base_tab.py
-    ├── base_service.py
-    └── app_config.py
+/src-tauri          # Rust backend (Tauri core)
+├── /src
+│   └── main.rs     # Main Tauri application
+├── /sidecar        # Python/Node.js processes
+│   ├── /python     # Financial calculations & ML
+│   └── /nodejs     # API services & data processing
+└── Cargo.toml
+
+/src                # React frontend
+├── /components     # Reusable UI components (shadcn/ui)
+├── /pages          # Main application pages
+├── /hooks          # Custom React hooks
+├── /lib            # Utilities and API calls
+├── /types          # TypeScript type definitions
+└── /assets         # Static assets
+
+/public             # Static files
 ```
 
-## Architecture Layers
+## 🎯 Contribution Areas
 
-### 1. Models Layer (`/models`)
-**Purpose**: Define data structures, entities, and business objects
+### Frontend (React + TypeScript)
+- **Components**: Build reusable UI with shadcn/ui
+- **Pages**: Create new financial analysis modules
+- **Charts**: Implement trading charts and visualizations
+- **Hooks**: Add data fetching and state management
 
-**What goes here**:
-- Data classes and dataclasses
-- Entity definitions (Stock, Portfolio, News, etc.)
-- Configuration objects
-- Enums and constants
+### Backend Services (Python/Node.js Sidecars)
+- **Data Fetching**: Add new market data sources
+- **Financial Analysis**: Implement trading algorithms
+- **ML Models**: Add predictive analytics
+- **API Integration**: Connect external financial APIs
 
-**Example**:
+### Rust (Heavy Processing Only)
+- **Performance-Critical**: Only when Python/Node.js isn't fast enough
+- **System Integration**: File system, OS-level operations
+- **Security**: Sensitive operations requiring Rust safety
+
+## 🚀 Getting Started
+
+### Prerequisites
+```bash
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install Node.js & pnpm
+npm install -g pnpm
+
+# Install Python dependencies
+pip install -r requirements.txt
+```
+
+### Development Setup
+```bash
+# Clone repository
+git clone https://github.com/Fincept-Corporation/FinceptTerminal
+cd FinceptTerminal
+
+# Install frontend dependencies  
+pnpm install
+
+# Run development server
+pnpm tauri dev
+```
+
+## 📋 Contribution Guidelines
+
+### 1. Frontend Contributions
+**Focus**: React components, TypeScript, shadcn/ui
+
+```typescript
+// Example: New component
+import { Card, CardHeader, CardTitle } from "@/components/ui/card"
+
+export function StockCard({ symbol, price }: StockCardProps) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{symbol}: ${price}</CardTitle>
+      </CardHeader>
+    </Card>
+  )
+}
+```
+
+**Guidelines**:
+- Use shadcn/ui components
+- Add TypeScript types for all props
+- Follow React best practices
+- Write responsive designs
+
+### 2. Backend Contributions  
+**Focus**: Python/Node.js sidecar processes
+
 ```python
-# models/dashboard/stock_data.py
-@dataclass
-class StockData:
-    symbol: str
-    price: float
-    change_pct: float
-    volume: int
+# Example: Python sidecar for financial data
+def fetch_stock_data(symbols: list[str]) -> dict:
+    # Fetch data from APIs
+    # Process and return
+    return processed_data
 ```
 
-**Contribution Guidelines**:
-- Use dataclasses for simple data containers
-- Include validation methods
-- Add type hints to all fields
-- Document all fields with docstrings
+**Guidelines**:
+- Use Python for ML/financial calculations
+- Use Node.js for API services
+- Handle errors gracefully
+- Add proper logging
 
-### 2. Services Layer (`/services`)
-**Purpose**: Handle data fetching, API calls, and data processing
+### 3. Rust Contributions
+**Focus**: Only performance-critical operations
 
-**What goes here**:
-- External API integrations
-- Data fetching logic
-- Data transformation and processing
-- Caching mechanisms
-- Error handling for data operations
-
-**Example**:
-```python
-# services/dashboard/market_data_service.py
-class MarketDataService:
-    def fetch_stock_data(self, symbols: List[str]) -> Dict[str, StockData]:
-        # API calls and data processing
+```rust
+// Example: High-performance calculation
+#[tauri::command]
+async fn calculate_portfolio_risk(data: Vec<f64>) -> f64 {
+    // Heavy mathematical operations
+    data.iter().sum::<f64>() / data.len() as f64
+}
 ```
 
-**Contribution Guidelines**:
-- Handle all errors gracefully with fallback data
-- Use concurrent programming for multiple API calls
-- Include comprehensive logging
-- Write data validation logic
-- Create mock/fallback data for testing
+**Guidelines**:
+- Only for heavy processing
+- Expose functions via `#[tauri::command]`
+- Use async when possible
 
-### 3. Presenters Layer (`/presenters`)
-**Purpose**: Business logic, state management, and coordination between views and services
+## 🔄 Development Workflow
 
-**What goes here**:
-- Business rules and logic
-- State management
-- Event handling
-- Data transformation for UI
-- Inter-module communication
+### Adding New Features
 
-**Example**:
-```python
-# presenters/dashboard/dashboard_presenter.py
-class DashboardPresenter:
-    def __init__(self, view, service):
-        self.view = view
-        self.service = service
-    
-    def refresh_data(self):
-        data = self.service.fetch_all_data()
-        self.view.update_display(data)
-```
+1. **Frontend Feature**:
+   ```bash
+   # Create component
+   /src/components/new-feature/
+   
+   # Add to page  
+   /src/pages/analytics/
+   ```
 
-**Contribution Guidelines**:
-- Keep business logic here, not in views
-- Manage application state
-- Handle user interactions
-- Coordinate between multiple services if needed
+2. **Backend Service**:
+   ```bash
+   # Python sidecar
+   /src-tauri/sidecar/python/new_service.py
+   
+   # Node.js sidecar  
+   /src-tauri/sidecar/nodejs/api-service.js
+   ```
 
-### 4. Views Layer (`/views`)
-**Purpose**: User interface and presentation logic only
-
-**What goes here**:
-- DearPyGui UI components
-- Chart creation and rendering
-- Event callbacks (but not logic)
-- UI updates and animations
-
-**Example**:
-```python
-# views/dashboard/dashboard_view.py
-class DashboardView(BaseTab):
-    def create_content(self):
-        # DearPyGui UI creation only
-        dpg.add_table(...)
-    
-    def update_stock_table(self, stocks):
-        # Update UI with new data
-```
-
-**Contribution Guidelines**:
-- Only DearPyGui code goes here
-- No business logic in views
-- Event handlers should call presenter methods
-- Focus on user experience and visual design
-
-## How to Contribute
-
-### Adding a New Feature
-
-1. **Choose Your Layer**: Decide which layer your contribution affects
-2. **Create Module Folders**: Add folders in relevant layers
-3. **Follow Naming Conventions**: Use clear, descriptive names
-
-**Example: Adding a "News Analysis" feature**
-```
-/app
-├── /models/news_analysis/
-│   ├── news_models.py
-│   └── sentiment_models.py
-├── /services/news_analysis/  
-│   ├── news_service.py
-│   └── sentiment_service.py
-├── /presenters/news_analysis/
-│   └── news_presenter.py
-└── /views/news_analysis/
-    └── news_view.py
-```
-
-### Partial Contributions Welcome
-
-You don't need to implement all layers! Contributions can be:
-
-**UI Only**: Work in `/views` folder
-- Design new charts or interfaces
-- Improve existing UI components
-- Add new visualization types
-
-**Data Only**: Work in `/services` folder  
-- Add new data sources (crypto exchanges, news APIs)
-- Improve data processing algorithms
-- Add new market indicators
-
-**Business Logic Only**: Work in `/presenters` folder
-- Add new analysis algorithms
-- Implement trading strategies  
-- Create data aggregation logic
-
-**Models Only**: Work in `/models` folder
-- Define new data structures
-- Add validation logic
-- Create configuration objects
-
-### Inter-Module Communication
-
-When features need to communicate:
-
-1. **Add to `/shared` folders**: Common code goes in shared directories
-2. **Use Presenter Layer**: Inter-module communication happens in presenters
-3. **Avoid Direct Dependencies**: Modules should not directly import each other
+3. **Connect Frontend to Backend**:
+   ```typescript
+   // API call from React
+   import { invoke } from '@tauri-apps/api/tauri'
+   
+   const data = await invoke('fetch_market_data', { symbols })
+   ```
 
 ### File Naming Conventions
+- **Components**: `PascalCase` (e.g., `StockChart.tsx`)
+- **Pages**: `kebab-case` (e.g., `market-analysis.tsx`)  
+- **Hooks**: `camelCase` starting with `use` (e.g., `useMarketData.ts`)
+- **Types**: `PascalCase` with `Props` suffix (e.g., `StockCardProps`)
 
-- **Models**: `*_models.py` (e.g., `stock_models.py`)
-- **Services**: `*_service.py` (e.g., `market_data_service.py`)  
-- **Presenters**: `*_presenter.py` (e.g., `dashboard_presenter.py`)
-- **Views**: `*_view.py` (e.g., `analytics_view.py`)
+## 🎨 UI/UX Guidelines
 
-### Code Quality Standards
+### Using shadcn/ui
+```typescript
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card } from "@/components/ui/card"
 
-1. **Type Hints**: Use type hints for all function parameters and returns
-2. **Docstrings**: Document all classes and public methods
-3. **Error Handling**: Include comprehensive error handling
-4. **Logging**: Use the shared logging system for debugging
-5. **Testing**: Write unit tests for your contributions
+// Always use shadcn components when available
+<Button variant="default">Analyze</Button>
+```
 
-### Getting Started
+### Responsive Design
+```typescript
+// Use Tailwind classes for responsiveness
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {/* Components */}
+</div>
+```
 
-1. **Fork the Repository**
-2. **Choose a Feature**: Pick something you want to work on
-3. **Create Module Structure**: Add necessary folders
-4. **Start Small**: Begin with models or a simple service
-5. **Submit PR**: Submit your contribution for review
+## 🧪 Testing
 
-### Examples for New Contributors
+### Frontend Tests
+```bash
+pnpm test          # Run React tests
+pnpm test:e2e      # End-to-end tests
+```
 
-**Easy Contributions**:
-- Add a new stock exchange data source
-- Create a new chart type for existing data
-- Add a new economic indicator
-- Improve error messages
+### Backend Tests  
+```bash
+pytest             # Python sidecar tests
+npm test           # Node.js sidecar tests
+```
 
-**Medium Contributions**:
-- Add crypto portfolio tracking
-- Implement technical analysis indicators
-- Create news sentiment analysis
-- Add export/import functionality
+## 📝 Code Quality
 
-**Advanced Contributions**:
-- Add real-time streaming data
-- Implement machine learning features
-- Create plugin system for external modules
-- Add advanced backtesting capabilities
+### TypeScript
+- Use strict type checking
+- Add interfaces for all data structures
+- Avoid `any` types
 
-## Questions?
+### React Best Practices
+- Use functional components with hooks
+- Implement proper error boundaries  
+- Add loading states
 
-- Read existing code in `/app` to understand patterns
-- Check `/utils` for shared utilities you can use
-- Look at `/core` for base classes to inherit from
-- Submit an issue if you need clarification
+### Python/Node.js
+- Follow PEP 8 (Python) / ESLint (Node.js)
+- Add type hints (Python) / JSDoc (Node.js)
+- Handle async operations properly
+
+## 🚀 Deployment
+
+### Build Commands
+```bash
+pnpm tauri build   # Build for production
+pnpm tauri build --debug  # Debug build
+```
+
+## 📞 Getting Help
+
+- **GitHub Issues**: Report bugs and request features
+- **Discussions**: Ask questions and share ideas  
+- **Email**: support@fincept.in
+
+## 🎯 Easy First Contributions
+
+- Add new shadcn/ui components
+- Create new chart visualizations
+- Add financial data sources
+- Improve TypeScript types
+- Write documentation
+- Add unit tests
+
+---
+
+**Start small, think big!** Every contribution helps build better financial technology for everyone.
