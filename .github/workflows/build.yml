@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   build:
@@ -115,9 +115,8 @@ jobs:
             echo "version=1.0.0" >> $GITHUB_OUTPUT
           fi
 
-      - name: Update README with download links
+      - name: Create download section
         run: |
-          # Get the run ID and commit SHA
           RUN_ID="${{ github.run_id }}"
           COMMIT_SHA="${{ github.sha }}"
           SHORT_SHA=${COMMIT_SHA:0:7}
@@ -125,48 +124,37 @@ jobs:
           REPO_URL="https://github.com/${{ github.repository }}"
           CURRENT_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           
-          # Create the download links section
-          cat > download_section.md << 'EOF'
-## 📥 Download Latest Build
+          echo "## 📥 Download Latest Build" > download_section.md
+          echo "" >> download_section.md
+          echo "**Version:** \`v${VERSION}\` | **Commit:** \`${SHORT_SHA}\` | **Build:** [#${RUN_ID}](${REPO_URL}/actions/runs/${RUN_ID}) | **Updated:** ${CURRENT_DATE}" >> download_section.md
+          echo "" >> download_section.md
+          echo "| Platform | Architecture | Download |" >> download_section.md
+          echo "|----------|-------------|----------|" >> download_section.md
+          echo "| 🍎 **macOS** | Apple Silicon (ARM64) | [![Download](https://img.shields.io/badge/Download-macOS%20ARM64-blue?style=for-the-badge&logo=apple)](${REPO_URL}/actions/runs/${RUN_ID}/artifacts) |" >> download_section.md
+          echo "| 🍎 **macOS** | Intel (x64) | [![Download](https://img.shields.io/badge/Download-macOS%20x64-blue?style=for-the-badge&logo=apple)](${REPO_URL}/actions/runs/${RUN_ID}/artifacts) |" >> download_section.md
+          echo "| 🐧 **Linux** | x64 | [![Download](https://img.shields.io/badge/Download-Linux%20x64-green?style=for-the-badge&logo=linux)](${REPO_URL}/actions/runs/${RUN_ID}/artifacts) |" >> download_section.md
+          echo "| 🪟 **Windows** | x64 | [![Download](https://img.shields.io/badge/Download-Windows%20x64-red?style=for-the-badge&logo=windows)](${REPO_URL}/actions/runs/${RUN_ID}/artifacts) |" >> download_section.md
+          echo "" >> download_section.md
+          echo "> **Note:** Click on the download buttons above to access the artifacts page, then download the specific build for your platform." >> download_section.md
+          echo "" >> download_section.md
+          echo "### 📋 Installation Instructions" >> download_section.md
+          echo "" >> download_section.md
+          echo "- **macOS**: Download the \`.dmg\` file, open it, and drag FinceptTerminal to Applications" >> download_section.md
+          echo "- **Linux**: Download the \`.AppImage\` file, make it executable (\`chmod +x\`), and run" >> download_section.md
+          echo "- **Windows**: Download the \`.msi\` file and run the installer" >> download_section.md
+          echo "" >> download_section.md
+          echo "---" >> download_section.md
 
-**Version:** `v$VERSION` | **Commit:** `$SHORT_SHA` | **Build:** [#$RUN_ID]($REPO_URL/actions/runs/$RUN_ID) | **Updated:** $CURRENT_DATE
-
-| Platform | Architecture | Download |
-|----------|-------------|----------|
-| 🍎 **macOS** | Apple Silicon (ARM64) | [![Download](https://img.shields.io/badge/Download-macOS%20ARM64-blue?style=for-the-badge&logo=apple)]($REPO_URL/actions/runs/$RUN_ID/artifacts) |
-| 🍎 **macOS** | Intel (x64) | [![Download](https://img.shields.io/badge/Download-macOS%20x64-blue?style=for-the-badge&logo=apple)]($REPO_URL/actions/runs/$RUN_ID/artifacts) |
-| 🐧 **Linux** | x64 | [![Download](https://img.shields.io/badge/Download-Linux%20x64-green?style=for-the-badge&logo=linux)]($REPO_URL/actions/runs/$RUN_ID/artifacts) |
-| 🪟 **Windows** | x64 | [![Download](https://img.shields.io/badge/Download-Windows%20x64-red?style=for-the-badge&logo=windows)]($REPO_URL/actions/runs/$RUN_ID/artifacts) |
-
-> **Note:** Click on the download buttons above to access the artifacts page, then download the specific build for your platform.
-
-### 📋 Installation Instructions
-
-- **macOS**: Download the `.dmg` file, open it, and drag FinceptTerminal to Applications
-- **Linux**: Download the `.AppImage` file, make it executable (`chmod +x`), and run
-- **Windows**: Download the `.msi` file and run the installer
-
----
-EOF
-          
-          # Replace variables in the template
-          sed -i "s/\$VERSION/$VERSION/g" download_section.md
-          sed -i "s/\$SHORT_SHA/$SHORT_SHA/g" download_section.md
-          sed -i "s/\$RUN_ID/$RUN_ID/g" download_section.md
-          sed -i "s|\$REPO_URL|$REPO_URL|g" download_section.md
-          sed -i "s/\$CURRENT_DATE/$CURRENT_DATE/g" download_section.md
-          
-          # Check if README exists
+      - name: Update README
+        run: |
           if [ ! -f "README.md" ]; then
             echo "Creating new README.md"
             echo "# FinceptTerminal" > README.md
             echo "" >> README.md
           fi
           
-          # Check if README has the download section markers
           if grep -q "<!-- DOWNLOAD_SECTION_START -->" README.md && grep -q "<!-- DOWNLOAD_SECTION_END -->" README.md; then
             echo "Updating existing download section"
-            # Create a temporary file with the new content
             awk '
               /<!-- DOWNLOAD_SECTION_START -->/ { 
                 print $0
@@ -181,9 +169,7 @@ EOF
             mv temp_readme.md README.md
           else
             echo "Adding new download section"
-            # Add markers and section after the first heading or at the beginning
             if grep -q "^# " README.md; then
-              # Insert after the first heading
               awk '
                 /^# / && !inserted { 
                   print $0
@@ -199,7 +185,6 @@ EOF
               ' README.md > temp_readme.md
               mv temp_readme.md README.md
             else
-              # Prepend to file
               {
                 echo "<!-- DOWNLOAD_SECTION_START -->"
                 cat download_section.md
@@ -211,7 +196,6 @@ EOF
             fi
           fi
           
-          # Clean up
           rm -f download_section.md
           
       - name: Commit and push changes
@@ -219,14 +203,12 @@ EOF
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           
-          # Check if there are any changes
           if git diff --quiet README.md; then
             echo "No changes to commit"
           else
             git add README.md
             git commit -m "🚀 Auto-update download links for build #${{ github.run_id }}"
             
-            # Retry push up to 3 times in case of conflicts
             for i in {1..3}; do
               if git push; then
                 echo "Successfully pushed changes"
