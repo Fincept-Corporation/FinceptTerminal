@@ -1,8 +1,6 @@
 // File: src/services/authApi.ts
 // Authentication API service for handling all auth-related API calls
 
-import { SessionData } from '@/contexts/AuthContext';
-
 // API Configuration
 const API_CONFIG = {
   BASE_URL: import.meta.env.DEV ? '/api' : 'https://finceptbackend.share.zrok.io',
