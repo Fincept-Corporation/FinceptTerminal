@@ -31,6 +31,9 @@ fincept_terminal/settings.json
 fincept_terminal/watchlist_settings.json
 upx.exe
 fincept_icon.ico
+legacy-python-depreciated/python
+fincept-terminal-desktop/.vscode
+fincept-terminal-desktop/node_modules
 setup.iss
 upx.exe"build/"
 .env
