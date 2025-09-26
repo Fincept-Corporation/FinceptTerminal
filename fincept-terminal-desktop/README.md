@@ -3,16 +3,17 @@
 A modern, cross-platform terminal application built with Tauri and React. Experience blazing-fast performance with a beautiful, intuitive interface.
 
 <!-- DOWNLOAD_SECTION_START -->
+
 ## 📥 Download Latest Build
 
-**Version:** `v1.0.0` | **Commit:** `abc1234` | **Build:** [#123](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/123) | **Updated:** 2025-09-26 15:30 UTC
+**Version:** `v0.1.0` | **Commit:** `1bfcac0` | **Build:** [#18029974840](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840) | **Updated:** 2025-09-26 06:52 UTC
 
 | Platform | Architecture | Download |
 |----------|-------------|----------|
-| 🍎 **macOS** | Apple Silicon (ARM64) | [![Download](https://img.shields.io/badge/Download-macOS%20ARM64-blue?style=for-the-badge&logo=apple)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/123/artifacts) |
-| 🍎 **macOS** | Intel (x64) | [![Download](https://img.shields.io/badge/Download-macOS%20x64-blue?style=for-the-badge&logo=apple)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/123/artifacts) |
-| 🐧 **Linux** | x64 | [![Download](https://img.shields.io/badge/Download-Linux%20x64-green?style=for-the-badge&logo=linux)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/123/artifacts) |
-| 🪟 **Windows** | x64 | [![Download](https://img.shields.io/badge/Download-Windows%20x64-red?style=for-the-badge&logo=windows)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/123/artifacts) |
+| 🍎 **macOS** | Apple Silicon (ARM64) | [![Download](https://img.shields.io/badge/Download-macOS%20ARM64-blue?style=for-the-badge&logo=apple)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840/artifacts) |
+| 🍎 **macOS** | Intel (x64) | [![Download](https://img.shields.io/badge/Download-macOS%20x64-blue?style=for-the-badge&logo=apple)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840/artifacts) |
+| 🐧 **Linux** | x64 | [![Download](https://img.shields.io/badge/Download-Linux%20x64-green?style=for-the-badge&logo=linux)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840/artifacts) |
+| 🪟 **Windows** | x64 | [![Download](https://img.shields.io/badge/Download-Windows%20x64-red?style=for-the-badge&logo=windows)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840/artifacts) |
 
 > **Note:** Click on the download buttons above to access the artifacts page, then download the specific build for your platform.
 
