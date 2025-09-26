@@ -1,0 +1,200 @@
+name: Build FinceptTerminal
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Allows manual trigger
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            target: 'aarch64-apple-darwin'
+            arch: 'arm64'
+            os_name: 'macOS'
+            file_ext: '.dmg'
+          - platform: 'macos-latest'
+            target: 'x86_64-apple-darwin'
+            arch: 'x64'
+            os_name: 'macOS'
+            file_ext: '.dmg'
+          - platform: 'ubuntu-22.04'
+            target: 'x86_64-unknown-linux-gnu'
+            arch: 'x64'
+            os_name: 'Linux'
+            file_ext: '.AppImage'
+          - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
+            arch: 'x64'
+            os_name: 'Windows'
+            file_ext: '.msi'
+
+    runs-on: ${{ matrix.platform }}
+
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version from Cargo.toml
+        id: get_version
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            VERSION=$(grep '^version = ' src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(grep '^version = ' src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libwebkit2gtk-4.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libjavascriptcoregtk-4.0-dev \
+            libsoup-3.0-dev \
+            libsoup2.4-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+          key: ${{ matrix.target }}
+
+      - name: Sync node version and setup cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: '--target ${{ matrix.target }}'
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: finceptterminal-${{ matrix.os_name }}-${{ matrix.arch }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/
+            !src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dSYM/
+          retention-days: 30
+
+  update-readme:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+
+      - name: Update README with download links
+        run: |
+          # Get the run ID and commit SHA
+          RUN_ID="${{ github.run_id }}"
+          COMMIT_SHA="${{ github.sha }}"
+          SHORT_SHA=${COMMIT_SHA:0:7}
+          VERSION="${{ needs.build.outputs.version }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          
+          # Create the download links section
+          cat > download_section.md << EOF
+          ## 📥 Download Latest Build
+          
+          **Version:** \`v${VERSION}\` | **Commit:** \`${SHORT_SHA}\` | **Build:** [#${RUN_ID}](${REPO_URL}/actions/runs/${RUN_ID})
+          
+          | Platform | Architecture | Download |
+          |----------|-------------|----------|
+          | 🍎 **macOS** | Apple Silicon (ARM64) | [![Download](https://img.shields.io/badge/Download-macOS%20ARM64-blue?style=for-the-badge&logo=apple)](${REPO_URL}/actions/runs/${RUN_ID}/artifacts) |
+          | 🍎 **macOS** | Intel (x64) | [![Download](https://img.shields.io/badge/Download-macOS%20x64-blue?style=for-the-badge&logo=apple)](${REPO_URL}/actions/runs/${RUN_ID}/artifacts) |
+          | 🐧 **Linux** | x64 | [![Download](https://img.shields.io/badge/Download-Linux%20x64-green?style=for-the-badge&logo=linux)](${REPO_URL}/actions/runs/${RUN_ID}/artifacts) |
+          | 🪟 **Windows** | x64 | [![Download](https://img.shields.io/badge/Download-Windows%20x64-red?style=for-the-badge&logo=windows)](${REPO_URL}/actions/runs/${RUN_ID}/artifacts) |
+          
+          > **Note:** Click on the download buttons above to access the artifacts page, then download the specific build for your platform.
+          
+          ### 📋 Installation Instructions
+          
+          - **macOS**: Download the \`.dmg\` file, open it, and drag FinceptTerminal to Applications
+          - **Linux**: Download the \`.AppImage\` file, make it executable (\`chmod +x\`), and run
+          - **Windows**: Download the \`.msi\` file and run the installer
+          
+          ---
+          EOF
+          
+          # Check if README has the download section markers
+          if grep -q "<!-- DOWNLOAD_SECTION_START -->" README.md && grep -q "<!-- DOWNLOAD_SECTION_END -->" README.md; then
+            # Replace existing section
+            sed -i '/<!-- DOWNLOAD_SECTION_START -->/,/<!-- DOWNLOAD_SECTION_END -->/c\
+          <!-- DOWNLOAD_SECTION_START -->\
+          '"$(cat download_section.md | sed 's/$/\\/')"'\
+          <!-- DOWNLOAD_SECTION_END -->' README.md
+          else
+            # Add section at the top after the title
+            if grep -q "^# " README.md; then
+              # Insert after the first heading
+              sed -i '/^# /r download_section.md' README.md
+              sed -i '/^# /a\\n<!-- DOWNLOAD_SECTION_START -->' README.md
+              sed -i '/<!-- DOWNLOAD_SECTION_START -->/,/---/a\<!-- DOWNLOAD_SECTION_END -->' README.md
+            else
+              # Prepend to file
+              cat download_section.md README.md > temp_readme.md
+              mv temp_readme.md README.md
+              sed -i '1i<!-- DOWNLOAD_SECTION_START -->' README.md
+              sed -i '/---/a\<!-- DOWNLOAD_SECTION_END -->' README.md
+            fi
+          fi
+          
+          # Clean up
+          rm download_section.md
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if git diff --quiet; then
+            echo "No changes to commit"
+          else
+            git add README.md
+            git commit -m "🚀 Update download links for build #${{ github.run_id }}"
+            git push
+          fi
