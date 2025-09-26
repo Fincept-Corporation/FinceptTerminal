@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "fincept-terminal-desktop",
+  "productName": "Fincept Terminal",
   "version": "0.1.0",
-  "identifier": "com.tilak.fincept-terminal-desktop",
+  "identifier": "com.tilak.fincept.terminal.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "fincept-terminal-desktop",
+        "title": "Fincept Terminal",
         "width": 800,
         "height": 600
       }
