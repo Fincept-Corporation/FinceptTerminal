@@ -5,7 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual trigger
 
 jobs:
   build:
@@ -14,23 +14,27 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest'
-            target: 'aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin'
+            os_name: 'macOS'
             arch: 'arm64'
-            os_name: 'macOS'
           - platform: 'macos-latest'
-            target: 'x86_64-apple-darwin'
-            arch: 'x64'
+            args: '--target x86_64-apple-darwin'
             os_name: 'macOS'
+            arch: 'x64'
           - platform: 'ubuntu-22.04'
-            target: 'x86_64-unknown-linux-gnu'
-            arch: 'x64'
+            args: '--target x86_64-unknown-linux-gnu'
             os_name: 'Linux'
-          - platform: 'windows-latest'
-            target: 'x86_64-pc-windows-msvc'
             arch: 'x64'
+          - platform: 'windows-latest'
+            args: '--target x86_64-pc-windows-msvc'
             os_name: 'Windows'
+            arch: 'x64'
 
     runs-on: ${{ matrix.platform }}
+
+    defaults:
+      run:
+        working-directory: ./fincept-terminal-desktop
 
     steps:
       - name: Checkout repository
@@ -60,19 +64,19 @@ jobs:
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.platform == 'ubuntu-22.04' && 'x86_64-unknown-linux-gnu' || 'x86_64-pc-windows-msvc' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
-          key: ${{ matrix.target }}
+          workspaces: './fincept-terminal-desktop/src-tauri -> target'
 
       - name: Sync node version and setup cache
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
           cache: 'npm'
+          cache-dependency-path: './fincept-terminal-desktop/package-lock.json'
 
       - name: Install frontend dependencies
         run: npm install
@@ -82,15 +86,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          args: '--target ${{ matrix.target }}'
+          projectPath: './fincept-terminal-desktop'
+          args: ${{ matrix.args }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: finceptterminal-${{ matrix.os_name }}-${{ matrix.arch }}
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/
-            !src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dSYM/
+            fincept-terminal-desktop/src-tauri/target/*/release/bundle/
+            !fincept-terminal-desktop/src-tauri/target/*/release/bundle/**/*.dSYM/
           retention-days: 30
 
   update-readme:
@@ -108,8 +113,8 @@ jobs:
       - name: Get version from Cargo.toml
         id: get_version
         run: |
-          if [ -f "src-tauri/Cargo.toml" ]; then
-            VERSION=$(grep '^version = ' src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
+          if [ -f "fincept-terminal-desktop/src-tauri/Cargo.toml" ]; then
+            VERSION=$(grep '^version = ' fincept-terminal-desktop/src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           else
             echo "version=1.0.0" >> $GITHUB_OUTPUT
@@ -147,13 +152,15 @@ jobs:
 
       - name: Update README
         run: |
-          if [ ! -f "README.md" ]; then
+          README_PATH="fincept-terminal-desktop/README.md"
+          if [ ! -f "$README_PATH" ]; then
             echo "Creating new README.md"
-            echo "# FinceptTerminal" > README.md
-            echo "" >> README.md
+            mkdir -p fincept-terminal-desktop
+            echo "# FinceptTerminal" > "$README_PATH"
+            echo "" >> "$README_PATH"
           fi
           
-          if grep -q "<!-- DOWNLOAD_SECTION_START -->" README.md && grep -q "<!-- DOWNLOAD_SECTION_END -->" README.md; then
+          if grep -q "<!-- DOWNLOAD_SECTION_START -->" "$README_PATH" && grep -q "<!-- DOWNLOAD_SECTION_END -->" "$README_PATH"; then
             echo "Updating existing download section"
             awk '
               /<!-- DOWNLOAD_SECTION_START -->/ { 
@@ -165,11 +172,11 @@ jobs:
                 next
               }
               { print }
-            ' README.md > temp_readme.md
-            mv temp_readme.md README.md
+            ' "$README_PATH" > temp_readme.md
+            mv temp_readme.md "$README_PATH"
           else
             echo "Adding new download section"
-            if grep -q "^# " README.md; then
+            if grep -q "^# " "$README_PATH"; then
               awk '
                 /^# / && !inserted { 
                   print $0
@@ -182,31 +189,31 @@ jobs:
                   next
                 }
                 { print }
-              ' README.md > temp_readme.md
-              mv temp_readme.md README.md
+              ' "$README_PATH" > temp_readme.md
+              mv temp_readme.md "$README_PATH"
             else
               {
                 echo "<!-- DOWNLOAD_SECTION_START -->"
                 cat download_section.md
                 echo "<!-- DOWNLOAD_SECTION_END -->"
                 echo ""
-                cat README.md
+                cat "$README_PATH"
               } > temp_readme.md
-              mv temp_readme.md README.md
+              mv temp_readme.md "$README_PATH"
             fi
           fi
           
           rm -f download_section.md
-          
+
       - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           
-          if git diff --quiet README.md; then
+          if git diff --quiet fincept-terminal-desktop/README.md; then
             echo "No changes to commit"
           else
-            git add README.md
+            git add fincept-terminal-desktop/README.md
             git commit -m "🚀 Auto-update download links for build #${{ github.run_id }}"
             
             for i in {1..3}; do
