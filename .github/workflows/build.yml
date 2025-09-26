@@ -64,7 +64,6 @@ jobs:
             libxss1 \
             libasound2-dev
           
-            
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -106,9 +105,6 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    permissions:
-      contents: write
-      pull-requests: write
     permissions:
       contents: write
       pull-requests: write
