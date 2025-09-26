@@ -6,22 +6,52 @@ A modern, cross-platform terminal application built with Tauri and React. Experi
 
 ## 📥 Download Latest Build
 
-**Version:** `v0.1.0` | **Commit:** `1bfcac0` | **Build:** [#18029974840](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840) | **Updated:** 2025-09-26 06:52 UTC
+**Version:** `v0.1.0` | **Commit:** `e18ee6f` | **Released:** 2025-09-26 07:10 UTC
 
-| Platform | Architecture | Download |
-|----------|-------------|----------|
-| 🍎 **macOS** | Apple Silicon (ARM64) | [![Download](https://img.shields.io/badge/Download-macOS%20ARM64-blue?style=for-the-badge&logo=apple)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840/artifacts) |
-| 🍎 **macOS** | Intel (x64) | [![Download](https://img.shields.io/badge/Download-macOS%20x64-blue?style=for-the-badge&logo=apple)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840/artifacts) |
-| 🐧 **Linux** | x64 | [![Download](https://img.shields.io/badge/Download-Linux%20x64-green?style=for-the-badge&logo=linux)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840/artifacts) |
-| 🪟 **Windows** | x64 | [![Download](https://img.shields.io/badge/Download-Windows%20x64-red?style=for-the-badge&logo=windows)](https://github.com/Fincept-Corporation/FinceptTerminal/actions/runs/18029974840/artifacts) |
+### 🎯 Direct Downloads - Click to Download Immediately!
 
-> **Note:** Click on the download buttons above to access the artifacts page, then download the specific build for your platform.
+| Platform | Architecture | Direct Download |
+|----------|-------------|----------------|
+| 🍎 **macOS** | Apple Silicon (ARM64) | [⬇️ **Download .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v0.1.0-build-11/FinceptTerminal-v0.1.0-macOS-arm64.dmg) |
+| 🍎 **macOS** | Intel (x64) | [⬇️ **Download .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v0.1.0-build-11/FinceptTerminal-v0.1.0-macOS-x64.dmg) |
+| 🐧 **Linux** | x64 (AppImage) | [⬇️ **Download .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v0.1.0-build-11/FinceptTerminal-v0.1.0-Linux-x64.AppImage) |
+| 🐧 **Linux** | x64 (Debian) | [⬇️ **Download .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v0.1.0-build-11/FinceptTerminal-v0.1.0-Linux-x64.deb) |
+| 🪟 **Windows** | x64 | [⬇️ **Download .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v0.1.0-build-11/FinceptTerminal-v0.1.0-Windows-x64.msi) |
 
-### 📋 Installation Instructions
+> ✨ **One-Click Downloads!** These links will start downloading immediately - no GitHub login required!
 
-- **macOS**: Download the `.dmg` file, open it, and drag FinceptTerminal to Applications
-- **Linux**: Download the `.AppImage` file, make it executable (`chmod +x`), and run
-- **Windows**: Download the `.msi` file and run the installer
+### 🛠️ Installation Instructions
+
+#### 🍎 **macOS**
+1. Click the download link above for your Mac type (Apple Silicon or Intel)
+2. Open the downloaded `.dmg` file
+3. Drag **FinceptTerminal** to your Applications folder
+4. Launch from Applications or Spotlight search
+
+#### 🐧 **Linux**
+
+**AppImage (Recommended - works on all distributions):**
+1. Download the `.AppImage` file
+2. Make it executable: `chmod +x FinceptTerminal-*.AppImage`
+3. Run it: `./FinceptTerminal-*.AppImage`
+
+**Debian/Ubuntu (.deb package):**
+1. Download the `.deb` file
+2. Install: `sudo dpkg -i FinceptTerminal-*.deb`
+3. Launch from applications menu or run `finceptterminal`
+
+#### 🪟 **Windows**
+1. Download the `.msi` installer
+2. Run the installer and follow the setup wizard
+3. Launch from Start Menu or Desktop shortcut
+
+### 📊 Build Status & Info
+
+![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)
+![Latest Release](https://img.shields.io/github/v/release/Fincept-Corporation/FinceptTerminal?include_prereleases&label=Latest%20Build)
+![Downloads](https://img.shields.io/github/downloads/Fincept-Corporation/FinceptTerminal/total?label=Total%20Downloads)
+
+**Release Page:** [View all releases and changelogs](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
 ---
 <!-- DOWNLOAD_SECTION_END -->
