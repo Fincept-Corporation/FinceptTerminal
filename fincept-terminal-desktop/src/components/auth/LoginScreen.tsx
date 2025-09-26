@@ -5,10 +5,10 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Monitor, Lock, Mail } from "lucide-react";
 import { Screen } from '../../App';
-import { AuthApiService } from '@/services/authApi';
 import { useAuth } from '@/contexts/AuthContext';
+import { Mail, Lock } from 'lucide-react';
+
 
 interface LoginScreenProps {
   onNavigate: (screen: Screen) => void;

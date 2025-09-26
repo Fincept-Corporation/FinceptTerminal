@@ -4,8 +4,43 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthApiService } from '@/services/authApi';
 
+// Response types to match your API
+export interface LoginResponse {
+  success: boolean;
+  data?: {
+    api_key: string;
+    username: string;
+    email: string;
+    credit_balance: number;
+  };
+  message?: string;
+  error?: string;
+}
+
+export interface DeviceRegisterResponse {
+  success: boolean;
+  data?: {
+    api_key?: string;
+    temp_api_key?: string;
+    expires_at?: string;
+    daily_limit?: number;
+    requests_today?: number;
+  };
+  message?: string;
+  error?: string;
+  status_code?: number;
+}
+
+export interface ApiResponse {
+  success: boolean;
+  data?: any;
+  message?: string;
+  error?: string;
+  status_code?: number;
+}
+
 // Types based on your Python API client
-interface SessionData {
+export interface SessionData {
   authenticated: boolean;
   user_type: 'guest' | 'registered' | null;
   api_key: string | null;
@@ -121,14 +156,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const validateSession = async (sessionData: SessionData): Promise<SessionData | null> => {
     if (!sessionData.api_key) return null;
 
-    const headers: Record<string, string> = {};
-    if (sessionData.api_key) {
-      headers['X-API-Key'] = sessionData.api_key;
-    }
-    if (sessionData.device_id) {
-      headers['X-Device-ID'] = sessionData.device_id;
-    }
-
     const result = await AuthApiService.getAuthStatus(sessionData.api_key, sessionData.device_id);
 
     if (result.success && result.data?.authenticated) {
@@ -209,10 +236,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log('AuthContext: Attempting login for:', email);
 
-      const result = await AuthApiService.login({ email, password });
+      const result = await AuthApiService.login({ email, password }) as ApiResponse;
 
-      if (result.success && result.data?.success) {
-        const apiData = result.data.data;
+      if (result.success && result.data) {
+        const apiData = result.data;
         const newSession: SessionData = {
           authenticated: true,
           user_type: 'registered',
@@ -232,10 +259,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('AuthContext: Login successful');
         return { success: true };
       } else {
-        console.log('AuthContext: Login failed:', result.data?.message || result.error);
+        console.log('AuthContext: Login failed:', result.message || result.error);
         return {
           success: false,
-          error: result.data?.message || result.error || 'Login failed'
+          error: result.message || result.error || 'Login failed'
         };
       }
     } catch (error) {
@@ -256,16 +283,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         username,
         email,
         password
-      });
+      }) as ApiResponse;
 
-      if (result.success && result.data?.success) {
+      if (result.success) {
         console.log('AuthContext: Signup successful, OTP sent');
         return { success: true };
       } else {
-        console.log('AuthContext: Signup failed:', result.data?.message || result.error);
+        console.log('AuthContext: Signup failed:', result.message || result.error);
         return {
           success: false,
-          error: result.data?.message || result.error || 'Registration failed'
+          error: result.message || result.error || 'Registration failed'
         };
       }
     } catch (error) {
@@ -282,10 +309,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log('AuthContext: Verifying OTP for:', email);
 
-      const result = await AuthApiService.verifyOtp({ email, otp });
+      const result = await AuthApiService.verifyOtp({ email, otp }) as ApiResponse;
 
-      if (result.success && result.data?.success) {
-        const apiData = result.data.data;
+      if (result.success && result.data) {
+        const apiData = result.data;
         const newSession: SessionData = {
           authenticated: true,
           user_type: 'registered',
@@ -305,10 +332,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('AuthContext: OTP verification successful');
         return { success: true };
       } else {
-        console.log('AuthContext: OTP verification failed:', result.data?.message || result.error);
+        console.log('AuthContext: OTP verification failed:', result.message || result.error);
         return {
           success: false,
-          error: result.data?.message || result.error || 'Verification failed'
+          error: result.message || result.error || 'Verification failed'
         };
       }
     } catch (error) {
@@ -325,16 +352,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       console.log('AuthContext: Requesting password reset for:', email);
 
-      const result = await AuthApiService.forgotPassword({ email });
+      const result = await AuthApiService.forgotPassword({ email }) as ApiResponse;
 
-      if (result.success && result.data?.success) {
+      if (result.success) {
         console.log('AuthContext: Password reset OTP sent successfully');
         return { success: true };
       } else {
-        console.log('AuthContext: Password reset request failed:', result.data?.message || result.error);
+        console.log('AuthContext: Password reset request failed:', result.message || result.error);
         return {
           success: false,
-          error: result.data?.message || result.error || 'Failed to send reset email'
+          error: result.message || result.error || 'Failed to send reset email'
         };
       }
     } catch (error) {
@@ -355,16 +382,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         email,
         otp,
         new_password: newPassword
-      });
+      }) as ApiResponse;
 
-      if (result.success && result.data?.success) {
+      if (result.success) {
         console.log('AuthContext: Password reset successful');
         return { success: true };
       } else {
-        console.log('AuthContext: Password reset failed:', result.data?.message || result.error);
+        console.log('AuthContext: Password reset failed:', result.message || result.error);
         return {
           success: false,
-          error: result.data?.message || result.error || 'Password reset failed'
+          error: result.message || result.error || 'Password reset failed'
         };
       }
     } catch (error) {
@@ -414,14 +441,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           user_agent: navigator.userAgent,
           language: navigator.language
         }
-      });
+      }) as DeviceRegisterResponse;
 
-      if (result.success && result.data?.success) {
-        const apiData = result.data.data;
+      if (result.success && result.data) {
+        const apiData = result.data;
         const guestSession: SessionData = {
           authenticated: true,
           user_type: 'guest',
-          api_key: apiData.api_key || apiData.temp_api_key,
+          api_key: apiData.api_key || apiData.temp_api_key || null,
           device_id: deviceId,
           expires_at: apiData.expires_at,
           daily_limit: apiData.daily_limit || 50,
@@ -437,10 +464,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else if (result.status_code === 409) {
         console.log('AuthContext: Device exists, getting existing session...');
 
-        const statusResult = await AuthApiService.getGuestStatus(deviceId);
+        const statusResult = await AuthApiService.getGuestStatus(deviceId) as ApiResponse;
 
-        if (statusResult.success && statusResult.data?.success) {
-          const statusData = statusResult.data.data;
+        if (statusResult.success && statusResult.data) {
+          const statusData = statusResult.data;
           const existingSession: SessionData = {
             authenticated: true,
             user_type: 'guest',
@@ -460,10 +487,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
 
-      console.log('AuthContext: Guest setup failed:', result.data?.message || result.error);
+      console.log('AuthContext: Guest setup failed:', result.message || result.error);
       return {
         success: false,
-        error: result.data?.message || result.error || 'Failed to setup guest access'
+        error: result.message || result.error || 'Failed to setup guest access'
       };
     } catch (error) {
       console.error('AuthContext: Guest setup error:', error);
