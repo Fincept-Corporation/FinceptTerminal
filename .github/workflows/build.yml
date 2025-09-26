@@ -59,7 +59,37 @@ jobs:
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev \
-            patchelf
+            patchelf \
+            libnss3-dev \
+            libxss1 \
+            libasound2-dev
+
+      - name: Fix missing CSS file (all platforms)
+        run: |
+          if [ ! -f "src/app.css" ]; then
+            echo "/* Global CSS styles */" > src/app.css
+            echo "@tailwind base;" >> src/app.css
+            echo "@tailwind components;" >> src/app.css
+            echo "@tailwind utilities;" >> src/app.css
+            echo "" >> src/app.css
+            echo "/* Custom app styles */" >> src/app.css
+            echo "body {" >> src/app.css
+            echo "  margin: 0;" >> src/app.css
+            echo "  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen'," >> src/app.css
+            echo "    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue'," >> src/app.css
+            echo "    sans-serif;" >> src/app.css
+            echo "  -webkit-font-smoothing: antialiased;" >> src/app.css
+            echo "  -moz-osx-font-smoothing: grayscale;" >> src/app.css
+            echo "}" >> src/app.css
+            echo "" >> src/app.css
+            echo "#root {" >> src/app.css
+            echo "  height: 100vh;" >> src/app.css
+            echo "  width: 100vw;" >> src/app.css
+            echo "}" >> src/app.css
+            echo "Created missing app.css file"
+          else
+            echo "app.css already exists"
+          fi
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
@@ -102,6 +132,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout repository
