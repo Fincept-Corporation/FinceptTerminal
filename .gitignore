@@ -14,6 +14,9 @@ fincept_env
 python
 treeview.py
 testing
+fincept-terminal-desktop/.vscode
+fincept-terminal-desktop/.claude
+fincept-terminal-desktop/CLAUDE.md
 fincept_terminal/fyers_session_config.json
 fincept_terminal/backup_20250730_072611
 .pdm-build
@@ -32,7 +35,6 @@ fincept_terminal/watchlist_settings.json
 upx.exe
 fincept_icon.ico
 legacy-python-depreciated/python
-fincept-terminal-desktop/.vscode
 fincept-terminal-desktop/node_modules
 setup.iss
 upx.exe"build/"

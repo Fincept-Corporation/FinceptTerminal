@@ -1,366 +1,458 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow
-} from '@/components/ui/table';
+import React, { useState, useRef, useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle } from 'lucide-react';
+import ForumTab from '@/components/tabs/ForumTab';
+import DashboardTab from '@/components/tabs/DashboardTab';
+import MarketsTab from '@/components/tabs/MarketsTab';
+import NewsTab from '@/components/tabs/NewsTab';
+import AdvancedTab from '@/components/tabs/AdvancedTab';
+import WatchlistTab from '@/components/tabs/WatchlistTab';
+import GeopoliticsTab from '@/components/tabs/GeopoliticsTab';
 
-const DashboardScreen = () => {
-  const [currentTime, setCurrentTime] = useState(new Date());
+// Dropdown Menu Component
+const DropdownMenu = ({ label, items, onItemClick }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef(null);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Custom Bloomberg Terminal Styling
-  const terminalStyles = `
-    .terminal-bg {
-      background: #000000 !important;
-      border: 1px solid #FF6600 !important;
-      border-radius: 0 !important;
-    }
-    .terminal-header {
-      background: #FF6600 !important;
-      color: #000000 !important;
-      border-radius: 0 !important;
-      font-family: 'Courier New', monospace !important;
-      font-weight: bold !important;
-      padding: 2px 4px !important;
-      margin: 0 !important;
-    }
-    .terminal-text {
-      font-family: 'Courier New', monospace !important;
-      font-size: 11px !important;
-      line-height: 1.2 !important;
-      color: #FFFFFF !important;
-    }
-    .terminal-orange { color: #FF6600 !important; }
-    .terminal-green { color: #00FF00 !important; }
-    .terminal-red { color: #FF0000 !important; }
-    .terminal-yellow { color: #FFFF00 !important; }
-    .terminal-cyan { color: #00FFFF !important; }
-    .terminal-gray { color: #808080 !important; }
-    .terminal-table {
-      border-collapse: collapse !important;
-      width: 100% !important;
-      font-family: 'Courier New', monospace !important;
-      font-size: 10px !important;
-    }
-    .terminal-table th {
-      background: #333333 !important;
-      color: #FFFF00 !important;
-      border: 1px solid #808080 !important;
-      padding: 2px 4px !important;
-      text-align: left !important;
-    }
-    .terminal-table td {
-      border: 1px solid #333333 !important;
-      padding: 1px 4px !important;
-      color: #FFFFFF !important;
-    }
-    .terminal-button {
-      background: #000000 !important;
-      border: 1px solid #FFFF00 !important;
-      color: #FFFF00 !important;
-      border-radius: 0 !important;
-      font-family: 'Courier New', monospace !important;
-      font-size: 9px !important;
-      padding: 1px 6px !important;
-      margin: 1px !important;
-      height: auto !important;
-    }
-    .terminal-button:hover {
-      background: #FFFF00 !important;
-      color: #000000 !important;
-    }
-    .india-border {
-      border: 2px solid #00FF00 !important;
-      background: #000000 !important;
-    }
-    .india-header {
-      background: #00FF00 !important;
-      color: #000000 !important;
-      text-align: center !important;
-    }
-  `;
-
-  const countries = {
-    "India": { gdp_trillion: 3.9, military_budget_billion: 83.6, political_stability: 6.8, current_risk: "Medium", market_influence: 7.8 },
-    "United States": { gdp_trillion: 27.4, military_budget_billion: 842, political_stability: 7.0, current_risk: "Low", market_influence: 9.5 },
-    "China": { gdp_trillion: 18.2, military_budget_billion: 296, political_stability: 6.5, current_risk: "Medium", market_influence: 8.9 },
-    "Russia": { gdp_trillion: 2.0, military_budget_billion: 109, political_stability: 4.0, current_risk: "High", market_influence: 6.2 }
-  };
-
-  const intelligenceFeeds = [
-    { time: "16:15", priority: "HIGH", source: "HUMINT", classification: "SECRET", event: "India-China border talks scheduled; infrastructure buildout accelerating" },
-    { time: "16:02", priority: "CRITICAL", source: "ECONINT", classification: "TOP SECRET", event: "Significant FDI inflows to India's semiconductor sector detected" },
-    { time: "15:48", priority: "MEDIUM", source: "OSINT", classification: "CONFIDENTIAL", event: "India-Middle East-Europe Corridor gaining momentum among traders" }
-  ];
-
-  const marketData = [
-    { asset: "India Nifty 50", impact: +0.95, reason: "FDI Strong" },
-    { asset: "S&P 500", impact: -1.8, reason: "Geopolitical Risk" },
-    { asset: "Energy Sector", impact: +3.8, reason: "Supply Risk" },
-    { asset: "Tech Stocks", impact: -2.9, reason: "US-China Tension" },
-    { asset: "Gold", impact: +2.1, reason: "Safe Haven" }
-  ];
-
   return (
-    <>
-      <style>{terminalStyles}</style>
-      <div className="min-h-screen bg-black text-white p-2 terminal-text">
-
-        {/* Bloomberg Header */}
-        <Card className="terminal-bg mb-2">
-          <CardHeader className="terminal-header p-2">
-            <div className="text-sm font-bold">
-              ████████ BLOOMBERG TERMINAL ████████ GEOPOLITICAL INTELLIGENCE SYSTEM ████████
+    <div ref={menuRef} style={{ position: 'relative', display: 'inline-block' }}>
+      <span 
+        style={{ cursor: 'pointer', padding: '2px 4px', borderRadius: '2px', backgroundColor: isOpen ? '#404040' : 'transparent' }}
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        {label}
+      </span>
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          backgroundColor: '#2d2d2d',
+          border: '1px solid #404040',
+          borderRadius: '2px',
+          minWidth: '150px',
+          zIndex: 1000,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
+        }}>
+          {items.map((item, index) => (
+            <div
+              key={index}
+              style={{
+                padding: '6px 12px',
+                cursor: item.disabled ? 'not-allowed' : 'pointer',
+                color: item.disabled ? '#666' : '#a3a3a3',
+                fontSize: '11px',
+                borderBottom: item.separator ? '1px solid #404040' : 'none'
+              }}
+              onMouseEnter={(e) => {
+                if (!item.disabled) {
+                  e.target.style.backgroundColor = '#404040';
+                  e.target.style.color = '#fff';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = 'transparent';
+                e.target.style.color = item.disabled ? '#666' : '#a3a3a3';
+              }}
+              onClick={() => {
+                if (!item.disabled && onItemClick) {
+                  onItemClick(item);
+                  setIsOpen(false);
+                }
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {item.icon}
+                <span>{item.label}</span>
+                {item.shortcut && (
+                  <span style={{ marginLeft: 'auto', fontSize: '10px', color: '#666' }}>
+                    {item.shortcut}
+                  </span>
+                )}
+              </div>
             </div>
-          </CardHeader>
-          <CardContent className="p-2">
-            <div className="terminal-text text-xs">
-              <span className="terminal-orange">GLOBAL RISK: </span>
-              <span className="terminal-red">7.2/10 </span>
-              <span className="terminal-gray">| </span>
-              <span className="terminal-orange">CONFLICTS: </span>
-              <span className="terminal-red">15 </span>
-              <span className="terminal-gray">| </span>
-              <span className="terminal-orange">SANCTIONS: </span>
-              <span className="terminal-yellow">3124 </span>
-              <span className="terminal-gray">| </span>
-              <span className="terminal-white">{currentTime.toLocaleString()}</span>
-            </div>
-            <div className="terminal-text text-xs mt-1">
-              <span className="terminal-gray">INDIA NIFTY: </span>
-              <span className="terminal-green">24,850 </span>
-              <span className="terminal-gray">| INR/USD: </span>
-              <span className="terminal-cyan">83.12 </span>
-              <span className="terminal-gray">| OIL: </span>
-              <span className="terminal-green">$82.30 </span>
-              <span className="terminal-gray">| ALERTS: </span>
-              <span className="terminal-red">52 ACTIVE</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Function Keys */}
-        <div className="mb-2 flex gap-1 flex-wrap">
-          {["F1:INDIA", "F2:CHINA", "F3:PAKISTAN", "F4:USA", "F5:RUSSIA", "F6:LAC", "F7:QUAD", "F8:BRICS"].map(key => (
-            <Button key={key} className="terminal-button">
-              {key}
-            </Button>
           ))}
         </div>
-
-        {/* Main Dashboard Grid */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
-
-          {/* Intelligence Alerts */}
-          <Card className="terminal-bg">
-            <CardHeader className="terminal-header p-1">
-              <CardTitle className="text-xs">■ REAL-TIME INTELLIGENCE ALERTS ■</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              {intelligenceFeeds.map((alert, idx) => (
-                <div key={idx} className="mb-3 text-xs terminal-text">
-                  <div className="flex gap-2">
-                    <span className="terminal-gray">{alert.time}</span>
-                    <span className={alert.priority === 'CRITICAL' ? 'terminal-red' : alert.priority === 'HIGH' ? 'terminal-orange' : 'terminal-yellow'}>
-                      [{alert.priority}]
-                    </span>
-                    <span className="terminal-cyan">[{alert.source}]</span>
-                  </div>
-                  <div className="mt-1">{alert.event}</div>
-                  <div className="terminal-yellow text-xs">CLASSIFICATION: {alert.classification}</div>
-                  <div className="border-b border-gray-600 mt-1"></div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Country Risk Matrix */}
-          <Card className="terminal-bg">
-            <CardHeader className="terminal-header p-1">
-              <CardTitle className="text-xs">■ COUNTRY RISK MATRIX ■</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <Table className="terminal-table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">COUNTRY</TableHead>
-                    <TableHead className="text-xs">RISK</TableHead>
-                    <TableHead className="text-xs">STAB</TableHead>
-                    <TableHead className="text-xs">MIL($B)</TableHead>
-                    <TableHead className="text-xs">GDP</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {Object.entries(countries).map(([country, data]) => (
-                    <TableRow key={country}>
-                      <TableCell className="text-xs">{country.substring(0,8)}</TableCell>
-                      <TableCell className={`text-xs ${
-                        data.current_risk === 'Low' ? 'terminal-green' :
-                        data.current_risk === 'Medium' ? 'terminal-yellow' : 'terminal-red'
-                      }`}>
-                        {data.current_risk.substring(0,3).toUpperCase()}
-                      </TableCell>
-                      <TableCell className="text-xs terminal-cyan">{data.political_stability}</TableCell>
-                      <TableCell className="text-xs terminal-red">${data.military_budget_billion}</TableCell>
-                      <TableCell className="text-xs terminal-green">${data.gdp_trillion}T</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          {/* Market Impact */}
-          <Card className="terminal-bg">
-            <CardHeader className="terminal-header p-1">
-              <CardTitle className="text-xs">■ MARKET IMPACT SUMMARY ■</CardTitle>
-            </CardHeader>
-            <CardContent className="p-2">
-              <Table className="terminal-table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">ASSET</TableHead>
-                    <TableHead className="text-xs">IMPACT</TableHead>
-                    <TableHead className="text-xs">REASON</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {marketData.map((item, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell className="text-xs">{item.asset.substring(0,12)}</TableCell>
-                      <TableCell className={`text-xs ${item.impact > 0 ? 'terminal-green' : 'terminal-red'}`}>
-                        {item.impact > 0 ? '+' : ''}{item.impact}%
-                      </TableCell>
-                      <TableCell className="text-xs terminal-gray">{item.reason}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* India-Specific Dashboard */}
-        <Card className="india-border mb-4">
-          <CardHeader className="india-header p-2">
-            <CardTitle className="text-sm font-bold">
-              ████ INDIA GEOPOLITICAL DASHBOARD - REAL-TIME ANALYSIS ████
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-2">
-            <div className="grid grid-cols-4 gap-2">
-
-              <Card className="terminal-bg">
-                <CardHeader className="p-1">
-                  <CardTitle className="text-xs terminal-yellow">INDIA: KEY METRICS</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2">
-                  <Table className="terminal-table">
-                    <TableBody>
-                      <TableRow>
-                        <TableCell className="text-xs">GDP:</TableCell>
-                        <TableCell className="text-xs terminal-green">$3.9T</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-xs">Population:</TableCell>
-                        <TableCell className="text-xs terminal-cyan">1428M</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-xs">Military:</TableCell>
-                        <TableCell className="text-xs terminal-red">$83.6B</TableCell>
-                      </TableRow>
-                      <TableRow>
-                        <TableCell className="text-xs">Risk Level:</TableCell>
-                        <TableCell className="text-xs terminal-yellow">MEDIUM</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              <Card className="terminal-bg">
-                <CardHeader className="p-1">
-                  <CardTitle className="text-xs terminal-yellow">STRATEGIC DEVELOPMENTS</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 text-xs">
-                  <div className="terminal-green">✓ G20 Presidency Success</div>
-                  <div className="terminal-green">✓ Quad Alliance Active</div>
-                  <div className="terminal-green">✓ Digital India Growth</div>
-                  <div className="terminal-orange">⚠ LAC Border Tensions</div>
-                  <div className="terminal-orange">⚠ Pakistan Relations</div>
-                  <div className="terminal-green">✓ Manufacturing Hub</div>
-                </CardContent>
-              </Card>
-
-              <Card className="terminal-bg">
-                <CardHeader className="p-1">
-                  <CardTitle className="text-xs terminal-yellow">THREAT ASSESSMENT</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2">
-                  <Table className="terminal-table">
-                    <TableBody>
-                      {[
-                        {threat: "China Border", level: 7.8, category: "HIGH"},
-                        {threat: "Pakistan Terror", level: 6.9, category: "MEDIUM"},
-                        {threat: "Cyber Threats", level: 6.5, category: "MEDIUM"},
-                        {threat: "Energy Security", level: 5.8, category: "MEDIUM"}
-                      ].map((item, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className="text-xs">{item.threat.substring(0,10)}:</TableCell>
-                          <TableCell className={`text-xs ${item.level >= 7.0 ? 'terminal-orange' : 'terminal-yellow'}`}>
-                            {item.level}
-                          </TableCell>
-                          <TableCell className={`text-xs ${item.level >= 7.0 ? 'terminal-orange' : 'terminal-yellow'}`}>
-                            [{item.category.substring(0,3)}]
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              <Card className="terminal-bg">
-                <CardHeader className="p-1">
-                  <CardTitle className="text-xs terminal-yellow">STRATEGIC OPPORTUNITIES</CardTitle>
-                </CardHeader>
-                <CardContent className="p-2 text-xs terminal-green">
-                  <div>• Global Manufacturing Hub</div>
-                  <div>• Semiconductor Production</div>
-                  <div>• Renewable Energy Leader</div>
-                  <div>• Defense Exports Growth</div>
-                  <div>• IMEC Trade Corridor</div>
-                  <div>• Digital Economy Expansion</div>
-                </CardContent>
-              </Card>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Status Bar */}
-        <Card className="terminal-bg">
-          <CardContent className="p-2 terminal-header">
-            <div className="flex justify-between text-xs font-bold">
-              <div>SYSTEM STATUS: OPERATIONAL | DATA FEEDS: ACTIVE | INTEL PROCESSING: REAL-TIME</div>
-              <div>Last Update: {currentTime.toLocaleTimeString()} | Classification: CONFIDENTIAL</div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </>
+      )}
+    </div>
   );
 };
 
-export default DashboardScreen;
+export default function FinxeptTerminal() {
+  const [activeTab, setActiveTab] = useState("dashboard");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
+
+  React.useEffect(() => {
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    document.body.style.backgroundColor = '#000000';
+    document.body.style.overflow = 'hidden';
+    document.body.style.overscrollBehavior = 'none';
+    document.documentElement.style.backgroundColor = '#000000';
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.overscrollBehavior = 'none';
+    
+    return () => {
+      document.body.style.overflow = 'auto';
+      document.body.style.overscrollBehavior = 'auto';
+      document.documentElement.style.overflow = 'auto';
+      document.documentElement.style.overscrollBehavior = 'auto';
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => {
+        setIsFullscreen(true);
+        setStatusMessage("Entered fullscreen mode");
+      }).catch(err => {
+        setStatusMessage("Failed to enter fullscreen mode");
+      });
+    } else {
+      document.exitFullscreen().then(() => {
+        setIsFullscreen(false);
+        setStatusMessage("Exited fullscreen mode");
+      });
+    }
+    
+    // Clear status message after 3 seconds
+    setTimeout(() => setStatusMessage(""), 3000);
+  };
+
+  const handleMenuAction = (item) => {
+    setStatusMessage(`${item.label} clicked`);
+    
+    // Handle specific actions
+    switch(item.action) {
+      case 'fullscreen':
+        toggleFullscreen();
+        break;
+      case 'refresh':
+        window.location.reload();
+        break;
+      case 'export':
+        setStatusMessage("Export functionality not implemented");
+        break;
+      default:
+        setTimeout(() => setStatusMessage(""), 3000);
+    }
+  };
+
+  // Menu configurations
+  const fileMenuItems = [
+    { label: 'New Workspace', shortcut: 'Ctrl+N', icon: null },
+    { label: 'Open Workspace', shortcut: 'Ctrl+O', icon: null },
+    { label: 'Save Workspace', shortcut: 'Ctrl+S', icon: null },
+    { label: 'Export Data', shortcut: 'Ctrl+E', icon: <Download size={12} />, action: 'export', separator: true },
+    { label: 'Import Settings', icon: null },
+    { label: 'Exit', shortcut: 'Alt+F4', icon: null, separator: true }
+  ];
+
+  const tabsMenuItems = [
+    { label: 'New Tab', shortcut: 'Ctrl+T', icon: null },
+    { label: 'Close Tab', shortcut: 'Ctrl+W', icon: null },
+    { label: 'Close Other Tabs', icon: null },
+    { label: 'Duplicate Tab', icon: null, separator: true },
+    { label: 'Tab Settings', icon: <Settings size={12} /> }
+  ];
+
+  const sessionMenuItems = [
+    { label: 'Login', icon: <User size={12} /> },
+    { label: 'Switch User', icon: null },
+    { label: 'Session Info', icon: null, separator: true },
+    { label: 'Extend Session', icon: null },
+    { label: 'Logout', icon: null }
+  ];
+
+  const apiMenuItems = [
+    { label: 'API Status', icon: null },
+    { label: 'Rate Limits', icon: null },
+    { label: 'API Keys', icon: null, separator: true },
+    { label: 'Documentation', icon: null },
+    { label: 'Test Connection', icon: <RefreshCw size={12} />, action: 'refresh' }
+  ];
+
+  const databaseMenuItems = [
+    { label: 'Connect Database', icon: <Database size={12} /> },
+    { label: 'Query Builder', icon: null },
+    { label: 'Schema Browser', icon: null, separator: true },
+    { label: 'Backup Data', icon: null },
+    { label: 'Import Data', icon: null }
+  ];
+
+  const viewMenuItems = [
+    { label: 'Fullscreen', shortcut: 'F11', icon: isFullscreen ? <Minimize size={12} /> : <Maximize size={12} />, action: 'fullscreen' },
+    { label: 'Zoom In', shortcut: 'Ctrl++', icon: null },
+    { label: 'Zoom Out', shortcut: 'Ctrl+-', icon: null },
+    { label: 'Reset Zoom', shortcut: 'Ctrl+0', icon: null, separator: true },
+    { label: 'Show Toolbar', icon: <Eye size={12} /> },
+    { label: 'Show Sidebar', icon: null }
+  ];
+
+  const toolsMenuItems = [
+    { label: 'Calculator', icon: null },
+    { label: 'Screen Capture', icon: null },
+    { label: 'Color Picker', icon: null, separator: true },
+    { label: 'Settings', icon: <Settings size={12} /> },
+    { label: 'Preferences', shortcut: 'Ctrl+,', icon: null }
+  ];
+
+  const helpMenuItems = [
+    { label: 'User Manual', icon: <HelpCircle size={12} /> },
+    { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+?', icon: null },
+    { label: 'Video Tutorials', icon: null, separator: true },
+    { label: 'Contact Support', icon: null },
+    { label: 'Report Bug', icon: null, separator: true },
+    { label: 'About Finxept', icon: null }
+  ];
+
+  const tabStyles = {
+    default: {
+      backgroundColor: 'transparent',
+      color: '#d4d4d4',
+      border: 'none',
+      padding: '3px 8px',
+      fontSize: '10px',
+      cursor: 'pointer',
+      borderRadius: '0'
+    },
+    active: {
+      backgroundColor: '#ea580c',
+      color: 'white',
+      border: 'none',
+      padding: '3px 8px',
+      fontSize: '10px',
+      cursor: 'pointer',
+      borderRadius: '0'
+    }
+  };
+
+  return (
+    <div style={{
+      width: '100vw',
+      height: '100vh',
+      margin: 0,
+      padding: 0,
+      backgroundColor: '#000000',
+      fontFamily: 'Consolas, "Courier New", monospace',
+      overflow: 'hidden',
+      fontSize: '11px',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      overscrollBehavior: 'none'
+    }}>
+      {/* Top Menu Bar with Functional Dropdowns */}
+      <div style={{
+        backgroundColor: '#2d2d2d',
+        color: '#a3a3a3',
+        fontSize: '11px',
+        borderBottom: '1px solid #404040',
+        padding: '2px 8px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        height: '20px'
+      }}>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <DropdownMenu label="File" items={fileMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Tabs" items={tabsMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Session" items={sessionMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="API" items={apiMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Database" items={databaseMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="View" items={viewMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Tools" items={toolsMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Help" items={helpMenuItems} onItemClick={handleMenuAction} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button
+            onClick={toggleFullscreen}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#a3a3a3',
+              cursor: 'pointer',
+              padding: '2px',
+              borderRadius: '2px'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = '#404040';
+              e.target.style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'transparent';
+              e.target.style.color = '#a3a3a3';
+            }}
+            title={isFullscreen ? 'Exit Fullscreen (F11)' : 'Enter Fullscreen (F11)'}
+          >
+            {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
+          </button>
+          <span style={{ color: '#fbbf24' }}>Guest (18h remaining)</span>
+          <span style={{ color: '#737373', cursor: 'pointer' }} title="Help">?</span>
+        </div>
+      </div>
+
+      {/* Status Message Bar */}
+      {statusMessage && (
+        <div style={{
+          backgroundColor: '#ea580c',
+          color: 'white',
+          fontSize: '10px',
+          padding: '2px 8px',
+          borderBottom: '1px solid #404040',
+          height: '16px',
+          display: 'flex',
+          alignItems: 'center'
+        }}>
+          {statusMessage}
+        </div>
+      )}
+
+      {/* Main Navigation Bar with Tabs */}
+      <div style={{
+        backgroundColor: '#3f3f3f',
+        borderBottom: '1px solid #404040',
+        height: '26px'
+      }}>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+          <TabsList style={{
+            backgroundColor: 'transparent',
+            border: 'none',
+            padding: '2px 4px',
+            height: '100%',
+            justifyContent: 'flex-start',
+            borderRadius: '0'
+          }}>
+            <TabsTrigger 
+              value="dashboard" 
+              style={activeTab === 'dashboard' ? tabStyles.active : tabStyles.default}
+            >
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger 
+              value="markets" 
+              style={activeTab === 'markets' ? tabStyles.active : tabStyles.default}
+            >
+              Markets
+            </TabsTrigger>
+            <TabsTrigger 
+              value="news" 
+              style={activeTab === 'news' ? tabStyles.active : tabStyles.default}
+            >
+              News
+            </TabsTrigger>
+            <TabsTrigger 
+              value="forum" 
+              style={activeTab === 'forum' ? tabStyles.active : tabStyles.default}
+            >
+              Forum
+            </TabsTrigger>
+            <TabsTrigger 
+              value="advanced" 
+              style={activeTab === 'advanced' ? tabStyles.active : tabStyles.default}
+            >
+              Advanced
+            </TabsTrigger>
+            <TabsTrigger
+              value="watchlist"
+              style={activeTab === 'watchlist' ? tabStyles.active : tabStyles.default}
+            >
+              Watchlist
+            </TabsTrigger>
+            <TabsTrigger
+              value="geopolitics"
+              style={activeTab === 'geopolitics' ? tabStyles.active : tabStyles.default}
+            >
+              Geopolitics
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {/* Command Bar */}
+      <div style={{
+        backgroundColor: '#2d2d2d',
+        borderBottom: '1px solid #404040',
+        padding: '4px 8px',
+        height: '24px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      }}>
+        <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 6px', fontSize: '9px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
+        <span style={{ color: '#a3a3a3', fontSize: '10px' }}>Enter Command</span>
+        <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
+        <span style={{ color: '#a3a3a3', fontSize: '10px' }}>Search</span>
+        <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
+        <span style={{ color: '#a3a3a3', fontSize: '10px' }}>2025-09-26 14:00:49</span>
+        {isFullscreen && (
+          <>
+            <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
+            <span style={{ color: '#fbbf24', fontSize: '10px' }}>FULLSCREEN MODE</span>
+          </>
+        )}
+      </div>
+
+      {/* Function Keys Bar */}
+      <div style={{
+        backgroundColor: '#1a1a1a',
+        borderBottom: '1px solid #404040',
+        padding: '2px 8px',
+        height: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '16px'
+      }}>
+        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F1:HELP</span>
+        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F2:MARKETS</span>
+        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F3:NEWS</span>
+        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F4:PORT</span>
+        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F5:MOVERS</span>
+        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F6:ECON</span>
+        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F11:FULLSCREEN</span>
+      </div>
+
+      {/* Main Content Area with Tab Content */}
+      <div style={{
+        height: statusMessage ? 'calc(100vh - 123px)' : 'calc(100vh - 107px)',
+        backgroundColor: '#000000'
+      }}>
+        <Tabs value={activeTab} className="h-full">
+          <TabsContent value="dashboard" className="h-full m-0 p-0">
+            <DashboardTab />
+          </TabsContent>
+          <TabsContent value="markets" className="h-full m-0 p-0">
+            <MarketsTab />
+          </TabsContent>
+          <TabsContent value="news" className="h-full m-0 p-0">
+            <NewsTab />
+          </TabsContent>
+          <TabsContent value="forum" className="h-full m-0 p-0">
+            <ForumTab />
+          </TabsContent>
+          <TabsContent value="advanced" className="h-full m-0 p-0">
+            <AdvancedTab />
+          </TabsContent>
+          <TabsContent value="watchlist" className="h-full m-0 p-0">
+            <WatchlistTab />
+          </TabsContent>
+          <TabsContent value="geopolitics" className="h-full m-0 p-0">
+            <GeopoliticsTab />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
