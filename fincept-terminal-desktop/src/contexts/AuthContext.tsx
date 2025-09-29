@@ -1,8 +1,9 @@
 // File: src/contexts/AuthContext.tsx
-// Authentication context for managing user state and backend API integration
+// Authentication context for managing user state and backend API integration with payment support
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthApiService } from '@/services/authApi';
+import { PaymentApiService } from '@/services/paymentApi';
 
 // Response types to match your API
 export interface LoginResponse {
@@ -12,6 +13,23 @@ export interface LoginResponse {
     username: string;
     email: string;
     credit_balance: number;
+  };
+  message?: string;
+  error?: string;
+}
+
+export interface UserProfileResponse {
+  success: boolean;
+  data?: {
+    id: number;
+    username: string;
+    email: string;
+    account_type: string;
+    credit_balance: number;
+    is_verified: boolean;
+    mfa_enabled: boolean;
+    created_at: string;
+    last_login_at: string;
   };
   message?: string;
   error?: string;
@@ -39,6 +57,55 @@ export interface ApiResponse {
   status_code?: number;
 }
 
+// Payment related types
+export interface SubscriptionPlan {
+  plan_id: string;
+  name: string;
+  description: string;
+  price_usd: number;
+  billing_interval: string;
+  api_calls_limit: number | string;
+  databases_access: string[];
+  priority_support: boolean;
+  features: {
+    api_calls: string;
+    databases: string;
+    support: string;
+  };
+}
+
+export interface PaymentSession {
+  checkout_url: string;
+  session_id: string;
+  payment_uuid: string;
+  plan: {
+    name: string;
+    price: number;
+  };
+}
+
+export interface UserSubscription {
+  has_subscription: boolean;
+  subscription?: {
+    subscription_uuid: string;
+    plan: {
+      name: string;
+      plan_id: string;
+      price: number;
+    };
+    status: string;
+    current_period_start: string;
+    current_period_end: string;
+    days_remaining: number;
+    cancel_at_period_end: boolean;
+    usage: {
+      api_calls_used: number;
+      api_calls_limit: number | string;
+      usage_percentage: number;
+    };
+  };
+}
+
 // Types based on your Python API client
 export interface SessionData {
   authenticated: boolean;
@@ -48,17 +115,23 @@ export interface SessionData {
   user_info?: {
     username?: string;
     email?: string;
+    account_type?: string;
     credit_balance?: number;
+    is_verified?: boolean;
+    mfa_enabled?: boolean;
   };
   expires_at?: string;
   daily_limit?: number;
   requests_today?: number;
+  subscription?: UserSubscription;
 }
 
 interface AuthContextType {
   session: SessionData | null;
   isLoading: boolean;
   isFirstTimeUser: boolean;
+  availablePlans: SubscriptionPlan[];
+  isLoadingPlans: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signup: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
@@ -67,6 +140,11 @@ interface AuthContextType {
   checkApiConnectivity: () => Promise<boolean>;
   forgotPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  // Payment methods
+  fetchPlans: () => Promise<{ success: boolean; error?: string }>;
+  createPaymentSession: (planId: string) => Promise<{ success: boolean; data?: PaymentSession; error?: string }>;
+  getUserSubscription: () => Promise<{ success: boolean; data?: UserSubscription; error?: string }>;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -151,6 +229,74 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [session, setSession] = useState<SessionData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFirstTimeUser, setIsFirstTimeUser] = useState(false);
+  const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
+
+  // Fetch user profile after login
+  // Find this function in AuthContext.tsx and update it:
+const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['data'] | null> => {
+  try {
+    const result = await AuthApiService.getUserProfile(apiKey);
+    console.log('AuthContext: Raw profile result:', result); // Add this debug line
+
+    if (result.success && result.data) {
+      // Fix: Extract the nested data properly
+      const profileData = result.data.data || result.data;
+      console.log('AuthContext: Extracted profile data:', profileData); // Add this debug line
+      return profileData;
+    }
+    return null;
+  } catch (error) {
+    console.error('Failed to fetch user profile:', error);
+    return null;
+  }
+};
+
+  // Fetch user subscription data
+  const fetchUserSubscription = async (apiKey: string): Promise<UserSubscription | null> => {
+    try {
+      const result = await PaymentApiService.getUserSubscription(apiKey);
+      if (result.success && result.data) {
+        return result.data;
+      }
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch user subscription:', error);
+      return null;
+    }
+  };
+
+  // Refresh user data including subscription
+  const refreshUserData = async (): Promise<void> => {
+    if (!session?.api_key || session.user_type !== 'registered') return;
+
+    try {
+      const [userProfile, userSubscription] = await Promise.all([
+        fetchUserProfile(session.api_key),
+        fetchUserSubscription(session.api_key)
+      ]);
+
+      if (userProfile) {
+        const updatedSession: SessionData = {
+          ...session,
+          user_info: {
+            username: userProfile.username,
+            email: userProfile.email,
+            account_type: userProfile.account_type,
+            credit_balance: userProfile.credit_balance,
+            is_verified: userProfile.is_verified,
+            mfa_enabled: userProfile.mfa_enabled
+          },
+          subscription: userSubscription || undefined
+        };
+
+        setSession(updatedSession);
+        saveSession(updatedSession);
+      }
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+    }
+  };
 
   // Validate session with API
   const validateSession = async (sessionData: SessionData): Promise<SessionData | null> => {
@@ -160,15 +306,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (result.success && result.data?.authenticated) {
       const apiData = result.data;
+
+      // For registered users, fetch detailed profile and subscription
+      let userProfile = null;
+      let userSubscription = null;
+
+      if (apiData.user_type === 'registered') {
+        userProfile = await fetchUserProfile(sessionData.api_key);
+        userSubscription = await fetchUserSubscription(sessionData.api_key);
+      }
+
       return {
         authenticated: true,
         user_type: apiData.user_type,
         api_key: sessionData.api_key,
         device_id: sessionData.device_id,
-        user_info: apiData.user_type === 'registered' ? apiData.user : undefined,
+        user_info: apiData.user_type === 'registered' && userProfile ? {
+          username: userProfile.username,
+          email: userProfile.email,
+          account_type: userProfile.account_type,
+          credit_balance: userProfile.credit_balance,
+          is_verified: userProfile.is_verified,
+          mfa_enabled: userProfile.mfa_enabled
+        } : apiData.user,
         expires_at: apiData.user_type === 'guest' ? apiData.guest?.expires_at : undefined,
         daily_limit: apiData.user_type === 'guest' ? apiData.guest?.daily_limit : undefined,
-        requests_today: apiData.user_type === 'guest' ? apiData.guest?.requests_today : undefined
+        requests_today: apiData.user_type === 'guest' ? apiData.guest?.requests_today : undefined,
+        subscription: userSubscription || undefined
       };
     }
 
@@ -186,22 +350,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const savedSession = loadSession();
         console.log('AuthContext: Saved session:', savedSession ? 'Found' : 'Not found');
 
+        // In your AuthContext useEffect:
         if (savedSession) {
-          console.log('AuthContext: Validating session with API...');
-          // For development, skip API validation to avoid CORS issues
-          if (import.meta.env.DEV) {
-            console.log('AuthContext: Development mode - using saved session without validation');
-            setSession(savedSession);
-          } else {
+          if (savedSession.user_type === 'registered') {
+            // Always validate registered users, even in dev mode
             const validatedSession = await validateSession(savedSession);
             if (validatedSession) {
-              console.log('AuthContext: Session validated successfully');
               setSession(validatedSession);
               saveSession(validatedSession);
             } else {
-              console.log('AuthContext: Session validation failed, clearing...');
+              console.log('Session validation failed, clearing...');
               clearSession();
             }
+          } else {
+            // Only skip validation for guest users in dev mode
+            setSession(savedSession);
           }
         }
 
@@ -219,15 +382,91 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check API connectivity
   const checkApiConnectivity = async (): Promise<boolean> => {
     try {
-      console.log('Checking API connectivity...');
-
       const isConnected = await AuthApiService.checkHealth();
-
-      console.log('API connectivity result:', isConnected);
       return isConnected;
     } catch (error) {
       console.error('API connectivity check failed:', error);
       return false;
+    }
+  };
+
+  // Fetch subscription plans
+  // Fetch subscription plans
+  const fetchPlans = async (): Promise<{ success: boolean; error?: string }> => {
+    setIsLoadingPlans(true);
+    try {
+      console.log('AuthContext: Fetching plans from API...');
+      const result = await PaymentApiService.getSubscriptionPlans();
+
+      console.log('AuthContext: Plans API result:', result);
+
+      if (result.success && result.data) {
+        // Handle the nested response structure: result.data.data.plans
+        const plansData = result.data.data || result.data;
+        const plans = plansData.plans || [];
+
+        console.log('AuthContext: Extracted plans:', plans);
+        console.log('AuthContext: Number of plans:', plans.length);
+
+        if (plans.length > 0) {
+          setAvailablePlans(plans);
+          console.log('AuthContext: Plans set successfully');
+          return { success: true };
+        } else {
+          console.log('AuthContext: No plans found in response');
+          return { success: false, error: 'No plans available' };
+        }
+      } else {
+        console.log('AuthContext: API request failed:', result.error);
+        return { success: false, error: result.error || 'Failed to fetch plans' };
+      }
+    } catch (error) {
+      console.error('AuthContext: Failed to fetch plans:', error);
+      return { success: false, error: 'Failed to fetch plans' };
+    } finally {
+      setIsLoadingPlans(false);
+    }
+  };
+
+  // Create payment session
+  const createPaymentSession = async (planId: string): Promise<{ success: boolean; data?: PaymentSession; error?: string }> => {
+    if (!session?.api_key) {
+      return { success: false, error: 'No API key available' };
+    }
+
+    try {
+      const result = await PaymentApiService.createCheckoutSession(session.api_key, {
+        plan_id: planId,
+        return_url: `${window.location.origin}/payment-success`
+      });
+
+      if (result.success && result.data) {
+        return { success: true, data: result.data };
+      } else {
+        return { success: false, error: result.error || 'Failed to create payment session' };
+      }
+    } catch (error) {
+      console.error('Failed to create payment session:', error);
+      return { success: false, error: 'Failed to create payment session' };
+    }
+  };
+
+  // Get user subscription
+  const getUserSubscription = async (): Promise<{ success: boolean; data?: UserSubscription; error?: string }> => {
+    if (!session?.api_key) {
+      return { success: false, error: 'No API key available' };
+    }
+
+    try {
+      const result = await PaymentApiService.getUserSubscription(session.api_key);
+      if (result.success) {
+        return { success: true, data: result.data };
+      } else {
+        return { success: false, error: result.error || 'Failed to get subscription' };
+      }
+    } catch (error) {
+      console.error('Failed to get subscription:', error);
+      return { success: false, error: 'Failed to get subscription' };
     }
   };
 
@@ -238,28 +477,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       const result = await AuthApiService.login({ email, password }) as ApiResponse;
 
-      if (result.success && result.data) {
-        const apiData = result.data;
-        const newSession: SessionData = {
-          authenticated: true,
-          user_type: 'registered',
-          api_key: apiData.api_key,
-          device_id: generateDeviceId(),
-          user_info: {
-            username: apiData.username,
-            email: apiData.email,
-            credit_balance: apiData.credit_balance
-          }
-        };
+      console.log('AuthContext: Full login result:', result);
+      console.log('AuthContext: result.success:', result.success);
+      console.log('AuthContext: result.data:', result.data);
 
-        setSession(newSession);
-        saveSession(newSession);
-        setIsFirstTimeUser(checkIsFirstTimeUser());
+      // In AuthContext.tsx, update the login function around line 480-515:
 
-        console.log('AuthContext: Login successful');
-        return { success: true };
-      } else {
-        console.log('AuthContext: Login failed:', result.message || result.error);
+if (result.success && result.data && result.data.data && result.data.data.api_key) {
+  const apiKey = result.data.data.api_key;
+  console.log('AuthContext: Login successful, API key received:', apiKey.substring(0, 20) + '...');
+
+  // Fetch user profile and subscription to get account_type and other details
+  const [userProfile, userSubscription] = await Promise.all([
+    fetchUserProfile(apiKey),
+    fetchUserSubscription(apiKey)
+  ]);
+
+  const newSession: SessionData = {
+    authenticated: true,
+    user_type: 'registered',
+    api_key: apiKey,
+    device_id: generateDeviceId(),
+    user_info: userProfile ? {
+      username: userProfile.username,
+      email: userProfile.email,
+      account_type: userProfile.account_type,  // ← This should be working
+      credit_balance: userProfile.credit_balance,
+      is_verified: userProfile.is_verified,
+      mfa_enabled: userProfile.mfa_enabled
+    } : {
+      // Fallback if profile fetch fails - assume free account
+      email: email,
+      account_type: 'free',  // ← Make sure this fallback is 'free', not undefined
+      credit_balance: 0
+    },
+    subscription: userSubscription || undefined
+  };
+
+  setSession(newSession);
+  saveSession(newSession);
+  setIsFirstTimeUser(checkIsFirstTimeUser());
+
+  console.log('AuthContext: Login successful, account_type:', newSession.user_info?.account_type);
+  console.log('AuthContext: Has subscription:', !!newSession.subscription?.has_subscription);
+  return { success: true };
+} else {
+        console.log('AuthContext: Login failed - success:', result.success, 'data:', result.data, 'api_key:', result.data?.api_key);
         return {
           success: false,
           error: result.message || result.error || 'Login failed'
@@ -277,8 +540,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Signup function
   const signup = async (username: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('AuthContext: Attempting signup for:', username, email);
-
       const result = await AuthApiService.register({
         username,
         email,
@@ -286,17 +547,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }) as ApiResponse;
 
       if (result.success) {
-        console.log('AuthContext: Signup successful, OTP sent');
         return { success: true };
       } else {
-        console.log('AuthContext: Signup failed:', result.message || result.error);
         return {
           success: false,
           error: result.message || result.error || 'Registration failed'
         };
       }
     } catch (error) {
-      console.error('AuthContext: Signup error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Registration failed'
@@ -307,39 +565,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // OTP verification
   const verifyOtp = async (email: string, otp: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('AuthContext: Verifying OTP for:', email);
-
       const result = await AuthApiService.verifyOtp({ email, otp }) as ApiResponse;
 
-      if (result.success && result.data) {
-        const apiData = result.data;
+      if (result.success && result.data && result.data.data && result.data.data.api_key) {
+        const apiKey = result.data.data.api_key;
+        console.log('AuthContext: OTP verification successful, API key received');
+
+        // Fetch user profile for new registered user (no subscription yet)
+        const userProfile = await fetchUserProfile(apiKey);
+
         const newSession: SessionData = {
           authenticated: true,
           user_type: 'registered',
-          api_key: apiData.api_key,
+          api_key: apiKey,
           device_id: generateDeviceId(),
-          user_info: {
-            username: apiData.username,
-            email: apiData.email,
-            credit_balance: apiData.credit_balance
-          }
+          user_info: userProfile ? {
+            username: userProfile.username,
+            email: userProfile.email,
+            account_type: userProfile.account_type,
+            credit_balance: userProfile.credit_balance,
+            is_verified: userProfile.is_verified,
+            mfa_enabled: userProfile.mfa_enabled
+          } : {
+            // Fallback if profile fetch fails - assume free account
+            email: email,
+            account_type: 'free',
+            credit_balance: 0
+          },
+          subscription: undefined // New user won't have subscription yet
         };
 
         setSession(newSession);
         saveSession(newSession);
         setIsFirstTimeUser(checkIsFirstTimeUser());
 
-        console.log('AuthContext: OTP verification successful');
         return { success: true };
       } else {
-        console.log('AuthContext: OTP verification failed:', result.message || result.error);
         return {
           success: false,
           error: result.message || result.error || 'Verification failed'
         };
       }
     } catch (error) {
-      console.error('AuthContext: OTP verification error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Verification failed'
@@ -350,22 +617,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Forgot password function
   const forgotPassword = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('AuthContext: Requesting password reset for:', email);
-
       const result = await AuthApiService.forgotPassword({ email }) as ApiResponse;
-
-      if (result.success) {
-        console.log('AuthContext: Password reset OTP sent successfully');
-        return { success: true };
-      } else {
-        console.log('AuthContext: Password reset request failed:', result.message || result.error);
-        return {
-          success: false,
-          error: result.message || result.error || 'Failed to send reset email'
-        };
-      }
+      return result.success
+        ? { success: true }
+        : { success: false, error: result.message || result.error || 'Failed to send reset email' };
     } catch (error) {
-      console.error('AuthContext: Forgot password error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to send reset email'
@@ -376,26 +632,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Reset password function
   const resetPassword = async (email: string, otp: string, newPassword: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('AuthContext: Attempting password reset for:', email);
-
       const result = await AuthApiService.resetPassword({
         email,
         otp,
         new_password: newPassword
       }) as ApiResponse;
 
-      if (result.success) {
-        console.log('AuthContext: Password reset successful');
-        return { success: true };
-      } else {
-        console.log('AuthContext: Password reset failed:', result.message || result.error);
-        return {
-          success: false,
-          error: result.message || result.error || 'Password reset failed'
-        };
-      }
+      return result.success
+        ? { success: true }
+        : { success: false, error: result.message || result.error || 'Password reset failed' };
     } catch (error) {
-      console.error('AuthContext: Reset password error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Password reset failed'
@@ -406,18 +652,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Guest access setup
   const setupGuestAccess = async (): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('AuthContext: Setting up guest access...');
-
-      // For development, create a mock guest session
       if (import.meta.env.DEV) {
-        console.log('AuthContext: Development mode - creating mock guest session');
-
         const mockGuestSession: SessionData = {
           authenticated: true,
           user_type: 'guest',
           api_key: 'mock_guest_api_key_' + Date.now(),
           device_id: generateDeviceId(),
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           daily_limit: 50,
           requests_today: 0
         };
@@ -426,7 +667,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         saveSession(mockGuestSession);
         setIsFirstTimeUser(checkIsFirstTimeUser());
 
-        console.log('AuthContext: Mock guest session created');
         return { success: true };
       }
 
@@ -459,41 +699,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         saveSession(guestSession);
         setIsFirstTimeUser(checkIsFirstTimeUser());
 
-        console.log('AuthContext: Guest access setup successful');
         return { success: true };
-      } else if (result.status_code === 409) {
-        console.log('AuthContext: Device exists, getting existing session...');
-
-        const statusResult = await AuthApiService.getGuestStatus(deviceId) as ApiResponse;
-
-        if (statusResult.success && statusResult.data) {
-          const statusData = statusResult.data;
-          const existingSession: SessionData = {
-            authenticated: true,
-            user_type: 'guest',
-            api_key: statusData.api_key,
-            device_id: deviceId,
-            expires_at: statusData.expires_at,
-            daily_limit: statusData.daily_limit || 50,
-            requests_today: statusData.requests_today || 0
-          };
-
-          setSession(existingSession);
-          saveSession(existingSession);
-          setIsFirstTimeUser(checkIsFirstTimeUser());
-
-          console.log('AuthContext: Existing guest session retrieved');
-          return { success: true };
-        }
       }
 
-      console.log('AuthContext: Guest setup failed:', result.message || result.error);
       return {
         success: false,
         error: result.message || result.error || 'Failed to setup guest access'
       };
     } catch (error) {
-      console.error('AuthContext: Guest setup error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to setup guest access'
@@ -504,14 +717,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Logout function
   const logout = async (): Promise<void> => {
     console.log('AuthContext: Logging out...');
-
-    if (session?.api_key) {
-      try {
-        await AuthApiService.logout(session.api_key);
-      } catch (error) {
-        console.error('Logout API call failed:', error);
-      }
-    }
 
     setSession(null);
     clearSession();
@@ -524,6 +729,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     session,
     isLoading,
     isFirstTimeUser,
+    availablePlans,
+    isLoadingPlans,
     login,
     signup,
     verifyOtp,
@@ -531,7 +738,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     checkApiConnectivity,
     forgotPassword,
-    resetPassword
+    resetPassword,
+    fetchPlans,
+    createPaymentSession,
+    getUserSubscription,
+    refreshUserData
   };
 
   return (
