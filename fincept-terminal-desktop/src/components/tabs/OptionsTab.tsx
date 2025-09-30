@@ -365,12 +365,12 @@ const OptionsTab: React.FC = () => {
               {showGreeks ? (
                 <>
                   {/* Calls */}
-                  <div style={{ color: COLOR_GREEN, fontWeight: 'bold', textAlign: 'center' }} colSpan={10}>
+                  <div style={{ color: COLOR_GREEN, fontWeight: 'bold', textAlign: 'center' }}>
                     ========== CALLS ==========
                   </div>
                   <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', textAlign: 'center' }}>STRIKE</div>
                   {/* Puts */}
-                  <div style={{ color: COLOR_RED, fontWeight: 'bold', textAlign: 'center' }} colSpan={10}>
+                  <div style={{ color: COLOR_RED, fontWeight: 'bold', textAlign: 'center' }}>
                     ========== PUTS ==========
                   </div>
                 </>

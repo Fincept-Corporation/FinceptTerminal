@@ -233,9 +233,9 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
   // Step 1: Registration Form
   if (step === 'form') {
     return (
-      <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
-        <div className="mb-6">
-          <div className="flex items-center mb-3">
+      <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-lg mx-4 shadow-2xl">
+        <div className="mb-5">
+          <div className="flex items-center mb-2.5">
             <button
               onClick={() => onNavigate('login')}
               className="text-zinc-400 hover:text-white transition-colors mr-3"
@@ -244,12 +244,12 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
             </button>
             <h2 className="text-white text-2xl font-light">Create Account</h2>
           </div>
-          <p className="text-zinc-400 text-xs leading-5">
+          <p className="text-zinc-400 text-sm leading-5">
             Join Fincept to access professional financial terminal and analytics platform.
           </p>
         </div>
 
-        <form onSubmit={handleRegister} className="space-y-4">
+        <form onSubmit={handleRegister} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="firstName" className="text-white text-xs">
@@ -316,7 +316,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                 <button
                   type="button"
                   onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
-                  className="bg-zinc-800 border border-zinc-600 text-white h-9 px-2 text-sm rounded flex items-center gap-1 hover:bg-zinc-700 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 min-w-[70px]"
+                  className="bg-zinc-800 border border-zinc-600 text-white h-9 px-2.5 text-sm rounded flex items-center gap-1 hover:bg-zinc-700 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 min-w-[75px]"
                   disabled={isLoading}
                 >
                   <span className="text-base">{selectedCountry?.flag || "🌍"}</span>
@@ -387,42 +387,44 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="password" className="text-white text-xs">
-              Password *
-            </Label>
-            <div className="relative">
-              <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-              <Input
-                id="password"
-                type="password"
-                placeholder="Create password"
-                value={formData.password}
-                onChange={(e) => handleChange("password", e.target.value)}
-                className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
-                disabled={isLoading}
-                required
-                minLength={8}
-              />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="password" className="text-white text-xs">
+                Password *
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Create password"
+                  value={formData.password}
+                  onChange={(e) => handleChange("password", e.target.value)}
+                  className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
+                  disabled={isLoading}
+                  required
+                  minLength={8}
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="confirmPassword" className="text-white text-xs">
-              Confirm Password *
-            </Label>
-            <div className="relative">
-              <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Confirm password"
-                value={formData.confirmPassword}
-                onChange={(e) => handleChange("confirmPassword", e.target.value)}
-                className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
-                disabled={isLoading}
-                required
-              />
+            <div className="space-y-1">
+              <Label htmlFor="confirmPassword" className="text-white text-xs">
+                Confirm Password *
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Confirm password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => handleChange("confirmPassword", e.target.value)}
+                  className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
+                  disabled={isLoading}
+                  required
+                />
+              </div>
             </div>
           </div>
 
@@ -435,7 +437,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
           <div className="flex justify-end pt-2">
             <Button
               type="submit"
-              className="bg-zinc-700 hover:bg-zinc-600 text-white px-6 py-1.5 text-sm font-normal transition-colors disabled:opacity-50"
+              className="bg-zinc-700 hover:bg-zinc-600 text-white px-6 py-2 text-sm font-normal transition-colors disabled:opacity-50"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -448,7 +450,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
           </div>
         </form>
 
-        <div className="mt-5 pt-4 border-t border-zinc-700 text-center">
+        <div className="mt-4 pt-4 border-t border-zinc-700 text-center">
           <p className="text-zinc-400 text-xs">
             Already have an account?{" "}
             <button

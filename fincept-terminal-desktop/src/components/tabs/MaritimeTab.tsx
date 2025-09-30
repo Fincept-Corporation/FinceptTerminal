@@ -68,7 +68,7 @@ export default function MaritimeTab() {
   ];
 
   const addPreset = (preset: typeof presetLocations[0]) => {
-    setMarkers([...markers, preset]);
+    setMarkers([...markers, { ...preset, title: preset.name }]);
   };
 
   useEffect(() => {

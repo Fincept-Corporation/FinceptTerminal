@@ -24,3 +24,4 @@ dist-ssr
 *.sw?
 
 src/services/node_modules
+src-tauri/target

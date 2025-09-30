@@ -6,7 +6,7 @@ const ProfileTab: React.FC = () => {
 
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [requestCount, setRequestCount] = useState(15);
-  const [usageStats, setUsageStats] = useState({
+  const [usageStats] = useState({
     total_requests: 1250,
     total_credits_used: 3425
   });
@@ -48,7 +48,8 @@ const ProfileTab: React.FC = () => {
 
   const regenerateApiKey = () => {
     const newKey = `fk_user_${Math.random().toString(36).substring(2, 15)}`;
-    setSessionData(prev => ({ ...prev, api_key: newKey }));
+    // TODO: Implement actual API key regeneration
+    console.log('New API key generated:', newKey);
   };
 
   // Header component matching DearPyGUI style
@@ -271,7 +272,7 @@ const ProfileTab: React.FC = () => {
               <TextLine text={`Username: ${userInfo?.username || 'N/A'}`} />
               <TextLine text={`Email: ${userInfo?.email || 'N/A'}`} />
               <TextLine text={`Account Type: ${accountType.charAt(0).toUpperCase() + accountType.slice(1)}`} />
-              <TextLine text={`Member Since: ${formatDate(userInfo?.created_at)}`} />
+              <TextLine text={`Member Since: ${formatDate((userInfo as any)?.created_at)}`} />
               <Spacer />
               {hasSubscription && subscriptionPlan && (
                 <>
