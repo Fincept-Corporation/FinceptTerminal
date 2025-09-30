@@ -6,7 +6,6 @@ import ForumTab from '@/components/tabs/ForumTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import MarketsTab from '@/components/tabs/MarketsTab';
 import NewsTab from '@/components/tabs/NewsTab';
-import AdvancedTab from '@/components/tabs/AdvancedTab';
 import WatchlistTab from '@/components/tabs/WatchlistTab';
 import GeopoliticsTab from '@/components/tabs/GeopoliticsTab';
 import ChatTab from '@/components/tabs/ChatTab';
@@ -25,6 +24,9 @@ import CodeEditorTab from '@/components/tabs/CodeEditorTab';
 import DocsTab from '@/components/tabs/DocsTab';
 import MaritimeTab from '@/components/tabs/MaritimeTab';
 import SettingsTab from '@/components/tabs/SettingsTab';
+import NodeEditorTab from '@/components/tabs/NodeEditorTab';
+import DataSourcesTab from '@/components/tabs/data-sources/DataSourcesTab';
+import AgentsTab from '@/components/tabs/agents/AgentsTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -289,7 +291,9 @@ export default function FinxeptTerminal() {
       padding: '3px 8px',
       fontSize: '10px',
       cursor: 'pointer',
-      borderRadius: '0'
+      borderRadius: '0',
+      whiteSpace: 'nowrap' as const,
+      flexShrink: 0
     },
     active: {
       backgroundColor: '#ea580c',
@@ -298,7 +302,9 @@ export default function FinxeptTerminal() {
       padding: '3px 8px',
       fontSize: '10px',
       cursor: 'pointer',
-      borderRadius: '0'
+      borderRadius: '0',
+      whiteSpace: 'nowrap' as const,
+      flexShrink: 0
     }
   };
 
@@ -315,7 +321,9 @@ export default function FinxeptTerminal() {
       position: 'fixed',
       top: 0,
       left: 0,
-      overscrollBehavior: 'none'
+      overscrollBehavior: 'none',
+      display: 'flex',
+      flexDirection: 'column'
     }}>
       {/* Top Menu Bar with Functional Dropdowns */}
       <div style={{
@@ -324,6 +332,7 @@ export default function FinxeptTerminal() {
         fontSize: '11px',
         borderBottom: '1px solid #404040',
         padding: '2px 8px',
+        flexShrink: 0,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -411,7 +420,8 @@ export default function FinxeptTerminal() {
           borderBottom: '1px solid #404040',
           height: '16px',
           display: 'flex',
-          alignItems: 'center'
+          alignItems: 'center',
+          flexShrink: 0
         }}>
           {statusMessage}
         </div>
@@ -421,17 +431,34 @@ export default function FinxeptTerminal() {
       <div style={{
         backgroundColor: '#3f3f3f',
         borderBottom: '1px solid #404040',
-        height: '26px'
+        height: '26px',
+        position: 'relative',
+        flexShrink: 0
       }}>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-          <TabsList style={{
-            backgroundColor: 'transparent',
-            border: 'none',
-            padding: '2px 4px',
-            height: '100%',
-            justifyContent: 'flex-start',
-            borderRadius: '0'
-          }}>
+        <div style={{
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          height: '100%',
+          scrollbarWidth: 'none', // Firefox
+          msOverflowStyle: 'none', // IE/Edge
+        }} className="hide-scrollbar">
+          <style>{`
+            .hide-scrollbar::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+            <TabsList style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              padding: '2px 4px',
+              height: '100%',
+              justifyContent: 'flex-start',
+              borderRadius: '0',
+              flexWrap: 'nowrap',
+              width: 'max-content',
+              minWidth: '100%'
+            }}>
             <TabsTrigger 
               value="dashboard" 
               style={activeTab === 'dashboard' ? tabStyles.active : tabStyles.default}
@@ -450,17 +477,11 @@ export default function FinxeptTerminal() {
             >
               News
             </TabsTrigger>
-            <TabsTrigger 
-              value="forum" 
+            <TabsTrigger
+              value="forum"
               style={activeTab === 'forum' ? tabStyles.active : tabStyles.default}
             >
               Forum
-            </TabsTrigger>
-            <TabsTrigger 
-              value="advanced" 
-              style={activeTab === 'advanced' ? tabStyles.active : tabStyles.default}
-            >
-              Advanced
             </TabsTrigger>
             <TabsTrigger
               value="watchlist"
@@ -570,8 +591,27 @@ export default function FinxeptTerminal() {
             >
               Settings
             </TabsTrigger>
+            <TabsTrigger
+              value="nodes"
+              style={activeTab === 'nodes' ? tabStyles.active : tabStyles.default}
+            >
+              Node Editor
+            </TabsTrigger>
+            <TabsTrigger
+              value="datasources"
+              style={activeTab === 'datasources' ? tabStyles.active : tabStyles.default}
+            >
+              Data Sources
+            </TabsTrigger>
+            <TabsTrigger
+              value="agents"
+              style={activeTab === 'agents' ? tabStyles.active : tabStyles.default}
+            >
+              Agents
+            </TabsTrigger>
           </TabsList>
         </Tabs>
+        </div>
       </div>
 
       {/* Command Bar */}
@@ -582,7 +622,8 @@ export default function FinxeptTerminal() {
         height: '24px',
         display: 'flex',
         alignItems: 'center',
-        gap: '12px'
+        gap: '12px',
+        flexShrink: 0
       }}>
         <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 6px', fontSize: '9px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
         <span style={{ color: '#a3a3a3', fontSize: '10px' }}>Enter Command</span>
@@ -606,7 +647,8 @@ export default function FinxeptTerminal() {
         height: '20px',
         display: 'flex',
         alignItems: 'center',
-        gap: '16px'
+        gap: '16px',
+        flexShrink: 0
       }}>
         <span style={{ color: '#fbbf24', fontSize: '10px' }}>F1:HELP</span>
         <span style={{ color: '#fbbf24', fontSize: '10px' }}>F2:MARKETS</span>
@@ -619,8 +661,10 @@ export default function FinxeptTerminal() {
 
       {/* Main Content Area with Tab Content */}
       <div style={{
-        height: statusMessage ? 'calc(100vh - 123px)' : 'calc(100vh - 107px)',
-        backgroundColor: '#000000'
+        flex: 1,
+        backgroundColor: '#000000',
+        minHeight: 0,
+        overflow: 'hidden'
       }}>
         <Tabs value={activeTab} className="h-full">
           <TabsContent value="dashboard" className="h-full m-0 p-0">
@@ -634,9 +678,6 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="forum" className="h-full m-0 p-0">
             <ForumTab />
-          </TabsContent>
-          <TabsContent value="advanced" className="h-full m-0 p-0">
-            <AdvancedTab />
           </TabsContent>
           <TabsContent value="watchlist" className="h-full m-0 p-0">
             <WatchlistTab />
@@ -691,6 +732,15 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="settings" className="h-full m-0 p-0">
             <SettingsTab />
+          </TabsContent>
+          <TabsContent value="nodes" className="h-full m-0 p-0">
+            <NodeEditorTab />
+          </TabsContent>
+          <TabsContent value="datasources" className="h-full m-0 p-0">
+            <DataSourcesTab />
+          </TabsContent>
+          <TabsContent value="agents" className="h-full m-0 p-0">
+            <AgentsTab />
           </TabsContent>
         </Tabs>
       </div>
