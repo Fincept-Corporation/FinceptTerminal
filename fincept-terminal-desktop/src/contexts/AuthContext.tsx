@@ -241,7 +241,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
     if (result.success && result.data) {
       // Fix: Extract the nested data properly
-      const profileData = result.data.data || result.data;
+      const profileData = (result.data as any).data || result.data;
       console.log('AuthContext: Extracted profile data:', profileData); // Add this debug line
       return profileData;
     }
@@ -300,23 +300,41 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
   // Validate session with API
   const validateSession = async (sessionData: SessionData): Promise<SessionData | null> => {
-    if (!sessionData.api_key) return null;
+    if (!sessionData.api_key) {
+      console.log('validateSession: No API key found');
+      return null;
+    }
 
+    console.log('validateSession: Validating session with API...');
     const result = await AuthApiService.getAuthStatus(sessionData.api_key, sessionData.device_id);
+    console.log('validateSession: Auth status result:', result);
+    console.log('validateSession: result.success =', result.success);
+    console.log('validateSession: result.data =', result.data);
 
-    if (result.success && result.data?.authenticated) {
-      const apiData = result.data;
+    // Backend returns nested structure: result.data.data contains the actual auth data
+    const authData = (result.data as any)?.data || result.data;
+    console.log('validateSession: authData =', authData);
+    console.log('validateSession: authData?.authenticated =', authData?.authenticated);
+
+    if (result.success && authData?.authenticated) {
+      const apiData = authData;
+      console.log('validateSession: User authenticated, type:', apiData.user_type);
 
       // For registered users, fetch detailed profile and subscription
       let userProfile = null;
       let userSubscription = null;
 
       if (apiData.user_type === 'registered') {
+        console.log('validateSession: Fetching user profile...');
         userProfile = await fetchUserProfile(sessionData.api_key);
+        console.log('validateSession: User profile result:', userProfile);
+
+        console.log('validateSession: Fetching user subscription...');
         userSubscription = await fetchUserSubscription(sessionData.api_key);
+        console.log('validateSession: User subscription result:', userSubscription);
       }
 
-      return {
+      const validatedSession = {
         authenticated: true,
         user_type: apiData.user_type,
         api_key: sessionData.api_key,
@@ -334,8 +352,12 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         requests_today: apiData.user_type === 'guest' ? apiData.guest?.requests_today : undefined,
         subscription: userSubscription || undefined
       };
+
+      console.log('validateSession: Returning validated session:', validatedSession);
+      return validatedSession;
     }
 
+    console.log('validateSession: Auth status check failed or not authenticated');
     return null;
   };
 
@@ -402,7 +424,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
 
       if (result.success && result.data) {
         // Handle the nested response structure: result.data.data.plans
-        const plansData = result.data.data || result.data;
+        const plansData = (result.data as any).data || result.data;
         const plans = plansData.plans || [];
 
         console.log('AuthContext: Extracted plans:', plans);

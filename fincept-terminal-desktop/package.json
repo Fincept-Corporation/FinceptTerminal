@@ -56,6 +56,7 @@
     "otplib": "^12.0.1",
     "playwright": "^1.55.1",
     "react": "^19.1.0",
+    "react-confetti": "^6.4.0",
     "react-day-picker": "^9.11.0",
     "react-dom": "^19.1.0",
     "recharts": "^2.15.4",

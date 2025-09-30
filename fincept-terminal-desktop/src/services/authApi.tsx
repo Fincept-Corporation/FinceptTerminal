@@ -3,7 +3,7 @@
 
 // API Configuration
 const API_CONFIG = {
-  BASE_URL: 'https://finceptbackend.share.zrok.io',
+  BASE_URL: import.meta.env.DEV ? '/api' : 'https://finceptbackend.share.zrok.io',
   API_VERSION: 'v1',
   CONNECTION_TIMEOUT: 10000,
   REQUEST_TIMEOUT: 30000
@@ -126,7 +126,7 @@ const makeApiRequest = async <T = any>(
       url,
       endpoint,
       data,
-      headers: { ...defaultHeaders, 'X-API-Key': defaultHeaders['X-API-Key'] ? '[REDACTED]' : undefined }
+      headers: { ...defaultHeaders, 'X-API-Key': (defaultHeaders as any)['X-API-Key'] ? '[REDACTED]' : undefined }
     });
 
     const config: RequestInit = {
