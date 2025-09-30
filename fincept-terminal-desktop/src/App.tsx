@@ -13,7 +13,6 @@ import HelpScreen from './components/auth/HelpScreen';
 import PricingScreen from './components/auth/PricingScreen';
 import PaymentProcessingScreen from './components/payment/PaymentProcessingScreen';
 import PaymentSuccessScreen from './components/payment/PaymentSuccessScreen';
-import InAppPaymentWindow from './components/payment/InAppPaymentWindow';
 import ContactUsScreen from './components/info/ContactUsScreen';
 import TermsOfServiceScreen from './components/info/TermsOfServiceScreen';
 import TrademarksScreen from './components/info/TrademarksScreen';
@@ -22,6 +21,7 @@ import DashboardScreen from './components/dashboard/DashboardScreen';
 import BackgroundPattern from './components/common/BackgroundPattern';
 import Header from './components/common/Header';
 import Footer from './components/common/Footer';
+import PaymentOverlay from './components/payment/PaymentOverlay';
 
 export type Screen =
   | 'login'
@@ -194,16 +194,7 @@ const App: React.FC = () => {
       <>
         <DashboardScreen />
         {/* In-App Payment Window Overlay */}
-        {paymentWindow.isOpen && (
-          <InAppPaymentWindow
-            checkoutUrl={paymentWindow.checkoutUrl}
-            planName={paymentWindow.planName}
-            planPrice={paymentWindow.planPrice}
-            onSuccess={paymentWindow.onSuccess || (() => {})}
-            onCancel={paymentWindow.onCancel || (() => {})}
-            onError={paymentWindow.onError || (() => {})}
-          />
-        )}
+        <PaymentOverlay paymentWindow={paymentWindow} />
       </>
     );
   }
@@ -217,16 +208,7 @@ const App: React.FC = () => {
           {renderPaymentScreen()}
         </div>
         {/* In-App Payment Window Overlay */}
-        {paymentWindow.isOpen && (
-          <InAppPaymentWindow
-            checkoutUrl={paymentWindow.checkoutUrl}
-            planName={paymentWindow.planName}
-            planPrice={paymentWindow.planPrice}
-            onSuccess={paymentWindow.onSuccess || (() => {})}
-            onCancel={paymentWindow.onCancel || (() => {})}
-            onError={paymentWindow.onError || (() => {})}
-          />
-        )}
+        <PaymentOverlay paymentWindow={paymentWindow} />
       </div>
     );
   }
@@ -331,16 +313,7 @@ const App: React.FC = () => {
       <Footer onNavigate={setCurrentScreen} />
 
       {/* In-App Payment Window Overlay - Available on all screens */}
-      {paymentWindow.isOpen && (
-        <InAppPaymentWindow
-          checkoutUrl={paymentWindow.checkoutUrl}
-          planName={paymentWindow.planName}
-          planPrice={paymentWindow.planPrice}
-          onSuccess={paymentWindow.onSuccess || (() => {})}
-          onCancel={paymentWindow.onCancel || (() => {})}
-          onError={paymentWindow.onError || (() => {})}
-        />
-      )}
+      <PaymentOverlay paymentWindow={paymentWindow} />
     </div>
   );
 };
