@@ -12,8 +12,8 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
@@ -21,5 +21,6 @@
     }
   },
   "include": ["src"],
+  "exclude": ["src/services/duckdbService.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

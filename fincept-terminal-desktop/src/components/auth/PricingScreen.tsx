@@ -28,7 +28,7 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
 
   // Prevent multiple simultaneous requests
   const loadingRef = useRef(false);
-  const retryTimeoutRef = useRef<NodeJS.Timeout>();
+  const retryTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Load plans on component mount - with debouncing
   useEffect(() => {
@@ -128,11 +128,11 @@ const handleSelectPlan = async () => {
 
       // DEBUG: Log the exact structure
       console.log('result.data structure:', JSON.stringify(result.data, null, 2));
-      console.log('checkout_url direct access:', result.data.checkout_url);
-      console.log('checkout_url via data.data:', result.data.data?.checkout_url);
+      console.log('checkout_url direct access:', (result.data as any).checkout_url);
+      console.log('checkout_url via data.data:', (result.data as any).data?.checkout_url);
 
       // Try different data access patterns
-      const checkoutUrl = result.data.checkout_url || result.data.data?.checkout_url;
+      const checkoutUrl = (result.data as any).checkout_url || (result.data as any).data?.checkout_url;
 
       if (checkoutUrl) {
         console.log('Found checkout URL:', checkoutUrl);

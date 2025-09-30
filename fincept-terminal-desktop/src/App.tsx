@@ -107,15 +107,15 @@ const App: React.FC = () => {
     const sessionId = urlParams.get('session_id');
     const paymentId = urlParams.get('payment_id');
 
-    // If we have payment parameters, go directly to success screen
-    if ((sessionId || paymentId) && session?.authenticated) {
+    // If we have payment parameters, go directly to success screen (don't wait for session)
+    if (sessionId || paymentId) {
       console.log('Payment success URL detected, redirecting to payment success screen');
       setCurrentScreen('paymentSuccess');
       // Clear URL parameters to prevent issues on refresh
       window.history.replaceState({}, document.title, window.location.pathname);
       return;
     }
-  }, [session?.authenticated]);
+  }, []); // Run only once on mount
 
   // Auto-navigation based on authentication state
   useEffect(() => {
@@ -136,7 +136,7 @@ const App: React.FC = () => {
 
         // Check if user is on free plan and needs to see pricing
         const isFreePlan = session.user_info?.account_type === 'free';
-        const hasActiveSubscription = session.subscription?.has_subscription;
+        const hasActiveSubscription = (session.subscription as any)?.data?.has_subscription || session.subscription?.has_subscription;
 
         // Show pricing if:
         // 1. User is registered with free account type AND
@@ -162,15 +162,17 @@ const App: React.FC = () => {
         }
       } else {
         console.log('Session not authenticated, staying on auth screens');
+        // Don't redirect if on payment success screen - let it handle authentication internally
         if (currentScreen === 'dashboard' ||
             currentScreen === 'pricing' ||
-            currentScreen === 'paymentProcessing' ||
-            currentScreen === 'paymentSuccess') {
+            currentScreen === 'paymentProcessing') {
           setCurrentScreen('login');
         }
-        // Reset flags when user logs out
-        setHasChosenFreePlan(false);
-        setCameFromLogin(false);
+        // Don't reset flags or redirect from paymentSuccess - it needs to complete first
+        if (currentScreen !== 'paymentSuccess') {
+          setHasChosenFreePlan(false);
+          setCameFromLogin(false);
+        }
       }
     }
   }, [session, isLoading, currentScreen, cameFromLogin, hasChosenFreePlan]);

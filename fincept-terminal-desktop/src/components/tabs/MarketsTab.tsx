@@ -16,7 +16,7 @@ const MarketsTab: React.FC = () => {
   const BLOOMBERG_PANEL_BG = '#000000';
 
   // Market data (exact structure from Python)
-  const marketData = {
+  const marketData: { [key: string]: string[][] } = {
     'Stock Indices': [
       ['S&P 500', '5232.35', '+23.45', '+0.45%', '+2.1%', '+5.4%'],
       ['Nasdaq 100', '16412.87', '-15.23', '-0.09%', '+1.8%', '+7.2%'],
@@ -92,7 +92,7 @@ const MarketsTab: React.FC = () => {
   };
 
   // Regional data (exact from Python)
-  const regionalData = {
+  const regionalData: { [key: string]: string[][] } = {
     'India': [
       ['RELIANCE.NS', 'Reliance Industries', '2500.45', '+23.45', '+0.95%'],
       ['TCS.NS', 'Tata Consultancy', '3456.78', '-12.34', '-0.36%'],

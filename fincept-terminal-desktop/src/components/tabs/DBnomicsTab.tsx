@@ -257,14 +257,14 @@ export default function DBnomicsTab() {
     if (seriesArray.length === 0) return null;
 
     const w = compact ? '100%' : 800;
-    const h = compact ? 240 : 400;
+    const h: number = compact ? 240 : 400;
     const ml = 60;
     const mr = 20;
     const mt = 20;
     const mb = 50;
 
     // For compact view, calculate width dynamically
-    const actualWidth = compact ? 380 : 800;
+    const actualWidth: number = compact ? 380 : 800;
     const pw = actualWidth - ml - mr;
     const ph = h - mt - mb;
 
@@ -302,7 +302,7 @@ export default function DBnomicsTab() {
             <g key={sIdx}>
               {sorted.map((obs, idx) => {
                 const x = ml + (pw * idx) / (sorted.length - 1 || 1);
-                const y = h - mb - (ph * ((obs.value - yMin) / yRange));
+                const y = h - mb - (ph * ((Number(obs.value) - yMin) / yRange));
                 const barWidth = pw / sorted.length * 0.8;
 
                 if (chartType === 'line' || chartType === 'area') {
@@ -310,11 +310,15 @@ export default function DBnomicsTab() {
                     <g key={idx}>
                       {chartType === 'area' && idx === 0 && (
                         <polygon
-                          points={sorted.map((o, i) => {
-                            const xi = ml + (pw * i) / (sorted.length - 1 || 1);
-                            const yi = h - mb - (ph * ((o.value - yMin) / yRange));
-                            return `${xi},${yi}`;
-                          }).join(' ') + ` ${w - mr},${h - mb} ${ml},${h - mb}`}
+                          points={(() => {
+                            const points = sorted.map((o, i) => {
+                              const xi = ml + (pw * i) / (sorted.length - 1 || 1);
+                              const oValue = typeof o.value === 'number' ? o.value : Number(o.value);
+                              const yi = h - mb - (ph * ((oValue - yMin) / yRange));
+                              return `${xi},${yi}`;
+                            }).join(' ');
+                            return `${points} ${actualWidth - mr},${h - mb} ${ml},${h - mb}`;
+                          })()}
                           fill={series.color}
                           opacity="0.2"
                         />
@@ -325,7 +329,7 @@ export default function DBnomicsTab() {
                           x1={x}
                           y1={y}
                           x2={ml + (pw * (idx + 1)) / (sorted.length - 1 || 1)}
-                          y2={h - mb - (ph * ((sorted[idx + 1].value - yMin) / yRange))}
+                          y2={h - mb - (ph * ((Number(sorted[idx + 1].value) - yMin) / yRange))}
                           stroke={series.color}
                           strokeWidth="1.5"
                         />
