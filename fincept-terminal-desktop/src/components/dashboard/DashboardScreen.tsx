@@ -8,6 +8,21 @@ import NewsTab from '@/components/tabs/NewsTab';
 import AdvancedTab from '@/components/tabs/AdvancedTab';
 import WatchlistTab from '@/components/tabs/WatchlistTab';
 import GeopoliticsTab from '@/components/tabs/GeopoliticsTab';
+import ChatTab from '@/components/tabs/ChatTab';
+import ProfileTab from '@/components/tabs/ProfileTab';
+import MarketplaceTab from '@/components/tabs/MarketplaceTab';
+import PortfolioTab from '@/components/tabs/PortfolioTab';
+import AnalyticsTab from '@/components/tabs/AnalyticsTab';
+import EquityResearchTab from '@/components/tabs/EquityResearchTab';
+import FixedIncomeTab from '@/components/tabs/FixedIncomeTab';
+import OptionsTab from '@/components/tabs/OptionsTab';
+import EconomicCalendarTab from '@/components/tabs/EconomicCalendarTab';
+import ScreenerTab from '@/components/tabs/ScreenerTab';
+import AlertsTab from '@/components/tabs/AlertsTab';
+import DBnomicsTab from '@/components/tabs/DBnomicsTab';
+import CodeEditorTab from '@/components/tabs/CodeEditorTab';
+import DocsTab from '@/components/tabs/DocsTab';
+import MaritimeTab from '@/components/tabs/MaritimeTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }) => {
@@ -276,7 +291,9 @@ export default function FinxeptTerminal() {
           <DropdownMenu label="Tools" items={toolsMenuItems} onItemClick={handleMenuAction} />
           <DropdownMenu label="Help" items={helpMenuItems} onItemClick={handleMenuAction} />
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <span style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px' }}>FINCEPT PROFESSIONAL</span>
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
           <button
             onClick={toggleFullscreen}
             style={{
@@ -377,6 +394,96 @@ export default function FinxeptTerminal() {
             >
               Geopolitics
             </TabsTrigger>
+            <TabsTrigger
+              value="chat"
+              style={activeTab === 'chat' ? tabStyles.active : tabStyles.default}
+            >
+              AI Chat
+            </TabsTrigger>
+            <TabsTrigger
+              value="profile"
+              style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
+            >
+              Profile
+            </TabsTrigger>
+            <TabsTrigger
+              value="marketplace"
+              style={activeTab === 'marketplace' ? tabStyles.active : tabStyles.default}
+            >
+              Marketplace
+            </TabsTrigger>
+            <TabsTrigger
+              value="portfolio"
+              style={activeTab === 'portfolio' ? tabStyles.active : tabStyles.default}
+            >
+              Portfolio
+            </TabsTrigger>
+            <TabsTrigger
+              value="analytics"
+              style={activeTab === 'analytics' ? tabStyles.active : tabStyles.default}
+            >
+              Analytics
+            </TabsTrigger>
+            <TabsTrigger
+              value="research"
+              style={activeTab === 'research' ? tabStyles.active : tabStyles.default}
+            >
+              Equity Research
+            </TabsTrigger>
+            <TabsTrigger
+              value="fixedincome"
+              style={activeTab === 'fixedincome' ? tabStyles.active : tabStyles.default}
+            >
+              Fixed Income
+            </TabsTrigger>
+            <TabsTrigger
+              value="options"
+              style={activeTab === 'options' ? tabStyles.active : tabStyles.default}
+            >
+              Options
+            </TabsTrigger>
+            <TabsTrigger
+              value="calendar"
+              style={activeTab === 'calendar' ? tabStyles.active : tabStyles.default}
+            >
+              Economic Calendar
+            </TabsTrigger>
+            <TabsTrigger
+              value="screener"
+              style={activeTab === 'screener' ? tabStyles.active : tabStyles.default}
+            >
+              Screener
+            </TabsTrigger>
+            <TabsTrigger
+              value="alerts"
+              style={activeTab === 'alerts' ? tabStyles.active : tabStyles.default}
+            >
+              Alerts
+            </TabsTrigger>
+            <TabsTrigger
+              value="dbnomics"
+              style={activeTab === 'dbnomics' ? tabStyles.active : tabStyles.default}
+            >
+              DBnomics
+            </TabsTrigger>
+            <TabsTrigger
+              value="code"
+              style={activeTab === 'code' ? tabStyles.active : tabStyles.default}
+            >
+              Code Editor
+            </TabsTrigger>
+            <TabsTrigger
+              value="docs"
+              style={activeTab === 'docs' ? tabStyles.active : tabStyles.default}
+            >
+              Docs
+            </TabsTrigger>
+            <TabsTrigger
+              value="maritime"
+              style={activeTab === 'maritime' ? tabStyles.active : tabStyles.default}
+            >
+              Maritime
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -450,6 +557,51 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="geopolitics" className="h-full m-0 p-0">
             <GeopoliticsTab />
+          </TabsContent>
+          <TabsContent value="chat" className="h-full m-0 p-0">
+            <ChatTab />
+          </TabsContent>
+          <TabsContent value="profile" className="h-full m-0 p-0">
+            <ProfileTab />
+          </TabsContent>
+          <TabsContent value="marketplace" className="h-full m-0 p-0">
+            <MarketplaceTab />
+          </TabsContent>
+          <TabsContent value="portfolio" className="h-full m-0 p-0">
+            <PortfolioTab />
+          </TabsContent>
+          <TabsContent value="analytics" className="h-full m-0 p-0">
+            <AnalyticsTab />
+          </TabsContent>
+          <TabsContent value="research" className="h-full m-0 p-0">
+            <EquityResearchTab />
+          </TabsContent>
+          <TabsContent value="fixedincome" className="h-full m-0 p-0">
+            <FixedIncomeTab />
+          </TabsContent>
+          <TabsContent value="options" className="h-full m-0 p-0">
+            <OptionsTab />
+          </TabsContent>
+          <TabsContent value="calendar" className="h-full m-0 p-0">
+            <EconomicCalendarTab />
+          </TabsContent>
+          <TabsContent value="screener" className="h-full m-0 p-0">
+            <ScreenerTab />
+          </TabsContent>
+          <TabsContent value="alerts" className="h-full m-0 p-0">
+            <AlertsTab />
+          </TabsContent>
+          <TabsContent value="dbnomics" className="h-full m-0 p-0">
+            <DBnomicsTab />
+          </TabsContent>
+          <TabsContent value="code" className="h-full m-0 p-0">
+            <CodeEditorTab />
+          </TabsContent>
+          <TabsContent value="docs" className="h-full m-0 p-0">
+            <DocsTab />
+          </TabsContent>
+          <TabsContent value="maritime" className="h-full m-0 p-0">
+            <MaritimeTab />
           </TabsContent>
         </Tabs>
       </div>

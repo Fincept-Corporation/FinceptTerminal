@@ -305,6 +305,23 @@ const MarketsTab: React.FC = () => {
       display: 'flex',
       flexDirection: 'column'
     }}>
+      <style>{`
+        /* Custom scrollbar styles */
+        *::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        *::-webkit-scrollbar-track {
+          background: #1a1a1a;
+        }
+        *::-webkit-scrollbar-thumb {
+          background: #404040;
+          border-radius: 4px;
+        }
+        *::-webkit-scrollbar-thumb:hover {
+          background: #525252;
+        }
+      `}</style>
       {/* Header Bar (exact from Python) */}
       <div style={{
         display: 'flex',
