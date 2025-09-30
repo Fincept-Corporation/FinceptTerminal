@@ -3,7 +3,7 @@
 
 // API Configuration
 const API_CONFIG = {
-  BASE_URL: 'http://localhost:4500',
+  BASE_URL: 'https://finceptbackend.share.zrok.io',
   API_VERSION: 'v1',
   CONNECTION_TIMEOUT: 10000,
   REQUEST_TIMEOUT: 30000
