@@ -1,890 +1,598 @@
-// File: src/components/tabs/ForumTab.tsx
-// Forum UI component with Bloomberg terminal styling
-
 import React, { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Search, 
-  Plus, 
-  TrendingUp, 
-  Clock, 
-  MessageSquare, 
-  Eye, 
-  ThumbsUp, 
-  ThumbsDown, 
-  Pin,
-  RefreshCw,
-  HelpCircle,
-  User
-} from 'lucide-react';
 
-import { useAuth } from '@/contexts/AuthContext';
-import { 
-  ForumApiService, 
-  ForumCategory, 
-  ForumPost, 
-  ForumComment, 
-  ForumStats,
-  ForumUtils 
-} from '@/services/forumApi';
+interface ForumPost {
+  id: string;
+  time: string;
+  author: string;
+  title: string;
+  content: string;
+  category: string;
+  tags: string[];
+  views: number;
+  replies: number;
+  likes: number;
+  sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  priority: 'HOT' | 'TRENDING' | 'NORMAL';
+  verified: boolean;
+}
 
-interface ForumTabProps {}
+interface ForumUser {
+  username: string;
+  reputation: number;
+  posts: number;
+  joined: string;
+  status: 'ONLINE' | 'OFFLINE';
+}
 
-const ForumTab: React.FC<ForumTabProps> = () => {
-  const { session } = useAuth();
-  
-  // State management
-  const [categories, setCategories] = useState<ForumCategory[]>([]);
-  const [posts, setPosts] = useState<ForumPost[]>([]);
-  const [stats, setStats] = useState<ForumStats | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
-  const [currentCategoryName, setCurrentCategoryName] = useState<string>('All Categories');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sortBy, setSortBy] = useState<string>('latest');
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string>('');
+const ForumTab: React.FC = () => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [activeCategory, setActiveCategory] = useState('ALL');
+  const [sortBy, setSortBy] = useState('LATEST');
+  const [onlineUsers, setOnlineUsers] = useState(1247);
 
-  // Post creation state
-  const [showCreatePost, setShowCreatePost] = useState<boolean>(false);
-  const [newPostTitle, setNewPostTitle] = useState<string>('');
-  const [newPostContent, setNewPostContent] = useState<string>('');
-  const [newPostCategory, setNewPostCategory] = useState<string>('');
-  const [createPostLoading, setCreatePostLoading] = useState<boolean>(false);
+  // Bloomberg color scheme
+  const BLOOMBERG_ORANGE = '#FFA500';
+  const BLOOMBERG_WHITE = '#FFFFFF';
+  const BLOOMBERG_RED = '#FF0000';
+  const BLOOMBERG_GREEN = '#00C800';
+  const BLOOMBERG_YELLOW = '#FFFF00';
+  const BLOOMBERG_GRAY = '#787878';
+  const BLOOMBERG_BLUE = '#6496FA';
+  const BLOOMBERG_PURPLE = '#C864FF';
+  const BLOOMBERG_CYAN = '#00FFFF';
+  const BLOOMBERG_DARK_BG = '#000000';
+  const BLOOMBERG_PANEL_BG = '#0a0a0a';
 
-  // Post details state
-  const [selectedPost, setSelectedPost] = useState<ForumPost | null>(null);
-  const [postComments, setPostComments] = useState<ForumComment[]>([]);
-  const [showPostDetails, setShowPostDetails] = useState<boolean>(false);
-  const [newComment, setNewComment] = useState<string>('');
-  const [commentLoading, setCommentLoading] = useState<boolean>(false);
-
-  // Bloomberg terminal colors
-  const colors = {
-    orange: '#ea580c',
-    white: '#ffffff',
-    red: '#ef4444',
-    green: '#22c55e',
-    yellow: '#eab308',
-    gray: '#64748b',
-    blue: '#3b82f6',
-    purple: '#8b5cf6'
-  };
-
-  // Authentication check
-  const isAuthenticated = session?.authenticated || false;
-  const apiKey = session?.api_key || undefined;
-  const deviceId = session?.device_id || undefined;
-
-  // Load initial data
   useEffect(() => {
-    if (isAuthenticated || session?.user_type === 'guest') {
-      loadInitialData();
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+      setOnlineUsers(prev => prev + Math.floor(Math.random() * 10) - 5);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const forumPosts: ForumPost[] = [
+    {
+      id: '1',
+      time: '16:52:18',
+      author: 'QuantTrader_Pro',
+      title: 'Fed Rate Decision Analysis - 75bps Cut Implications for Q2 2024',
+      content: 'Deep analysis of the Federal Reserve\'s emergency rate cut decision. Historical precedents from 2008 and 2020 suggest this could trigger a sustained equity rally. My quant models show S&P 500 has 78% probability of hitting 4,950 within 30 days. Key sectors to watch: Tech (AI infrastructure), Regional Banks (benefiting from rate cuts), Real Estate (commercial REITs). However, watch for potential stagflation risks if inflation doesn\'t respond as expected. Technical analysis shows strong support at 4,750 with RSI indicating oversold conditions in previous weeks. Options market is pricing in 15% move in either direction - suggesting high uncertainty. My personal position: Long QQQ calls, Short VIX, Hedged with TLT puts.',
+      category: 'MARKETS',
+      tags: ['FED', 'RATES', 'ANALYSIS', 'S&P500'],
+      views: 8924,
+      replies: 156,
+      likes: 342,
+      sentiment: 'BULLISH',
+      priority: 'HOT',
+      verified: true
+    },
+    {
+      id: '2',
+      time: '16:48:33',
+      author: 'TechInvestor88',
+      title: 'NVIDIA Q4 Earnings Preview - AI Chip Demand Analysis',
+      content: 'NVDA earnings expected next week. My channel checks with data center operators suggest GPU orders are up 40% QoQ. H100 chips still have 6-month waiting lists. Competition from AMD and custom chips (Google TPU, Amazon Trainium) not materially impacting market share yet. Guidance will be key - looking for $30B+ revenue guidance for FY2024. Stock trading at 45x forward earnings which seems reasonable given 50%+ revenue growth. Potential risks: export restrictions to China (20% of revenue), datacenter capex slowdown, margin compression from next-gen Blackwell chips. My play: Selling $650 puts, buying $750 calls for earnings week. High IV makes this attractive. What are your thoughts on the competitive landscape?',
+      category: 'TECH',
+      tags: ['NVDA', 'EARNINGS', 'AI', 'SEMICONDUCTORS'],
+      views: 6234,
+      replies: 89,
+      likes: 278,
+      sentiment: 'BULLISH',
+      priority: 'TRENDING',
+      verified: true
+    },
+    {
+      id: '3',
+      time: '16:45:12',
+      author: 'CryptoWhale_2024',
+      title: 'Bitcoin ETF Approval - Historical Analysis of Gold ETF Launch 2004',
+      content: 'Now that spot BTC ETFs are approved, I did historical analysis of what happened when Gold ETF (GLD) launched in Nov 2004. Gold was at $450/oz and rallied to $1,900/oz over next 7 years (322% gain). Key differences: Gold already had massive institutional adoption, BTC is earlier in adoption curve. Similarities: Both are "digital gold" narratives, both faced regulatory skepticism, both had futures products before ETFs. My projection: BTC could see $100K within 12-18 months as institutional allocations begin. Fidelity alone has $4.5T AUM - even 1% allocation would be $45B into BTC market. However, watch for: Grayscale GBTC redemptions (discount now closed), Mt. Gox distribution, regulatory changes. I\'m holding long-term, targeting $150K by end of 2025.',
+      category: 'CRYPTO',
+      tags: ['BTC', 'ETF', 'INSTITUTIONS', 'GOLD'],
+      views: 5823,
+      replies: 142,
+      likes: 401,
+      sentiment: 'BULLISH',
+      priority: 'HOT',
+      verified: true
+    },
+    {
+      id: '4',
+      time: '16:41:45',
+      author: 'EnergyAnalyst_TX',
+      title: 'Saudi Arabia Production Cuts - Oil Supply Dynamics Through 2024',
+      content: 'Saudi extending voluntary 1M bpd cuts through Q2. This is critical because global oil inventories are already at 5-year lows. US SPR still depleted (365M barrels vs 650M historical). Demand side: China reopening could add 1.5M bpd demand, US summer driving season approaching. Supply side: US shale growth plateauing at 13M bpd, OPEC+ discipline stronger than expected. My price targets: Brent $95-105 range for Q2/Q3, potential spike to $120 if geopolitical tensions escalate (Middle East, Russia). How to play: Long XLE (energy sector ETF), individual picks - CVX and XOM for stability + dividends, smaller E&Ps for leverage (DVN, FANG). Alternative plays: Refined products (crack spreads widening), tanker stocks (shipping rates up 40% YoY). Risks: Demand destruction above $100/bbl, surprise OPEC production increases.',
+      category: 'ENERGY',
+      tags: ['OIL', 'OPEC', 'COMMODITIES', 'ENERGY'],
+      views: 4156,
+      replies: 67,
+      likes: 189,
+      sentiment: 'BULLISH',
+      priority: 'TRENDING',
+      verified: true
+    },
+    {
+      id: '5',
+      time: '16:38:22',
+      author: 'BankingInsider',
+      title: 'JPMorgan Q4 Beat - What It Means for Regional Banks',
+      content: 'JPM crushed earnings with $15.2B profit. Key takeaway: Net Interest Margin held up despite rate uncertainty. Credit quality remains strong (provisions down 34%). But here\'s what matters for regional banks (KRE, RF, CFG): JPM benefited from deposit flight FROM regional banks after SVB collapse. They gained $200B+ in deposits at near-zero cost. Regional banks face opposite dynamic: deposit costs up 200bps, commercial real estate exposure (office vacancy at 20%+ in major cities), wholesale funding pressure. My contrarian take: Some regional banks are now oversold. Look at tangible book value - many trading at 0.7x TBV. Potential acquisitions by larger banks could unlock value. Playing this with: Long USB and TFC (strong balance sheets), short SBNY and PACW (CRE exposure). Rate cuts actually help net interest income for banks - flattening curve is positive.',
+      category: 'BANKING',
+      tags: ['JPM', 'BANKS', 'EARNINGS', 'FINANCIALS'],
+      views: 3642,
+      replies: 78,
+      likes: 156,
+      sentiment: 'NEUTRAL',
+      priority: 'NORMAL',
+      verified: true
+    },
+    {
+      id: '6',
+      time: '16:35:01',
+      author: 'GlobalMacro_Trader',
+      title: 'China $2.8T Infrastructure Plan - Supply Chain and Commodity Implications',
+      content: 'China announced massive Belt & Road 2.0 initiative. This is bigger than most realize. $2.8T over 5 years = $560B annually (compare to China\'s 2023 GDP of $18T, this is 3% of GDP). Focus areas: AI infrastructure, renewable energy (solar/wind), digital connectivity, ports/logistics. Commodity implications: Steel demand up (already seeing Chinese rebar futures +8%), Copper demand massive (EV charging, grid infrastructure), Rare earths (tech components), Lithium (battery supply chain). Equity plays: Chinese infrastructure stocks (obviously), but ALSO emerging market infrastructure plays (Indonesia, Vietnam, Pakistan). Commodity plays: FCX (copper), ALB (lithium), MP (rare earths). Currency implications: Yuan strength short-term as capital flows in, but medium-term weakness as China exports inflation via commodity demand. This is 2008-2010 China stimulus playbook 2.0. Worked then, could work again.',
+      category: 'GLOBAL',
+      tags: ['CHINA', 'INFRASTRUCTURE', 'COMMODITIES', 'EM'],
+      views: 3198,
+      replies: 54,
+      likes: 134,
+      sentiment: 'BULLISH',
+      priority: 'NORMAL',
+      verified: false
+    },
+    {
+      id: '7',
+      time: '16:32:18',
+      author: 'OptionsFlow_Alert',
+      title: 'Massive Call Sweeps in Tech Stocks - Someone Knows Something',
+      content: 'Unusual options activity detected across multiple tech names. MSFT: 50,000 calls at $400 strike expiring March (premium paid: $45M). GOOGL: 30,000 calls at $150 strike Feb expiry ($22M premium). META: 25,000 calls at $380 strike March ($31M). These are NOT retail traders - this is institutional flow, paying up for upside. Timing suspicious: 2 days before big tech earnings start. Either hedge funds positioning for earnings beats, or insiders know something about AI monetization that market doesn\'t. Historical precedent: Similar unusual activity preceded NVDA\'s 60% rally last year. My interpretation: Smart money is betting on AI revenue acceleration across cloud/advertising. Playing this with: Long dated calls on QQQ and XLK, selling near-term puts to finance. Risk/reward heavily skewed to upside if thesis correct. Monitoring daily options flow for any reversals.',
+      category: 'OPTIONS',
+      tags: ['OPTIONS', 'TECH', 'FLOW', 'UNUSUAL_ACTIVITY'],
+      views: 7234,
+      replies: 134,
+      likes: 423,
+      sentiment: 'BULLISH',
+      priority: 'HOT',
+      verified: true
+    },
+    {
+      id: '8',
+      time: '16:28:45',
+      author: 'MacroHedgeFund',
+      title: 'Yield Curve Un-Inversion - Historical Recession Indicator Analysis',
+      content: 'The 2-10 year Treasury yield curve just un-inverted after 18 months inverted. Historical data: Every recession since 1970 was preceded by curve inversion FOLLOWED by un-inversion. Average lag between un-inversion and recession: 6-12 months. Current situation: Curve un-inverting due to Fed rate cuts (short end falling faster than long end). Question is whether this is "soft landing" scenario or delayed recession. Bull case: Inflation under control, employment strong, consumer spending resilient, corporate earnings growing. Bear case: Leading indicators weak (PMI, LEI, yield curve), commercial real estate stress, consumer credit deteriorating, geopolitical risks. My positioning: Cautiously bullish equities but hedged with TLT (long duration treasuries rally in recession), Gold (safe haven), defensive sectors (utilities, consumer staples). Time horizon matters - 6 month view bullish, 12-18 month view increasingly cautious.',
+      category: 'MACRO',
+      tags: ['BONDS', 'RECESSION', 'YIELD_CURVE', 'MACRO'],
+      views: 4523,
+      replies: 89,
+      likes: 267,
+      sentiment: 'NEUTRAL',
+      priority: 'TRENDING',
+      verified: true
     }
-  }, [isAuthenticated, session]);
+  ];
 
-  const loadInitialData = async () => {
-    setLoading(true);
-    setError('');
+  const topContributors: ForumUser[] = [
+    { username: 'QuantTrader_Pro', reputation: 8947, posts: 1234, joined: '2021-03-15', status: 'ONLINE' },
+    { username: 'CryptoWhale_2024', reputation: 7823, posts: 892, joined: '2020-11-22', status: 'ONLINE' },
+    { username: 'OptionsFlow_Alert', reputation: 7456, posts: 1567, joined: '2022-01-08', status: 'ONLINE' },
+    { username: 'MacroHedgeFund', reputation: 6789, posts: 743, joined: '2021-07-19', status: 'OFFLINE' },
+    { username: 'TechInvestor88', reputation: 6234, posts: 654, joined: '2022-05-12', status: 'ONLINE' },
+    { username: 'EnergyAnalyst_TX', reputation: 5892, posts: 521, joined: '2021-09-30', status: 'ONLINE' }
+  ];
 
-    try {
-      // Load categories and stats in parallel
-      const [categoriesResult, statsResult] = await Promise.all([
-        ForumApiService.getCategories(apiKey, deviceId),
-        ForumApiService.getForumStats(apiKey, deviceId)
-      ]);
+  const categories = [
+    { name: 'ALL', count: 8947, color: BLOOMBERG_WHITE },
+    { name: 'MARKETS', count: 2341, color: BLOOMBERG_BLUE },
+    { name: 'TECH', count: 1876, color: BLOOMBERG_PURPLE },
+    { name: 'CRYPTO', count: 1654, color: BLOOMBERG_CYAN },
+    { name: 'OPTIONS', count: 1234, color: BLOOMBERG_YELLOW },
+    { name: 'BANKING', count: 987, color: BLOOMBERG_GREEN },
+    { name: 'ENERGY', count: 876, color: BLOOMBERG_ORANGE },
+    { name: 'MACRO', count: 654, color: BLOOMBERG_RED },
+    { name: 'GLOBAL', count: 543, color: BLOOMBERG_PURPLE }
+  ];
 
-      if (categoriesResult.success && categoriesResult.data?.success) {
-        const categoriesData = categoriesResult.data.data.categories;
-        setCategories(categoriesData);
-        
-        // Load posts from first category or all posts
-        if (categoriesData.length > 0) {
-          loadPosts(categoriesData[0].id, categoriesData[0].name);
-        } else {
-          loadAllPosts();
-        }
-      }
-
-      if (statsResult.success && statsResult.data?.success) {
-        setStats(statsResult.data.data);
-      }
-    } catch (err) {
-      setError('Failed to load forum data. Please try again.');
-      console.error('Forum data loading failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadPosts = async (categoryId?: number, categoryName?: string) => {
-    setLoading(true);
-    setError('');
-
-    try {
-      let result;
-      
-      if (categoryId) {
-        result = await ForumApiService.getPostsByCategory(
-          categoryId, 
-          sortBy, 
-          20, 
-          apiKey, 
-          deviceId
-        );
-        setSelectedCategory(categoryId);
-        setCurrentCategoryName(categoryName || 'Unknown Category');
-      } else {
-        result = await ForumApiService.getAllPosts(sortBy, 20, apiKey, deviceId);
-        setSelectedCategory(null);
-        setCurrentCategoryName('All Categories');
-      }
-
-      if (result.success && result.data?.success) {
-        const postsData = result.data.data.posts || [];
-        setPosts(postsData);
-      } else {
-        throw new Error(result.error || 'Failed to load posts');
-      }
-    } catch (err) {
-      setError('Failed to load posts. Please try again.');
-      console.error('Posts loading failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadAllPosts = () => {
-    loadPosts();
-  };
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const result = await ForumApiService.searchPosts(
-        searchQuery, 
-        'all', 
-        20, 
-        apiKey, 
-        deviceId
-      );
-
-      if (result.success && result.data?.success) {
-        const searchResults = result.data.data.results.posts || [];
-        setPosts(searchResults);
-        setCurrentCategoryName(`Search: "${searchQuery}"`);
-        setSelectedCategory(null);
-      } else {
-        throw new Error(result.error || 'Search failed');
-      }
-    } catch (err) {
-      setError('Search failed. Please try again.');
-      console.error('Search failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVote = async (postUuid: string, voteType: 'up' | 'down') => {
-    if (!isAuthenticated) {
-      setError('You must be logged in to vote');
-      return;
-    }
-
-    try {
-      const result = await ForumApiService.voteOnPost(
-        postUuid, 
-        voteType, 
-        apiKey!, 
-        deviceId
-      );
-
-      if (result.success && result.data?.success) {
-        // Refresh posts to show updated vote counts
-        loadPosts(selectedCategory, currentCategoryName);
-      } else {
-        throw new Error(result.error || 'Vote failed');
-      }
-    } catch (err) {
-      console.error('Vote failed:', err);
-      setError('Vote failed. Please try again.');
-    }
-  };
-
-  const handleCreatePost = async () => {
-    if (!isAuthenticated) {
-      setError('You must be logged in to create posts');
-      return;
-    }
-
-    const validation = ForumUtils.validatePost(newPostTitle, newPostContent);
-    if (!validation.valid) {
-      setError(validation.error!);
-      return;
-    }
-
-    if (!newPostCategory) {
-      setError('Please select a category');
-      return;
-    }
-
-    setCreatePostLoading(true);
-    setError('');
-
-    try {
-      const result = await ForumApiService.createPost({
-        title: newPostTitle,
-        content: newPostContent,
-        category_id: parseInt(newPostCategory)
-      }, apiKey!, deviceId);
-
-      if (result.success && result.data?.success) {
-        setShowCreatePost(false);
-        setNewPostTitle('');
-        setNewPostContent('');
-        setNewPostCategory('');
-        // Refresh posts
-        loadPosts(selectedCategory, currentCategoryName);
-      } else {
-        throw new Error(result.error || 'Failed to create post');
-      }
-    } catch (err) {
-      setError('Failed to create post. Please try again.');
-      console.error('Post creation failed:', err);
-    } finally {
-      setCreatePostLoading(false);
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'HOT': return BLOOMBERG_RED;
+      case 'TRENDING': return BLOOMBERG_ORANGE;
+      case 'NORMAL': return BLOOMBERG_GRAY;
+      default: return BLOOMBERG_GRAY;
     }
   };
 
-  const viewPostDetails = async (post: ForumPost) => {
-    setSelectedPost(post);
-    setShowPostDetails(true);
-    
-    try {
-      const result = await ForumApiService.getPostDetails(
-        post.post_uuid, 
-        apiKey, 
-        deviceId
-      );
-
-      if (result.success && result.data?.success) {
-        setPostComments(result.data.data.comments || []);
-      }
-    } catch (err) {
-      console.error('Failed to load post details:', err);
+  const getSentimentColor = (sentiment: string) => {
+    switch (sentiment) {
+      case 'BULLISH': return BLOOMBERG_GREEN;
+      case 'BEARISH': return BLOOMBERG_RED;
+      case 'NEUTRAL': return BLOOMBERG_YELLOW;
+      default: return BLOOMBERG_GRAY;
     }
   };
 
-  const addComment = async () => {
-    if (!isAuthenticated || !selectedPost) return;
-
-    const validation = ForumUtils.validateComment(newComment);
-    if (!validation.valid) {
-      setError(validation.error!);
-      return;
-    }
-
-    setCommentLoading(true);
-
-    try {
-      const result = await ForumApiService.addComment(
-        selectedPost.post_uuid,
-        { content: newComment },
-        apiKey!,
-        deviceId
-      );
-
-      if (result.success && result.data?.success) {
-        setNewComment('');
-        // Reload post details
-        viewPostDetails(selectedPost);
-      } else {
-        throw new Error(result.error || 'Failed to add comment');
-      }
-    } catch (err) {
-      setError('Failed to add comment. Please try again.');
-      console.error('Comment failed:', err);
-    } finally {
-      setCommentLoading(false);
-    }
-  };
-
-  // Render authentication error
-  if (!session || (!isAuthenticated && session.user_type !== 'guest')) {
-    return (
-      <div className="h-full bg-black text-white p-8 flex items-center justify-center">
-        <Card className="bg-zinc-900 border-zinc-700 max-w-md">
-          <CardHeader>
-            <CardTitle className="text-yellow-500 flex items-center gap-2">
-              <HelpCircle className="h-5 w-5" />
-              Authentication Required
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-zinc-300">
-              Please authenticate to access the Global Forum
-            </p>
-            <ul className="text-zinc-400 text-sm space-y-1">
-              <li>• Access to all forum categories</li>
-              <li>• Create posts and comments</li>
-              <li>• Vote on posts and comments</li>
-              <li>• Real-time forum activity</li>
-              <li>• User profiles and reputation</li>
-            </ul>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const filteredPosts = activeCategory === 'ALL'
+    ? forumPosts
+    : forumPosts.filter(post => post.category === activeCategory);
 
   return (
-    <div className="h-full bg-black text-white font-mono">
+    <div style={{
+      height: '100%',
+      backgroundColor: BLOOMBERG_DARK_BG,
+      color: BLOOMBERG_WHITE,
+      fontFamily: 'Consolas, monospace',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      fontSize: '12px'
+    }}>
       {/* Header */}
-      <div className="bg-zinc-900 border-b border-zinc-700 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-4">
-            <span style={{ color: colors.orange }} className="text-lg font-bold">FINCEPT</span>
-            <span className="text-white">GLOBAL FORUM</span>
-            <span className="text-zinc-500">|</span>
-            
-            {/* Search */}
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="Search posts, topics..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                className="bg-zinc-800 border-zinc-600 text-white w-64"
-              />
-              <Button 
-                onClick={handleSearch}
-                className="bg-zinc-700 hover:bg-zinc-600"
-              >
-                <Search className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <span className="text-zinc-500">|</span>
-            
-            {/* User Status */}
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              {session.user_type === 'registered' ? (
-                <span style={{ color: colors.green }}>
-                  USER: {session.user_info?.username?.toUpperCase() || 'REGISTERED'}
-                </span>
-              ) : (
-                <span style={{ color: colors.yellow }}>USER: GUEST</span>
-              )}
-            </div>
-          </div>
+      <div style={{
+        backgroundColor: BLOOMBERG_PANEL_BG,
+        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        padding: '4px 8px',
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
+          <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>FINCEPT GLOBAL FORUM</span>
+          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+          <span style={{ color: BLOOMBERG_GREEN }}>● LIVE</span>
+          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+          <span style={{ color: BLOOMBERG_YELLOW }}>USERS ONLINE: {onlineUsers.toLocaleString()}</span>
+          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+          <span style={{ color: BLOOMBERG_CYAN }}>POSTS TODAY: 2,847</span>
+          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+          <span style={{ color: BLOOMBERG_WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
         </div>
 
-        {/* Function Keys */}
-        <div className="flex items-center gap-4">
-          <Button
-            onClick={loadInitialData}
-            className="bg-transparent hover:bg-zinc-700 text-yellow-500 text-xs h-6 px-2"
-          >
-            F1:HELP
-          </Button>
-          <Button
-            onClick={loadInitialData}
-            className="bg-transparent hover:bg-zinc-700 text-yellow-500 text-xs h-6 px-2"
-          >
-            <RefreshCw className="h-3 w-3 mr-1" />
-            F2:REFRESH
-          </Button>
-          {isAuthenticated && (
-            <Button
-              onClick={() => setShowCreatePost(true)}
-              className="bg-transparent hover:bg-zinc-700 text-yellow-500 text-xs h-6 px-2"
-            >
-              <Plus className="h-3 w-3 mr-1" />
-              F3:NEW POST
-            </Button>
-          )}
-          <Button
-            onClick={() => document.querySelector('input')?.focus()}
-            className="bg-transparent hover:bg-zinc-700 text-yellow-500 text-xs h-6 px-2"
-          >
-            F4:SEARCH
-          </Button>
-          <Button
-            onClick={() => setSortBy('popular')}
-            className="bg-transparent hover:bg-zinc-700 text-yellow-500 text-xs h-6 px-2"
-          >
-            <TrendingUp className="h-3 w-3 mr-1" />
-            F5:TRENDING
-          </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>
+          <span style={{ color: BLOOMBERG_GRAY }}>TRENDING:</span>
+          <span style={{ color: BLOOMBERG_RED }}>FED_RATES</span>
+          <span style={{ color: BLOOMBERG_CYAN }}>BTC_ETF</span>
+          <span style={{ color: BLOOMBERG_PURPLE }}>NVDA_EARNINGS</span>
+          <span style={{ color: BLOOMBERG_ORANGE }}>OIL_SUPPLY</span>
+          <span style={{ color: BLOOMBERG_GREEN }}>AI_REVENUE</span>
+          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+          <span style={{ color: BLOOMBERG_GRAY }}>SENTIMENT:</span>
+          <span style={{ color: BLOOMBERG_GREEN }}>BULLISH 68%</span>
+          <span style={{ color: BLOOMBERG_RED }}>BEARISH 18%</span>
+          <span style={{ color: BLOOMBERG_YELLOW }}>NEUTRAL 14%</span>
+        </div>
+      </div>
+
+      {/* Function Keys */}
+      <div style={{
+        backgroundColor: BLOOMBERG_PANEL_BG,
+        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        padding: '2px 4px',
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2px' }}>
+          {[
+            { key: "F1", label: "ALL", filter: "ALL" },
+            { key: "F2", label: "MARKETS", filter: "MARKETS" },
+            { key: "F3", label: "TECH", filter: "TECH" },
+            { key: "F4", label: "CRYPTO", filter: "CRYPTO" },
+            { key: "F5", label: "OPTIONS", filter: "OPTIONS" },
+            { key: "F6", label: "BANKING", filter: "BANKING" },
+            { key: "F7", label: "ENERGY", filter: "ENERGY" },
+            { key: "F8", label: "MACRO", filter: "MACRO" },
+            { key: "F9", label: "POST", filter: "POST" },
+            { key: "F10", label: "SEARCH", filter: "SEARCH" },
+            { key: "F11", label: "PROFILE", filter: "PROFILE" },
+            { key: "F12", label: "SETTINGS", filter: "SETTINGS" }
+          ].map(item => (
+            <button key={item.key}
+              onClick={() => item.filter !== 'POST' && item.filter !== 'SEARCH' && item.filter !== 'PROFILE' && item.filter !== 'SETTINGS' && setActiveCategory(item.filter)}
+              style={{
+                backgroundColor: activeCategory === item.filter ? BLOOMBERG_ORANGE : BLOOMBERG_DARK_BG,
+                border: `1px solid ${BLOOMBERG_GRAY}`,
+                color: activeCategory === item.filter ? BLOOMBERG_DARK_BG : BLOOMBERG_WHITE,
+                padding: '2px 4px',
+                fontSize: '9px',
+                height: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: activeCategory === item.filter ? 'bold' : 'normal',
+                cursor: 'pointer'
+              }}>
+              <span style={{ color: BLOOMBERG_YELLOW }}>{item.key}:</span>
+              <span style={{ marginLeft: '2px' }}>{item.label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex h-[calc(100%-120px)]">
-        {/* Left Panel - Categories */}
-        <div className="w-80 bg-zinc-950 border-r border-zinc-700 p-4 overflow-y-auto">
-          <div style={{ color: colors.orange }} className="font-bold mb-4">FORUM CATEGORIES</div>
-          
-          <div className="space-y-2 mb-4">
-            <Button
-              onClick={() => loadAllPosts()}
-              variant={selectedCategory === null ? "default" : "ghost"}
-              className="w-full justify-start text-xs h-8"
-            >
-              ALL
-            </Button>
-            <Button
-              onClick={() => setSortBy('popular')}
-              variant="ghost"
-              className="w-full justify-start text-xs h-8"
-            >
-              TRENDING
-            </Button>
-            <Button
-              onClick={() => setSortBy('latest')}
-              variant="ghost"
-              className="w-full justify-start text-xs h-8"
-            >
-              RECENT
-            </Button>
-          </div>
+      <div style={{ flex: 1, overflow: 'auto', padding: '4px', backgroundColor: '#050505' }}>
+        <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
 
-          <Separator className="bg-zinc-700 mb-4" />
+          {/* Left Panel - Categories & Stats */}
+          <div style={{
+            width: '280px',
+            backgroundColor: BLOOMBERG_PANEL_BG,
+            border: `1px solid ${BLOOMBERG_GRAY}`,
+            padding: '4px',
+            overflow: 'auto'
+          }}>
+            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+              FORUM CATEGORIES
+            </div>
+            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '4px' }}></div>
 
-          {/* Categories List */}
-          <div className="space-y-2 mb-6">
-            {categories.map((category) => (
-              <Button
-                key={category.id}
-                onClick={() => loadPosts(category.id, category.name)}
-                variant={selectedCategory === category.id ? "default" : "ghost"}
-                className="w-full justify-start text-xs h-auto p-2 flex-col items-start"
-              >
-                <div className="flex justify-between w-full">
-                  <span>{category.name}</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {category.post_count}
-                  </Badge>
-                </div>
-                {category.description && (
-                  <span className="text-zinc-500 text-xs mt-1">
-                    {ForumUtils.truncateText(category.description, 40)}
-                  </span>
-                )}
-              </Button>
+            {categories.map((cat, index) => (
+              <button key={index}
+                onClick={() => setActiveCategory(cat.name)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  padding: '4px',
+                  marginBottom: '2px',
+                  backgroundColor: activeCategory === cat.name ? 'rgba(255,165,0,0.1)' : 'transparent',
+                  border: `1px solid ${activeCategory === cat.name ? BLOOMBERG_ORANGE : 'transparent'}`,
+                  color: cat.color,
+                  fontSize: '10px',
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}>
+                <span>{cat.name}</span>
+                <span style={{ color: BLOOMBERG_CYAN }}>{cat.count}</span>
+              </button>
             ))}
-          </div>
 
-          <Separator className="bg-zinc-700 mb-4" />
-
-          {/* Statistics */}
-          {stats && (
-            <div>
-              <div style={{ color: colors.yellow }} className="font-bold mb-2">FORUM STATISTICS</div>
-              <div className="text-xs space-y-1">
-                <div>Categories: {stats.total_categories}</div>
-                <div>Total Posts: {ForumUtils.formatNumber(stats.total_posts)}</div>
-                <div>Total Comments: {ForumUtils.formatNumber(stats.total_comments)}</div>
-                <div style={{ color: colors.green }}>Total Votes: {ForumUtils.formatNumber(stats.total_votes)}</div>
+            <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '8px', paddingTop: '8px' }}>
+              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+                TOP CONTRIBUTORS
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Center Panel - Posts */}
-        <div className="flex-1 bg-black overflow-y-auto">
-          <div className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-4">
-                <span style={{ color: colors.orange }} className="font-bold">FORUM POSTS</span>
-                <span className="text-zinc-500">|</span>
-                <span className="text-white">{currentCategoryName}</span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Label className="text-zinc-400 text-xs">SORT:</Label>
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-32 bg-zinc-800 border-zinc-600 text-white text-xs h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-800 border-zinc-600">
-                    <SelectItem value="latest">Latest</SelectItem>
-                    <SelectItem value="popular">Popular</SelectItem>
-                    <SelectItem value="views">Most Viewed</SelectItem>
-                    <SelectItem value="replies">Most Replies</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {loading && (
-              <div className="text-yellow-500 mb-4">Loading posts...</div>
-            )}
-
-            {error && (
-              <div className="text-red-400 bg-red-900/20 border border-red-900/50 rounded p-2 mb-4 text-xs">
-                {error}
-              </div>
-            )}
-
-            {/* Posts List */}
-            <div className="space-y-4">
-              {posts.map((post) => (
-                <Card key={post.post_uuid} className="bg-zinc-900 border-zinc-700">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {post.is_pinned && <Pin className="h-4 w-4" style={{ color: colors.orange }} />}
-                        <Button
-                          onClick={() => viewPostDetails(post)}
-                          variant="ghost"
-                          className="p-0 h-auto text-left text-white hover:text-blue-400"
-                        >
-                          <span className="text-sm font-medium">
-                            {ForumUtils.truncateText(post.title, 60)}
-                          </span>
-                        </Button>
-                        <Badge 
-                          variant="outline" 
-                          className="text-xs"
-                          style={{ borderColor: colors.blue, color: colors.blue }}
-                        >
-                          {post.category_name}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-xs text-zinc-400 mb-2">
-                      <div className="flex items-center gap-1">
-                        <Eye className="h-3 w-3" />
-                        {ForumUtils.formatNumber(post.views)}
-                      </div>
-                      <div 
-                        className={`flex items-center gap-1 ${ForumUtils.getVoteColor(ForumUtils.calculateVoteScore(post.likes, post.dislikes))}`}
-                      >
-                        <ThumbsUp className="h-3 w-3" />
-                        {ForumUtils.calculateVoteScore(post.likes, post.dislikes)}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <MessageSquare className="h-3 w-3" />
-                        {post.reply_count}
-                      </div>
-                      <div>By: {post.author_display_name}</div>
-                      <div>{ForumUtils.formatTimestamp(post.created_at)}</div>
-                    </div>
-
-                    <p className="text-zinc-300 text-xs mb-3">
-                      {ForumUtils.truncateText(post.content, 120)}
-                    </p>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => viewPostDetails(post)}
-                        size="sm"
-                        className="bg-zinc-700 hover:bg-zinc-600 text-xs h-6"
-                      >
-                        VIEW
-                      </Button>
-                      
-                      {isAuthenticated && (
-                        <>
-                          <Button
-                            onClick={() => handleVote(post.post_uuid, 'up')}
-                            size="sm"
-                            className="bg-transparent hover:bg-green-900/20 text-green-400 border border-green-600 text-xs h-6"
-                          >
-                            👍 UP
-                          </Button>
-                          <Button
-                            onClick={() => handleVote(post.post_uuid, 'down')}
-                            size="sm"
-                            className="bg-transparent hover:bg-red-900/20 text-red-400 border border-red-600 text-xs h-6"
-                          >
-                            👎 DOWN
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+              {topContributors.map((user, index) => (
+                <div key={index} style={{
+                  padding: '3px',
+                  marginBottom: '2px',
+                  backgroundColor: 'rgba(255,255,255,0.02)',
+                  fontSize: '9px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                    <span style={{ color: BLOOMBERG_WHITE }}>{user.username}</span>
+                    <span style={{ color: user.status === 'ONLINE' ? BLOOMBERG_GREEN : BLOOMBERG_GRAY }}>
+                      ●
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', color: BLOOMBERG_GRAY }}>
+                    <span>REP: {user.reputation}</span>
+                    <span>POSTS: {user.posts}</span>
+                  </div>
+                </div>
               ))}
             </div>
 
-            {posts.length === 0 && !loading && (
-              <div className="text-center text-zinc-400 mt-8">
-                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>No posts found</p>
+            <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '8px', paddingTop: '8px' }}>
+              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+                FORUM STATISTICS
               </div>
-            )}
+              <div style={{ fontSize: '9px', lineHeight: '1.4', color: BLOOMBERG_GRAY }}>
+                <div>Total Posts: 894,234</div>
+                <div>Total Users: 47,832</div>
+                <div>Posts Today: 2,847</div>
+                <div>Active Now: {onlineUsers}</div>
+                <div style={{ color: BLOOMBERG_GREEN }}>Avg Response: 12 min</div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Right Panel - User Dashboard */}
-        <div className="w-80 bg-zinc-950 border-l border-zinc-700 p-4 overflow-y-auto">
-          <div style={{ color: colors.orange }} className="font-bold mb-4">USER DASHBOARD</div>
-          
-          {/* User Info */}
-          <div className="mb-6">
-            <div style={{ color: colors.yellow }} className="font-bold mb-2">CURRENT USER</div>
-            <div className="flex items-center gap-3 mb-2">
-              <div 
-                className="w-8 h-8 rounded flex items-center justify-center text-xs font-bold text-white"
-                style={{ backgroundColor: session.user_type === 'registered' ? colors.green : colors.yellow }}
-              >
-                {session.user_type === 'registered' 
-                  ? session.user_info?.username?.substring(0, 2).toUpperCase() || 'RU'
-                  : 'GU'
-                }
+          {/* Center Panel - Forum Posts */}
+          <div style={{
+            flex: 1,
+            backgroundColor: BLOOMBERG_PANEL_BG,
+            border: `1px solid ${BLOOMBERG_GRAY}`,
+            padding: '4px',
+            overflow: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <div style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold' }}>
+                FORUM POSTS [{activeCategory}]
               </div>
-              <div>
-                <div className="text-white text-sm">
-                  {session.user_type === 'registered' 
-                    ? session.user_info?.username || 'Registered User'
-                    : 'Guest User'
-                  }
+              <div style={{ display: 'flex', gap: '4px', fontSize: '9px' }}>
+                <button onClick={() => setSortBy('LATEST')} style={{
+                  padding: '2px 6px',
+                  backgroundColor: sortBy === 'LATEST' ? BLOOMBERG_ORANGE : BLOOMBERG_DARK_BG,
+                  color: sortBy === 'LATEST' ? BLOOMBERG_DARK_BG : BLOOMBERG_WHITE,
+                  border: `1px solid ${BLOOMBERG_GRAY}`,
+                  cursor: 'pointer'
+                }}>LATEST</button>
+                <button onClick={() => setSortBy('HOT')} style={{
+                  padding: '2px 6px',
+                  backgroundColor: sortBy === 'HOT' ? BLOOMBERG_ORANGE : BLOOMBERG_DARK_BG,
+                  color: sortBy === 'HOT' ? BLOOMBERG_DARK_BG : BLOOMBERG_WHITE,
+                  border: `1px solid ${BLOOMBERG_GRAY}`,
+                  cursor: 'pointer'
+                }}>HOT</button>
+                <button onClick={() => setSortBy('TOP')} style={{
+                  padding: '2px 6px',
+                  backgroundColor: sortBy === 'TOP' ? BLOOMBERG_ORANGE : BLOOMBERG_DARK_BG,
+                  color: sortBy === 'TOP' ? BLOOMBERG_DARK_BG : BLOOMBERG_WHITE,
+                  border: `1px solid ${BLOOMBERG_GRAY}`,
+                  cursor: 'pointer'
+                }}>TOP</button>
+              </div>
+            </div>
+            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '8px' }}></div>
+
+            {filteredPosts.map((post, index) => (
+              <div key={post.id} style={{
+                marginBottom: '6px',
+                padding: '6px',
+                backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                borderLeft: `3px solid ${getPriorityColor(post.priority)}`,
+                paddingLeft: '6px'
+              }}>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '2px', fontSize: '8px' }}>
+                  <span style={{ color: BLOOMBERG_GRAY }}>{post.time}</span>
+                  <span style={{ color: getPriorityColor(post.priority), fontWeight: 'bold' }}>[{post.priority}]</span>
+                  <span style={{ color: BLOOMBERG_BLUE }}>[{post.category}]</span>
+                  <span style={{ color: getSentimentColor(post.sentiment) }}>{post.sentiment}</span>
+                  {post.verified && <span style={{ color: BLOOMBERG_CYAN }}>✓ VERIFIED</span>}
                 </div>
-                {session.user_type === 'registered' ? (
-                  <div style={{ color: colors.green }} className="text-xs">
-                    Credits: {session.user_info?.credit_balance || 0}
-                  </div>
-                ) : (
-                  <div style={{ color: colors.yellow }} className="text-xs">
-                    Limited Access
-                  </div>
-                )}
+
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '2px', fontSize: '9px' }}>
+                  <span style={{ color: BLOOMBERG_CYAN }}>@{post.author}</span>
+                  <span style={{ color: BLOOMBERG_GRAY }}>•</span>
+                  <span style={{ color: BLOOMBERG_WHITE, fontWeight: 'bold' }}>{post.title}</span>
+                </div>
+
+                <div style={{ color: BLOOMBERG_GRAY, fontSize: '9px', lineHeight: '1.3', marginBottom: '3px' }}>
+                  {post.content}
+                </div>
+
+                <div style={{ display: 'flex', gap: '6px', fontSize: '8px', marginBottom: '2px' }}>
+                  {post.tags.map((tag, i) => (
+                    <span key={i} style={{
+                      color: BLOOMBERG_YELLOW,
+                      backgroundColor: 'rgba(255,255,0,0.1)',
+                      padding: '1px 4px',
+                      borderRadius: '2px'
+                    }}>#{tag}</span>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', fontSize: '8px' }}>
+                  <span style={{ color: BLOOMBERG_CYAN }}>👁️ {post.views.toLocaleString()}</span>
+                  <span style={{ color: BLOOMBERG_PURPLE }}>💬 {post.replies}</span>
+                  <span style={{ color: BLOOMBERG_GREEN }}>👍 {post.likes}</span>
+                  <button style={{
+                    color: BLOOMBERG_ORANGE,
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '8px'
+                  }}>REPLY</button>
+                  <button style={{
+                    color: BLOOMBERG_BLUE,
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '8px'
+                  }}>SHARE</button>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
 
-          <Separator className="bg-zinc-700 mb-4" />
-
-          {/* User Actions */}
-          <div className="mb-6">
-            <div style={{ color: colors.yellow }} className="font-bold mb-2">USER ACTIONS</div>
-            <div className="space-y-2">
-              {isAuthenticated ? (
-                <>
-                  <Button 
-                    onClick={() => setShowCreatePost(true)}
-                    className="w-full justify-start text-xs h-8"
-                  >
-                    CREATE NEW POST
-                  </Button>
-                  <Button className="w-full justify-start text-xs h-6">
-                    MY POSTS
-                  </Button>
-                  <Button className="w-full justify-start text-xs h-6">
-                    MY ACTIVITY
-                  </Button>
-                  <Button className="w-full justify-start text-xs h-6">
-                    SETTINGS
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button 
-                    onClick={() => loadAllPosts()}
-                    className="w-full justify-start text-xs h-6"
-                  >
-                    VIEW POSTS
-                  </Button>
-                  <Button 
-                    onClick={() => document.querySelector('input')?.focus()}
-                    className="w-full justify-start text-xs h-6"
-                  >
-                    SEARCH FORUM
-                  </Button>
-                </>
-              )}
+          {/* Right Panel - Activity & Trending */}
+          <div style={{
+            width: '280px',
+            backgroundColor: BLOOMBERG_PANEL_BG,
+            border: `1px solid ${BLOOMBERG_GRAY}`,
+            padding: '4px',
+            overflow: 'auto'
+          }}>
+            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+              TRENDING TOPICS (1H)
             </div>
-          </div>
+            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '8px' }}></div>
 
-          <Separator className="bg-zinc-700 mb-4" />
+            {[
+              { topic: '#FED_RATES', mentions: 847, sentiment: 'BULLISH', change: '+234%' },
+              { topic: '#BTC_ETF', mentions: 723, sentiment: 'BULLISH', change: '+189%' },
+              { topic: '#NVDA', mentions: 612, sentiment: 'BULLISH', change: '+156%' },
+              { topic: '#OIL_SUPPLY', mentions: 487, sentiment: 'BULLISH', change: '+123%' },
+              { topic: '#BANKING_CRISIS', mentions: 356, sentiment: 'BEARISH', change: '+89%' },
+              { topic: '#AI_REVENUE', mentions: 298, sentiment: 'BULLISH', change: '+67%' }
+            ].map((item, index) => (
+              <div key={index} style={{
+                padding: '3px',
+                marginBottom: '3px',
+                backgroundColor: 'rgba(255,255,255,0.02)',
+                fontSize: '9px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                  <span style={{ color: BLOOMBERG_YELLOW }}>{item.topic}</span>
+                  <span style={{ color: BLOOMBERG_GREEN }}>{item.change}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: BLOOMBERG_GRAY }}>
+                  <span>{item.mentions} mentions</span>
+                  <span style={{ color: getSentimentColor(item.sentiment) }}>{item.sentiment}</span>
+                </div>
+              </div>
+            ))}
 
-          {/* Recent Activity */}
-          <div>
-            <div style={{ color: colors.yellow }} className="font-bold mb-2">RECENT ACTIVITY</div>
-            <div className="text-xs text-zinc-400 space-y-1">
-              <div>Loading activity...</div>
+            <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '12px', paddingTop: '8px' }}>
+              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+                RECENT ACTIVITY
+              </div>
+              {[
+                { user: 'QuantTrader_Pro', action: 'posted', target: 'Fed Rate Analysis', time: '2 min ago' },
+                { user: 'CryptoWhale_2024', action: 'replied to', target: 'BTC ETF Thread', time: '5 min ago' },
+                { user: 'OptionsFlow_Alert', action: 'liked', target: 'NVDA Earnings Post', time: '8 min ago' },
+                { user: 'MacroHedgeFund', action: 'posted', target: 'Yield Curve Analysis', time: '12 min ago' },
+                { user: 'TechInvestor88', action: 'replied to', target: 'AI Infrastructure', time: '15 min ago' }
+              ].map((activity, index) => (
+                <div key={index} style={{
+                  padding: '2px',
+                  marginBottom: '2px',
+                  fontSize: '8px',
+                  color: BLOOMBERG_GRAY,
+                  lineHeight: '1.3'
+                }}>
+                  <span style={{ color: BLOOMBERG_CYAN }}>@{activity.user}</span>
+                  {' '}<span>{activity.action}</span>{' '}
+                  <span style={{ color: BLOOMBERG_WHITE }}>{activity.target}</span>
+                  {' '}<span style={{ color: BLOOMBERG_YELLOW }}>• {activity.time}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '12px', paddingTop: '8px' }}>
+              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+                SENTIMENT ANALYSIS
+              </div>
+              <div style={{ fontSize: '9px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                  <span style={{ color: BLOOMBERG_GRAY }}>Bullish Posts:</span>
+                  <span style={{ color: BLOOMBERG_GREEN }}>68%</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                  <span style={{ color: BLOOMBERG_GRAY }}>Bearish Posts:</span>
+                  <span style={{ color: BLOOMBERG_RED }}>18%</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                  <span style={{ color: BLOOMBERG_GRAY }}>Neutral Posts:</span>
+                  <span style={{ color: BLOOMBERG_YELLOW }}>14%</span>
+                </div>
+                <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, marginTop: '4px', paddingTop: '4px' }}>
+                  <span style={{ color: BLOOMBERG_CYAN }}>Overall Sentiment:</span>
+                  <span style={{ color: BLOOMBERG_GREEN, fontWeight: 'bold', marginLeft: '4px' }}>+0.62 BULLISH</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Create Post Dialog */}
-      <Dialog open={showCreatePost} onOpenChange={setShowCreatePost}>
-        <DialogContent className="bg-zinc-900 border-zinc-700 text-white">
-          <DialogHeader>
-            <DialogTitle style={{ color: colors.orange }}>CREATE NEW POST</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-white">Category</Label>
-              <Select value={newPostCategory} onValueChange={setNewPostCategory}>
-                <SelectTrigger className="bg-zinc-800 border-zinc-600 text-white">
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-800 border-zinc-600">
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id.toString()}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-white">Title</Label>
-              <Input
-                value={newPostTitle}
-                onChange={(e) => setNewPostTitle(e.target.value)}
-                className="bg-zinc-800 border-zinc-600 text-white"
-                placeholder="Enter post title..."
-              />
-            </div>
-            <div>
-              <Label className="text-white">Content</Label>
-              <Textarea
-                value={newPostContent}
-                onChange={(e) => setNewPostContent(e.target.value)}
-                className="bg-zinc-800 border-zinc-600 text-white min-h-32"
-                placeholder="Enter post content..."
-              />
-            </div>
-            {error && (
-              <div className="text-red-400 text-xs">{error}</div>
-            )}
-            <div className="flex justify-end gap-2">
-              <Button
-                onClick={() => setShowCreatePost(false)}
-                variant="ghost"
-                className="text-zinc-400"
-              >
-                CANCEL
-              </Button>
-              <Button
-                onClick={handleCreatePost}
-                disabled={createPostLoading}
-                style={{ backgroundColor: colors.orange }}
-                className="hover:bg-orange-600"
-              >
-                {createPostLoading ? 'CREATING...' : 'CREATE POST'}
-              </Button>
-            </div>
+      {/* Status Bar */}
+      <div style={{
+        borderTop: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: BLOOMBERG_PANEL_BG,
+        padding: '2px 8px',
+        fontSize: '10px',
+        color: BLOOMBERG_GRAY,
+        flexShrink: 0
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <span>Fincept Global Forum v2.4.1 | Professional trading community</span>
+            <span>Posts: 894,234 | Users: 47,832 | Active: {onlineUsers}</span>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Post Details Dialog */}
-      <Dialog open={showPostDetails} onOpenChange={setShowPostDetails}>
-        <DialogContent className="bg-zinc-900 border-zinc-700 text-white max-w-4xl max-h-[80vh] overflow-y-auto">
-          {selectedPost && (
-            <>
-              <DialogHeader>
-                <DialogTitle style={{ color: colors.orange }}>POST DETAILS</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-lg font-bold text-white mb-2">{selectedPost.title}</h3>
-                  <div className="flex items-center gap-4 text-xs text-zinc-400 mb-4">
-                    <div>Author: {selectedPost.author_display_name}</div>
-                    <div>Category: {selectedPost.category_name}</div>
-                    <div>Views: {ForumUtils.formatNumber(selectedPost.views)}</div>
-                    <div>Likes: {selectedPost.likes}</div>
-                    <div>Comments: {postComments.length}</div>
-                  </div>
-                  <div className="text-zinc-300 whitespace-pre-wrap mb-4">
-                    {selectedPost.content}
-                  </div>
-                </div>
-
-                {/* Comments */}
-                <div>
-                  <h4 className="font-bold text-yellow-500 mb-2">COMMENTS ({postComments.length})</h4>
-                  
-                  {/* Add Comment */}
-                  {isAuthenticated && (
-                    <div className="flex gap-2 mb-4">
-                      <Textarea
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Add a comment..."
-                        className="bg-zinc-800 border-zinc-600 text-white flex-1 min-h-20"
-                      />
-                      <Button
-                        onClick={addComment}
-                        disabled={commentLoading}
-                        style={{ backgroundColor: colors.orange }}
-                        className="hover:bg-orange-600"
-                      >
-                        {commentLoading ? 'POSTING...' : 'POST'}
-                      </Button>
-                    </div>
-                  )}
-
-                  {/* Comments List */}
-                  <div className="space-y-3">
-                    {postComments.map((comment) => (
-                      <div key={comment.comment_uuid} className="bg-zinc-800 p-3 rounded border border-zinc-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="text-white font-medium text-sm">
-                              {comment.author_display_name}
-                            </span>
-                            <span className="text-zinc-500 text-xs">
-                              {ForumUtils.formatTimestamp(comment.created_at)}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div 
-                              className={`text-xs ${ForumUtils.getVoteColor(ForumUtils.calculateVoteScore(comment.likes, comment.dislikes))}`}
-                            >
-                              {ForumUtils.calculateVoteScore(comment.likes, comment.dislikes)}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-zinc-300 text-sm whitespace-pre-wrap">
-                          {comment.content}
-                        </div>
-                      </div>
-                    ))}
-
-                    {postComments.length === 0 && (
-                      <div className="text-center text-zinc-500 py-8">
-                        <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No comments yet</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button
-                    onClick={() => setShowPostDetails(false)}
-                    className="bg-zinc-700 hover:bg-zinc-600"
-                  >
-                    CLOSE
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <span>Category: {activeCategory}</span>
+            <span>Sort: {sortBy}</span>
+            <span style={{ color: BLOOMBERG_GREEN }}>STATUS: LIVE</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
