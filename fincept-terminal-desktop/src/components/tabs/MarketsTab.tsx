@@ -137,14 +137,16 @@ const MarketsTab: React.FC = () => {
     return () => clearInterval(timer);
   }, [autoUpdate]);
 
-  // Create market panel (exact layout from Python)
+  // Create market panel (responsive layout)
   const createMarketPanel = (title: string, data: string[][]) => (
     <div style={{
       backgroundColor: BLOOMBERG_PANEL_BG,
       border: `1px solid ${BLOOMBERG_GRAY}`,
-      width: '500px',
-      height: '250px',
-      margin: '5px',
+      flex: '1 1 calc(33.333% - 16px)',
+      minWidth: '300px',
+      maxWidth: '600px',
+      height: '280px',
+      margin: '8px',
       display: 'flex',
       flexDirection: 'column'
     }}>
@@ -219,14 +221,16 @@ const MarketsTab: React.FC = () => {
     </div>
   );
 
-  // Create regional panel (exact layout from Python)
+  // Create regional panel (responsive layout)
   const createRegionalPanel = (title: string, data: string[][]) => (
     <div style={{
       backgroundColor: BLOOMBERG_PANEL_BG,
       border: `1px solid ${BLOOMBERG_GRAY}`,
-      width: '500px',
-      height: '280px',
-      margin: '5px',
+      flex: '1 1 calc(33.333% - 16px)',
+      minWidth: '300px',
+      maxWidth: '600px',
+      height: '300px',
+      margin: '8px',
       display: 'flex',
       flexDirection: 'column'
     }}>
@@ -322,27 +326,31 @@ const MarketsTab: React.FC = () => {
           background: #525252;
         }
       `}</style>
-      {/* Header Bar (exact from Python) */}
+      {/* Header Bar - Responsive */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
+        flexWrap: 'wrap',
         padding: '8px 12px',
         backgroundColor: BLOOMBERG_PANEL_BG,
         borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
-        fontSize: '13px'
+        fontSize: '13px',
+        gap: '8px',
+        flexShrink: 0
       }}>
         <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>FINCEPT</span>
-        <span style={{ color: BLOOMBERG_WHITE, marginLeft: '8px' }}>MARKET TERMINAL</span>
-        <span style={{ color: BLOOMBERG_GRAY, margin: '0 8px' }}>|</span>
+        <span style={{ color: BLOOMBERG_WHITE }}>MARKET TERMINAL</span>
+        <span style={{ color: BLOOMBERG_GRAY }}>|</span>
         <input
           type="text"
-          defaultValue="Search Symbol"
+          placeholder="Search Symbol"
           style={{
             backgroundColor: BLOOMBERG_DARK_BG,
             border: `1px solid ${BLOOMBERG_GRAY}`,
             color: BLOOMBERG_WHITE,
             padding: '4px 8px',
-            width: '200px',
+            flex: '0 1 200px',
+            minWidth: '120px',
             fontSize: '11px'
           }}
         />
@@ -351,27 +359,30 @@ const MarketsTab: React.FC = () => {
           color: 'black',
           border: 'none',
           padding: '4px 12px',
-          marginLeft: '8px',
           fontSize: '11px',
           fontWeight: 'bold',
-          width: '80px'
+          cursor: 'pointer',
+          minWidth: '70px'
         }}>
           SEARCH
         </button>
-        <span style={{ color: BLOOMBERG_GRAY, margin: '0 8px' }}>|</span>
-        <span style={{ color: BLOOMBERG_WHITE }}>
+        <span style={{ color: BLOOMBERG_GRAY }}>|</span>
+        <span style={{ color: BLOOMBERG_WHITE, fontSize: '11px' }}>
           {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
         </span>
       </div>
 
-      {/* Control Panel (exact from Python) */}
+      {/* Control Panel - Responsive */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
+        flexWrap: 'wrap',
         padding: '8px 12px',
         backgroundColor: BLOOMBERG_PANEL_BG,
         borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
-        fontSize: '12px'
+        fontSize: '12px',
+        gap: '8px',
+        flexShrink: 0
       }}>
         <button
           onClick={() => { setIsUpdating(true); setLastUpdate(new Date()); setTimeout(() => setIsUpdating(false), 1000); }}
@@ -380,10 +391,10 @@ const MarketsTab: React.FC = () => {
             color: 'black',
             border: 'none',
             padding: '4px 12px',
-            marginRight: '8px',
             fontSize: '11px',
             fontWeight: 'bold',
-            width: '80px'
+            cursor: 'pointer',
+            minWidth: '70px'
           }}
         >
           REFRESH
@@ -395,10 +406,10 @@ const MarketsTab: React.FC = () => {
             color: 'black',
             border: 'none',
             padding: '4px 12px',
-            marginRight: '8px',
             fontSize: '11px',
             fontWeight: 'bold',
-            width: '80px'
+            cursor: 'pointer',
+            minWidth: '70px'
           }}
         >
           AUTO {autoUpdate ? 'ON' : 'OFF'}
@@ -409,90 +420,101 @@ const MarketsTab: React.FC = () => {
           color: BLOOMBERG_WHITE,
           padding: '4px 8px',
           fontSize: '11px',
-          width: '80px',
-          marginRight: '8px'
+          minWidth: '70px',
+          cursor: 'pointer'
         }}>
           <option>1 min</option>
           <option>5 min</option>
-          <option selected>10 min</option>
+          <option>10 min</option>
           <option>30 min</option>
         </select>
-        <span style={{ color: BLOOMBERG_GRAY, margin: '0 8px' }}>|</span>
-        <span style={{ color: BLOOMBERG_GRAY }}>LAST UPDATE:</span>
-        <span style={{ color: BLOOMBERG_WHITE, marginLeft: '8px' }}>
+        <span style={{ color: BLOOMBERG_GRAY }}>|</span>
+        <span style={{ color: BLOOMBERG_GRAY, fontSize: '11px' }}>LAST UPDATE:</span>
+        <span style={{ color: BLOOMBERG_WHITE, fontSize: '11px' }}>
           {lastUpdate.toTimeString().substring(0, 8)}
         </span>
-        <span style={{ color: BLOOMBERG_GRAY, margin: '0 8px' }}>|</span>
-        <span style={{ color: isUpdating ? BLOOMBERG_ORANGE : BLOOMBERG_GREEN }}>●</span>
-        <span style={{ color: isUpdating ? BLOOMBERG_ORANGE : BLOOMBERG_GREEN, marginLeft: '8px' }}>
+        <span style={{ color: BLOOMBERG_GRAY }}>|</span>
+        <span style={{ color: isUpdating ? BLOOMBERG_ORANGE : BLOOMBERG_GREEN, fontSize: '14px' }}>●</span>
+        <span style={{ color: isUpdating ? BLOOMBERG_ORANGE : BLOOMBERG_GREEN, fontSize: '11px', fontWeight: 'bold' }}>
           {isUpdating ? 'UPDATING' : 'LIVE'}
         </span>
       </div>
 
-      {/* Main Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
+      {/* Main Content - Responsive */}
+      <div style={{
+        flex: 1,
+        overflow: 'auto',
+        padding: '12px',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
         {/* Global Markets Section */}
         <div style={{
           color: BLOOMBERG_ORANGE,
           fontSize: '14px',
           fontWeight: 'bold',
-          marginBottom: '8px'
+          marginBottom: '8px',
+          letterSpacing: '0.5px'
         }}>
           GLOBAL MARKETS
         </div>
-        <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
+        <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '16px' }}></div>
 
-        {/* 3x2 Market Grid (exact from Python) */}
-        <div>
-          {/* First row - 3 categories */}
-          <div style={{ display: 'flex' }}>
-            {categories.slice(0, 3).map(category =>
-              createMarketPanel(category, marketData[category])
-            )}
-          </div>
-
-          <div style={{ height: '10px' }}></div>
-
-          {/* Second row - 3 categories */}
-          <div style={{ display: 'flex' }}>
-            {categories.slice(3, 6).map(category =>
-              createMarketPanel(category, marketData[category])
-            )}
-          </div>
+        {/* Responsive Market Grid */}
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0',
+          marginBottom: '24px'
+        }}>
+          {categories.map(category =>
+            createMarketPanel(category, marketData[category])
+          )}
         </div>
-
-        <div style={{ height: '20px' }}></div>
 
         {/* Regional Markets Section */}
         <div style={{
           color: BLOOMBERG_ORANGE,
           fontSize: '14px',
           fontWeight: 'bold',
-          marginBottom: '8px'
+          marginBottom: '8px',
+          marginTop: '16px',
+          letterSpacing: '0.5px'
         }}>
           REGIONAL MARKETS - LIVE DATA
         </div>
-        <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
+        <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '16px' }}></div>
 
-        {/* Regional Panels (exact from Python) */}
-        <div style={{ display: 'flex' }}>
+        {/* Responsive Regional Panels */}
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0'
+        }}>
           {Object.keys(regionalData).map(region =>
             createRegionalPanel(region, regionalData[region])
           )}
         </div>
       </div>
 
-      {/* Status Bar */}
+      {/* Status Bar - Responsive */}
       <div style={{
         borderTop: `1px solid ${BLOOMBERG_GRAY}`,
         backgroundColor: BLOOMBERG_PANEL_BG,
-        padding: '4px 12px',
+        padding: '6px 12px',
         fontSize: '10px',
-        color: BLOOMBERG_GRAY
+        color: BLOOMBERG_GRAY,
+        flexShrink: 0
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '8px'
+        }}>
           <span>Data provided by Bloomberg Terminal API | Updates every 5 seconds</span>
-          <span>Connected: {Object.keys(regionalData).length} regional markets</span>
+          <span style={{ whiteSpace: 'nowrap' }}>Connected: {Object.keys(regionalData).length} regional markets</span>
         </div>
       </div>
     </div>
