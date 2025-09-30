@@ -7,7 +7,6 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  ExternalLink,
   RefreshCw,
   AlertTriangle,
   CreditCard,
@@ -37,8 +36,8 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
   const [paymentData, setPaymentData] = useState<any>(null);
   const [error, setError] = useState<string>('');
 
-  const intervalRef = useRef<NodeJS.Timeout>();
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const maxChecks = 60; // Check for 5 minutes (every 5 seconds)
   const checkInterval = 5000; // 5 seconds
   const maxWaitTime = 300000; // 5 minutes

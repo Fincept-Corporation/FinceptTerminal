@@ -409,7 +409,7 @@ const AnalyticsTab: React.FC = () => {
                 <XAxis dataKey="stock" stroke={BLOOMBERG_WHITE} fontSize={8} />
                 <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
                 <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="momentum" fill={(entry) => entry.momentum > 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED} />
+                <Bar dataKey="momentum" fill={BLOOMBERG_GREEN} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -542,7 +542,7 @@ const AnalyticsTab: React.FC = () => {
                 <XAxis type="number" stroke={BLOOMBERG_WHITE} fontSize={8} />
                 <YAxis type="category" dataKey="factor" stroke={BLOOMBERG_WHITE} fontSize={8} />
                 <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="contribution" fill={(entry) => entry.contribution > 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED} />
+                <Bar dataKey="contribution" fill={BLOOMBERG_GREEN} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>

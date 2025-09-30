@@ -3,7 +3,7 @@
 
 // API Configuration
 const PAYMENT_API_CONFIG = {
-  BASE_URL: 'https://finceptbackend.share.zrok.io',
+  BASE_URL: import.meta.env.DEV ? '/api' : 'https://finceptbackend.share.zrok.io',
   CONNECTION_TIMEOUT: 10000,
   REQUEST_TIMEOUT: 30000
 };
@@ -144,7 +144,7 @@ const makePaymentApiRequest = async <T = any>(
     });
 
     // Debug headers (with API key redacted)
-    const debugHeaders = { ...defaultHeaders };
+    const debugHeaders: any = { ...defaultHeaders };
     if (debugHeaders['X-API-Key']) {
       debugHeaders['X-API-Key'] = '[REDACTED - Length: ' + debugHeaders['X-API-Key'].length + ']';
     }
@@ -176,7 +176,7 @@ const makePaymentApiRequest = async <T = any>(
       method: config.method,
       mode: config.mode,
       hasBody: !!config.body,
-      bodyLength: config.body ? config.body.length : 0
+      bodyLength: config.body ? (config.body as string).length : 0
     });
 
     const response = await fetch(url, config);

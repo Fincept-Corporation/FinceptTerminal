@@ -27,13 +27,13 @@ import MaritimeTab from '@/components/tabs/MaritimeTab';
 import SettingsTab from '@/components/tabs/SettingsTab';
 
 // Dropdown Menu Component
-const DropdownMenu = ({ label, items, onItemClick }) => {
+const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -62,7 +62,7 @@ const DropdownMenu = ({ label, items, onItemClick }) => {
           zIndex: 1000,
           boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
         }}>
-          {items.map((item, index) => (
+          {items.map((item: any, index: number) => (
             <div
               key={index}
               style={{
@@ -74,13 +74,13 @@ const DropdownMenu = ({ label, items, onItemClick }) => {
               }}
               onMouseEnter={(e) => {
                 if (!item.disabled) {
-                  e.target.style.backgroundColor = '#404040';
-                  e.target.style.color = '#fff';
+                  (e.target as HTMLDivElement).style.backgroundColor = '#404040';
+                  (e.target as HTMLDivElement).style.color = '#fff';
                 }
               }}
               onMouseLeave={(e) => {
-                e.target.style.backgroundColor = 'transparent';
-                e.target.style.color = item.disabled ? '#666' : '#a3a3a3';
+                (e.target as HTMLDivElement).style.backgroundColor = 'transparent';
+                (e.target as HTMLDivElement).style.color = item.disabled ? '#666' : '#a3a3a3';
               }}
               onClick={() => {
                 if (!item.disabled && onItemClick) {
@@ -154,11 +154,11 @@ export default function FinxeptTerminal() {
     } else if (session.user_type === 'registered') {
       const username = session.user_info?.username || session.user_info?.email || 'User';
       const accountType = session.user_info?.account_type || 'free';
-      const hasSubscription = session.subscription?.has_subscription;
+      const hasSubscription = (session.subscription as any)?.data?.has_subscription || session.subscription?.has_subscription;
 
       // Show account type badge
       if (hasSubscription) {
-        const planName = session.subscription?.subscription?.plan?.name || accountType;
+        const planName = (session.subscription as any)?.data?.subscription?.plan?.name || session.subscription?.subscription?.plan?.name || accountType;
         return `👤 ${username} | 📦 ${planName} | ✅ Active`;
       } else if (accountType === 'free') {
         return `👤 ${username} | 📦 Free Plan`;
@@ -175,7 +175,7 @@ export default function FinxeptTerminal() {
       document.documentElement.requestFullscreen().then(() => {
         setIsFullscreen(true);
         setStatusMessage("Entered fullscreen mode");
-      }).catch(err => {
+      }).catch(() => {
         setStatusMessage("Failed to enter fullscreen mode");
       });
     } else {
@@ -189,7 +189,7 @@ export default function FinxeptTerminal() {
     setTimeout(() => setStatusMessage(""), 3000);
   };
 
-  const handleMenuAction = async (item) => {
+  const handleMenuAction = async (item: any) => {
     setStatusMessage(`${item.label} clicked`);
 
     // Handle specific actions
@@ -353,12 +353,12 @@ export default function FinxeptTerminal() {
               borderRadius: '2px'
             }}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#404040';
-              e.target.style.color = '#fff';
+              (e.target as HTMLButtonElement).style.backgroundColor = '#404040';
+              (e.target as HTMLButtonElement).style.color = '#fff';
             }}
             onMouseLeave={(e) => {
-              e.target.style.backgroundColor = 'transparent';
-              e.target.style.color = '#a3a3a3';
+              (e.target as HTMLButtonElement).style.backgroundColor = 'transparent';
+              (e.target as HTMLButtonElement).style.color = '#a3a3a3';
             }}
             title={isFullscreen ? 'Exit Fullscreen (F11)' : 'Enter Fullscreen (F11)'}
           >
