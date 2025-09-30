@@ -1,30 +1,8 @@
 import React, { useState, useEffect } from 'react';
-
-interface SessionData {
-  user_type: 'guest' | 'registered' | 'unknown';
-  authenticated: boolean;
-  api_key?: string;
-  device_id?: string;
-  user_info?: {
-    username: string;
-    email: string;
-    account_type: string;
-    created_at: string;
-    credit_balance: number;
-  };
-  requests_today: number;
-  daily_limit: number;
-}
+import { useAuth } from '@/contexts/AuthContext';
 
 const ProfileTab: React.FC = () => {
-  const [sessionData, setSessionData] = useState<SessionData>({
-    user_type: 'guest',
-    authenticated: false,
-    api_key: 'fk_guest_abc123def456',
-    device_id: 'device_12345678901234567890',
-    requests_today: 15,
-    daily_limit: 50
-  });
+  const { session, logout } = useAuth();
 
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [requestCount, setRequestCount] = useState(15);
@@ -55,14 +33,9 @@ const ProfileTab: React.FC = () => {
     setRequestCount(prev => prev + 1);
   };
 
-  const logoutUser = () => {
-    setSessionData({
-      user_type: 'guest',
-      authenticated: false,
-      device_id: `cleared_${Date.now()}`,
-      requests_today: 0,
-      daily_limit: 50
-    });
+  const logoutUser = async () => {
+    await logout();
+    window.location.href = '/';
   };
 
   const showSignupInfo = () => {
@@ -180,8 +153,11 @@ const ProfileTab: React.FC = () => {
   };
 
   const renderGuestProfile = () => {
-    const displayDeviceId = sessionData.device_id?.substring(0, 20) + "..." || 'Unknown';
-    const remaining = Math.max(0, sessionData.daily_limit - sessionData.requests_today);
+    if (!session) return null;
+    const displayDeviceId = session.device_id?.substring(0, 20) + "..." || 'Unknown';
+    const requests_today = session.requests_today || 0;
+    const daily_limit = session.daily_limit || 50;
+    const remaining = Math.max(0, daily_limit - requests_today);
 
     return (
       <div className="p-4">
@@ -193,10 +169,10 @@ const ProfileTab: React.FC = () => {
               <TextLine text="Account Type: Guest User" />
               <TextLine text={`Device ID: ${displayDeviceId}`} />
               <Spacer />
-              <TextLine text={getApiKeyInfo(sessionData.api_key)} />
+              <TextLine text={getApiKeyInfo(session.api_key || undefined)} />
               <Spacer />
               <TextLine text={`Session Requests: ${requestCount}`} />
-              <TextLine text={`Today's Requests: ${sessionData.requests_today}/${sessionData.daily_limit}`} />
+              <TextLine text={`Today's Requests: ${requests_today}/${daily_limit}`} />
               <TextLine
                 text={`Remaining Today: ${remaining}`}
                 color={remaining > 10 ? COLORS.success : COLORS.error}
@@ -210,11 +186,11 @@ const ProfileTab: React.FC = () => {
           right={
             <InfoWidget title="Upgrade Your Access">
               <TextLine
-                text={sessionData.api_key?.startsWith("fk_guest_") ? "🔄 Current: Guest API Key" : "🔄 Current: Offline Mode"}
+                text={session.api_key ? "🔄 Current: Guest API Key" : "🔄 Current: Offline Mode"}
                 color={COLORS.warning}
               />
               <Spacer />
-              {sessionData.api_key?.startsWith("fk_guest_") ? (
+              {session.api_key ? (
                 <>
                   <TextLine text="• Temporary access (24 hours)" />
                   <TextLine text="• 50 requests per day" />
@@ -249,7 +225,7 @@ const ProfileTab: React.FC = () => {
             </div>
             <div>
               <TextLine text="Daily Usage:" color={COLORS.info} />
-              <TextLine text={`${sessionData.requests_today}/${sessionData.daily_limit}`} />
+              <TextLine text={`${requests_today}/${daily_limit}`} />
             </div>
             <div>
               <TextLine text="Status:" color={COLORS.info} />
@@ -266,8 +242,12 @@ const ProfileTab: React.FC = () => {
   };
 
   const renderUserProfile = () => {
-    const userInfo = sessionData.user_info;
+    if (!session) return null;
+    const userInfo = session.user_info;
     const creditBalance = userInfo?.credit_balance || 0;
+    const accountType = userInfo?.account_type || 'free';
+    const hasSubscription = session.subscription?.has_subscription;
+    const subscriptionPlan = session.subscription?.subscription?.plan;
 
     let balanceColor, status;
     if (creditBalance > 1000) {
@@ -290,15 +270,24 @@ const ProfileTab: React.FC = () => {
             <InfoWidget title="Account Details">
               <TextLine text={`Username: ${userInfo?.username || 'N/A'}`} />
               <TextLine text={`Email: ${userInfo?.email || 'N/A'}`} />
-              <TextLine text={`Account Type: ${userInfo?.account_type?.charAt(0).toUpperCase() + userInfo?.account_type?.slice(1) || 'Free'}`} />
+              <TextLine text={`Account Type: ${accountType.charAt(0).toUpperCase() + accountType.slice(1)}`} />
               <TextLine text={`Member Since: ${formatDate(userInfo?.created_at)}`} />
               <Spacer />
+              {hasSubscription && subscriptionPlan && (
+                <>
+                  <TextLine text="Subscription:" color={COLORS.info} />
+                  <TextLine text={`Plan: ${subscriptionPlan.name}`} color={COLORS.success} />
+                  <TextLine text={`Price: $${subscriptionPlan.price}/month`} />
+                  <TextLine text={`Status: ${session.subscription?.subscription?.status}`} color={COLORS.success} />
+                  <Spacer />
+                </>
+              )}
               <TextLine text="Authentication:" color={COLORS.info} />
-              <TextLine text={getApiKeyInfo(sessionData.api_key, true)} />
+              <TextLine text={getApiKeyInfo(session.api_key || undefined, true)} />
               <Spacer />
-              <TextLine text="✓ Unlimited API requests" />
-              <TextLine text="✓ All database access" />
-              <TextLine text="✓ Premium features" />
+              <TextLine text={hasSubscription ? "✓ Unlimited API requests" : "✓ Limited API requests"} />
+              <TextLine text={hasSubscription ? "✓ All database access" : "✓ Basic database access"} />
+              <TextLine text={hasSubscription ? "✓ Premium features" : "✓ Standard features"} />
               <Spacer height={20} />
               <ButtonGroup buttons={[
                 { label: "Regenerate API Key", callback: regenerateApiKey },
@@ -368,10 +357,13 @@ const ProfileTab: React.FC = () => {
 
   // Main render logic based on user type
   const renderContent = () => {
-    switch (sessionData.user_type) {
+    if (!session) {
+      return renderUnknownProfile();
+    }
+
+    switch (session.user_type) {
       case 'guest': return renderGuestProfile();
       case 'registered': return renderUserProfile();
-      case 'unknown': return renderUnknownProfile();
       default: return renderUnknownProfile();
     }
   };

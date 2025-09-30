@@ -43,6 +43,11 @@ const PaymentSuccessScreen: React.FC<PaymentSuccessScreenProps> = ({
 
     console.log('Payment success page loaded with params:', { sessionId, paymentId });
 
+    // Clear URL parameters immediately to prevent re-processing on refresh
+    if (sessionId || paymentId) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     const handlePaymentSuccess = async () => {
       if (!session?.api_key) {
         setError('Authentication required');
