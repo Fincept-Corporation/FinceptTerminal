@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle } from 'lucide-react';
+import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import ForumTab from '@/components/tabs/ForumTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import MarketsTab from '@/components/tabs/MarketsTab';
@@ -23,6 +24,7 @@ import DBnomicsTab from '@/components/tabs/DBnomicsTab';
 import CodeEditorTab from '@/components/tabs/CodeEditorTab';
 import DocsTab from '@/components/tabs/DocsTab';
 import MaritimeTab from '@/components/tabs/MaritimeTab';
+import SettingsTab from '@/components/tabs/SettingsTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }) => {
@@ -105,6 +107,7 @@ const DropdownMenu = ({ label, items, onItemClick }) => {
 };
 
 export default function FinxeptTerminal() {
+  const { session, logout } = useAuth();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -127,6 +130,46 @@ export default function FinxeptTerminal() {
     };
   }, []);
 
+  // Get session display text
+  const getSessionDisplay = () => {
+    if (!session) return 'Loading...';
+
+    if (session.user_type === 'guest') {
+      // Calculate time remaining for guest users
+      if (session.expires_at) {
+        const expiryTime = new Date(session.expires_at).getTime();
+        const now = new Date().getTime();
+        const hoursRemaining = Math.floor((expiryTime - now) / (1000 * 60 * 60));
+        const minutesRemaining = Math.floor(((expiryTime - now) % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (hoursRemaining > 0) {
+          return `👤 Guest (${hoursRemaining}h ${minutesRemaining}m remaining)`;
+        } else if (minutesRemaining > 0) {
+          return `👤 Guest (${minutesRemaining}m remaining)`;
+        } else {
+          return '👤 Guest (Expired)';
+        }
+      }
+      return '👤 Guest User';
+    } else if (session.user_type === 'registered') {
+      const username = session.user_info?.username || session.user_info?.email || 'User';
+      const accountType = session.user_info?.account_type || 'free';
+      const hasSubscription = session.subscription?.has_subscription;
+
+      // Show account type badge
+      if (hasSubscription) {
+        const planName = session.subscription?.subscription?.plan?.name || accountType;
+        return `👤 ${username} | 📦 ${planName} | ✅ Active`;
+      } else if (accountType === 'free') {
+        return `👤 ${username} | 📦 Free Plan`;
+      } else {
+        return `👤 ${username} | 📦 ${accountType.charAt(0).toUpperCase() + accountType.slice(1)}`;
+      }
+    }
+
+    return 'Unknown Session';
+  };
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().then(() => {
@@ -146,9 +189,9 @@ export default function FinxeptTerminal() {
     setTimeout(() => setStatusMessage(""), 3000);
   };
 
-  const handleMenuAction = (item) => {
+  const handleMenuAction = async (item) => {
     setStatusMessage(`${item.label} clicked`);
-    
+
     // Handle specific actions
     switch(item.action) {
       case 'fullscreen':
@@ -159,6 +202,12 @@ export default function FinxeptTerminal() {
         break;
       case 'export':
         setStatusMessage("Export functionality not implemented");
+        break;
+      case 'logout':
+        setStatusMessage("Logging out...");
+        await logout();
+        // Redirect to login will be handled by App.tsx
+        window.location.href = '/';
         break;
       default:
         setTimeout(() => setStatusMessage(""), 3000);
@@ -184,11 +233,10 @@ export default function FinxeptTerminal() {
   ];
 
   const sessionMenuItems = [
-    { label: 'Login', icon: <User size={12} /> },
+    { label: 'Session Info', icon: <User size={12} /> },
     { label: 'Switch User', icon: null },
-    { label: 'Session Info', icon: null, separator: true },
-    { label: 'Extend Session', icon: null },
-    { label: 'Logout', icon: null }
+    { label: 'Extend Session', icon: null, separator: true },
+    { label: 'Logout', icon: <LogOut size={12} />, action: 'logout' }
   ];
 
   const apiMenuItems = [
@@ -316,7 +364,39 @@ export default function FinxeptTerminal() {
           >
             {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
           </button>
-          <span style={{ color: '#fbbf24' }}>Guest (18h remaining)</span>
+          <span style={{ color: '#fbbf24', fontSize: '10px' }}>{getSessionDisplay()}</span>
+          <button
+            onClick={async () => {
+              setStatusMessage("Logging out...");
+              await logout();
+              window.location.href = '/';
+            }}
+            style={{
+              backgroundColor: 'transparent',
+              color: '#ff6b6b',
+              border: '1px solid #ff6b6b',
+              padding: '3px 8px',
+              fontSize: '10px',
+              cursor: 'pointer',
+              borderRadius: '3px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontWeight: 'bold'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#ff6b6b';
+              e.currentTarget.style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#ff6b6b';
+            }}
+            title="Logout"
+          >
+            <LogOut size={12} />
+            LOGOUT
+          </button>
           <span style={{ color: '#737373', cursor: 'pointer' }} title="Help">?</span>
         </div>
       </div>
@@ -484,6 +564,12 @@ export default function FinxeptTerminal() {
             >
               Maritime
             </TabsTrigger>
+            <TabsTrigger
+              value="settings"
+              style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
+            >
+              Settings
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
@@ -602,6 +688,9 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="maritime" className="h-full m-0 p-0">
             <MaritimeTab />
+          </TabsContent>
+          <TabsContent value="settings" className="h-full m-0 p-0">
+            <SettingsTab />
           </TabsContent>
         </Tabs>
       </div>
