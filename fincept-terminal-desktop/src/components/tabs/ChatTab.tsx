@@ -293,7 +293,7 @@ const ChatTab: React.FC = () => {
         marginBottom: '4px'
       }}>
         <div style={{
-          maxWidth: '450px',
+          maxWidth: '80%',
           minWidth: '120px',
           backgroundColor: BLOOMBERG_PANEL_BG,
           border: `1px solid ${BLOOMBERG_GRAY}`,
@@ -336,33 +336,35 @@ const ChatTab: React.FC = () => {
       flexDirection: 'column',
       fontSize: '12px'
     }}>
-      {/* Terminal Header */}
+      {/* Terminal Header - Responsive */}
       <div style={{
         backgroundColor: BLOOMBERG_PANEL_BG,
         borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
-        padding: '8px 12px'
+        padding: '8px 12px',
+        flexShrink: 0
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>FINCEPT</span>
           <span style={{ color: BLOOMBERG_WHITE }}>AI ASSISTANT</span>
           <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-          <span style={{ color: userType === 'FREE' ? BLOOMBERG_YELLOW : BLOOMBERG_GREEN }}>
+          <span style={{ color: userType === 'FREE' ? BLOOMBERG_YELLOW : BLOOMBERG_GREEN, fontSize: '11px' }}>
             👤 {userType === 'FREE' ? 'Guest Mode' : 'User Mode'}
           </span>
           <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>
+          <span style={{ color: BLOOMBERG_WHITE, fontSize: '11px' }}>
             {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
           </span>
         </div>
       </div>
 
-      {/* Function Keys */}
+      {/* Function Keys - Responsive */}
       <div style={{
         backgroundColor: BLOOMBERG_PANEL_BG,
         borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
-        padding: '4px 8px'
+        padding: '4px 8px',
+        flexShrink: 0
       }}>
-        <div style={{ display: 'flex', gap: '4px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
           {[
             { key: 'F1:HELP', action: () => setMessageInput('I need help with using this AI assistant') },
             { key: 'F2:SESSIONS', action: () => document.getElementById('session-search')?.focus() },
@@ -390,15 +392,18 @@ const ChatTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left Panel - Chat Sessions */}
+      {/* Main Content - Responsive */}
+      <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', overflow: 'hidden' }}>
+        {/* Left Panel - Chat Sessions - Responsive */}
         <div style={{
-          width: '350px',
+          flex: '0 0 300px',
+          minWidth: '280px',
+          maxWidth: '400px',
           backgroundColor: BLOOMBERG_PANEL_BG,
           borderRight: `1px solid ${BLOOMBERG_GRAY}`,
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          overflow: 'hidden'
         }}>
           <div style={{ padding: '12px' }}>
             <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
@@ -532,13 +537,15 @@ const ChatTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Center Panel - Chat Interface */}
+        {/* Center Panel - Chat Interface - Responsive */}
         <div style={{
-          width: '850px',
+          flex: '1 1 500px',
+          minWidth: '400px',
           backgroundColor: BLOOMBERG_PANEL_BG,
           borderRight: `1px solid ${BLOOMBERG_GRAY}`,
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          overflow: 'hidden'
         }}>
           {/* Chat Header */}
           <div style={{ padding: '12px' }}>
@@ -637,9 +644,11 @@ const ChatTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Panel - Command Center */}
+        {/* Right Panel - Command Center - Responsive */}
         <div style={{
-          width: '300px',
+          flex: '0 0 280px',
+          minWidth: '260px',
+          maxWidth: '350px',
           backgroundColor: BLOOMBERG_PANEL_BG,
           padding: '12px',
           overflow: 'auto'
@@ -719,26 +728,28 @@ const ChatTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Status Bar */}
+      {/* Status Bar - Responsive */}
       <div style={{
         backgroundColor: BLOOMBERG_PANEL_BG,
         borderTop: `1px solid ${BLOOMBERG_GRAY}`,
         padding: '6px 12px',
         display: 'flex',
         alignItems: 'center',
-        gap: '16px',
-        fontSize: '11px'
+        flexWrap: 'wrap',
+        gap: '12px',
+        fontSize: '11px',
+        flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <div style={{ color: BLOOMBERG_GREEN }}>●</div>
-          <span style={{ color: BLOOMBERG_GREEN }}>CONNECTED</span>
+          <div style={{ color: BLOOMBERG_GREEN, fontSize: '14px' }}>●</div>
+          <span style={{ color: BLOOMBERG_GREEN, fontSize: '10px', fontWeight: 'bold' }}>CONNECTED</span>
         </div>
         <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-        <span style={{ color: BLOOMBERG_ORANGE }}>AI CHAT</span>
+        <span style={{ color: BLOOMBERG_ORANGE, fontSize: '10px', fontWeight: 'bold' }}>AI CHAT</span>
         <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-        <span style={{ color: BLOOMBERG_WHITE }}>{systemStatus}</span>
+        <span style={{ color: BLOOMBERG_WHITE, fontSize: '10px' }}>{systemStatus}</span>
         <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-        <span style={{ color: BLOOMBERG_WHITE }}>USER: {userType}</span>
+        <span style={{ color: BLOOMBERG_WHITE, fontSize: '10px' }}>USER: {userType}</span>
       </div>
     </div>
   );

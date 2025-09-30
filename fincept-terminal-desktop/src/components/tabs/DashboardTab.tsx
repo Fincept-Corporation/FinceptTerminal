@@ -57,11 +57,13 @@ const DashboardTab: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Create left panel (Market Monitor)
+  // Create left panel (Market Monitor) - Responsive
   const createLeftPanel = () => (
     <div style={{
-      width: '350px',
-      height: '600px',
+      flex: '1 1 300px',
+      minWidth: '280px',
+      maxWidth: '400px',
+      minHeight: '500px',
       backgroundColor: BLOOMBERG_PANEL_BG,
       border: `1px solid ${BLOOMBERG_GRAY}`,
       padding: '8px',
@@ -150,11 +152,12 @@ const DashboardTab: React.FC = () => {
     </div>
   );
 
-  // Create center panel (Stock Data with Tabs)
+  // Create center panel (Stock Data with Tabs) - Responsive
   const createCenterPanel = () => (
     <div style={{
-      width: '800px',
-      height: '600px',
+      flex: '2 1 500px',
+      minWidth: '400px',
+      minHeight: '500px',
       backgroundColor: BLOOMBERG_PANEL_BG,
       border: `1px solid ${BLOOMBERG_GRAY}`,
       padding: '8px',
@@ -307,11 +310,13 @@ const DashboardTab: React.FC = () => {
     </div>
   );
 
-  // Create right panel (Command Line)
+  // Create right panel (Command Line) - Responsive
   const createRightPanel = () => (
     <div style={{
-      width: '350px',
-      height: '600px',
+      flex: '1 1 300px',
+      minWidth: '280px',
+      maxWidth: '400px',
+      minHeight: '500px',
       backgroundColor: BLOOMBERG_PANEL_BG,
       border: `1px solid ${BLOOMBERG_GRAY}`,
       padding: '8px',
@@ -430,45 +435,66 @@ const DashboardTab: React.FC = () => {
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Header */}
+      {/* Header - Responsive */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
+        flexWrap: 'wrap',
         padding: '8px 12px',
         backgroundColor: BLOOMBERG_PANEL_BG,
         borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
-        fontSize: '12px'
+        fontSize: '12px',
+        gap: '12px',
+        flexShrink: 0
       }}>
         <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>BLOOMBERG TERMINAL</span>
-        <span style={{ color: BLOOMBERG_WHITE, marginLeft: '16px' }}>
+        <span style={{ color: BLOOMBERG_WHITE, fontSize: '11px' }}>
           {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: BLOOMBERG_GREEN }}>●</span>
-          <span style={{ color: BLOOMBERG_GREEN, fontSize: '10px' }}>LIVE</span>
+          <span style={{ color: BLOOMBERG_GREEN, fontSize: '14px' }}>●</span>
+          <span style={{ color: BLOOMBERG_GREEN, fontSize: '10px', fontWeight: 'bold' }}>LIVE</span>
         </div>
       </div>
 
-      {/* Main Content - 3 Panel Layout */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-        <div style={{ display: 'flex', gap: '8px' }}>
+      {/* Main Content - Responsive 3 Panel Layout */}
+      <div style={{
+        flex: 1,
+        overflow: 'auto',
+        padding: '12px',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '12px',
+          justifyContent: 'center'
+        }}>
           {createLeftPanel()}
           {createCenterPanel()}
           {createRightPanel()}
         </div>
       </div>
 
-      {/* Status Bar */}
+      {/* Status Bar - Responsive */}
       <div style={{
         borderTop: `1px solid ${BLOOMBERG_GRAY}`,
         backgroundColor: BLOOMBERG_PANEL_BG,
-        padding: '4px 12px',
+        padding: '6px 12px',
         fontSize: '10px',
-        color: BLOOMBERG_GRAY
+        color: BLOOMBERG_GRAY,
+        flexShrink: 0
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '8px'
+        }}>
           <span>Bloomberg Professional Service | Real-time financial data</span>
-          <span>Session: {currentTime.toTimeString().substring(0, 8)}</span>
+          <span style={{ whiteSpace: 'nowrap' }}>Session: {currentTime.toTimeString().substring(0, 8)}</span>
         </div>
       </div>
     </div>
