@@ -38,7 +38,7 @@ export abstract class BaseAdapter {
    * Query data from the data source
    * Optional: Implement if your adapter supports querying
    */
-  async query(query: string): Promise<any> {
+  async query(query: string, request?: any): Promise<any> {
     throw new Error(`Query not implemented for ${this.connection.type}`);
   }
 
