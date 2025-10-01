@@ -53,10 +53,52 @@ export default function DBnomicsTab() {
   const [singleViewSeries, setSingleViewSeries] = useState<DataPoint[]>([]);
   const [singleChartType, setSingleChartType] = useState<ChartType>('line');
 
-  // Load providers on mount
+  // Load providers and restore cached state on mount
   React.useEffect(() => {
     loadProviders();
+    restoreState();
   }, []);
+
+  // Save state to localStorage whenever important data changes
+  React.useEffect(() => {
+    saveState();
+  }, [singleViewSeries, slots, slotChartTypes, singleChartType, activeView]);
+
+  const saveState = () => {
+    try {
+      const state = {
+        singleViewSeries,
+        slots,
+        slotChartTypes,
+        singleChartType,
+        activeView,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('dbnomics_state', JSON.stringify(state));
+    } catch (error) {
+      console.error('Failed to save DBnomics state:', error);
+    }
+  };
+
+  const restoreState = () => {
+    try {
+      const saved = localStorage.getItem('dbnomics_state');
+      if (saved) {
+        const state = JSON.parse(saved);
+        // Only restore if saved within last 24 hours
+        if (state.timestamp && Date.now() - state.timestamp < 24 * 60 * 60 * 1000) {
+          if (state.singleViewSeries) setSingleViewSeries(state.singleViewSeries);
+          if (state.slots) setSlots(state.slots);
+          if (state.slotChartTypes) setSlotChartTypes(state.slotChartTypes);
+          if (state.singleChartType) setSingleChartType(state.singleChartType);
+          if (state.activeView) setActiveView(state.activeView);
+          setStatus('Restored previous session');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to restore DBnomics state:', error);
+    }
+  };
 
   // API Functions
   const loadProviders = async () => {
@@ -224,6 +266,7 @@ export default function DBnomicsTab() {
   const addToSingleView = () => {
     if (currentData) {
       setSingleViewSeries([...singleViewSeries, currentData]);
+      setActiveView('single'); // Switch to single view
       setStatus('Added to single view');
     }
   };
@@ -236,6 +279,7 @@ export default function DBnomicsTab() {
     setSlots([[]]);
     setSlotChartTypes(['line']);
     setSingleViewSeries([]);
+    localStorage.removeItem('dbnomics_state'); // Clear cache
     setStatus('Cleared all');
   };
 
@@ -705,9 +749,10 @@ export default function DBnomicsTab() {
                                   <td style={{ padding: '6px 12px', color: '#d4d4d4', whiteSpace: 'nowrap', fontWeight: 'bold' }}>{period}</td>
                                   {singleViewSeries.map((series, sIdx) => {
                                     const obs = series.observations.find(o => o.period === period);
+                                    const value = obs ? (typeof obs.value === 'number' ? obs.value : Number(obs.value)) : null;
                                     return (
-                                      <td key={sIdx} style={{ padding: '6px 12px', textAlign: 'right', color: obs ? '#a3a3a3' : '#404040', whiteSpace: 'nowrap' }}>
-                                        {obs ? obs.value.toFixed(4) : '—'}
+                                      <td key={sIdx} style={{ padding: '6px 12px', textAlign: 'right', color: value !== null ? '#a3a3a3' : '#404040', whiteSpace: 'nowrap' }}>
+                                        {value !== null && !isNaN(value) ? value.toFixed(4) : '—'}
                                       </td>
                                     );
                                   })}
