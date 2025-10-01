@@ -98,7 +98,7 @@ import { SFTPAdapter } from './SFTPAdapter';
 import { DataSourceConnection } from '../types';
 
 // Map of data source types to their adapter classes
-const ADAPTER_MAP: Record<string, typeof BaseAdapter> = {
+const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   // Relational Databases
   postgresql: PostgreSQLAdapter,
   mysql: MySQLAdapter,

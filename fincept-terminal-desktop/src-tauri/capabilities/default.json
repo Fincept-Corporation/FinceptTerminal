@@ -6,6 +6,11 @@
   "permissions": [
     "core:default",
     "opener:default",
-    "cors-fetch:default"
+    "cors-fetch:default",
+    "sql:default",
+    "sql:allow-load",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "sql:allow-close"
   ]
 }
