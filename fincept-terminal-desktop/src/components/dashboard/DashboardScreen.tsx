@@ -27,6 +27,7 @@ import SettingsTab from '@/components/tabs/SettingsTab';
 import NodeEditorTab from '@/components/tabs/NodeEditorTab';
 import DataSourcesTab from '@/components/tabs/data-sources/DataSourcesTab';
 import AgentsTab from '@/components/tabs/agents/AgentsTab';
+import DataMappingTab from '@/components/tabs/data-mapping/DataMappingTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -609,6 +610,12 @@ export default function FinxeptTerminal() {
             >
               Agents
             </TabsTrigger>
+            <TabsTrigger
+              value="datamapping"
+              style={activeTab === 'datamapping' ? tabStyles.active : tabStyles.default}
+            >
+              Data Mapping
+            </TabsTrigger>
           </TabsList>
         </Tabs>
         </div>
@@ -741,6 +748,9 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="agents" className="h-full m-0 p-0">
             <AgentsTab />
+          </TabsContent>
+          <TabsContent value="datamapping" className="h-full m-0 p-0">
+            <DataMappingTab />
           </TabsContent>
         </Tabs>
       </div>

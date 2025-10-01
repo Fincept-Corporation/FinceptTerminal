@@ -1,8 +1,6 @@
 name: Build FinceptTerminal
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
   workflow_dispatch: # Allows manual trigger
@@ -33,17 +31,17 @@ jobs:
             os_name: 'Windows'
             arch: 'x64'
             target: 'x86_64-pc-windows-msvc'
-    
+
     runs-on: ${{ matrix.platform }}
-    
+
     defaults:
       run:
         working-directory: ./fincept-terminal-desktop
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        
+
       - name: Install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -67,27 +65,27 @@ jobs:
             libnss3-dev \
             libxss1 \
             libasound2-dev
-          
+
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-          
+
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './fincept-terminal-desktop/src-tauri -> target'
-          
+
       - name: Sync node version and setup cache
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
           cache: 'npm'
           cache-dependency-path: './fincept-terminal-desktop/package-lock.json'
-          
+
       - name: Install frontend dependencies
         run: npm install
-        
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -95,7 +93,7 @@ jobs:
         with:
           projectPath: './fincept-terminal-desktop'
           args: ${{ matrix.args }}
-          
+
       - name: Prepare artifacts with proper naming
         id: prepare
         run: |
@@ -141,7 +139,7 @@ jobs:
           artifact_count=$(find ../release-artifacts -type f | wc -l)
           echo "artifact_count=$artifact_count" >> $GITHUB_OUTPUT
         shell: bash
-          
+
       - name: Upload build artifacts
         if: steps.prepare.outputs.artifact_count > 0
         uses: actions/upload-artifact@v4
@@ -153,7 +151,7 @@ jobs:
   create-release:
     needs: build
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'  # Only create releases for manual triggers
     permissions:
       contents: write
       pull-requests: write
