@@ -110,9 +110,9 @@ export class OpenTSDBAdapter extends BaseAdapter {
   }
 
   /**
-   * Get config
+   * Get OpenTSDB config
    */
-  async getConfig(): Promise<any> {
+  async getOpenTSDBConfig(): Promise<any> {
     return await this.query('/api/config');
   }
 

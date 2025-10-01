@@ -11,6 +11,8 @@ build.txt
 cmder
 reqgen.py
 fincept_env
+*.md
+!README.md
 python
 treeview.py
 testing
@@ -44,4 +46,4 @@ temp
 tempdist
 settings.json
 watchlist_settings.json
-.DS_Store
+.DS_Storenul 

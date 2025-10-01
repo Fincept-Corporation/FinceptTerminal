@@ -47,8 +47,8 @@ export class PrometheusAdapter extends BaseAdapter {
 
         return this.createSuccessResult('Successfully connected to Prometheus', {
           url,
-          version: buildInfo['version'] || 'Unknown',
-          goVersion: buildInfo['goVersion'],
+          version: (buildInfo as any)['version'] || 'Unknown',
+          goVersion: (buildInfo as any)['goVersion'],
           timestamp: new Date().toISOString(),
         });
       } catch (fetchError) {
