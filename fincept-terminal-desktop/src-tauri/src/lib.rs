@@ -22,6 +22,9 @@ struct SpawnResult {
     success: bool,
     error: Option<String>,
 }
+mod datasources;
+
+use datasources::yfinance;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -219,7 +222,8 @@ pub fn run() {
             commands::market_data::get_market_quote,
             commands::market_data::get_market_quotes,
             commands::market_data::get_period_returns,
-            commands::market_data::check_market_data_health
+            commands::market_data::check_market_data_health,
+            yfinance::get_stock_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

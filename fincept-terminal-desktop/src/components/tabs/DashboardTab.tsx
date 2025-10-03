@@ -1,4 +1,33 @@
 import React, { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+
+
+const testGreet = async () => {
+  try {
+    const greeting = await invoke('greet', { name: 'Bloomberg User' });
+    console.log('Greeting from Rust:', greeting);
+    // You can also show this in an alert or update state
+    alert(greeting);
+  } catch (error) {
+    console.error('Error calling greet command:', error);
+  }
+};
+
+async function fetchStockData() {
+    try {
+        const stockData = await invoke('get_stock_data', { 
+            symbol: 'AAPL',
+            period: '1mo'
+        });
+        console.log('Stock data:', stockData);
+        return stockData;
+    } catch (error) {
+        console.error('Error fetching stock data:', error);
+        throw error;
+    }
+}
+console.log('Fetching stock data for AAPL...');
+await fetchStockData();
 
 const DashboardTab: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
