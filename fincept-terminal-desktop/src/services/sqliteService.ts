@@ -204,11 +204,62 @@ class SQLiteService {
       )
     `);
 
+    // MCP servers table
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS mcp_servers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        command TEXT NOT NULL,
+        args TEXT NOT NULL,
+        env TEXT,
+        category TEXT,
+        icon TEXT,
+        enabled INTEGER DEFAULT 1,
+        auto_start INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'stopped',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    // MCP tools cache table
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS mcp_tools (
+        id TEXT PRIMARY KEY,
+        server_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        input_schema TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (server_id) REFERENCES mcp_servers(id) ON DELETE CASCADE
+      )
+    `);
+
+    // MCP tool usage logs
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS mcp_tool_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id TEXT NOT NULL,
+        tool_name TEXT NOT NULL,
+        args TEXT,
+        result TEXT,
+        success INTEGER,
+        execution_time INTEGER,
+        error TEXT,
+        timestamp TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (server_id) REFERENCES mcp_servers(id) ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_credentials_service ON credentials(service_name)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_uuid)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_sessions_updated ON chat_sessions(updated_at DESC)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_mcp_tools_server ON mcp_tools(server_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_mcp_usage_server ON mcp_tool_usage(server_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_mcp_usage_timestamp ON mcp_tool_usage(timestamp DESC)`);
   }
 
   private async seedDefaultSettings(): Promise<void> {
@@ -613,6 +664,334 @@ class SQLiteService {
     console.log('Forcing database reinitialization...');
     await this.close();
     await this.initialize();
+  }
+
+  // ==================== MCP SERVER METHODS ====================
+
+  /**
+   * Add a new MCP server
+   */
+  async addMCPServer(server: {
+    id: string;
+    name: string;
+    description: string;
+    command: string;
+    args: string;
+    env?: string | null;
+    category: string;
+    icon: string;
+    enabled: boolean;
+    auto_start?: boolean;
+  }): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execute(
+      `INSERT INTO mcp_servers (id, name, description, command, args, env, category, icon, enabled, auto_start, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'stopped')`,
+      [server.id, server.name, server.description, server.command, server.args, server.env, server.category, server.icon, server.enabled ? 1 : 0, server.auto_start ? 1 : 0]
+    );
+  }
+
+  /**
+   * Get all MCP servers
+   */
+  async getMCPServers(): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    command: string;
+    args: string;
+    env: string | null;
+    category: string;
+    icon: string;
+    enabled: boolean;
+    auto_start: boolean;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const servers = await this.db.select<Array<any>>(
+      'SELECT * FROM mcp_servers ORDER BY created_at DESC'
+    );
+
+    return servers.map(s => ({
+      ...s,
+      enabled: s.enabled === 1,
+      auto_start: s.auto_start === 1
+    }));
+  }
+
+  /**
+   * Get a single MCP server by ID
+   */
+  async getMCPServer(id: string): Promise<{
+    id: string;
+    name: string;
+    description: string;
+    command: string;
+    args: string;
+    env: string | null;
+    category: string;
+    icon: string;
+    enabled: boolean;
+    auto_start: boolean;
+    status: string;
+    created_at: string;
+    updated_at: string;
+  } | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const servers = await this.db.select<Array<any>>(
+      'SELECT * FROM mcp_servers WHERE id = $1',
+      [id]
+    );
+
+    if (servers.length === 0) return null;
+
+    return {
+      ...servers[0],
+      enabled: servers[0].enabled === 1,
+      auto_start: servers[0].auto_start === 1
+    };
+  }
+
+  /**
+   * Update MCP server status
+   */
+  async updateMCPServerStatus(id: string, status: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execute(
+      `UPDATE mcp_servers SET status = $1, updated_at = datetime('now') WHERE id = $2`,
+      [status, id]
+    );
+  }
+
+  /**
+   * Update MCP server configuration
+   */
+  async updateMCPServerConfig(id: string, updates: {
+    env?: Record<string, string>;
+    enabled?: boolean;
+    auto_start?: boolean;
+  }): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sets: string[] = [];
+    const values: any[] = [];
+
+    if (updates.env !== undefined) {
+      sets.push('env = $' + (values.length + 1));
+      values.push(JSON.stringify(updates.env));
+    }
+
+    if (updates.enabled !== undefined) {
+      sets.push('enabled = $' + (values.length + 1));
+      values.push(updates.enabled ? 1 : 0);
+    }
+
+    if (updates.auto_start !== undefined) {
+      sets.push('auto_start = $' + (values.length + 1));
+      values.push(updates.auto_start ? 1 : 0);
+    }
+
+    if (sets.length > 0) {
+      sets.push('updated_at = datetime(\'now\')');
+      values.push(id);
+
+      await this.db.execute(
+        `UPDATE mcp_servers SET ${sets.join(', ')} WHERE id = $${values.length}`,
+        values
+      );
+    }
+  }
+
+  /**
+   * Delete MCP server
+   */
+  async deleteMCPServer(id: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execute('DELETE FROM mcp_servers WHERE id = $1', [id]);
+  }
+
+  /**
+   * Get all auto-start enabled servers
+   */
+  async getAutoStartServers(): Promise<Array<{
+    id: string;
+    name: string;
+    description: string;
+    command: string;
+    args: string;
+    env: string | null;
+    category: string;
+    icon: string;
+    enabled: boolean;
+    auto_start: boolean;
+    status: string;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const servers = await this.db.select<Array<any>>(
+      'SELECT * FROM mcp_servers WHERE auto_start = 1 AND enabled = 1'
+    );
+
+    return servers.map(s => ({
+      ...s,
+      enabled: s.enabled === 1,
+      auto_start: s.auto_start === 1
+    }));
+  }
+
+  /**
+   * Cache tools for an MCP server
+   */
+  async cacheMCPTools(serverId: string, tools: Array<{
+    name: string;
+    description?: string;
+    inputSchema: any;
+  }>): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Delete existing tools for this server
+    await this.db.execute('DELETE FROM mcp_tools WHERE server_id = $1', [serverId]);
+
+    // Insert new tools
+    for (const tool of tools) {
+      const toolId = `${serverId}__${tool.name}`;
+      await this.db.execute(
+        `INSERT INTO mcp_tools (id, server_id, name, description, input_schema)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [toolId, serverId, tool.name, tool.description || '', JSON.stringify(tool.inputSchema)]
+      );
+    }
+  }
+
+  /**
+   * Get all cached MCP tools
+   */
+  async getMCPTools(): Promise<Array<{
+    id: string;
+    server_id: string;
+    name: string;
+    description: string;
+    input_schema: string;
+    created_at: string;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    return await this.db.select<Array<any>>(
+      'SELECT * FROM mcp_tools ORDER BY server_id, name'
+    );
+  }
+
+  /**
+   * Get tools for a specific server
+   */
+  async getMCPToolsForServer(serverId: string): Promise<Array<{
+    id: string;
+    server_id: string;
+    name: string;
+    description: string;
+    input_schema: string;
+    created_at: string;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    return await this.db.select<Array<any>>(
+      'SELECT * FROM mcp_tools WHERE server_id = $1 ORDER BY name',
+      [serverId]
+    );
+  }
+
+  /**
+   * Log MCP tool usage
+   */
+  async logMCPToolUsage(log: {
+    serverId: string;
+    toolName: string;
+    args: string;
+    result: string | null;
+    success: boolean;
+    executionTime: number;
+    error?: string;
+  }): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execute(
+      `INSERT INTO mcp_tool_usage (server_id, tool_name, args, result, success, execution_time, error)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [log.serverId, log.toolName, log.args, log.result, log.success ? 1 : 0, log.executionTime, log.error || null]
+    );
+  }
+
+  /**
+   * Get MCP server statistics
+   */
+  async getMCPServerStats(serverId: string): Promise<{
+    toolCount: number;
+    callsToday: number;
+    lastUsed: string | null;
+  }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Get tool count
+    const toolCountResult = await this.db.select<Array<{ count: number }>>(
+      'SELECT COUNT(*) as count FROM mcp_tools WHERE server_id = $1',
+      [serverId]
+    );
+
+    // Get calls today
+    const callsTodayResult = await this.db.select<Array<{ count: number }>>(
+      `SELECT COUNT(*) as count FROM mcp_tool_usage
+       WHERE server_id = $1 AND date(timestamp) = date('now')`,
+      [serverId]
+    );
+
+    // Get last used
+    const lastUsedResult = await this.db.select<Array<{ timestamp: string | null }>>(
+      `SELECT timestamp FROM mcp_tool_usage
+       WHERE server_id = $1
+       ORDER BY timestamp DESC
+       LIMIT 1`,
+      [serverId]
+    );
+
+    return {
+      toolCount: toolCountResult[0]?.count || 0,
+      callsToday: callsTodayResult[0]?.count || 0,
+      lastUsed: lastUsedResult[0]?.timestamp || null
+    };
+  }
+
+  /**
+   * Get recent MCP tool usage logs
+   */
+  async getMCPToolUsageLogs(limit: number = 50): Promise<Array<{
+    id: number;
+    server_id: string;
+    tool_name: string;
+    args: string;
+    result: string;
+    success: boolean;
+    execution_time: number;
+    error: string | null;
+    timestamp: string;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const logs = await this.db.select<Array<any>>(
+      'SELECT * FROM mcp_tool_usage ORDER BY timestamp DESC LIMIT $1',
+      [limit]
+    );
+
+    return logs.map(log => ({
+      ...log,
+      success: log.success === 1
+    }));
   }
 }
 

@@ -28,6 +28,8 @@ import NodeEditorTab from '@/components/tabs/NodeEditorTab';
 import DataSourcesTab from '@/components/tabs/data-sources/DataSourcesTab';
 import AgentsTab from '@/components/tabs/agents/AgentsTab';
 import DataMappingTab from '@/components/tabs/data-mapping/DataMappingTab';
+import MCPTab from '@/components/tabs/mcp';
+import FyersTab from '@/components/tabs/fyers';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -503,6 +505,18 @@ export default function FinxeptTerminal() {
               AI Chat
             </TabsTrigger>
             <TabsTrigger
+              value="fyers"
+              style={activeTab === 'fyers' ? tabStyles.active : tabStyles.default}
+            >
+              Fyers
+            </TabsTrigger>
+            <TabsTrigger
+              value="mcp"
+              style={activeTab === 'mcp' ? tabStyles.active : tabStyles.default}
+            >
+              MCP
+            </TabsTrigger>
+            <TabsTrigger
               value="profile"
               style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
             >
@@ -694,6 +708,12 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="chat" className="h-full m-0 p-0">
             <ChatTab />
+          </TabsContent>
+          <TabsContent value="fyers" className="h-full m-0 p-0">
+            <FyersTab />
+          </TabsContent>
+          <TabsContent value="mcp" className="h-full m-0 p-0">
+            <MCPTab />
           </TabsContent>
           <TabsContent value="profile" className="h-full m-0 p-0">
             <ProfileTab />

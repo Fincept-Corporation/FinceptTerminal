@@ -453,6 +453,198 @@ class LLMApiService {
     }
   }
 
+  // Chat with MCP tools support (Full Implementation)
+  async chatWithTools(
+    userMessage: string,
+    conversationHistory: ChatMessage[] = [],
+    tools: Array<any> = [],
+    onStream?: StreamCallback,
+    onToolCall?: (toolName: string, args: any, result?: any) => void
+  ): Promise<LLMResponse> {
+    try {
+      // Get active provider config
+      const activeConfig = await sqliteService.getActiveLLMConfig();
+      if (!activeConfig) {
+        return {
+          content: '',
+          error: 'No active LLM provider configured. Please check settings.'
+        };
+      }
+
+      // Only OpenAI and OpenRouter support function calling well
+      if (activeConfig.provider !== 'openai' && activeConfig.provider !== 'openrouter') {
+        // Fall back to regular chat for other providers
+        return this.chat(userMessage, conversationHistory, onStream);
+      }
+
+      // If no tools provided, fall back to regular chat
+      if (tools.length === 0) {
+        return this.chat(userMessage, conversationHistory, onStream);
+      }
+
+      const globalSettings = await sqliteService.getLLMGlobalSettings();
+
+      const config: LLMConfig = {
+        provider: activeConfig.provider,
+        apiKey: activeConfig.api_key,
+        baseUrl: activeConfig.base_url,
+        model: activeConfig.model,
+        temperature: globalSettings.temperature,
+        maxTokens: globalSettings.max_tokens,
+        systemPrompt: globalSettings.system_prompt
+      };
+
+      // Build messages
+      let messages: any[] = [
+        { role: 'system', content: config.systemPrompt || 'You are a helpful assistant with access to tools. Use them when needed.' },
+        ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
+        { role: 'user', content: userMessage }
+      ];
+
+      // Convert MCP tools to OpenAI function format
+      const functions = tools.map(tool => ({
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: tool.description || '',
+          parameters: tool.inputSchema || { type: 'object', properties: {} }
+        }
+      }));
+
+      const url = `${config.baseUrl || 'https://api.openai.com/v1'}/chat/completions`;
+
+      // First call - with tools
+      let response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`,
+          ...(activeConfig.provider === 'openrouter' ? {
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'Fincept Terminal'
+          } : {})
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: messages,
+          tools: functions,
+          tool_choice: 'auto',
+          temperature: config.temperature,
+          max_tokens: config.maxTokens
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || `API error: ${response.status}`);
+      }
+
+      let data = await response.json();
+      let assistantMessage = data.choices[0].message;
+
+      // Check if AI wants to call tools
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        // Add assistant's tool call message to conversation
+        messages.push(assistantMessage);
+
+        // Execute each tool call
+        for (const toolCall of assistantMessage.tool_calls) {
+          const toolName = toolCall.function.name;
+          const toolArgs = JSON.parse(toolCall.function.arguments);
+
+          console.log(`[MCP] Calling tool: ${toolName}`, toolArgs);
+
+          // Notify UI that tool is being called
+          if (onToolCall) {
+            onToolCall(toolName, toolArgs);
+          }
+
+          // Import mcpManager dynamically to avoid circular dependency
+          const { mcpManager } = await import('./mcpManager');
+
+          // Execute the tool
+          try {
+            // Parse server ID from tool name (format: serverId__toolName)
+            const [serverId, actualToolName] = toolName.includes('__')
+              ? toolName.split('__')
+              : [toolName, toolName];
+
+            const toolResult = await mcpManager.callTool(serverId, actualToolName, toolArgs);
+
+            // Format result for OpenAI
+            const resultContent = toolResult.content
+              .map((c: any) => c.text || JSON.stringify(c.data || c))
+              .join('\n');
+
+            // Add tool result to conversation
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: resultContent
+            });
+
+            // Notify UI of result
+            if (onToolCall) {
+              onToolCall(toolName, toolArgs, toolResult);
+            }
+
+            console.log(`[MCP] Tool result:`, resultContent);
+          } catch (error) {
+            console.error(`[MCP] Tool execution error:`, error);
+            messages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+            });
+          }
+        }
+
+        // Second call - get final response with tool results
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${config.apiKey}`,
+            ...(activeConfig.provider === 'openrouter' ? {
+              'HTTP-Referer': window.location.origin,
+              'X-Title': 'Fincept Terminal'
+            } : {})
+          },
+          body: JSON.stringify({
+            model: config.model,
+            messages: messages,
+            temperature: config.temperature,
+            max_tokens: config.maxTokens
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error?.message || `API error: ${response.status}`);
+        }
+
+        data = await response.json();
+        assistantMessage = data.choices[0].message;
+      }
+
+      return {
+        content: assistantMessage.content || '',
+        usage: {
+          promptTokens: data.usage?.prompt_tokens || 0,
+          completionTokens: data.usage?.completion_tokens || 0,
+          totalTokens: data.usage?.total_tokens || 0
+        }
+      };
+
+    } catch (error) {
+      console.error('Error in chatWithTools:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
   // Test connection
   async testConnection(): Promise<{ success: boolean; error?: string; model?: string }> {
     try {
