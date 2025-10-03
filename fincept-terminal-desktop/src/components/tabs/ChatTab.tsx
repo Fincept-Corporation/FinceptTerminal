@@ -314,24 +314,61 @@ const ChatTab: React.FC = () => {
         content: msg.content
       }));
 
-      // Call LLM API with streaming
-      const response = await llmApiService.chat(
-        userContent,
-        conversationHistory,
-        (chunk: string, done: boolean) => {
-          if (!done) {
-            flushSync(() => {
-              setStreamingContent(prev => prev + chunk);
-            });
-          } else {
-            flushSync(() => {
-              setIsTyping(false);
-              setStreamingContent('');
-              setSystemStatus('STATUS: READY');
-            });
-          }
-        }
-      );
+      // Get MCP tools if available
+      let mcpTools: any[] = [];
+      try {
+        const { mcpManager } = await import('../../services/mcpManager');
+        mcpTools = await mcpManager.getAllTools();
+        console.log(`[Chat] Found ${mcpTools.length} MCP tools`);
+      } catch (error) {
+        console.log('[Chat] No MCP tools available');
+      }
+
+      // Call LLM API with tools if available
+      const response = mcpTools.length > 0
+        ? await llmApiService.chatWithTools(
+            userContent,
+            conversationHistory,
+            mcpTools,
+            (chunk: string, done: boolean) => {
+              if (!done) {
+                flushSync(() => {
+                  setStreamingContent(prev => prev + chunk);
+                });
+              } else {
+                flushSync(() => {
+                  setIsTyping(false);
+                  setStreamingContent('');
+                  setSystemStatus('STATUS: READY');
+                });
+              }
+            },
+            (toolName: string, args: any, result?: any) => {
+              // Tool call callback
+              if (!result) {
+                setSystemStatus(`STATUS: Calling tool ${toolName}...`);
+              } else {
+                setSystemStatus(`STATUS: Tool ${toolName} completed`);
+              }
+            }
+          )
+        : await llmApiService.chat(
+            userContent,
+            conversationHistory,
+            (chunk: string, done: boolean) => {
+              if (!done) {
+                flushSync(() => {
+                  setStreamingContent(prev => prev + chunk);
+                });
+              } else {
+                flushSync(() => {
+                  setIsTyping(false);
+                  setStreamingContent('');
+                  setSystemStatus('STATUS: READY');
+                });
+              }
+            }
+          );
 
       if (response.error) {
         const errorMessage = await sqliteService.addChatMessage({
