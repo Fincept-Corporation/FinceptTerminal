@@ -12,6 +12,7 @@ cmder
 reqgen.py
 fincept_env
 *.md
+*.db
 !README.md
 python
 treeview.py

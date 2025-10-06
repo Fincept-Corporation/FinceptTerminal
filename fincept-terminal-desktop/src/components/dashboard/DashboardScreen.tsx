@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigation } from '@/contexts/NavigationContext';
 import ForumTab from '@/components/tabs/ForumTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import MarketsTab from '@/components/tabs/MarketsTab';
@@ -30,6 +31,7 @@ import AgentsTab from '@/components/tabs/agents/AgentsTab';
 import DataMappingTab from '@/components/tabs/data-mapping/DataMappingTab';
 import MCPTab from '@/components/tabs/mcp';
 import FyersTab from '@/components/tabs/fyers';
+import SupportTicketTab from '@/components/tabs/SupportTicketTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -113,6 +115,7 @@ const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any
 
 export default function FinxeptTerminal() {
   const { session, logout } = useAuth();
+  const navigation = useNavigation();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -135,12 +138,13 @@ export default function FinxeptTerminal() {
     };
   }, []);
 
-  // Get session display text
-  const getSessionDisplay = () => {
-    if (!session) return 'Loading...';
+  // Get clickable session display component
+  const getClickableSessionDisplay = () => {
+    if (!session) return <span style={{ color: '#fbbf24', fontSize: '10px' }}>Loading...</span>;
 
     if (session.user_type === 'guest') {
-      // Calculate time remaining for guest users
+      // Guest user display
+      let timeText = '';
       if (session.expires_at) {
         const expiryTime = new Date(session.expires_at).getTime();
         const now = new Date().getTime();
@@ -148,31 +152,70 @@ export default function FinxeptTerminal() {
         const minutesRemaining = Math.floor(((expiryTime - now) % (1000 * 60 * 60)) / (1000 * 60));
 
         if (hoursRemaining > 0) {
-          return `👤 Guest (${hoursRemaining}h ${minutesRemaining}m remaining)`;
+          timeText = ` (${hoursRemaining}h ${minutesRemaining}m remaining)`;
         } else if (minutesRemaining > 0) {
-          return `👤 Guest (${minutesRemaining}m remaining)`;
+          timeText = ` (${minutesRemaining}m remaining)`;
         } else {
-          return '👤 Guest (Expired)';
+          timeText = ' (Expired)';
         }
       }
-      return '👤 Guest User';
+
+      return (
+        <span style={{ color: '#fbbf24', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span
+            onClick={() => setActiveTab('profile')}
+            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+            title="Go to Profile"
+          >
+            👤 Guest
+          </span>
+          <span>{timeText}</span>
+          <span style={{ color: '#787878' }}>|</span>
+          <span
+            onClick={() => navigation.navigateToPricing()}
+            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+            title="View Plans"
+          >
+            📦 View Plans
+          </span>
+        </span>
+      );
     } else if (session.user_type === 'registered') {
       const username = session.user_info?.username || session.user_info?.email || 'User';
       const accountType = session.user_info?.account_type || 'free';
       const hasSubscription = (session.subscription as any)?.data?.has_subscription || session.subscription?.has_subscription;
+      const planName = hasSubscription
+        ? ((session.subscription as any)?.data?.subscription?.plan?.name || session.subscription?.subscription?.plan?.name || accountType)
+        : (accountType === 'free' ? 'Free Plan' : accountType.charAt(0).toUpperCase() + accountType.slice(1));
 
-      // Show account type badge
-      if (hasSubscription) {
-        const planName = (session.subscription as any)?.data?.subscription?.plan?.name || session.subscription?.subscription?.plan?.name || accountType;
-        return `👤 ${username} | 📦 ${planName} | ✅ Active`;
-      } else if (accountType === 'free') {
-        return `👤 ${username} | 📦 Free Plan`;
-      } else {
-        return `👤 ${username} | 📦 ${accountType.charAt(0).toUpperCase() + accountType.slice(1)}`;
-      }
+      return (
+        <span style={{ color: '#fbbf24', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span
+            onClick={() => setActiveTab('profile')}
+            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+            title="Go to Profile"
+          >
+            👤 {username}
+          </span>
+          <span style={{ color: '#787878' }}>|</span>
+          <span
+            onClick={() => navigation.navigateToPricing()}
+            style={{ cursor: 'pointer', textDecoration: 'underline' }}
+            title={hasSubscription ? 'Change Plan' : 'View Plans'}
+          >
+            📦 {planName}
+          </span>
+          {hasSubscription && (
+            <>
+              <span style={{ color: '#787878' }}>|</span>
+              <span>✅ Active</span>
+            </>
+          )}
+        </span>
+      );
     }
 
-    return 'Unknown Session';
+    return <span style={{ color: '#fbbf24', fontSize: '10px' }}>Unknown Session</span>;
   };
 
   const toggleFullscreen = () => {
@@ -376,7 +419,7 @@ export default function FinxeptTerminal() {
           >
             {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
           </button>
-          <span style={{ color: '#fbbf24', fontSize: '10px' }}>{getSessionDisplay()}</span>
+          {getClickableSessionDisplay()}
           <button
             onClick={async () => {
               setStatusMessage("Logging out...");
@@ -629,6 +672,12 @@ export default function FinxeptTerminal() {
               style={activeTab === 'datamapping' ? tabStyles.active : tabStyles.default}
             >
               Data Mapping
+            <TabsTrigger
+              value="support"
+              style={activeTab === 'support' ? tabStyles.active : tabStyles.default}
+            >
+              Support
+            </TabsTrigger>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -765,6 +814,9 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="datasources" className="h-full m-0 p-0">
             <DataSourcesTab />
+          </TabsContent>
+          <TabsContent value="support" className="h-full m-0 p-0">
+            <SupportTicketTab />
           </TabsContent>
           <TabsContent value="agents" className="h-full m-0 p-0">
             <AgentsTab />

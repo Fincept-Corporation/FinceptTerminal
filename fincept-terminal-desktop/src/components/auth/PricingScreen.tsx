@@ -186,19 +186,34 @@ const handleSelectPlan = async () => {
     const isPopular = plan.plan_id === 'starter_20';
     const isRecommended = plan.plan_id === 'unlimited_199';
 
+    // Check if this is the current plan
+    const currentPlanId = (session?.subscription as any)?.data?.subscription?.plan?.plan_id ||
+                          session?.subscription?.subscription?.plan?.plan_id;
+    const isCurrentPlan = currentPlanId === plan.plan_id;
+
     return (
       <div
         key={plan.plan_id}
-        onClick={() => setSelectedPlan(plan.plan_id)}
+        onClick={() => !isCurrentPlan && setSelectedPlan(plan.plan_id)}
         className={`
-          relative cursor-pointer rounded-lg border-2 p-4 transition-all duration-200 hover:scale-[1.02]
-          ${isSelected
-            ? 'border-blue-500 bg-blue-600/10 shadow-lg shadow-blue-500/20'
-            : 'border-zinc-600 bg-zinc-800/50 hover:border-zinc-500'
+          relative rounded-lg border-2 p-4 transition-all duration-200
+          ${isCurrentPlan
+            ? 'border-green-500 bg-green-600/10 cursor-default'
+            : isSelected
+            ? 'border-blue-500 bg-blue-600/10 shadow-lg shadow-blue-500/20 cursor-pointer hover:scale-[1.02]'
+            : 'border-zinc-600 bg-zinc-800/50 hover:border-zinc-500 cursor-pointer hover:scale-[1.02]'
           }
         `}
       >
-        {isPopular && (
+        {isCurrentPlan && (
+          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
+            <span className="bg-green-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
+              Current Plan
+            </span>
+          </div>
+        )}
+
+        {!isCurrentPlan && isPopular && (
           <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
             <span className="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
               Popular
@@ -206,9 +221,9 @@ const handleSelectPlan = async () => {
           </div>
         )}
 
-        {isRecommended && (
+        {!isCurrentPlan && isRecommended && (
           <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-            <span className="bg-green-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
+            <span className="bg-orange-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
               Best Value
             </span>
           </div>
@@ -337,15 +352,20 @@ const handleSelectPlan = async () => {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center">
-            {userType === 'existing' && (
-              <button
-                onClick={() => onProceedToDashboard()}
-                className="text-zinc-400 hover:text-white transition-colors mr-3"
-                disabled={isLoading}
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-            )}
+            <button
+              onClick={() => {
+                // Navigate based on authentication status
+                if (session?.authenticated) {
+                  onProceedToDashboard();
+                } else {
+                  onNavigate('login' as Screen);
+                }
+              }}
+              className="text-zinc-400 hover:text-white transition-colors mr-3"
+              disabled={isLoading}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
             <h2 className="text-white text-xl font-semibold">
               {userType === 'existing' ? 'Upgrade Your Plan' : 'Choose Your Plan'}
             </h2>

@@ -237,13 +237,20 @@ export class ForumApiService {
     return makeForumRequest<PostDetails>('GET', `/forum/posts/${postUuid}`, apiKey, deviceId);
   }
 
-  // Create new post
+  // Create new post (note: endpoint requires category_id in path according to OpenAPI spec)
   static async createPost(
-    request: CreatePostRequest, 
-    apiKey: string, 
+    categoryId: number,
+    request: Omit<CreatePostRequest, 'category_id'>,
+    apiKey: string,
     deviceId?: string
   ): Promise<ApiResponse<{ post: ForumPost }>> {
-    return makeForumRequest<{ post: ForumPost }>('POST', '/forum/posts', apiKey, deviceId, request);
+    return makeForumRequest<{ post: ForumPost }>(
+      'POST',
+      `/forum/categories/${categoryId}/posts`,
+      apiKey,
+      deviceId,
+      { ...request, category_id: categoryId }
+    );
   }
 
   // Add comment to post
@@ -379,11 +386,139 @@ export class ForumApiService {
 
   // Pin/Unpin post (admin only)
   static async togglePostPin(
-    postUuid: string, 
-    apiKey: string, 
+    postUuid: string,
+    apiKey: string,
     deviceId?: string
   ): Promise<ApiResponse<{ post: ForumPost }>> {
     return makeForumRequest<{ post: ForumPost }>('POST', `/forum/posts/${postUuid}/toggle-pin`, apiKey, deviceId);
+  }
+
+  // Get trending posts
+  static async getTrendingPosts(
+    limit: number = 10,
+    timeframe: 'day' | 'week' | 'month' = 'week',
+    apiKey?: string,
+    deviceId?: string
+  ): Promise<ApiResponse<{ posts: ForumPost[] }>> {
+    return makeForumRequest<{ posts: ForumPost[] }>(
+      'GET',
+      `/forum/posts/trending?limit=${limit}&timeframe=${timeframe}`,
+      apiKey,
+      deviceId
+    );
+  }
+
+  // Get forum user profile by username
+  static async getUserProfile(
+    username: string,
+    apiKey: string,
+    deviceId?: string
+  ): Promise<ApiResponse<{
+    username: string;
+    display_name: string;
+    bio: string;
+    avatar_color: string;
+    signature: string;
+    post_count: number;
+    comment_count: number;
+    reputation: number;
+    joined_at: string;
+  }>> {
+    return makeForumRequest(
+      'GET',
+      `/forum/profile/${username}`,
+      apiKey,
+      deviceId
+    );
+  }
+
+  // Get current user's forum profile
+  static async getMyProfile(
+    apiKey: string,
+    deviceId?: string
+  ): Promise<ApiResponse<{
+    username: string;
+    display_name: string;
+    bio: string;
+    avatar_color: string;
+    signature: string;
+    show_email: boolean;
+    email_notifications: boolean;
+    post_count: number;
+    comment_count: number;
+    reputation: number;
+    joined_at: string;
+  }>> {
+    return makeForumRequest(
+      'GET',
+      '/forum/profile',
+      apiKey,
+      deviceId
+    );
+  }
+
+  // Update forum profile
+  static async updateProfile(
+    updates: {
+      display_name?: string;
+      bio?: string;
+      avatar_color?: string;
+      signature?: string;
+      show_email?: boolean;
+      email_notifications?: boolean;
+    },
+    apiKey: string,
+    deviceId?: string
+  ): Promise<ApiResponse<{ message: string; profile: any }>> {
+    return makeForumRequest(
+      'PUT',
+      '/forum/profile',
+      apiKey,
+      deviceId,
+      updates
+    );
+  }
+
+  // Create forum category (admin only)
+  static async createCategory(
+    categoryData: {
+      name: string;
+      description: string;
+      icon?: string;
+      color?: string;
+    },
+    apiKey: string,
+    deviceId?: string
+  ): Promise<ApiResponse<{ category: ForumCategory }>> {
+    return makeForumRequest<{ category: ForumCategory }>(
+      'POST',
+      '/forum/admin/categories',
+      apiKey,
+      deviceId,
+      categoryData
+    );
+  }
+
+  // Get admin forum statistics
+  static async getAdminStatistics(
+    apiKey: string,
+    deviceId?: string
+  ): Promise<ApiResponse<{
+    total_posts: number;
+    total_comments: number;
+    total_users: number;
+    posts_today: number;
+    comments_today: number;
+    active_users_today: number;
+    most_active_categories: Array<{ category_name: string; post_count: number }>;
+    recent_activity: Array<any>;
+  }>> {
+    return makeForumRequest(
+      'GET',
+      '/forum/admin/statistics',
+      apiKey,
+      deviceId
+    );
   }
 }
 

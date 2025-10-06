@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './contexts/AuthContext';
+import { NavigationProvider } from './contexts/NavigationContext';
 import { setPaymentWindowManager } from './services/paymentApi';
 
 // Import screens
@@ -52,6 +53,7 @@ const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [hasChosenFreePlan, setHasChosenFreePlan] = useState(false);
   const [cameFromLogin, setCameFromLogin] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [paymentWindow, setPaymentWindow] = useState<PaymentWindowState>({
     isOpen: false,
     checkoutUrl: '',
@@ -156,7 +158,10 @@ const App: React.FC = () => {
                    (hasChosenFreePlan && !cameFromLogin) ||
                    (isFreePlan && hasChosenFreePlan)) {
           console.log('User has subscription, is guest, or chose free plan - redirecting to dashboard');
-          if (currentScreen !== 'paymentProcessing' && currentScreen !== 'paymentSuccess') {
+          // Don't force redirect if user manually navigated to pricing
+          if (currentScreen !== 'paymentProcessing' &&
+              currentScreen !== 'paymentSuccess' &&
+              currentScreen !== 'pricing') {
             setCurrentScreen('dashboard');
           }
         }
@@ -194,7 +199,9 @@ const App: React.FC = () => {
   if (session?.authenticated && currentScreen === 'dashboard') {
     return (
       <>
-        <DashboardScreen />
+        <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab}>
+          <DashboardScreen />
+        </NavigationProvider>
         {/* In-App Payment Window Overlay */}
         <PaymentOverlay paymentWindow={paymentWindow} />
       </>
