@@ -252,6 +252,17 @@ class SQLiteService {
       )
     `);
 
+    // Market data cache table
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS market_data_cache (
+        symbol TEXT NOT NULL,
+        category TEXT NOT NULL,
+        quote_data TEXT NOT NULL,
+        cached_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (symbol, category)
+      )
+    `);
+
     // Create indexes
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_credentials_service ON credentials(service_name)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category)`);
@@ -260,6 +271,8 @@ class SQLiteService {
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_mcp_tools_server ON mcp_tools(server_id)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_mcp_usage_server ON mcp_tool_usage(server_id)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_mcp_usage_timestamp ON mcp_tool_usage(timestamp DESC)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_market_cache_category ON market_data_cache(category)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_market_cache_time ON market_data_cache(cached_at)`);
   }
 
   private async seedDefaultSettings(): Promise<void> {
@@ -992,6 +1005,97 @@ class SQLiteService {
       ...log,
       success: log.success === 1
     }));
+  }
+
+  // ==================== MARKET DATA CACHE ====================
+
+  /**
+   * Save market data to cache
+   */
+  async saveMarketDataCache(symbol: string, category: string, quoteData: any): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execute(
+      `INSERT OR REPLACE INTO market_data_cache (symbol, category, quote_data, cached_at)
+       VALUES ($1, $2, $3, datetime('now'))`,
+      [symbol, category, JSON.stringify(quoteData)]
+    );
+  }
+
+  /**
+   * Get cached market data if it's less than maxAgeMinutes old
+   */
+  async getCachedMarketData(symbol: string, category: string, maxAgeMinutes: number = 10): Promise<any | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const result = await this.db.select<Array<{
+      quote_data: string;
+      cached_at: string;
+    }>>(
+      `SELECT quote_data, cached_at FROM market_data_cache
+       WHERE symbol = $1 AND category = $2
+       AND datetime(cached_at) > datetime('now', '-${maxAgeMinutes} minutes')`,
+      [symbol, category]
+    );
+
+    if (result.length > 0) {
+      try {
+        return JSON.parse(result[0].quote_data);
+      } catch (error) {
+        console.error('Error parsing cached market data:', error);
+        return null;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get all cached market data for a category that's less than maxAgeMinutes old
+   */
+  async getCachedCategoryData(category: string, symbols: string[], maxAgeMinutes: number = 10): Promise<Map<string, any>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const placeholders = symbols.map((_, i) => `$${i + 2}`).join(',');
+    const result = await this.db.select<Array<{
+      symbol: string;
+      quote_data: string;
+      cached_at: string;
+    }>>(
+      `SELECT symbol, quote_data, cached_at FROM market_data_cache
+       WHERE category = $1 AND symbol IN (${placeholders})
+       AND datetime(cached_at) > datetime('now', '-${maxAgeMinutes} minutes')`,
+      [category, ...symbols]
+    );
+
+    const dataMap = new Map<string, any>();
+    result.forEach(row => {
+      try {
+        dataMap.set(row.symbol, JSON.parse(row.quote_data));
+      } catch (error) {
+        console.error(`Error parsing cached data for ${row.symbol}:`, error);
+      }
+    });
+
+    return dataMap;
+  }
+
+  /**
+   * Clear all market data cache
+   */
+  async clearMarketDataCache(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.execute('DELETE FROM market_data_cache');
+  }
+
+  /**
+   * Clear expired cache entries (older than maxAgeMinutes)
+   */
+  async clearExpiredMarketCache(maxAgeMinutes: number = 10): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.execute(
+      `DELETE FROM market_data_cache WHERE datetime(cached_at) <= datetime('now', '-${maxAgeMinutes} minutes')`
+    );
   }
 }
 
