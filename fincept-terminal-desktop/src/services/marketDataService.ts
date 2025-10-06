@@ -2,6 +2,7 @@
 // Modular design: gracefully handles failures and can be extended with other data sources
 
 import { invoke } from '@tauri-apps/api/core';
+import { sqliteService } from './sqliteService';
 
 export interface QuoteData {
   symbol: string;
@@ -159,6 +160,61 @@ class MarketDataService {
       seven_day: returns[index]?.seven_day,
       thirty_day: returns[index]?.thirty_day
     }));
+  }
+
+  /**
+   * Fetch enhanced quotes with SQL caching
+   * Checks cache first, only fetches from API if cache is stale or missing
+   */
+  async getEnhancedQuotesWithCache(
+    symbols: string[],
+    category: string,
+    maxCacheAgeMinutes: number = 10
+  ): Promise<(QuoteData & { seven_day?: number; thirty_day?: number })[]> {
+    try {
+      // Check if database is initialized
+      if (!sqliteService.isReady()) {
+        console.warn('[MarketDataService] Database not ready, fetching without cache');
+        return await this.getEnhancedQuotes(symbols);
+      }
+
+      // Try to get cached data for all symbols
+      const cachedData = await sqliteService.getCachedCategoryData(category, symbols, maxCacheAgeMinutes);
+
+      // Identify which symbols need fresh data
+      const symbolsNeedingFetch = symbols.filter(symbol => !cachedData.has(symbol));
+
+      // If all data is cached, return it
+      if (symbolsNeedingFetch.length === 0) {
+        console.log(`[MarketDataService] Using cached data for ${symbols.length} symbols in ${category}`);
+        return symbols.map(symbol => cachedData.get(symbol)!);
+      }
+
+      // Fetch missing data from API
+      console.log(`[MarketDataService] Fetching ${symbolsNeedingFetch.length}/${symbols.length} symbols from API for ${category}`);
+      const freshQuotes = await this.getEnhancedQuotes(symbolsNeedingFetch);
+
+      // Cache the fresh data
+      await Promise.all(
+        freshQuotes.map(quote =>
+          sqliteService.saveMarketDataCache(quote.symbol, category, quote)
+        )
+      );
+
+      // Combine cached and fresh data in original order
+      const result = symbols.map(symbol => {
+        if (cachedData.has(symbol)) {
+          return cachedData.get(symbol)!;
+        }
+        const freshQuote = freshQuotes.find(q => q.symbol === symbol);
+        return freshQuote || null;
+      }).filter(q => q !== null) as (QuoteData & { seven_day?: number; thirty_day?: number })[];
+
+      return result;
+    } catch (error) {
+      console.error('[MarketDataService] Cache error, falling back to direct fetch:', error);
+      return await this.getEnhancedQuotes(symbols);
+    }
   }
 
   /**

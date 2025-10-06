@@ -203,6 +203,23 @@ const GeopoliticsTab: React.FC = () => {
       flexDirection: 'column',
       fontSize: '12px'
     }}>
+      <style>{`
+        /* Custom scrollbar styles for Geopolitics Tab */
+        *::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+        *::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        *::-webkit-scrollbar-thumb {
+          background: rgba(120, 120, 120, 0.3);
+          border-radius: 3px;
+        }
+        *::-webkit-scrollbar-thumb:hover {
+          background: rgba(120, 120, 120, 0.5);
+        }
+      `}</style>
       {/* Complex Header with Multiple Status Lines */}
       <div style={{
         backgroundColor: BLOOMBERG_PANEL_BG,

@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { MarketplaceApiService, Dataset } from '@/services/marketplaceApi';
 
 interface MarketProduct {
   id: string;
@@ -20,11 +22,27 @@ interface MarketProduct {
 }
 
 const MarketplaceTab: React.FC = () => {
-  const [currentScreen, setCurrentScreen] = useState<'BROWSE' | 'DETAILS' | 'CART'>('BROWSE');
+  const { session } = useAuth();
+  const [currentScreen, setCurrentScreen] = useState<'BROWSE' | 'DETAILS' | 'CART' | 'UPLOAD' | 'MY_PURCHASES' | 'ANALYTICS' | 'ADMIN_STATS'>('BROWSE');
   const [selectedProduct, setSelectedProduct] = useState<MarketProduct | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [cartItems, setCartItems] = useState<string[]>([]);
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [myUploadedDatasets, setMyUploadedDatasets] = useState<any[]>([]);
+
+  // Upload state
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadMetadata, setUploadMetadata] = useState({
+    title: '',
+    description: '',
+    category: 'stocks',
+    price_tier: 'free',
+    tags: ''
+  });
 
   // Colors
   const C = {
@@ -41,125 +59,118 @@ const MarketplaceTab: React.FC = () => {
     PANEL_BG: '#0a0a0a'
   };
 
-  const products: MarketProduct[] = [
-    {
-      id: 'MKT001',
-      type: 'DATA',
-      name: 'Global Equity Real-Time Feed',
-      vendor: 'Refinitiv Data Solutions',
-      category: 'Market Data',
-      price: 4999.00,
-      pricingModel: 'MONTHLY',
-      shortDescription: 'Real-time equity prices for 60,000+ global securities across 120+ exchanges',
-      rating: 4.8,
-      reviews: 2847,
-      users: 12450,
-      accuracy: '99.99%',
-      latency: '<1ms',
-      verified: true,
-      trending: true,
-      featured: true
-    },
-    {
-      id: 'MKT002',
-      type: 'ALGO',
-      name: 'Quantum Alpha Strategy',
-      vendor: 'QuantEdge Systems',
-      category: 'Trading Algorithms',
-      price: 15000.00,
-      pricingModel: 'ANNUAL',
-      shortDescription: 'ML-powered multi-factor equity strategy with proven 18.7% annual alpha',
-      rating: 4.9,
-      reviews: 1234,
-      users: 3847,
-      accuracy: '87.3%',
-      latency: '<500ms',
-      verified: true,
-      trending: true,
-      featured: true
-    },
-    {
-      id: 'MKT003',
-      type: 'API',
-      name: 'Options Analytics Suite',
-      vendor: 'DerivativeEdge Inc.',
-      category: 'Derivatives',
-      price: 0.05,
-      pricingModel: 'USAGE_BASED',
-      shortDescription: 'Complete options pricing, Greeks, and volatility analytics API',
-      rating: 4.7,
-      reviews: 3456,
-      users: 18923,
-      accuracy: '99.5%',
-      latency: '<50ms',
-      verified: true,
-      trending: false,
-      featured: true
-    },
-    {
-      id: 'MKT004',
-      type: 'MODEL',
-      name: 'Credit Risk AI Model',
-      vendor: 'RiskLab Analytics',
-      category: 'Risk Management',
-      price: 8500.00,
-      pricingModel: 'MONTHLY',
-      shortDescription: 'Deep learning model for corporate credit risk assessment',
-      rating: 4.6,
-      reviews: 892,
-      users: 2341,
-      accuracy: '91.2%',
+  // Fetch datasets from API
+  const fetchDatasets = async () => {
+    if (!session?.api_key) return;
+
+    setIsLoading(true);
+    try {
+      const response = await MarketplaceApiService.browseDatasets(session.api_key, {
+        category: selectedCategory === 'ALL' ? undefined : selectedCategory,
+        search: searchQuery || undefined,
+        page: currentPage,
+        limit: 20,
+        sort_by: 'uploaded_at',
+        sort_order: 'desc'
+      });
+
+      console.log('📊 Browse datasets response:', response);
+
+      if (response.success && response.data) {
+        // Handle nested data structure
+        const datasetsArray = response.data.data?.datasets || response.data.datasets || [];
+        const totalPagesCount = response.data.data?.pagination?.total_pages || response.data.total_pages || 1;
+
+        console.log('📦 Datasets found:', datasetsArray.length, datasetsArray);
+
+        setDatasets(datasetsArray);
+        setTotalPages(totalPagesCount);
+      } else {
+        console.error('❌ Failed to fetch datasets:', response.error);
+        setDatasets([]);
+      }
+    } catch (error) {
+      console.error('💥 Failed to fetch datasets:', error);
+      setDatasets([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch MY uploaded datasets
+  const fetchMyDatasets = async () => {
+    if (!session?.api_key) return;
+
+    try {
+      const response = await MarketplaceApiService.getDatasetAnalytics(session.api_key);
+      console.log('📊 My uploaded datasets analytics:', response);
+
+      if (response.success && response.data) {
+        const myDatasets = response.data.data?.datasets || response.data.datasets || [];
+        console.log('📦 My uploaded datasets:', myDatasets);
+        setMyUploadedDatasets(myDatasets);
+      }
+    } catch (error) {
+      console.error('Failed to fetch my datasets:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchDatasets();
+    fetchMyDatasets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.api_key, selectedCategory, searchQuery, currentPage]);
+
+  // Convert Dataset to MarketProduct format for UI compatibility
+  const convertToMarketProduct = (dataset: Dataset): MarketProduct => {
+    const typeMap: Record<string, MarketProduct['type']> = {
+      'stocks': 'DATA',
+      'forex': 'DATA',
+      'crypto': 'DATA',
+      'commodities': 'DATA',
+      'bonds': 'DATA',
+      'indices': 'DATA',
+      'economic_data': 'SIGNAL'
+    };
+
+    const pricingMap: Record<string, MarketProduct['pricingModel']> = {
+      'free': 'FREE',
+      'basic': 'MONTHLY',
+      'premium': 'ANNUAL',
+      'enterprise': 'USAGE_BASED'
+    };
+
+    return {
+      id: dataset.id.toString(),
+      type: typeMap[dataset.category] || 'DATA',
+      name: dataset.title,
+      vendor: dataset.uploader_username,
+      category: dataset.category,
+      price: dataset.price_credits,
+      pricingModel: pricingMap[dataset.price_tier] || 'FREE',
+      shortDescription: dataset.description,
+      rating: dataset.rating || 0,
+      reviews: dataset.downloads_count || 0,
+      users: dataset.downloads_count || 0,
+      accuracy: 'N/A',
       latency: 'N/A',
       verified: true,
-      trending: false,
-      featured: false
-    },
-    {
-      id: 'MKT005',
-      type: 'SIGNAL',
-      name: 'Social Sentiment Signals',
-      vendor: 'SentimentAlpha',
-      category: 'Alternative Data',
-      price: 2999.00,
-      pricingModel: 'MONTHLY',
-      shortDescription: 'Trading signals from social media sentiment analysis',
-      rating: 4.4,
-      reviews: 1678,
-      users: 7823,
-      accuracy: '73.8%',
-      latency: '<1hr',
-      verified: true,
-      trending: true,
-      featured: false
-    },
-    {
-      id: 'MKT006',
-      type: 'PLUGIN',
-      name: 'Portfolio Risk Dashboard',
-      vendor: 'Fincept Labs',
-      category: 'Analytics',
-      price: 0.00,
-      pricingModel: 'FREE',
-      shortDescription: 'Advanced portfolio risk analytics dashboard plugin',
-      rating: 4.9,
-      reviews: 5678,
-      users: 28934,
-      accuracy: '99.9%',
-      latency: '<100ms',
-      verified: true,
-      trending: true,
-      featured: true
-    }
-  ];
+      trending: dataset.downloads_count > 100,
+      featured: dataset.rating > 4.5
+    };
+  };
+
+  const products: MarketProduct[] = datasets.map(convertToMarketProduct);
+
+  // Get unique categories from datasets
+  const categoryCounts = datasets.reduce((acc, dataset) => {
+    acc[dataset.category] = (acc[dataset.category] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
 
   const categories = [
-    { name: 'ALL', count: products.length },
-    { name: 'Market Data', count: 2 },
-    { name: 'Trading Algorithms', count: 1 },
-    { name: 'Derivatives', count: 1 },
-    { name: 'Risk Management', count: 1 },
-    { name: 'Alternative Data', count: 1 },
-    { name: 'Analytics', count: 1 }
+    { name: 'ALL', count: datasets.length },
+    ...Object.entries(categoryCounts).map(([name, count]) => ({ name, count }))
   ];
 
   const filteredProducts = products.filter(p =>
@@ -174,6 +185,120 @@ const MarketplaceTab: React.FC = () => {
     return colors[type] || C.WHITE;
   };
 
+  // Handle purchase
+  const handlePurchase = async (datasetId: string) => {
+    if (!session?.api_key) return;
+
+    try {
+      const response = await MarketplaceApiService.purchaseDataset(
+        session.api_key,
+        parseInt(datasetId)
+      );
+
+      if (response.success) {
+        alert('Purchase successful! Dataset access granted.');
+        // Remove from cart after purchase
+        setCartItems(cartItems.filter(id => id !== datasetId));
+      } else {
+        alert(`Purchase failed: ${response.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Purchase error:', error);
+      alert('Purchase failed. Please try again.');
+    }
+  };
+
+  // Handle download
+  const handleDownload = async (datasetId: string) => {
+    if (!session?.api_key) return;
+
+    try {
+      const response = await MarketplaceApiService.downloadDataset(
+        session.api_key,
+        parseInt(datasetId)
+      );
+
+      if (response.success && response.data?.download_url) {
+        window.open(response.data.download_url, '_blank');
+      } else {
+        alert(`Download failed: ${response.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Download failed. Please try again.');
+    }
+  };
+
+  // Handle upload
+  const handleUpload = async () => {
+    if (!session?.api_key || !uploadFile) {
+      alert('Please select a file and fill in all details');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await MarketplaceApiService.uploadDataset(
+        session.api_key,
+        uploadFile,
+        {
+          title: uploadMetadata.title,
+          description: uploadMetadata.description,
+          category: uploadMetadata.category,
+          price_tier: uploadMetadata.price_tier,
+          tags: uploadMetadata.tags ? uploadMetadata.tags.split(',').map(t => t.trim()) : []
+        }
+      );
+
+      console.log('📤 Upload response:', response);
+      console.log('📤 Upload response.data:', response.data);
+      console.log('📤 Upload response full:', JSON.stringify(response, null, 2));
+
+      if (response.success) {
+        const uploadedDataset = response.data?.data || response.data;
+        console.log('✅ Dataset uploaded successfully:', uploadedDataset);
+        console.log('✅ Dataset ID:', uploadedDataset?.id);
+        console.log('✅ Dataset full object:', JSON.stringify(uploadedDataset, null, 2));
+
+        alert(`Dataset uploaded successfully! ID: ${uploadedDataset?.id || 'Unknown'}\nTitle: ${uploadedDataset?.title || 'Unknown'}`);
+
+        setUploadFile(null);
+        setUploadMetadata({
+          title: '',
+          description: '',
+          category: 'stocks',
+          price_tier: 'free',
+          tags: ''
+        });
+
+        // Immediately try to fetch the specific dataset
+        if (uploadedDataset?.id && session?.api_key) {
+          console.log(`🔍 Attempting to fetch dataset ${uploadedDataset.id} directly...`);
+          MarketplaceApiService.getDatasetDetails(session.api_key, uploadedDataset.id)
+            .then(detailsResponse => {
+              console.log('📋 Dataset details response:', detailsResponse);
+            });
+        }
+
+        // Wait a bit for backend to process, then refresh and switch to browse
+        setTimeout(() => {
+          console.log('🔄 Refreshing datasets list...');
+          fetchDatasets();
+          fetchMyDatasets();
+          setCurrentScreen('BROWSE');
+        }, 1500);
+      } else {
+        console.error('❌ Upload failed:', response.error);
+        alert(`Upload failed: ${response.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Upload failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div style={{ width: '100%', height: '100%', backgroundColor: C.DARK_BG, color: C.WHITE, fontFamily: 'Consolas, monospace', display: 'flex', flexDirection: 'column' }}>
       <style>{`
@@ -185,16 +310,47 @@ const MarketplaceTab: React.FC = () => {
 
       {/* Header */}
       <div style={{ backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}`, padding: '8px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ color: C.ORANGE, fontWeight: 'bold', fontSize: '16px' }}>FINCEPT MARKETPLACE</span>
             <span style={{ color: C.GRAY }}>|</span>
-            <span style={{ color: C.CYAN, fontSize: '12px' }}>{products.length} Products Available</span>
+            <span style={{ color: C.CYAN, fontSize: '12px' }}>{datasets.length} Datasets Available</span>
+            {currentScreen === 'BROWSE' && (
+              <>
+                <span style={{ color: C.GRAY }}>|</span>
+                <span style={{ color: C.YELLOW, fontSize: '12px' }}>My Uploads: {myUploadedDatasets.length}</span>
+                <span style={{ color: C.GRAY }}>|</span>
+                <button
+                  onClick={() => {
+                    fetchDatasets();
+                    fetchMyDatasets();
+                  }}
+                  disabled={isLoading}
+                  style={{ padding: '4px 8px', backgroundColor: C.DARK_BG, border: `2px solid ${C.BLUE}`, color: C.BLUE, fontSize: '10px', fontWeight: 'bold', cursor: isLoading ? 'not-allowed' : 'pointer', fontFamily: 'Consolas, monospace' }}
+                >
+                  {isLoading ? '⟳ LOADING...' : '🔄 REFRESH'}
+                </button>
+              </>
+            )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <button onClick={() => setCurrentScreen('BROWSE')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'BROWSE' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'BROWSE' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
               BROWSE
             </button>
+            <button onClick={() => setCurrentScreen('UPLOAD')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'UPLOAD' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'UPLOAD' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
+              📤 UPLOAD
+            </button>
+            <button onClick={() => setCurrentScreen('MY_PURCHASES')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'MY_PURCHASES' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'MY_PURCHASES' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
+              📦 MY PURCHASES
+            </button>
+            <button onClick={() => setCurrentScreen('ANALYTICS')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'ANALYTICS' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'ANALYTICS' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
+              📊 ANALYTICS
+            </button>
+            {(session?.user_info as any)?.is_admin && (
+              <button onClick={() => setCurrentScreen('ADMIN_STATS')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'ADMIN_STATS' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'ADMIN_STATS' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
+              🔧 ADMIN
+            </button>
+            )}
             <button onClick={() => setCurrentScreen('CART')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'CART' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'CART' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
               🛒 CART {cartItems.length > 0 && `(${cartItems.length})`}
             </button>
@@ -223,8 +379,18 @@ const MarketplaceTab: React.FC = () => {
 
             {/* Products */}
             <div className="marketplace-scroll" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#050505', padding: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '16px' }}>
-                {filteredProducts.map((product) => (
+              {isLoading ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: C.GRAY }}>
+                  <div style={{ fontSize: '18px', marginBottom: '12px' }}>Loading datasets...</div>
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: C.GRAY }}>
+                  <div style={{ fontSize: '18px', marginBottom: '12px' }}>No datasets found</div>
+                  <div style={{ fontSize: '14px' }}>Try adjusting your filters or search query</div>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '16px' }}>
+                  {filteredProducts.map((product) => (
                   <div key={product.id} style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${getTypeColor(product.type)}`, padding: '16px' }}>
                     <div style={{ display: 'inline-block', backgroundColor: getTypeColor(product.type), color: C.DARK_BG, padding: '4px 10px', fontSize: '10px', fontWeight: 'bold', marginBottom: '8px' }}>
                       {product.type}
@@ -251,8 +417,9 @@ const MarketplaceTab: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -310,27 +477,128 @@ const MarketplaceTab: React.FC = () => {
                     </button>
                   </div>
                 ) : (
-                  products.filter(p => cartItems.includes(p.id)).map((product) => (
-                    <div key={product.id} style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${getTypeColor(product.type)}`, padding: '20px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ color: C.WHITE, fontSize: '18px', fontWeight: 'bold', marginBottom: '4px' }}>{product.name}</div>
-                        <div style={{ color: C.GRAY, fontSize: '13px', marginBottom: '8px' }}>by {product.vendor}</div>
-                      </div>
-                      <div style={{ textAlign: 'right', marginLeft: '24px' }}>
-                        <div style={{ color: C.GREEN, fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
-                          {product.pricingModel === 'FREE' ? 'FREE' : `$${product.price.toLocaleString()}`}
+                  <>
+                    {products.filter(p => cartItems.includes(p.id)).map((product) => (
+                      <div key={product.id} style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${getTypeColor(product.type)}`, padding: '20px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ color: C.WHITE, fontSize: '18px', fontWeight: 'bold', marginBottom: '4px' }}>{product.name}</div>
+                          <div style={{ color: C.GRAY, fontSize: '13px', marginBottom: '8px' }}>by {product.vendor}</div>
                         </div>
-                        <button onClick={() => setCartItems(cartItems.filter(id => id !== product.id))} style={{ padding: '8px 16px', backgroundColor: C.DARK_BG, border: `2px solid ${C.RED}`, color: C.RED, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                          REMOVE
-                        </button>
+                        <div style={{ textAlign: 'right', marginLeft: '24px' }}>
+                          <div style={{ color: C.GREEN, fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' }}>
+                            {product.pricingModel === 'FREE' ? 'FREE' : `${product.price} Credits`}
+                          </div>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button onClick={() => handlePurchase(product.id)} style={{ padding: '8px 16px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GREEN}`, color: C.GREEN, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
+                              PURCHASE
+                            </button>
+                            <button onClick={() => setCartItems(cartItems.filter(id => id !== product.id))} style={{ padding: '8px 16px', backgroundColor: C.DARK_BG, border: `2px solid ${C.RED}`, color: C.RED, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
+                              REMOVE
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </>
                 )}
               </div>
             </div>
           </>
         )}
+
+        {currentScreen === 'UPLOAD' && (
+          <>
+            <div style={{ padding: '12px', backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}` }}>
+              <div style={{ color: C.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>UPLOAD DATASET</div>
+            </div>
+            <div className="marketplace-scroll" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#050505', padding: '20px' }}>
+              <div style={{ maxWidth: '800px', margin: '0 auto', backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, padding: '24px' }}>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', color: C.WHITE, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Dataset Title</label>
+                  <input
+                    type="text"
+                    value={uploadMetadata.title}
+                    onChange={(e) => setUploadMetadata({ ...uploadMetadata, title: e.target.value })}
+                    style={{ width: '100%', padding: '10px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GRAY}`, color: C.WHITE, fontSize: '14px', fontFamily: 'Consolas, monospace' }}
+                    placeholder="Enter dataset title"
+                  />
+                </div>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', color: C.WHITE, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Description</label>
+                  <textarea
+                    value={uploadMetadata.description}
+                    onChange={(e) => setUploadMetadata({ ...uploadMetadata, description: e.target.value })}
+                    style={{ width: '100%', padding: '10px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GRAY}`, color: C.WHITE, fontSize: '14px', fontFamily: 'Consolas, monospace', minHeight: '100px' }}
+                    placeholder="Describe your dataset"
+                  />
+                </div>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', color: C.WHITE, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Category</label>
+                  <select
+                    value={uploadMetadata.category}
+                    onChange={(e) => setUploadMetadata({ ...uploadMetadata, category: e.target.value })}
+                    style={{ width: '100%', padding: '10px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GRAY}`, color: C.WHITE, fontSize: '14px', fontFamily: 'Consolas, monospace' }}
+                  >
+                    <option value="stocks">Stocks</option>
+                    <option value="forex">Forex</option>
+                    <option value="crypto">Cryptocurrency</option>
+                    <option value="commodities">Commodities</option>
+                    <option value="bonds">Bonds</option>
+                    <option value="indices">Indices</option>
+                    <option value="economic_data">Economic Data</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', color: C.WHITE, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Price Tier</label>
+                  <select
+                    value={uploadMetadata.price_tier}
+                    onChange={(e) => setUploadMetadata({ ...uploadMetadata, price_tier: e.target.value })}
+                    style={{ width: '100%', padding: '10px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GRAY}`, color: C.WHITE, fontSize: '14px', fontFamily: 'Consolas, monospace' }}
+                  >
+                    <option value="free">Free (0 credits)</option>
+                    <option value="basic">Basic (10 credits)</option>
+                    <option value="premium">Premium (50 credits)</option>
+                    <option value="enterprise">Enterprise (100 credits)</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', color: C.WHITE, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Tags (comma separated)</label>
+                  <input
+                    type="text"
+                    value={uploadMetadata.tags}
+                    onChange={(e) => setUploadMetadata({ ...uploadMetadata, tags: e.target.value })}
+                    style={{ width: '100%', padding: '10px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GRAY}`, color: C.WHITE, fontSize: '14px', fontFamily: 'Consolas, monospace' }}
+                    placeholder="stocks, real-time, equity"
+                  />
+                </div>
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', color: C.WHITE, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Upload File</label>
+                  <input
+                    type="file"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    style={{ width: '100%', padding: '10px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GRAY}`, color: C.WHITE, fontSize: '14px', fontFamily: 'Consolas, monospace' }}
+                  />
+                  {uploadFile && (
+                    <div style={{ marginTop: '8px', color: C.CYAN, fontSize: '12px' }}>
+                      Selected: {uploadFile.name} ({(uploadFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={handleUpload}
+                  disabled={isLoading}
+                  style={{ padding: '12px 32px', backgroundColor: isLoading ? C.GRAY : C.ORANGE, border: 'none', color: C.DARK_BG, fontSize: '14px', fontWeight: 'bold', cursor: isLoading ? 'not-allowed' : 'pointer', fontFamily: 'Consolas, monospace' }}
+                >
+                  {isLoading ? 'UPLOADING...' : 'UPLOAD DATASET'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {currentScreen === 'MY_PURCHASES' && <MyPurchasesScreen session={session} C={C} />}
+        {currentScreen === 'ANALYTICS' && <AnalyticsScreen session={session} C={C} />}
+        {currentScreen === 'ADMIN_STATS' && <AdminStatsScreen session={session} C={C} />}
       </div>
 
       {/* Footer */}
@@ -349,6 +617,244 @@ const MarketplaceTab: React.FC = () => {
         </div>
       </div>
     </div>
+  );
+};
+
+// My Purchases Screen Component
+const MyPurchasesScreen: React.FC<{ session: any; C: any }> = ({ session, C }) => {
+  const [purchases, setPurchases] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchPurchases = async () => {
+      if (!session?.api_key) return;
+      setIsLoading(true);
+      try {
+        const response = await MarketplaceApiService.getUserPurchases(session.api_key, 1, 50);
+        if (response.success && response.data) {
+          setPurchases(response.data.purchases || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch purchases:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchPurchases();
+  }, [session?.api_key]);
+
+  const handleDownload = async (datasetId: number) => {
+    if (!session?.api_key) return;
+    try {
+      const response = await MarketplaceApiService.downloadDataset(session.api_key, datasetId);
+      if (response.success && response.data?.download_url) {
+        window.open(response.data.download_url, '_blank');
+      }
+    } catch (error) {
+      alert('Download failed');
+    }
+  };
+
+  return (
+    <>
+      <div style={{ padding: '12px', backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}` }}>
+        <div style={{ color: C.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>MY PURCHASES ({purchases.length})</div>
+      </div>
+      <div className="marketplace-scroll" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#050505', padding: '20px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          {isLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: C.GRAY }}>Loading...</div>
+          ) : purchases.length === 0 ? (
+            <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, padding: '40px', textAlign: 'center' }}>
+              <div style={{ color: C.GRAY, fontSize: '18px' }}>No purchases yet</div>
+            </div>
+          ) : (
+            purchases.map((purchase) => (
+              <div key={purchase.id} style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.GREEN}`, padding: '20px', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ color: C.WHITE, fontSize: '18px', fontWeight: 'bold', marginBottom: '4px' }}>{purchase.dataset_title}</div>
+                    <div style={{ color: C.GRAY, fontSize: '13px', marginBottom: '8px' }}>
+                      Purchased: {new Date(purchase.purchased_at).toLocaleDateString()} | Paid: {purchase.price_paid} credits
+                    </div>
+                  </div>
+                  <button onClick={() => handleDownload(purchase.dataset_id)} style={{ padding: '10px 20px', backgroundColor: C.DARK_BG, border: `2px solid ${C.BLUE}`, color: C.BLUE, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
+                    📥 DOWNLOAD
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+// Analytics Screen Component
+const AnalyticsScreen: React.FC<{ session: any; C: any }> = ({ session, C }) => {
+  const [analytics, setAnalytics] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      if (!session?.api_key) return;
+      setIsLoading(true);
+      try {
+        const response = await MarketplaceApiService.getDatasetAnalytics(session.api_key);
+        if (response.success && response.data) {
+          setAnalytics(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch analytics:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchAnalytics();
+  }, [session?.api_key]);
+
+  return (
+    <>
+      <div style={{ padding: '12px', backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}` }}>
+        <div style={{ color: C.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>MY DATASET ANALYTICS</div>
+      </div>
+      <div className="marketplace-scroll" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#050505', padding: '20px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          {isLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: C.GRAY }}>Loading...</div>
+          ) : !analytics ? (
+            <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, padding: '40px', textAlign: 'center' }}>
+              <div style={{ color: C.GRAY, fontSize: '18px' }}>No analytics data available</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.BLUE}`, padding: '20px', textAlign: 'center' }}>
+                  <div style={{ color: C.BLUE, fontSize: '36px', fontWeight: 'bold' }}>{analytics.total_datasets || 0}</div>
+                  <div style={{ color: C.WHITE, fontSize: '14px', marginTop: '8px' }}>Total Datasets</div>
+                </div>
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GREEN}`, padding: '20px', textAlign: 'center' }}>
+                  <div style={{ color: C.GREEN, fontSize: '36px', fontWeight: 'bold' }}>{analytics.total_downloads || 0}</div>
+                  <div style={{ color: C.WHITE, fontSize: '14px', marginTop: '8px' }}>Total Downloads</div>
+                </div>
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.ORANGE}`, padding: '20px', textAlign: 'center' }}>
+                  <div style={{ color: C.ORANGE, fontSize: '36px', fontWeight: 'bold' }}>{analytics.total_revenue || 0}</div>
+                  <div style={{ color: C.WHITE, fontSize: '14px', marginTop: '8px' }}>Total Revenue (credits)</div>
+                </div>
+              </div>
+              {analytics.datasets && analytics.datasets.length > 0 && (
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, padding: '20px' }}>
+                  <div style={{ color: C.ORANGE, fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>DATASET PERFORMANCE</div>
+                  {analytics.datasets.map((dataset: any) => (
+                    <div key={dataset.id} style={{ borderBottom: `1px solid ${C.GRAY}`, padding: '12px 0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ color: C.WHITE, fontSize: '14px' }}>{dataset.title}</div>
+                        <div style={{ display: 'flex', gap: '24px' }}>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ color: C.CYAN, fontSize: '18px', fontWeight: 'bold' }}>{dataset.downloads}</div>
+                            <div style={{ color: C.GRAY, fontSize: '11px' }}>Downloads</div>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ color: C.GREEN, fontSize: '18px', fontWeight: 'bold' }}>{dataset.revenue}</div>
+                            <div style={{ color: C.GRAY, fontSize: '11px' }}>Revenue</div>
+                          </div>
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ color: C.YELLOW, fontSize: '18px', fontWeight: 'bold' }}>★ {dataset.rating.toFixed(1)}</div>
+                            <div style={{ color: C.GRAY, fontSize: '11px' }}>Rating</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
+
+// Admin Stats Screen Component
+const AdminStatsScreen: React.FC<{ session: any; C: any }> = ({ session, C }) => {
+  const [stats, setStats] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!session?.api_key) return;
+      setIsLoading(true);
+      try {
+        const response = await MarketplaceApiService.getMarketplaceStats(session.api_key);
+        if (response.success && response.data) {
+          setStats(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch admin stats:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchStats();
+  }, [session?.api_key]);
+
+  return (
+    <>
+      <div style={{ padding: '12px', backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}` }}>
+        <div style={{ color: C.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>🔧 ADMIN MARKETPLACE STATISTICS</div>
+      </div>
+      <div className="marketplace-scroll" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#050505', padding: '20px' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+          {isLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: C.GRAY }}>Loading...</div>
+          ) : !stats ? (
+            <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, padding: '40px', textAlign: 'center' }}>
+              <div style={{ color: C.GRAY, fontSize: '18px' }}>No statistics available</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.BLUE}`, padding: '20px', textAlign: 'center' }}>
+                  <div style={{ color: C.BLUE, fontSize: '36px', fontWeight: 'bold' }}>{stats.total_datasets || 0}</div>
+                  <div style={{ color: C.WHITE, fontSize: '14px', marginTop: '8px' }}>Total Datasets</div>
+                </div>
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GREEN}`, padding: '20px', textAlign: 'center' }}>
+                  <div style={{ color: C.GREEN, fontSize: '36px', fontWeight: 'bold' }}>{stats.total_purchases || 0}</div>
+                  <div style={{ color: C.WHITE, fontSize: '14px', marginTop: '8px' }}>Total Purchases</div>
+                </div>
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.ORANGE}`, padding: '20px', textAlign: 'center' }}>
+                  <div style={{ color: C.ORANGE, fontSize: '36px', fontWeight: 'bold' }}>{stats.total_revenue || 0}</div>
+                  <div style={{ color: C.WHITE, fontSize: '14px', marginTop: '8px' }}>Total Revenue (credits)</div>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.CYAN}`, padding: '20px', textAlign: 'center' }}>
+                  <div style={{ color: C.CYAN, fontSize: '36px', fontWeight: 'bold' }}>{stats.total_uploads || 0}</div>
+                  <div style={{ color: C.WHITE, fontSize: '14px', marginTop: '8px' }}>Total Uploads</div>
+                </div>
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.PURPLE}`, padding: '20px', textAlign: 'center' }}>
+                  <div style={{ color: C.PURPLE, fontSize: '36px', fontWeight: 'bold' }}>{stats.active_users || 0}</div>
+                  <div style={{ color: C.WHITE, fontSize: '14px', marginTop: '8px' }}>Active Users</div>
+                </div>
+              </div>
+              {stats.popular_categories && (
+                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, padding: '20px', marginTop: '24px' }}>
+                  <div style={{ color: C.ORANGE, fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>POPULAR CATEGORIES</div>
+                  {Object.entries(stats.popular_categories).map(([category, count]: [string, any]) => (
+                    <div key={category} style={{ borderBottom: `1px solid ${C.GRAY}`, padding: '12px 0', display: 'flex', justifyContent: 'space-between' }}>
+                      <div style={{ color: C.WHITE, fontSize: '14px' }}>{category}</div>
+                      <div style={{ color: C.CYAN, fontSize: '14px', fontWeight: 'bold' }}>{count} datasets</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </>
   );
 };
 
