@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Edit2 } from 'lucide-react';
 import { marketDataService, QuoteData } from '../../services/marketDataService';
 import { tickerStorage } from '../../services/tickerStorageService';
+import { sqliteService } from '../../services/sqliteService';
 import TickerEditModal from './TickerEditModal';
 
 const MarketsTab: React.FC = () => {
@@ -10,6 +11,7 @@ const MarketsTab: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [updateInterval, setUpdateInterval] = useState(600000); // 10 minutes default
+  const [dbInitialized, setDbInitialized] = useState(false);
 
   // Market data state
   const [marketData, setMarketData] = useState<Record<string, QuoteData[]>>({});
@@ -36,16 +38,27 @@ const MarketsTab: React.FC = () => {
   const fetchMarketData = async () => {
     setIsUpdating(true);
 
-    // Fetch global markets
+    // Calculate cache age in minutes (10 minutes by default from updateInterval)
+    const cacheAgeMinutes = updateInterval / 60000;
+
+    // Fetch global markets with caching
     const globalPromises = preferences.globalMarkets.map(async (market) => {
-      const quotes = await marketDataService.getEnhancedQuotes(market.tickers);
+      const quotes = await marketDataService.getEnhancedQuotesWithCache(
+        market.tickers,
+        market.category,
+        cacheAgeMinutes
+      );
       return { category: market.category, quotes };
     });
 
-    // Fetch regional markets
+    // Fetch regional markets with caching
     const regionalPromises = preferences.regionalMarkets.map(async (market) => {
       const symbols = market.tickers.map(t => t.symbol);
-      const quotes = await marketDataService.getEnhancedQuotes(symbols);
+      const quotes = await marketDataService.getEnhancedQuotesWithCache(
+        symbols,
+        market.region,
+        cacheAgeMinutes
+      );
       return { region: market.region, quotes };
     });
 
@@ -68,6 +81,25 @@ const MarketsTab: React.FC = () => {
     setLastUpdate(new Date());
     setIsUpdating(false);
   };
+
+  // Initialize database on mount
+  useEffect(() => {
+    const initDatabase = async () => {
+      try {
+        await sqliteService.initialize();
+        const healthCheck = await sqliteService.healthCheck();
+        if (healthCheck.healthy) {
+          setDbInitialized(true);
+          console.log('[MarketsTab] Database initialized and ready for caching');
+        } else {
+          console.warn('[MarketsTab] Database not healthy:', healthCheck.message);
+        }
+      } catch (error) {
+        console.error('[MarketsTab] Database initialization error:', error);
+      }
+    };
+    initDatabase();
+  }, []);
 
   // Initial fetch
   useEffect(() => {
@@ -495,6 +527,11 @@ const MarketsTab: React.FC = () => {
           <span>Data provided by Yahoo Finance API | Real-time updates</span>
           <span style={{ whiteSpace: 'nowrap' }}>
             Connected: {Object.keys(regionalData).length} regional markets
+            {dbInitialized && (
+              <span style={{ marginLeft: '8px', color: BLOOMBERG_GREEN }}>
+                | Cache: ENABLED
+              </span>
+            )}
           </span>
         </div>
       </div>
