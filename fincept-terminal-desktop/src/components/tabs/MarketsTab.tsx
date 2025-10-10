@@ -34,50 +34,57 @@ const MarketsTab: React.FC = () => {
   const BLOOMBERG_DARK_BG = '#1a1a1a';
   const BLOOMBERG_PANEL_BG = '#000000';
 
-  // Fetch market data
+  // Fetch market data progressively (display as data arrives)
   const fetchMarketData = async () => {
     setIsUpdating(true);
 
     // Calculate cache age in minutes (10 minutes by default from updateInterval)
     const cacheAgeMinutes = updateInterval / 60000;
 
-    // Fetch global markets with caching
-    const globalPromises = preferences.globalMarkets.map(async (market) => {
-      const quotes = await marketDataService.getEnhancedQuotesWithCache(
-        market.tickers,
-        market.category,
-        cacheAgeMinutes
-      );
-      return { category: market.category, quotes };
+    // Create an array to track completion
+    const allFetches: Promise<void>[] = [];
+
+    // Fetch global markets progressively - each updates immediately
+    preferences.globalMarkets.forEach((market) => {
+      const fetchPromise = (async () => {
+        try {
+          // Get just quotes without period returns for faster initial load
+          const quotes = await marketDataService.getQuotes(market.tickers);
+
+          // Update state immediately as data arrives
+          setMarketData(prev => ({
+            ...prev,
+            [market.category]: quotes
+          }));
+        } catch (error) {
+          console.error(`Failed to fetch ${market.category}:`, error);
+        }
+      })();
+      allFetches.push(fetchPromise);
     });
 
-    // Fetch regional markets with caching
-    const regionalPromises = preferences.regionalMarkets.map(async (market) => {
-      const symbols = market.tickers.map(t => t.symbol);
-      const quotes = await marketDataService.getEnhancedQuotesWithCache(
-        symbols,
-        market.region,
-        cacheAgeMinutes
-      );
-      return { region: market.region, quotes };
+    // Fetch regional markets progressively
+    preferences.regionalMarkets.forEach((market) => {
+      const fetchPromise = (async () => {
+        try {
+          const symbols = market.tickers.map(t => t.symbol);
+          // Get just quotes without period returns for faster initial load
+          const quotes = await marketDataService.getQuotes(symbols);
+
+          // Update state immediately as data arrives
+          setRegionalData(prev => ({
+            ...prev,
+            [market.region]: quotes
+          }));
+        } catch (error) {
+          console.error(`Failed to fetch ${market.region}:`, error);
+        }
+      })();
+      allFetches.push(fetchPromise);
     });
 
-    const globalResults = await Promise.all(globalPromises);
-    const regionalResults = await Promise.all(regionalPromises);
-
-    // Update state
-    const newMarketData: Record<string, QuoteData[]> = {};
-    globalResults.forEach(({ category, quotes }) => {
-      newMarketData[category] = quotes;
-    });
-    setMarketData(newMarketData);
-
-    const newRegionalData: Record<string, QuoteData[]> = {};
-    regionalResults.forEach(({ region, quotes }) => {
-      newRegionalData[region] = quotes;
-    });
-    setRegionalData(newRegionalData);
-
+    // Wait for all basic quotes to load
+    await Promise.all(allFetches);
     setLastUpdate(new Date());
     setIsUpdating(false);
   };
@@ -188,8 +195,8 @@ const MarketsTab: React.FC = () => {
         <div style={{ textAlign: 'right' }}>PRICE</div>
         <div style={{ textAlign: 'right' }}>CHANGE</div>
         <div style={{ textAlign: 'right' }}>%CHG</div>
-        <div style={{ textAlign: 'right' }}>7D</div>
-        <div style={{ textAlign: 'right' }}>30D</div>
+        <div style={{ textAlign: 'right' }}>HIGH</div>
+        <div style={{ textAlign: 'right' }}>LOW</div>
       </div>
 
       {/* Data Rows */}
@@ -227,13 +234,13 @@ const MarketsTab: React.FC = () => {
                 textAlign: 'right'
               }}>{formatPercent(quote.change_percent)}</div>
               <div style={{
-                color: (quote as any).seven_day >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+                color: BLOOMBERG_WHITE,
                 textAlign: 'right'
-              }}>{(quote as any).seven_day ? formatPercent((quote as any).seven_day) : '-'}</div>
+              }}>{quote.high ? quote.high.toFixed(2) : '-'}</div>
               <div style={{
-                color: (quote as any).thirty_day >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+                color: BLOOMBERG_WHITE,
                 textAlign: 'right'
-              }}>{(quote as any).thirty_day ? formatPercent((quote as any).thirty_day) : '-'}</div>
+              }}>{quote.low ? quote.low.toFixed(2) : '-'}</div>
             </div>
           ))
         )}

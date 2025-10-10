@@ -25,3 +25,7 @@ dist-ssr
 
 src/services/node_modules
 src-tauri/target
+
+# Python embeddable package (download separately)
+src-tauri/resources/python/
+!src-tauri/resources/scripts/

@@ -48,24 +48,24 @@ const ProfileTab: React.FC = () => {
       try {
         if (currentScreen === 'usage') {
           if (session.user_type === 'guest') {
-            const result = await UserApiService.getGuestUsage(session.api_key);
+            const result = await UserApiService.getGuestUsage(session.api_key || '');
             if (result.success) setUsageData(result.data);
           } else {
-            const result = await UserApiService.getUserUsage(session.api_key);
+            const result = await UserApiService.getUserUsage(session.api_key || '');
             if (result.success) setUsageData(result.data);
 
             // Also fetch detailed usage
-            const detailedResult = await UserApiService.getUsageDetails(session.api_key);
+            const detailedResult = await UserApiService.getUsageDetails(session.api_key || '');
             if (detailedResult.success) setDetailedUsage(detailedResult.data);
           }
         } else if (currentScreen === 'payments') {
-          const result = await UserApiService.getPaymentHistory(session.api_key, 1, 20);
+          const result = await UserApiService.getPaymentHistory(session.api_key || '', 1, 20);
           if (result.success) setPaymentHistory(result.data?.payments || result.data || []);
         } else if (currentScreen === 'subscriptions') {
-          const result = await UserApiService.getUserSubscriptions(session.api_key);
+          const result = await UserApiService.getUserSubscriptions(session.api_key || '');
           if (result.success) setSubscriptions(result.data?.subscriptions || result.data || []);
         } else if (currentScreen === 'support') {
-          const result = await UserApiService.getUserTickets(session.api_key);
+          const result = await UserApiService.getUserTickets(session.api_key || '');
           if (result.success) setSupportTickets(result.data?.tickets || result.data || []);
         }
       } catch (error) {
@@ -88,7 +88,7 @@ const ProfileTab: React.FC = () => {
     if (!session?.api_key) return;
     if (confirm('Are you sure you want to regenerate your API key? Your old key will be invalidated.')) {
       setLoading(true);
-      const result = await UserApiService.regenerateApiKey(session.api_key);
+      const result = await UserApiService.regenerateApiKey(session.api_key || '');
       setLoading(false);
       if (result.success) {
         alert(`New API Key: ${result.data?.new_api_key || 'Check your profile'}\n\nPlease save this key securely. You will need to re-login.`);
@@ -102,7 +102,7 @@ const ProfileTab: React.FC = () => {
   const extendSession = async () => {
     if (!session?.api_key) return;
     setLoading(true);
-    const result = await UserApiService.extendGuestSession(session.api_key);
+    const result = await UserApiService.extendGuestSession(session.api_key || '');
     setLoading(false);
     if (result.success) {
       alert('Session extended successfully!');
@@ -115,7 +115,7 @@ const ProfileTab: React.FC = () => {
     if (!session?.api_key) return;
     if (confirm('Are you sure you want to cancel your subscription? It will remain active until the end of the billing period.')) {
       setLoading(true);
-      const result = await UserApiService.cancelSubscription(session.api_key);
+      const result = await UserApiService.cancelSubscription(session.api_key || '');
       setLoading(false);
       if (result.success) {
         alert('Subscription cancelled successfully. It will remain active until the end of your billing period.');
@@ -128,7 +128,7 @@ const ProfileTab: React.FC = () => {
   const reactivateSubscription = async () => {
     if (!session?.api_key) return;
     setLoading(true);
-    const result = await UserApiService.reactivateSubscription(session.api_key);
+    const result = await UserApiService.reactivateSubscription(session.api_key || '');
     setLoading(false);
     if (result.success) {
       alert('Subscription reactivated successfully!');
@@ -142,7 +142,7 @@ const ProfileTab: React.FC = () => {
     const confirmation = prompt('This action cannot be undone. Type "DELETE MY ACCOUNT" to confirm:');
     if (confirmation === 'DELETE MY ACCOUNT') {
       setLoading(true);
-      const result = await UserApiService.deleteUserAccount(session.api_key, { confirm: true });
+      const result = await UserApiService.deleteUserAccount(session.api_key || '', { confirm: true });
       setLoading(false);
       if (result.success) {
         alert('Your account has been deleted.');
@@ -471,7 +471,7 @@ const ProfileTab: React.FC = () => {
                     </div>
                     <div style={{ marginBottom: '8px' }}>
                       <span style={{ color: C.GRAY }}>User ID:</span>
-                      <span style={{ color: C.GRAY, marginLeft: '8px', fontSize: '10px' }}>#{userInfo?.id || 'N/A'}</span>
+                      <span style={{ color: C.GRAY, marginLeft: '8px', fontSize: '10px' }}>#{(userInfo as any)?.id || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
@@ -926,7 +926,7 @@ const ProfileTab: React.FC = () => {
                 if (confirm('Are you sure you want to delete your guest session?')) {
                   if (session?.api_key) {
                     setLoading(true);
-                    const result = await UserApiService.deleteGuestSession(session.api_key);
+                    const result = await UserApiService.deleteGuestSession(session.api_key || '');
                     setLoading(false);
                     if (result.success) {
                       alert('Guest session deleted successfully.');

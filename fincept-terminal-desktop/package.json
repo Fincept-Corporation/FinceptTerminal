@@ -55,6 +55,7 @@
     "jsonata": "^2.1.0",
     "jsonpath": "^1.1.1",
     "langchain": "^0.3.34",
+    "lightweight-charts": "^5.0.9",
     "lucide-react": "^0.544.0",
     "next-themes": "^0.4.6",
     "ollama": "^0.6.0",
