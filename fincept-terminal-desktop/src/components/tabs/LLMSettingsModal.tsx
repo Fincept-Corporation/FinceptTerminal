@@ -5,9 +5,10 @@ interface LLMSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave?: () => void;
+  onNavigateToSettings?: () => void;
 }
 
-const LLMSettingsModal: React.FC<LLMSettingsModalProps> = ({ isOpen, onClose }) => {
+const LLMSettingsModal: React.FC<LLMSettingsModalProps> = ({ isOpen, onClose, onNavigateToSettings }) => {
   // Bloomberg colors
   const BLOOMBERG_ORANGE = '#FFA500';
   const BLOOMBERG_WHITE = '#FFFFFF';
@@ -108,7 +109,10 @@ const LLMSettingsModal: React.FC<LLMSettingsModalProps> = ({ isOpen, onClose }) 
 
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
             <button
-              onClick={onClose}
+              onClick={() => {
+                onClose();
+                onNavigateToSettings?.();
+              }}
               style={{
                 backgroundColor: BLOOMBERG_ORANGE,
                 color: 'black',

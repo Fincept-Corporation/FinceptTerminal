@@ -78,8 +78,8 @@ const MarketplaceTab: React.FC = () => {
 
       if (response.success && response.data) {
         // Handle nested data structure
-        const datasetsArray = response.data.data?.datasets || response.data.datasets || [];
-        const totalPagesCount = response.data.data?.pagination?.total_pages || response.data.total_pages || 1;
+        const datasetsArray = (response.data as any).data?.datasets || (response.data as any).datasets || [];
+        const totalPagesCount = (response.data as any).data?.pagination?.total_pages || (response.data as any).total_pages || 1;
 
         console.log('📦 Datasets found:', datasetsArray.length, datasetsArray);
 
@@ -106,7 +106,7 @@ const MarketplaceTab: React.FC = () => {
       console.log('📊 My uploaded datasets analytics:', response);
 
       if (response.success && response.data) {
-        const myDatasets = response.data.data?.datasets || response.data.datasets || [];
+        const myDatasets = (response.data as any).data?.datasets || (response.data as any).datasets || [];
         console.log('📦 My uploaded datasets:', myDatasets);
         setMyUploadedDatasets(myDatasets);
       }
@@ -255,12 +255,12 @@ const MarketplaceTab: React.FC = () => {
       console.log('📤 Upload response full:', JSON.stringify(response, null, 2));
 
       if (response.success) {
-        const uploadedDataset = response.data?.data || response.data;
+        const uploadedDataset = (response.data as any)?.data || response.data;
         console.log('✅ Dataset uploaded successfully:', uploadedDataset);
-        console.log('✅ Dataset ID:', uploadedDataset?.id);
+        console.log('✅ Dataset ID:', (uploadedDataset as any)?.id);
         console.log('✅ Dataset full object:', JSON.stringify(uploadedDataset, null, 2));
 
-        alert(`Dataset uploaded successfully! ID: ${uploadedDataset?.id || 'Unknown'}\nTitle: ${uploadedDataset?.title || 'Unknown'}`);
+        alert(`Dataset uploaded successfully! ID: ${(uploadedDataset as any)?.id || 'Unknown'}\nTitle: ${(uploadedDataset as any)?.title || 'Unknown'}`);
 
         setUploadFile(null);
         setUploadMetadata({
@@ -272,9 +272,9 @@ const MarketplaceTab: React.FC = () => {
         });
 
         // Immediately try to fetch the specific dataset
-        if (uploadedDataset?.id && session?.api_key) {
-          console.log(`🔍 Attempting to fetch dataset ${uploadedDataset.id} directly...`);
-          MarketplaceApiService.getDatasetDetails(session.api_key, uploadedDataset.id)
+        if ((uploadedDataset as any)?.id && session?.api_key) {
+          console.log(`🔍 Attempting to fetch dataset ${(uploadedDataset as any).id} directly...`);
+          MarketplaceApiService.getDatasetDetails(session.api_key, (uploadedDataset as any).id)
             .then(detailsResponse => {
               console.log('📋 Dataset details response:', detailsResponse);
             });

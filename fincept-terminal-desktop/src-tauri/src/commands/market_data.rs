@@ -1,8 +1,9 @@
 // Market data Tauri commands
 // Frontend can call these commands to fetch live market data
 
-use crate::data_sources::yfinance::{YFinanceProvider, QuoteData};
+use crate::data_sources::yfinance::{YFinanceProvider, QuoteData, HistoricalData};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct QuoteResponse {
@@ -93,7 +94,88 @@ pub async fn get_period_returns(symbol: String) -> Result<PeriodReturnsResponse,
 /// Health check for market data provider
 #[tauri::command]
 pub async fn check_market_data_health() -> Result<bool, String> {
-
     let provider = YFinanceProvider::new();
     Ok(provider.health_check().await)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct HistoricalResponse {
+    pub success: bool,
+    pub data: Vec<HistoricalData>,
+    pub error: Option<String>,
+}
+
+/// Fetch historical data for a symbol
+#[tauri::command]
+pub async fn get_historical_data(
+    symbol: String,
+    start_date: String,
+    end_date: String,
+) -> Result<HistoricalResponse, String> {
+    let provider = YFinanceProvider::new();
+
+    match provider.get_historical(&symbol, &start_date, &end_date).await {
+        Some(data) => Ok(HistoricalResponse {
+            success: true,
+            data,
+            error: None,
+        }),
+        None => Ok(HistoricalResponse {
+            success: false,
+            data: Vec::new(),
+            error: Some(format!("Failed to fetch historical data for {}", symbol)),
+        }),
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StockInfoResponse {
+    pub success: bool,
+    pub data: Option<Value>,
+    pub error: Option<String>,
+}
+
+/// Fetch stock info (company data, metrics, etc.)
+#[tauri::command]
+pub async fn get_stock_info(symbol: String) -> Result<StockInfoResponse, String> {
+    let provider = YFinanceProvider::new();
+
+    match provider.get_info(&symbol).await {
+        Some(info) => Ok(StockInfoResponse {
+            success: true,
+            data: Some(info),
+            error: None,
+        }),
+        None => Ok(StockInfoResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Failed to fetch info for {}", symbol)),
+        }),
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FinancialsResponse {
+    pub success: bool,
+    pub data: Option<Value>,
+    pub error: Option<String>,
+}
+
+/// Fetch financial statements (income, balance sheet, cash flow)
+#[tauri::command]
+pub async fn get_financials(symbol: String) -> Result<FinancialsResponse, String> {
+    let provider = YFinanceProvider::new();
+
+    match provider.get_financials(&symbol).await {
+        Some(financials) => Ok(FinancialsResponse {
+            success: true,
+            data: Some(financials),
+            error: None,
+        }),
+        None => Ok(FinancialsResponse {
+            success: false,
+            data: None,
+            error: Some(format!("Failed to fetch financials for {}", symbol)),
+        }),
+    }
 }

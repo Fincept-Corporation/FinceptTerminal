@@ -219,7 +219,10 @@ pub fn run() {
             commands::market_data::get_market_quote,
             commands::market_data::get_market_quotes,
             commands::market_data::get_period_returns,
-            commands::market_data::check_market_data_health
+            commands::market_data::check_market_data_health,
+            commands::market_data::get_historical_data,
+            commands::market_data::get_stock_info,
+            commands::market_data::get_financials
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -756,7 +756,7 @@ export default function FinxeptTerminal() {
             <GeopoliticsTab />
           </TabsContent>
           <TabsContent value="chat" className="h-full m-0 p-0">
-            <ChatTab />
+            <ChatTab onNavigateToSettings={() => setActiveTab('settings')} />
           </TabsContent>
           <TabsContent value="fyers" className="h-full m-0 p-0">
             <FyersTab />

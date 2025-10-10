@@ -1,9 +1,12 @@
 [package]
 name = "fincept-terminal-desktop"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+version = "1.0.0"
+description = "Professional-grade financial analysis platform with AI-powered insights and real-time market data"
+authors = ["Fincept Corporation <support@fincept.in>"]
 edition = "2021"
+license = "MIT"
+homepage = "https://product.fincept.in"
+repository = "https://github.com/Fincept-Corporation/FinceptTerminal"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,15 +21,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["devtools"] }
+tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-cors-fetch = "4"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
-yahoo_finance_api = "1.2"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
-time = "0.3"
-
+chrono = "0.4"

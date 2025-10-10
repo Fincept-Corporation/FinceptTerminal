@@ -105,8 +105,8 @@ const ForumTab: React.FC = () => {
 
   // Get API credentials
   const getApiCredentials = () => {
-    const apiKey = session?.api_key || localStorage.getItem('fincept_api_key');
-    const deviceId = session?.device_id || localStorage.getItem('fincept_device_id');
+    const apiKey = session?.api_key || localStorage.getItem('fincept_api_key') || undefined;
+    const deviceId = session?.device_id || localStorage.getItem('fincept_device_id') || undefined;
     return { apiKey, deviceId };
   };
 
@@ -411,8 +411,8 @@ const ForumTab: React.FC = () => {
     try {
       const response = await ForumApiService.getMyProfile(apiKey, deviceId);
 
-      if (response.success && response.data?.data?.profile) {
-        const profile = response.data.data.profile;
+      if (response.success && response.data?.data) {
+        const profile = response.data.data;
         setUserProfile(profile);
         setProfileEdit({
           display_name: profile.display_name || '',
@@ -441,8 +441,8 @@ const ForumTab: React.FC = () => {
     try {
       const response = await ForumApiService.getUserProfile(username, apiKey, deviceId);
 
-      if (response.success && response.data?.data?.profile) {
-        setUserProfile(response.data.data.profile);
+      if (response.success && response.data?.data) {
+        setUserProfile(response.data.data);
         setShowProfile(true);
       }
     } catch (error) {

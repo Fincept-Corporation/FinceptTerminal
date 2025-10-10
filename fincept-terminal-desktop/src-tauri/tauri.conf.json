@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Fincept Terminal",
-  "version": "0.1.0",
-  "identifier": "com.tilak.fincept.terminal.desktop",
+  "version": "1.0.0",
+  "identifier": "com.fincept.terminal",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -14,8 +14,13 @@
     "windows": [
       {
         "title": "Fincept Terminal",
-        "width": 800,
-        "height": 600
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 768,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
       }
     ],
     "security": {
@@ -24,13 +29,39 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["msi", "nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Fincept Corporation",
+    "copyright": "Copyright © 2025 Fincept Corporation. All rights reserved.",
+    "category": "Finance",
+    "shortDescription": "Professional-grade financial analysis platform with AI-powered insights",
+    "longDescription": "FinceptTerminal is an AI-Powered Finance Terminal For Investment Research. Access real-time market data, advanced analytics, and institutional-grade tools for informed investment decisions.",
+    "resources": [
+      "resources/python/*",
+      "resources/scripts/*"
+    ],
+    "externalBin": [],
+    "windows": {
+      "signCommand": "relic sign --file %1 --key azure --config relic.conf",
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "wix": {
+        "language": "en-US"
+      },
+      "nsis": {
+        "languages": ["English"],
+        "installerIcon": "icons/icon.ico",
+        "installMode": "currentUser"
+      }
+    }
   }
 }
