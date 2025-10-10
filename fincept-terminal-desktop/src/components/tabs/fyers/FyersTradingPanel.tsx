@@ -87,8 +87,8 @@ const FyersTradingPanel: React.FC = () => {
 
       const response = await fyersService.placeOrder(orderPayload);
 
-      if (response.s === 'ok') {
-        alert(`Order placed successfully! Order ID: ${response.id || 'N/A'}`);
+      if (response.orderId || (response as any).s === 'ok') {
+        alert(`Order placed successfully! Order ID: ${response.orderId || (response as any).id || 'N/A'}`);
         // Reset form
         setOrderSymbol('');
         setOrderQty(1);

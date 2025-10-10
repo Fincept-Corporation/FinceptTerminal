@@ -156,9 +156,9 @@ const FyersMarketDataPanel: React.FC = () => {
       const newFlash: PriceFlash = {};
       Object.keys(data).forEach(symbol => {
         if (previousQuotes[symbol] && data[symbol]) {
-          const oldPrice = previousQuotes[symbol].ltp;
-          const newPrice = data[symbol].ltp;
-          if (oldPrice !== newPrice) {
+          const oldPrice = previousQuotes[symbol].ltp || previousQuotes[symbol].lp || 0;
+          const newPrice = data[symbol].ltp || data[symbol].lp || 0;
+          if (oldPrice !== undefined && newPrice !== undefined && oldPrice !== newPrice) {
             newFlash[symbol] = newPrice > oldPrice ? 'up' : 'down';
           }
         }
@@ -277,8 +277,8 @@ const FyersMarketDataPanel: React.FC = () => {
 
       const response = await fyersService.placeOrder(orderPayload);
 
-      if (response.s === 'ok') {
-        alert(`Order placed successfully! Order ID: ${response.id || 'N/A'}`);
+      if (response.orderId || (response as any).s === 'ok') {
+        alert(`Order placed successfully! Order ID: ${response.orderId || (response as any).id || 'N/A'}`);
         setOrderModal({ isOpen: false, symbol: '', side: 'BUY', ltp: 0 });
       } else {
         alert(`Order failed: ${response.message || 'Unknown error'}`);
@@ -623,7 +623,7 @@ const FyersMarketDataPanel: React.FC = () => {
                           data={historicalData[symbol]}
                           width={100}
                           height={28}
-                          color={quote?.chp > 0 ? BLOOMBERG_GREEN : quote?.chp < 0 ? BLOOMBERG_RED : BLOOMBERG_GRAY}
+                          color={(quote?.chp || 0) > 0 ? BLOOMBERG_GREEN : (quote?.chp || 0) < 0 ? BLOOMBERG_RED : BLOOMBERG_GRAY}
                         />
                       ) : (
                         <span style={{ color: BLOOMBERG_GRAY, fontSize: '9px' }}>Loading...</span>

@@ -124,11 +124,19 @@ export interface FyersMarketStatus {
 
 export interface FyersQuote {
   n: string; // symbol
-  s: string; // status
-  v: {
-    ch: number; // change
-    chp: number; // change percent
-    lp: number; // last price
+  s?: string; // status
+  lp?: number; // last price
+  ltp?: number; // last traded price
+  ch?: number; // change
+  chp?: number; // change percent
+  high?: number; // high
+  low?: number; // low
+  open?: number; // open
+  volume?: number; // volume
+  v?: number | {
+    ch: number;
+    chp: number;
+    lp: number;
     spread: number;
     ask: number;
     bid: number;
@@ -138,6 +146,9 @@ export interface FyersQuote {
     prev_close_price: number;
     volume: number;
   };
+  o?: number;
+  h?: number;
+  l?: number;
 }
 
 export interface FyersMarketDepth {
@@ -168,14 +179,19 @@ export interface FyersHistoryCandle {
 }
 
 export interface SymbolMasterEntry {
-  fytoken: string;
+  fytoken?: string;
+  fyToken?: string;
   symbol: string;
   description: string;
   exchange: string;
   segment: string;
   isin?: string;
   lotsize?: number;
+  lotSize?: number;
   tick_size?: number;
+  tickSize?: number;
+  shortName?: string;
+  displayName?: string;
 }
 
 // ==================== FYERS SERVICE CLASS ====================
@@ -377,21 +393,6 @@ class FyersService {
   }
 
   /**
-   * Place order
-   */
-  async placeOrder(orderPayload: any): Promise<any> {
-    if (!this.isReady()) throw new Error('Fyers service not initialized');
-
-    const response = await this.fyers.place_order(orderPayload);
-
-    if (response.s !== 'ok') {
-      throw new Error(response.message || 'Order placement failed');
-    }
-
-    return response;
-  }
-
-  /**
    * Place GTT order
    */
   async placeGTTOrder(gttPayload: any): Promise<any> {
@@ -559,11 +560,14 @@ class FyersService {
         // Convert object to array of entries with symbol as key
         this.symbolMasterCache = Object.entries(data).map(([symbol, details]: [string, any]) => ({
           symbol: symbol,
-          fyToken: details.fyToken,
+          fytoken: details.fyToken || details.fytoken,
+          fyToken: details.fyToken || details.fytoken,
           description: details.symbolDesc || details.symDetails || '',
           exchange: details.exchangeName || 'NSE',
           segment: details.exSeries || '',
+          lotsize: details.minLotSize || 1,
           lotSize: details.minLotSize || 1,
+          tick_size: details.tickSize || 0.05,
           tickSize: details.tickSize || 0.05,
           shortName: details.short_name || details.exSymbol || '',
           displayName: details.display_format_mob || details.exSymName || ''

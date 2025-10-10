@@ -24,27 +24,27 @@ const DEFAULT_PREFERENCES: UserMarketPreferences = {
   globalMarkets: [
     {
       category: 'Stock Indices',
-      tickers: ['^GSPC', '^IXIC', '^DJI', '^RUT', '^VIX', '^FTSE', '^GDAXI', '^N225', '^FCHI', '^HSI']
+      tickers: ['^GSPC', '^IXIC', '^DJI', '^RUT', '^VIX', '^FTSE', '^GDAXI', '^N225', '^FCHI', '^HSI', '^AXJO', '^BSESN']
     },
     {
       category: 'Forex',
-      tickers: ['EURUSD=X', 'GBPUSD=X', 'JPY=X', 'CHF=X', 'CAD=X', 'AUDUSD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X']
+      tickers: ['EURUSD=X', 'GBPUSD=X', 'JPY=X', 'CHF=X', 'CAD=X', 'AUDUSD=X', 'NZDUSD=X', 'EURGBP=X', 'EURJPY=X', 'GBPJPY=X', 'USDCNY=X', 'USDINR=X']
     },
     {
       category: 'Commodities',
-      tickers: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'ZW=F', 'ZC=F']
+      tickers: ['GC=F', 'SI=F', 'CL=F', 'BZ=F', 'NG=F', 'HG=F', 'PL=F', 'PA=F', 'ZW=F', 'ZC=F', 'ZS=F', 'KC=F']
     },
     {
       category: 'Bonds',
-      tickers: ['^TNX', '^TYX', '^IRX', 'DE10Y=X', 'GB10Y=X', 'JP10Y=X', 'FR10Y=X', 'IT10Y=X', 'ES10Y=X', 'CA10Y=X']
+      tickers: ['^TNX', '^TYX', '^IRX', 'DE10Y=X', 'GB10Y=X', 'JP10Y=X', 'FR10Y=X', 'IT10Y=X', 'ES10Y=X', 'CA10Y=X', 'AU10Y=X', 'IN10Y=X']
     },
     {
       category: 'ETFs',
-      tickers: ['SPY', 'QQQ', 'DIA', 'EEM', 'GLD', 'XLK', 'XLE', 'XLF', 'XLV', 'VNQ']
+      tickers: ['SPY', 'QQQ', 'DIA', 'EEM', 'GLD', 'XLK', 'XLE', 'XLF', 'XLV', 'VNQ', 'IWM', 'VTI']
     },
     {
       category: 'Cryptocurrencies',
-      tickers: ['BTC-USD', 'ETH-USD', 'BNB-USD', 'SOL-USD', 'DOGE-USD', 'MATIC-USD', 'LINK-USD', 'ADA-USD', 'DOT-USD', 'AVAX-USD']
+      tickers: ['BTC-USD', 'ETH-USD', 'BNB-USD', 'SOL-USD', 'XRP-USD', 'ADA-USD', 'DOGE-USD', 'MATIC-USD', 'LINK-USD', 'DOT-USD', 'AVAX-USD', 'UNI-USD']
     }
   ],
   regionalMarkets: [
@@ -58,7 +58,11 @@ const DEFAULT_PREFERENCES: UserMarketPreferences = {
         { symbol: 'HINDUNILVR.NS', name: 'Hindustan Unilever' },
         { symbol: 'ICICIBANK.NS', name: 'ICICI Bank' },
         { symbol: 'SBIN.NS', name: 'State Bank of India' },
-        { symbol: 'BHARTIARTL.NS', name: 'Bharti Airtel' }
+        { symbol: 'BHARTIARTL.NS', name: 'Bharti Airtel' },
+        { symbol: 'ITC.NS', name: 'ITC Limited' },
+        { symbol: 'KOTAKBANK.NS', name: 'Kotak Mahindra Bank' },
+        { symbol: 'LT.NS', name: 'Larsen & Toubro' },
+        { symbol: 'WIPRO.NS', name: 'Wipro Limited' }
       ]
     },
     {
@@ -71,7 +75,11 @@ const DEFAULT_PREFERENCES: UserMarketPreferences = {
         { symbol: 'TCEHY', name: 'Tencent Holdings' },
         { symbol: 'NIO', name: 'NIO Inc' },
         { symbol: 'LI', name: 'Li Auto' },
-        { symbol: 'XPEV', name: 'XPeng' }
+        { symbol: 'XPEV', name: 'XPeng' },
+        { symbol: 'BILI', name: 'Bilibili' },
+        { symbol: 'NTES', name: 'NetEase' },
+        { symbol: 'TME', name: 'Tencent Music' },
+        { symbol: 'BEKE', name: 'KE Holdings' }
       ]
     },
     {
@@ -84,7 +92,11 @@ const DEFAULT_PREFERENCES: UserMarketPreferences = {
         { symbol: 'NVDA', name: 'NVIDIA Corp' },
         { symbol: 'META', name: 'Meta Platforms' },
         { symbol: 'TSLA', name: 'Tesla Inc' },
-        { symbol: 'JPM', name: 'JPMorgan Chase' }
+        { symbol: 'JPM', name: 'JPMorgan Chase' },
+        { symbol: 'V', name: 'Visa Inc' },
+        { symbol: 'WMT', name: 'Walmart Inc' },
+        { symbol: 'UNH', name: 'UnitedHealth Group' },
+        { symbol: 'MA', name: 'Mastercard Inc' }
       ]
     }
   ],

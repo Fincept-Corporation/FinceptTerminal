@@ -7,7 +7,11 @@ import { llmConfigService } from '../../services/llmConfig';
 import LLMSettingsModal from './LLMSettingsModal';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 
-const ChatTab: React.FC = () => {
+interface ChatTabProps {
+  onNavigateToSettings?: () => void;
+}
+
+const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentSessionUuid, setCurrentSessionUuid] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1017,6 +1021,7 @@ const ChatTab: React.FC = () => {
           setCurrentProvider(llmConfigService.getActiveProvider());
           setSystemStatus('STATUS: SETTINGS UPDATED');
         }}
+        onNavigateToSettings={onNavigateToSettings}
       />
     </div>
   );
