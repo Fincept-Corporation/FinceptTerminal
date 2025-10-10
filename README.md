@@ -76,7 +76,56 @@ Inspired by Bloomberg and Refinitiv, Fincept Terminal delivers real-time market 
 
 ## 🚀 Getting Started
 
-### **Option 1: Build from Source**
+### **Option 1: Download from Microsoft Store** 🎉
+
+<div align="center">
+
+[![Get it from Microsoft Store](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
+
+**Easiest installation • Automatic updates • Windows 10/11**
+
+</div>
+
+### **Option 2: Download Installer**
+
+**Windows:**
+- 📦 [Download MSI Installer](http://product.fincept.in/FinceptTerminalV2Alpha.msi) (Windows 10/11)
+
+**macOS & Linux:**
+- Pre-built installers coming soon.
+
+### **Option 3: Build from Source**
+
+#### 🚀 **Quick Setup (Automated)**
+
+**For Windows:**
+```bash
+# 1. Clone the repository
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+
+# 2. Run setup script (as Administrator)
+setup.bat
+```
+
+**For Linux/macOS:**
+```bash
+# 1. Clone the repository
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal
+
+# 2. Make script executable and run
+chmod +x setup.sh
+./setup.sh
+```
+
+The automated setup script will:
+- ✅ Install Node.js LTS (v22.14.0)
+- ✅ Install Rust (latest stable)
+- ✅ Install project dependencies
+- ✅ Set up everything automatically
+
+#### ⚙️ **Manual Setup**
 
 **Prerequisites:** Node.js 18+, Rust 1.70+, Git
 
@@ -94,9 +143,6 @@ npm run tauri dev
 # Build for production
 npm run tauri build
 ```
-
-### **Option 2: Download Installer**
-Pre-built installers for Windows, macOS, and Linux coming soon.
 
 ---
 
@@ -182,9 +228,14 @@ We welcome contributions from developers, traders, and financial professionals!
 ```bash
 # Fork and clone
 git clone https://github.com/YOUR_USERNAME/FinceptTerminal.git
-cd FinceptTerminal/fincept-terminal-desktop
+cd FinceptTerminal
 
-# Install and run
+# Automated setup (recommended for first-time contributors)
+# Windows: run setup.bat as Administrator
+# Linux/macOS: chmod +x setup.sh && ./setup.sh
+
+# Or manual setup
+cd fincept-terminal-desktop
 npm install
 npm run dev          # Start Vite dev server
 npm run tauri dev    # Start Tauri app

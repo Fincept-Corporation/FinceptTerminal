@@ -1,0 +1,166 @@
+FinceptTerminal - AI-Powered Financial Research Platform
+
+Transform your investment strategy with FinceptTerminal, a comprehensive financial analysis platform that brings institutional-grade tools to investors and traders.
+
+IMPORTANT: Free version includes limited API calls and basic features. Premium subscription required for unlimited access to real-time data, advanced AI features, and professional tools. Trial limitations apply - see subscription details below.
+
+═══════════════════════════════════════════════════════════════
+
+REAL-TIME MARKET INTELLIGENCE
+Access market data across global equities, forex, cryptocurrencies, commodities, bonds, and ETFs. Monitor multiple asset classes with professional watchlists and price tracking.
+
+Note: Real-time data availability and update frequency depend on your subscription tier. Free accounts have daily API limits.
+
+AI-POWERED ANALYSIS
+Leverage artificial intelligence for financial queries, sentiment analysis, and market insights. Get instant analysis from market data through our integrated AI chat assistant.
+
+Note: AI features have usage limits on free accounts. Unlimited AI queries available with Premium, Professional, and Enterprise subscriptions.
+
+PROFESSIONAL RESEARCH TOOLS
+Conduct fundamental analysis with company financials, earnings reports, and valuation metrics. Access technical analysis with multiple indicators, customizable charts, and screening tools.
+
+Note: Advanced charting features and historical data depth vary by subscription level.
+
+GLOBAL ECONOMIC DATA
+Stay informed with economic indicators including central bank data, GDP figures, inflation statistics, and employment data. Track international economic trends and geopolitical developments.
+
+PORTFOLIO MANAGEMENT
+Monitor your investments with performance tracking, basic risk analysis, and asset allocation tools. Set price alerts and receive notifications.
+
+Note: Portfolio tracking limits apply to free accounts. Professional tiers support unlimited portfolios.
+
+COMMUNITY INSIGHTS
+Engage with a community of investors through integrated discussion forums. Share analysis, discuss market trends, and connect with other market participants.
+
+PROFESSIONAL INTERFACE
+Navigate efficiently with a Bloomberg-inspired interface featuring keyboard shortcuts, tabbed workflow, and optimized dark mode for extended sessions.
+
+═══════════════════════════════════════════════════════════════
+
+SUBSCRIPTION TIERS & PRICING
+
+FREE TIER (Guest Mode - 24 Hour Sessions)
+- Limited API calls per day
+- Basic market data access
+- AI chat with daily message limits
+- Single watchlist
+- Community forum access (read-only)
+- 24-hour session expiration
+
+STARTER PLAN
+- Increased API limits
+- Extended data retention
+- Multiple watchlists
+- Basic technical indicators
+- Forum posting access
+- Persistent account
+
+PROFESSIONAL PLAN
+- High API call limits
+- Real-time data feeds
+- Advanced technical analysis
+- Unlimited AI queries
+- Priority support
+- Advanced portfolio tools
+
+ENTERPRISE PLAN
+- Unlimited API access
+- Premium data sources
+- Custom integrations
+- Dedicated support
+- Advanced features
+- Multi-user support
+
+Note: Subscriptions are managed through the Fincept API backend. In-app purchase options available. Pricing details available at app launch and in the Settings menu.
+
+═══════════════════════════════════════════════════════════════
+
+KEY FEATURES
+✓ Market coverage across major asset classes
+✓ News feeds and market updates
+✓ Technical charting tools
+✓ Fundamental analysis resources
+✓ AI-powered financial assistant
+✓ Economic calendar
+✓ Customizable watchlists and alerts
+✓ Portfolio tracking
+✓ Community discussion forums
+✓ Cross-platform desktop application
+✓ Broker integration support (Fyers and more)
+
+═══════════════════════════════════════════════════════════════
+
+DESIGNED FOR
+• Retail investors seeking professional tools
+• Active traders requiring market analysis
+• Financial analysts conducting research
+• Students and educators in finance
+• Portfolio managers tracking investments
+
+═══════════════════════════════════════════════════════════════
+
+IMPORTANT DISCLAIMERS
+
+TRIAL LIMITATIONS
+- Free accounts have daily API call limits
+- AI chat limited to specified messages per day
+- Guest sessions expire after 24 hours
+- Real-time data may be delayed on free tier
+- Advanced features require paid subscription
+
+DATA DISCLAIMER
+Market data is provided for informational purposes only. FinceptTerminal is not a registered investment advisor. Data accuracy depends on third-party API providers. No guarantee of data completeness or timeliness.
+
+NOT FINANCIAL ADVICE
+This application provides tools and data for research purposes. It does not provide investment advice, recommendations, or endorsements. Users are responsible for their own investment decisions.
+
+BROKER INTEGRATION
+Broker integration features (trading capabilities) require separate accounts with supported brokers (e.g., Fyers). FinceptTerminal does not execute trades directly. All trading is subject to broker terms and conditions.
+
+═══════════════════════════════════════════════════════════════
+
+SECURITY AND PRIVACY
+Your data security is our priority. FinceptTerminal uses:
+- Encrypted local credential storage
+- Secure HTTPS connections for API communications
+- No storage of sensitive financial credentials
+- User data handled per our Privacy Policy
+
+═══════════════════════════════════════════════════════════════
+
+SYSTEM REQUIREMENTS
+Operating System: Windows 10 (64-bit) or Windows 11
+Memory: Minimum 4GB RAM (8GB recommended)
+Storage: 500MB available disk space
+Network: Active internet connection required for all features
+Display: 1920x1080 resolution or higher recommended
+
+═══════════════════════════════════════════════════════════════
+
+THIRD-PARTY SERVICES
+This application connects to external APIs and services:
+- Fincept API (backend services)
+- Financial data providers
+- AI/LLM services (OpenAI, Google Gemini, Anthropic Claude, DeepSeek, Ollama, OpenRouter)
+- News aggregation services
+- Economic data sources
+
+API keys for third-party AI services must be provided by users for those features.
+
+═══════════════════════════════════════════════════════════════
+
+SUPPORT
+For technical support, feature requests, or billing inquiries:
+- In-app Support Ticket system
+- Community Forums
+- Email support (available to paid subscribers)
+
+═══════════════════════════════════════════════════════════════
+
+Start making informed investment decisions with FinceptTerminal.
+
+Note: This is a research and analysis tool. Always conduct your own due diligence and consult with qualified financial advisors before making investment decisions. Past performance does not guarantee future results.
+
+Version: 1.0.0
+Developer: Fincept
+Category: Finance & Business Tools
