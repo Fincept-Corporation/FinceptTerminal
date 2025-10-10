@@ -13,7 +13,7 @@
 ### *Professional Financial Analysis Platform*
 **Bloomberg-level insights for everyone. Open source. Cross-platform.**
 
-[🚀 Quick Start](#-getting-started) • [✨ Features](#-features) • [📸 Screenshots](#-platform-preview) • [🤝 Contribute](#-contributing)
+[📥 Download](#-getting-started) • [✨ Features](#-features) • [📸 Screenshots](#-platform-preview) • [🤝 Contribute](#-contributing)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -37,40 +37,6 @@ Inspired by Bloomberg and Refinitiv, Fincept Terminal delivers real-time market 
 | ⚙️ Limited customization | 🎨 **Fully Customizable** |
 
 **Tech Stack:** Tauri (Rust) • React 19 • TypeScript • TailwindCSS
-
----
-
-## ✨ Features
-
-### 📊 Market Intelligence
-- 🌍 **Global Coverage** - Stocks, forex, crypto, commodities, bonds, ETFs
-- 📈 **Real-Time Data** - Live market feeds and streaming updates
-- 📰 **News Integration** - Financial news from multiple sources
-- 📉 **Watchlists** - Track your favorite assets
-
-### 🧠 AI-Powered Analysis
-- 🤖 **GenAI Chat** - Natural language financial queries
-- 📊 **Sentiment Analysis** - Real-time market sentiment
-- 💡 **Smart Insights** - AI-driven recommendations
-- 🎯 **Pattern Recognition** - Automated technical signals
-
-### 📈 Professional Tools
-- 📊 **Technical Analysis** - Advanced charting with 50+ indicators
-- 💼 **Fundamentals** - Company financials and research
-- 📋 **Portfolio Tracking** - Multi-account management
-- ⚡ **Backtesting** - Test strategies with historical data
-- 🔔 **Custom Alerts** - Price and technical notifications
-
-### 🌐 Global Insights
-- 🏛️ **Economic Data** - Central bank rates, GDP, inflation
-- 🗺️ **Trade Routes** - Maritime shipping and logistics
-- 🌍 **Geopolitics** - Risk assessment and global events
-
-### 🎨 User Experience
-- 🖥️ **Bloomberg-Style UI** - Professional terminal interface
-- ⚡ **Function Keys** - Keyboard shortcuts (F1-F12)
-- 🌓 **Dark Mode** - Optimized for long sessions
-- 🎯 **Tab Workflow** - Dashboard, Markets, News, Forum, Advanced
 
 ---
 
@@ -143,6 +109,47 @@ npm run tauri dev
 # Build for production
 npm run tauri build
 ```
+
+---
+
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%">
+
+### 📊 Market Intelligence
+🌍 Global coverage (stocks, forex, crypto, commodities)<br>
+📈 Real-time data & streaming updates<br>
+📰 Multi-source news integration<br>
+📉 Custom watchlists
+
+### 🧠 AI-Powered Analysis
+🤖 GenAI chat interface<br>
+📊 Real-time sentiment analysis<br>
+💡 AI-driven insights & recommendations<br>
+🎯 Automated pattern recognition
+
+</td>
+<td width="50%">
+
+### 📈 Professional Tools
+📊 Advanced charting (50+ indicators)<br>
+💼 Company financials & research<br>
+📋 Multi-account portfolio tracking<br>
+⚡ Strategy backtesting<br>
+🔔 Custom price & technical alerts
+
+### 🌐 Global Insights
+🏛️ Economic data (rates, GDP, inflation)<br>
+🗺️ Trade routes & maritime logistics<br>
+🌍 Geopolitical risk assessment
+
+</td>
+</tr>
+</table>
+
+**User Experience:** Bloomberg-style UI • Function key shortcuts (F1-F12) • Dark mode • Tab-based workflow
 
 ---
 
