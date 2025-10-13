@@ -86,9 +86,14 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
   // Separate effect to set default selection when plans are loaded
   useEffect(() => {
     if (availablePlans.length > 0 && !selectedPlan) {
-      setSelectedPlan('starter_20');
+      const currentPlanId = (session?.subscription as any)?.data?.subscription?.plan?.plan_id ||
+                            session?.subscription?.subscription?.plan?.plan_id;
+      // Don't auto-select if user already has current plan, otherwise select starter
+      if (!currentPlanId) {
+        setSelectedPlan('starter_20');
+      }
     }
-  }, [availablePlans.length, selectedPlan]);
+  }, [availablePlans.length, selectedPlan, session?.subscription]);
 
   const getAnnualPrice = (monthlyPrice: number) => {
     return monthlyPrice * 10; // 2 months free when billed annually
@@ -177,10 +182,8 @@ const handleSelectPlan = async () => {
 
   const getPlanCard = (plan: any) => {
     const isSelected = selectedPlan === plan.plan_id;
-    const displayPrice = billingPeriod === 'annually' && plan.price_usd > 0
-      ? getAnnualPrice(plan.price_usd)
-      : plan.price_usd;
-    const priceUnit = billingPeriod === 'annually' ? 'year' : 'month';
+    const displayPrice = plan.price_usd;
+    const priceUnit = 'month';
 
     // Determine if plan is popular or recommended
     const isPopular = plan.plan_id === 'starter_20';
@@ -246,12 +249,6 @@ const handleSelectPlan = async () => {
               </span>
               <span className="text-zinc-400 text-xs ml-1">/{priceUnit}</span>
             </div>
-
-            {billingPeriod === 'annually' && plan.price_usd > 0 && (
-              <div className="text-green-400 text-xs mt-0.5">
-                Save {PaymentUtils.formatCurrency(PaymentUtils.calculateAnnualSavings(plan.price_usd))}/year
-              </div>
-            )}
           </div>
 
           <p className="text-zinc-400 text-xs">{plan.description}</p>
@@ -334,7 +331,7 @@ const handleSelectPlan = async () => {
               <Button
                 onClick={handleContinueWithFree}
                 variant="outline"
-                className="w-full border-zinc-600 text-zinc-300 hover:bg-zinc-800"
+                className="w-full bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500"
               >
                 Continue with Free Plan
               </Button>
@@ -346,6 +343,14 @@ const handleSelectPlan = async () => {
   }
 
   const selectedPlanData = availablePlans.find(p => p.plan_id === selectedPlan);
+
+  // Get current plan info
+  const currentPlanId = (session?.subscription as any)?.data?.subscription?.plan?.plan_id ||
+                        session?.subscription?.subscription?.plan?.plan_id;
+  const currentPlanData = availablePlans.find(p => p.plan_id === currentPlanId);
+  const hasActiveSubscription = (session?.subscription as any)?.data?.has_subscription ||
+                                 session?.subscription?.has_subscription;
+  const isCurrentPlanSelected = selectedPlan === currentPlanId;
 
   return (
     <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-700 rounded-xl p-6 w-full max-w-5xl mx-auto shadow-2xl">
@@ -371,34 +376,12 @@ const handleSelectPlan = async () => {
             </h2>
           </div>
 
-          <div className="flex items-center bg-zinc-800 rounded-lg p-0.5">
-            <button
-              onClick={() => setBillingPeriod('monthly')}
-              className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
-                billingPeriod === 'monthly'
-                  ? 'bg-zinc-600 text-white'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-              disabled={isLoading}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setBillingPeriod('annually')}
-              className={`px-3 py-1.5 text-xs rounded-md transition-colors ${
-                billingPeriod === 'annually'
-                  ? 'bg-zinc-600 text-white'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-              disabled={isLoading}
-            >
-              Annual <span className="text-green-400">(-17%)</span>
-            </button>
-          </div>
         </div>
 
         <p className="text-zinc-400 text-sm">
-          {userType === 'existing'
+          {hasActiveSubscription && currentPlanData
+            ? `Currently on ${currentPlanData.name} plan. Select a different plan to upgrade or downgrade.`
+            : userType === 'existing'
             ? 'Currently on Free plan. Upgrade for advanced features and higher limits.'
             : 'Select a plan that fits your financial analysis needs. Start with 14-day free trial.'
           }
@@ -440,12 +423,7 @@ const handleSelectPlan = async () => {
                 <div className="text-zinc-400 text-xs">
                   {selectedPlanData ? (
                     <>
-                      {PaymentUtils.formatCurrency(
-                        billingPeriod === 'annually'
-                          ? getAnnualPrice(selectedPlanData.price_usd)
-                          : selectedPlanData.price_usd
-                      )}
-                      /{billingPeriod === 'annually' ? 'year' : 'month'} • 14-day free trial • Cancel anytime
+                      {PaymentUtils.formatCurrency(selectedPlanData.price_usd)}/month • 14-day free trial • Cancel anytime
                     </>
                   ) : (
                     'Select a plan to continue'
@@ -454,27 +432,42 @@ const handleSelectPlan = async () => {
               </div>
 
               <div className="flex gap-3">
-                {userType === 'existing' && (
+                {userType === 'existing' && !hasActiveSubscription && (
                   <Button
                     onClick={handleContinueWithFree}
                     variant="outline"
-                    className="border-zinc-600 text-zinc-300 hover:bg-zinc-800 px-4 py-2 text-sm transition-colors"
+                    className="bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500 px-4 py-2 text-sm transition-colors"
                     disabled={isLoading}
                   >
                     Stay Free
                   </Button>
                 )}
 
+                {hasActiveSubscription && (
+                  <Button
+                    onClick={onProceedToDashboard}
+                    variant="outline"
+                    className="bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500 px-4 py-2 text-sm transition-colors"
+                    disabled={isLoading}
+                  >
+                    Keep Current Plan
+                  </Button>
+                )}
+
                 <Button
                   onClick={handleSelectPlan}
-                  disabled={!selectedPlan || isLoading}
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 text-sm transition-colors disabled:opacity-50"
+                  disabled={!selectedPlan || isLoading || isCurrentPlanSelected}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2 text-sm transition-colors disabled:opacity-50"
                 >
                   {isLoading ? (
                     <div className="flex items-center">
                       <Loader2 className="w-3 h-3 animate-spin mr-2" />
                       Processing...
                     </div>
+                  ) : isCurrentPlanSelected ? (
+                    'Current Plan'
+                  ) : hasActiveSubscription ? (
+                    `Change to ${selectedPlanData?.name || 'Plan'}`
                   ) : (
                     `Start Free Trial - ${selectedPlanData?.name || 'Plan'}`
                   )}

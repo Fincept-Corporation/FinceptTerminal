@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, Plus, Trash2, Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, ChevronDown, Edit3 } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3 } from 'lucide-react';
 import { sqliteService, type Credential, type LLMConfig, type LLMGlobalSettings } from '@/services/sqliteService';
 import { ollamaService } from '@/services/ollamaService';
 
@@ -26,50 +26,12 @@ export default function SettingsTab() {
   const [ollamaError, setOllamaError] = useState<string | null>(null);
   const [useManualEntry, setUseManualEntry] = useState(false);
 
-  // New credential form
-  const [newCredential, setNewCredential] = useState<Credential>({
+  // New API key form
+  const [newApiKey, setNewApiKey] = useState({
     service_name: '',
-    username: '',
-    password: '',
-    api_key: '',
-    api_secret: '',
-    additional_data: ''
+    api_key: ''
   });
 
-  // Mock user profile data
-  const [userProfile, setUserProfile] = useState({
-    full_name: 'John Doe',
-    email: 'john.doe@example.com',
-    account_type: 'Professional',
-    subscription_status: 'Active',
-    subscription_expiry: '2025-12-31',
-    api_calls_today: 1247,
-    api_limit: 10000,
-    storage_used: '2.4 GB',
-    storage_limit: '50 GB'
-  });
-
-  // Mock terminal settings
-  const [terminalSettings, setTerminalSettings] = useState({
-    theme: 'dark',
-    font_size: '11',
-    auto_refresh: true,
-    refresh_interval: '5',
-    show_tooltips: true,
-    enable_animations: true,
-    data_compression: false,
-    cache_enabled: true
-  });
-
-  // Mock notification settings
-  const [notificationSettings, setNotificationSettings] = useState({
-    email_alerts: true,
-    price_alerts: true,
-    news_alerts: false,
-    trade_confirmations: true,
-    system_updates: true,
-    marketing_emails: false
-  });
 
   useEffect(() => {
     initDB();
@@ -131,32 +93,33 @@ export default function SettingsTab() {
     }
   };
 
-  const handleSaveCredential = async () => {
-    if (!newCredential.service_name || !newCredential.username || !newCredential.password) {
-      showMessage('error', 'Service name, username, and password are required');
+  const handleSaveApiKey = async () => {
+    if (!newApiKey.service_name || !newApiKey.api_key) {
+      showMessage('error', 'Service name and API key are required');
       return;
     }
 
     try {
       setLoading(true);
-      const result = await sqliteService.saveCredential(newCredential);
+      const credential: Credential = {
+        service_name: newApiKey.service_name,
+        username: 'api',
+        password: 'key',
+        api_key: newApiKey.api_key,
+        api_secret: '',
+        additional_data: ''
+      };
+      const result = await sqliteService.saveCredential(credential);
 
       if (result.success) {
         showMessage('success', result.message);
-        setNewCredential({
-          service_name: '',
-          username: '',
-          password: '',
-          api_key: '',
-          api_secret: '',
-          additional_data: ''
-        });
+        setNewApiKey({ service_name: '', api_key: '' });
         await loadCredentials();
       } else {
         showMessage('error', result.message);
       }
     } catch (error) {
-      showMessage('error', 'Failed to save credential');
+      showMessage('error', 'Failed to save API key');
     } finally {
       setLoading(false);
     }
@@ -246,10 +209,6 @@ export default function SettingsTab() {
   const showMessage = (type: 'success' | 'error', text: string) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 5000);
-  };
-
-  const handleSaveSettings = async (section: string) => {
-    showMessage('success', `${section} settings saved successfully`);
   };
 
   const getCurrentLLMConfig = () => llmConfigs.find(c => c.provider === activeProvider);
@@ -359,14 +318,14 @@ export default function SettingsTab() {
               <div>
                 <div style={{ marginBottom: '24px' }}>
                   <h2 style={{ color: '#ea580c', fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
-                    CREDENTIAL MANAGEMENT
+                    API KEY MANAGEMENT
                   </h2>
                   <p style={{ color: '#888', fontSize: '10px' }}>
-                    Securely store API keys, passwords, and authentication tokens. All data is encrypted and stored locally in SQLite.
+                    Store API keys for services like FRED, Alpha Vantage, etc. All data is encrypted and stored locally.
                   </p>
                 </div>
 
-                {/* Add New Credential */}
+                {/* Add New API Key */}
                 <div style={{
                   background: '#0a0a0a',
                   border: '1px solid #1a1a1a',
@@ -375,19 +334,19 @@ export default function SettingsTab() {
                   borderRadius: '4px'
                 }}>
                   <h3 style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
-                    Add New Credential
+                    Add New API Key
                   </h3>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '12px', alignItems: 'end' }}>
                     <div>
                       <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         SERVICE NAME *
                       </label>
                       <input
                         type="text"
-                        value={newCredential.service_name}
-                        onChange={(e) => setNewCredential({ ...newCredential, service_name: e.target.value })}
-                        placeholder="e.g., Fyers, Zerodha, Alpha Vantage"
+                        value={newApiKey.service_name}
+                        onChange={(e) => setNewApiKey({ ...newApiKey, service_name: e.target.value })}
+                        placeholder="e.g., FRED, AlphaVantage"
                         style={{
                           width: '100%',
                           background: '#000',
@@ -401,13 +360,13 @@ export default function SettingsTab() {
                     </div>
                     <div>
                       <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                        USERNAME *
+                        API KEY *
                       </label>
                       <input
                         type="text"
-                        value={newCredential.username}
-                        onChange={(e) => setNewCredential({ ...newCredential, username: e.target.value })}
-                        placeholder="Username or Client ID"
+                        value={newApiKey.api_key}
+                        onChange={(e) => setNewApiKey({ ...newApiKey, api_key: e.target.value })}
+                        placeholder="Your API key"
                         style={{
                           width: '100%',
                           background: '#000',
@@ -419,115 +378,35 @@ export default function SettingsTab() {
                         }}
                       />
                     </div>
-                    <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                        PASSWORD *
-                      </label>
-                      <input
-                        type="password"
-                        value={newCredential.password}
-                        onChange={(e) => setNewCredential({ ...newCredential, password: e.target.value })}
-                        placeholder="Password or Secret"
-                        style={{
-                          width: '100%',
-                          background: '#000',
-                          border: '1px solid #2a2a2a',
-                          color: '#fff',
-                          padding: '8px',
-                          fontSize: '10px',
-                          borderRadius: '3px'
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                        API KEY (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={newCredential.api_key}
-                        onChange={(e) => setNewCredential({ ...newCredential, api_key: e.target.value })}
-                        placeholder="API Key"
-                        style={{
-                          width: '100%',
-                          background: '#000',
-                          border: '1px solid #2a2a2a',
-                          color: '#fff',
-                          padding: '8px',
-                          fontSize: '10px',
-                          borderRadius: '3px'
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                        API SECRET (Optional)
-                      </label>
-                      <input
-                        type="password"
-                        value={newCredential.api_secret}
-                        onChange={(e) => setNewCredential({ ...newCredential, api_secret: e.target.value })}
-                        placeholder="API Secret"
-                        style={{
-                          width: '100%',
-                          background: '#000',
-                          border: '1px solid #2a2a2a',
-                          color: '#fff',
-                          padding: '8px',
-                          fontSize: '10px',
-                          borderRadius: '3px'
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                        ADDITIONAL DATA (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={newCredential.additional_data}
-                        onChange={(e) => setNewCredential({ ...newCredential, additional_data: e.target.value })}
-                        placeholder="JSON or any extra data"
-                        style={{
-                          width: '100%',
-                          background: '#000',
-                          border: '1px solid #2a2a2a',
-                          color: '#fff',
-                          padding: '8px',
-                          fontSize: '10px',
-                          borderRadius: '3px'
-                        }}
-                      />
-                    </div>
+                    <button
+                      onClick={handleSaveApiKey}
+                      disabled={loading}
+                      style={{
+                        background: '#ea580c',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '8px 16px',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        borderRadius: '3px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        opacity: loading ? 0.5 : 1,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <Plus size={14} />
+                      {loading ? 'SAVING...' : 'ADD'}
+                    </button>
                   </div>
-
-                  <button
-                    onClick={handleSaveCredential}
-                    disabled={loading}
-                    style={{
-                      background: '#ea580c',
-                      color: '#fff',
-                      border: 'none',
-                      padding: '8px 16px',
-                      fontSize: '10px',
-                      fontWeight: 'bold',
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      borderRadius: '3px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      opacity: loading ? 0.5 : 1
-                    }}
-                  >
-                    <Plus size={14} />
-                    {loading ? 'SAVING...' : 'ADD CREDENTIAL'}
-                  </button>
                 </div>
 
-                {/* Saved Credentials List */}
+                {/* Saved API Keys List */}
                 <div>
                   <h3 style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
-                    Saved Credentials ({credentials.length})
+                    Saved API Keys ({credentials.length})
                   </h3>
 
                   {credentials.length === 0 ? (
@@ -539,7 +418,7 @@ export default function SettingsTab() {
                       borderRadius: '4px'
                     }}>
                       <Lock size={32} color="#333" style={{ margin: '0 auto 12px' }} />
-                      <p style={{ color: '#666', fontSize: '11px' }}>No credentials saved yet</p>
+                      <p style={{ color: '#666', fontSize: '11px' }}>No API keys saved yet</p>
                     </div>
                   ) : (
                     <div style={{ display: 'grid', gap: '12px' }}>
@@ -550,46 +429,20 @@ export default function SettingsTab() {
                             background: '#0a0a0a',
                             border: '1px solid #1a1a1a',
                             padding: '16px',
-                            borderRadius: '4px'
+                            borderRadius: '4px',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
                           }}
                         >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-                            <div>
-                              <h4 style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-                                {cred.service_name}
-                              </h4>
-                              <p style={{ color: '#666', fontSize: '9px' }}>
-                                Created: {cred.created_at ? new Date(cred.created_at).toLocaleDateString() : 'N/A'}
-                              </p>
-                            </div>
-                            <button
-                              onClick={() => cred.id && handleDeleteCredential(cred.id)}
-                              style={{
-                                background: 'transparent',
-                                border: '1px solid #ff0000',
-                                color: '#ff0000',
-                                padding: '4px 8px',
-                                fontSize: '9px',
-                                cursor: 'pointer',
-                                borderRadius: '3px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                            >
-                              <Trash2 size={12} />
-                              DELETE
-                            </button>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', fontSize: '10px' }}>
-                            <span style={{ color: '#888' }}>Username:</span>
-                            <span style={{ color: '#fff' }}>{cred.username}</span>
-
-                            <span style={{ color: '#888' }}>Password:</span>
+                          <div style={{ flex: 1 }}>
+                            <h4 style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+                              {cred.service_name}
+                            </h4>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ color: '#fff', fontFamily: 'monospace' }}>
-                                {showPasswords[cred.id!] ? cred.password : '•'.repeat(12)}
+                              <span style={{ color: '#888', fontSize: '9px' }}>API Key:</span>
+                              <span style={{ color: '#fff', fontFamily: 'monospace', fontSize: '10px' }}>
+                                {showPasswords[cred.id!] ? cred.api_key : '•'.repeat(20)}
                               </span>
                               <button
                                 onClick={() => cred.id && togglePasswordVisibility(cred.id)}
@@ -604,30 +457,28 @@ export default function SettingsTab() {
                                 {showPasswords[cred.id!] ? <EyeOff size={14} color="#888" /> : <Eye size={14} color="#888" />}
                               </button>
                             </div>
-
-                            {cred.api_key && (
-                              <>
-                                <span style={{ color: '#888' }}>API Key:</span>
-                                <span style={{ color: '#fff', fontFamily: 'monospace', wordBreak: 'break-all' }}>{cred.api_key}</span>
-                              </>
-                            )}
-
-                            {cred.api_secret && (
-                              <>
-                                <span style={{ color: '#888' }}>API Secret:</span>
-                                <span style={{ color: '#fff', fontFamily: 'monospace' }}>
-                                  {showPasswords[cred.id!] ? cred.api_secret : '•'.repeat(12)}
-                                </span>
-                              </>
-                            )}
-
-                            {cred.additional_data && (
-                              <>
-                                <span style={{ color: '#888' }}>Additional:</span>
-                                <span style={{ color: '#fff', fontSize: '9px', wordBreak: 'break-all' }}>{cred.additional_data}</span>
-                              </>
-                            )}
+                            <p style={{ color: '#666', fontSize: '9px', marginTop: '4px' }}>
+                              Added: {cred.created_at ? new Date(cred.created_at).toLocaleDateString() : 'N/A'}
+                            </p>
                           </div>
+                          <button
+                            onClick={() => cred.id && handleDeleteCredential(cred.id)}
+                            style={{
+                              background: 'transparent',
+                              border: '1px solid #ff0000',
+                              color: '#ff0000',
+                              padding: '4px 8px',
+                              fontSize: '9px',
+                              cursor: 'pointer',
+                              borderRadius: '3px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <Trash2 size={12} />
+                            DELETE
+                          </button>
                         </div>
                       ))}
                     </div>

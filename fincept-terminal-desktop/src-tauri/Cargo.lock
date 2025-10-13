@@ -1071,7 +1071,7 @@ dependencies = [
 
 [[package]]
 name = "fincept-terminal-desktop"
-version = "1.0.0"
+version = "3.0.0"
 dependencies = [
  "anyhow",
  "chrono",
