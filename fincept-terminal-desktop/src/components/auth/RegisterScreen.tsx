@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, User, Mail, Phone, Building, Lock, Key, ChevronDown } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, Building, Lock, Key, ChevronDown, Check, X } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -42,6 +42,15 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
   const [countries, setCountries] = useState<Country[]>([]);
   const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
   const [countrySearchTerm, setCountrySearchTerm] = useState("");
+
+  // Password validation state
+  const [passwordValidation, setPasswordValidation] = useState({
+    minLength: false,
+    hasUpperCase: false,
+    hasLowerCase: false,
+    hasNumber: false,
+    hasSpecialChar: false
+  });
 
   // Fetch countries data from REST Countries API
   useEffect(() => {
@@ -99,6 +108,17 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (error) setError("");
+
+    // Real-time password validation
+    if (field === 'password') {
+      setPasswordValidation({
+        minLength: value.length >= 8,
+        hasUpperCase: /[A-Z]/.test(value),
+        hasLowerCase: /[a-z]/.test(value),
+        hasNumber: /[0-9]/.test(value),
+        hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(value)
+      });
+    }
   };
 
   const handleCountrySelect = (country: Country) => {
@@ -146,10 +166,21 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
       if (result.success) {
         console.log('Registration successful, OTP sent to:', formData.email);
+        // Note: Backend handles re-registration for unverified accounts automatically
+        // A fresh OTP is sent even if the user previously registered but didn't verify
         setStep('otp-verification');
       } else {
         console.log('Registration failed:', result.error);
-        setError(result.error || 'Registration failed. Please try again.');
+        // Enhanced error handling for common scenarios
+        const errorMessage = result.error || 'Registration failed. Please try again.';
+
+        // If the error indicates an already verified account, show helpful message
+        if (errorMessage.toLowerCase().includes('already exists') ||
+            errorMessage.toLowerCase().includes('already registered')) {
+          setError("This email is already registered and verified. Please use the login page instead.");
+        } else {
+          setError(errorMessage);
+        }
       }
     } catch (err) {
       console.error('Registration error:', err);
@@ -387,45 +418,77 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="password" className="text-white text-xs">
-                Password *
-              </Label>
-              <div className="relative">
-                <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Create password"
-                  value={formData.password}
-                  onChange={(e) => handleChange("password", e.target.value)}
-                  className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
-                  disabled={isLoading}
-                  required
-                  minLength={8}
-                />
-              </div>
+          <div className="space-y-1">
+            <Label htmlFor="password" className="text-white text-xs">
+              Password *
+            </Label>
+            <div className="relative">
+              <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+              <Input
+                id="password"
+                type="password"
+                placeholder="Create password"
+                value={formData.password}
+                onChange={(e) => handleChange("password", e.target.value)}
+                className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
+                disabled={isLoading}
+                required
+                minLength={8}
+              />
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="confirmPassword" className="text-white text-xs">
-                Confirm Password *
-              </Label>
-              <div className="relative">
-                <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Confirm password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => handleChange("confirmPassword", e.target.value)}
-                  className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
-                  disabled={isLoading}
-                  required
-                />
+            {/* Password Strength Indicators */}
+            {formData.password && (
+              <div className="mt-2 space-y-1 text-xs">
+                <div className={`flex items-center gap-1.5 ${passwordValidation.minLength ? 'text-green-400' : 'text-zinc-500'}`}>
+                  {passwordValidation.minLength ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                  <span>At least 8 characters</span>
+                </div>
+                <div className={`flex items-center gap-1.5 ${passwordValidation.hasUpperCase ? 'text-green-400' : 'text-zinc-500'}`}>
+                  {passwordValidation.hasUpperCase ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                  <span>One uppercase letter</span>
+                </div>
+                <div className={`flex items-center gap-1.5 ${passwordValidation.hasLowerCase ? 'text-green-400' : 'text-zinc-500'}`}>
+                  {passwordValidation.hasLowerCase ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                  <span>One lowercase letter</span>
+                </div>
+                <div className={`flex items-center gap-1.5 ${passwordValidation.hasNumber ? 'text-green-400' : 'text-zinc-500'}`}>
+                  {passwordValidation.hasNumber ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                  <span>One number</span>
+                </div>
+                <div className={`flex items-center gap-1.5 ${passwordValidation.hasSpecialChar ? 'text-green-400' : 'text-zinc-500'}`}>
+                  {passwordValidation.hasSpecialChar ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                  <span>One special character</span>
+                </div>
               </div>
+            )}
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="confirmPassword" className="text-white text-xs">
+              Confirm Password *
+            </Label>
+            <div className="relative">
+              <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Confirm password"
+                value={formData.confirmPassword}
+                onChange={(e) => handleChange("confirmPassword", e.target.value)}
+                className={`bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 ${
+                  formData.confirmPassword && formData.password !== formData.confirmPassword ? 'border-red-500' : ''
+                }`}
+                disabled={isLoading}
+                required
+              />
             </div>
+            {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+              <div className="flex items-center gap-1.5 text-red-400 text-xs mt-1">
+                <X className="h-3 w-3" />
+                <span>Passwords do not match</span>
+              </div>
+            )}
           </div>
 
           {error && (
@@ -475,7 +538,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     );
   }
 
-  // Step 2: OTP Verification (unchanged)
+  // Step 2: OTP Verification
   if (step === 'otp-verification') {
     return (
       <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
@@ -493,6 +556,9 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
           <p className="text-zinc-400 text-xs leading-5">
             We've sent a verification code to <span className="text-white">{formData.email}</span>.
             Please enter the code below to complete your registration.
+          </p>
+          <p className="text-zinc-500 text-xs leading-5 mt-2">
+            Note: If you've registered before but didn't verify, a fresh code has been sent to your email.
           </p>
         </div>
 

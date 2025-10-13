@@ -43,7 +43,19 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
         // App.tsx useEffect will handle navigation based on account_type
       } else {
         console.log('Login failed:', result.error);
-        setError(result.error || 'Login failed. Please check your credentials.');
+
+        // Check for specific error messages and provide helpful feedback
+        const errorMessage = result.error || 'Login failed. Please check your credentials.';
+
+        if (errorMessage.toLowerCase().includes('user not found') ||
+            errorMessage.toLowerCase().includes('invalid credentials') ||
+            errorMessage.toLowerCase().includes('user does not exist')) {
+          setError("Account not found. Please sign up first to create an account.");
+        } else if (errorMessage.toLowerCase().includes('password')) {
+          setError("Incorrect password. Please try again or reset your password.");
+        } else {
+          setError(errorMessage);
+        }
       }
     } catch (err) {
       console.error('Login error:', err);

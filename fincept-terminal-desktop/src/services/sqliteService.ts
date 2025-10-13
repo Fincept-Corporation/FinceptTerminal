@@ -366,6 +366,14 @@ class SQLiteService {
     return result.length > 0 ? result[0] : null;
   }
 
+  /**
+   * Get API key for a specific service (simplified retrieval)
+   */
+  async getApiKey(serviceName: string): Promise<string | null> {
+    const credential = await this.getCredentialByService(serviceName);
+    return credential?.api_key || null;
+  }
+
   async deleteCredential(id: number): Promise<{ success: boolean; message: string }> {
     if (!this.db) throw new Error('Database not initialized');
     try {
