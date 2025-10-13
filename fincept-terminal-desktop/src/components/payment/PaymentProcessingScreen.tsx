@@ -275,21 +275,30 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
           )}
 
           {(status === 'waiting' || status === 'processing') && (
-            <Button
-              onClick={handleManualRefresh}
-              variant="outline"
-              className="w-full border-zinc-600 text-zinc-300 hover:bg-zinc-800"
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Check Status Now
-            </Button>
+            <div className="space-y-2">
+              <Button
+                onClick={handleManualRefresh}
+                variant="outline"
+                className="w-full bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500"
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Check Status Now
+              </Button>
+              <Button
+                onClick={handleBackToPricing}
+                variant="outline"
+                className="w-full bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500"
+              >
+                Back to Plans
+              </Button>
+            </div>
           )}
 
           {(status === 'failed' || status === 'cancelled' || status === 'timeout') && (
             <div className="space-y-2">
               <Button
                 onClick={handleManualRefresh}
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Check Again
@@ -297,7 +306,7 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
               <Button
                 onClick={handleBackToPricing}
                 variant="outline"
-                className="w-full border-zinc-600 text-zinc-300 hover:bg-zinc-800"
+                className="w-full bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500"
               >
                 Back to Plans
               </Button>

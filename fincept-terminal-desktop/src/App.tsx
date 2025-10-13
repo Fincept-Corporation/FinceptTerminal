@@ -86,12 +86,13 @@ const App: React.FC = () => {
             onCancel: () => {
               console.log('PaymentManager: Payment cancelled by user');
               setPaymentWindow(prev => ({ ...prev, isOpen: false }));
+              setCurrentScreen('pricing');
               resolve(false);
             },
             onError: (error: string) => {
               console.error('PaymentManager: Payment error:', error);
               setPaymentWindow(prev => ({ ...prev, isOpen: false }));
-              alert(`Payment failed: ${error}`);
+              setCurrentScreen('pricing');
               resolve(false);
             }
           });
