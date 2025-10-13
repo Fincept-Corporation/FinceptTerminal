@@ -199,6 +199,49 @@ fn sha256_hash(input: String) -> String {
     format!("{:x}", result)
 }
 
+// Execute Python script with arguments and environment variables
+#[tauri::command]
+fn execute_python_script(
+    script_name: String,
+    args: Vec<String>,
+    env: Option<HashMap<String, String>>,
+) -> Result<String, String> {
+    println!("[Tauri] Executing Python script: {} with args: {:?}", script_name, args);
+
+    let python_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("resources")
+        .join("python")
+        .join("python.exe");
+
+    let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("resources")
+        .join("scripts")
+        .join(&script_name);
+
+    let mut cmd = Command::new(&python_path);
+    cmd.arg(&script_path).args(&args);
+
+    // Add environment variables if provided
+    if let Some(env_vars) = env {
+        for (key, value) in env_vars {
+            cmd.env(key, value);
+        }
+    }
+
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                String::from_utf8(output.stdout)
+                    .map_err(|e| format!("Failed to parse output: {}", e))
+            } else {
+                let error = String::from_utf8_lossy(&output.stderr);
+                Err(format!("Python script failed: {}", error))
+            }
+        }
+        Err(e) => Err(format!("Failed to execute Python script: {}", e)),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -216,6 +259,7 @@ pub fn run() {
             ping_mcp_server,
             kill_mcp_server,
             sha256_hash,
+            execute_python_script,
             commands::market_data::get_market_quote,
             commands::market_data::get_market_quotes,
             commands::market_data::get_period_returns,

@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
+import { APP_VERSION } from '@/constants/version';
 import ForumTab from '@/components/tabs/ForumTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import MarketsTab from '@/components/tabs/MarketsTab';
@@ -21,6 +22,7 @@ import EconomicCalendarTab from '@/components/tabs/EconomicCalendarTab';
 import ScreenerTab from '@/components/tabs/ScreenerTab';
 import AlertsTab from '@/components/tabs/AlertsTab';
 import DBnomicsTab from '@/components/tabs/DBnomicsTab';
+import EconomicsTab from '@/components/tabs/EconomicsTab';
 import CodeEditorTab from '@/components/tabs/CodeEditorTab';
 import DocsTab from '@/components/tabs/DocsTab';
 import MaritimeTab from '@/components/tabs/MaritimeTab';
@@ -129,7 +131,21 @@ export default function FinxeptTerminal() {
     document.documentElement.style.backgroundColor = '#000000';
     document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'none';
-    
+
+    // Initialize database on app start
+    (async () => {
+      try {
+        const { sqliteService } = await import('@/services/sqliteService');
+        if (!sqliteService.isReady()) {
+          console.log('Initializing database on app start...');
+          await sqliteService.initialize();
+          console.log('Database initialized successfully');
+        }
+      } catch (error) {
+        console.error('Failed to initialize database on app start:', error);
+      }
+    })();
+
     return () => {
       document.body.style.overflow = 'auto';
       document.body.style.overscrollBehavior = 'auto';
@@ -326,7 +342,7 @@ export default function FinxeptTerminal() {
     { label: 'Video Tutorials', icon: null, separator: true },
     { label: 'Contact Support', icon: null },
     { label: 'Report Bug', icon: null, separator: true },
-    { label: 'About Finxept', icon: null }
+    { label: `About Finxept v${APP_VERSION}`, icon: null }
   ];
 
   const tabStyles = {
@@ -626,6 +642,12 @@ export default function FinxeptTerminal() {
               DBnomics
             </TabsTrigger>
             <TabsTrigger
+              value="economics"
+              style={activeTab === 'economics' ? tabStyles.active : tabStyles.default}
+            >
+              Economics
+            </TabsTrigger>
+            <TabsTrigger
               value="code"
               style={activeTab === 'code' ? tabStyles.active : tabStyles.default}
             >
@@ -672,12 +694,12 @@ export default function FinxeptTerminal() {
               style={activeTab === 'datamapping' ? tabStyles.active : tabStyles.default}
             >
               Data Mapping
+            </TabsTrigger>
             <TabsTrigger
               value="support"
               style={activeTab === 'support' ? tabStyles.active : tabStyles.default}
             >
               Support
-            </TabsTrigger>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -701,6 +723,8 @@ export default function FinxeptTerminal() {
         <span style={{ color: '#a3a3a3', fontSize: '10px' }}>Search</span>
         <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
         <span style={{ color: '#a3a3a3', fontSize: '10px' }}>2025-09-26 14:00:49</span>
+        <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
+        <span style={{ color: '#10b981', fontSize: '10px', fontWeight: 'bold' }}>v{APP_VERSION}</span>
         {isFullscreen && (
           <>
             <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
@@ -796,6 +820,9 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="dbnomics" className="h-full m-0 p-0">
             <DBnomicsTab />
+          </TabsContent>
+          <TabsContent value="economics" className="h-full m-0 p-0">
+            <EconomicsTab />
           </TabsContent>
           <TabsContent value="code" className="h-full m-0 p-0">
             <CodeEditorTab />
