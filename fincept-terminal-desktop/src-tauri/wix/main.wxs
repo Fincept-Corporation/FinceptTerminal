@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product
+        Id="*"
+        Name="Fincept Terminal"
+        Language="1033"
+        Version="1.0.0"
+        Manufacturer="Fincept Corporation"
+        UpgradeCode="{{upgrade_code}}">
+
+        <Package
+            InstallerVersion="200"
+            Compressed="yes"
+            InstallScope="perUser"
+            Description="Professional-grade financial analysis platform" />
+
+        <MajorUpgrade
+            DowngradeErrorMessage="A newer version of Fincept Terminal is already installed."
+            Schedule="afterInstallInitialize" />
+
+        <MediaTemplate EmbedCab="yes" />
+
+        <!-- Main Feature -->
+        <Feature Id="MainApplication" Title="Fincept Terminal" Level="1">
+            <ComponentGroupRef Id="ProductComponents" />
+        </Feature>
+
+        <!-- Custom action to remove AppData on uninstall -->
+        <Property Id="REMOVEAPPDATA" Value="1" />
+
+        <CustomAction
+            Id="RemoveAppDataFolder"
+            Directory="LOCALAPPDATA"
+            ExeCommand='cmd.exe /C "rmdir /s /q "%LOCALAPPDATA%\com.fincept.terminal" && rmdir /s /q "%APPDATA%\com.fincept.terminal""'
+            Execute="deferred"
+            Impersonate="yes"
+            Return="ignore" />
+
+        <InstallExecuteSequence>
+            <Custom Action="RemoveAppDataFolder" Before="RemoveFiles">
+                (NOT UPGRADINGPRODUCTCODE) AND (REMOVE="ALL")
+            </Custom>
+        </InstallExecuteSequence>
+
+    </Product>
+
+    <!-- Directory structure -->
+    <Fragment>
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="LocalAppDataFolder">
+                <Directory Id="APPLICATIONFOLDER" Name="Fincept Terminal">
+                    {{component_groups}}
+                </Directory>
+            </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ApplicationProgramsFolder" Name="Fincept Terminal"/>
+            </Directory>
+        </Directory>
+    </Fragment>
+
+    <!-- Components -->
+    <Fragment>
+        <ComponentGroup Id="ProductComponents" Directory="APPLICATIONFOLDER">
+            <!-- Tauri will inject components here -->
+            {{components}}
+
+            <!-- Additional cleanup component -->
+            <Component Id="CleanupComponent" Guid="*">
+                <RemoveFolder Id="RemoveApplicationFolder" Directory="APPLICATIONFOLDER" On="uninstall"/>
+                <RemoveFolder Id="RemoveLocalAppData" Directory="LOCALAPPDATA" On="uninstall"/>
+                <RegistryValue Root="HKCU" Key="Software\Fincept Corporation\Fincept Terminal"
+                               Name="Installed" Type="integer" Value="1" KeyPath="yes"/>
+            </Component>
+        </ComponentGroup>
+    </Fragment>
+</Wix>
