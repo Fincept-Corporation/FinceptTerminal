@@ -11,7 +11,7 @@ import requests
 from typing import Dict, Any
 
 # API Configuration
-API_KEY = os.environ.get('VBL1E8236OO8253H', '')
+API_KEY = os.environ.get('', '')
 BASE_URL = "https://www.alphavantage.co/query"
 
 
