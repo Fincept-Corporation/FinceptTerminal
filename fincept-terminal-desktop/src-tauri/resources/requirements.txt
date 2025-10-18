@@ -1,3 +1,4 @@
 yfinance>=0.2.66
 pandas>=2.3.3
 numpy>=2.3.3
+databento>=0.52.0
