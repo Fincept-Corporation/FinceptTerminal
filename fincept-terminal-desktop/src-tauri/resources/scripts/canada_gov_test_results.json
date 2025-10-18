@@ -1,0 +1,62 @@
+[
+  {
+    "endpoint": "Get Publishers (Catalogue)",
+    "status": "success",
+    "data_count": 354
+  },
+  {
+    "endpoint": "Get Datasets by Publisher (Statistics Canada)",
+    "status": "insufficient_data",
+    "error": "Not enough data items"
+  },
+  {
+    "endpoint": "Search Datasets (CPI)",
+    "status": "success",
+    "data_count": 5
+  },
+  {
+    "endpoint": "Get Dataset Details (CPI)",
+    "status": "api_error",
+    "error": "Request timeout. The Government of Canada API is taking too long to respond."
+  },
+  {
+    "endpoint": "Get Dataset Resources (CPI)",
+    "status": "api_error",
+    "error": "HTTP Error: 404 - {\"help\": \"https://open.canada.ca/data/api/3/action/help_show?name=package_show\", \"error\": {\"__type\": \"Not Found Error\", \"message\": \"Not found\"}, \"success\": false}"
+  },
+  {
+    "endpoint": "Get Recent Datasets",
+    "status": "success",
+    "data_count": 10
+  },
+  {
+    "endpoint": "Get Popular Publishers",
+    "status": "success",
+    "data_count": 10
+  },
+  {
+    "endpoint": "Invalid Publisher ID (Error Handling)",
+    "status": "success",
+    "data_count": 0
+  },
+  {
+    "endpoint": "Invalid Dataset ID (Error Handling)",
+    "status": "api_error",
+    "error": "HTTP Error: 404 - {\"help\": \"https://open.canada.ca/data/api/3/action/help_show?name=package_show\", \"error\": {\"__type\": \"Not Found Error\", \"message\": \"Not found\"}, \"success\": false}"
+  },
+  {
+    "endpoint": "Get Publisher Details (Statistics Canada)",
+    "status": "api_error",
+    "error": "HTTP Error: 404 - {\"help\": \"https://open.canada.ca/data/api/3/action/help_show?name=organization_show\", \"error\": {\"__type\": \"Not Found Error\", \"message\": \"Not found\"}, \"success\": false}"
+  },
+  {
+    "endpoint": "Get Resource Info",
+    "status": "api_error",
+    "error": "HTTP Error: 404 - {\"help\": \"https://open.canada.ca/data/api/3/action/help_show?name=resource_show\", \"error\": {\"__type\": \"Not Found Error\", \"message\": \"Not found\"}, \"success\": false}"
+  },
+  {
+    "endpoint": "Resource Preview (CSV URL)",
+    "status": "api_error",
+    "error": "Failed to download resource: 404 Client Error: Not Found for url: https://www150.statcan.gc.ca/t1/tbl1/en/csv/18100004-eng.zip"
+  }
+]
