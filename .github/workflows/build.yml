@@ -1,9 +1,7 @@
 name: Build FinceptTerminal
 
 on:
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch: # Allows manual trigger
+  workflow_dispatch:
 
 jobs:
   build:
