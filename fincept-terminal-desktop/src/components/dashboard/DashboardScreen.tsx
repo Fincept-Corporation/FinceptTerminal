@@ -34,6 +34,7 @@ import DataMappingTab from '@/components/tabs/data-mapping/DataMappingTab';
 import MCPTab from '@/components/tabs/mcp';
 import FyersTab from '@/components/tabs/fyers';
 import SupportTicketTab from '@/components/tabs/SupportTicketTab';
+import PolygonEqTab from '@/components/tabs/PolygonEqTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -606,6 +607,12 @@ export default function FinxeptTerminal() {
               Equity Research
             </TabsTrigger>
             <TabsTrigger
+              value="polygon"
+              style={activeTab === 'polygon' ? tabStyles.active : tabStyles.default}
+            >
+              Polygon EQ
+            </TabsTrigger>
+            <TabsTrigger
               value="fixedincome"
               style={activeTab === 'fixedincome' ? tabStyles.active : tabStyles.default}
             >
@@ -802,6 +809,9 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="research" className="h-full m-0 p-0">
             <EquityResearchTab />
+          </TabsContent>
+          <TabsContent value="polygon" className="h-full m-0 p-0">
+            <PolygonEqTab />
           </TabsContent>
           <TabsContent value="fixedincome" className="h-full m-0 p-0">
             <FixedIncomeTab />
