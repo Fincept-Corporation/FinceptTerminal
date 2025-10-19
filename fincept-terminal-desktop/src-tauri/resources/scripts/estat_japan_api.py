@@ -71,7 +71,7 @@ def _make_request(endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dic
         data = response.json()
 
         # Check for e-Stat API errors
-        if isinstance(data, dict) and data.get('GET_STATS_LIST') or data.get('GET_META_INFO') or data.get('GET_STATS_DATA'):
+        if isinstance(data, dict) and (data.get('GET_STATS_LIST') or data.get('GET_META_INFO') or data.get('GET_STATS_DATA')):
             # Valid e-Stat response structure
             result_data = data
         else:
