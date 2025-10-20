@@ -14,6 +14,13 @@ fincept_env
 *.md
 *.db
 !README.md
+!README.es.md
+!README.fr.md
+!README.zh-CN.md
+!README.ja.md
+!README.ko.md
+!README.de.md
+!README.hi.md
 python
 treeview.py
 testing
