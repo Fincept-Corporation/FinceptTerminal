@@ -63,7 +63,7 @@ Inspiriert von Bloomberg und Refinitiv liefert Fincept Terminal Echtzeit-Marktda
 
 ### **Option 3: Aus der Quelle erstellen**
 
-#### 🚀**Quick Setup (Automated)**
+#### 🚀**Schnelle Einrichtung (automatisiert)**
 
 **Für Windows:**
 
@@ -93,7 +93,7 @@ Das automatisierte Setup-Skript führt Folgendes aus:
 -   ✅ Installieren Sie Node.js LTS (v22.14.0)
 -   ✅ Installiere Rust (neueste stabile Version)
 -   ✅ Projektabhängigkeiten installieren
--   ✅ Set up everything automatically
+-   ✅ Alles automatisch einrichten
 
 #### ⚙️**Manuelle Einrichtung**
 
@@ -184,7 +184,7 @@ npm run tauri build
 
 ## 🛣️ Roadmap
 
-### **Current Status**
+### **Aktueller Status**
 
 -   ✅ Tauri-Anwendungsframework
 -   ✅ Authentifizierungssystem (Gast + registriert)
@@ -213,7 +213,7 @@ npm run tauri build
 
 * * *
 
-## 🤝 Mitwirken
+## 🤝 Mitmachen
 
 Wir freuen uns über Beiträge von Entwicklern, Händlern und Finanzexperten!
 
@@ -323,7 +323,7 @@ npm run tauri dev    # Start Tauri app
 
 ## 📜 Lizenz
 
-MIT License - see [LIZENZ.txt](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)
+MIT License - see[LIZENZ.txt](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)
 
 * * *
 
