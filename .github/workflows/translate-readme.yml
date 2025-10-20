@@ -1,0 +1,49 @@
+name: Translate README
+
+on:
+  push:
+    paths:
+      - 'README.md'
+  workflow_dispatch:
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Translate to Spanish
+        uses: dephraiim/translate-readme@main
+        with:
+          LANG: es
+
+      - name: Translate to Chinese
+        uses: dephraiim/translate-readme@main
+        with:
+          LANG: zh-CN
+
+      - name: Translate to Japanese
+        uses: dephraiim/translate-readme@main
+        with:
+          LANG: ja
+
+      - name: Translate to French
+        uses: dephraiim/translate-readme@main
+        with:
+          LANG: fr
+      - name: Translate to Korean
+        uses: dephraiim/translate-readme@main
+        with:
+          LANG: ko
+      - name: Translate to German
+        uses: dephraiim/translate-readme@main
+        with:
+          LANG: de
+      - name: Translate to Hindi
+        uses: dephraiim/translate-readme@main
+        with:
+          LANG: hi
+
