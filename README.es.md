@@ -22,7 +22,7 @@
 
 ## 🎯 ¿Qué es Fincept Terminal?
 
-**Terminal Fincept**es una terminal financiera moderna y multiplataforma construida con**Privación**,**Reaccionar**, y**Mecanografiado**. Ofrece herramientas de análisis financiero de nivel institucional a inversores y comerciantes minoristas, completamente gratuitas y de código abierto.
+**Terminal Fincept**es una terminal financiera moderna y multiplataforma construida con**Privación**, **Reaccionar**, y**Mecanografiado**. Ofrece herramientas de análisis financiero de nivel institucional a inversores y comerciantes minoristas, completamente gratuitas y de código abierto.
 
 Inspirada en Bloomberg y Refinitiv, Fincept Terminal ofrece datos de mercado en tiempo real, análisis avanzados, conocimientos basados ​​en IA y una interfaz profesional, todo sin el precio empresarial.
 
