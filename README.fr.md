@@ -268,7 +268,7 @@ npm run tauri dev    # Start Tauri app
 
 * * *
 
-## 📊 Technical Details
+## 📊 Détails techniques
 
 **Performance:**
 
