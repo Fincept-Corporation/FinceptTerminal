@@ -135,7 +135,8 @@ npm run tauri build
 
 ### 📈 전문 도구
 
-📊 고급 차트(50개 이상의 지표)<br>💼 회사 재무 및 연구<br>📋 다중 계정 포트폴리오 추적<br>⚡ 백테스팅 전략<br>🔔 맞춤형 가격 및 기술 알림
+📊 고급 차트(50개 이상의 지표)<br>💼 회사 재무 및 연구<br>📋 다중 계정 포트폴리오 추적<br>⚡ 백테스팅 전략<br>
+🔔 Custom price & technical alerts
 
 ### 🌐 글로벌 인사이트
 
@@ -195,7 +196,7 @@ npm run tauri build
 -   🚧 고급 차트 작성
 -   🚧 AI 비서
 
-### **Coming Soon (Q2 2025)**
+### **출시 예정(2025년 2분기)**
 
 -   📊 완전한 시장 데이터 스트리밍
 -   📈 50개 이상의 지표가 포함된 대화형 차트
@@ -313,7 +314,7 @@ npm run tauri dev    # Start Tauri app
 
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?style=for-the-badge&logo=github)](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)[![Email Support](https://img.shields.io/badge/Email-dev@fincept.in-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:dev@fincept.in)[![Contact Form](https://img.shields.io/badge/Contact-Form-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://forms.gle/DUsDHwxBNRVstYMi6)
 
-**커뮤니티에 의해, 커뮤니티를 위해 구축됨**_누구나 전문적인 재무 분석에 접근할 수 있도록 만들기_
+**커뮤니티에 의해, 커뮤니티를 위해 구축됨**_모든 사람이 전문적인 재무 분석에 접근할 수 있도록 만들기_
 
 ⭐**우리를 스타**• 🔄**공유하다**• 🤝**기여하다**
 
@@ -321,7 +322,7 @@ npm run tauri dev    # Start Tauri app
 
 * * *
 
-## 📜 라이센스
+## 📜 라이선스
 
 MIT 라이센스 - 참조[라이센스.txt](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)
 
