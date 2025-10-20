@@ -200,7 +200,7 @@ npm run tauri build
 -   📊 Streaming complet des données de marché
 -   📈 Graphiques interactifs avec plus de 50 indicateurs
 -   🤖 Production AI features
--   💼 Portfolio management
+-   💼 Gestion de portefeuille
 -   🔔 Système d'alerte
 
 ### **Avenir**
@@ -268,7 +268,7 @@ npm run tauri dev    # Start Tauri app
 
 * * *
 
-## 📊 Détails techniques
+## 📊 Technical Details
 
 **Performance:**
 
@@ -282,7 +282,7 @@ npm run tauri dev    # Start Tauri app
 -   ✅ macOS 11+ (Intel, Apple Silicon)
 -   ✅Linux (Ubuntu, Debian, Fedora)
 
-**Security:**
+**Sécurité:**
 
 -   Environnement bac à sable Tauri
 -   Pas d'exécution Node.js
