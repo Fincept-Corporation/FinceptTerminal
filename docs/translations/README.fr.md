@@ -16,6 +16,30 @@
 
 <!-- DOWNLOAD_SECTION_START -->
 
+## 📥 Téléchargez la dernière version
+
+**Version:**`v3.0.0`\|**Commettre:**`7a750c4`\|**Libéré:**2025-10-22 11:47 UTC
+
+### 🎯 Téléchargements directs - Cliquez pour télécharger immédiatement !
+
+| Plate-forme    | Architecture           | Téléchargement direct                                                                                                                                             |
+| -------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🍎**macOS**    | Apple Silicium (ARM64) | [⬇️**Télécharger .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
+| 🍎**macOS**    | Intel (x64)            | [⬇️**Télécharger .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
+| 🐧**Linux**    | x64 (AppImage)         | [⬇️**Télécharger .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**Linux**    | x64 (Debian)           | [⬇️**Télécharger .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
+| 🪟**Fenêtres** | hshch                  | [⬇️**Télécharger .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
+
+> ✨**Téléchargements en un clic !**Le téléchargement de ces liens commencera immédiatement – ​​aucune connexion GitHub requise !
+
+### 📊 Statut et informations de la construction
+
+![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)![Latest Release](https://img.shields.io/github/v/release/Fincept-Corporation/FinceptTerminal?include_prereleases&label=Latest%20Build)![Downloads](https://img.shields.io/github/downloads/Fincept-Corporation/FinceptTerminal/total?label=Total%20Downloads)
+
+**Page de sortie :**[Afficher toutes les versions et journaux des modifications](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+* * *
+
 <!-- DOWNLOAD_SECTION_END -->
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
