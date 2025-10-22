@@ -16,6 +16,30 @@
 
 <!-- DOWNLOAD_SECTION_START -->
 
+## 📥 최신 빌드 다운로드
+
+**버전:**`v3.0.0`\|**저지르다:**`7a750c4`\|**출시된:**2025-10-22 11:47 UTC
+
+### 🎯 직접 다운로드 - 즉시 다운로드하려면 클릭하세요!
+
+| 플랫폼         | 건축학           | 직접 다운로드                                                                                                                                                  |
+| ----------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🍎**macOS** | 애플 실리콘(ARM64) | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)       |
+| 🍎**macOS** | 인텔(x64)       | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)         |
+| 🐧**리눅스**   | x64(앱이미지)     | [⬇️**.App이미지 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**리눅스**   | x64(데비안)      | [⬇️**.deb 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)         |
+| 🪟**윈도우**   | 쉿             | [⬇️**.msi 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)       |
+
+> ✨**원클릭 다운로드!**이 링크는 즉시 다운로드되기 시작합니다. GitHub 로그인이 필요하지 않습니다!
+
+### 📊 빌드 상태 및 정보
+
+![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)![Latest Release](https://img.shields.io/github/v/release/Fincept-Corporation/FinceptTerminal?include_prereleases&label=Latest%20Build)![Downloads](https://img.shields.io/github/downloads/Fincept-Corporation/FinceptTerminal/total?label=Total%20Downloads)
+
+**릴리스 페이지:**[모든 릴리스 및 변경 로그 보기](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+* * *
+
 <!-- DOWNLOAD_SECTION_END -->
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
@@ -26,7 +50,7 @@
 
 ## 🎯 핀셉트 터미널이란?
 
-**핀셉트 터미널**현대적인 크로스 플랫폼 금융 터미널입니다.**고난**,**반응하다**, 그리고**타입스크립트**. 개인 투자자와 거래자에게 기관 수준의 재무 분석 도구를 완전 무료 오픈 소스로 제공합니다.
+**핀셉트 터미널**현대적인 크로스 플랫폼 금융 터미널입니다.**고난**,**반응하다**, 그리고**타입스크립트**. 이는 소매 투자자와 거래자에게 기관 수준의 재무 분석 도구를 제공하며 완전히 무료이며 오픈 소스입니다.
 
 Bloomberg 및 Refinitiv에서 영감을 받은 Fincept Terminal은 기업 가격표 없이 실시간 시장 데이터, 고급 분석, AI 기반 통찰력 및 전문 인터페이스를 모두 제공합니다.
 
@@ -177,7 +201,7 @@ npm run tauri build
 | ![GlobalTrade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png) | ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png) |
 |                                                      국제 무역 흐름                                                     |                                                실시간 다중 자산 시장                                               |
 
-|                                                          무역분석                                                         |
+|                                                         무역 분석                                                         |
 | :-------------------------------------------------------------------------------------------------------------------: |
 | ![TradeAnalysis](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/TradeAnalysis.png) |
 |                                                      고급 분석 및 백테스트                                                     |

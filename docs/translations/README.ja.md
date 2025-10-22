@@ -16,6 +16,30 @@
 
 <!-- DOWNLOAD_SECTION_START -->
 
+## 📥 最新ビルドをダウンロード
+
+**バージョン:**`v3.0.0`\|**専念：**`7a750c4`\|**リリース:**2025-10-22 11:47 UTC
+
+### 🎯 直接ダウンロード - クリックしてすぐにダウンロードしてください!
+
+| プラットフォーム    | 建築              | 直接ダウンロード                                                                                                                                                     |
+| ----------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 🍎**macOS** | アップルシリコン（ARM64） | [⬇️**.dmgをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
+| 🍎**macOS** | インテル (x64)      | [⬇️**.dmgをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
+| 🐧**Linux** | x64 (アプリイメージ)   | [⬇️**.AppImageをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**Linux** | x64 (Debian)    | [⬇️**.debをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
+| 🪟**窓**     | ふーん             | [⬇️**.msiをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
+
+> ✨**ワンクリックでダウンロード！**これらのリンクはすぐにダウンロードを開始します。GitHub へのログインは必要ありません。
+
+### 📊 ビルドのステータスと情報
+
+![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)![Latest Release](https://img.shields.io/github/v/release/Fincept-Corporation/FinceptTerminal?include_prereleases&label=Latest%20Build)![Downloads](https://img.shields.io/github/downloads/Fincept-Corporation/FinceptTerminal/total?label=Total%20Downloads)
+
+**リリースページ:**[すべてのリリースと変更ログを表示する](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+* * *
+
 <!-- DOWNLOAD_SECTION_END -->
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
@@ -237,7 +261,7 @@ npm run tauri build
 -   [アーキテクチャに関するドキュメント](docs/ARCHITECTURE.md)
 -   [Python 貢献者ガイド](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
 -   [TypeScript 貢献者ガイド](docs/TYPESCRIPT_CONTRIBUTOR_GUIDE.md)
--   [Rust Contributor Guide](docs/RUST_CONTRIBUTOR_GUIDE.md)
+-   [Rust 貢献者ガイド](docs/RUST_CONTRIBUTOR_GUIDE.md)
 -   [バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)
 -   [リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)
 -   [ディスカッション](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
