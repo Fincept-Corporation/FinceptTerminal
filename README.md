@@ -21,6 +21,56 @@
 
 <!-- DOWNLOAD_SECTION_START -->
 
+## 📥 Download Latest Build
+
+**Version:** `v3.0.0` | **Commit:** `7a750c4` | **Released:** 2025-10-22 11:47 UTC
+
+### 🎯 Direct Downloads - Click to Download Immediately!
+
+| Platform | Architecture | Direct Download |
+|----------|-------------|----------------|
+| 🍎 **macOS** | Apple Silicon (ARM64) | [⬇️ **Download .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg) |
+| 🍎 **macOS** | Intel (x64) | [⬇️ **Download .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg) |
+| 🐧 **Linux** | x64 (AppImage) | [⬇️ **Download .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧 **Linux** | x64 (Debian) | [⬇️ **Download .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb) |
+| 🪟 **Windows** | x64 | [⬇️ **Download .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi) |
+
+> ✨ **One-Click Downloads!** These links will start downloading immediately - no GitHub login required!
+
+### 🛠️ Installation Instructions
+
+#### 🍎 **macOS**
+1. Click the download link above for your Mac type (Apple Silicon or Intel)
+2. Open the downloaded `.dmg` file
+3. Drag **FinceptTerminal** to your Applications folder
+4. Launch from Applications or Spotlight search
+
+#### 🐧 **Linux**
+
+**AppImage (Recommended - works on all distributions):**
+1. Download the `.AppImage` file
+2. Make it executable: `chmod +x FinceptTerminal-*.AppImage`
+3. Run it: `./FinceptTerminal-*.AppImage`
+
+**Debian/Ubuntu (.deb package):**
+1. Download the `.deb` file
+2. Install: `sudo dpkg -i FinceptTerminal-*.deb`
+3. Launch from applications menu or run `finceptterminal`
+
+#### 🪟 **Windows**
+1. Download the `.msi` installer
+2. Run the installer and follow the setup wizard
+3. Launch from Start Menu or Desktop shortcut
+
+### 📊 Build Status & Info
+
+![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)
+![Latest Release](https://img.shields.io/github/v/release/Fincept-Corporation/FinceptTerminal?include_prereleases&label=Latest%20Build)
+![Downloads](https://img.shields.io/github/downloads/Fincept-Corporation/FinceptTerminal/total?label=Total%20Downloads)
+
+**Release Page:** [View all releases and changelogs](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+---
 <!-- DOWNLOAD_SECTION_END -->
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
