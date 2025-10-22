@@ -6,13 +6,17 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-[英語](README.md)\|[スペイン語](README.es.md)\|[中文](README.zh-CN.md)\|[日本語](README.ja.md)\|[フランス語](README.fr.md)\|[ドイツ語](README.de.md)\|[韓国人](README.ko.md)\|[ヒンディー語](README.hi.md)
+[英語](README.md)\|[スペイン語](docs/translations/README.es.md)\|[中文](docs/translations/README.zh-CN.md)\|[日本語](docs/translations/README.ja.md)\|[フランス語](docs/translations/README.fr.md)\|[ドイツ語](docs/translations/README.de.md)\|[韓国人](docs/translations/README.ko.md)\|[ヒンディー語](docs/translations/README.hi.md)
 
 ### _プロフェッショナルな財務分析プラットフォーム_
 
 **ブルームバーグレベルの洞察を誰にでも。オープンソース。クロスプラットフォーム。**
 
 [📥 ダウンロード](#-getting-started)•[✨ 特徴](#-features)•[📸 スクリーンショット](#-platform-preview)•[🤝 貢献する](#-contributing)
+
+<!-- DOWNLOAD_SECTION_START -->
+
+<!-- DOWNLOAD_SECTION_END -->
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -227,7 +231,13 @@ npm run tauri build
 
 **クイックリンク:**
 
--   [貢献ガイドライン](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/CONTRIBUTING.md)
+-   [貢献ガイドライン](docs/CONTRIBUTING.md)
+-   [行動規範](docs/CODE_OF_CONDUCT.md)
+-   [スタートガイド](docs/GETTING_STARTED.md)
+-   [アーキテクチャに関するドキュメント](docs/ARCHITECTURE.md)
+-   [Python 貢献者ガイド](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
+-   [TypeScript 貢献者ガイド](docs/TYPESCRIPT_CONTRIBUTOR_GUIDE.md)
+-   [Rust Contributor Guide](docs/RUST_CONTRIBUTOR_GUIDE.md)
 -   [バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)
 -   [リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)
 -   [ディスカッション](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
