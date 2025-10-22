@@ -11,11 +11,12 @@ build.txt
 cmder
 reqgen.py
 fincept_env
+*.md
 *.db
 # Allow specific markdown files
 !README.md
-!CLAUDE.md
 !docs/**/*.md
+!.github/**/*.md
 python
 treeview.py
 testing
