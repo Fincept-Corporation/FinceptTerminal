@@ -6,13 +6,17 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-[अंग्रेज़ी](README.md)\|[स्पैनिश](README.es.md)\|[चीनी](README.zh-CN.md)\|[जापानी](README.ja.md)\|[फ़्रेंच](README.fr.md)\|[जर्मन](README.de.md)\|[कोरियाई](README.ko.md)\|[हिन्दी](README.hi.md)
+[अंग्रेज़ी](README.md)\|[स्पैनिश](docs/translations/README.es.md)\|[चीनी](docs/translations/README.zh-CN.md)\|[जापानी](docs/translations/README.ja.md)\|[फ़्रेंच](docs/translations/README.fr.md)\|[जर्मन](docs/translations/README.de.md)\|[कोरियाई](docs/translations/README.ko.md)\|[हिन्दी](docs/translations/README.hi.md)
 
 ### _व्यावसायिक वित्तीय विश्लेषण मंच_
 
 **सभी के लिए ब्लूमबर्ग-स्तरीय अंतर्दृष्टि। खुला स्त्रोत। क्रॉस-प्लेटफ़ॉर्म।**
 
 [📥 Download](#-getting-started)•[✨ विशेषताएँ](#-features)•[📸 स्क्रीनशॉट](#-platform-preview)•[🤝 योगदान करें](#-contributing)
+
+<!-- DOWNLOAD_SECTION_START -->
+
+<!-- DOWNLOAD_SECTION_END -->
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -158,7 +162,7 @@ npm run tauri build
 | ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png) | ![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png) |
 |                                      एआई-संचालित वित्तीय सहायक                                      |                                           वास्तविक समय बाज़ार अवलोकन                                          |
 
-|                                                अर्थव्यवस्था                                               |                                             इक्विटी अनुसंधान                                            |
+|                                                अर्थव्यवस्था                                               |                                             Equity Research                                             |
 | :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: |
 | ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) | ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) |
 |                                           वैश्विक आर्थिक संकेतक                                           |                                          व्यापक स्टॉक विश्लेषण                                          |
@@ -166,7 +170,7 @@ npm run tauri build
 |                                                  मंच                                                  |                                                     भूराजनीति                                                     |
 | :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
 | ![Forum](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Forum.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
-|                                           सामुदायिक चर्चाएँ                                           |                                               वैश्विक जोखिम निगरानी                                               |
+|                                         Community discussions                                         |                                               वैश्विक जोखिम निगरानी                                               |
 
 |                                                  वैश्विक व्यापार                                                  |                                                   बाज़ार                                                  |
 | :---------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------: |
@@ -227,7 +231,13 @@ npm run tauri build
 
 **त्वरित सम्पक:**
 
--   [योगदान दिशानिर्देश](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/CONTRIBUTING.md)
+-   [योगदान दिशानिर्देश](docs/CONTRIBUTING.md)
+-   [आचार संहिता](docs/CODE_OF_CONDUCT.md)
+-   [गेटिंग स्टार्टेड गाइड](docs/GETTING_STARTED.md)
+-   [वास्तुकला दस्तावेज़ीकरण](docs/ARCHITECTURE.md)
+-   [पायथन योगदानकर्ता गाइड](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
+-   [टाइपस्क्रिप्ट योगदानकर्ता गाइड](docs/TYPESCRIPT_CONTRIBUTOR_GUIDE.md)
+-   [जंग योगदानकर्ता गाइड](docs/RUST_CONTRIBUTOR_GUIDE.md)
 -   [रिपोर्ट बग](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)
 -   [फ़ीचर का अनुरोध करें](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)
 -   [विचार विमर्श](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)

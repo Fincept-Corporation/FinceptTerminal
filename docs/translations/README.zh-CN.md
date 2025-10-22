@@ -6,13 +6,17 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-[英语](README.md)\|[西班牙语](README.es.md)\|[中文](README.zh-CN.md)\|[日本人](README.ja.md)\|[法语](README.fr.md)\|[德语](README.de.md)\|[韩国人](README.ko.md)\|[印地语](README.hi.md)
+[英语](README.md)\|[西班牙语](docs/translations/README.es.md)\|[中文](docs/translations/README.zh-CN.md)\|[日本人](docs/translations/README.ja.md)\|[法语](docs/translations/README.fr.md)\|[德语](docs/translations/README.de.md)\|[韩国人](docs/translations/README.ko.md)\|[印地语](docs/translations/README.hi.md)
 
 ### _专业财务分析平台_
 
 **为每个人提供彭博级的见解。开源。跨平台。**
 
 [📥 下载](#-getting-started)•[✨ 特点](#-features)•[📸 截图](#-platform-preview)•[🤝 贡献](#-contributing)
+
+<!-- DOWNLOAD_SECTION_START -->
+
+<!-- DOWNLOAD_SECTION_END -->
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -184,7 +188,7 @@ npm run tauri build
 
 ## 🛣️路线图
 
-### **目前状态**
+### **目前状况**
 
 -   ✅ Tauri 应用框架
 -   ✅ 认证系统（访客+注册）
@@ -207,7 +211,7 @@ npm run tauri build
 
 -   🌍 多语言支持
 -   🏢 经纪商整合
--   📱 移动配套应用程序
+-   📱 移动伴侣应用程序
 -   🔌插件系统
 -   🎨 主题市场
 
@@ -227,7 +231,13 @@ npm run tauri build
 
 **快速链接：**
 
--   [贡献指南](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/CONTRIBUTING.md)
+-   [贡献指南](docs/CONTRIBUTING.md)
+-   [行为守则](docs/CODE_OF_CONDUCT.md)
+-   [入门指南](docs/GETTING_STARTED.md)
+-   [架构文档](docs/ARCHITECTURE.md)
+-   [Python 贡献者指南](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
+-   [TypeScript 贡献者指南](docs/TYPESCRIPT_CONTRIBUTOR_GUIDE.md)
+-   [Rust 贡献者指南](docs/RUST_CONTRIBUTOR_GUIDE.md)
 -   [报告错误](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)
 -   [请求功能](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)
 -   [讨论](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
