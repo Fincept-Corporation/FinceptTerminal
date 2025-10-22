@@ -17,7 +17,8 @@ fincept_env
 !README.md
 !docs/**/*.md
 !.github/**/*.md
-python
+# Allow embedded Python in resources
+!fincept-terminal-desktop/src-tauri/resources/python/
 treeview.py
 testing
 fincept-terminal-desktop/.vscode
@@ -41,6 +42,8 @@ fincept_terminal/watchlist_settings.json
 upx.exe
 fincept_icon.ico
 legacy-python-depreciated/python
+python
+!fincept-terminal-desktop/src-tauri/resources/python/**
 fincept-terminal-desktop/node_modules
 setup.iss
 upx.exe"build/"
