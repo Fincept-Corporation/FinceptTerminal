@@ -6,13 +6,17 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-[영어](README.md)\|[스페인 사람](README.es.md)\|[중국인](README.zh-CN.md)\|[일본어](README.ja.md)\|[프랑스 국민](README.fr.md)\|[독일 사람](README.de.md)\|[한국어](README.ko.md)\|[힌디 어](README.hi.md)
+[영어](README.md)\|[스페인 사람](docs/translations/README.es.md)\|[중국인](docs/translations/README.zh-CN.md)\|[일본어](docs/translations/README.ja.md)\|[프랑스 국민](docs/translations/README.fr.md)\|[독일 사람](docs/translations/README.de.md)\|[한국어](docs/translations/README.ko.md)\|[힌디 어](docs/translations/README.hi.md)
 
 ### _전문 재무 분석 플랫폼_
 
 **모두를 위한 Bloomberg 수준의 통찰력. 오픈 소스. 크로스 플랫폼.**
 
 [📥 다운로드](#-getting-started)•[✨ 특징](#-features)•[📸 스크린샷](#-platform-preview)•[🤝 기여](#-contributing)
+
+<!-- DOWNLOAD_SECTION_START -->
+
+<!-- DOWNLOAD_SECTION_END -->
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -227,7 +231,13 @@ npm run tauri build
 
 **빠른 링크:**
 
--   [기여 지침](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/CONTRIBUTING.md)
+-   [기여 지침](docs/CONTRIBUTING.md)
+-   [행동 강령](docs/CODE_OF_CONDUCT.md)
+-   [시작하기 가이드](docs/GETTING_STARTED.md)
+-   [아키텍처 문서](docs/ARCHITECTURE.md)
+-   [Python 기여자 가이드](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
+-   [TypeScript 기여자 가이드](docs/TYPESCRIPT_CONTRIBUTOR_GUIDE.md)
+-   [Rust 기여자 가이드](docs/RUST_CONTRIBUTOR_GUIDE.md)
 -   [버그 신고](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)
 -   [기능 요청](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)
 -   [토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
@@ -313,7 +323,7 @@ npm run tauri dev    # Start Tauri app
 
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?style=for-the-badge&logo=github)](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)[![Email Support](https://img.shields.io/badge/Email-dev@fincept.in-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:dev@fincept.in)[![Contact Form](https://img.shields.io/badge/Contact-Form-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://forms.gle/DUsDHwxBNRVstYMi6)
 
-**커뮤니티에 의해, 커뮤니티를 위해 구축됨**_모든 사람이 전문적인 재무 분석에 접근할 수 있도록 만들기_
+**커뮤니티에 의해, 커뮤니티를 위해 구축됨**_누구나 전문적인 재무 분석에 접근할 수 있도록 만들기_
 
 ⭐**우리를 스타**• 🔄**공유하다**• 🤝**기여하다**
 
@@ -321,7 +331,7 @@ npm run tauri dev    # Start Tauri app
 
 * * *
 
-## 📜 라이선스
+## 📜 라이센스
 
 MIT 라이센스 - 참조[라이센스.txt](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)
 
