@@ -23,6 +23,7 @@ interface IndicatorData {
   country: string;
   transform: string;
   observations: Observation[];
+  observation_count?: number;
   metadata: any;
 }
 
