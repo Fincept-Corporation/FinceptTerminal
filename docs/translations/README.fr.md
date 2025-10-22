@@ -6,13 +6,17 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-[Anglais](README.md)\|[Espagnol](README.es.md)\|[Chinois](README.zh-CN.md)\|[japonais](README.ja.md)\|[Français](README.fr.md)\|[Allemand](README.de.md)\|[coréen](README.ko.md)\|[hindi](README.hi.md)
+[Anglais](README.md)\|[Espagnol](docs/translations/README.es.md)\|[Chinois](docs/translations/README.zh-CN.md)\|[japonais](docs/translations/README.ja.md)\|[Français](docs/translations/README.fr.md)\|[Allemand](docs/translations/README.de.md)\|[coréen](docs/translations/README.ko.md)\|[hindi](docs/translations/README.hi.md)
 
 ### _Plateforme d'analyse financière professionnelle_
 
 **Des informations de niveau Bloomberg pour tout le monde. Source ouverte. Multiplateforme.**
 
 [📥 Télécharger](#-getting-started)•[✨ Caractéristiques](#-features)•[📸 Captures d'écran](#-platform-preview)•[🤝 Contribuer](#-contributing)
+
+<!-- DOWNLOAD_SECTION_START -->
+
+<!-- DOWNLOAD_SECTION_END -->
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -227,7 +231,13 @@ Nous apprécions les contributions des développeurs, des traders et des profess
 
 **Liens rapides :**
 
--   [Lignes directrices de contribution](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/CONTRIBUTING.md)
+-   [Lignes directrices de contribution](docs/CONTRIBUTING.md)
+-   [Code de conduite](docs/CODE_OF_CONDUCT.md)
+-   [Guide de démarrage](docs/GETTING_STARTED.md)
+-   [Documentation architecturale](docs/ARCHITECTURE.md)
+-   [Guide du contributeur Python](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
+-   [Guide du contributeur TypeScript](docs/TYPESCRIPT_CONTRIBUTOR_GUIDE.md)
+-   [Guide du contributeur Rust](docs/RUST_CONTRIBUTOR_GUIDE.md)
 -   [Signaler un bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)
 -   [Fonctionnalité de demande](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)
 -   [Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
