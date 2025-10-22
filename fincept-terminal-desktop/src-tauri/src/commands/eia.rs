@@ -449,6 +449,8 @@ pub async fn get_eia_petroleum_markets_overview() -> Result<String, String> {
         ("spot_prices_crude_gas_heating", "crude,conventional_gas")
     ];
 
+    let categories_len = categories.len();
+
     for (category, tables) in categories {
         match get_eia_petroleum_status_report(
             category.to_string(),
@@ -463,7 +465,7 @@ pub async fn get_eia_petroleum_markets_overview() -> Result<String, String> {
 
     Ok(serde_json::json!({
         "petroleum_markets_overview": results,
-        "categories_analyzed": categories.len()
+        "categories_analyzed": categories_len
     }).to_string())
 }
 
@@ -478,7 +480,7 @@ pub async fn get_eia_natural_gas_markets_overview() -> Result<String, String> {
         ("05b", "US Regional Natural Gas Prices")
     ];
 
-    for (table, description) in gas_tables {
+    for (table, _description) in gas_tables {
         match get_eia_short_term_energy_outlook(
             table.to_string(),
             None,
@@ -579,9 +581,9 @@ pub async fn get_eia_energy_consumption_analysis() -> Result<String, String> {
 
     // Get consumption data from STEO
     let consumption_tables = vec![
-        ("04a", "PATCPUSX,PAFPPUS,PANIPUS"),  # Petroleum consumption
-        ("05a", "NGNWPUS,NGSFPUS,NGNIPUS"),     # Natural gas consumption
-        ("07a", "EPEOTWH,INEOTWH,CMEOTWH"),     # Electricity consumption
+        ("04a", "PATCPUSX,PAFPPUS,PANIPUS"),  // Petroleum consumption
+        ("05a", "NGNWPUS,NGSFPUS,NGNIPUS"),     // Natural gas consumption
+        ("07a", "EPEOTWH,INEOTWH,CMEOTWH"),     // Electricity consumption
     ];
 
     for (table, symbols) in consumption_tables {

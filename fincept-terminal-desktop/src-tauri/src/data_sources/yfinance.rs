@@ -187,7 +187,7 @@ impl YFinanceProvider {
     pub async fn get_period_returns(&self, symbol: &str) -> Option<(f64, f64)> {
         // Get current date and past dates
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-        let seven_days_ago = (chrono::Utc::now() - chrono::Duration::days(10)).format("%Y-%m-%d").to_string();
+        let _seven_days_ago = (chrono::Utc::now() - chrono::Duration::days(10)).format("%Y-%m-%d").to_string();
         let thirty_days_ago = (chrono::Utc::now() - chrono::Duration::days(35)).format("%Y-%m-%d").to_string();
 
         // Fetch historical data

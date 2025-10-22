@@ -731,7 +731,7 @@ pub async fn get_wto_global_trade_overview() -> Result<String, String> {
         None,
         None,
         None,
-        Some(100).to_string(),
+        Some(100),
         None,
         Some(1),
         None
@@ -783,7 +783,7 @@ pub async fn get_wto_sector_trade_analysis(
             None,
             None,
             None,
-            Some(100).to_string(),
+            Some(100),
             None,
             Some(1),
             None
@@ -831,7 +831,7 @@ pub async fn get_wto_comparative_trade_analysis(
             None,
             None,
             None,
-            Some(100).to_string(),
+            Some(100),
             None,
             Some(1),
             None

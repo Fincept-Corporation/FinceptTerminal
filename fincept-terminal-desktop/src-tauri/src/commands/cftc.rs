@@ -297,7 +297,7 @@ pub async fn get_cftc_precious_metals_cot(
     futures_only: Option<bool>,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let mut args = vec!["gold,silver,platinum,palladium"];
+    let mut args = vec!["gold,silver,platinum,palladium".to_string()];
     if let Some(report_type) = report_type {
         args.push(report_type);
     } else {
@@ -323,7 +323,7 @@ pub async fn get_cftc_energy_cot(
     futures_only: Option<bool>,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let mut args = vec!["crude_oil,natural_gas,gasoline,heating_oil"];
+    let mut args = vec!["crude_oil,natural_gas,gasoline,heating_oil".to_string()];
     if let Some(report_type) = report_type {
         args.push(report_type);
     } else {
@@ -349,7 +349,7 @@ pub async fn get_cftc_agricultural_cot(
     futures_only: Option<bool>,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let mut args = vec!["corn,wheat,soybeans,cotton,cocoa,coffee,sugar"];
+    let mut args = vec!["corn,wheat,soybeans,cotton,cocoa,coffee,sugar".to_string()];
     if let Some(report_type) = report_type {
         args.push(report_type);
     } else {
@@ -374,7 +374,7 @@ pub async fn get_cftc_financial_cot(
     futures_only: Option<bool>,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let mut args = vec!["euro,jpy,british_pound,s&p_500,nasdaq_100"];
+    let mut args = vec!["euro,jpy,british_pound,s&p_500,nasdaq_100".to_string()];
     args.push("financial".to_string());
     if let Some(futures_only) = futures_only {
         args.push(futures_only.to_string());
@@ -396,7 +396,7 @@ pub async fn get_cftc_crypto_cot(
     futures_only: Option<bool>,
     limit: Option<i32>,
 ) -> Result<String, String> {
-    let mut args = vec!["bitcoin,ether"];
+    let mut args = vec!["bitcoin,ether".to_string()];
     if let Some(report_type) = report_type {
         args.push(report_type);
     } else {
