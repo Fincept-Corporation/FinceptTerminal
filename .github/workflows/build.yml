@@ -84,6 +84,15 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Disable code signing for CI builds
+        run: |
+          cd src-tauri
+          # Backup original config
+          cp tauri.conf.json tauri.conf.json.bak
+          # Remove signing command using sed
+          sed -i.tmp 's/"signCommand".*,//' tauri.conf.json
+        shell: bash
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
