@@ -262,9 +262,7 @@ class AlphaVantageService {
       if (result.status === 'fulfilled' && result.value.data.success) {
         results.data[result.value.type] = result.value.data;
       } else {
-        const dataType = requests[index] ?
-          (result.status === 'fulfilled' ? result.value.type : 'unknown') :
-          'unknown';
+        const dataType = result.status === 'fulfilled' ? result.value.type : 'unknown';
         results.failed_requests.push({
           type: dataType,
           error: result.status === 'rejected' ?
