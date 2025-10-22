@@ -37,31 +37,6 @@
 
 > ✨ **One-Click Downloads!** These links will start downloading immediately - no GitHub login required!
 
-### 🛠️ Installation Instructions
-
-#### 🍎 **macOS**
-1. Click the download link above for your Mac type (Apple Silicon or Intel)
-2. Open the downloaded `.dmg` file
-3. Drag **FinceptTerminal** to your Applications folder
-4. Launch from Applications or Spotlight search
-
-#### 🐧 **Linux**
-
-**AppImage (Recommended - works on all distributions):**
-1. Download the `.AppImage` file
-2. Make it executable: `chmod +x FinceptTerminal-*.AppImage`
-3. Run it: `./FinceptTerminal-*.AppImage`
-
-**Debian/Ubuntu (.deb package):**
-1. Download the `.deb` file
-2. Install: `sudo dpkg -i FinceptTerminal-*.deb`
-3. Launch from applications menu or run `finceptterminal`
-
-#### 🪟 **Windows**
-1. Download the `.msi` installer
-2. Run the installer and follow the setup wizard
-3. Launch from Start Menu or Desktop shortcut
-
 ### 📊 Build Status & Info
 
 ![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)
