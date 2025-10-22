@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Fincept Terminal",
+  "productName": "FinceptTerminal",
   "version": "3.0.0",
   "identifier": "com.fincept.terminal",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Fincept Terminal",
+        "title": "FinceptTerminal",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,
@@ -44,8 +44,8 @@
     "shortDescription": "Professional-grade financial analysis platform with AI-powered insights",
     "longDescription": "FinceptTerminal is an AI-Powered Finance Terminal For Investment Research. Access real-time market data, advanced analytics, and institutional-grade tools for informed investment decisions.",
     "resources": [
-      "resources/python/*",
-      "resources/scripts/*"
+      "resources/python/**",
+      "resources/scripts/**"
     ],
     "externalBin": [],
     "windows": {
