@@ -1,6 +1,5 @@
 use tauri::command;
 use std::process::Command;
-use std::collections::HashMap;
 
 // ==================== METADATA COMMANDS ====================
 

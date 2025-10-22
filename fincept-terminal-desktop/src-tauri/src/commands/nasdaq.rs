@@ -1,5 +1,6 @@
 // NASDAQ data commands based on OpenBB nasdaq provider
 use std::process::Command;
+use chrono::Datelike;
 
 /// Execute NASDAQ Python script command
 #[tauri::command]
@@ -466,6 +467,7 @@ pub async fn get_nasdaq_sector_analysis() -> Result<String, String> {
         "utilities", "real_estate", "basic_materials"
     ];
 
+    let sectors_clone = sectors.clone();
     for sector in sectors {
         match get_nasdaq_stocks_by_sector(sector.to_string(), Some(20)).await {
             Ok(data) => results.push((format!("sector_{}", sector), data)),
@@ -475,7 +477,7 @@ pub async fn get_nasdaq_sector_analysis() -> Result<String, String> {
 
     Ok(serde_json::json!({
         "sector_analysis": results,
-        "sectors_analyzed": sectors
+        "sectors_analyzed": sectors_clone
     }).to_string())
 }
 
@@ -487,6 +489,7 @@ pub async fn get_nasdaq_market_cap_analysis() -> Result<String, String> {
     // Get data for each market cap category
     let market_caps = vec!["mega", "large", "mid", "small", "micro"];
 
+    let market_caps_clone = market_caps.clone();
     for market_cap in market_caps {
         match get_nasdaq_stocks_by_market_cap(market_cap.to_string(), Some(20)).await {
             Ok(data) => results.push((format!("market_cap_{}", market_cap), data)),
@@ -496,7 +499,7 @@ pub async fn get_nasdaq_market_cap_analysis() -> Result<String, String> {
 
     Ok(serde_json::json!({
         "market_cap_analysis": results,
-        "market_caps_analyzed": market_caps
+        "market_caps_analyzed": market_caps_clone
     }).to_string())
 }
 
@@ -508,6 +511,7 @@ pub async fn get_nasdaq_exchange_comparison() -> Result<String, String> {
     // Get data for each exchange
     let exchanges = vec!["nasdaq", "nyse", "amex"];
 
+    let exchanges_clone = exchanges.clone();
     for exchange in exchanges {
         match get_nasdaq_stocks_by_exchange(exchange.to_string(), Some(25)).await {
             Ok(data) => results.push((format!("exchange_{}", exchange), data)),
@@ -517,7 +521,7 @@ pub async fn get_nasdaq_exchange_comparison() -> Result<String, String> {
 
     Ok(serde_json::json!({
         "exchange_comparison": results,
-        "exchanges_analyzed": exchanges
+        "exchanges_analyzed": exchanges_clone
     }).to_string())
 }
 
@@ -574,6 +578,7 @@ pub async fn get_nasdaq_directory_info() -> Result<String, String> {
     // Search for popular stocks
     let popular_searches = vec!["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"];
 
+    let popular_searches_clone = popular_searches.clone();
     for search_term in popular_searches {
         match search_nasdaq_equities(Some(search_term.to_string()), None).await {
             Ok(data) => results.push((format!("search_{}", search_term), data)),
@@ -595,6 +600,6 @@ pub async fn get_nasdaq_directory_info() -> Result<String, String> {
 
     Ok(serde_json::json!({
         "directory_info": results,
-        "popular_searches": popular_searches
+        "popular_searches": popular_searches_clone
     }).to_string())
 }

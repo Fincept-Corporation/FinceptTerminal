@@ -463,7 +463,7 @@ pub async fn get_ecb_major_economies_bop_analysis(
         ("FR", "France"),
     ];
 
-    for (code, name) in countries {
+    for (code, _name) in countries {
         match get_ecb_bop_main(code.to_string(), frequency.clone()).await {
             Ok(data) => results.push((format!("bop_{}", code.to_lowercase()), data)),
             Err(e) => results.push((format!("bop_{}", code.to_lowercase()), format!("Error: {}", e))),
