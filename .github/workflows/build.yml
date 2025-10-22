@@ -321,77 +321,72 @@ jobs:
           ---
           EOF
           
-      - name: Update README file
+      - name: Update README files
         run: |
-          README_PATH="fincept-terminal-desktop/README.md"
-          if [ ! -f "$README_PATH" ]; then
-            echo "Creating new README.md"
-            mkdir -p fincept-terminal-desktop
-            echo "# FinceptTerminal" > "$README_PATH"
-            echo "" >> "$README_PATH"
-            echo "A powerful terminal application built with Tauri and React." >> "$README_PATH"
-            echo "" >> "$README_PATH"
-          fi
-          
-          # Update or add download section
-          if grep -q "<!-- DOWNLOAD_SECTION_START -->" "$README_PATH" && grep -q "<!-- DOWNLOAD_SECTION_END -->" "$README_PATH"; then
-            echo "🔄 Updating existing download section..."
-            awk '
-              /<!-- DOWNLOAD_SECTION_START -->/ { 
-                print $0
-                print ""
-                system("cat download_section.md")
-                while (getline > 0 && !/<!-- DOWNLOAD_SECTION_END -->/) continue
-                print "<!-- DOWNLOAD_SECTION_END -->"
-                next
-              }
-              { print }
-            ' "$README_PATH" > temp_readme.md
-            mv temp_readme.md "$README_PATH"
-          else
-            echo "➕ Adding new download section..."
-            if grep -q "^# " "$README_PATH"; then
+          # Function to update a README file
+          update_readme() {
+            local README_PATH="$1"
+
+            if [ ! -f "$README_PATH" ]; then
+              echo "⚠️  README not found: $README_PATH"
+              return
+            fi
+
+            # Update or add download section
+            if grep -q "<!-- DOWNLOAD_SECTION_START -->" "$README_PATH" && grep -q "<!-- DOWNLOAD_SECTION_END -->" "$README_PATH"; then
+              echo "🔄 Updating existing download section in $README_PATH..."
               awk '
-                /^# / && !inserted { 
+                /<!-- DOWNLOAD_SECTION_START -->/ {
                   print $0
                   print ""
-                  print "<!-- DOWNLOAD_SECTION_START -->"
-                  print ""
                   system("cat download_section.md")
-                  print ""
+                  while (getline > 0 && !/<!-- DOWNLOAD_SECTION_END -->/) continue
                   print "<!-- DOWNLOAD_SECTION_END -->"
-                  print ""
-                  inserted = 1
                   next
                 }
                 { print }
               ' "$README_PATH" > temp_readme.md
               mv temp_readme.md "$README_PATH"
             else
-              {
-                echo "<!-- DOWNLOAD_SECTION_START -->"
-                echo ""
-                cat download_section.md
-                echo ""
-                echo "<!-- DOWNLOAD_SECTION_END -->"
-                echo ""
-                cat "$README_PATH"
-              } > temp_readme.md
-              mv temp_readme.md "$README_PATH"
+              echo "➕ Adding new download section to $README_PATH..."
+              if grep -q "^# " "$README_PATH"; then
+                awk '
+                  /^# / && !inserted {
+                    print $0
+                    print ""
+                    print "<!-- DOWNLOAD_SECTION_START -->"
+                    print ""
+                    system("cat download_section.md")
+                    print ""
+                    print "<!-- DOWNLOAD_SECTION_END -->"
+                    print ""
+                    inserted = 1
+                    next
+                  }
+                  { print }
+                ' "$README_PATH" > temp_readme.md
+                mv temp_readme.md "$README_PATH"
+              fi
             fi
-          fi
-          
+          }
+
+          # Update both README files
+          update_readme "README.md"
+          update_readme "fincept-terminal-desktop/README.md"
+
           rm -f download_section.md
           
       - name: Commit and push README changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
-          
-          if git diff --quiet fincept-terminal-desktop/README.md; then
+
+          # Add both README files
+          git add README.md fincept-terminal-desktop/README.md
+
+          if git diff --cached --quiet; then
             echo "ℹ️  No changes to commit"
           else
-            git add fincept-terminal-desktop/README.md
             git commit -m "🚀 Auto-update direct download links for v${{ steps.get_version.outputs.version }}
 
             ✨ Added direct download links for:
