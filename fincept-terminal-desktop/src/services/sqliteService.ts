@@ -263,6 +263,64 @@ class SQLiteService {
       )
     `);
 
+    // Portfolio tables
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS portfolios (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        owner TEXT NOT NULL,
+        currency TEXT DEFAULT 'USD',
+        description TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS portfolio_assets (
+        id TEXT PRIMARY KEY,
+        portfolio_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        avg_buy_price REAL NOT NULL,
+        first_purchase_date TEXT,
+        last_updated TEXT DEFAULT (datetime('now')),
+        notes TEXT,
+        FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE,
+        UNIQUE(portfolio_id, symbol)
+      )
+    `);
+
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS portfolio_transactions (
+        id TEXT PRIMARY KEY,
+        portfolio_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        transaction_type TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        price REAL NOT NULL,
+        total_value REAL NOT NULL,
+        transaction_date TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+      )
+    `);
+
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+        id TEXT PRIMARY KEY,
+        portfolio_id TEXT NOT NULL,
+        total_value REAL NOT NULL,
+        total_cost_basis REAL NOT NULL,
+        total_pnl REAL NOT NULL,
+        total_pnl_percent REAL NOT NULL,
+        snapshot_date TEXT DEFAULT (datetime('now')),
+        snapshot_data TEXT NOT NULL,
+        FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_credentials_service ON credentials(service_name)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category)`);
@@ -273,6 +331,11 @@ class SQLiteService {
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_mcp_usage_timestamp ON mcp_tool_usage(timestamp DESC)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_market_cache_category ON market_data_cache(category)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_market_cache_time ON market_data_cache(cached_at)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_portfolio_assets_portfolio ON portfolio_assets(portfolio_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_portfolio ON portfolio_transactions(portfolio_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_date ON portfolio_transactions(transaction_date DESC)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_portfolio ON portfolio_snapshots(portfolio_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_date ON portfolio_snapshots(snapshot_date DESC)`);
   }
 
   private async seedDefaultSettings(): Promise<void> {
