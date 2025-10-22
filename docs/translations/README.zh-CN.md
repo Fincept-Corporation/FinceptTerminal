@@ -10,11 +10,35 @@
 
 ### _专业财务分析平台_
 
-**为每个人提供彭博级的见解。开源。跨平台。**
+**Bloomberg-level insights for everyone. Open source. Cross-platform.**
 
 [📥 下载](#-getting-started)•[✨ 特点](#-features)•[📸 截图](#-platform-preview)•[🤝 贡献](#-contributing)
 
 <!-- DOWNLOAD_SECTION_START -->
+
+## 📥 下载最新版本
+
+**版本：**`v3.0.0`\|**犯罪：**`7a750c4`\|**发布：**2025-10-22 11:47 世界标准时间
+
+### 🎯直接下载 - 点击立即下载！
+
+| 平台          | 建筑学          | 直接下载                                                                                                                                                    |
+| ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🍎**macOS** | 苹果芯片 (ARM64) | [⬇️**下载.dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
+| 🍎**macOS** | 英特尔 (x64)    | [⬇️**下载.dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
+| 🐧**Linux** | x64（应用程序图像）  | [⬇️**下载.AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**Linux** | x64（Debian）  | [⬇️**下载.deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
+| 🪟**视窗**    | 哈什奇          | [⬇️**下载.msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
+
+> ✨**一键下载！**这些链接将立即开始下载 - 无需登录 GitHub！
+
+### 📊 构建状态和信息
+
+![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)![Latest Release](https://img.shields.io/github/v/release/Fincept-Corporation/FinceptTerminal?include_prereleases&label=Latest%20Build)![Downloads](https://img.shields.io/github/downloads/Fincept-Corporation/FinceptTerminal/total?label=Total%20Downloads)
+
+**发布页面：**[查看所有版本和变更日志](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+* * *
 
 <!-- DOWNLOAD_SECTION_END -->
 
@@ -170,12 +194,12 @@ npm run tauri build
 |                                                   论坛                                                  |                                                        地缘政治                                                       |
 | :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
 | ![Forum](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Forum.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
-|                                                  社区讨论                                                 |                                                       全球风险监控                                                      |
+|                                         Community discussions                                         |                                                       全球风险监控                                                      |
 
 |                                                        全球贸易                                                       |                                                     市场                                                    |
 | :---------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------: |
 | ![GlobalTrade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png) | ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png) |
-|                                                       国际贸易流量                                                      |                                                  实时多资产市场                                                  |
+|                                                       国际贸易流动                                                      |                                                  实时多资产市场                                                  |
 
 |                                                          贸易分析                                                         |
 | :-------------------------------------------------------------------------------------------------------------------: |
@@ -211,7 +235,7 @@ npm run tauri build
 
 -   🌍 多语言支持
 -   🏢 经纪商整合
--   📱 移动伴侣应用程序
+-   📱 移动配套应用程序
 -   🔌插件系统
 -   🎨 主题市场
 
