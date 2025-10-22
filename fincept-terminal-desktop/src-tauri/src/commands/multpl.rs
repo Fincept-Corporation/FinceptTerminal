@@ -531,7 +531,7 @@ pub async fn get_multpl_year_over_year_comparison(
         .format("%Y-%m-%d")
         .to_string();
 
-    match get_multpl_series(series_name, Some(start_date), Some(end_date)).await {
+    match get_multpl_series(series_name.clone(), Some(start_date), Some(end_date)).await {
         Ok(data) => {
             Ok(serde_json::json!({
                 "year_over_year_comparison": data,
