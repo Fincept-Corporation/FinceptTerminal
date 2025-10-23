@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 # agents/innovation_agent.py - Technology Innovation Cycle Analysis Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - technology trends data
+#   - innovation metrics
+#   - patent filings
+#   - R&D investments
+#
+# OUTPUT:
+#   - Technology trend forecasts
+#   - Innovation cycle identification
+#   - Disruptive technology alerts
+#   - Sector impact analysis
+#
+# PARAMETERS:
+#   - technology_sectors
+#   - innovation_indicators
+#   - trend_analysis_periods
+#   - disruption_thresholds
+"""
+
 import asyncio
 import numpy as np
 import pandas as pd

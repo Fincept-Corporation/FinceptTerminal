@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 # agents/currency_agent.py - Foreign Exchange Analysis Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - currency pairs
+#   - forex market data
+#   - interest rate differentials
+#   - geopolitical events
+#
+# OUTPUT:
+#   - Currency trading signals
+#   - FX market analysis
+#   - Exchange rate forecasts
+#   - Currency pair recommendations
+#
+# PARAMETERS:
+#   - currency_pairs
+#   - timeframes
+#   - technical_indicators
+#   - fundamental_factors
+"""
+
 import asyncio
 import numpy as np
 from datetime import datetime

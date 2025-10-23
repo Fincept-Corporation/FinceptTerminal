@@ -1,3 +1,22 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - Agent state messages
+#   - Metadata dictionaries
+#   - Agent output data
+#   - Agent names
+#
+# OUTPUT:
+#   - Formatted agent reasoning display
+#   - Merged dictionaries
+#   - JSON-serializable agent outputs
+#
+# PARAMETERS:
+#   - merge_dicts function for combining state dictionaries
+#   - show_agent_reasoning function for displaying analysis
+#   - AgentState TypedDict for structure definition
+"""
+
 from typing_extensions import Annotated, Sequence, TypedDict
 
 import operator

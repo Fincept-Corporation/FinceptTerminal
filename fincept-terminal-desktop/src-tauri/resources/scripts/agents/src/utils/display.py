@@ -1,3 +1,25 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - Trading decisions dictionary with tickers
+#   - Agent analysis signals dictionary
+#   - Backtest results with table rows
+#   - Performance metrics and portfolio data
+#
+# OUTPUT:
+#   - Formatted console output with colored tables
+#   - Portfolio summaries with total values
+#   - Performance metrics (Sharpe ratio, Sortino ratio, Max drawdown)
+#   - Agent signal analysis with confidence scores
+#
+# PARAMETERS:
+#   - tickers: Stock symbols for analysis
+#   - actions: BUY/SELL/HOLD decisions
+#   - quantities: Number of shares
+#   - confidence: Confidence percentages
+#   - reasoning: Detailed analysis explanations
+"""
+
 from colorama import Fore, Style
 from tabulate import tabulate
 from .analysts import ANALYST_ORDER

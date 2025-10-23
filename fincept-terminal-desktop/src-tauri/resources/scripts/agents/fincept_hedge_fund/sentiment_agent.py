@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 # agents/sentiment_agent.py - Market Sentiment Analysis Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - market sentiment data
+#   - social media feeds
+#   - news sentiment
+#   - investor sentiment surveys
+#
+# OUTPUT:
+#   - Market sentiment scores
+#   - Sentiment trend analysis
+#   - Contrarian signals
+#   - Sentiment-based alerts
+#
+# PARAMETERS:
+#   - sentiment_sources
+#   - analysis_timeframes
+#   - sentiment_thresholds
+#   - contrarian_indicators
+"""
+
 import asyncio
 import numpy as np
 import pandas as pd

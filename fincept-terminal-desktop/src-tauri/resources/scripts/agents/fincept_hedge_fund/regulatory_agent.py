@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 # agents/regulatory_agent.py - Regulatory Intelligence Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - regulatory announcements
+#   - compliance updates
+#   - policy changes
+#   - enforcement actions
+#
+# OUTPUT:
+#   - Regulatory impact assessments
+#   - Compliance requirement updates
+#   - Policy change analysis
+#   - Risk mitigation recommendations
+#
+# PARAMETERS:
+#   - regulatory_sources
+#   - compliance_frameworks
+#   - risk_categories
+#   - monitoring_frequency
+"""
+
 import asyncio
 import numpy as np
 import pandas as pd

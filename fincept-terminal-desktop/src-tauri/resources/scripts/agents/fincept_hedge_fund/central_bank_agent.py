@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 # agents/central_bank_agent.py - Central Bank Policy Analysis Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - central bank announcements
+#   - monetary policy statements
+#   - interest rate decisions
+#   - economic indicators
+#
+# OUTPUT:
+#   - Central bank policy signals
+#   - Monetary policy stance analysis
+#   - Interest rate forecasts
+#   - Market impact assessments
+#
+# PARAMETERS:
+#   - policy_indicators
+#   - economic_data_sources
+#   - central_bank_watchlist
+#   - forecast_horizons
+"""
+
 import asyncio
 import numpy as np
 import pandas as pd

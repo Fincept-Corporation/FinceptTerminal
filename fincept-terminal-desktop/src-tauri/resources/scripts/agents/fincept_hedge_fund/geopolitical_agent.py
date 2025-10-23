@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 # agents/geopolitical_agent.py - Geopolitical Risk Analysis Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - geopolitical events
+#   - political risk indicators
+#   - international relations data
+#   - regional stability metrics
+#
+# OUTPUT:
+#   - Geopolitical risk assessments
+#   - Regional stability analysis
+#   - Political event impact forecasts
+#   - Cross-border investment recommendations
+#
+# PARAMETERS:
+#   - risk_indicators
+#   - regions_monitoring
+#   - event_types
+#   - impact_timeframes
+"""
+
 import asyncio
 import numpy as np
 import pandas as pd
