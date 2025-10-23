@@ -1,14 +1,22 @@
-from fincept_terminal.Agents.src.graph.state import AgentState, show_agent_reasoning
-from fincept_terminal.Agents.src.tools.api import get_financial_metrics, get_market_cap, search_line_items
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage
-from pydantic import BaseModel
-import json
-import math
-from typing_extensions import Literal
-from fincept_terminal.Agents.src.utils.progress import progress
-from fincept_terminal.Agents.src.utils.llm import call_llm
-from fincept_terminal.Agents.src.utils.api_key import get_api_key_from_state
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - ticker symbols (array)
+#   - end_date (string)
+#   - FINANCIAL_DATASETS_API_KEY
+#
+# OUTPUT:
+#   - Financial metrics: ROE, D/E, Current Ratio, P/E, P/B, ROIC, ROA
+#   - Financial line items: Revenue, Net Income, FCF, Debt, Equity, Retained Earnings, Operating Margin, R&D, Shares, Total Assets, Current Assets, Current Liabilities
+#   - Market Cap
+#   - Factor scores: Value, Momentum, Quality, Low Volatility, Profitability
+#
+# PARAMETERS:
+#   - period="annual"
+#   - limit=10 years
+#   - factor_combination_weights: Value=35%, Momentum=35%, Quality=30%
+#   - academic_validation_threshold: 95% confidence level
+"""
 
 
 class AQRSignal(BaseModel):

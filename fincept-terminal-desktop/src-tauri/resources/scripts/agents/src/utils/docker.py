@@ -1,3 +1,23 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - model names
+#   - Ollama service URLs
+#   - download confirmation responses
+#
+# OUTPUT:
+#   - Model availability status
+#   - Download progress updates
+#   - Service connection results
+#   - Docker container status
+#
+# PARAMETERS:
+#   - model_name: Name of the Ollama model to manage
+#   - ollama_url: Base URL for Ollama service
+#   - max_wait_time: Maximum time to wait for model downloads
+#   - check_interval: Interval for checking download progress
+"""
+
 """Utilities for working with Ollama models in Docker environments"""
 
 import requests
