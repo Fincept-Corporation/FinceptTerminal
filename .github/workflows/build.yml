@@ -93,6 +93,45 @@ jobs:
           sed -i.tmp 's/"signCommand".*,//' tauri.conf.json
         shell: bash
 
+      - name: Debug - Verify project structure and resources
+        run: |
+          echo "=========================================="
+          echo "🔍 DEBUGGING PROJECT STRUCTURE"
+          echo "=========================================="
+          echo ""
+          echo "📂 Current working directory:"
+          pwd
+          echo ""
+          echo "📂 Repository root contents:"
+          ls -la
+          echo ""
+          echo "📂 Project directory exists?"
+          ls -la fincept-terminal-desktop/ 2>/dev/null || echo "❌ fincept-terminal-desktop not found"
+          echo ""
+          echo "📂 src-tauri directory:"
+          ls -la src-tauri/ 2>/dev/null || echo "❌ src-tauri not found"
+          echo ""
+          echo "📂 Resources directory structure:"
+          ls -la src-tauri/resources/ 2>/dev/null || echo "❌ src-tauri/resources not found"
+          echo ""
+          echo "📂 Python directory:"
+          ls -la src-tauri/resources/python/ 2>/dev/null || echo "❌ python directory not found"
+          echo ""
+          echo "📂 Scripts directory:"
+          ls -la src-tauri/resources/scripts/ 2>/dev/null || echo "❌ scripts directory not found"
+          echo ""
+          echo "📊 Count of Python files in scripts:"
+          find src-tauri/resources/scripts/ -name "*.py" 2>/dev/null | wc -l || echo "0"
+          echo ""
+          echo "📄 First 10 Python files in scripts:"
+          find src-tauri/resources/scripts/ -name "*.py" 2>/dev/null | head -10 || echo "None found"
+          echo ""
+          echo "📄 tauri.conf.json resources section:"
+          grep -A 5 '"resources"' src-tauri/tauri.conf.json 2>/dev/null || echo "❌ Could not read tauri.conf.json"
+          echo ""
+          echo "=========================================="
+        shell: bash
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
