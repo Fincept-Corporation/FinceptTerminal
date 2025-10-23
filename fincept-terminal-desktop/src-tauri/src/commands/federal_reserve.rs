@@ -1,18 +1,17 @@
 // Federal Reserve data commands
 use std::process::Command;
+use crate::utils::python::{get_python_path, get_script_path};
 
 /// Execute Federal Reserve Python script command
 #[tauri::command]
 pub async fn execute_federal_reserve_command(
+    app: tauri::AppHandle, 
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
     // Get the Python script path
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let script_path = manifest_dir
-        .join("resources")
-        .join("scripts")
-        .join("federal_reserve_data.py");
+    let python_path = get_python_path(&app)?;
+    let script_path = get_script_path(&app, "federal_reserve_data.py")?;
 
     // Verify script exists
     if !script_path.exists() {
@@ -27,7 +26,7 @@ pub async fn execute_federal_reserve_command(
     cmd_args.extend(args);
 
     // Execute Python script
-    let output = Command::new("python")
+    let output = Command::new(&python_path)
         .args(&cmd_args)
         .output()
         .map_err(|e| format!("Failed to execute Federal Reserve command: {}", e))?;
@@ -43,7 +42,7 @@ pub async fn execute_federal_reserve_command(
 
 /// Get Federal Funds Rate data
 #[tauri::command]
-pub async fn get_federal_funds_rate(
+pub async fn get_federal_funds_rate(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -54,12 +53,12 @@ pub async fn get_federal_funds_rate(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_federal_reserve_command("federal_funds_rate".to_string(), args).await
+    execute_federal_reserve_command(app, "federal_funds_rate".to_string(), args).await
 }
 
 /// Get SOFR Rate data
 #[tauri::command]
-pub async fn get_sofr_rate(
+pub async fn get_sofr_rate(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -70,12 +69,12 @@ pub async fn get_sofr_rate(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_federal_reserve_command("sofr_rate".to_string(), args).await
+    execute_federal_reserve_command(app, "sofr_rate".to_string(), args).await
 }
 
 /// Get Treasury Rates data
 #[tauri::command]
-pub async fn get_treasury_rates(
+pub async fn get_treasury_rates(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -86,22 +85,22 @@ pub async fn get_treasury_rates(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_federal_reserve_command("treasury_rates".to_string(), args).await
+    execute_federal_reserve_command(app, "treasury_rates".to_string(), args).await
 }
 
 /// Get Yield Curve data
 #[tauri::command]
-pub async fn get_yield_curve(date: Option<String>) -> Result<String, String> {
+pub async fn get_yield_curve(app: tauri::AppHandle, date: Option<String>) -> Result<String, String> {
     let mut args = Vec::new();
     if let Some(date) = date {
         args.push(date);
     }
-    execute_federal_reserve_command("yield_curve".to_string(), args).await
+    execute_federal_reserve_command(app, "yield_curve".to_string(), args).await
 }
 
 /// Get Money Measures data
 #[tauri::command]
-pub async fn get_money_measures(
+pub async fn get_money_measures(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
     adjusted: Option<bool>,
@@ -116,12 +115,12 @@ pub async fn get_money_measures(
     if let Some(adjusted) = adjusted {
         args.push(adjusted.to_string());
     }
-    execute_federal_reserve_command("money_measures".to_string(), args).await
+    execute_federal_reserve_command(app, "money_measures".to_string(), args).await
 }
 
 /// Get Central Bank Holdings data
 #[tauri::command]
-pub async fn get_central_bank_holdings(
+pub async fn get_central_bank_holdings(app: tauri::AppHandle, 
     holding_type: Option<String>,
     summary: Option<bool>,
     date: Option<String>,
@@ -138,12 +137,12 @@ pub async fn get_central_bank_holdings(
     if let Some(date) = date {
         args.push(date);
     }
-    execute_federal_reserve_command("central_bank_holdings".to_string(), args).await
+    execute_federal_reserve_command(app, "central_bank_holdings".to_string(), args).await
 }
 
 /// Get Overnight Bank Funding Rate data
 #[tauri::command]
-pub async fn get_overnight_bank_funding_rate(
+pub async fn get_overnight_bank_funding_rate(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -154,12 +153,12 @@ pub async fn get_overnight_bank_funding_rate(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_federal_reserve_command("overnight_bank_funding_rate".to_string(), args).await
+    execute_federal_reserve_command(app, "overnight_bank_funding_rate".to_string(), args).await
 }
 
 /// Get comprehensive monetary data
 #[tauri::command]
-pub async fn get_comprehensive_monetary_data(
+pub async fn get_comprehensive_monetary_data(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -170,11 +169,11 @@ pub async fn get_comprehensive_monetary_data(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_federal_reserve_command("comprehensive_monetary_data".to_string(), args).await
+    execute_federal_reserve_command(app, "comprehensive_monetary_data".to_string(), args).await
 }
 
 /// Get market overview
 #[tauri::command]
-pub async fn get_fed_market_overview() -> Result<String, String> {
-    execute_federal_reserve_command("market_overview".to_string(), vec![]).await
+pub async fn get_fed_market_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_federal_reserve_command(app, "market_overview".to_string(), vec![]).await
 }

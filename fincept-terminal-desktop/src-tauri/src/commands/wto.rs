@@ -1,18 +1,17 @@
 // WTO (World Trade Organization) data commands based on WTO APIs
 use std::process::Command;
+use crate::utils::python::{get_python_path, get_script_path};
 
 /// Execute WTO Python script command
 #[tauri::command]
 pub async fn execute_wto_command(
+    app: tauri::AppHandle, 
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
     // Get the Python script path
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let script_path = manifest_dir
-        .join("resources")
-        .join("scripts")
-        .join("wto_data.py");
+    let python_path = get_python_path(&app)?;
+    let script_path = get_script_path(&app, "wto_data.py")?;
 
     // Verify script exists
     if !script_path.exists() {
@@ -27,7 +26,7 @@ pub async fn execute_wto_command(
     cmd_args.extend(args);
 
     // Execute Python script
-    let output = Command::new("python")
+    let output = Command::new(&python_path)
         .args(&cmd_args)
         .output()
         .map_err(|e| format!("Failed to execute WTO command: {}", e))?;
@@ -45,21 +44,21 @@ pub async fn execute_wto_command(
 
 /// Get available WTO APIs and endpoints
 #[tauri::command]
-pub async fn get_wto_available_apis() -> Result<String, String> {
-    execute_wto_command("available_apis".to_string(), vec![]).await
+pub async fn get_wto_available_apis(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_wto_command(app, "available_apis".to_string(), vec![]).await
 }
 
 /// Get comprehensive WTO overview across all APIs
 #[tauri::command]
-pub async fn get_wto_overview() -> Result<String, String> {
-    execute_wto_command("overview".to_string(), vec![]).await
+pub async fn get_wto_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_wto_command(app, "overview".to_string(), vec![]).await
 }
 
 // QUANTITATIVE RESTRICTIONS (QR) COMMANDS
 
 /// Get QR members list
 #[tauri::command]
-pub async fn get_wto_qr_members(
+pub async fn get_wto_qr_members(app: tauri::AppHandle, 
     member_code: Option<String>,
     name: Option<String>,
     page: Option<i32>,
@@ -81,12 +80,12 @@ pub async fn get_wto_qr_members(
         args.push(p.to_string());
     }
 
-    execute_wto_command("qr_members".to_string(), args).await
+    execute_wto_command(app, "qr_members".to_string(), args).await
 }
 
 /// Get QR products list
 #[tauri::command]
-pub async fn get_wto_qr_products(
+pub async fn get_wto_qr_products(app: tauri::AppHandle, 
     hs_version: String,
     code: Option<String>,
     description: Option<String>,
@@ -109,12 +108,12 @@ pub async fn get_wto_qr_products(
         args.push(p.to_string());
     }
 
-    execute_wto_command("qr_products".to_string(), args).await
+    execute_wto_command(app, "qr_products".to_string(), args).await
 }
 
 /// Get QR notifications list
 #[tauri::command]
-pub async fn get_wto_qr_notifications(
+pub async fn get_wto_qr_notifications(app: tauri::AppHandle, 
     reporter_member_code: Option<String>,
     notification_year: Option<i32>,
     page: Option<i32>,
@@ -136,21 +135,21 @@ pub async fn get_wto_qr_notifications(
         args.push(p.to_string());
     }
 
-    execute_wto_command("qr_notifications".to_string(), args).await
+    execute_wto_command(app, "qr_notifications".to_string(), args).await
 }
 
 /// Get QR details by ID
 #[tauri::command]
-pub async fn get_wto_qr_details(
+pub async fn get_wto_qr_details(app: tauri::AppHandle, 
     qr_id: i32,
 ) -> Result<String, String> {
     let args = vec!["--qr_id".to_string(), qr_id.to_string()];
-    execute_wto_command("qr_details".to_string(), args).await
+    execute_wto_command(app, "qr_details".to_string(), args).await
 }
 
 /// Get QR list with filters
 #[tauri::command]
-pub async fn get_wto_qr_list(
+pub async fn get_wto_qr_list(app: tauri::AppHandle, 
     reporter_member_code: Option<String>,
     in_force_only: Option<bool>,
     year_of_entry_into_force: Option<i32>,
@@ -190,20 +189,20 @@ pub async fn get_wto_qr_list(
         args.push(p.to_string());
     }
 
-    execute_wto_command("qr_list".to_string(), args).await
+    execute_wto_command(app, "qr_list".to_string(), args).await
 }
 
 /// Get QR HS versions
 #[tauri::command]
-pub async fn get_wto_qr_hs_versions() -> Result<String, String> {
-    execute_wto_command("qr_hs_versions".to_string(), vec![]).await
+pub async fn get_wto_qr_hs_versions(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_wto_command(app, "qr_hs_versions".to_string(), vec![]).await
 }
 
 // EPING (SPS/TBT NOTIFICATIONS) COMMANDS
 
 /// Get ePing members list
 #[tauri::command]
-pub async fn get_wto_eping_members(
+pub async fn get_wto_eping_members(app: tauri::AppHandle, 
     language: Option<i32>,
 ) -> Result<String, String> {
     let mut args = Vec::new();
@@ -213,12 +212,12 @@ pub async fn get_wto_eping_members(
         args.push(l.to_string());
     }
 
-    execute_wto_command("eping_members".to_string(), args).await
+    execute_wto_command(app, "eping_members".to_string(), args).await
 }
 
 /// Search ePing notifications
 #[tauri::command]
-pub async fn search_wto_eping_notifications(
+pub async fn search_wto_eping_notifications(app: tauri::AppHandle, 
     language: Option<i32>,
     domain_ids: Option<i32>,
     document_symbol: Option<String>,
@@ -288,14 +287,14 @@ pub async fn search_wto_eping_notifications(
         args.push(ps.to_string());
     }
 
-    execute_wto_command("eping_search".to_string(), args).await
+    execute_wto_command(app, "eping_search".to_string(), args).await
 }
 
 // TIMESERIES API COMMANDS
 
 /// Get timeseries topics
 #[tauri::command]
-pub async fn get_wto_timeseries_topics(
+pub async fn get_wto_timeseries_topics(app: tauri::AppHandle, 
     language: Option<i32>,
 ) -> Result<String, String> {
     let mut args = Vec::new();
@@ -305,12 +304,12 @@ pub async fn get_wto_timeseries_topics(
         args.push(l.to_string());
     }
 
-    execute_wto_command("timeseries_topics".to_string(), args).await
+    execute_wto_command(app, "timeseries_topics".to_string(), args).await
 }
 
 /// Get timeseries indicators
 #[tauri::command]
-pub async fn get_wto_timeseries_indicators(
+pub async fn get_wto_timeseries_indicators(app: tauri::AppHandle, 
     indicator: Option<String>,
     name: Option<String>,
     topics: Option<String>,
@@ -356,12 +355,12 @@ pub async fn get_wto_timeseries_indicators(
         args.push(l.to_string());
     }
 
-    execute_wto_command("timeseries_indicators".to_string(), args).await
+    execute_wto_command(app, "timeseries_indicators".to_string(), args).await
 }
 
 /// Get timeseries data
 #[tauri::command]
-pub async fn get_wto_timeseries_data(
+pub async fn get_wto_timeseries_data(app: tauri::AppHandle, 
     indicator: String,
     reporters: Option<String>,
     partners: Option<String>,
@@ -444,12 +443,12 @@ pub async fn get_wto_timeseries_data(
         args.push(im.to_string());
     }
 
-    execute_wto_command("timeseries_data".to_string(), args).await
+    execute_wto_command(app, "timeseries_data".to_string(), args).await
 }
 
 /// Get timeseries reporting economies
 #[tauri::command]
-pub async fn get_wto_timeseries_reporters(
+pub async fn get_wto_timeseries_reporters(app: tauri::AppHandle, 
     name: Option<String>,
     individual_group: Option<String>,
     regions: Option<String>,
@@ -483,14 +482,14 @@ pub async fn get_wto_timeseries_reporters(
         args.push(l.to_string());
     }
 
-    execute_wto_command("timeseries_reporters".to_string(), args).await
+    execute_wto_command(app, "timeseries_reporters".to_string(), args).await
 }
 
 // TFAD (TRADE FACILITATION AGREEMENT DATABASE) COMMANDS
 
 /// Get TFAD data
 #[tauri::command]
-pub async fn get_wto_tfad_data(
+pub async fn get_wto_tfad_data(app: tauri::AppHandle, 
     countries: Option<String>,
 ) -> Result<String, String> {
     let mut args = Vec::new();
@@ -500,14 +499,14 @@ pub async fn get_wto_tfad_data(
         args.push(c);
     }
 
-    execute_wto_command("tfad_data".to_string(), args).await
+    execute_wto_command(app, "tfad_data".to_string(), args).await
 }
 
 // ANALYSIS COMMANDS
 
 /// Get trade restrictions analysis
 #[tauri::command]
-pub async fn get_wto_trade_restrictions_analysis(
+pub async fn get_wto_trade_restrictions_analysis(app: tauri::AppHandle, 
     member_code: Option<String>,
 ) -> Result<String, String> {
     let mut args = Vec::new();
@@ -517,12 +516,12 @@ pub async fn get_wto_trade_restrictions_analysis(
         args.push(mc);
     }
 
-    execute_wto_command("trade_restrictions_analysis".to_string(), args).await
+    execute_wto_command(app, "trade_restrictions_analysis".to_string(), args).await
 }
 
 /// Get notifications analysis
 #[tauri::command]
-pub async fn get_wto_notifications_analysis(
+pub async fn get_wto_notifications_analysis(app: tauri::AppHandle, 
     language: Option<i32>,
     domain_ids: Option<i32>,
     date_from: Option<String>,
@@ -550,12 +549,12 @@ pub async fn get_wto_notifications_analysis(
         args.push(dt);
     }
 
-    execute_wto_command("notifications_analysis".to_string(), args).await
+    execute_wto_command(app, "notifications_analysis".to_string(), args).await
 }
 
 /// Get trade statistics analysis
 #[tauri::command]
-pub async fn get_wto_trade_statistics_analysis(
+pub async fn get_wto_trade_statistics_analysis(app: tauri::AppHandle, 
     indicator: Option<String>,
     reporter: Option<String>,
     years: Option<String>,
@@ -577,12 +576,12 @@ pub async fn get_wto_trade_statistics_analysis(
         args.push(y);
     }
 
-    execute_wto_command("trade_statistics_analysis".to_string(), args).await
+    execute_wto_command(app, "trade_statistics_analysis".to_string(), args).await
 }
 
 /// Get comprehensive WTO analysis
 #[tauri::command]
-pub async fn get_wto_comprehensive_analysis(
+pub async fn get_wto_comprehensive_analysis(app: tauri::AppHandle, 
     member_code: Option<String>,
     indicator: Option<String>,
 ) -> Result<String, String> {
@@ -598,15 +597,16 @@ pub async fn get_wto_comprehensive_analysis(
         args.push(i);
     }
 
-    execute_wto_command("comprehensive_analysis".to_string(), args).await
+    execute_wto_command(app, "comprehensive_analysis".to_string(), args).await
 }
 
 // CONVENIENCE COMMANDS FOR MAJOR ECONOMIES
 
 /// Get US trade data analysis
 #[tauri::command]
-pub async fn get_wto_us_trade_analysis() -> Result<String, String> {
+pub async fn get_wto_us_trade_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
     get_wto_trade_statistics_analysis(
+        app,
         Some("TP_A_0010".to_string()),
         Some("US".to_string()),
         Some("2020-2023".to_string())
@@ -615,8 +615,9 @@ pub async fn get_wto_us_trade_analysis() -> Result<String, String> {
 
 /// Get China trade data analysis
 #[tauri::command]
-pub async fn get_wto_china_trade_analysis() -> Result<String, String> {
+pub async fn get_wto_china_trade_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
     get_wto_trade_statistics_analysis(
+        app,
         Some("TP_A_0010".to_string()),
         Some("CN".to_string()),
         Some("2020-2023".to_string())
@@ -625,8 +626,9 @@ pub async fn get_wto_china_trade_analysis() -> Result<String, String> {
 
 /// Get Germany trade data analysis
 #[tauri::command]
-pub async fn get_wto_germany_trade_analysis() -> Result<String, String> {
+pub async fn get_wto_germany_trade_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
     get_wto_trade_statistics_analysis(
+        app,
         Some("TP_A_0010".to_string()),
         Some("DE".to_string()),
         Some("2020-2023".to_string())
@@ -635,8 +637,9 @@ pub async fn get_wto_germany_trade_analysis() -> Result<String, String> {
 
 /// Get Japan trade data analysis
 #[tauri::command]
-pub async fn get_wto_japan_trade_analysis() -> Result<String, String> {
+pub async fn get_wto_japan_trade_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
     get_wto_trade_statistics_analysis(
+        app,
         Some("TP_A_0010".to_string()),
         Some("JP".to_string()),
         Some("2020-2023".to_string())
@@ -645,8 +648,9 @@ pub async fn get_wto_japan_trade_analysis() -> Result<String, String> {
 
 /// Get UK trade data analysis
 #[tauri::command]
-pub async fn get_wto_uk_trade_analysis() -> Result<String, String> {
+pub async fn get_wto_uk_trade_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
     get_wto_trade_statistics_analysis(
+        app,
         Some("TP_A_0010".to_string()),
         Some("GB".to_string()),
         Some("2020-2023".to_string())
@@ -657,7 +661,7 @@ pub async fn get_wto_uk_trade_analysis() -> Result<String, String> {
 
 /// Get recent TBT notifications
 #[tauri::command]
-pub async fn get_wto_recent_tbt_notifications(
+pub async fn get_wto_recent_tbt_notifications(app: tauri::AppHandle, 
     days_back: Option<i32>,
 ) -> Result<String, String> {
     let days = days_back.unwrap_or(30);
@@ -665,6 +669,7 @@ pub async fn get_wto_recent_tbt_notifications(
     let date_from = (chrono::Utc::now() - chrono::Duration::days(days as i64)).format("%Y-%m-%d").to_string();
 
     search_wto_eping_notifications(
+        app,
         Some(1),  // English
         Some(1),  // TBT domain
         None,
@@ -681,7 +686,7 @@ pub async fn get_wto_recent_tbt_notifications(
 
 /// Get recent SPS notifications
 #[tauri::command]
-pub async fn get_wto_recent_sps_notifications(
+pub async fn get_wto_recent_sps_notifications(app: tauri::AppHandle, 
     days_back: Option<i32>,
 ) -> Result<String, String> {
     let days = days_back.unwrap_or(30);
@@ -689,6 +694,7 @@ pub async fn get_wto_recent_sps_notifications(
     let date_from = (chrono::Utc::now() - chrono::Duration::days(days as i64)).format("%Y-%m-%d").to_string();
 
     search_wto_eping_notifications(
+        app,
         Some(1),  // English
         Some(2),  // SPS domain
         None,
@@ -705,10 +711,11 @@ pub async fn get_wto_recent_sps_notifications(
 
 /// Get member specific comprehensive analysis
 #[tauri::command]
-pub async fn get_wto_member_analysis(
+pub async fn get_wto_member_analysis(app: tauri::AppHandle, 
     member_code: String,
 ) -> Result<String, String> {
     get_wto_comprehensive_analysis(
+        app,
         Some(member_code),
         Some("TP_A_0010".to_string())
     ).await
@@ -716,11 +723,12 @@ pub async fn get_wto_member_analysis(
 
 /// Get global trade overview
 #[tauri::command]
-pub async fn get_wto_global_trade_overview() -> Result<String, String> {
+pub async fn get_wto_global_trade_overview(app: tauri::AppHandle, ) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get timeseries data for global trade
     match get_wto_timeseries_data(
+        app.clone(),
         "TP_A_0010".to_string(),  // Merchandise trade value
         Some("all".to_string()),
         Some("all".to_string()),
@@ -741,12 +749,12 @@ pub async fn get_wto_global_trade_overview() -> Result<String, String> {
     }
 
     // Get recent notifications
-    match get_wto_recent_tbt_notifications(Some(7)).await {
+    match get_wto_recent_tbt_notifications(app.clone(), Some(7)).await {
         Ok(data) => results.push(("recent_tbt_notifications".to_string(), data)),
         Err(e) => results.push(("recent_tbt_notifications".to_string(), format!("Error: {}", e))),
     }
 
-    match get_wto_recent_sps_notifications(Some(7)).await {
+    match get_wto_recent_sps_notifications(app.clone(), Some(7)).await {
         Ok(data) => results.push(("recent_sps_notifications".to_string(), data)),
         Err(e) => results.push(("recent_sps_notifications".to_string(), format!("Error: {}", e))),
     }
@@ -760,7 +768,7 @@ pub async fn get_wto_global_trade_overview() -> Result<String, String> {
 
 /// Get sector-specific trade analysis
 #[tauri::command]
-pub async fn get_wto_sector_trade_analysis(
+pub async fn get_wto_sector_trade_analysis(app: tauri::AppHandle, 
     sector_codes: String,
     reporter: Option<String>,
     years: Option<String>,
@@ -773,6 +781,7 @@ pub async fn get_wto_sector_trade_analysis(
     for sector in sectors {
         let trimmed_sector = sector.trim();
         match get_wto_timeseries_data(
+            app.clone(),
             format!("TP_S_{}", trimmed_sector),
             reporter.clone(),
             Some("default".to_string()),
@@ -805,7 +814,7 @@ pub async fn get_wto_sector_trade_analysis(
 
 /// Get comparative trade analysis between economies
 #[tauri::command]
-pub async fn get_wto_comparative_trade_analysis(
+pub async fn get_wto_comparative_trade_analysis(app: tauri::AppHandle, 
     economies: String,
     indicator: Option<String>,
     years: Option<String>,
@@ -821,6 +830,7 @@ pub async fn get_wto_comparative_trade_analysis(
     for economy in economy_list {
         let trimmed_economy = economy.trim();
         match get_wto_timeseries_data(
+            app.clone(),
             indicator_code.clone(),
             Some(trimmed_economy.to_string()),
             Some("all".to_string()),
