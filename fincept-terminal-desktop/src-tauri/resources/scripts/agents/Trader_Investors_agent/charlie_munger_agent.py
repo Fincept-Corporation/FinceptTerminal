@@ -1,3 +1,20 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - ticker symbols (array)
+#   - end_date (string)
+#   - FINANCIAL_DATASETS_API_KEY
+#
+# OUTPUT:
+#   - Financial metrics: ROE, D/E, Current Ratio
+#   - Financial line items: Revenue, Net Income, FCF, Debt, Equity, Retained Earnings, Operating Margin, R&D, Shares
+#   - Market Cap
+#
+# PARAMETERS:
+#   - period="annual"
+#   - limit=10 years
+"""
+
 from fincept_terminal.Agents.src.graph.state import AgentState, show_agent_reasoning
 from fincept_terminal.Agents.src.tools.api import get_financial_metrics, get_market_cap, search_line_items
 from langchain_core.prompts import ChatPromptTemplate

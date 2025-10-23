@@ -1,3 +1,20 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - compiled graph objects
+#   - output file path specifications
+#
+# OUTPUT:
+#   - PNG image files
+#   - Graph visualizations
+#   - Mermaid diagram representations
+#   - Workflow structure diagrams
+#
+# PARAMETERS:
+#   - app: Compiled LangGraph application with workflow structure
+#   - output_file_path: File system path for saving the PNG visualization
+"""
+
 from langgraph.graph.state import CompiledGraph
 from langchain_core.runnables.graph import MermaidDrawMethod
 
