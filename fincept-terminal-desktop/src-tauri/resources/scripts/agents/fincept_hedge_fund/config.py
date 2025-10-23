@@ -1,6 +1,23 @@
 # -*- coding: utf-8 -*-
 # config.py - Production Configuration for AI Hedge Fund System
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - ticker symbols (array)
+#   - end_date (string)
+#   - FINANCIAL_DATASETS_API_KEY
+#
+# OUTPUT:
+#   - Financial metrics: ROE, D/E, Current Ratio
+#   - Financial line items: Revenue, Net Income, FCF, Debt, Equity, Retained Earnings, Operating Margin, R&D, Shares
+#   - Market Cap
+#
+# PARAMETERS:
+#   - period="annual"
+#   - limit=10 years
+"""
+
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
