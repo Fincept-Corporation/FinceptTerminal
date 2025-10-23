@@ -5,6 +5,29 @@ Analytics Engine Module
 Advanced statistical analysis, forecasting, and scenario analysis for economic data.
 Provides sophisticated analytical capabilities including time series forecasting,
 statistical hypothesis testing, Monte Carlo simulation, and scenario analysis.
+
+===== DATA SOURCES REQUIRED =====
+INPUT:
+  - Pandas DataFrame/Series with economic/financial data
+  - Time series data with datetime index (for time series analysis)
+  - Scenario parameters (dictionaries for scenario analysis)
+  - Volatility, drift, base values (for Monte Carlo simulation)
+
+OUTPUT:
+  - Descriptive statistics (mean, median, variance, percentiles)
+  - Correlation matrices with p-values
+  - Hypothesis test results (t-tests, normality tests)
+  - Time series forecasts (ARIMA, exponential smoothing, linear trend)
+  - Monte Carlo simulation results with risk metrics
+  - Scenario analysis comparisons and sensitivity results
+
+PARAMETERS:
+  - precision: Decimal precision (default: 8)
+  - base_currency: Currency for calculations (default: 'USD')
+  - confidence_level: Statistical confidence (default: 0.95)
+  - forecast_periods: Number of periods to forecast (default: 12)
+  - num_simulations: Monte Carlo simulations (default: 1000)
+  - distribution: Probability distribution (default: 'normal')
 """
 
 import numpy as np
