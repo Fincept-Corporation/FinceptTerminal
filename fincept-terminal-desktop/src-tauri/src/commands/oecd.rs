@@ -1,18 +1,17 @@
 // OECD data commands based on OpenBB oecd provider
 use std::process::Command;
+use crate::utils::python::{get_python_path, get_script_path};
 
 /// Execute OECD Python script command
 #[tauri::command]
 pub async fn execute_oecd_command(
+    app: tauri::AppHandle, 
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
     // Get the Python script path
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let script_path = manifest_dir
-        .join("resources")
-        .join("scripts")
-        .join("oecd_data.py");
+    let python_path = get_python_path(&app)?;
+    let script_path = get_script_path(&app, "oecd_data.py")?;
 
     // Verify script exists
     if !script_path.exists() {
@@ -27,7 +26,7 @@ pub async fn execute_oecd_command(
     cmd_args.extend(args);
 
     // Execute Python script
-    let output = Command::new("python")
+    let output = Command::new(&python_path)
         .args(&cmd_args)
         .output()
         .map_err(|e| format!("Failed to execute OECD command: {}", e))?;
@@ -43,7 +42,7 @@ pub async fn execute_oecd_command(
 
 /// Get real GDP data for specified countries
 #[tauri::command]
-pub async fn get_oecd_gdp_real(
+pub async fn get_oecd_gdp_real(app: tauri::AppHandle, 
     countries: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -62,12 +61,12 @@ pub async fn get_oecd_gdp_real(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_oecd_command("gdp_real".to_string(), args).await
+    execute_oecd_command(app, "gdp_real".to_string(), args).await
 }
 
 /// Get Consumer Price Index data
 #[tauri::command]
-pub async fn get_oecd_consumer_price_index(
+pub async fn get_oecd_consumer_price_index(app: tauri::AppHandle, 
     countries: Option<String>,
     expenditure: Option<String>,
     frequency: Option<String>,
@@ -98,12 +97,12 @@ pub async fn get_oecd_consumer_price_index(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_oecd_command("cpi".to_string(), args).await
+    execute_oecd_command(app, "cpi".to_string(), args).await
 }
 
 /// Get GDP forecast data
 #[tauri::command]
-pub async fn get_oecd_gdp_forecast(
+pub async fn get_oecd_gdp_forecast(app: tauri::AppHandle, 
     countries: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -118,12 +117,12 @@ pub async fn get_oecd_gdp_forecast(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_oecd_command("gdp_forecast".to_string(), args).await
+    execute_oecd_command(app, "gdp_forecast".to_string(), args).await
 }
 
 /// Get unemployment rate data
 #[tauri::command]
-pub async fn get_oecd_unemployment(
+pub async fn get_oecd_unemployment(app: tauri::AppHandle, 
     countries: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -142,12 +141,12 @@ pub async fn get_oecd_unemployment(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_oecd_command("unemployment".to_string(), args).await
+    execute_oecd_command(app, "unemployment".to_string(), args).await
 }
 
 /// Get comprehensive economic summary for a country
 #[tauri::command]
-pub async fn get_oecd_economic_summary(
+pub async fn get_oecd_economic_summary(app: tauri::AppHandle, 
     country: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -162,11 +161,11 @@ pub async fn get_oecd_economic_summary(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_oecd_command("economic_summary".to_string(), args).await
+    execute_oecd_command(app, "economic_summary".to_string(), args).await
 }
 
 /// Get list of available countries and data categories
 #[tauri::command]
-pub async fn get_oecd_country_list() -> Result<String, String> {
-    execute_oecd_command("country_list".to_string(), vec![]).await
+pub async fn get_oecd_country_list(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_oecd_command(app, "country_list".to_string(), vec![]).await
 }

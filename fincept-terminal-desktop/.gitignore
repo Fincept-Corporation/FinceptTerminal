@@ -29,3 +29,4 @@ src-tauri/target
 # Python embeddable package (download separately)
 src-tauri/resources/python/
 !src-tauri/resources/scripts/
+fincept-terminal-desktop/nul

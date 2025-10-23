@@ -1,5 +1,6 @@
 // Polygon.io data commands
 use serde::{Deserialize, Serialize};
+use crate::utils::python::{get_python_path, get_script_path};
 use std::process::Command;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -12,15 +13,13 @@ pub struct PolygonResponse {
 /// Execute Polygon.io Python script command
 #[tauri::command]
 pub async fn execute_polygon_command(
+    app: tauri::AppHandle,
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
     // Get the Python script path - use CARGO_MANIFEST_DIR for correct path resolution
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let script_path = manifest_dir
-        .join("resources")
-        .join("scripts")
-        .join("polygon_data.py");
+    let python_path = get_python_path(&app)?;
+    let script_path = get_script_path(&app, "polygon_data.py")?;
 
     // Verify script exists
     if !script_path.exists() {
@@ -35,7 +34,7 @@ pub async fn execute_polygon_command(
     cmd_args.extend(args);
 
     // Execute Python script
-    let output = Command::new("python")
+    let output = Command::new(&python_path)
         .args(&cmd_args)
         .output()
         .map_err(|e| format!("Failed to execute command: {}", e))?;

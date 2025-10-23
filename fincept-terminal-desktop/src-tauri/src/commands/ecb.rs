@@ -1,18 +1,17 @@
 // ECB (European Central Bank) data commands based on OpenBB ECB provider
 use std::process::Command;
+use crate::utils::python::{get_python_path, get_script_path};
 
 /// Execute ECB Python script command
 #[tauri::command]
 pub async fn execute_ecb_command(
+    app: tauri::AppHandle, 
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
     // Get the Python script path
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let script_path = manifest_dir
-        .join("resources")
-        .join("scripts")
-        .join("ecb_data.py");
+    let python_path = get_python_path(&app)?;
+    let script_path = get_script_path(&app, "ecb_data.py")?;
 
     // Verify script exists
     if !script_path.exists() {
@@ -27,7 +26,7 @@ pub async fn execute_ecb_command(
     cmd_args.extend(args);
 
     // Execute Python script
-    let output = Command::new("python")
+    let output = Command::new(&python_path)
         .args(&cmd_args)
         .output()
         .map_err(|e| format!("Failed to execute ECB command: {}", e))?;
@@ -45,27 +44,27 @@ pub async fn execute_ecb_command(
 
 /// Get available ECB data categories and options
 #[tauri::command]
-pub async fn get_ecb_available_categories() -> Result<String, String> {
-    execute_ecb_command("available_categories".to_string(), vec![]).await
+pub async fn get_ecb_available_categories(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_ecb_command(app, "available_categories".to_string(), vec![]).await
 }
 
 /// Get currency reference rates (daily FX rates)
 #[tauri::command]
-pub async fn get_ecb_currency_reference_rates() -> Result<String, String> {
-    execute_ecb_command("currency_rates".to_string(), vec![]).await
+pub async fn get_ecb_currency_reference_rates(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_ecb_command(app, "currency_rates".to_string(), vec![]).await
 }
 
 /// Get ECB overview with multiple data sources
 #[tauri::command]
-pub async fn get_ecb_overview() -> Result<String, String> {
-    execute_ecb_command("overview".to_string(), vec![]).await
+pub async fn get_ecb_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_ecb_command(app, "overview".to_string(), vec![]).await
 }
 
 // YIELD CURVE COMMANDS
 
 /// Get yield curve data with specified parameters
 #[tauri::command]
-pub async fn get_ecb_yield_curve(
+pub async fn get_ecb_yield_curve(app: tauri::AppHandle, 
     rating: Option<String>,
     curve_type: Option<String>,
     date: Option<String>,
@@ -87,12 +86,12 @@ pub async fn get_ecb_yield_curve(
         args.push(d);
     }
 
-    execute_ecb_command("yield_curve".to_string(), args).await
+    execute_ecb_command(app, "yield_curve".to_string(), args).await
 }
 
 /// Get AAA-rated spot rate yield curve
 #[tauri::command]
-pub async fn get_ecb_yield_curve_aaa_spot(
+pub async fn get_ecb_yield_curve_aaa_spot(app: tauri::AppHandle, 
     date: Option<String>,
 ) -> Result<String, String> {
     let mut args = vec!["--rating".to_string(), "aaa".to_string(), "--type".to_string(), "spot_rate".to_string()];
@@ -102,12 +101,12 @@ pub async fn get_ecb_yield_curve_aaa_spot(
         args.push(d);
     }
 
-    execute_ecb_command("yield_curve".to_string(), args).await
+    execute_ecb_command(app, "yield_curve".to_string(), args).await
 }
 
 /// Get AAA-rated instantaneous forward yield curve
 #[tauri::command]
-pub async fn get_ecb_yield_curve_aaa_forward(
+pub async fn get_ecb_yield_curve_aaa_forward(app: tauri::AppHandle, 
     date: Option<String>,
 ) -> Result<String, String> {
     let mut args = vec!["--rating".to_string(), "aaa".to_string(), "--type".to_string(), "instantaneous_forward".to_string()];
@@ -117,12 +116,12 @@ pub async fn get_ecb_yield_curve_aaa_forward(
         args.push(d);
     }
 
-    execute_ecb_command("yield_curve".to_string(), args).await
+    execute_ecb_command(app, "yield_curve".to_string(), args).await
 }
 
 /// Get AAA-rated par yield curve
 #[tauri::command]
-pub async fn get_ecb_yield_curve_aaa_par_yield(
+pub async fn get_ecb_yield_curve_aaa_par_yield(app: tauri::AppHandle, 
     date: Option<String>,
 ) -> Result<String, String> {
     let mut args = vec!["--rating".to_string(), "aaa".to_string(), "--type".to_string(), "par_yield".to_string()];
@@ -132,12 +131,12 @@ pub async fn get_ecb_yield_curve_aaa_par_yield(
         args.push(d);
     }
 
-    execute_ecb_command("yield_curve".to_string(), args).await
+    execute_ecb_command(app, "yield_curve".to_string(), args).await
 }
 
 /// Get all ratings spot rate yield curve
 #[tauri::command]
-pub async fn get_ecb_yield_curve_all_spot(
+pub async fn get_ecb_yield_curve_all_spot(app: tauri::AppHandle, 
     date: Option<String>,
 ) -> Result<String, String> {
     let mut args = vec!["--rating".to_string(), "all_ratings".to_string(), "--type".to_string(), "spot_rate".to_string()];
@@ -147,12 +146,12 @@ pub async fn get_ecb_yield_curve_all_spot(
         args.push(d);
     }
 
-    execute_ecb_command("yield_curve".to_string(), args).await
+    execute_ecb_command(app, "yield_curve".to_string(), args).await
 }
 
 /// Get all ratings instantaneous forward yield curve
 #[tauri::command]
-pub async fn get_ecb_yield_curve_all_forward(
+pub async fn get_ecb_yield_curve_all_forward(app: tauri::AppHandle, 
     date: Option<String>,
 ) -> Result<String, String> {
     let mut args = vec!["--rating".to_string(), "all_ratings".to_string(), "--type".to_string(), "instantaneous_forward".to_string()];
@@ -162,12 +161,12 @@ pub async fn get_ecb_yield_curve_all_forward(
         args.push(d);
     }
 
-    execute_ecb_command("yield_curve".to_string(), args).await
+    execute_ecb_command(app, "yield_curve".to_string(), args).await
 }
 
 /// Get all ratings par yield curve
 #[tauri::command]
-pub async fn get_ecb_yield_curve_all_par_yield(
+pub async fn get_ecb_yield_curve_all_par_yield(app: tauri::AppHandle, 
     date: Option<String>,
 ) -> Result<String, String> {
     let mut args = vec!["--rating".to_string(), "all_ratings".to_string(), "--type".to_string(), "par_yield".to_string()];
@@ -177,14 +176,14 @@ pub async fn get_ecb_yield_curve_all_par_yield(
         args.push(d);
     }
 
-    execute_ecb_command("yield_curve".to_string(), args).await
+    execute_ecb_command(app, "yield_curve".to_string(), args).await
 }
 
 // BALANCE OF PAYMENTS COMMANDS
 
 /// Get balance of payments data with specified parameters
 #[tauri::command]
-pub async fn get_ecb_balance_of_payments(
+pub async fn get_ecb_balance_of_payments(app: tauri::AppHandle, 
     country: Option<String>,
     frequency: Option<String>,
     report_type: Option<String>,
@@ -206,12 +205,12 @@ pub async fn get_ecb_balance_of_payments(
         args.push(rt);
     }
 
-    execute_ecb_command("balance_of_payments".to_string(), args).await
+    execute_ecb_command(app, "balance_of_payments".to_string(), args).await
 }
 
 /// Get main balance of payments data for a country
 #[tauri::command]
-pub async fn get_ecb_bop_main(
+pub async fn get_ecb_bop_main(app: tauri::AppHandle, 
     country: String,
     frequency: Option<String>,
 ) -> Result<String, String> {
@@ -222,12 +221,12 @@ pub async fn get_ecb_bop_main(
         args.push(f);
     }
 
-    execute_ecb_command("balance_of_payments".to_string(), args).await
+    execute_ecb_command(app, "balance_of_payments".to_string(), args).await
 }
 
 /// Get summary balance of payments data for a country
 #[tauri::command]
-pub async fn get_ecb_bop_summary(
+pub async fn get_ecb_bop_summary(app: tauri::AppHandle, 
     country: String,
     frequency: Option<String>,
 ) -> Result<String, String> {
@@ -238,12 +237,12 @@ pub async fn get_ecb_bop_summary(
         args.push(f);
     }
 
-    execute_ecb_command("balance_of_payments".to_string(), args).await
+    execute_ecb_command(app, "balance_of_payments".to_string(), args).await
 }
 
 /// Get services balance of payments data for a country
 #[tauri::command]
-pub async fn get_ecb_bop_services(
+pub async fn get_ecb_bop_services(app: tauri::AppHandle, 
     country: String,
 ) -> Result<String, String> {
     let args = vec![
@@ -255,12 +254,12 @@ pub async fn get_ecb_bop_services(
         "quarterly".to_string()
     ];
 
-    execute_ecb_command("balance_of_payments".to_string(), args).await
+    execute_ecb_command(app, "balance_of_payments".to_string(), args).await
 }
 
 /// Get investment income balance of payments data for a country
 #[tauri::command]
-pub async fn get_ecb_bop_investment_income(
+pub async fn get_ecb_bop_investment_income(app: tauri::AppHandle, 
     country: String,
 ) -> Result<String, String> {
     let args = vec![
@@ -272,12 +271,12 @@ pub async fn get_ecb_bop_investment_income(
         "quarterly".to_string()
     ];
 
-    execute_ecb_command("balance_of_payments".to_string(), args).await
+    execute_ecb_command(app, "balance_of_payments".to_string(), args).await
 }
 
 /// Get direct investment balance of payments data for a country
 #[tauri::command]
-pub async fn get_ecb_bop_direct_investment(
+pub async fn get_ecb_bop_direct_investment(app: tauri::AppHandle, 
     country: String,
 ) -> Result<String, String> {
     let args = vec![
@@ -289,12 +288,12 @@ pub async fn get_ecb_bop_direct_investment(
         "quarterly".to_string()
     ];
 
-    execute_ecb_command("balance_of_payments".to_string(), args).await
+    execute_ecb_command(app, "balance_of_payments".to_string(), args).await
 }
 
 /// Get portfolio investment balance of payments data for a country
 #[tauri::command]
-pub async fn get_ecb_bop_portfolio_investment(
+pub async fn get_ecb_bop_portfolio_investment(app: tauri::AppHandle, 
     country: String,
 ) -> Result<String, String> {
     let args = vec![
@@ -306,12 +305,12 @@ pub async fn get_ecb_bop_portfolio_investment(
         "quarterly".to_string()
     ];
 
-    execute_ecb_command("balance_of_payments".to_string(), args).await
+    execute_ecb_command(app, "balance_of_payments".to_string(), args).await
 }
 
 /// Get other investment balance of payments data for a country
 #[tauri::command]
-pub async fn get_ecb_bop_other_investment(
+pub async fn get_ecb_bop_other_investment(app: tauri::AppHandle, 
     country: String,
 ) -> Result<String, String> {
     let args = vec![
@@ -323,80 +322,80 @@ pub async fn get_ecb_bop_other_investment(
         "quarterly".to_string()
     ];
 
-    execute_ecb_command("balance_of_payments".to_string(), args).await
+    execute_ecb_command(app, "balance_of_payments".to_string(), args).await
 }
 
 // CONVENIENCE COMMANDS FOR MAJOR ECONOMIES
 
 /// Get US balance of payments data
 #[tauri::command]
-pub async fn get_ecb_bop_united_states(
+pub async fn get_ecb_bop_united_states(app: tauri::AppHandle, 
     frequency: Option<String>,
 ) -> Result<String, String> {
-    get_ecb_bop_main("US".to_string(), frequency).await
+    get_ecb_bop_main(app, "US".to_string(), frequency).await
 }
 
 /// Get Japan balance of payments data
 #[tauri::command]
-pub async fn get_ecb_bop_japan(
+pub async fn get_ecb_bop_japan(app: tauri::AppHandle, 
     frequency: Option<String>,
 ) -> Result<String, String> {
-    get_ecb_bop_main("JP".to_string(), frequency).await
+    get_ecb_bop_main(app, "JP".to_string(), frequency).await
 }
 
 /// Get United Kingdom balance of payments data
 #[tauri::command]
-pub async fn get_ecb_bop_united_kingdom(
+pub async fn get_ecb_bop_united_kingdom(app: tauri::AppHandle, 
     frequency: Option<String>,
 ) -> Result<String, String> {
-    get_ecb_bop_main("GB".to_string(), frequency).await
+    get_ecb_bop_main(app, "GB".to_string(), frequency).await
 }
 
 /// Get Switzerland balance of payments data
 #[tauri::command]
-pub async fn get_ecb_bop_switzerland(
+pub async fn get_ecb_bop_switzerland(app: tauri::AppHandle, 
     frequency: Option<String>,
 ) -> Result<String, String> {
-    get_ecb_bop_main("CH".to_string(), frequency).await
+    get_ecb_bop_main(app, "CH".to_string(), frequency).await
 }
 
 /// Get Canada balance of payments data
 #[tauri::command]
-pub async fn get_ecb_bop_canada(
+pub async fn get_ecb_bop_canada(app: tauri::AppHandle, 
     frequency: Option<String>,
 ) -> Result<String, String> {
-    get_ecb_bop_main("CA".to_string(), frequency).await
+    get_ecb_bop_main(app, "CA".to_string(), frequency).await
 }
 
 /// Get Australia balance of payments data
 #[tauri::command]
-pub async fn get_ecb_bop_australia(
+pub async fn get_ecb_bop_australia(app: tauri::AppHandle, 
     frequency: Option<String>,
 ) -> Result<String, String> {
-    get_ecb_bop_main("AU".to_string(), frequency).await
+    get_ecb_bop_main(app, "AU".to_string(), frequency).await
 }
 
 // ANALYSIS COMMANDS
 
 /// Get comprehensive ECB financial markets analysis
 #[tauri::command]
-pub async fn get_ecb_financial_markets_analysis() -> Result<String, String> {
+pub async fn get_ecb_financial_markets_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get currency rates
-    match get_ecb_currency_reference_rates().await {
+    match get_ecb_currency_reference_rates(app.clone()).await {
         Ok(data) => results.push(("currency_rates".to_string(), data)),
         Err(e) => results.push(("currency_rates".to_string(), format!("Error: {}", e))),
     }
 
     // Get AAA yield curve
-    match get_ecb_yield_curve_aaa_spot(None).await {
+    match get_ecb_yield_curve_aaa_spot(app.clone(), None).await {
         Ok(data) => results.push(("yield_curve_aaa_spot".to_string(), data)),
         Err(e) => results.push(("yield_curve_aaa_spot".to_string(), format!("Error: {}", e))),
     }
 
     // Get all ratings yield curve
-    match get_ecb_yield_curve_all_spot(None).await {
+    match get_ecb_yield_curve_all_spot(app.clone(), None).await {
         Ok(data) => results.push(("yield_curve_all_spot".to_string(), data)),
         Err(e) => results.push(("yield_curve_all_spot".to_string(), format!("Error: {}", e))),
     }
@@ -410,7 +409,7 @@ pub async fn get_ecb_financial_markets_analysis() -> Result<String, String> {
 
 /// Get ECB yield curve analysis comparing different ratings and types
 #[tauri::command]
-pub async fn get_ecb_yield_curve_analysis(
+pub async fn get_ecb_yield_curve_analysis(app: tauri::AppHandle, 
     date: Option<String>,
 ) -> Result<String, String> {
     let mut results = Vec::new();
@@ -426,7 +425,7 @@ pub async fn get_ecb_yield_curve_analysis(
     ];
 
     for (name, rating, curve_type) in curve_types {
-        match get_ecb_yield_curve(
+        match get_ecb_yield_curve(app.clone(), 
             Some(rating.to_string()),
             Some(curve_type.to_string()),
             date.clone()
@@ -446,7 +445,7 @@ pub async fn get_ecb_yield_curve_analysis(
 
 /// Get ECB major economies balance of payments analysis
 #[tauri::command]
-pub async fn get_ecb_major_economies_bop_analysis(
+pub async fn get_ecb_major_economies_bop_analysis(app: tauri::AppHandle, 
     frequency: Option<String>,
 ) -> Result<String, String> {
     let mut results = Vec::new();
@@ -464,7 +463,7 @@ pub async fn get_ecb_major_economies_bop_analysis(
     ];
 
     for (code, _name) in countries {
-        match get_ecb_bop_main(code.to_string(), frequency.clone()).await {
+        match get_ecb_bop_main(app.clone(), code.to_string(), frequency.clone()).await {
             Ok(data) => results.push((format!("bop_{}", code.to_lowercase()), data)),
             Err(e) => results.push((format!("bop_{}", code.to_lowercase()), format!("Error: {}", e))),
         }
@@ -480,7 +479,7 @@ pub async fn get_ecb_major_economies_bop_analysis(
 
 /// Get custom ECB analysis for specific countries and parameters
 #[tauri::command]
-pub async fn get_ecb_custom_analysis(
+pub async fn get_ecb_custom_analysis(app: tauri::AppHandle, 
     countries: String,  // Comma-separated country codes
     include_yield_curve: Option<bool>,
     include_currency_rates: Option<bool>,
@@ -489,7 +488,7 @@ pub async fn get_ecb_custom_analysis(
 
     // Get currency rates if requested
     if include_yield_curve.unwrap_or(true) {
-        match get_ecb_currency_reference_rates().await {
+        match get_ecb_currency_reference_rates(app.clone()).await {
             Ok(data) => results.push(("currency_rates".to_string(), data)),
             Err(e) => results.push(("currency_rates".to_string(), format!("Error: {}", e))),
         }
@@ -497,7 +496,7 @@ pub async fn get_ecb_custom_analysis(
 
     // Get yield curve if requested
     if include_yield_curve.unwrap_or(true) {
-        match get_ecb_yield_curve_aaa_spot(None).await {
+        match get_ecb_yield_curve_aaa_spot(app.clone(), None).await {
             Ok(data) => results.push(("yield_curve".to_string(), data)),
             Err(e) => results.push(("yield_curve".to_string(), format!("Error: {}", e))),
         }
@@ -507,7 +506,7 @@ pub async fn get_ecb_custom_analysis(
     let country_list: Vec<&str> = countries.split(',').collect();
     for country_code in country_list {
         let trimmed_code = country_code.trim();
-        match get_ecb_bop_main(trimmed_code.to_string(), None).await {
+        match get_ecb_bop_main(app.clone(), trimmed_code.to_string(), None).await {
             Ok(data) => results.push((format!("bop_{}", trimmed_code.to_lowercase()), data)),
             Err(e) => results.push((format!("bop_{}", trimmed_code.to_lowercase()), format!("Error: {}", e))),
         }
@@ -528,17 +527,17 @@ pub async fn get_ecb_custom_analysis(
 
 /// Get current ECB market snapshot
 #[tauri::command]
-pub async fn get_ecb_current_market_snapshot() -> Result<String, String> {
+pub async fn get_ecb_current_market_snapshot(app: tauri::AppHandle, ) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get current currency rates
-    match get_ecb_currency_reference_rates().await {
+    match get_ecb_currency_reference_rates(app.clone()).await {
         Ok(data) => results.push(("currency_rates".to_string(), data)),
         Err(e) => results.push(("currency_rates".to_string(), format!("Error: {}", e))),
     }
 
     // Get current yield curve
-    match get_ecb_yield_curve_aaa_spot(None).await {
+    match get_ecb_yield_curve_aaa_spot(app.clone(), None).await {
         Ok(data) => results.push(("yield_curve_current".to_string(), data)),
         Err(e) => results.push(("yield_curve_current".to_string(), format!("Error: {}", e))),
     }
