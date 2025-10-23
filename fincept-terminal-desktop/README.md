@@ -6,17 +6,17 @@ A modern, cross-platform terminal application built with Tauri and React. Experi
 
 ## 📥 Download Latest Build
 
-**Version:** `v3.0.0` | **Commit:** `7a750c4` | **Released:** 2025-10-22 11:47 UTC
+**Version:** `v3.0.0` | **Commit:** `0532172` | **Released:** 2025-10-23 06:22 UTC
 
 ### 🎯 Direct Downloads - Click to Download Immediately!
 
 | Platform | Architecture | Direct Download |
 |----------|-------------|----------------|
-| 🍎 **macOS** | Apple Silicon (ARM64) | [⬇️ **Download .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg) |
-| 🍎 **macOS** | Intel (x64) | [⬇️ **Download .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg) |
-| 🐧 **Linux** | x64 (AppImage) | [⬇️ **Download .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧 **Linux** | x64 (Debian) | [⬇️ **Download .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb) |
-| 🪟 **Windows** | x64 | [⬇️ **Download .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi) |
+| 🍎 **macOS** | Apple Silicon (ARM64) | [⬇️ **Download .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-50/FinceptTerminal-v3.0.0-macOS-arm64.dmg) |
+| 🍎 **macOS** | Intel (x64) | [⬇️ **Download .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-50/FinceptTerminal-v3.0.0-macOS-x64.dmg) |
+| 🐧 **Linux** | x64 (AppImage) | [⬇️ **Download .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-50/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧 **Linux** | x64 (Debian) | [⬇️ **Download .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-50/FinceptTerminal-v3.0.0-Linux-x64.deb) |
+| 🪟 **Windows** | x64 | [⬇️ **Download .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-50/FinceptTerminal-v3.0.0-Windows-x64.msi) |
 
 > ✨ **One-Click Downloads!** These links will start downloading immediately - no GitHub login required!
 
