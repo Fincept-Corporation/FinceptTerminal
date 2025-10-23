@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 # agents/supply_chain_agent.py - Supply Chain Analysis Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - supply chain data
+#   - logistics metrics
+#   - inventory levels
+#   - shipping information
+#
+# OUTPUT:
+#   - Supply chain risk assessments
+#   - Disruption alerts
+#   - Efficiency metrics
+#   - Supplier risk analysis
+#
+# PARAMETERS:
+#   - supply_chain_tiers
+#   - risk_indicators
+#   - monitoring_regions
+#   - disruption_thresholds
+"""
+
 import asyncio
 import numpy as np
 import pandas as pd

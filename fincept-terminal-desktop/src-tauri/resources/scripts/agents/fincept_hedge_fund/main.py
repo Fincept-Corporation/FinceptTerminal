@@ -1,6 +1,30 @@
 # -*- coding: utf-8 -*-
 # main.py - AI Hedge Fund Orchestrator and Execution Engine
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - Agent reports from all hedge fund agents
+#   - Market data feeds (real-time and historical)
+#   - Portfolio current positions and allocations
+#   - Risk management parameters and limits
+#   - Trading signals and market regime data
+#
+# OUTPUT:
+#   - Aggregated trading signals with conviction scores
+#   - Portfolio recommendations with asset allocations
+#   - Risk-adjusted position sizes using Kelly Criterion
+#   - Execution results with trading costs and slippage
+#   - Performance metrics and portfolio analytics
+#
+# PARAMETERS:
+#   - max_position_size: Maximum single position limit (default 10%)
+#   - max_sector_exposure: Maximum sector allocation limit (default 25%)
+#   - var_limit: Value-at-Risk limit (default 5%)
+#   - update_frequency: Analysis cycle frequency (default 60 seconds)
+#   - agent_weights: Weight distribution for different agents
+"""
+
 import asyncio
 import logging
 import json

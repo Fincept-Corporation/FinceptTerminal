@@ -1,3 +1,23 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - model names
+#   - installation preferences
+#   - download confirmations
+#
+# OUTPUT:
+#   - Local model availability
+#   - Installation status
+#   - Download progress
+#   - Server connectivity status
+#
+# PARAMETERS:
+#   - model_name: Name of the Ollama model to manage
+#   - ollama_url: Server URL for Ollama API communication
+#   - system: Operating system platform
+#   - max_wait_time: Timeout duration for server startup operations
+"""
+
 """Utilities for working with Ollama models"""
 
 import platform

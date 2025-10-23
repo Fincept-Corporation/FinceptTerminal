@@ -1,6 +1,26 @@
 # -*- coding: utf-8 -*-
 # agents/behavioral_agent.py - Behavioral Finance Analysis Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - market sentiment data
+#   - behavioral indicators
+#   - psychological market patterns
+#
+# OUTPUT:
+#   - Behavioral finance signals
+#   - Market sentiment analysis
+#   - Anomaly detection results
+#   - Behavioral pattern recognition
+#
+# PARAMETERS:
+#   - sentiment_data_sources
+#   - behavioral_models
+#   - anomaly_thresholds
+#   - psychological_indicators
+"""
+
 import asyncio
 import numpy as np
 from datetime import datetime, timedelta

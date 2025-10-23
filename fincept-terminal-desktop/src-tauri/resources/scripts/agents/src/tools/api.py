@@ -1,3 +1,28 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - ticker symbols (array)
+#   - end_date (string)
+#   - FINANCIAL_DATASETS_API_KEY
+#   - start_date (optional string)
+#   - period (string, default "ttm")
+#   - limit (integer, default varies by function)
+#
+# OUTPUT:
+#   - Price data: OHLCV with timestamps
+#   - Financial metrics: ROE, D/E, Current Ratio, P/E, P/B, etc.
+#   - Financial line items: Revenue, Net Income, FCF, Debt, Equity, Retained Earnings, Operating Margin, R&D, Shares
+#   - Company news with sentiment data
+#   - Insider trades with filing dates
+#   - Market capitalization data
+#
+# PARAMETERS:
+#   - period="ttm" or "annual" or "quarterly"
+#   - limit=10 years for financial metrics
+#   - max_retries=3 for API requests
+#   - interval="day" for price data
+"""
+
 import datetime
 import os
 import pandas as pd

@@ -1,5 +1,27 @@
 # ===== HEDGE FUND AGENTS INTEGRATION GUIDE =====
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - ticker symbols (array)
+#   - end_date (string)
+#   - Mock financial data for testing
+#   - API keys for different LLM providers
+#   - Hedge fund agent selections and configurations
+#
+# OUTPUT:
+#   - Consensus trading signals from multiple hedge funds
+#   - Individual fund analysis results
+#   - Web service endpoints with JSON responses
+#   - Portfolio recommendations with confidence scores
+#
+# PARAMETERS:
+#   - consensus_threshold: 60% agreement for bullish/bearish signals
+#   - llm_providers: OpenRouter, Ollama, OpenAI configurations
+#   - selected_funds: List of hedge funds to run analysis
+#   - web_service_endpoints: REST API endpoints for analysis
+"""
+
 # 1. STANDALONE USAGE (Direct Import)
 from bridgewater_hedge_fund import bridgewater_associates_agent
 from renaissance_hedge_fund import renaissance_technologies_agent
