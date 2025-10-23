@@ -10,6 +10,7 @@ use sha2::{Sha256, Digest};
 // Data sources and commands modules
 mod data_sources;
 mod commands;
+mod utils;
 
 // Global state to manage MCP server processes
 struct MCPState {
@@ -202,21 +203,26 @@ fn sha256_hash(input: String) -> String {
 // Execute Python script with arguments and environment variables
 #[tauri::command]
 fn execute_python_script(
+    app: tauri::AppHandle,
     script_name: String,
     args: Vec<String>,
     env: Option<HashMap<String, String>>,
 ) -> Result<String, String> {
     println!("[Tauri] Executing Python script: {} with args: {:?}", script_name, args);
 
-    let python_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("resources")
-        .join("python")
-        .join("python.exe");
+    let python_path = utils::python::get_python_path(&app)?;
+    let script_path = utils::python::get_script_path(&app, &script_name)?;
 
-    let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("resources")
-        .join("scripts")
-        .join(&script_name);
+    println!("[Tauri] Python path: {:?}", python_path);
+    println!("[Tauri] Script path: {:?}", script_path);
+
+    // Verify paths exist
+    if !python_path.exists() {
+        return Err(format!("Python executable not found at: {:?}", python_path));
+    }
+    if !script_path.exists() {
+        return Err(format!("Script not found at: {:?}", script_path));
+    }
 
     let mut cmd = Command::new(&python_path);
     cmd.arg(&script_path).args(&args);
@@ -675,7 +681,114 @@ pub fn run() {
             commands::oscar::oscar_get_instrument_types,
             commands::oscar::oscar_search_weather_instruments,
             commands::oscar::oscar_get_climate_monitoring_instruments,
-            commands::oscar::oscar_get_overview_statistics
+            commands::oscar::oscar_get_overview_statistics,
+            // FRED (Federal Reserve Economic Data) Commands
+            commands::fred::execute_fred_command,
+            commands::fred::get_fred_series,
+            commands::fred::search_fred_series,
+            commands::fred::get_fred_series_info,
+            commands::fred::get_fred_category,
+            commands::fred::get_fred_multiple_series,
+            // CoinGecko Commands
+            commands::coingecko::execute_coingecko_command,
+            commands::coingecko::get_coingecko_price,
+            commands::coingecko::get_coingecko_market_data,
+            commands::coingecko::get_coingecko_historical,
+            commands::coingecko::search_coingecko_coins,
+            commands::coingecko::get_coingecko_trending,
+            commands::coingecko::get_coingecko_global_data,
+            commands::coingecko::get_coingecko_top_coins,
+            // World Bank Commands
+            commands::worldbank::execute_worldbank_command,
+            commands::worldbank::get_worldbank_indicator,
+            commands::worldbank::search_worldbank_indicators,
+            commands::worldbank::get_worldbank_country_info,
+            commands::worldbank::get_worldbank_countries,
+            commands::worldbank::get_worldbank_gdp,
+            commands::worldbank::get_worldbank_economic_overview,
+            commands::worldbank::get_worldbank_development_indicators,
+            // Trading Economics Commands
+            commands::trading_economics::execute_trading_economics_command,
+            commands::trading_economics::get_trading_economics_indicators,
+            commands::trading_economics::get_trading_economics_historical,
+            commands::trading_economics::get_trading_economics_calendar,
+            commands::trading_economics::get_trading_economics_markets,
+            commands::trading_economics::get_trading_economics_ratings,
+            commands::trading_economics::get_trading_economics_forecasts,
+            // EconDB Commands
+            commands::econdb::execute_econdb_command,
+            commands::econdb::get_econdb_series,
+            commands::econdb::search_econdb_indicators,
+            commands::econdb::get_econdb_datasets,
+            commands::econdb::get_econdb_country_data,
+            commands::econdb::get_econdb_multiple_series,
+            // Canada Government Commands
+            commands::canada_gov::execute_canada_gov_command,
+            commands::canada_gov::search_canada_gov_datasets,
+            commands::canada_gov::get_canada_gov_dataset,
+            commands::canada_gov::get_canada_gov_economic_data,
+            // UK Government Commands
+            commands::datagovuk::execute_datagovuk_command,
+            commands::datagovuk::search_datagovuk_datasets,
+            commands::datagovuk::get_datagovuk_dataset,
+            // Australian Government Commands
+            commands::datagov_au::execute_datagov_au_command,
+            commands::datagov_au::search_datagov_au_datasets,
+            commands::datagov_au::get_datagov_au_dataset,
+            // Japan Statistics Commands
+            commands::estat_japan::execute_estat_japan_command,
+            commands::estat_japan::get_estat_japan_data,
+            commands::estat_japan::search_estat_japan_stats,
+            // German Government Commands
+            commands::govdata_de::execute_govdata_de_command,
+            commands::govdata_de::search_govdata_de_datasets,
+            commands::govdata_de::get_govdata_de_dataset,
+            // Singapore Government Commands
+            commands::datagovsg::execute_datagovsg_command,
+            commands::datagovsg::search_datagovsg_datasets,
+            commands::datagovsg::get_datagovsg_dataset,
+            // Hong Kong Government Commands
+            commands::data_gov_hk::execute_data_gov_hk_command,
+            commands::data_gov_hk::search_data_gov_hk_datasets,
+            commands::data_gov_hk::get_data_gov_hk_dataset,
+            // French Government Commands
+            commands::french_gov::execute_french_gov_command,
+            commands::french_gov::search_french_gov_datasets,
+            commands::french_gov::get_french_gov_dataset,
+            // Swiss Government Commands
+            commands::swiss_gov::execute_swiss_gov_command,
+            commands::swiss_gov::search_swiss_gov_datasets,
+            commands::swiss_gov::get_swiss_gov_dataset,
+            // Spain Data Commands
+            commands::spain_data::execute_spain_data_command,
+            commands::spain_data::get_spain_economic_data,
+            commands::spain_data::search_spain_datasets,
+            // Asian Development Bank Commands
+            commands::adb::execute_adb_command,
+            commands::adb::get_adb_indicators,
+            commands::adb::search_adb_datasets,
+            commands::adb::get_adb_development_data,
+            // OpenAFRICA Commands
+            commands::openafrica::execute_openafrica_command,
+            commands::openafrica::search_openafrica_datasets,
+            commands::openafrica::get_openafrica_dataset,
+            commands::openafrica::get_openafrica_country_datasets,
+            // Economic Calendar Commands
+            commands::economic_calendar::execute_economic_calendar_command,
+            commands::economic_calendar::get_economic_calendar_today,
+            commands::economic_calendar::get_economic_calendar_upcoming,
+            commands::economic_calendar::get_economic_calendar_by_country,
+            commands::economic_calendar::get_economic_calendar_high_impact,
+            // Databento Commands
+            commands::databento::execute_databento_command,
+            commands::databento::get_databento_market_data,
+            commands::databento::get_databento_datasets,
+            commands::databento::get_databento_historical,
+            // Sentinel Hub Commands
+            commands::sentinelhub::execute_sentinelhub_command,
+            commands::sentinelhub::get_sentinelhub_imagery,
+            commands::sentinelhub::get_sentinelhub_collections,
+            commands::sentinelhub::search_sentinelhub_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

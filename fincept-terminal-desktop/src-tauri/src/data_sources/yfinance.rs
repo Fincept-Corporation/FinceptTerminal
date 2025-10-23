@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 use anyhow::{Result, Context};
 use std::process::Command;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuoteData {
@@ -31,12 +32,23 @@ pub struct HistoricalData {
     pub adj_close: f64,
 }
 
-pub struct YFinanceProvider {}
+pub struct YFinanceProvider {
+    python_path: PathBuf,
+    script_path: PathBuf,
+}
 
 impl YFinanceProvider {
-    /// Create a new YFinance provider instance
-    pub fn new() -> Self {
-        Self {}
+    /// Create a new YFinance provider instance with runtime paths
+    pub fn new(app: &tauri::AppHandle) -> Result<Self> {
+        let python_path = crate::utils::python::get_python_path(app)
+            .map_err(|e| anyhow::anyhow!(e))?;
+        let script_path = crate::utils::python::get_script_path(app, "yfinance_data.py")
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        Ok(Self {
+            python_path,
+            script_path,
+        })
     }
 
     /// Fetch real-time quote for a single symbol
@@ -62,18 +74,8 @@ impl YFinanceProvider {
 
     /// Internal batch fetch method - calls Python yfinance script with multiple symbols
     async fn fetch_batch_quotes(&self, symbols: Vec<String>) -> Result<Vec<QuoteData>> {
-        let python_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("python")
-            .join("python.exe");
-
-        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("scripts")
-            .join("yfinance_data.py");
-
-        let mut cmd = Command::new(&python_path);
-        cmd.arg(&script_path).arg("batch_quotes");
+        let mut cmd = Command::new(&self.python_path);
+        cmd.arg(&self.script_path).arg("batch_quotes");
 
         for symbol in symbols {
             cmd.arg(symbol);
@@ -97,19 +99,8 @@ impl YFinanceProvider {
 
     /// Internal fetch method - calls Python yfinance script
     async fn fetch_quote(&self, symbol: &str) -> Result<QuoteData> {
-        // Use absolute path from project root
-        let python_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("python")
-            .join("python.exe");
-
-        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("scripts")
-            .join("yfinance_data.py");
-
-        let output = Command::new(&python_path)
-            .arg(&script_path)
+        let output = Command::new(&self.python_path)
+            .arg(&self.script_path)
             .arg("quote")
             .arg(symbol)
             .output()
@@ -151,18 +142,8 @@ impl YFinanceProvider {
         start_date: &str,
         end_date: &str,
     ) -> Result<Vec<HistoricalData>> {
-        let python_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("python")
-            .join("python.exe");
-
-        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("scripts")
-            .join("yfinance_data.py");
-
-        let output = Command::new(&python_path)
-            .arg(&script_path)
+        let output = Command::new(&self.python_path)
+            .arg(&self.script_path)
             .arg("historical")
             .arg(symbol)
             .arg(start_date)
@@ -234,18 +215,8 @@ impl YFinanceProvider {
 
     /// Internal info fetch method - calls Python yfinance script
     async fn fetch_info(&self, symbol: &str) -> Result<serde_json::Value> {
-        let python_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("python")
-            .join("python.exe");
-
-        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("scripts")
-            .join("yfinance_data.py");
-
-        let output = Command::new(&python_path)
-            .arg(&script_path)
+        let output = Command::new(&self.python_path)
+            .arg(&self.script_path)
             .arg("info")
             .arg(symbol)
             .output()
@@ -273,18 +244,8 @@ impl YFinanceProvider {
 
     /// Internal financials fetch method - calls Python yfinance script
     async fn fetch_financials(&self, symbol: &str) -> Result<serde_json::Value> {
-        let python_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("python")
-            .join("python.exe");
-
-        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("resources")
-            .join("scripts")
-            .join("yfinance_data.py");
-
-        let output = Command::new(&python_path)
-            .arg(&script_path)
+        let output = Command::new(&self.python_path)
+            .arg(&self.script_path)
             .arg("financials")
             .arg(symbol)
             .output()
@@ -303,11 +264,7 @@ impl YFinanceProvider {
     }
 }
 
-impl Default for YFinanceProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Removed Default implementation - requires AppHandle
 
 #[cfg(test)]
 mod tests {

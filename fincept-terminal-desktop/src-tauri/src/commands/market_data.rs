@@ -35,9 +35,9 @@ pub struct PeriodReturnsResponse {
 
 /// Fetch a single quote
 #[tauri::command]
-pub async fn get_market_quote(symbol: String) -> Result<QuoteResponse, String> {
+pub async fn get_market_quote(app: tauri::AppHandle, symbol: String) -> Result<QuoteResponse, String> {
 
-    let provider = YFinanceProvider::new();
+    let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_quote(&symbol).await {
         Some(quote) => Ok(QuoteResponse {
@@ -55,9 +55,9 @@ pub async fn get_market_quote(symbol: String) -> Result<QuoteResponse, String> {
 
 /// Fetch multiple quotes (batch)
 #[tauri::command]
-pub async fn get_market_quotes(symbols: Vec<String>) -> Result<QuotesResponse, String> {
+pub async fn get_market_quotes(app: tauri::AppHandle, symbols: Vec<String>) -> Result<QuotesResponse, String> {
 
-    let provider = YFinanceProvider::new();
+    let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
     let quotes = provider.get_quotes(symbols).await;
 
     Ok(QuotesResponse {
@@ -69,9 +69,9 @@ pub async fn get_market_quotes(symbols: Vec<String>) -> Result<QuotesResponse, S
 
 /// Fetch period returns (7D, 30D)
 #[tauri::command]
-pub async fn get_period_returns(symbol: String) -> Result<PeriodReturnsResponse, String> {
+pub async fn get_period_returns(app: tauri::AppHandle, symbol: String) -> Result<PeriodReturnsResponse, String> {
 
-    let provider = YFinanceProvider::new();
+    let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_period_returns(&symbol).await {
         Some((seven_day, thirty_day)) => Ok(PeriodReturnsResponse {
@@ -93,8 +93,8 @@ pub async fn get_period_returns(symbol: String) -> Result<PeriodReturnsResponse,
 
 /// Health check for market data provider
 #[tauri::command]
-pub async fn check_market_data_health() -> Result<bool, String> {
-    let provider = YFinanceProvider::new();
+pub async fn check_market_data_health(app: tauri::AppHandle) -> Result<bool, String> {
+    let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
     Ok(provider.health_check().await)
 }
 
@@ -108,11 +108,12 @@ pub struct HistoricalResponse {
 /// Fetch historical data for a symbol
 #[tauri::command]
 pub async fn get_historical_data(
+    app: tauri::AppHandle,
     symbol: String,
     start_date: String,
     end_date: String,
 ) -> Result<HistoricalResponse, String> {
-    let provider = YFinanceProvider::new();
+    let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_historical(&symbol, &start_date, &end_date).await {
         Some(data) => Ok(HistoricalResponse {
@@ -137,8 +138,8 @@ pub struct StockInfoResponse {
 
 /// Fetch stock info (company data, metrics, etc.)
 #[tauri::command]
-pub async fn get_stock_info(symbol: String) -> Result<StockInfoResponse, String> {
-    let provider = YFinanceProvider::new();
+pub async fn get_stock_info(app: tauri::AppHandle, symbol: String) -> Result<StockInfoResponse, String> {
+    let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_info(&symbol).await {
         Some(info) => Ok(StockInfoResponse {
@@ -163,8 +164,8 @@ pub struct FinancialsResponse {
 
 /// Fetch financial statements (income, balance sheet, cash flow)
 #[tauri::command]
-pub async fn get_financials(symbol: String) -> Result<FinancialsResponse, String> {
-    let provider = YFinanceProvider::new();
+pub async fn get_financials(app: tauri::AppHandle, symbol: String) -> Result<FinancialsResponse, String> {
+    let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_financials(&symbol).await {
         Some(financials) => Ok(FinancialsResponse {

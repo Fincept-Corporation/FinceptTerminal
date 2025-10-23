@@ -1,18 +1,17 @@
 // IMF (International Monetary Fund) data commands based on OpenBB imf provider
 use std::process::Command;
+use crate::utils::python::{get_python_path, get_script_path};
 
 /// Execute IMF Python script command
 #[tauri::command]
 pub async fn execute_imf_command(
+    app: tauri::AppHandle, 
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
     // Get the Python script path
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let script_path = manifest_dir
-        .join("resources")
-        .join("scripts")
-        .join("imf_data.py");
+    let python_path = get_python_path(&app)?;
+    let script_path = get_script_path(&app, "imf_data.py")?;
 
     // Verify script exists
     if !script_path.exists() {
@@ -27,7 +26,7 @@ pub async fn execute_imf_command(
     cmd_args.extend(args);
 
     // Execute Python script
-    let output = Command::new("python")
+    let output = Command::new(&python_path)
         .args(&cmd_args)
         .output()
         .map_err(|e| format!("Failed to execute IMF command: {}", e))?;
@@ -43,7 +42,7 @@ pub async fn execute_imf_command(
 
 /// Get economic indicators data (IRFCL and FSI)
 #[tauri::command]
-pub async fn get_imf_economic_indicators(
+pub async fn get_imf_economic_indicators(app: tauri::AppHandle, 
     countries: Option<String>,
     symbols: Option<String>,
     frequency: Option<String>,
@@ -70,12 +69,12 @@ pub async fn get_imf_economic_indicators(
     if let Some(sector) = sector {
         args.push(sector);
     }
-    execute_imf_command("economic_indicators".to_string(), args).await
+    execute_imf_command(app, "economic_indicators".to_string(), args).await
 }
 
 /// Get direction of trade data (exports, imports, balance)
 #[tauri::command]
-pub async fn get_imf_direction_of_trade(
+pub async fn get_imf_direction_of_trade(app: tauri::AppHandle, 
     countries: Option<String>,
     counterparts: Option<String>,
     direction: Option<String>,
@@ -102,24 +101,24 @@ pub async fn get_imf_direction_of_trade(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_imf_command("direction_of_trade".to_string(), args).await
+    execute_imf_command(app, "direction_of_trade".to_string(), args).await
 }
 
 /// Get list of available IMF indicators
 #[tauri::command]
-pub async fn get_imf_available_indicators(
+pub async fn get_imf_available_indicators(app: tauri::AppHandle, 
     query: Option<String>,
 ) -> Result<String, String> {
     let mut args = Vec::new();
     if let Some(query) = query {
         args.push(query);
     }
-    execute_imf_command("available_indicators".to_string(), args).await
+    execute_imf_command(app, "available_indicators".to_string(), args).await
 }
 
 /// Get comprehensive economic data for a country
 #[tauri::command]
-pub async fn get_imf_comprehensive_economic_data(
+pub async fn get_imf_comprehensive_economic_data(app: tauri::AppHandle, 
     country: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -132,12 +131,12 @@ pub async fn get_imf_comprehensive_economic_data(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_imf_command("comprehensive_economic_data".to_string(), args).await
+    execute_imf_command(app, "comprehensive_economic_data".to_string(), args).await
 }
 
 /// Get IMF reserves data (top line indicators)
 #[tauri::command]
-pub async fn get_imf_reserves_data(
+pub async fn get_imf_reserves_data(app: tauri::AppHandle, 
     countries: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -161,12 +160,12 @@ pub async fn get_imf_reserves_data(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_imf_command("economic_indicators".to_string(), args).await
+    execute_imf_command(app, "economic_indicators".to_string(), args).await
 }
 
 /// Get IMF trade data (exports, imports, balance)
 #[tauri::command]
-pub async fn get_imf_trade_summary(
+pub async fn get_imf_trade_summary(app: tauri::AppHandle, 
     country: String,
     counterpart: Option<String>,
     frequency: Option<String>,
@@ -192,5 +191,5 @@ pub async fn get_imf_trade_summary(
     if let Some(end_date) = end_date {
         args.push(end_date);
     }
-    execute_imf_command("direction_of_trade".to_string(), args).await
+    execute_imf_command(app, "direction_of_trade".to_string(), args).await
 }
