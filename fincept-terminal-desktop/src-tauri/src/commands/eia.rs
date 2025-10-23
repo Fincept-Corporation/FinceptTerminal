@@ -1,18 +1,17 @@
 // EIA (U.S. Energy Information Administration) data commands based on OpenBB eia provider
 use std::process::Command;
+use crate::utils::python::{get_python_path, get_script_path};
 
 /// Execute EIA Python script command
 #[tauri::command]
 pub async fn execute_eia_command(
+    app: tauri::AppHandle, 
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
     // Get the Python script path
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let script_path = manifest_dir
-        .join("resources")
-        .join("scripts")
-        .join("eia_data.py");
+    let python_path = get_python_path(&app)?;
+    let script_path = get_script_path(&app, "eia_data.py")?;
 
     // Verify script exists
     if !script_path.exists() {
@@ -27,7 +26,7 @@ pub async fn execute_eia_command(
     cmd_args.extend(args);
 
     // Execute Python script
-    let output = Command::new("python")
+    let output = Command::new(&python_path)
         .args(&cmd_args)
         .output()
         .map_err(|e| format!("Failed to execute EIA command: {}", e))?;
@@ -45,7 +44,7 @@ pub async fn execute_eia_command(
 
 /// Get petroleum status report data
 #[tauri::command]
-pub async fn get_eia_petroleum_status_report(
+pub async fn get_eia_petroleum_status_report(app: tauri::AppHandle, 
     category: String,
     tables: Option<String>,
     start_date: Option<String>,
@@ -61,18 +60,18 @@ pub async fn get_eia_petroleum_status_report(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_petroleum".to_string(), args).await
+    execute_eia_command(app, "get_petroleum".to_string(), args).await
 }
 
 /// Get available petroleum categories
 #[tauri::command]
-pub async fn get_eia_petroleum_categories() -> Result<String, String> {
-    execute_eia_command("available_categories".to_string(), vec![]).await
+pub async fn get_eia_petroleum_categories(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_eia_command(app, "available_categories".to_string(), vec![]).await
 }
 
 /// Get crude oil stocks
 #[tauri::command]
-pub async fn get_eia_crude_stocks(
+pub async fn get_eia_crude_stocks(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -83,12 +82,12 @@ pub async fn get_eia_crude_stocks(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_crude_stocks".to_string(), args).await
+    execute_eia_command(app, "get_crude_stocks".to_string(), args).await
 }
 
 /// Get gasoline stocks
 #[tauri::command]
-pub async fn get_eia_gasoline_stocks(
+pub async fn get_eia_gasoline_stocks(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -99,12 +98,12 @@ pub async fn get_eia_gasoline_stocks(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_gasoline_stocks".to_string(), args).await
+    execute_eia_command(app, "get_gasoline_stocks".to_string(), args).await
 }
 
 /// Get petroleum imports
 #[tauri::command]
-pub async fn get_eia_petroleum_imports(
+pub async fn get_eia_petroleum_imports(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -115,20 +114,20 @@ pub async fn get_eia_petroleum_imports(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_petroleum_imports".to_string(), args).await
+    execute_eia_command(app, "get_petroleum_imports".to_string(), args).await
 }
 
 /// Get spot prices
 #[tauri::command]
-pub async fn get_eia_spot_prices() -> Result<String, String> {
-    execute_eia_command("get_spot_prices".to_string(), vec![]).await
+pub async fn get_eia_spot_prices(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_eia_command(app, "get_spot_prices".to_string(), vec![]).await
 }
 
 // SHORT TERM ENERGY OUTLOOK (STEO) COMMANDS
 
 /// Get short term energy outlook data
 #[tauri::command]
-pub async fn get_eia_short_term_energy_outlook(
+pub async fn get_eia_short_term_energy_outlook(app: tauri::AppHandle, 
     table: String,
     symbols: Option<String>,
     frequency: Option<String>,
@@ -148,18 +147,18 @@ pub async fn get_eia_short_term_energy_outlook(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_steo".to_string(), args).await
+    execute_eia_command(app, "get_steo".to_string(), args).await
 }
 
 /// Get available STEO tables
 #[tauri::command]
-pub async fn get_eia_steo_tables() -> Result<String, String> {
-    execute_eia_command("available_steo_tables".to_string(), vec![]).await
+pub async fn get_eia_steo_tables(app: tauri::AppHandle, ) -> Result<String, String> {
+    execute_eia_command(app, "available_steo_tables".to_string(), vec![]).await
 }
 
 /// Get energy markets summary
 #[tauri::command]
-pub async fn get_eia_energy_markets_summary(
+pub async fn get_eia_energy_markets_summary(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -170,12 +169,12 @@ pub async fn get_eia_energy_markets_summary(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_energy_markets_summary".to_string(), args).await
+    execute_eia_command(app, "get_energy_markets_summary".to_string(), args).await
 }
 
 /// Get natural gas summary
 #[tauri::command]
-pub async fn get_eia_natural_gas_summary(
+pub async fn get_eia_natural_gas_summary(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -186,14 +185,14 @@ pub async fn get_eia_natural_gas_summary(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_natural_gas_summary".to_string(), args).await
+    execute_eia_command(app, "get_natural_gas_summary".to_string(), args).await
 }
 
 // SPECIFIC PETROLEUM DATA COMMANDS
 
 /// Get balance sheet data
 #[tauri::command]
-pub async fn get_eia_balance_sheet(
+pub async fn get_eia_balance_sheet(app: tauri::AppHandle, 
     tables: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -208,12 +207,12 @@ pub async fn get_eia_balance_sheet(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_petroleum".to_string(), args).await
+    execute_eia_command(app, "get_petroleum".to_string(), args).await
 }
 
 /// Get inputs and production data
 #[tauri::command]
-pub async fn get_eia_inputs_production(
+pub async fn get_eia_inputs_production(app: tauri::AppHandle, 
     tables: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -228,12 +227,12 @@ pub async fn get_eia_inputs_production(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_petroleum".to_string(), args).await
+    execute_eia_command(app, "get_petroleum".to_string(), args).await
 }
 
 /// Get refiner blender net production
 #[tauri::command]
-pub async fn get_eia_refiner_production(
+pub async fn get_eia_refiner_production(app: tauri::AppHandle, 
     tables: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -248,12 +247,12 @@ pub async fn get_eia_refiner_production(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_petroleum".to_string(), args).await
+    execute_eia_command(app, "get_petroleum".to_string(), args).await
 }
 
 /// Get distillate fuel oil stocks
 #[tauri::command]
-pub async fn get_eia_distillate_stocks(
+pub async fn get_eia_distillate_stocks(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -264,12 +263,12 @@ pub async fn get_eia_distillate_stocks(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_petroleum".to_string(), args).await
+    execute_eia_command(app, "get_petroleum".to_string(), args).await
 }
 
 /// Get imports by country
 #[tauri::command]
-pub async fn get_eia_imports_by_country(
+pub async fn get_eia_imports_by_country(app: tauri::AppHandle, 
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -280,12 +279,12 @@ pub async fn get_eia_imports_by_country(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_petroleum".to_string(), args).await
+    execute_eia_command(app, "get_petroleum".to_string(), args).await
 }
 
 /// Get weekly estimates
 #[tauri::command]
-pub async fn get_eia_weekly_estimates(
+pub async fn get_eia_weekly_estimates(app: tauri::AppHandle, 
     tables: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -300,12 +299,12 @@ pub async fn get_eia_weekly_estimates(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_petroleum".to_string(), args).await
+    execute_eia_command(app, "get_petroleum".to_string(), args).await
 }
 
 /// Get retail prices
 #[tauri::command]
-pub async fn get_eia_retail_prices(
+pub async fn get_eia_retail_prices(app: tauri::AppHandle, 
     tables: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -320,14 +319,14 @@ pub async fn get_eia_retail_prices(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_petroleum".to_string(), args).await
+    execute_eia_command(app, "get_petroleum".to_string(), args).await
 }
 
 // SPECIFIC STEO DATA COMMANDS
 
 /// Get nominal energy prices
 #[tauri::command]
-pub async fn get_eia_nominal_prices(
+pub async fn get_eia_nominal_prices(app: tauri::AppHandle, 
     symbols: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -346,12 +345,12 @@ pub async fn get_eia_nominal_prices(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_steo".to_string(), args).await
+    execute_eia_command(app, "get_steo".to_string(), args).await
 }
 
 /// Get US petroleum supply data
 #[tauri::command]
-pub async fn get_eia_petroleum_supply(
+pub async fn get_eia_petroleum_supply(app: tauri::AppHandle, 
     symbols: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -370,12 +369,12 @@ pub async fn get_eia_petroleum_supply(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_steo".to_string(), args).await
+    execute_eia_command(app, "get_steo".to_string(), args).await
 }
 
 /// Get electricity industry overview
 #[tauri::command]
-pub async fn get_eia_electricity_overview(
+pub async fn get_eia_electricity_overview(app: tauri::AppHandle, 
     symbols: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -394,12 +393,12 @@ pub async fn get_eia_electricity_overview(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_steo".to_string(), args).await
+    execute_eia_command(app, "get_steo".to_string(), args).await
 }
 
 /// Get macroeconomic indicators
 #[tauri::command]
-pub async fn get_eia_macroeconomic_indicators(
+pub async fn get_eia_macroeconomic_indicators(app: tauri::AppHandle, 
     symbols: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -418,26 +417,26 @@ pub async fn get_eia_macroeconomic_indicators(
     if let Some(end) = end_date {
         args.push(end);
     }
-    execute_eia_command("get_steo".to_string(), args).await
+    execute_eia_command(app, "get_steo".to_string(), args).await
 }
 
 // OVERVIEW AND ANALYSIS COMMANDS
 
 /// Get comprehensive energy overview
 #[tauri::command]
-pub async fn get_eia_energy_overview(
+pub async fn get_eia_energy_overview(app: tauri::AppHandle, 
     limit: Option<i32>,
 ) -> Result<String, String> {
     let mut args = Vec::new();
     if let Some(lim) = limit {
         args.push(lim.to_string());
     }
-    execute_eia_command("energy_overview".to_string(), args).await
+    execute_eia_command(app, "energy_overview".to_string(), args).await
 }
 
 /// Get petroleum markets overview
 #[tauri::command]
-pub async fn get_eia_petroleum_markets_overview() -> Result<String, String> {
+pub async fn get_eia_petroleum_markets_overview(app: tauri::AppHandle, ) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get key petroleum data
@@ -452,7 +451,7 @@ pub async fn get_eia_petroleum_markets_overview() -> Result<String, String> {
     let categories_len = categories.len();
 
     for (category, tables) in categories {
-        match get_eia_petroleum_status_report(
+        match get_eia_petroleum_status_report(app.clone(), 
             category.to_string(),
             Some(tables.to_string()),
             None,
@@ -471,7 +470,7 @@ pub async fn get_eia_petroleum_markets_overview() -> Result<String, String> {
 
 /// Get natural gas markets overview
 #[tauri::command]
-pub async fn get_eia_natural_gas_markets_overview() -> Result<String, String> {
+pub async fn get_eia_natural_gas_markets_overview(app: tauri::AppHandle, ) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get natural gas data from STEO
@@ -481,7 +480,7 @@ pub async fn get_eia_natural_gas_markets_overview() -> Result<String, String> {
     ];
 
     for (table, _description) in gas_tables {
-        match get_eia_short_term_energy_outlook(
+        match get_eia_short_term_energy_outlook(app.clone(), 
             table.to_string(),
             None,
             Some("month".to_string()),
@@ -501,7 +500,7 @@ pub async fn get_eia_natural_gas_markets_overview() -> Result<String, String> {
 
 /// Get energy price trends
 #[tauri::command]
-pub async fn get_eia_energy_price_trends(
+pub async fn get_eia_energy_price_trends(app: tauri::AppHandle, 
     frequency: Option<String>,
 ) -> Result<String, String> {
     let freq = frequency.unwrap_or_else(|| "month".to_string());
@@ -513,7 +512,7 @@ pub async fn get_eia_energy_price_trends(
     ];
 
     for (table, symbols) in price_tables {
-        match get_eia_short_term_energy_outlook(
+        match get_eia_short_term_energy_outlook(app.clone(), 
             table.to_string(),
             Some(symbols.to_string()),
             Some(freq.clone()),
@@ -534,7 +533,7 @@ pub async fn get_eia_energy_price_trends(
 
 /// Get energy supply analysis
 #[tauri::command]
-pub async fn get_eia_energy_supply_analysis() -> Result<String, String> {
+pub async fn get_eia_energy_supply_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get supply data from petroleum status report
@@ -545,7 +544,7 @@ pub async fn get_eia_energy_supply_analysis() -> Result<String, String> {
     ];
 
     for (category, tables) in supply_categories {
-        match get_eia_petroleum_status_report(
+        match get_eia_petroleum_status_report(app.clone(), 
             category.to_string(),
             Some(tables.to_string()),
             None,
@@ -557,7 +556,7 @@ pub async fn get_eia_energy_supply_analysis() -> Result<String, String> {
     }
 
     // Get supply data from STEO
-    match get_eia_short_term_energy_outlook(
+    match get_eia_short_term_energy_outlook(app.clone(), 
         "04a".to_string(),
         None,
         Some("month".to_string()),
@@ -576,7 +575,7 @@ pub async fn get_eia_energy_supply_analysis() -> Result<String, String> {
 
 /// Get energy consumption analysis
 #[tauri::command]
-pub async fn get_eia_energy_consumption_analysis() -> Result<String, String> {
+pub async fn get_eia_energy_consumption_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get consumption data from STEO
@@ -587,7 +586,7 @@ pub async fn get_eia_energy_consumption_analysis() -> Result<String, String> {
     ];
 
     for (table, symbols) in consumption_tables {
-        match get_eia_short_term_energy_outlook(
+        match get_eia_short_term_energy_outlook(app.clone(), 
             table.to_string(),
             Some(symbols.to_string()),
             Some("month".to_string()),
@@ -607,7 +606,7 @@ pub async fn get_eia_energy_consumption_analysis() -> Result<String, String> {
 
 /// Get custom energy data analysis
 #[tauri::command]
-pub async fn get_eia_custom_analysis(
+pub async fn get_eia_custom_analysis(app: tauri::AppHandle, 
     data_sources: String, // comma-separated list of data sources
     start_date: Option<String>,
     end_date: Option<String>,
@@ -627,7 +626,7 @@ pub async fn get_eia_custom_analysis(
                 let category = format!("{}_{}", parts[1], parts[2]);
                 let tables = if parts.len() > 3 { parts[3] } else { "all" };
 
-                match get_eia_petroleum_status_report(
+                match get_eia_petroleum_status_report(app.clone(), 
                     category,
                     Some(tables.to_string()),
                     start_date.clone(),
@@ -641,7 +640,7 @@ pub async fn get_eia_custom_analysis(
             // Handle STEO requests
             let table = source.strip_prefix("steo_").unwrap_or("01");
 
-            match get_eia_short_term_energy_outlook(
+            match get_eia_short_term_energy_outlook(app.clone(), 
                 table.to_string(),
                 None,
                 Some("month".to_string()),
@@ -666,23 +665,23 @@ pub async fn get_eia_custom_analysis(
 
 /// Get current energy market snapshot
 #[tauri::command]
-pub async fn get_eia_current_market_snapshot() -> Result<String, String> {
+pub async fn get_eia_current_market_snapshot(app: tauri::AppHandle, ) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get most recent petroleum data
-    match get_eia_petroleum_status_report("balance_sheet".to_string(), Some("stocks,supply".to_string()), None, None).await {
+    match get_eia_petroleum_status_report(app.clone(), "balance_sheet".to_string(), Some("stocks,supply".to_string()), None, None).await {
         Ok(data) => results.push(("petroleum_balance".to_string(), data)),
         Err(e) => results.push(("petroleum_balance".to_string(), format!("Error: {}", e))),
     }
 
     // Get most recent spot prices
-    match get_eia_spot_prices().await {
+    match get_eia_spot_prices(app.clone()).await {
         Ok(data) => results.push(("spot_prices".to_string(), data)),
         Err(e) => results.push(("spot_prices".to_string(), format!("Error: {}", e))),
     }
 
     // Get recent STEO data (if available)
-    match get_eia_energy_markets_summary(None, None).await {
+    match get_eia_energy_markets_summary(app, None, None).await {
         Ok(data) => results.push(("energy_markets".to_string(), data)),
         Err(e) => results.push(("energy_markets".to_string(), format!("Error: {}", e))),
     }
