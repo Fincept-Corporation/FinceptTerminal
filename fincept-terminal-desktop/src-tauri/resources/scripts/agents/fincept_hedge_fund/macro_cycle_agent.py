@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 # agents/macro_cycle_agent.py - Economic Cycles Analysis Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - economic indicators
+#   - business cycle data
+#   - employment statistics
+#   - inflation metrics
+#
+# OUTPUT:
+#   - Economic cycle phase identification
+#   - Business cycle forecasts
+#   - Macro trend analysis
+#   - Sector rotation recommendations
+#
+# PARAMETERS:
+#   - economic_indicators
+#   - cycle_detection_methods
+#   - forecast_horizons
+#   - sector_classification
+"""
+
 import asyncio
 import numpy as np
 import pandas as pd
