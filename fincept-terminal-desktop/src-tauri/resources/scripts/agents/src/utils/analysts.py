@@ -1,3 +1,26 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - Analyst configuration dictionaries
+#   - Agent function references
+#   - Trading style definitions
+#   - Order sequencing parameters
+#
+# OUTPUT:
+#   - ANALYST_CONFIG dictionary with display names, descriptions, investing styles
+#   - Analyst function mappings
+#   - Ordered agent lists by priority
+#   - Agent metadata for API responses
+#
+# PARAMETERS:
+#   - display_name: Human-readable analyst names (e.g., "Warren Buffett")
+#   - description: Brief titles (e.g., "The Oracle of Omaha")
+#   - investing_style: Detailed investment approaches
+#   - agent_func: Function references for each analyst
+#   - type: Agent categories ("analyst")
+#   - order: Numerical execution priorities (0-14)
+"""
+
 """Constants and utilities related to analysts configuration."""
 
 from src.agents import portfolio_manager

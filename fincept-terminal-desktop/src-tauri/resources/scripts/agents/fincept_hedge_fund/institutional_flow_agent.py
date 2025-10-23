@@ -1,6 +1,27 @@
 # -*- coding: utf-8 -*-
 # agents/institutional_flow_agent.py - Institutional Flow Analysis Agent
 
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - institutional trading data
+#   - fund flow metrics
+#   - position changes
+#   - large holder information
+#
+# OUTPUT:
+#   - Institutional flow analysis
+#   - Fund flow trends
+#   - Position change alerts
+#   - Institutional sentiment indicators
+#
+# PARAMETERS:
+#   - institution_types
+#   - flow_thresholds
+#   - position_tracking
+#   - reporting_periods
+"""
+
 import asyncio
 import numpy as np
 import pandas as pd

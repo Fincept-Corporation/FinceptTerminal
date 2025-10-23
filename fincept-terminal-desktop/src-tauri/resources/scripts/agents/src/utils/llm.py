@@ -1,3 +1,24 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - text prompts
+#   - Pydantic model classes
+#   - agent configuration parameters
+#
+# OUTPUT:
+#   - Structured LLM responses
+#   - Validated output data
+#   - Default fallback responses
+#   - API call results
+#
+# PARAMETERS:
+#   - prompt: Input text prompt for the LLM to process
+#   - pydantic_model: Schema class for structured output validation
+#   - agent_name: Identifier for extracting agent-specific model configuration
+#   - state: Agent state containing model preferences and API keys
+#   - max_retries: Number of retry attempts for failed LLM calls
+"""
+
 """Helper functions for LLM"""
 
 import json

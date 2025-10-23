@@ -1,3 +1,25 @@
+"""
+===== DATA SOURCES REQUIRED =====
+# INPUT:
+#   - agent names
+#   - status messages
+#   - ticker symbols
+#   - analysis results
+#
+# OUTPUT:
+#   - Formatted progress tables
+#   - Live status displays
+#   - Agent completion tracking
+#   - Real-time execution monitoring
+#
+# PARAMETERS:
+#   - agent_name: Name identifier for the agent being tracked
+#   - ticker: Stock symbol being analyzed by the agent
+#   - status: Current status message
+#   - analysis: Analysis results or output from the agent
+#   - timestamp: UTC timestamp for status tracking
+"""
+
 from datetime import datetime, timezone
 from rich.console import Console
 from rich.live import Live
