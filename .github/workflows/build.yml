@@ -98,7 +98,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          projectPath: './fincept-terminal-desktop'
           args: ${{ matrix.args }}
 
       - name: Prepare artifacts with proper naming
