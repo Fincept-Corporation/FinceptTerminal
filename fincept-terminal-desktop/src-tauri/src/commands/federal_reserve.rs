@@ -1,43 +1,19 @@
 // Federal Reserve data commands
-use std::process::Command;
-use crate::utils::python::{get_python_path, get_script_path};
+use crate::utils::python::execute_python_command;
 
 /// Execute Federal Reserve Python script command
 #[tauri::command]
 pub async fn execute_federal_reserve_command(
-    app: tauri::AppHandle, 
+    app: tauri::AppHandle,
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
-    // Get the Python script path
-    let python_path = get_python_path(&app)?;
-    let script_path = get_script_path(&app, "federal_reserve_data.py")?;
-
-    // Verify script exists
-    if !script_path.exists() {
-        return Err(format!(
-            "Federal Reserve script not found at: {}",
-            script_path.display()
-        ));
-    }
-
     // Build command arguments
-    let mut cmd_args = vec![script_path.to_string_lossy().to_string(), command];
+    let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script
-    let output = Command::new(&python_path)
-        .args(&cmd_args)
-        .output()
-        .map_err(|e| format!("Failed to execute Federal Reserve command: {}", e))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Federal Reserve command failed: {}", stderr))
-    }
+    // Execute Python script with console window hidden on Windows
+    execute_python_command(&app, "federal_reserve_data.py", &cmd_args)
 }
 
 /// Get Federal Funds Rate data
