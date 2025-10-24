@@ -18,17 +18,17 @@
 
 ## 📥 最新ビルドをダウンロード
 
-**バージョン:**`v3.0.0`\|**専念：**`7a750c4`\|**リリース:**2025-10-22 11:47 UTC
+**バージョン:**`v3.0.0`\|**専念：**`d834bb1`\|**リリース:**2025-10-23 12:14 UTC
 
 ### 🎯 直接ダウンロード - クリックしてすぐにダウンロードしてください!
 
 | プラットフォーム    | 建築              | 直接ダウンロード                                                                                                                                                     |
 | ----------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 🍎**macOS** | アップルシリコン（ARM64） | [⬇️**.dmgをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
-| 🍎**macOS** | インテル (x64)      | [⬇️**.dmgをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
-| 🐧**Linux** | x64 (アプリイメージ)   | [⬇️**.AppImageをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧**Linux** | x64 (Debian)    | [⬇️**.debをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
-| 🪟**窓**     | ふーん             | [⬇️**.msiをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
+| 🍎**macOS** | アップルシリコン（ARM64） | [⬇️**.dmgをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
+| 🍎**macOS** | インテル (x64)      | [⬇️**.dmgをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
+| 🐧**Linux** | x64 (アプリイメージ)   | [⬇️**.AppImageをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**Linux** | x64 (Debian)    | [⬇️**.debをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
+| 🪟**窓**     | ふーん             | [⬇️**.msiをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
 
 > ✨**ワンクリックでダウンロード！**これらのリンクはすぐにダウンロードを開始します。GitHub へのログインは必要ありません。
 
