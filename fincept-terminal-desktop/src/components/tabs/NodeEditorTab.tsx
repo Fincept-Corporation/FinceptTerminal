@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -31,6 +31,8 @@ import {
   Edit3,
   X
 } from 'lucide-react';
+import MCPToolNode from './node-editor/MCPToolNode';
+import { generateMCPNodeConfigs, MCPNodeConfig } from './node-editor/mcpNodeConfigs';
 
 // Custom Node Component
 const CustomNode = ({ data, id, selected }: any) => {
@@ -249,6 +251,22 @@ const NODE_CONFIGS = [
 ];
 
 export default function NodeEditorTab() {
+  const [mcpNodeConfigs, setMcpNodeConfigs] = useState<MCPNodeConfig[]>([]);
+
+  // Load MCP node configurations on mount
+  useEffect(() => {
+    const loadMCPNodes = async () => {
+      try {
+        const configs = await generateMCPNodeConfigs();
+        setMcpNodeConfigs(configs);
+        console.log('[NodeEditor] Loaded MCP node configs:', configs.length);
+      } catch (error) {
+        console.error('[NodeEditor] Failed to load MCP configs:', error);
+      }
+    };
+    loadMCPNodes();
+  }, []);
+
   const [nodes, setNodes, onNodesChange] = useNodesState([
     {
       id: '1',
@@ -355,7 +373,10 @@ export default function NodeEditorTab() {
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [showNodeMenu, setShowNodeMenu] = useState(false);
 
-  const nodeTypes: NodeTypes = useMemo(() => ({ custom: CustomNode }), []);
+  const nodeTypes: NodeTypes = useMemo(() => ({
+    custom: CustomNode,
+    'mcp-tool': MCPToolNode
+  }), []);
 
   // Handle label change
   function handleLabelChange(nodeId: string, newLabel: string) {
@@ -389,13 +410,26 @@ export default function NodeEditorTab() {
     [setEdges]
   );
 
-  // Add new node
+  // Add new node (handles both regular nodes and MCP tool nodes)
   const addNode = (config: any) => {
+    const isMCPNode = config.type === 'mcp-tool';
+
     const newNode: Node = {
       id: `node_${Date.now()}`,
-      type: 'custom',
+      type: isMCPNode ? 'mcp-tool' : 'custom',
       position: { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 },
-      data: {
+      data: isMCPNode ? {
+        serverId: config.serverId,
+        toolName: config.toolName,
+        label: config.label,
+        parameters: {},
+        onParameterChange: (params: Record<string, any>) => {
+          console.log('[NodeEditor] MCP tool parameters changed:', params);
+        },
+        onExecute: (result: any) => {
+          console.log('[NodeEditor] MCP tool executed with result:', result);
+        },
+      } : {
         label: config.label,
         nodeType: config.type,
         color: config.color,
@@ -783,6 +817,60 @@ export default function NodeEditorTab() {
               ))}
             </div>
           ))}
+
+          {/* MCP Tools Section */}
+          {mcpNodeConfigs.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <div
+                style={{
+                  color: '#FFA500',
+                  fontSize: '10px',
+                  marginBottom: '6px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  fontWeight: 'bold',
+                }}
+              >
+                ⚡ MCP TOOLS ({mcpNodeConfigs.length})
+              </div>
+              {mcpNodeConfigs.map((config) => (
+                <button
+                  key={config.id}
+                  onClick={() => addNode(config)}
+                  style={{
+                    backgroundColor: '#0a0a0a',
+                    color: '#FFA500',
+                    border: '1px solid #FFA50040',
+                    padding: '8px 12px',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    borderRadius: '3px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    marginBottom: '6px',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#FFA50020';
+                    e.currentTarget.style.borderColor = '#FFA500';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = '#0a0a0a';
+                    e.currentTarget.style.borderColor = '#FFA50040';
+                  }}
+                >
+                  <span style={{ fontSize: '14px' }}>{config.icon}</span>
+                  <div style={{ flex: 1, textAlign: 'left' }}>
+                    <div>{config.label}</div>
+                    <div style={{ fontSize: '9px', color: '#787878' }}>
+                      {config.serverId}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

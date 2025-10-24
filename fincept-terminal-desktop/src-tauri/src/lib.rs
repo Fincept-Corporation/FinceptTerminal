@@ -1,9 +1,12 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 use std::collections::HashMap;
-use std::process::{Child, Command, Stdio};
-use std::sync::Mutex;
+use std::process::{Child, Command, Stdio, ChildStdout, ChildStdin};
+use std::sync::{Arc, Mutex};
 use std::io::{BufRead, BufReader, Write};
+use std::thread;
+use std::time::Duration;
+use std::sync::mpsc::{channel, Sender, Receiver};
 use serde::Serialize;
 use sha2::{Sha256, Digest};
 
@@ -12,9 +15,16 @@ mod data_sources;
 mod commands;
 mod utils;
 
+// MCP Server Process with communication channels
+struct MCPProcess {
+    child: Child,
+    stdin: Arc<Mutex<ChildStdin>>,
+    response_rx: Receiver<String>,
+}
+
 // Global state to manage MCP server processes
 struct MCPState {
-    processes: Mutex<HashMap<String, Child>>,
+    processes: Mutex<HashMap<String, MCPProcess>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -29,9 +39,10 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-// Spawn an MCP server process
+// Spawn an MCP server process with background stdout reader
 #[tauri::command]
 fn spawn_mcp_server(
+    app: tauri::AppHandle,
     state: tauri::State<MCPState>,
     server_id: String,
     command: String,
@@ -40,9 +51,47 @@ fn spawn_mcp_server(
 ) -> Result<SpawnResult, String> {
     println!("[Tauri] Spawning MCP server: {} with command: {} {:?}", server_id, command, args);
 
+    // Determine if we should use bundled Bun (for npx/bunx commands)
+    let (fixed_command, fixed_args) = if command == "npx" || command == "bunx" {
+        // Try to get bundled Bun path
+        match utils::python::get_bundled_bun_path(&app) {
+            Ok(bun_path) => {
+                println!("[Tauri] Using bundled Bun: {:?}", bun_path);
+                // Use 'bun x' which is equivalent to 'bunx' or 'npx'
+                let mut new_args = vec!["x".to_string()];
+                new_args.extend(args.clone());
+                (bun_path.to_string_lossy().to_string(), new_args)
+            }
+            Err(e) => {
+                println!("[Tauri] Bundled Bun not found, falling back to system npx: {}", e);
+                // Fall back to system npx
+                #[cfg(target_os = "windows")]
+                let cmd = "npx.cmd".to_string();
+                #[cfg(not(target_os = "windows"))]
+                let cmd = "npx".to_string();
+                (cmd, args.clone())
+            }
+        }
+    } else {
+        // Fix command for Windows - node/python need .exe extension
+        #[cfg(target_os = "windows")]
+        let cmd = if command == "node" {
+            "node.exe".to_string()
+        } else if command == "python" {
+            "python.exe".to_string()
+        } else {
+            command.clone()
+        };
+
+        #[cfg(not(target_os = "windows"))]
+        let cmd = command.clone();
+
+        (cmd, args.clone())
+    };
+
     // Build command
-    let mut cmd = Command::new(&command);
-    cmd.args(&args)
+    let mut cmd = Command::new(&fixed_command);
+    cmd.args(&fixed_args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -52,15 +101,74 @@ fn spawn_mcp_server(
         cmd.env(key, value);
     }
 
+    // Hide console window on Windows
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
     // Spawn process
     match cmd.spawn() {
-        Ok(child) => {
+        Ok(mut child) => {
             let pid = child.id();
             println!("[Tauri] MCP server spawned successfully with PID: {}", pid);
 
-            // Store process
+            // Extract stdin and stdout
+            let stdin = child.stdin.take().ok_or("Failed to get stdin")?;
+            let stdout = child.stdout.take().ok_or("Failed to get stdout")?;
+            let stderr = child.stderr.take();
+
+            // Create channel for responses
+            let (response_tx, response_rx): (Sender<String>, Receiver<String>) = channel();
+
+            // Spawn background thread to read stdout
+            let server_id_clone = server_id.clone();
+            thread::spawn(move || {
+                let reader = BufReader::new(stdout);
+                println!("[Tauri] Started stdout reader thread for {}", server_id_clone);
+
+                for line in reader.lines() {
+                    match line {
+                        Ok(content) => {
+                            if !content.trim().is_empty() {
+                                println!("[Tauri] Received from {}: {}", server_id_clone, content);
+                                if response_tx.send(content).is_err() {
+                                    eprintln!("[Tauri] Response channel closed for {}", server_id_clone);
+                                    break;
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[Tauri] Error reading stdout for {}: {}", server_id_clone, e);
+                            break;
+                        }
+                    }
+                }
+                println!("[Tauri] Stdout reader thread exiting for {}", server_id_clone);
+            });
+
+            // Spawn background thread to read stderr (for debugging)
+            if let Some(stderr) = stderr {
+                let server_id_clone = server_id.clone();
+                thread::spawn(move || {
+                    let reader = BufReader::new(stderr);
+                    for line in reader.lines() {
+                        if let Ok(content) = line {
+                            if !content.trim().is_empty() {
+                                eprintln!("[Tauri] STDERR from {}: {}", server_id_clone, content);
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Store process with communication channels
+            let mcp_process = MCPProcess {
+                child,
+                stdin: Arc::new(Mutex::new(stdin)),
+                response_rx,
+            };
+
             let mut processes = state.processes.lock().unwrap();
-            processes.insert(server_id.clone(), child);
+            processes.insert(server_id.clone(), mcp_process);
 
             Ok(SpawnResult {
                 pid,
@@ -79,7 +187,7 @@ fn spawn_mcp_server(
     }
 }
 
-// Send JSON-RPC request to MCP server
+// Send JSON-RPC request to MCP server with timeout
 #[tauri::command]
 fn send_mcp_request(
     state: tauri::State<MCPState>,
@@ -90,35 +198,35 @@ fn send_mcp_request(
 
     let mut processes = state.processes.lock().unwrap();
 
-    if let Some(child) = processes.get_mut(&server_id) {
-        // Get stdin handle
-        if let Some(ref mut stdin) = child.stdin {
-            // Write request
-            if let Err(e) = writeln!(stdin, "{}", request) {
-                return Err(format!("Failed to write to stdin: {}", e));
-            }
+    if let Some(mcp_process) = processes.get_mut(&server_id) {
+        // Write request to stdin
+        {
+            let mut stdin = mcp_process.stdin.lock().unwrap();
+            writeln!(stdin, "{}", request)
+                .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+            stdin.flush()
+                .map_err(|e| format!("Failed to flush stdin: {}", e))?;
+        }
 
-            if let Err(e) = stdin.flush() {
-                return Err(format!("Failed to flush stdin: {}", e));
-            }
+        println!("[Tauri] Request sent, waiting for response...");
 
-            // Read response from stdout
-            if let Some(ref mut stdout) = child.stdout {
-                let reader = BufReader::new(stdout);
-                if let Some(Ok(line)) = reader.lines().next() {
-                    println!("[Tauri] Received response: {}", line);
-                    return Ok(line);
-                } else {
-                    return Err("No response from server".to_string());
-                }
-            } else {
-                return Err("No stdout available".to_string());
+        // Wait for response with timeout (30 seconds for initial package download)
+        match mcp_process.response_rx.recv_timeout(Duration::from_secs(30)) {
+            Ok(response) => {
+                println!("[Tauri] Received response: {}", response);
+                Ok(response)
             }
-        } else {
-            return Err("No stdin available".to_string());
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                eprintln!("[Tauri] Timeout waiting for response from {}", server_id);
+                Err("Timeout: No response from server within 30 seconds".to_string())
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                eprintln!("[Tauri] Response channel disconnected for {}", server_id);
+                Err("Server process has terminated unexpectedly".to_string())
+            }
         }
     } else {
-        return Err(format!("Server {} not found", server_id));
+        Err(format!("Server {} not found", server_id))
     }
 }
 
@@ -133,16 +241,13 @@ fn send_mcp_notification(
 
     let mut processes = state.processes.lock().unwrap();
 
-    if let Some(child) = processes.get_mut(&server_id) {
-        if let Some(ref mut stdin) = child.stdin {
-            writeln!(stdin, "{}", notification)
-                .map_err(|e| format!("Failed to write notification: {}", e))?;
-            stdin.flush()
-                .map_err(|e| format!("Failed to flush: {}", e))?;
-            Ok(())
-        } else {
-            Err("No stdin available".to_string())
-        }
+    if let Some(mcp_process) = processes.get_mut(&server_id) {
+        let mut stdin = mcp_process.stdin.lock().unwrap();
+        writeln!(stdin, "{}", notification)
+            .map_err(|e| format!("Failed to write notification: {}", e))?;
+        stdin.flush()
+            .map_err(|e| format!("Failed to flush: {}", e))?;
+        Ok(())
     } else {
         Err(format!("Server {} not found", server_id))
     }
@@ -156,9 +261,9 @@ fn ping_mcp_server(
 ) -> Result<bool, String> {
     let mut processes = state.processes.lock().unwrap();
 
-    if let Some(child) = processes.get_mut(&server_id) {
+    if let Some(mcp_process) = processes.get_mut(&server_id) {
         // Check if process is still running
-        match child.try_wait() {
+        match mcp_process.child.try_wait() {
             Ok(Some(_)) => Ok(false), // Process has exited
             Ok(None) => Ok(true),      // Process is still running
             Err(_) => Ok(false),       // Error checking status
@@ -178,8 +283,8 @@ fn kill_mcp_server(
 
     let mut processes = state.processes.lock().unwrap();
 
-    if let Some(mut child) = processes.remove(&server_id) {
-        match child.kill() {
+    if let Some(mut mcp_process) = processes.remove(&server_id) {
+        match mcp_process.child.kill() {
             Ok(_) => {
                 println!("[Tauri] Server {} killed successfully", server_id);
                 Ok(())
@@ -199,6 +304,14 @@ fn sha256_hash(input: String) -> String {
     let result = hasher.finalize();
     format!("{:x}", result)
 }
+
+// Windows-specific imports to hide console windows
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+// Windows creation flags to hide console window
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 // Execute Python script with arguments and environment variables
 #[tauri::command]
@@ -233,6 +346,10 @@ fn execute_python_script(
             cmd.env(key, value);
         }
     }
+
+    // Hide console window on Windows
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
     match cmd.output() {
         Ok(output) => {

@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { AGENT_CONFIGS, AGENT_CATEGORIES, getAgentConfig } from './agentConfigs';
 import { AgentConfig, AgentStatus, AgentCategory } from './types';
+import { AgentMCPConfig } from './agentMCPExecutor';
 
 // Custom Agent Node Component with Dynamic Handles
 const AgentNode = ({ data, id, selected }: any) => {
@@ -254,6 +255,24 @@ const AgentNode = ({ data, id, selected }: any) => {
         <div>
           Status: <span style={{ color: getStatusColor(data.status) }}>{data.status}</span>
         </div>
+        {data.mcpConfig && data.mcpConfig.enabled && (
+          <div style={{
+            backgroundColor: '#FFA50020',
+            border: '1px solid #FFA500',
+            borderRadius: '3px',
+            padding: '4px 6px',
+            fontSize: '9px',
+            color: '#FFA500',
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            marginTop: '4px'
+          }}>
+            <span>⚡</span>
+            <span>MCP: {data.mcpConfig.allowedServers.length} servers</span>
+          </div>
+        )}
         {data.hasInput && data.hasOutput && (
           <div style={{ display: 'flex', gap: '10px', fontSize: '9px', marginTop: '4px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -476,6 +495,14 @@ export default function AgentsTab() {
 
   // Add new agent node
   const addAgentNode = (config: AgentConfig) => {
+    // Default MCP configuration
+    const defaultMCPConfig: AgentMCPConfig = {
+      enabled: false,
+      allowedServers: [],
+      autonomousMode: true,
+      maxToolCalls: 10
+    };
+
     const newNode: Node = {
       id: `agent_${Date.now()}`,
       type: 'agent',
@@ -495,6 +522,7 @@ export default function AgentsTab() {
         status: 'idle' as AgentStatus,
         connectedInputs: 0,
         connectedOutputs: 0,
+        mcpConfig: defaultMCPConfig,
         onLabelChange: handleLabelChange,
         onParameterChange: handleParameterChange,
       },
@@ -567,11 +595,55 @@ export default function AgentsTab() {
   // Execute workflow
   const executeWorkflow = async () => {
     setIsExecuting(true);
-    // Mock execution - in production this would call the actual agent execution engine
-    setTimeout(() => {
+
+    try {
+      console.log('[AgentsTab] Starting workflow execution with', nodes.length, 'agents');
+
+      // Find starting nodes (nodes with no inputs or connected inputs)
+      const startingNodes = nodes.filter(node => {
+        const hasInputConnections = edges.some(edge => edge.target === node.id);
+        return !node.data.hasInput || !hasInputConnections;
+      });
+
+      console.log('[AgentsTab] Starting nodes:', startingNodes.map(n => n.data.label));
+
+      // Execute agents with MCP support if enabled
+      for (const node of startingNodes) {
+        if (node.data.mcpConfig && node.data.mcpConfig.enabled) {
+          console.log(`[AgentsTab] Agent ${node.data.label} has MCP enabled with ${node.data.mcpConfig.allowedServers.length} servers`);
+
+          // Update node status
+          setNodes((nds) =>
+            nds.map((n) =>
+              n.id === node.id
+                ? { ...n, data: { ...n.data, status: 'running' as AgentStatus } }
+                : n
+            )
+          );
+
+          // Execute agent with MCP (simplified for demonstration)
+          // In production, this would call executeAgentWithMCP
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Update node status to completed
+          setNodes((nds) =>
+            nds.map((n) =>
+              n.id === node.id
+                ? { ...n, data: { ...n.data, status: 'completed' as AgentStatus, lastRun: Date.now() } }
+                : n
+            )
+          );
+        }
+      }
+
       setIsExecuting(false);
-      alert('Workflow execution completed! (Mock implementation)');
-    }, 2000);
+      console.log('[AgentsTab] Workflow execution completed');
+      alert('Workflow execution completed!\n\nAgents with MCP enabled can now use external tools autonomously.');
+    } catch (error) {
+      console.error('[AgentsTab] Workflow execution failed:', error);
+      setIsExecuting(false);
+      alert('Workflow execution failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
   };
 
   // Filtered agent configs

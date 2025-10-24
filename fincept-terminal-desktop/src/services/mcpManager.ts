@@ -50,7 +50,35 @@ class MCPManager {
     try {
       console.log(`[MCPManager] Installing server: ${config.name}`);
 
-      // Add to database
+      // Check if server already exists
+      const existing = await sqliteService.getMCPServer(config.id);
+
+      if (existing) {
+        console.log(`[MCPManager] Server ${config.id} already installed, updating config...`);
+
+        // Update existing server config
+        await sqliteService.updateMCPServerConfig(config.id, {
+          env: config.env
+        });
+
+        // Restart if running
+        if (this.clients.has(config.id)) {
+          await this.stopServer(config.id);
+        }
+
+        // Try to start with new config
+        try {
+          await this.startServer(config.id);
+        } catch (startError) {
+          console.warn(`[MCPManager] Failed to start existing server: ${startError}`);
+          // Don't throw - server is already installed
+        }
+
+        console.log(`[MCPManager] Server ${config.name} updated successfully`);
+        return;
+      }
+
+      // Add new server to database
       await sqliteService.addMCPServer({
         id: config.id,
         name: config.name,
@@ -63,8 +91,13 @@ class MCPManager {
         enabled: true
       });
 
-      // Try to start the server immediately
-      await this.startServer(config.id);
+      // Try to start the server (don't fail install if start fails)
+      try {
+        await this.startServer(config.id);
+      } catch (startError) {
+        console.warn(`[MCPManager] Server installed but failed to start: ${startError}`);
+        // Server is installed, just not running - this is OK
+      }
 
       console.log(`[MCPManager] Server ${config.name} installed successfully`);
     } catch (error) {
@@ -344,59 +377,57 @@ class MCPManager {
       clearInterval(this.healthCheckInterval);
     }
 
-    this.healthCheckInterval = setInterval(async () => {
-      for (const [serverId, client] of this.clients.entries()) {
-        try {
-          const isAlive = await client.ping();
+    // Only start health check after servers have had time to initialize
+    setTimeout(() => {
+      this.healthCheckInterval = setInterval(async () => {
+        for (const [serverId, client] of this.clients.entries()) {
+          try {
+            const isAlive = await client.ping();
 
-          if (!isAlive) {
-            console.warn(`[MCPManager] Server ${serverId} is not responding`);
+            if (!isAlive) {
+              console.warn(`[MCPManager] Server ${serverId} is not responding`);
 
-            // Get server config to check if we should auto-restart
-            const server = await sqliteService.getMCPServer(serverId);
+              // Get server config to check if we should auto-restart
+              const server = await sqliteService.getMCPServer(serverId);
 
-            if (server && server.enabled) {
-              const errorInfo = this.serverErrors.get(serverId) || { count: 0, lastError: '', lastErrorTime: 0 };
+              if (server && server.enabled) {
+                const errorInfo = this.serverErrors.get(serverId) || { count: 0, lastError: '', lastErrorTime: 0 };
 
-              // Only attempt restart if we haven't exceeded max retries (3)
-              if (errorInfo.count < 3) {
-                console.log(`[MCPManager] Attempting automatic restart of ${serverId} (attempt ${errorInfo.count + 1}/3)`);
+                // Only restart if last error was more than 5 minutes ago (avoid rapid restart loops)
+                const timeSinceLastError = Date.now() - errorInfo.lastErrorTime;
+                const shouldRetry = errorInfo.count < 3 && timeSinceLastError > 300000; // 5 minutes
 
-                try {
-                  // Stop and restart
-                  await this.stopServer(serverId);
-                  await this.startServer(serverId);
-                  console.log(`[MCPManager] Successfully restarted ${serverId}`);
-                } catch (restartError) {
-                  console.error(`[MCPManager] Failed to restart ${serverId}:`, restartError);
+                if (shouldRetry) {
+                  console.log(`[MCPManager] Attempting automatic restart of ${serverId} (attempt ${errorInfo.count + 1}/3)`);
+
+                  try {
+                    // Stop and restart
+                    await this.stopServer(serverId);
+                    await this.startServer(serverId);
+                    console.log(`[MCPManager] Successfully restarted ${serverId}`);
+                  } catch (restartError) {
+                    console.error(`[MCPManager] Failed to restart ${serverId}:`, restartError);
+                  }
+                } else if (errorInfo.count >= 3) {
+                  console.error(`[MCPManager] Server ${serverId} exceeded max restart attempts (3)`);
+                  await sqliteService.updateMCPServerStatus(serverId, 'error');
                 }
               } else {
-                console.error(`[MCPManager] Server ${serverId} exceeded max restart attempts (3)`);
                 await sqliteService.updateMCPServerStatus(serverId, 'error');
               }
             } else {
-              await sqliteService.updateMCPServerStatus(serverId, 'error');
+              // Server is healthy, clear any error tracking
+              if (this.serverErrors.has(serverId)) {
+                this.serverErrors.delete(serverId);
+              }
             }
-          } else {
-            // Server is healthy, clear any error tracking
-            if (this.serverErrors.has(serverId)) {
-              this.serverErrors.delete(serverId);
-            }
+          } catch (error) {
+            // Don't track errors during health check - too noisy
+            console.debug(`[MCPManager] Health check failed for ${serverId}:`, error);
           }
-        } catch (error) {
-          console.error(`[MCPManager] Health check failed for ${serverId}:`, error);
-
-          // Track the error
-          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-          const existing = this.serverErrors.get(serverId) || { count: 0, lastError: '', lastErrorTime: 0 };
-          this.serverErrors.set(serverId, {
-            count: existing.count + 1,
-            lastError: errorMsg,
-            lastErrorTime: Date.now()
-          });
         }
-      }
-    }, 30000); // Check every 30 seconds
+      }, 60000); // Check every 60 seconds (less aggressive)
+    }, 10000); // Wait 10 seconds before starting health checks
   }
 
   // Get server health info

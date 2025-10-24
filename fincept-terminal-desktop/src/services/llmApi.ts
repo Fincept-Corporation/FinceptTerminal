@@ -502,10 +502,11 @@ class LLMApiService {
       ];
 
       // Convert MCP tools to OpenAI function format
+      // Prefix tool name with serverId for proper routing
       const functions = tools.map(tool => ({
         type: 'function',
         function: {
-          name: tool.name,
+          name: `${tool.serverId}__${tool.name}`, // Format: serverId__toolName
           description: tool.description || '',
           parameters: tool.inputSchema || { type: 'object', properties: {} }
         }

@@ -318,14 +318,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         content: msg.content
       }));
 
-      // Get MCP tools if available
+      // Get MCP tools if available using the unified service
       let mcpTools: any[] = [];
       try {
-        const { mcpManager } = await import('../../services/mcpManager');
-        mcpTools = await mcpManager.getAllTools();
+        const { mcpToolService } = await import('../../services/mcpToolService');
+        mcpTools = await mcpToolService.getAllTools();
         console.log(`[Chat] Found ${mcpTools.length} MCP tools`);
       } catch (error) {
-        console.log('[Chat] No MCP tools available');
+        console.log('[Chat] No MCP tools available:', error);
       }
 
       // Call LLM API with tools if available

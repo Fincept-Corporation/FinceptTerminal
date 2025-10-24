@@ -321,6 +321,30 @@ class SQLiteService {
       )
     `);
 
+    // Watchlist tables
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS watchlists (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        color TEXT DEFAULT '#FFA500',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS watchlist_stocks (
+        id TEXT PRIMARY KEY,
+        watchlist_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        added_at TEXT DEFAULT (datetime('now')),
+        notes TEXT,
+        FOREIGN KEY (watchlist_id) REFERENCES watchlists(id) ON DELETE CASCADE,
+        UNIQUE(watchlist_id, symbol)
+      )
+    `);
+
     // Create indexes
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_credentials_service ON credentials(service_name)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category)`);
@@ -336,6 +360,8 @@ class SQLiteService {
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_date ON portfolio_transactions(transaction_date DESC)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_portfolio ON portfolio_snapshots(portfolio_id)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_date ON portfolio_snapshots(snapshot_date DESC)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_watchlist_stocks_watchlist ON watchlist_stocks(watchlist_id)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_watchlist_stocks_symbol ON watchlist_stocks(symbol)`);
   }
 
   private async seedDefaultSettings(): Promise<void> {
