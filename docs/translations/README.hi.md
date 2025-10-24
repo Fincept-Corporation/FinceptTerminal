@@ -18,17 +18,17 @@
 
 ## 📥 नवीनतम बिल्ड डाउनलोड करें
 
-**संस्करण:**`v3.0.0`\|**प्रतिबद्ध:**`7a750c4`\|**जारी किया:**2025-10-22 11:47 यूटीसी
+**संस्करण:**`v3.0.0`\|**प्रतिबद्ध:**`d834bb1`\|**जारी किया:**2025-10-23 12:14 यूटीसी
 
 ### 🎯 सीधे डाउनलोड - तुरंत डाउनलोड करने के लिए क्लिक करें!
 
 | प्लैटफ़ॉर्म     | वास्तुकला             | प्रत्यक्षत: डाउनलोड                                                                                                                                            |
 | --------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🍎**मैक ओएस**   | एप्पल सिलिकॉन (ARM64) | [⬇️**.dmg डाउनलोड करें**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)     |
-| 🍎**मैक ओएस**   | इंटेल (x64)           | [⬇️**.dmg डाउनलोड करें**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)       |
-| 🐧**लिनक्स**    | x64 (ऐपइमेज)          | [⬇️**Download .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧**लिनक्स**    | x64 (डेबियन)          | [⬇️**डाउनलोड .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)            |
-| 🪟**खिड़कियाँ** | hshch                 | [⬇️**.एमएसआई डाउनलोड करें**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)  |
+| 🍎**मैक ओएस**   | एप्पल सिलिकॉन (ARM64) | [⬇️**.dmg डाउनलोड करें**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)     |
+| 🍎**मैक ओएस**   | इंटेल (x64)           | [⬇️**.dmg डाउनलोड करें**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)       |
+| 🐧**लिनक्स**    | x64 (ऐपइमेज)          | [⬇️**Download .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**लिनक्स**    | x64 (डेबियन)          | [⬇️**डाउनलोड .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)            |
+| 🪟**खिड़कियाँ** | hshch                 | [⬇️**.एमएसआई डाउनलोड करें**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)  |
 
 > ✨**एक-क्लिक डाउनलोड!**ये लिंक तुरंत डाउनलोड होना शुरू हो जाएंगे - GitHub लॉगिन की आवश्यकता नहीं है!
 
