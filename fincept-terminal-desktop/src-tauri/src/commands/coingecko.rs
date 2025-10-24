@@ -1,6 +1,5 @@
 // CoinGecko cryptocurrency data commands
-use std::process::Command;
-use crate::utils::python::{get_python_path, get_script_path};
+use crate::utils::python::execute_python_command;
 
 /// Execute CoinGecko Python script command
 #[tauri::command]
@@ -9,31 +8,12 @@ pub async fn execute_coingecko_command(
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
-    let python_path = get_python_path(&app)?;
-    let script_path = get_script_path(&app, "coingecko.py")?;
-
-    if !script_path.exists() {
-        return Err(format!(
-            "CoinGecko script not found at: {}",
-            script_path.display()
-        ));
-    }
-
-    let mut cmd_args = vec![script_path.to_string_lossy().to_string(), command];
+    // Build command arguments
+    let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    let output = Command::new(&python_path)
-        .args(&cmd_args)
-        .output()
-        .map_err(|e| format!("Failed to execute CoinGecko command: {}", e))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("CoinGecko command failed: {}", stderr))
-    }
+    // Execute Python script with console window hidden on Windows
+    execute_python_command(&app, "coingecko.py", &cmd_args)
 }
 
 /// Get cryptocurrency price
