@@ -17,8 +17,12 @@ fincept_env
 !README.md
 !docs/**/*.md
 !.github/**/*.md
-# Allow embedded Python in resources
+# Allow embedded Python in resources (but exclude executables)
 !fincept-terminal-desktop/src-tauri/resources/python/
+fincept-terminal-desktop/src-tauri/resources/python/**/*.exe
+fincept-terminal-desktop/src-tauri/resources/python/**/*.dll
+fincept-terminal-desktop/src-tauri/resources/python/**/*.so
+fincept-terminal-desktop/src-tauri/resources/python/**/*.dylib
 treeview.py
 testing
 fincept-terminal-desktop/.vscode
@@ -44,6 +48,14 @@ fincept_icon.ico
 legacy-python-depreciated/python
 python
 !fincept-terminal-desktop/src-tauri/resources/python/**
+# Exclude large executables and binaries
+fincept-terminal-desktop/src-tauri/resources/bun/
+*.exe
+*.dll
+*.so
+*.dylib
+# But allow specific necessary files (place these above the general exclusions)
+!fincept-terminal-desktop/src-tauri/resources/python/python.exe
 fincept-terminal-desktop/node_modules
 setup.iss
 upx.exe"build/"
