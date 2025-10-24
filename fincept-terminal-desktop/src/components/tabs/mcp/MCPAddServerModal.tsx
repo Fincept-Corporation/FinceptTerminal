@@ -13,7 +13,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    command: 'npx',
+    command: 'bunx',
     args: '',
     envVars: '',
     category: 'custom',
@@ -194,7 +194,7 @@ const MCPAddServerModal: React.FC<MCPAddServerModalProps> = ({ onClose, onAdd })
               type="text"
               value={formData.command}
               onChange={(e) => setFormData({ ...formData, command: e.target.value })}
-              placeholder="npx, node, python, etc."
+              placeholder="bunx, node, python, etc."
               required
               style={{
                 width: '100%',

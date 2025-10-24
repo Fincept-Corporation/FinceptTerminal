@@ -1,11 +1,10 @@
 use tauri::command;
-use std::process::Command;
 
 // ==================== METADATA COMMANDS ====================
 
 #[command]
 pub async fn bea_get_dataset_list() -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/bea_data.py")
         .arg("dataset_list")
         .output()
@@ -22,7 +21,7 @@ pub async fn bea_get_dataset_list() -> Result<String, String> {
 
 #[command]
 pub async fn bea_get_parameter_list(dataset_name: String) -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/bea_data.py")
         .arg("parameter_list")
         .arg(&dataset_name)
@@ -40,7 +39,7 @@ pub async fn bea_get_parameter_list(dataset_name: String) -> Result<String, Stri
 
 #[command]
 pub async fn bea_get_parameter_values(dataset_name: String, parameter_name: String) -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/bea_data.py")
         .arg("parameter_values")
         .arg(&dataset_name)
@@ -63,7 +62,7 @@ pub async fn bea_get_parameter_values_filtered(
     parameter_name: String,
     target_parameter: String
 ) -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/bea_data.py")
         .arg("parameter_values_filtered")
         .arg(&dataset_name)
@@ -85,7 +84,7 @@ pub async fn bea_get_parameter_values_filtered(
 
 #[command]
 pub async fn bea_get_nipa_data(table_name: String, frequency: Option<String>, year: Option<String>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("nipa")
         .arg(&table_name);
@@ -118,7 +117,7 @@ pub async fn bea_get_ni_underlying_detail(
     frequency: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("ni_underlying")
         .arg(&table_name);
@@ -147,7 +146,7 @@ pub async fn bea_get_ni_underlying_detail(
 
 #[command]
 pub async fn bea_get_fixed_assets(table_name: String, year: Option<String>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("fixed_assets")
         .arg(&table_name);
@@ -180,7 +179,7 @@ pub async fn bea_get_mne_data(
     nonbank_affiliates_only: Option<String>,
     get_footnotes: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("mne")
         .arg(&direction);
@@ -240,7 +239,7 @@ pub async fn bea_get_gdp_by_industry(
     frequency: Option<String>,
     industry: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("gdp_by_industry")
         .arg(&table_id);
@@ -280,7 +279,7 @@ pub async fn bea_get_international_transactions(
     frequency: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("international_transactions");
 
@@ -323,7 +322,7 @@ pub async fn bea_get_international_investment_position(
     frequency: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("international_investment");
 
@@ -359,7 +358,7 @@ pub async fn bea_get_international_investment_position(
 
 #[command]
 pub async fn bea_get_input_output(table_id: String, year: Option<String>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("input_output")
         .arg(&table_id);
@@ -387,7 +386,7 @@ pub async fn bea_get_underlying_gdp_by_industry(
     frequency: Option<String>,
     industry: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("underlying_gdp_industry")
         .arg(&table_id);
@@ -428,7 +427,7 @@ pub async fn bea_get_international_services_trade(
     area_or_country: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("international_services");
 
@@ -473,7 +472,7 @@ pub async fn bea_get_regional_data(
     geo_fips: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("regional")
         .arg(&table_name);
@@ -510,7 +509,7 @@ pub async fn bea_get_regional_data(
 
 #[command]
 pub async fn bea_get_economic_overview(year: Option<String>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("economic_overview");
 
@@ -535,7 +534,7 @@ pub async fn bea_get_regional_snapshot(
     geo_fips: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("regional_snapshot");
 

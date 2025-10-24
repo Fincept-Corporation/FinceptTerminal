@@ -2,30 +2,33 @@
 // Manage MCP servers and tools in Bloomberg-style interface
 
 import React, { useState, useEffect } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { mcpManager, MCPServerWithStats } from '../../../services/mcpManager';
 import { sqliteService } from '../../../services/sqliteService';
-import MCPServerCard from './MCPServerCard';
-import MCPMarketplace from './MCPMarketplace';
+import MCPMarketplace from './marketplace/MCPMarketplace';
 import MCPAddServerModal from './MCPAddServerModal';
 
 const MCPTab: React.FC = () => {
+  const [view, setView] = useState<'marketplace' | 'installed'>('marketplace');
   const [servers, setServers] = useState<MCPServerWithStats[]>([]);
   const [tools, setTools] = useState<any[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Initializing...');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Bloomberg colors
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_PANEL_BG = '#0a0a0a';
-  const BLOOMBERG_GREEN = '#00C800';
+  const ORANGE = '#FFA500';
+  const WHITE = '#FFFFFF';
+  const GRAY = '#787878';
+  const DARK_BG = '#0a0a0a';
+  const PANEL_BG = '#1a1a1a';
+  const BORDER = '#2d2d2d';
+  const GREEN = '#10b981';
+  const RED = '#ef4444';
+  const YELLOW = '#f59e0b';
 
   useEffect(() => {
-    // Auto-start servers on mount
     const initializeServers = async () => {
       try {
         await mcpManager.startAutoStartServers();
@@ -37,7 +40,6 @@ const MCPTab: React.FC = () => {
 
     initializeServers();
 
-    // Auto-refresh every 5 seconds
     const interval = setInterval(() => {
       loadData(true);
     }, 5000);
@@ -56,7 +58,7 @@ const MCPTab: React.FC = () => {
       setTools(toolsData);
 
       const runningCount = serversData.filter(s => s.status === 'running').length;
-      setStatusMessage(`${runningCount} servers connected | ${toolsData.length} tools available`);
+      setStatusMessage(`${runningCount} running | ${toolsData.length} tools available`);
     } catch (error) {
       console.error('Failed to load MCP data:', error);
       setStatusMessage('Error loading data');
@@ -75,6 +77,7 @@ const MCPTab: React.FC = () => {
       await mcpManager.installServer(config);
       await loadData();
       setStatusMessage('Server installed successfully');
+      setView('installed');
     } catch (error) {
       console.error('Failed to install server:', error);
       setStatusMessage(`Installation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -130,177 +133,478 @@ const MCPTab: React.FC = () => {
     }
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'running':
+        return <CheckCircle size={14} color={GREEN} />;
+      case 'error':
+        return <XCircle size={14} color={RED} />;
+      default:
+        return <AlertCircle size={14} color={GRAY} />;
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'running':
+        return GREEN;
+      case 'error':
+        return RED;
+      default:
+        return GRAY;
+    }
+  };
+
   const runningServers = servers.filter(s => s.status === 'running').length;
+  const filteredServers = servers.filter(s =>
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div style={{
+      width: '100%',
       height: '100%',
-      backgroundColor: BLOOMBERG_DARK_BG,
-      color: BLOOMBERG_WHITE,
+      backgroundColor: DARK_BG,
+      color: WHITE,
       fontFamily: 'Consolas, monospace',
       display: 'flex',
       flexDirection: 'column',
-      fontSize: '11px'
+      fontSize: '11px',
+      overflow: 'hidden'
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
-        padding: '8px 12px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        backgroundColor: PANEL_BG,
+        borderBottom: `1px solid ${BORDER}`,
+        padding: '12px 16px',
         flexShrink: 0
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold', fontSize: '12px' }}>
-            MCP INTEGRATIONS
-          </span>
-          <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-          <span style={{ color: runningServers > 0 ? BLOOMBERG_GREEN : BLOOMBERG_GRAY, fontSize: '10px' }}>
-            {runningServers} Running
-          </span>
-          <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-          <span style={{ color: BLOOMBERG_WHITE, fontSize: '10px' }}>
-            {tools.length} Tools
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', gap: '6px' }}>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            style={{
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
-              padding: '4px 10px',
-              fontSize: '10px',
-              cursor: isRefreshing ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              opacity: isRefreshing ? 0.5 : 1
-            }}
-          >
-            <RefreshCw size={12} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
-            REFRESH
-          </button>
-
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            style={{
-              backgroundColor: BLOOMBERG_ORANGE,
-              color: 'black',
-              border: 'none',
-              padding: '4px 10px',
-              fontSize: '10px',
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{
+              color: ORANGE,
+              fontSize: '14px',
               fontWeight: 'bold',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-          >
-            <Plus size={12} />
-            ADD SERVER
-          </button>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left Panel: Installed Servers */}
-        <div style={{
-          width: '50%',
-          borderRight: `1px solid ${BLOOMBERG_GRAY}`,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden'
-        }}>
-          <div style={{
-            padding: '8px 12px',
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
-            flexShrink: 0
-          }}>
-            <span style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold' }}>
-              INSTALLED SERVERS ({servers.length})
+              letterSpacing: '0.5px'
+            }}>
+              MCP MARKETPLACE
+            </span>
+            <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
+            <span style={{ color: GRAY, fontSize: '11px' }}>
+              {servers.length} Installed | {runningServers} Running | {tools.length} Tools
             </span>
           </div>
 
-          <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-            {servers.length === 0 ? (
-              <div style={{
-                textAlign: 'center',
-                color: BLOOMBERG_GRAY,
-                padding: '40px 20px',
-                fontSize: '10px'
-              }}>
-                <div style={{ marginBottom: '8px' }}>No MCP servers installed.</div>
-                <div>Install from marketplace or add a custom server.</div>
-              </div>
-            ) : (
-              servers.map(server => {
-                const healthInfo = mcpManager.getServerHealthInfo(server.id);
-                return (
-                  <MCPServerCard
-                    key={server.id}
-                    server={server}
-                    onStart={() => handleStartServer(server.id)}
-                    onStop={() => handleStopServer(server.id)}
-                    onRemove={() => handleRemoveServer(server.id)}
-                    onToggleAutoStart={(enabled) => handleToggleAutoStart(server.id, enabled)}
-                    healthInfo={healthInfo}
-                  />
-                );
-              })
-            )}
+          {/* View Switcher */}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              style={{
+                backgroundColor: 'transparent',
+                border: `1px solid ${BORDER}`,
+                color: WHITE,
+                padding: '6px 12px',
+                fontSize: '10px',
+                cursor: isRefreshing ? 'not-allowed' : 'pointer',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                opacity: isRefreshing ? 0.5 : 1,
+                fontWeight: 'bold'
+              }}
+            >
+              <RefreshCw size={12} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+              REFRESH
+            </button>
+
+            <button
+              onClick={() => setView('marketplace')}
+              style={{
+                backgroundColor: view === 'marketplace' ? ORANGE : 'transparent',
+                color: view === 'marketplace' ? 'black' : WHITE,
+                border: `1px solid ${view === 'marketplace' ? ORANGE : BORDER}`,
+                padding: '6px 12px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                fontWeight: 'bold'
+              }}
+            >
+              MARKETPLACE
+            </button>
+            <button
+              onClick={() => setView('installed')}
+              style={{
+                backgroundColor: view === 'installed' ? ORANGE : 'transparent',
+                color: view === 'installed' ? 'black' : WHITE,
+                border: `1px solid ${view === 'installed' ? ORANGE : BORDER}`,
+                padding: '6px 12px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                fontWeight: 'bold'
+              }}
+            >
+              MY SERVERS ({servers.length})
+            </button>
+
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              style={{
+                backgroundColor: GREEN,
+                color: 'black',
+                border: 'none',
+                padding: '6px 12px',
+                fontSize: '10px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <Plus size={12} />
+              CUSTOM
+            </button>
           </div>
         </div>
 
-        {/* Right Panel: Marketplace */}
-        <div style={{ width: '50%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <MCPMarketplace onInstall={handleInstallServer} />
-        </div>
+        {/* Search Bar (only for installed view) */}
+        {view === 'installed' && servers.length > 0 && (
+          <div style={{ position: 'relative' }}>
+            <Search
+              size={14}
+              style={{
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: GRAY,
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Search installed servers..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                backgroundColor: DARK_BG,
+                border: `1px solid ${BORDER}`,
+                color: WHITE,
+                padding: '8px 12px 8px 36px',
+                fontSize: '11px',
+                borderRadius: '4px',
+                outline: 'none',
+              }}
+            />
+          </div>
+        )}
       </div>
 
-      {/* Bottom Panel: Available Tools */}
+      {/* Content Area */}
       <div style={{
-        height: '140px',
-        borderTop: `1px solid ${BLOOMBERG_GRAY}`,
-        backgroundColor: BLOOMBERG_PANEL_BG,
+        flex: 1,
         overflow: 'auto',
-        padding: '8px',
-        flexShrink: 0
+        padding: '16px',
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none',
       }}>
-        <div style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
+        <style>{`
+          div::-webkit-scrollbar {
+            display: none;
+          }
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+
+        {view === 'marketplace' ? (
+          /* Marketplace View */
+          <MCPMarketplace onInstall={handleInstallServer} installedServers={servers} />
+        ) : (
+          /* Installed Servers View */
+          <div>
+            {filteredServers.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '60px 20px',
+                color: GRAY,
+              }}>
+                <Zap size={48} style={{ marginBottom: '16px', opacity: 0.3, color: ORANGE }} />
+                <h3 style={{ fontSize: '14px', marginBottom: '8px', color: WHITE }}>
+                  {searchTerm ? 'No servers found' : 'No MCP servers installed'}
+                </h3>
+                <p style={{ fontSize: '11px', marginBottom: '16px' }}>
+                  {searchTerm ? 'Try a different search term' : 'Install your first MCP server from the marketplace'}
+                </p>
+                {!searchTerm && (
+                  <button
+                    onClick={() => setView('marketplace')}
+                    style={{
+                      backgroundColor: ORANGE,
+                      color: 'black',
+                      border: 'none',
+                      padding: '8px 16px',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      borderRadius: '4px',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    BROWSE MARKETPLACE
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                gap: '16px',
+              }}>
+                {filteredServers.map(server => {
+                  const healthInfo = mcpManager.getServerHealthInfo(server.id);
+                  return (
+                    <div
+                      key={server.id}
+                      style={{
+                        backgroundColor: PANEL_BG,
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: '6px',
+                        padding: '16px',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = ORANGE;
+                        e.currentTarget.style.boxShadow = `0 0 12px ${ORANGE}40`;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = BORDER;
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                    >
+                      {/* Server Header */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
+                        <span style={{ fontSize: '28px' }}>{server.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <h3 style={{
+                              color: WHITE,
+                              fontSize: '13px',
+                              fontWeight: 'bold',
+                            }}>
+                              {server.name}
+                            </h3>
+                            {getStatusIcon(server.status)}
+                          </div>
+                          <div style={{
+                            display: 'inline-block',
+                            backgroundColor: `${getStatusColor(server.status)}20`,
+                            color: getStatusColor(server.status),
+                            padding: '2px 8px',
+                            fontSize: '9px',
+                            borderRadius: '3px',
+                            textTransform: 'uppercase',
+                            fontWeight: 'bold',
+                          }}>
+                            {server.status}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <p style={{
+                        color: GRAY,
+                        fontSize: '10px',
+                        lineHeight: '1.5',
+                        marginBottom: '12px',
+                      }}>
+                        {server.description}
+                      </p>
+
+                      {/* Stats */}
+                      <div style={{
+                        display: 'flex',
+                        gap: '16px',
+                        marginBottom: '12px',
+                        fontSize: '10px',
+                        color: GRAY,
+                      }}>
+                        <div>
+                          <span style={{ color: WHITE, fontWeight: 'bold' }}>{server.toolCount}</span> tools
+                        </div>
+                        <div>
+                          <span style={{ color: WHITE, fontWeight: 'bold' }}>{server.callsToday}</span> calls today
+                        </div>
+                        {server.auto_start && (
+                          <div style={{ color: GREEN }}>
+                            <Zap size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                            Auto-start
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Error Message */}
+                      {healthInfo && healthInfo.errorCount > 0 && (
+                        <div style={{
+                          padding: '8px',
+                          backgroundColor: `${RED}20`,
+                          border: `1px solid ${RED}`,
+                          borderRadius: '4px',
+                          fontSize: '9px',
+                          color: RED,
+                          marginBottom: '12px',
+                        }}>
+                          <strong>Errors: {healthInfo.errorCount}</strong>
+                          {healthInfo.lastError && (
+                            <div style={{ marginTop: '4px' }}>{healthInfo.lastError}</div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Actions */}
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        {server.status === 'running' ? (
+                          <button
+                            onClick={() => handleStopServer(server.id)}
+                            style={{
+                              backgroundColor: 'transparent',
+                              color: YELLOW,
+                              border: `1px solid ${YELLOW}`,
+                              padding: '6px 10px',
+                              fontSize: '9px',
+                              cursor: 'pointer',
+                              borderRadius: '3px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            <Square size={10} />
+                            STOP
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleStartServer(server.id)}
+                            style={{
+                              backgroundColor: 'transparent',
+                              color: GREEN,
+                              border: `1px solid ${GREEN}`,
+                              padding: '6px 10px',
+                              fontSize: '9px',
+                              cursor: 'pointer',
+                              borderRadius: '3px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontWeight: 'bold',
+                            }}
+                          >
+                            <Play size={10} />
+                            START
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => handleToggleAutoStart(server.id, !server.auto_start)}
+                          style={{
+                            backgroundColor: 'transparent',
+                            color: server.auto_start ? ORANGE : GRAY,
+                            border: `1px solid ${server.auto_start ? ORANGE : '#404040'}`,
+                            padding: '6px 10px',
+                            fontSize: '9px',
+                            cursor: 'pointer',
+                            borderRadius: '3px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          <Zap size={10} />
+                          AUTO
+                        </button>
+
+                        <button
+                          onClick={() => handleRemoveServer(server.id)}
+                          style={{
+                            backgroundColor: 'transparent',
+                            color: RED,
+                            border: `1px solid ${RED}`,
+                            padding: '6px 10px',
+                            fontSize: '9px',
+                            cursor: 'pointer',
+                            borderRadius: '3px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          <Trash2 size={10} />
+                          REMOVE
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Tools Footer */}
+      <div style={{
+        height: '120px',
+        borderTop: `1px solid ${BORDER}`,
+        backgroundColor: PANEL_BG,
+        overflow: 'auto',
+        padding: '12px 16px',
+        flexShrink: 0,
+        scrollbarWidth: 'none',
+        msOverflowStyle: 'none',
+      }}>
+        <div style={{
+          color: ORANGE,
+          fontSize: '11px',
+          fontWeight: 'bold',
+          marginBottom: '8px',
+          letterSpacing: '0.5px'
+        }}>
           AVAILABLE TOOLS ({tools.length})
         </div>
 
         {tools.length === 0 ? (
-          <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
+          <div style={{ color: GRAY, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
             No tools available. Start an MCP server to see its tools.
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '8px' }}>
             {tools.map(tool => (
               <div
                 key={tool.id}
                 style={{
-                  backgroundColor: BLOOMBERG_DARK_BG,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
-                  padding: '4px 6px',
-                  fontSize: '9px'
+                  backgroundColor: DARK_BG,
+                  border: `1px solid ${BORDER}`,
+                  padding: '6px 8px',
+                  fontSize: '9px',
+                  borderRadius: '3px',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
-                  <span style={{ color: BLOOMBERG_ORANGE }}>🔧</span>
-                  <span style={{ color: BLOOMBERG_WHITE, fontWeight: 'bold' }}>{tool.name}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+                  <Settings size={10} style={{ color: ORANGE }} />
+                  <span style={{ color: WHITE, fontWeight: 'bold' }}>{tool.name}</span>
                 </div>
                 {tool.description && (
-                  <div style={{ color: BLOOMBERG_GRAY, fontSize: '8px' }}>
-                    {tool.description.substring(0, 60)}{tool.description.length > 60 ? '...' : ''}
+                  <div style={{ color: GRAY, fontSize: '8px', marginLeft: '16px' }}>
+                    {tool.description.substring(0, 50)}{tool.description.length > 50 ? '...' : ''}
                   </div>
                 )}
               </div>
@@ -311,14 +615,18 @@ const MCPTab: React.FC = () => {
 
       {/* Status Bar */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderTop: `1px solid ${BLOOMBERG_GRAY}`,
-        padding: '4px 12px',
+        backgroundColor: DARK_BG,
+        borderTop: `1px solid ${BORDER}`,
+        padding: '6px 16px',
         fontSize: '9px',
-        color: BLOOMBERG_GRAY,
-        flexShrink: 0
+        color: GRAY,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
       }}>
-        STATUS: {statusMessage}
+        <span style={{ color: ORANGE }}>●</span>
+        {statusMessage}
       </div>
 
       {/* Add Server Modal */}
@@ -331,13 +639,6 @@ const MCPTab: React.FC = () => {
           }}
         />
       )}
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 };

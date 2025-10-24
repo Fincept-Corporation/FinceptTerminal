@@ -4,6 +4,14 @@ export type AgentCategory = 'hedge-fund' | 'trader' | 'analysis' | 'data' | 'exe
 
 export type AgentStatus = 'idle' | 'running' | 'completed' | 'error' | 'paused';
 
+// MCP Integration Types
+export interface AgentMCPConfig {
+  enabled: boolean;
+  allowedServers: string[]; // Which MCP servers this agent can use
+  autonomousMode: boolean; // Agent decides when to use tools vs user explicitly triggers
+  maxToolCalls: number; // Maximum tool calls per execution to prevent infinite loops
+}
+
 export interface AgentConfig {
   id: string;
   name: string;
@@ -46,6 +54,7 @@ export interface AgentNode {
     status: AgentStatus;
     lastRun?: string;
     error?: string;
+    mcpConfig?: AgentMCPConfig; // MCP integration configuration
     onLabelChange: (nodeId: string, newLabel: string) => void;
     onParameterChange: (nodeId: string, paramName: string, value: any) => void;
   };

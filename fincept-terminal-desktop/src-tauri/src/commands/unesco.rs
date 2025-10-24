@@ -1,5 +1,4 @@
 use tauri::command;
-use std::process::Command;
 
 // ==================== DATA ENDPOINTS ====================
 
@@ -14,7 +13,7 @@ pub async fn unesco_get_indicator_data(
     indicator_metadata: Option<bool>,
     version: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("indicator_data");
 
@@ -86,7 +85,7 @@ pub async fn unesco_export_indicator_data(
     indicator_metadata: Option<bool>,
     version: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("export_indicator_data")
         .arg(&format_type);
@@ -151,7 +150,7 @@ pub async fn unesco_export_indicator_data(
 
 #[command]
 pub async fn unesco_list_geo_units(version: Option<String>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("list_geo_units");
 
@@ -173,7 +172,7 @@ pub async fn unesco_list_geo_units(version: Option<String>) -> Result<String, St
 
 #[command]
 pub async fn unesco_export_geo_units(format_type: String, version: Option<String>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("export_geo_units")
         .arg(&format_type);
@@ -200,7 +199,7 @@ pub async fn unesco_list_indicators(
     disaggregations: Option<bool>,
     version: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("list_indicators");
 
@@ -240,7 +239,7 @@ pub async fn unesco_export_indicators(
     disaggregations: Option<bool>,
     version: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("export_indicators")
         .arg(&format_type);
@@ -278,7 +277,7 @@ pub async fn unesco_export_indicators(
 
 #[command]
 pub async fn unesco_get_default_version() -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/unesco_data.py")
         .arg("get_default_version")
         .output()
@@ -295,7 +294,7 @@ pub async fn unesco_get_default_version() -> Result<String, String> {
 
 #[command]
 pub async fn unesco_list_versions() -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/unesco_data.py")
         .arg("list_versions")
         .output()
@@ -318,7 +317,7 @@ pub async fn unesco_get_education_overview(
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("education_overview");
 
@@ -356,7 +355,7 @@ pub async fn unesco_get_global_education_trends(
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("global_trends");
 
@@ -393,7 +392,7 @@ pub async fn unesco_get_country_comparison(
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("country_comparison")
         .arg(&indicator_code);
@@ -429,7 +428,7 @@ pub async fn unesco_search_indicators_by_theme(
     theme: String,
     limit: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("search_by_theme")
         .arg(&theme);
@@ -457,7 +456,7 @@ pub async fn unesco_get_regional_education_data(
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("regional_data")
         .arg(&region_id);
@@ -496,7 +495,7 @@ pub async fn unesco_get_science_technology_data(
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("sti_data");
 
@@ -534,7 +533,7 @@ pub async fn unesco_get_culture_data(
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("culture_data");
 
@@ -572,7 +571,7 @@ pub async fn unesco_export_country_dataset(
     format_type: String,
     include_metadata: Option<bool>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("export_country_dataset")
         .arg(&country_code)
