@@ -20,7 +20,6 @@ import FixedIncomeTab from '@/components/tabs/FixedIncomeTab';
 import OptionsTab from '@/components/tabs/OptionsTab';
 import EconomicCalendarTab from '@/components/tabs/EconomicCalendarTab';
 import ScreenerTab from '@/components/tabs/ScreenerTab';
-import AlertsTab from '@/components/tabs/AlertsTab';
 import DBnomicsTab from '@/components/tabs/DBnomicsTab';
 import EconomicsTab from '@/components/tabs/EconomicsTab';
 import CodeEditorTab from '@/components/tabs/CodeEditorTab';
@@ -637,12 +636,6 @@ export default function FinxeptTerminal() {
               Screener
             </TabsTrigger>
             <TabsTrigger
-              value="alerts"
-              style={activeTab === 'alerts' ? tabStyles.active : tabStyles.default}
-            >
-              Alerts
-            </TabsTrigger>
-            <TabsTrigger
               value="dbnomics"
               style={activeTab === 'dbnomics' ? tabStyles.active : tabStyles.default}
             >
@@ -824,9 +817,6 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="screener" className="h-full m-0 p-0">
             <ScreenerTab />
-          </TabsContent>
-          <TabsContent value="alerts" className="h-full m-0 p-0">
-            <AlertsTab />
           </TabsContent>
           <TabsContent value="dbnomics" className="h-full m-0 p-0">
             <DBnomicsTab />

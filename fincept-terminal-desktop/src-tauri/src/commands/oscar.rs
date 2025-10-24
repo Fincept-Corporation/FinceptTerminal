@@ -1,5 +1,4 @@
 use tauri::command;
-use std::process::Command;
 
 // ==================== INSTRUMENTS ENDPOINTS ====================
 
@@ -11,7 +10,7 @@ pub async fn oscar_get_instruments(
     filter_on: Option<String>,
     filter_value: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("instruments");
 
@@ -57,7 +56,7 @@ pub async fn oscar_get_instruments(
 
 #[command]
 pub async fn oscar_get_instrument_by_slug(slug: String) -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/oscar_data.py")
         .arg("instrument")
         .arg(&slug)
@@ -78,7 +77,7 @@ pub async fn oscar_search_instruments_by_type(
     instrument_type: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("search_instruments_type")
         .arg(&instrument_type);
@@ -104,7 +103,7 @@ pub async fn oscar_search_instruments_by_agency(
     agency: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("search_instruments_agency")
         .arg(&agency);
@@ -131,7 +130,7 @@ pub async fn oscar_search_instruments_by_year_range(
     end_year: i32,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("search_instruments_year")
         .arg(start_year.to_string())
@@ -155,7 +154,7 @@ pub async fn oscar_search_instruments_by_year_range(
 
 #[command]
 pub async fn oscar_get_instrument_classifications() -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/oscar_data.py")
         .arg("instrument_classifications")
         .output()
@@ -180,7 +179,7 @@ pub async fn oscar_get_satellites(
     filter_on: Option<String>,
     filter_value: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("satellites");
 
@@ -226,7 +225,7 @@ pub async fn oscar_get_satellites(
 
 #[command]
 pub async fn oscar_get_satellite_by_slug(slug: String) -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/oscar_data.py")
         .arg("satellite")
         .arg(&slug)
@@ -247,7 +246,7 @@ pub async fn oscar_search_satellites_by_orbit(
     orbit_type: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("search_satellites_orbit")
         .arg(&orbit_type);
@@ -273,7 +272,7 @@ pub async fn oscar_search_satellites_by_agency(
     agency: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("search_satellites_agency")
         .arg(&agency);
@@ -304,7 +303,7 @@ pub async fn oscar_get_variables(
     filter_on: Option<String>,
     filter_value: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("variables");
 
@@ -350,7 +349,7 @@ pub async fn oscar_get_variables(
 
 #[command]
 pub async fn oscar_get_variable_by_slug(slug: String) -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/oscar_data.py")
         .arg("variable")
         .arg(&slug)
@@ -371,7 +370,7 @@ pub async fn oscar_search_variables_by_instrument(
     instrument: String,
     page: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("search_variables_instrument")
         .arg(&instrument);
@@ -394,7 +393,7 @@ pub async fn oscar_search_variables_by_instrument(
 
 #[command]
 pub async fn oscar_get_ecv_variables(page: Option<i32>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("ecv_variables");
 
@@ -418,7 +417,7 @@ pub async fn oscar_get_ecv_variables(page: Option<i32>) -> Result<String, String
 
 #[command]
 pub async fn oscar_get_space_agencies() -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/oscar_data.py")
         .arg("space_agencies")
         .output()
@@ -435,7 +434,7 @@ pub async fn oscar_get_space_agencies() -> Result<String, String> {
 
 #[command]
 pub async fn oscar_get_instrument_types() -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/oscar_data.py")
         .arg("instrument_types")
         .output()
@@ -452,7 +451,7 @@ pub async fn oscar_get_instrument_types() -> Result<String, String> {
 
 #[command]
 pub async fn oscar_search_weather_instruments(page: Option<i32>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("weather_instruments");
 
@@ -474,7 +473,7 @@ pub async fn oscar_search_weather_instruments(page: Option<i32>) -> Result<Strin
 
 #[command]
 pub async fn oscar_get_climate_monitoring_instruments(page: Option<i32>) -> Result<String, String> {
-    let mut cmd = Command::new("python");
+    let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
         .arg("climate_instruments");
 
@@ -496,7 +495,7 @@ pub async fn oscar_get_climate_monitoring_instruments(page: Option<i32>) -> Resu
 
 #[command]
 pub async fn oscar_get_overview_statistics() -> Result<String, String> {
-    let output = Command::new("python")
+    let output = crate::utils::python::python_command()
         .arg("resources/scripts/oscar_data.py")
         .arg("overview_statistics")
         .output()

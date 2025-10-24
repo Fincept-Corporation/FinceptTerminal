@@ -2,7 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { PortfolioSummary } from '../../../services/portfolioService';
 import { BLOOMBERG_COLORS, formatCurrency } from './utils';
 import { Bell, TrendingUp, TrendingDown, Target } from 'lucide-react';
-import { alertsService, PriceAlert } from '../../../services/alertsService';
+
+interface PriceAlert {
+  id: string;
+  symbol: string;
+  type: string;
+  condition: string;
+  target_value: number;
+  is_triggered: boolean;
+  created_at: string;
+}
 
 interface AlertsViewProps {
   portfolioSummary: PortfolioSummary;
@@ -13,38 +22,17 @@ const AlertsView: React.FC<AlertsViewProps> = ({ portfolioSummary }) => {
   const currency = portfolioSummary.portfolio.currency;
 
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ total: 0, active: 0, triggered: 0, byType: {} as Record<string, number> });
 
+  // Stub - alerts service removed
   useEffect(() => {
-    const loadAlerts = async () => {
-      try {
-        await alertsService.initialize();
-        const portfolioAlerts = await alertsService.getPortfolioAlerts(portfolioSummary.portfolio.id, false);
-        const alertStats = await alertsService.getAlertStats(portfolioSummary.portfolio.id);
-
-        setAlerts(portfolioAlerts);
-        setStats(alertStats);
-      } catch (error) {
-        console.error('Failed to load alerts:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadAlerts();
+    setLoading(false);
   }, [portfolioSummary.portfolio.id]);
 
   const handleDeleteAlert = async (alertId: string) => {
-    try {
-      await alertsService.deleteAlert(alertId);
-      setAlerts(prev => prev.filter(a => a.id !== alertId));
-      // Refresh stats
-      const alertStats = await alertsService.getAlertStats(portfolioSummary.portfolio.id);
-      setStats(alertStats);
-    } catch (error) {
-      console.error('Failed to delete alert:', error);
-    }
+    // Stub - alerts service removed
+    setAlerts(prev => prev.filter(a => a.id !== alertId));
   };
 
   const getAlertIcon = (type: string) => {
