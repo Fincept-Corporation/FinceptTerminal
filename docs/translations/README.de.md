@@ -18,17 +18,17 @@
 
 ## 📥 Laden Sie den neuesten Build herunter
 
-**Version:**`v3.0.0`\|**Begehen:**`7a750c4`\|**Freigegeben:**22.10.2025 11:47 UTC
+**Version:**`v3.0.0`\|**Begehen:**`d834bb1`\|**Freigegeben:**23.10.2025 12:14 UTC
 
 ### 🎯 Direkte Downloads – Klicken Sie hier, um sofort herunterzuladen!
 
 | Plattform     | Architektur           | Direkter Download                                                                                                                                                        |
 | ------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 🍎**macOS**   | Apple Silicon (ARM64) | [⬇️**Laden Sie .dmg herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
-| 🍎**macOS**   | Intel (x64)           | [⬇️**Laden Sie .dmg herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
-| 🐧**Linux**   | x64 (AppImage)        | [⬇️**Laden Sie .AppImage herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧**Linux**   | x64 (Debian)          | [⬇️**Laden Sie .deb herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
-| 🪟**Windows** | x64                   | [⬇️**Laden Sie .msi herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
+| 🍎**macOS**   | Apple Silicon (ARM64) | [⬇️**Laden Sie .dmg herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
+| 🍎**macOS**   | Intel (x64)           | [⬇️**Laden Sie .dmg herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
+| 🐧**Linux**   | x64 (AppImage)        | [⬇️**Laden Sie .AppImage herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**Linux**   | x64 (Debian)          | [⬇️**Laden Sie .deb herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
+| 🪟**Windows** | hshch                 | [⬇️**Laden Sie .msi herunter**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
 
 > ✨**One-Click-Downloads!**Der Download dieser Links beginnt sofort – kein GitHub-Login erforderlich!
 
