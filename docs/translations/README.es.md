@@ -6,7 +6,7 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-[Inglés](README.md)\|[Español](docs/translations/README.es.md)\|[Chino](docs/translations/README.zh-CN.md)\|[japonés](docs/translations/README.ja.md)\|[Francés](docs/translations/README.fr.md)\|[Alemán](docs/translations/README.de.md) \| [coreano](docs/translations/README.ko.md)\|[hindi](docs/translations/README.hi.md)
+[Inglés](README.md)\|[Español](docs/translations/README.es.md)\|[Chino](docs/translations/README.zh-CN.md)\|[japonés](docs/translations/README.ja.md)\|[Francés](docs/translations/README.fr.md)\|[Alemán](docs/translations/README.de.md)\|[coreano](docs/translations/README.ko.md)\|[hindi](docs/translations/README.hi.md)
 
 ### _Plataforma de análisis financiero profesional_
 
@@ -18,17 +18,17 @@
 
 ## 📥 Descargar la última versión
 
-**Versión:**`v3.0.0`\|**Comprometerse:**`7a750c4`\|**Liberado:** 2025-10-22 11:47 UTC
+**Versión:**`v3.0.0`\|**Comprometerse:**`d834bb1`\|**Liberado:**2025-10-23 12:14UTC
 
 ### 🎯 Descargas directas: ¡haga clic para descargar inmediatamente!
 
 | Plataforma     | Arquitectura               | Descarga directa                                                                                                                                                |
 | -------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🍎**macos**    | Silicona de Apple (ARM64)  | [⬇️**Descargar .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
-| 🍎**macos**    | Intel (x64)                | [⬇️**Descargar .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
-| 🐧**linux**    | x64 (Imagen de aplicación) | [⬇️**Descargar .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧**linux**    | x64 (Debian)               | [⬇️**Descargar .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
-| 🪟**ventanas** | hshch                      | [⬇️**Descargar .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
+| 🍎**macos**    | Silicona de Apple (ARM64)  | [⬇️**Descargar .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
+| 🍎**macos**    | Intel (x64)                | [⬇️**Descargar .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
+| 🐧**linux**    | x64 (Imagen de aplicación) | [⬇️**Descargar .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**linux**    | x64 (Debian)               | [⬇️**Descargar .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
+| 🪟**ventanas** | hshch                      | [⬇️**Descargar .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
 
 > ✨**¡Descargas con un clic!**Estos enlaces comenzarán a descargarse inmediatamente: ¡no es necesario iniciar sesión en GitHub!
 
@@ -93,7 +93,7 @@ Inspirada en Bloomberg y Refinitiv, Fincept Terminal ofrece datos de mercado en 
 
 #### 🚀**Configuración rápida (automatizada)**
 
-**Para ventanas:**
+**Para Windows:**
 
 ```bash
 # 1. Clone the repository

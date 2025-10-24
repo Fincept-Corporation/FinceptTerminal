@@ -10,7 +10,7 @@
 
 ### _专业财务分析平台_
 
-**Bloomberg-level insights for everyone. Open source. Cross-platform.**
+**为每个人提供彭博级的见解。开源。跨平台。**
 
 [📥 下载](#-getting-started)•[✨ 特点](#-features)•[📸 截图](#-platform-preview)•[🤝 贡献](#-contributing)
 
@@ -18,17 +18,17 @@
 
 ## 📥 下载最新版本
 
-**版本：**`v3.0.0`\|**犯罪：**`7a750c4`\|**发布：**2025-10-22 11:47 世界标准时间
+**版本：**`v3.0.0`\|**犯罪：**`d834bb1`\|**发布：**2025-10-23 12:14 世界标准时间
 
 ### 🎯直接下载 - 点击立即下载！
 
 | 平台          | 建筑学          | 直接下载                                                                                                                                                    |
 | ----------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🍎**macOS** | 苹果芯片 (ARM64) | [⬇️**下载.dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
-| 🍎**macOS** | 英特尔 (x64)    | [⬇️**下载.dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
-| 🐧**Linux** | x64（应用程序图像）  | [⬇️**下载.AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧**Linux** | x64（Debian）  | [⬇️**下载.deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
-| 🪟**视窗**    | 哈什奇          | [⬇️**下载.msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
+| 🍎**macOS** | 苹果芯片 (ARM64) | [⬇️**下载.dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
+| 🍎**macOS** | 英特尔 (x64)    | [⬇️**下载.dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
+| 🐧**Linux** | x64（应用程序图像）  | [⬇️**下载.AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**Linux** | x64（Debian）  | [⬇️**下载.deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
+| 🪟**视窗**    | 哈什奇          | [⬇️**下载.msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
 
 > ✨**一键下载！**这些链接将立即开始下载 - 无需登录 GitHub！
 
@@ -194,12 +194,12 @@ npm run tauri build
 |                                                   论坛                                                  |                                                        地缘政治                                                       |
 | :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
 | ![Forum](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Forum.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
-|                                         Community discussions                                         |                                                       全球风险监控                                                      |
+|                                                  社区讨论                                                 |                                                       全球风险监控                                                      |
 
 |                                                        全球贸易                                                       |                                                     市场                                                    |
 | :---------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------: |
 | ![GlobalTrade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png) | ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png) |
-|                                                       国际贸易流动                                                      |                                                  实时多资产市场                                                  |
+|                                                       国际贸易流量                                                      |                                                  实时多资产市场                                                  |
 
 |                                                          贸易分析                                                         |
 | :-------------------------------------------------------------------------------------------------------------------: |
@@ -235,7 +235,7 @@ npm run tauri build
 
 -   🌍 多语言支持
 -   🏢 经纪商整合
--   📱 移动配套应用程序
+-   📱 移动伴侣应用程序
 -   🔌插件系统
 -   🎨 主题市场
 
