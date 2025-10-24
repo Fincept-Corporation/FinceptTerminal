@@ -1,0 +1,79 @@
+[ERROR] Failed to save config with lock: Error: ENOENT: no such file or directory, lstat 'C:\Users\Vanshika\.claude.json'
+[DEBUG] Writing to temp file: C:\Users\Vanshika\.claude.json.tmp.12712.1760766562803
+[DEBUG] Setting permissions for new file: 600
+[DEBUG] Temp file written successfully, size: 103 bytes
+[DEBUG] Renaming C:\Users\Vanshika\.claude.json.tmp.12712.1760766562803 to C:\Users\Vanshika\.claude.json
+[DEBUG] File C:\Users\Vanshika\.claude.json written atomically
+[DEBUG] Using bash path: "C:\Program Files\Git\bin\bash.exe"
+[DEBUG] Writing to temp file: C:\Users\Vanshika\.claude.json.tmp.12712.1760766563015
+[DEBUG] Preserving file permissions: 100666
+[DEBUG] Temp file written successfully, size: 183 bytes
+[DEBUG] Applied original permissions to temp file
+[DEBUG] Renaming C:\Users\Vanshika\.claude.json.tmp.12712.1760766563015 to C:\Users\Vanshika\.claude.json
+[DEBUG] File C:\Users\Vanshika\.claude.json written atomically
+[DEBUG] Writing to temp file: C:\Users\Vanshika\.claude.json.tmp.12712.1760766563074
+[DEBUG] Preserving file permissions: 100666
+[DEBUG] Temp file written successfully, size: 220 bytes
+[DEBUG] Applied original permissions to temp file
+[DEBUG] Renaming C:\Users\Vanshika\.claude.json.tmp.12712.1760766563074 to C:\Users\Vanshika\.claude.json
+[DEBUG] File C:\Users\Vanshika\.claude.json written atomically
+[DEBUG] Found 0 plugins (0 enabled, 0 disabled)
+[DEBUG] >>>>> getSkillsIfEnabled() CALLED <<<<<
+[DEBUG] ENABLE_SKILLS value: true, type: boolean
+[DEBUG] ENABLE_SKILLS check passed, loading skills...
+[DEBUG] Loading skills from directories: managed=C:\ProgramData\ClaudeCode\.claude\skills, user=C:\Users\Vanshika\.claude\skills, project=C:\Users\Vanshika\.claude\.claude\skills
+[DEBUG] >>>>> getPluginSkills CALLED <<<<<
+[DEBUG] Creating shell snapshot for bash (C:\Program Files\Git\bin\bash.exe)
+[DEBUG] Looking for shell config file: C:\Users\Vanshika\.bashrc
+[DEBUG] Shell config file not found: C:\Users\Vanshika\.bashrc, creating snapshot with Claude Code defaults only
+[DEBUG] Snapshots directory: C:\Users\Vanshika\.claude\shell-snapshots
+[DEBUG] Creating snapshot at: C:\Users\Vanshika\.claude\shell-snapshots\snapshot-bash-1760766563772-s99znu.sh
+[DEBUG] Shell binary exists: true
+[DEBUG] Execution timeout: 10000ms
+[DEBUG] Writing to temp file: C:\Users\Vanshika\.claude\todos\3c32941f-91d4-4278-bc2c-7ac218e5b0e8-agent-3c32941f-91d4-4278-bc2c-7ac218e5b0e8.json.tmp.12712.1760766564436
+[DEBUG] Temp file written successfully, size: 2 bytes
+[DEBUG] Renaming C:\Users\Vanshika\.claude\todos\3c32941f-91d4-4278-bc2c-7ac218e5b0e8-agent-3c32941f-91d4-4278-bc2c-7ac218e5b0e8.json.tmp.12712.1760766564436 to C:\Users\Vanshika\.claude\todos\3c32941f-91d4-4278-bc2c-7ac218e5b0e8-agent-3c32941f-91d4-4278-bc2c-7ac218e5b0e8.json
+[DEBUG] File C:\Users\Vanshika\.claude\todos\3c32941f-91d4-4278-bc2c-7ac218e5b0e8-agent-3c32941f-91d4-4278-bc2c-7ac218e5b0e8.json written atomically
+[DEBUG] getPluginSkills: Processing 0 enabled plugins
+[DEBUG] Total plugin skills loaded: 0
+[DEBUG] Total plugin commands loaded: 0
+[DEBUG] Registered 0 hooks from 0 plugins
+[DEBUG] Loaded 0 skills total (managed: 0, user: 0, project: 0)
+[DEBUG] getSkillsIfEnabled returning: 0 skill dir commands, 0 plugin skills
+[DEBUG] Total plugin agents loaded: 0
+[DEBUG] Ripgrep first use test: PASSED (mode=builtin, path=C:\Users\Vanshika\AppData\Roaming\npm\node_modules\@anthropic-ai\claude-code\vendor\ripgrep\x64-win32\rg.exe)
+[DEBUG] Writing to temp file: C:\Users\Vanshika\.claude.json.tmp.12712.1760766566124
+[DEBUG] Preserving file permissions: 100666
+[DEBUG] Temp file written successfully, size: 302 bytes
+[DEBUG] Applied original permissions to temp file
+[DEBUG] Renaming C:\Users\Vanshika\.claude.json.tmp.12712.1760766566124 to C:\Users\Vanshika\.claude.json
+[DEBUG] File C:\Users\Vanshika\.claude.json written atomically
+[DEBUG] Writing to temp file: C:\Users\Vanshika\.claude.json.tmp.12712.1760766566177
+[DEBUG] Preserving file permissions: 100666
+[DEBUG] Temp file written successfully, size: 332 bytes
+[DEBUG] Applied original permissions to temp file
+[DEBUG] Renaming C:\Users\Vanshika\.claude.json.tmp.12712.1760766566177 to C:\Users\Vanshika\.claude.json
+[DEBUG] File C:\Users\Vanshika\.claude.json written atomically
+[ERROR] Error streaming, falling back to non-streaming mode: Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted
+[ERROR] Error in non-streaming fallback: Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted
+[ERROR] Error: Error: Could not resolve authentication method. Expected either apiKey or authToken to be set. Or for one of the "X-Api-Key" or "Authorization" headers to be explicitly omitted
+    at Jy.validateHeaders (file:///C:/Users/Vanshika/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js:357:930)
+    at Jy.buildHeaders (file:///C:/Users/Vanshika/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js:357:8412)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Jy.buildRequest (file:///C:/Users/Vanshika/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js:357:7470)
+    at async Jy.makeRequest (file:///C:/Users/Vanshika/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js:357:3309)
+    at async BTQ.Ao1.model (file:///C:/Users/Vanshika/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js:3310:18707)
+    at async Ao1 (file:///C:/Users/Vanshika/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js:2650:39781)
+    at async BTQ (file:///C:/Users/Vanshika/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js:3310:18875)
+    at async file:///C:/Users/Vanshika/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js:3310:13054
+    at async ba0 (file:///C:/Users/Vanshika/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/cli.js:3310:4494)
+[DEBUG] Getting matching hook commands for SubagentStop with query: undefined
+[DEBUG] Found 0 hook matchers in settings
+[DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+[DEBUG] Writing to temp file: C:\Users\Vanshika\.claude.json.tmp.12712.1760766566778
+[DEBUG] Preserving file permissions: 100666
+[DEBUG] Temp file written successfully, size: 31566 bytes
+[DEBUG] Applied original permissions to temp file
+[DEBUG] Renaming C:\Users\Vanshika\.claude.json.tmp.12712.1760766566778 to C:\Users\Vanshika\.claude.json
+[DEBUG] File C:\Users\Vanshika\.claude.json written atomically
+[DEBUG] Shell snapshot created successfully (345 bytes)
