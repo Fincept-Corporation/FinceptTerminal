@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Read(//c/windowsdisk/finceptTerminal/legacy-python-depreciated/fincept_terminal/Analytics/economics/**)"
-    ],
-    "deny": [],
-    "ask": []
-  }
-}
