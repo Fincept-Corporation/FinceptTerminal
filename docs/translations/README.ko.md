@@ -18,17 +18,17 @@
 
 ## 📥 최신 빌드 다운로드
 
-**버전:**`v3.0.0`\|**저지르다:**`7a750c4`\|**출시된:**2025-10-22 11:47 UTC
+**버전:**`v3.0.0`\|**저지르다:**`d834bb1`\|**출시된:**2025-10-23 12:14 UTC
 
 ### 🎯 직접 다운로드 - 즉시 다운로드하려면 클릭하세요!
 
 | 플랫폼         | 건축학           | 직접 다운로드                                                                                                                                                  |
 | ----------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🍎**macOS** | 애플 실리콘(ARM64) | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-arm64.dmg)       |
-| 🍎**macOS** | 인텔(x64)       | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-macOS-x64.dmg)         |
-| 🐧**리눅스**   | x64(앱이미지)     | [⬇️**.App이미지 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧**리눅스**   | x64(데비안)      | [⬇️**.deb 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Linux-x64.deb)         |
-| 🪟**윈도우**   | 쉿             | [⬇️**.msi 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-41/FinceptTerminal-v3.0.0-Windows-x64.msi)       |
+| 🍎**macOS** | 애플 실리콘(ARM64) | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)       |
+| 🍎**macOS** | 인텔(x64)       | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)         |
+| 🐧**리눅스**   | x64(앱이미지)     | [⬇️**.App이미지 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**리눅스**   | x64(데비안)      | [⬇️**.deb 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)         |
+| 🪟**윈도우**   | 쉿             | [⬇️**.msi 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)       |
 
 > ✨**원클릭 다운로드!**이 링크는 즉시 다운로드되기 시작합니다. GitHub 로그인이 필요하지 않습니다!
 
@@ -347,7 +347,7 @@ npm run tauri dev    # Start Tauri app
 
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?style=for-the-badge&logo=github)](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)[![Email Support](https://img.shields.io/badge/Email-dev@fincept.in-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:dev@fincept.in)[![Contact Form](https://img.shields.io/badge/Contact-Form-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://forms.gle/DUsDHwxBNRVstYMi6)
 
-**커뮤니티에 의해, 커뮤니티를 위해 구축됨**_누구나 전문적인 재무 분석에 접근할 수 있도록 만들기_
+**커뮤니티에 의해, 커뮤니티를 위해 구축됨**_모든 사람이 전문적인 재무 분석에 접근할 수 있도록 만들기_
 
 ⭐**우리를 스타**• 🔄**공유하다**• 🤝**기여하다**
 
