@@ -48,4 +48,4 @@ tempdist
 settings.json
 watchlist_settings.json
 .DS_Storenul 
-**/.claude/
+**/.claude/"claude/" 
