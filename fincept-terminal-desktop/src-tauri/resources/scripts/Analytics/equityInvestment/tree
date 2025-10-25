@@ -1,0 +1,42 @@
+fincept_terminal/
+├── core_analytics/
+│   ├── __init__.py
+│   ├── base/
+│   │   ├── __init__.py
+│   │   ├── data_provider.py
+│   │   ├── validators.py
+│   │   └── base_models.py
+│   │
+│   ├── equity_valuation/
+│   │   ├── __init__.py
+│   │   ├── dividend_models.py        # DDM, Gordon, H-model, multi-stage
+│   │   ├── dcf_models.py            # FCFF, FCFE, terminal value
+│   │   ├── multiples_valuation.py   # All price/EV multiples, comparables
+│   │   ├── residual_income.py       # RI, EVA, accounting adjustments
+│   │   ├── private_valuation.py     # Private company methods
+│   │   └── advanced_valuation.py    # Sum-of-parts, conglomerate discounts
+│   │
+│   ├── market_analysis/
+│   │   ├── __init__.py
+│   │   ├── market_efficiency.py     # Efficiency tests, anomalies, behavioral
+│   │   ├── index_analysis.py        # Index construction, rebalancing
+│   │   ├── market_structure.py      # Trading, orders, margin calculations
+│   │   └── securities_analysis.py   # Security types, characteristics, risk/return
+│   │
+│   ├── company_analysis/
+│   │   ├── __init__.py
+│   │   ├── fundamental_analysis.py  # Business model, ratios, DuPont
+│   │   ├── industry_analysis.py     # Porter's 5 forces, PESTLE, competitive
+│   │   ├── forecasting.py          # Revenue, expense, scenario modeling
+│   │   └── momentum_analysis.py     # Momentum indicators for valuation
+│   │
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── calculations.py          # Financial calculations, normalization
+│   │   ├── reporting.py            # Reports, cross-border adjustments
+│   │   └── config.py               # Settings, parameters
+│   │
+│   └── data_sources/
+│       ├── __init__.py
+│       ├── provider_factory.py
+│       └── manual_input.py
