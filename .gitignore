@@ -1,6 +1,7 @@
 # .gitignore
 *.egg-info/
 .idea/
+legacy-python-depreciated
 __pycache__/
 dist
 build/cli/cli.pkg
