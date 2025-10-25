@@ -410,16 +410,24 @@ jobs:
           if git diff --cached --quiet; then
             echo "ℹ️  No changes to commit"
           else
+            # Check if there are any open PRs to avoid conflicts
+            OPEN_PRS=$(gh pr list --state open --json number --jq 'length' 2>/dev/null || echo "0")
+            if [ "$OPEN_PRS" -gt 0 ]; then
+              echo "⚠️  Found $OPEN_PRS open PR(s). Skipping README auto-update to avoid conflicts."
+              echo "💡 README will be updated when PRs are merged or on next manual build."
+              exit 0
+            fi
+
             git commit -m "🚀 Auto-update direct download links for v${{ steps.get_version.outputs.version }}
 
             ✨ Added direct download links for:
-            - macOS (ARM64 & x64) 
+            - macOS (ARM64 & x64)
             - Linux (AppImage & .deb)
             - Windows (x64)
-            
+
             📦 Release: ${{ steps.create_release.outputs.tag_name }}
             🔗 All downloads are now one-click with no GitHub login required!"
-            
+
             # Push with retries
             for i in {1..5}; do
               if git push; then
