@@ -30,3 +30,4 @@ src-tauri/target
 src-tauri/resources/python/
 !src-tauri/resources/scripts/
 fincept-terminal-desktop/nul
+"**/.claude/" 
