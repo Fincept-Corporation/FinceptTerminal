@@ -93,7 +93,7 @@ Inspirada en Bloomberg y Refinitiv, Fincept Terminal ofrece datos de mercado en 
 
 #### 🚀**Configuración rápida (automatizada)**
 
-**Para Windows:**
+**Para ventanas:**
 
 ```bash
 # 1. Clone the repository
@@ -221,7 +221,7 @@ npm run tauri build
 -   ✅ Funciones del foro
 -   🚧 Datos de mercado en tiempo real
 -   🚧 Gráficos avanzados
--   🚧 asistente de IA
+-   🚧 AI assistant
 
 ### **Próximamente (segundo trimestre de 2025)**
 
