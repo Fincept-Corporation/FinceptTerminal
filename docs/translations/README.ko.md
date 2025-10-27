@@ -26,7 +26,7 @@
 | ----------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 🍎**macOS** | 애플 실리콘(ARM64) | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)       |
 | 🍎**macOS** | 인텔(x64)       | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)         |
-| 🐧**리눅스**   | x64(앱이미지)     | [⬇️**.App이미지 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
+| 🐧**Linux** | x64(앱이미지)     | [⬇️**.App이미지 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
 | 🐧**리눅스**   | x64(데비안)      | [⬇️**.deb 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)         |
 | 🪟**윈도우**   | 쉿             | [⬇️**.msi 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)       |
 
@@ -63,7 +63,7 @@ Bloomberg 및 Refinitiv에서 영감을 받은 Fincept Terminal은 기업 가격
 | 🔒 공급업체 잠금     | 💻**크로스 플랫폼 데스크탑**  |
 | ⚙️ 제한된 사용자 정의  | 🎨**완전히 사용자 정의 가능** |
 
-**기술 스택:** Tauri (Rust) • React 19 • TypeScript • TailwindCSS
+**Tech Stack:**Tauri(Rust) • React 19 • TypeScript • TailwindCSS
 
 * * *
 

@@ -189,7 +189,7 @@ npm run tauri build
 |                                                     経済                                                    |                                                   株式調査                                                  |
 | :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: |
 | ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) | ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) |
-|                                                   世界経済指標                                                  |                                                 包括的な株式分析                                                |
+|                                                   世界経済指標                                                  |                                       Comprehensive stock analysis                                      |
 
 |                                                 フォーラム                                                 |                                                        地政学                                                        |
 | :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
@@ -199,7 +199,7 @@ npm run tauri build
 |                                                        世界貿易                                                       |                                                     市場                                                    |
 | :---------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------: |
 | ![GlobalTrade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png) | ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png) |
-|                                                      国際貿易の流れ                                                      |                                                ライブマルチアセット市場                                               |
+|                                             International trade flows                                             |                                                ライブマルチアセット市場                                               |
 
 |                                                          貿易分析                                                         |
 | :-------------------------------------------------------------------------------------------------------------------: |

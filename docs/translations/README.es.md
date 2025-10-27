@@ -221,7 +221,7 @@ npm run tauri build
 -   ✅ Funciones del foro
 -   🚧 Datos de mercado en tiempo real
 -   🚧 Gráficos avanzados
--   🚧 AI assistant
+-   🚧 asistente de IA
 
 ### **Próximamente (segundo trimestre de 2025)**
 
@@ -237,7 +237,7 @@ npm run tauri build
 -   🏢 Integraciones de corredores
 -   📱 Aplicación complementaria móvil
 -   🔌 Sistema de complementos
--   🎨 Mercado temático
+-   🎨 Theme marketplace
 
 * * *
 
