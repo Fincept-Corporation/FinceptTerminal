@@ -77,11 +77,12 @@ export class MappingStorage {
   }
 
   /**
-   * Get mappings by connection ID
+   * Get mappings by connection ID (OBSOLETE - kept for backward compatibility)
    */
   async getMappingsByConnection(connectionId: string): Promise<DataMappingConfig[]> {
     const all = this.getAllMappings();
-    return all.filter((m) => m.source.connectionId === connectionId);
+    // Note: source.connectionId no longer exists in new architecture
+    return all.filter((m) => m.source.type === 'api' && m.source.apiConfig?.id === connectionId);
   }
 
   /**

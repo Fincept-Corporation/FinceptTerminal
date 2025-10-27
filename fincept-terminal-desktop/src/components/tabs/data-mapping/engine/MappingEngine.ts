@@ -1,11 +1,11 @@
-// Core Mapping Engine
+// Core Mapping Engine - Updated to use APIClient
 
 import { DataMappingConfig, MappingExecutionContext, MappingExecutionResult, FieldMapping, ParserEngine } from '../types';
 import { getParser } from './parsers';
 import { applyTransform } from '../utils/transformFunctions';
 import { getSchema } from '../schemas';
-import { createAdapter } from '../../data-sources/adapters';
-import { DataSourceConnection } from '../../data-sources/types';
+import { apiClient } from '../services/APIClient';
+import { mappingDatabase } from '../services/MappingDatabase';
 
 export class MappingEngine {
   /**
@@ -21,9 +21,9 @@ export class MappingEngine {
       let rawData: any;
       if (context.data) {
         rawData = context.data;
-      } else if (mapping.source.connectionId) {
+      } else if (mapping.source.type === 'api' && mapping.source.apiConfig) {
         rawData = await this.fetchData(mapping, parameters);
-      } else if (mapping.source.sampleData) {
+      } else if (mapping.source.type === 'sample' && mapping.source.sampleData) {
         rawData = mapping.source.sampleData;
       } else {
         throw new Error('No data source provided');
@@ -75,40 +75,43 @@ export class MappingEngine {
   }
 
   /**
-   * Fetch data from connection
+   * Fetch data from API with caching
    */
   private async fetchData(mapping: DataMappingConfig, parameters?: Record<string, any>): Promise<any> {
-    if (!mapping.source.connection) {
-      throw new Error('Connection not loaded');
+    if (mapping.source.type !== 'api' || !mapping.source.apiConfig) {
+      throw new Error('API configuration not provided');
     }
 
-    // Get adapter for this connection
-    const adapter = createAdapter(mapping.source.connection);
-    if (!adapter) {
-      throw new Error(`No adapter found for ${mapping.source.connection.type}`);
-    }
+    const apiConfig = mapping.source.apiConfig;
 
-    // Build endpoint with parameters
-    let endpoint = mapping.source.endpoint || '';
-    if (parameters) {
-      for (const [key, value] of Object.entries(parameters)) {
-        endpoint = endpoint.replace(`{${key}}`, String(value));
+    // Check cache if enabled
+    if (apiConfig.cacheEnabled && mapping.id) {
+      const cachedData = await mappingDatabase.getCachedResponse(mapping.id, parameters || {});
+      if (cachedData) {
+        console.log('[MappingEngine] Using cached response');
+        return cachedData;
       }
     }
 
-    // Execute request (adapter handles authentication)
-    const request = {
-      endpoint,
-      method: mapping.source.method || 'GET',
-      headers: mapping.source.headers,
-      body: mapping.source.body,
-    };
+    // Execute API request
+    console.log('[MappingEngine] Executing API request');
+    const response = await apiClient.executeRequest(apiConfig, parameters || {});
 
-    // Note: This assumes adapters have an executeRequest method
-    // You may need to extend your adapter interface
-    const response = await (adapter as any).executeRequest?.(request);
+    if (!response.success) {
+      throw new Error(`API request failed: ${response.error?.message || 'Unknown error'}`);
+    }
 
-    return response;
+    // Cache response if enabled
+    if (apiConfig.cacheEnabled && mapping.id && response.data) {
+      await mappingDatabase.setCachedResponse(
+        mapping.id,
+        parameters || {},
+        response.data,
+        apiConfig.cacheTTL || 300
+      );
+    }
+
+    return response.data;
   }
 
   /**
@@ -162,9 +165,11 @@ export class MappingEngine {
       try {
         let value = await this.extractFieldValue(sourceData, fieldMapping);
 
-        // Apply transformation if specified
-        if (fieldMapping.transform && value !== null && value !== undefined) {
-          value = applyTransform(value, fieldMapping.transform, fieldMapping.transformParams);
+        // Apply transformations if specified
+        if (fieldMapping.transform && fieldMapping.transform.length > 0 && value !== null && value !== undefined) {
+          for (const transformName of fieldMapping.transform) {
+            value = applyTransform(value, transformName, fieldMapping.transformParams);
+          }
         }
 
         // Use default value if null/undefined and required
@@ -186,7 +191,7 @@ export class MappingEngine {
     }
 
     // Add derived field calculations for POSITION schema
-    if (mapping.target.schema === 'POSITION') {
+    if (mapping.target.schemaType === 'predefined' && mapping.target.schema === 'POSITION') {
       if (!result.costBasis && result.quantity && result.averagePrice) {
         result.costBasis = Math.abs(result.quantity * result.averagePrice);
       }
@@ -202,13 +207,25 @@ export class MappingEngine {
    * Extract field value using parser
    */
   private async extractFieldValue(sourceData: any, fieldMapping: FieldMapping): Promise<any> {
-    // Use field-specific parser if specified, otherwise use default
-    const parser = fieldMapping.parserEngine
-      ? getParser(fieldMapping.parserEngine)
+    // Handle different source types
+    if (fieldMapping.source.type === 'static') {
+      return fieldMapping.source.value;
+    }
+
+    if (!fieldMapping.source.path) {
+      return fieldMapping.defaultValue;
+    }
+
+    // Use field-specific parser if specified (legacy support), otherwise use parser from mapping
+    const parserType = fieldMapping.parserEngine || fieldMapping.parser;
+    const parser = parserType
+      ? (typeof parserType === 'string' ? getParser(ParserEngine.DIRECT) : getParser(parserType))
       : getParser(ParserEngine.DIRECT);
 
     try {
-      return await parser.execute(sourceData, fieldMapping.sourceExpression);
+      // Use source.path (new) or sourceExpression (legacy)
+      const expression = fieldMapping.source.path || fieldMapping.sourceExpression || '';
+      return await parser.execute(sourceData, expression);
     } catch (error) {
       console.error(`Failed to extract ${fieldMapping.targetField}:`, error);
       return fieldMapping.defaultValue;
@@ -276,8 +293,21 @@ export class MappingEngine {
    * Validate transformed data against schema
    */
   private async validateData(data: any, mapping: DataMappingConfig): Promise<any> {
-    const schema = getSchema(mapping.target.schema);
-    if (!schema) {
+    // Get fields from either predefined or custom schema
+    let fields: any[] = [];
+
+    if (mapping.target.schemaType === 'predefined') {
+      const schema = getSchema(mapping.target.schema!);
+      if (!schema) {
+        return { valid: true, errors: [] };
+      }
+      fields = Object.entries(schema.fields).map(([name, spec]) => ({
+        name,
+        ...spec,
+      }));
+    } else if (mapping.target.schemaType === 'custom') {
+      fields = mapping.target.customFields || [];
+    } else {
       return { valid: true, errors: [] };
     }
 
@@ -288,7 +318,8 @@ export class MappingEngine {
       const item = items[i];
 
       // Validate each field
-      for (const [fieldName, fieldSpec] of Object.entries(schema.fields)) {
+      for (const fieldSpec of fields) {
+        const fieldName = fieldSpec.name;
         const value = item[fieldName];
 
         // Required check

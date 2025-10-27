@@ -1,7 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
 use std::collections::HashMap;
-use std::process::{Child, Command, Stdio, ChildStdout, ChildStdin};
+use std::process::{Child, Command, Stdio, ChildStdin};
 use std::sync::{Arc, Mutex};
 use std::io::{BufRead, BufReader, Write};
 use std::thread;

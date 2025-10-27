@@ -1,108 +1,159 @@
-// Data Mapping Tab - Main component
+// Data Mapping Tab - Complete Rewrite with Standalone API Integration
 
-import React, { useState } from 'react';
-import { Plus, List, Save, Play, ArrowLeft, ArrowRight } from 'lucide-react';
-import { DataMappingConfig, ParserEngine, MappingExecutionResult, MappingTemplate } from './types';
-import { DataSourceConnection } from '../data-sources/types';
-import { JSONExplorer } from './components/JSONExplorer';
-import { ExpressionBuilder } from './components/ExpressionBuilder';
+import React, { useState, useEffect } from 'react';
+import { Plus, List, Save, Play, ArrowLeft, ArrowRight, CheckCircle, Circle, Bookmark } from 'lucide-react';
+import {
+  DataMappingConfig,
+  APIConfig,
+  CreateStep,
+  UnifiedSchemaType,
+  CustomField,
+  FieldMapping,
+  MappingExecutionResult,
+  ParserEngine,
+  MappingTemplate,
+} from './types';
+import { APIConfigurationPanel } from './components/APIConfigurationPanel';
+import { SchemaBuilder } from './components/SchemaBuilder';
+import { VisualFieldMapper } from './components/VisualFieldMapper';
+import { CacheSettings } from './components/CacheSettings';
 import { LivePreview } from './components/LivePreview';
-import { SchemaSelector } from './components/SchemaSelector';
-import { ConnectionSelector } from './components/ConnectionSelector';
 import { TemplateLibrary } from './components/TemplateLibrary';
-import { MappingEngine } from './engine/MappingEngine';
-import { getSchema } from './schemas';
+import { mappingEngine } from './engine/MappingEngine';
+import { mappingDatabase } from './services/MappingDatabase';
+import { v4 as uuidv4 } from 'uuid';
 
-type View = 'gallery' | 'create' | 'list';
-type CreateStep = 'template' | 'connection' | 'schema' | 'data' | 'mapping' | 'test';
+type View = 'list' | 'create' | 'templates';
 
 export default function DataMappingTab() {
-  const [view, setView] = useState<View>('gallery');
-  const [currentStep, setCurrentStep] = useState<CreateStep>('template');
+  const [view, setView] = useState<View>('list');
+  const [currentStep, setCurrentStep] = useState<CreateStep>('api-config');
+  const [savedMappings, setSavedMappings] = useState<DataMappingConfig[]>([]);
+  const [isLoadingMappings, setIsLoadingMappings] = useState(false);
 
   // State for creating new mapping
-  const [selectedConnection, setSelectedConnection] = useState<DataSourceConnection | null>(null);
-  const [selectedSchema, setSelectedSchema] = useState<string>('');
-  const [endpoint, setEndpoint] = useState('');
+  const [mappingId, setMappingId] = useState<string>('');
+  const [mappingName, setMappingName] = useState<string>('');
+  const [mappingDescription, setMappingDescription] = useState<string>('');
+
+  // API Configuration
+  const [apiConfig, setApiConfig] = useState<APIConfig>({
+    id: uuidv4(),
+    name: '',
+    description: '',
+    baseUrl: '',
+    endpoint: '',
+    method: 'GET',
+    authentication: { type: 'none' },
+    headers: {},
+    queryParams: {},
+    timeout: 30000,
+    cacheEnabled: true,
+    cacheTTL: 300,
+  });
+
+  // Schema Configuration
+  const [schemaType, setSchemaType] = useState<'predefined' | 'custom'>('predefined');
+  const [selectedSchema, setSelectedSchema] = useState<UnifiedSchemaType | undefined>();
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+
+  // Sample Data
   const [sampleData, setSampleData] = useState<any>(null);
-  const [sampleDataJson, setSampleDataJson] = useState('');
-  const [mappingName, setMappingName] = useState('');
-  const [extractionEngine, setExtractionEngine] = useState<ParserEngine>(ParserEngine.JSONPATH);
-  const [extractionExpression, setExtractionExpression] = useState('');
-  const [fieldMappings, setFieldMappings] = useState<any[]>([]);
+
+  // Field Mappings
+  const [fieldMappings, setFieldMappings] = useState<FieldMapping[]>([]);
+
+  // Test Results
   const [testResult, setTestResult] = useState<MappingExecutionResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
-  const [jsonError, setJsonError] = useState<string | null>(null);
 
-  const steps: CreateStep[] = ['template', 'connection', 'schema', 'data', 'mapping', 'test'];
+  const steps: CreateStep[] = [
+    'api-config',
+    'schema-select',
+    'field-mapping',
+    'cache-settings',
+    'test-save',
+  ];
   const stepIndex = steps.indexOf(currentStep);
 
-  const mappingEngine = new MappingEngine();
+  useEffect(() => {
+    loadSavedMappings();
+    initializeDatabase();
+  }, []);
 
-  const handleTemplateSelect = (template: MappingTemplate) => {
-    // Load template configuration
-    const config = template.mappingConfig;
-
-    setMappingName(config.name || template.name);
-    if (config.target?.schema) {
-      setSelectedSchema(config.target.schema);
-    }
-    if (config.extraction) {
-      setExtractionEngine(config.extraction.engine);
-      setExtractionExpression(config.extraction.rootPath || '');
-    }
-    if (config.fieldMappings) {
-      setFieldMappings(config.fieldMappings);
-    }
-
-    // Skip to connection step
-    setCurrentStep('connection');
-  };
-
-  const handleConnectionSelect = (connection: DataSourceConnection) => {
-    setSelectedConnection(connection);
-  };
-
-  const handleSchemaSelect = (schemaName: string) => {
-    setSelectedSchema(schemaName);
-  };
-
-  const handleFetchSampleData = async () => {
+  const initializeDatabase = async () => {
     try {
-      const data = JSON.parse(sampleDataJson);
-      setSampleData(data);
-      setJsonError(null);
+      await mappingDatabase.initialize();
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Invalid JSON format';
-      setJsonError(errorMessage);
-      alert(`JSON Error: ${errorMessage}`);
+      console.error('Failed to initialize database:', error);
     }
   };
 
-  const handleAddFieldMapping = () => {
-    setFieldMappings([
-      ...fieldMappings,
-      {
-        targetField: '',
-        sourceExpression: '',
-        required: false,
-      },
-    ]);
+  const loadSavedMappings = async () => {
+    setIsLoadingMappings(true);
+    try {
+      const mappings = await mappingDatabase.getAllMappings();
+      setSavedMappings(mappings);
+    } catch (error) {
+      console.error('Failed to load mappings:', error);
+    } finally {
+      setIsLoadingMappings(false);
+    }
   };
 
-  const handleUpdateFieldMapping = (index: number, field: string, value: any) => {
-    const updated = [...fieldMappings];
-    updated[index] = { ...updated[index], [field]: value };
-    setFieldMappings(updated);
+  const handleStartNewMapping = () => {
+    // Reset all state
+    setMappingId(uuidv4());
+    setMappingName('');
+    setMappingDescription('');
+    setApiConfig({
+      id: uuidv4(),
+      name: '',
+      description: '',
+      baseUrl: '',
+      endpoint: '',
+      method: 'GET',
+      authentication: { type: 'none' },
+      headers: {},
+      queryParams: {},
+      timeout: 30000,
+      cacheEnabled: true,
+      cacheTTL: 300,
+    });
+    setSchemaType('predefined');
+    setSelectedSchema(undefined);
+    setCustomFields([]);
+    setSampleData(null);
+    setFieldMappings([]);
+    setTestResult(null);
+    setCurrentStep('api-config');
+    setView('create');
   };
 
-  const handleRemoveFieldMapping = (index: number) => {
-    setFieldMappings(fieldMappings.filter((_, i) => i !== index));
+  const handleTestSuccess = (data: any) => {
+    setSampleData(data);
+    console.log('[DataMappingTab] Sample data fetched:', data);
+  };
+
+  const handleApiConfigChange = (config: APIConfig) => {
+    setApiConfig(config);
+    // Sync mapping name with API config name if not manually set
+    if (!mappingName || mappingName === apiConfig.name) {
+      setMappingName(config.name);
+    }
+    if (!mappingDescription || mappingDescription === apiConfig.description) {
+      setMappingDescription(config.description);
+    }
   };
 
   const handleTestMapping = async () => {
-    if (!sampleData || !selectedSchema) {
-      alert('Please provide sample data and select a schema');
+    if (!sampleData) {
+      alert('Please fetch sample data first');
+      return;
+    }
+
+    if (fieldMappings.length === 0) {
+      alert('Please configure at least one field mapping');
       return;
     }
 
@@ -110,23 +161,24 @@ export default function DataMappingTab() {
 
     try {
       const mappingConfig: DataMappingConfig = {
-        id: 'test_mapping',
-        name: mappingName || 'Test Mapping',
-        description: '',
+        id: mappingId,
+        name: mappingName || apiConfig.name,
+        description: mappingDescription || apiConfig.description,
         source: {
-          connectionId: selectedConnection?.id || '',
-          connection: selectedConnection || undefined,
+          type: 'sample',
           sampleData,
         },
         target: {
-          schema: selectedSchema,
+          schemaType,
+          schema: schemaType === 'predefined' ? selectedSchema : undefined,
+          customFields: schemaType === 'custom' ? customFields : undefined,
         },
         extraction: {
-          engine: extractionEngine,
-          rootPath: extractionExpression,
-          isArray: true,
+          engine: ParserEngine.DIRECT,
+          rootPath: '',
+          isArray: Array.isArray(sampleData),
         },
-        fieldMappings: fieldMappings.filter((m) => m.targetField && m.sourceExpression),
+        fieldMappings,
         postProcessing: undefined,
         validation: {
           enabled: true,
@@ -144,6 +196,10 @@ export default function DataMappingTab() {
 
       const result = await mappingEngine.test(mappingConfig, sampleData);
       setTestResult(result);
+
+      if (!result.success) {
+        alert(`Test failed: ${result.errors?.join(', ')}`);
+      }
     } catch (error) {
       console.error('Test failed:', error);
       setTestResult({
@@ -161,190 +217,231 @@ export default function DataMappingTab() {
     }
   };
 
-  const handleSaveMapping = () => {
-    // TODO: Save to DuckDB
-    alert('Mapping saved! (Storage implementation pending)');
-    setView('list');
+  const handleSaveMapping = async () => {
+    if (!testResult?.success) {
+      alert('Please test the mapping successfully before saving');
+      return;
+    }
+
+    if (!mappingName) {
+      alert('Please provide a mapping name');
+      return;
+    }
+
+    try {
+      const mappingConfig: DataMappingConfig = {
+        id: mappingId,
+        name: mappingName,
+        description: mappingDescription,
+        source: {
+          type: 'api',
+          apiConfig,
+        },
+        target: {
+          schemaType,
+          schema: schemaType === 'predefined' ? selectedSchema : undefined,
+          customFields: schemaType === 'custom' ? customFields : undefined,
+        },
+        extraction: {
+          engine: ParserEngine.DIRECT,
+          rootPath: '',
+          isArray: Array.isArray(sampleData),
+        },
+        fieldMappings,
+        postProcessing: undefined,
+        validation: {
+          enabled: true,
+          strictMode: false,
+          rules: [],
+        },
+        metadata: {
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: 1,
+          tags: [],
+          aiGenerated: false,
+        },
+      };
+
+      await mappingDatabase.saveMapping(mappingConfig);
+      alert('Mapping saved successfully!');
+      await loadSavedMappings();
+      setView('list');
+    } catch (error) {
+      console.error('Failed to save mapping:', error);
+      alert(`Failed to save mapping: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const handleDeleteMapping = async (id: string) => {
+    if (!confirm('Delete this mapping? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await mappingDatabase.deleteMapping(id);
+      await loadSavedMappings();
+    } catch (error) {
+      console.error('Failed to delete mapping:', error);
+      alert('Failed to delete mapping');
+    }
+  };
+
+  const handleLoadMapping = async (mapping: DataMappingConfig) => {
+    setMappingId(mapping.id);
+    setMappingName(mapping.name);
+    setMappingDescription(mapping.description);
+
+    if (mapping.source.type === 'api' && mapping.source.apiConfig) {
+      setApiConfig(mapping.source.apiConfig);
+    }
+
+    setSchemaType(mapping.target.schemaType);
+    if (mapping.target.schemaType === 'predefined') {
+      setSelectedSchema(mapping.target.schema as UnifiedSchemaType | undefined);
+    } else {
+      setCustomFields(mapping.target.customFields || []);
+    }
+
+    setFieldMappings(mapping.fieldMappings);
+    setCurrentStep('api-config');
+    setView('create');
+  };
+
+  const handleSelectTemplate = (template: MappingTemplate) => {
+    // Load template into create view
+    setMappingId(uuidv4());
+    setMappingName(template.mappingConfig.name || template.name);
+    setMappingDescription(template.mappingConfig.description || template.description);
+
+    if (template.mappingConfig.source?.apiConfig) {
+      setApiConfig(template.mappingConfig.source.apiConfig);
+    }
+
+    if (template.mappingConfig.target) {
+      setSchemaType(template.mappingConfig.target.schemaType);
+      if (template.mappingConfig.target.schemaType === 'predefined') {
+        setSelectedSchema(template.mappingConfig.target.schema as UnifiedSchemaType);
+      } else {
+        setCustomFields(template.mappingConfig.target.customFields || []);
+      }
+    }
+
+    if (template.mappingConfig.fieldMappings) {
+      setFieldMappings(template.mappingConfig.fieldMappings);
+    }
+
+    setCurrentStep('api-config');
+    setView('create');
+  };
+
+  const canProceedToNextStep = () => {
+    switch (currentStep) {
+      case 'api-config':
+        return apiConfig.baseUrl && apiConfig.endpoint && apiConfig.name;
+      case 'schema-select':
+        return (schemaType === 'predefined' && selectedSchema) ||
+               (schemaType === 'custom' && customFields.length > 0);
+      case 'fetch-sample':
+        return sampleData !== null;
+      case 'field-mapping':
+        return fieldMappings.length > 0;
+      case 'cache-settings':
+        return true;
+      case 'test-save':
+        return testResult?.success === true;
+      default:
+        return false;
+    }
+  };
+
+  const getStepStatus = (step: CreateStep): 'complete' | 'current' | 'pending' => {
+    const targetIndex = steps.indexOf(step);
+    if (targetIndex < stepIndex) return 'complete';
+    if (targetIndex === stepIndex) return 'current';
+    return 'pending';
   };
 
   const renderStepContent = () => {
     switch (currentStep) {
-      case 'template':
+      case 'api-config':
         return (
-          <div className="p-6">
-            <TemplateLibrary onSelectTemplate={handleTemplateSelect} />
-            <div className="mt-6 flex justify-center">
-              <button
-                onClick={() => setCurrentStep('connection')}
-                className="bg-zinc-800 hover:bg-zinc-700 text-white px-6 py-2 rounded text-sm font-bold"
-              >
-                SKIP - CREATE FROM SCRATCH
-              </button>
-            </div>
-          </div>
-        );
-
-      case 'connection':
-        return (
-          <div className="p-6">
-            <ConnectionSelector
-              selectedConnectionId={selectedConnection?.id}
-              onSelect={handleConnectionSelect}
+          <div className="p-6 max-w-4xl mx-auto">
+            <h2 className="text-lg font-bold text-white mb-4">Configure API Connection</h2>
+            <APIConfigurationPanel
+              config={apiConfig}
+              onChange={handleApiConfigChange}
+              onTestSuccess={handleTestSuccess}
             />
           </div>
         );
 
-      case 'schema':
+      case 'schema-select':
         return (
-          <div className="p-6">
-            <SchemaSelector selectedSchema={selectedSchema} onSelect={handleSchemaSelect} />
+          <div className="p-6 max-w-full mx-auto">
+            <h2 className="text-lg font-bold text-white mb-4">Choose Target Schema</h2>
+            <SchemaBuilder
+              schemaType={schemaType}
+              selectedSchema={selectedSchema}
+              customFields={customFields}
+              onSchemaTypeChange={setSchemaType}
+              onSchemaSelect={(schema) => setSelectedSchema(schema as UnifiedSchemaType)}
+              onCustomFieldsChange={setCustomFields}
+              sampleData={sampleData}
+            />
           </div>
         );
 
-      case 'data':
+      case 'field-mapping':
+        if (!sampleData) {
+          return (
+            <div className="p-6 text-center">
+              <p className="text-red-400">Please fetch sample data first</p>
+            </div>
+          );
+        }
+
         return (
-          <div className="p-6 space-y-4">
-            <div>
-              <h3 className="text-xs font-bold text-orange-500 uppercase mb-2">Endpoint Configuration</h3>
-              <input
-                type="text"
-                placeholder="/historical-candle/{symbol}/day/{from}/{to}"
-                value={endpoint}
-                onChange={(e) => setEndpoint(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 text-gray-300 px-3 py-2 text-sm rounded focus:outline-none focus:border-orange-500"
-              />
-            </div>
-
-            <div>
-              <h3 className="text-xs font-bold text-orange-500 uppercase mb-2">Sample Data (JSON)</h3>
-              <textarea
-                value={sampleDataJson}
-                onChange={(e) => setSampleDataJson(e.target.value)}
-                placeholder='{"data": {"candles": [[timestamp, o, h, l, c, v]]}}'
-                rows={12}
-                className="w-full bg-zinc-900 border border-zinc-700 text-gray-300 p-3 text-xs font-mono rounded focus:outline-none focus:border-orange-500"
-              />
-              <button
-                onClick={handleFetchSampleData}
-                className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded text-sm font-bold"
-              >
-                PARSE & PREVIEW
-              </button>
-            </div>
-
-            {sampleData && (
-              <div>
-                <h3 className="text-xs font-bold text-orange-500 uppercase mb-2">JSON Structure</h3>
-                <JSONExplorer data={sampleData} />
-              </div>
-            )}
+          <div className="p-6 h-full">
+            <h2 className="text-lg font-bold text-white mb-4">Map API Fields to Schema</h2>
+            <VisualFieldMapper
+              schemaType={schemaType}
+              selectedSchema={selectedSchema}
+              customFields={customFields}
+              sampleData={sampleData}
+              mappings={fieldMappings}
+              onMappingsChange={setFieldMappings}
+            />
           </div>
         );
 
-      case 'mapping':
-        const schema = selectedSchema ? getSchema(selectedSchema) : null;
-
+      case 'cache-settings':
         return (
-          <div className="p-6 space-y-4">
-            <div>
-              <h3 className="text-xs font-bold text-orange-500 uppercase mb-2">Mapping Name</h3>
-              <input
-                type="text"
-                placeholder="My Mapping Name"
-                value={mappingName}
-                onChange={(e) => setMappingName(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700 text-gray-300 px-3 py-2 text-sm rounded focus:outline-none focus:border-orange-500"
-              />
-            </div>
-
-            <div>
-              <h3 className="text-xs font-bold text-orange-500 uppercase mb-2">Data Extraction</h3>
-              <ExpressionBuilder
-                initialEngine={extractionEngine}
-                initialExpression={extractionExpression}
-                testData={sampleData}
-                onExpressionChange={(engine, expression) => {
-                  setExtractionEngine(engine);
-                  setExtractionExpression(expression);
-                }}
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-bold text-orange-500 uppercase">Field Mappings</h3>
-                <button
-                  onClick={handleAddFieldMapping}
-                  className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded text-xs font-bold flex items-center gap-1"
-                >
-                  <Plus size={12} />
-                  ADD FIELD
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {schema &&
-                  Object.entries(schema.fields).map(([fieldName, fieldSpec]) => {
-                    const existingMapping = fieldMappings.find((m) => m.targetField === fieldName);
-                    const index = fieldMappings.indexOf(existingMapping);
-
-                    return (
-                      <div key={fieldName} className="bg-zinc-900 border border-zinc-700 rounded p-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-xs text-gray-400 block mb-1">
-                              Target Field {fieldSpec.required && <span className="text-orange-500">*</span>}
-                            </label>
-                            <input
-                              type="text"
-                              value={fieldName}
-                              disabled
-                              className="w-full bg-zinc-800 border border-zinc-700 text-gray-400 px-2 py-1 text-xs rounded font-mono"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-400 block mb-1">Source Expression</label>
-                            <input
-                              type="text"
-                              placeholder="$.data.field"
-                              value={existingMapping?.sourceExpression || ''}
-                              onChange={(e) => {
-                                if (existingMapping) {
-                                  handleUpdateFieldMapping(index, 'sourceExpression', e.target.value);
-                                } else {
-                                  setFieldMappings([
-                                    ...fieldMappings,
-                                    {
-                                      targetField: fieldName,
-                                      sourceExpression: e.target.value,
-                                      required: fieldSpec.required,
-                                    },
-                                  ]);
-                                }
-                              }}
-                              className="w-full bg-zinc-800 border border-zinc-700 text-gray-300 px-2 py-1 text-xs rounded font-mono focus:outline-none focus:border-orange-500"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
+          <div className="p-6 max-w-4xl mx-auto">
+            <h2 className="text-lg font-bold text-white mb-4">Cache & Security Settings</h2>
+            <CacheSettings
+              cacheEnabled={apiConfig.cacheEnabled}
+              cacheTTL={apiConfig.cacheTTL}
+              onCacheEnabledChange={(enabled) =>
+                setApiConfig({ ...apiConfig, cacheEnabled: enabled })
+              }
+              onCacheTTLChange={(ttl) => setApiConfig({ ...apiConfig, cacheTTL: ttl })}
+              mappingId={mappingId}
+            />
           </div>
         );
 
-      case 'test':
+      case 'test-save':
         return (
-          <div className="p-6 space-y-4">
+          <div className="p-6 max-w-4xl mx-auto space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-orange-500 uppercase">Test Mapping</h3>
+              <h2 className="text-lg font-bold text-white">Test & Save Mapping</h2>
               <button
                 onClick={handleTestMapping}
                 disabled={isTesting}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-zinc-700 text-white px-4 py-2 rounded text-sm font-bold flex items-center gap-2"
+                className="bg-green-600 hover:bg-green-700 disabled:bg-zinc-700 text-white px-4 py-2 rounded font-bold flex items-center gap-2"
               >
-                <Play size={14} />
+                <Play size={16} />
                 {isTesting ? 'TESTING...' : 'RUN TEST'}
               </button>
             </div>
@@ -356,7 +453,7 @@ export default function DataMappingTab() {
                 onClick={handleSaveMapping}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded font-bold flex items-center justify-center gap-2"
               >
-                <Save size={16} />
+                <Save size={18} />
                 SAVE MAPPING
               </button>
             )}
@@ -369,233 +466,215 @@ export default function DataMappingTab() {
   };
 
   return (
-    <div style={{ width: '100%', height: '100%', backgroundColor: '#0a0a0a', display: 'flex', flexDirection: 'column' }}>
+    <div className="w-full h-full bg-zinc-950 flex flex-col">
       {/* Header */}
-      <div
-        style={{
-          backgroundColor: '#1a1a1a',
-          borderBottom: '1px solid #2d2d2d',
-          padding: '12px 16px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span
-              style={{
-                color: '#ea580c',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                letterSpacing: '0.5px',
-              }}
-            >
+      <div className="bg-zinc-900 border-b border-zinc-800 p-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-orange-500 text-sm font-bold tracking-wide">
               DATA MAPPING
             </span>
-            <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
-            <span style={{ color: '#737373', fontSize: '11px' }}>Transform any data source to unified schemas</span>
+            <div className="w-px h-5 bg-zinc-700"></div>
+            <span className="text-gray-500 text-xs">
+              Connect any API directly to Fincept Terminal
+            </span>
           </div>
 
-          {/* View Switcher */}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setView('gallery')}
-              style={{
-                backgroundColor: view === 'gallery' ? '#ea580c' : 'transparent',
-                color: view === 'gallery' ? 'white' : '#a3a3a3',
-                border: `1px solid ${view === 'gallery' ? '#ea580c' : '#404040'}`,
-                padding: '6px 12px',
-                fontSize: '11px',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                fontWeight: 'bold',
-              }}
-            >
-              TEMPLATES
-            </button>
-            <button
-              onClick={() => {
-                setView('create');
-                setCurrentStep('template');
-              }}
-              style={{
-                backgroundColor: view === 'create' ? '#ea580c' : 'transparent',
-                color: view === 'create' ? 'white' : '#a3a3a3',
-                border: `1px solid ${view === 'create' ? '#ea580c' : '#404040'}`,
-                padding: '6px 12px',
-                fontSize: '11px',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              <Plus size={12} />
-              CREATE NEW
-            </button>
+          <div className="flex gap-2">
             <button
               onClick={() => setView('list')}
-              style={{
-                backgroundColor: view === 'list' ? '#ea580c' : 'transparent',
-                color: view === 'list' ? 'white' : '#a3a3a3',
-                border: `1px solid ${view === 'list' ? '#ea580c' : '#404040'}`,
-                padding: '6px 12px',
-                fontSize: '11px',
-                cursor: 'pointer',
-                borderRadius: '3px',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
+              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 ${
+                view === 'list'
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-transparent text-gray-400 border border-zinc-700 hover:border-zinc-600'
+              }`}
             >
               <List size={12} />
               MY MAPPINGS
+            </button>
+            <button
+              onClick={() => setView('templates')}
+              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 ${
+                view === 'templates'
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-transparent text-gray-400 border border-zinc-700 hover:border-zinc-600'
+              }`}
+            >
+              <Bookmark size={12} />
+              TEMPLATES
+            </button>
+            <button
+              onClick={handleStartNewMapping}
+              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 ${
+                view === 'create'
+                  ? 'bg-orange-600 text-white'
+                  : 'bg-transparent text-gray-400 border border-zinc-700 hover:border-zinc-600'
+              }`}
+            >
+              <Plus size={12} />
+              CREATE NEW
             </button>
           </div>
         </div>
       </div>
 
-      {/* Step Progress (for create view) */}
+      {/* Step Progress */}
       {view === 'create' && (
-        <div style={{ backgroundColor: '#1a1a1a', borderBottom: '1px solid #2d2d2d', padding: '12px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {steps.map((step, index) => (
-              <React.Fragment key={step}>
-                <div
-                  style={{
-                    flex: 1,
-                    textAlign: 'center',
-                    cursor: index <= stepIndex ? 'pointer' : 'default',
-                  }}
-                  onClick={() => index <= stepIndex && setCurrentStep(step)}
-                >
+        <div className="bg-zinc-900 border-b border-zinc-800 p-3">
+          <div className="flex items-center gap-2">
+            {steps.map((step, index) => {
+              const status = getStepStatus(step);
+              const Icon = status === 'complete' ? CheckCircle : Circle;
+
+              return (
+                <React.Fragment key={step}>
                   <div
-                    style={{
-                      height: '4px',
-                      backgroundColor: index <= stepIndex ? '#ea580c' : '#404040',
-                      borderRadius: '2px',
-                      marginBottom: '4px',
-                    }}
-                  ></div>
-                  <span
-                    style={{
-                      fontSize: '10px',
-                      color: index <= stepIndex ? '#ea580c' : '#737373',
-                      fontWeight: 'bold',
-                      textTransform: 'uppercase',
-                    }}
+                    className={`flex-1 flex flex-col items-center cursor-pointer ${
+                      index <= stepIndex ? 'opacity-100' : 'opacity-40'
+                    }`}
+                    onClick={() => index <= stepIndex && setCurrentStep(step)}
                   >
-                    {step}
-                  </span>
-                </div>
-                {index < steps.length - 1 && (
-                  <ArrowRight size={12} style={{ color: '#404040' }} />
-                )}
-              </React.Fragment>
-            ))}
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon
+                        size={14}
+                        className={
+                          status === 'complete'
+                            ? 'text-green-500'
+                            : status === 'current'
+                            ? 'text-orange-500'
+                            : 'text-gray-600'
+                        }
+                      />
+                      <span
+                        className={`text-xs font-bold uppercase ${
+                          status === 'complete'
+                            ? 'text-green-500'
+                            : status === 'current'
+                            ? 'text-orange-500'
+                            : 'text-gray-600'
+                        }`}
+                      >
+                        {step.replace('-', ' ')}
+                      </span>
+                    </div>
+                    <div
+                      className={`h-1 w-full rounded ${
+                        index <= stepIndex ? 'bg-orange-500' : 'bg-zinc-700'
+                      }`}
+                    ></div>
+                  </div>
+                  {index < steps.length - 1 && (
+                    <ArrowRight size={12} className="text-zinc-700 flex-shrink-0" />
+                  )}
+                </React.Fragment>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {view === 'gallery' && (
-          <div style={{ padding: '24px' }}>
-            <TemplateLibrary
-              onSelectTemplate={(template) => {
-                handleTemplateSelect(template);
-                setView('create');
-              }}
-            />
-          </div>
-        )}
-
-        {view === 'create' && (
-          <>
-            {renderStepContent()}
-
-            {/* Navigation Buttons */}
-            {currentStep !== 'template' && (
-              <div
-                style={{
-                  position: 'sticky',
-                  bottom: 0,
-                  backgroundColor: '#1a1a1a',
-                  borderTop: '1px solid #2d2d2d',
-                  padding: '16px',
-                  display: 'flex',
-                  gap: '12px',
-                  justifyContent: 'space-between',
-                }}
-              >
+      <div className="flex-1 overflow-auto">
+        {view === 'list' && (
+          <div className="p-6">
+            {isLoadingMappings ? (
+              <div className="text-center py-12 text-gray-400">Loading mappings...</div>
+            ) : savedMappings.length === 0 ? (
+              <div className="text-center py-12">
+                <h3 className="text-gray-400 mb-3">No mappings yet</h3>
+                <p className="text-gray-600 text-sm mb-6">
+                  Create your first API mapping to get started
+                </p>
                 <button
-                  onClick={() => {
-                    const prevIndex = stepIndex - 1;
-                    if (prevIndex >= 0) {
-                      setCurrentStep(steps[prevIndex]);
-                    }
-                  }}
-                  disabled={stepIndex === 0}
-                  style={{
-                    backgroundColor: 'transparent',
-                    color: '#a3a3a3',
-                    border: '1px solid #404040',
-                    padding: '8px 16px',
-                    fontSize: '11px',
-                    cursor: stepIndex === 0 ? 'not-allowed' : 'pointer',
-                    borderRadius: '4px',
-                    fontWeight: 'bold',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    opacity: stepIndex === 0 ? 0.5 : 1,
-                  }}
+                  onClick={handleStartNewMapping}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded font-bold flex items-center gap-2 mx-auto"
                 >
-                  <ArrowLeft size={14} />
-                  PREVIOUS
-                </button>
-
-                <button
-                  onClick={() => {
-                    const nextIndex = stepIndex + 1;
-                    if (nextIndex < steps.length) {
-                      setCurrentStep(steps[nextIndex]);
-                    }
-                  }}
-                  disabled={stepIndex === steps.length - 1}
-                  style={{
-                    backgroundColor: '#ea580c',
-                    color: 'white',
-                    border: 'none',
-                    padding: '8px 16px',
-                    fontSize: '11px',
-                    cursor: stepIndex === steps.length - 1 ? 'not-allowed' : 'pointer',
-                    borderRadius: '4px',
-                    fontWeight: 'bold',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    opacity: stepIndex === steps.length - 1 ? 0.5 : 1,
-                  }}
-                >
-                  NEXT
-                  <ArrowRight size={14} />
+                  <Plus size={16} />
+                  CREATE FIRST MAPPING
                 </button>
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {savedMappings.map((mapping) => (
+                  <div
+                    key={mapping.id}
+                    className="bg-zinc-900 border border-zinc-700 rounded p-4 hover:border-zinc-600 transition-colors"
+                  >
+                    <h3 className="text-white font-bold mb-1">{mapping.name}</h3>
+                    <p className="text-xs text-gray-400 mb-3">{mapping.description}</p>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500">
+                        {mapping.target.schemaType === 'predefined'
+                          ? mapping.target.schema?.toUpperCase()
+                          : 'CUSTOM'}
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleLoadMapping(mapping)}
+                          className="text-blue-400 hover:text-blue-300"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteMapping(mapping.id)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
-          </>
-        )}
-
-        {view === 'list' && (
-          <div style={{ padding: '24px', textAlign: 'center' }}>
-            <h3 style={{ color: '#a3a3a3', marginBottom: '12px' }}>My Mappings</h3>
-            <p style={{ color: '#737373', fontSize: '12px' }}>
-              No saved mappings yet. Create your first mapping to get started.
-            </p>
           </div>
         )}
+
+        {view === 'templates' && (
+          <div className="p-6">
+            <TemplateLibrary onSelectTemplate={handleSelectTemplate} />
+          </div>
+        )}
+
+        {view === 'create' && <>{renderStepContent()}</>}
       </div>
+
+      {/* Navigation Footer */}
+      {view === 'create' && (
+        <div className="bg-zinc-900 border-t border-zinc-800 p-3 flex justify-between">
+          <button
+            onClick={() => {
+              const prevIndex = stepIndex - 1;
+              if (prevIndex >= 0) {
+                setCurrentStep(steps[prevIndex]);
+              }
+            }}
+            disabled={stepIndex === 0}
+            className="px-4 py-2 rounded text-xs font-bold flex items-center gap-2 bg-transparent text-gray-400 border border-zinc-700 hover:border-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ArrowLeft size={14} />
+            PREVIOUS
+          </button>
+
+          <button
+            onClick={() => {
+              if (!canProceedToNextStep()) {
+                alert('Please complete the current step before proceeding');
+                return;
+              }
+              const nextIndex = stepIndex + 1;
+              if (nextIndex < steps.length) {
+                setCurrentStep(steps[nextIndex]);
+              }
+            }}
+            disabled={stepIndex === steps.length - 1}
+            className="px-4 py-2 rounded text-xs font-bold flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            NEXT
+            <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
