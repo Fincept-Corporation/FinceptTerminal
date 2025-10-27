@@ -160,6 +160,41 @@ export default function DataMappingTab() {
     setIsTesting(true);
 
     try {
+      // Detect if data has common array structure (only if not already configured from template)
+      const detectDataArray = (obj: any): { rootPath: string; isArray: boolean } => {
+        if (Array.isArray(obj)) return { rootPath: '', isArray: true };
+
+        // Common patterns: data, results, items, records
+        const arrayKeys = ['data', 'results', 'items', 'records', 'response'];
+        for (const key of arrayKeys) {
+          if (obj[key] && Array.isArray(obj[key]) && obj[key].length > 0) {
+            return { rootPath: key, isArray: true };
+          }
+        }
+
+        return { rootPath: '', isArray: false };
+      };
+
+      // Use existing extraction config if available (from template), otherwise auto-detect
+      let extractionConfig;
+      if (fieldMappings.length > 0 && fieldMappings[0].source?.path?.startsWith('$')) {
+        // Template has configured extraction, detect from sample data
+        const { rootPath, isArray } = detectDataArray(sampleData);
+        extractionConfig = {
+          engine: ParserEngine.JSONPATH,
+          rootPath: rootPath ? `$.${rootPath}[*]` : '',
+          isArray,
+        };
+      } else {
+        // No template, auto-detect
+        const { rootPath, isArray } = detectDataArray(sampleData);
+        extractionConfig = {
+          engine: ParserEngine.JSONPATH,
+          rootPath: rootPath ? `$.${rootPath}[*]` : '',
+          isArray,
+        };
+      }
+
       const mappingConfig: DataMappingConfig = {
         id: mappingId,
         name: mappingName || apiConfig.name,
@@ -173,11 +208,7 @@ export default function DataMappingTab() {
           schema: schemaType === 'predefined' ? selectedSchema : undefined,
           customFields: schemaType === 'custom' ? customFields : undefined,
         },
-        extraction: {
-          engine: ParserEngine.DIRECT,
-          rootPath: '',
-          isArray: Array.isArray(sampleData),
-        },
+        extraction: extractionConfig,
         fieldMappings,
         postProcessing: undefined,
         validation: {
@@ -229,6 +260,40 @@ export default function DataMappingTab() {
     }
 
     try {
+      // Detect if data has common array structure (same logic as test)
+      const detectDataArray = (obj: any): { rootPath: string; isArray: boolean } => {
+        if (Array.isArray(obj)) return { rootPath: '', isArray: true };
+
+        const arrayKeys = ['data', 'results', 'items', 'records', 'response'];
+        for (const key of arrayKeys) {
+          if (obj[key] && Array.isArray(obj[key]) && obj[key].length > 0) {
+            return { rootPath: key, isArray: true };
+          }
+        }
+
+        return { rootPath: '', isArray: false };
+      };
+
+      // Use existing extraction config if available (from template), otherwise auto-detect
+      let extractionConfig;
+      if (fieldMappings.length > 0 && fieldMappings[0].source?.path?.startsWith('$')) {
+        // Template has configured extraction, detect from sample data
+        const { rootPath, isArray } = detectDataArray(sampleData);
+        extractionConfig = {
+          engine: ParserEngine.JSONPATH,
+          rootPath: rootPath ? `$.${rootPath}[*]` : '',
+          isArray,
+        };
+      } else {
+        // No template, auto-detect
+        const { rootPath, isArray } = detectDataArray(sampleData);
+        extractionConfig = {
+          engine: ParserEngine.JSONPATH,
+          rootPath: rootPath ? `$.${rootPath}[*]` : '',
+          isArray,
+        };
+      }
+
       const mappingConfig: DataMappingConfig = {
         id: mappingId,
         name: mappingName,
@@ -242,11 +307,7 @@ export default function DataMappingTab() {
           schema: schemaType === 'predefined' ? selectedSchema : undefined,
           customFields: schemaType === 'custom' ? customFields : undefined,
         },
-        extraction: {
-          engine: ParserEngine.DIRECT,
-          rootPath: '',
-          isArray: Array.isArray(sampleData),
-        },
+        extraction: extractionConfig,
         fieldMappings,
         postProcessing: undefined,
         validation: {
@@ -338,12 +399,10 @@ export default function DataMappingTab() {
   const canProceedToNextStep = () => {
     switch (currentStep) {
       case 'api-config':
-        return apiConfig.baseUrl && apiConfig.endpoint && apiConfig.name;
+        return apiConfig.baseUrl && apiConfig.endpoint && apiConfig.name && sampleData !== null;
       case 'schema-select':
         return (schemaType === 'predefined' && selectedSchema) ||
                (schemaType === 'custom' && customFields.length > 0);
-      case 'fetch-sample':
-        return sampleData !== null;
       case 'field-mapping':
         return fieldMappings.length > 0;
       case 'cache-settings':
@@ -388,6 +447,14 @@ export default function DataMappingTab() {
               onSchemaSelect={(schema) => setSelectedSchema(schema as UnifiedSchemaType)}
               onCustomFieldsChange={setCustomFields}
               sampleData={sampleData}
+              onFieldMappingsAutoCreate={(newMappings) => {
+                // Only add mappings for fields that don't already have mappings
+                const existingFields = new Set(fieldMappings.map(m => m.targetField));
+                const uniqueNewMappings = newMappings.filter(m => !existingFields.has(m.targetField));
+                if (uniqueNewMappings.length > 0) {
+                  setFieldMappings([...fieldMappings, ...uniqueNewMappings]);
+                }
+              }}
             />
           </div>
         );

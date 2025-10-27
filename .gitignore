@@ -17,6 +17,7 @@ fincept_env
 # Allow specific markdown files
 !README.md
 !docs/**/*.md
+**/.claude/
 !.github/**/*.md
 # Allow embedded Python in resources (but exclude executables)
 !fincept-terminal-desktop/src-tauri/resources/python/

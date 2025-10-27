@@ -13,7 +13,8 @@ interface SchemaBuilderProps {
   onSchemaTypeChange: (type: 'predefined' | 'custom') => void;
   onSchemaSelect: (schema: string) => void;
   onCustomFieldsChange: (fields: CustomField[]) => void;
-  sampleData?: any; // NEW: Pass sample data for visual selection
+  sampleData?: any;
+  onFieldMappingsAutoCreate?: (mappings: any[]) => void; // NEW: Auto-create field mappings
 }
 
 export function SchemaBuilder({
@@ -24,6 +25,7 @@ export function SchemaBuilder({
   onSchemaSelect,
   onCustomFieldsChange,
   sampleData,
+  onFieldMappingsAutoCreate,
 }: SchemaBuilderProps) {
   const [editingField, setEditingField] = useState<number | null>(null);
   const [selectedJsonPath, setSelectedJsonPath] = useState<string[] | undefined>();
@@ -61,6 +63,34 @@ export function SchemaBuilder({
     return cleanedSegments.join('_');
   };
 
+  // Create field mapping from path
+  const createFieldMapping = (fieldName: string, path: string[], isRequired: boolean = false) => {
+    // Convert path to JSONPath expression
+    // For paths from auto-detection, we assume rootPath has already extracted the array
+    // So we just need the relative path from the current item
+    let jsonPathExpression: string;
+
+    if (path.length === 0) {
+      jsonPathExpression = '$';
+    } else if (path.length === 1) {
+      // Simple field at root level
+      jsonPathExpression = `$.${path[0]}`;
+    } else {
+      // Nested field - build path without root
+      jsonPathExpression = '$.' + path.join('.');
+    }
+
+    return {
+      targetField: fieldName,
+      source: {
+        type: 'path' as const,
+        path: jsonPathExpression,
+      },
+      parser: 'jsonpath' as const,
+      required: isRequired,
+    };
+  };
+
   // Handle field selection from JSON tree
   const handleFieldSelectFromJson = (path: string[], value: any) => {
     const fullPath = path.join('.');
@@ -93,7 +123,15 @@ export function SchemaBuilder({
       defaultValue: value === null || value === undefined ? undefined : value,
     };
 
-    onCustomFieldsChange([...customFields, newField]);
+    const updatedFields = [...customFields, newField];
+    onCustomFieldsChange(updatedFields);
+
+    // Auto-create field mapping
+    if (onFieldMappingsAutoCreate) {
+      const newMapping = createFieldMapping(fieldName, path, newField.required);
+      onFieldMappingsAutoCreate([newMapping]);
+    }
+
     setEditingField(customFields.length);
     setSelectedJsonPath(path);
   };
@@ -113,22 +151,25 @@ export function SchemaBuilder({
   const handleAutoAddAllFields = () => {
     if (!sampleData) return;
 
+    // Store field paths for mapping creation
+    const fieldPaths: { field: CustomField; path: string[] }[] = [];
+
     // Detect if data has a common array structure (e.g., data: [...])
-    const detectDataArray = (obj: any): any => {
-      if (Array.isArray(obj)) return obj;
+    const detectDataArray = (obj: any): { data: any; arrayKey: string | null } => {
+      if (Array.isArray(obj)) return { data: obj, arrayKey: null };
 
       // Common patterns: data, results, items, records
       const arrayKeys = ['data', 'results', 'items', 'records', 'response'];
       for (const key of arrayKeys) {
         if (obj[key] && Array.isArray(obj[key]) && obj[key].length > 0) {
-          return obj[key];
+          return { data: obj[key], arrayKey: key };
         }
       }
 
-      return obj;
+      return { data: obj, arrayKey: null };
     };
 
-    const extractFields = (obj: any, pathArray: string[] = ['root']): CustomField[] => {
+    const extractFields = (obj: any, pathArray: string[] = []): CustomField[] => {
       const fields: CustomField[] = [];
 
       if (typeof obj !== 'object' || obj === null) return fields;
@@ -136,7 +177,7 @@ export function SchemaBuilder({
       // Handle array - use first item as template
       if (Array.isArray(obj)) {
         if (obj.length > 0) {
-          return extractFields(obj[0], [...pathArray, '[0]']);
+          return extractFields(obj[0], pathArray);
         }
         return fields;
       }
@@ -148,21 +189,29 @@ export function SchemaBuilder({
 
         // Only add primitive fields (leaf nodes)
         if (fieldType !== 'object' && fieldType !== 'array') {
-          const fieldName = generateFieldNameFromPath(currentPath);
+          const fieldName = key; // Use simple key name for single-level fields
+          const nestedFieldName = currentPath.join('_'); // Use underscore for nested
+          const actualFieldName = currentPath.length === 1 ? fieldName : nestedFieldName;
           const fullPath = currentPath.join('.');
 
-          fields.push({
-            name: fieldName,
+          const field: CustomField = {
+            name: actualFieldName,
             type: fieldType,
             description: `Path: ${fullPath}`,
             required: false,
-          });
+          };
+
+          fields.push(field);
+          fieldPaths.push({ field, path: currentPath });
         } else if (fieldType === 'object' && value !== null) {
           // Recursively extract from nested objects
           fields.push(...extractFields(value, currentPath));
         } else if (fieldType === 'array' && Array.isArray(value) && value.length > 0) {
-          // Extract from first array item
-          fields.push(...extractFields(value[0], [...currentPath, '[0]']));
+          // Extract from first array item if it's an array of objects
+          const firstItem = value[0];
+          if (typeof firstItem === 'object' && firstItem !== null) {
+            fields.push(...extractFields(firstItem, currentPath));
+          }
         }
       }
 
@@ -170,7 +219,7 @@ export function SchemaBuilder({
     };
 
     // Try to detect the main data array
-    const dataToProcess = detectDataArray(sampleData);
+    const { data: dataToProcess } = detectDataArray(sampleData);
     const autoFields = extractFields(dataToProcess);
 
     // Remove duplicates based on field name
@@ -186,6 +235,15 @@ export function SchemaBuilder({
     }
 
     onCustomFieldsChange(limitedFields);
+
+    // Auto-create field mappings for all added fields
+    if (onFieldMappingsAutoCreate) {
+      const mappings = fieldPaths
+        .filter(({ field }) => limitedFields.some(f => f.name === field.name))
+        .map(({ field, path }) => createFieldMapping(field.name, path, field.required));
+
+      onFieldMappingsAutoCreate(mappings);
+    }
   };
 
   const handleRemoveField = (index: number) => {
@@ -470,7 +528,7 @@ export function SchemaBuilder({
           {customFields.length > 0 && (
             <div className="mt-3 text-xs text-green-500 bg-green-900/20 border border-green-700 rounded p-3">
               <strong>✓ {customFields.length} field{customFields.length !== 1 ? 's' : ''} added!</strong>
-              {' '}You can now proceed to the next step to map these fields.
+              {' '}Field mappings have been created automatically. You can review them in Step 3 (Field Mapping).
             </div>
           )}
         </div>

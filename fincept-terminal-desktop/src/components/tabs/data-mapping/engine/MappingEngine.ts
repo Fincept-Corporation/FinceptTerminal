@@ -1,7 +1,7 @@
 // Core Mapping Engine - Updated to use APIClient
 
 import { DataMappingConfig, MappingExecutionContext, MappingExecutionResult, FieldMapping, ParserEngine } from '../types';
-import { getParser } from './parsers';
+import { getParser, BaseParser } from './parsers';
 import { applyTransform } from '../utils/transformFunctions';
 import { getSchema } from '../schemas';
 import { apiClient } from '../services/APIClient';
@@ -172,9 +172,9 @@ export class MappingEngine {
           }
         }
 
-        // Use default value if null/undefined and required
+        // Use default value if null/undefined
         if ((value === null || value === undefined)) {
-          if (fieldMapping.required && fieldMapping.defaultValue !== undefined) {
+          if (fieldMapping.defaultValue !== undefined) {
             value = fieldMapping.defaultValue;
           } else if (fieldMapping.required) {
             throw new Error(`Required field ${fieldMapping.targetField} is missing`);
@@ -218,9 +218,24 @@ export class MappingEngine {
 
     // Use field-specific parser if specified (legacy support), otherwise use parser from mapping
     const parserType = fieldMapping.parserEngine || fieldMapping.parser;
-    const parser = parserType
-      ? (typeof parserType === 'string' ? getParser(ParserEngine.DIRECT) : getParser(parserType))
-      : getParser(ParserEngine.DIRECT);
+    let parser: BaseParser;
+
+    if (typeof parserType === 'string') {
+      // Map string parser names to ParserEngine enum
+      const parserMap: Record<string, ParserEngine> = {
+        'jsonpath': ParserEngine.JSONPATH,
+        'jsonata': ParserEngine.JSONATA,
+        'jmespath': ParserEngine.JMESPATH,
+        'direct': ParserEngine.DIRECT,
+        'javascript': ParserEngine.CUSTOM_JS,
+      };
+      const engine = parserMap[parserType.toLowerCase()] || ParserEngine.DIRECT;
+      parser = getParser(engine);
+    } else if (parserType !== undefined) {
+      parser = getParser(parserType);
+    } else {
+      parser = getParser(ParserEngine.DIRECT);
+    }
 
     try {
       // Use source.path (new) or sourceExpression (legacy)
