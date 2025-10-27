@@ -1,7 +1,5 @@
 // Data Mapping Types and Interfaces
 
-import { DataSourceConnection } from '../data-sources/types';
-
 // ========== PARSER ENGINES ==========
 
 export enum ParserEngine {
@@ -20,9 +18,68 @@ export interface ParserConfig {
   validation?: ValidationRule[];
 }
 
+// ========== API CONFIGURATION ==========
+
+export interface APIAuthConfig {
+  type: 'none' | 'apikey' | 'bearer' | 'basic' | 'oauth2';
+  config?: {
+    apiKey?: {
+      location: 'header' | 'query';
+      keyName: string;
+      value: string;
+    };
+    bearer?: {
+      token: string;
+    };
+    basic?: {
+      username: string;
+      password: string;
+    };
+    oauth2?: {
+      accessToken: string;
+      refreshToken?: string;
+    };
+  };
+}
+
+export interface APIConfig {
+  id: string;
+  name: string;
+  description: string;
+  baseUrl: string;
+  endpoint: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  authentication: APIAuthConfig;
+  headers: Record<string, string>;
+  queryParams: Record<string, string>; // Supports {placeholder} syntax
+  body?: string; // JSON string for POST/PUT/PATCH
+  timeout?: number; // milliseconds
+  cacheEnabled: boolean;
+  cacheTTL: number; // seconds
+}
+
+export interface APIResponse {
+  success: boolean;
+  data?: any;
+  error?: {
+    type: 'network' | 'auth' | 'client' | 'server' | 'timeout' | 'parse';
+    statusCode?: number;
+    message: string;
+    details?: string;
+  };
+  metadata: {
+    duration: number;
+    url: string;
+    method: string;
+    timestamp: string;
+  };
+}
+
 // ========== UNIFIED SCHEMAS ==========
 
 export type FieldType = 'string' | 'number' | 'boolean' | 'datetime' | 'array' | 'object' | 'enum';
+
+export type UnifiedSchemaType = 'OHLCV' | 'QUOTE' | 'TICK' | 'ORDER' | 'POSITION' | 'PORTFOLIO' | 'INSTRUMENT';
 
 export interface FieldSpec {
   type: FieldType;
@@ -46,17 +103,39 @@ export interface UnifiedSchema {
   examples?: any[];
 }
 
+// Custom field definition for user-created schemas
+export interface CustomField {
+  name: string;
+  type: FieldType;
+  description: string;
+  required: boolean;
+  defaultValue?: any;
+  validation?: {
+    min?: number;
+    max?: number;
+    pattern?: string;
+  };
+}
+
 // ========== FIELD MAPPING ==========
 
 export interface FieldMapping {
   targetField: string;           // Field name in unified schema
-  sourceExpression: string;      // JSONPath/JSONata/etc expression
-  parserEngine?: ParserEngine;   // Override default parser
-  transform?: string;            // Transform function name
+  source: {
+    type: 'path' | 'static' | 'expression';
+    path?: string;               // JSONPath/JSONata/etc expression
+    value?: any;                 // For static values
+  };
+  parser: 'jsonpath' | 'jmespath' | 'direct' | 'javascript' | 'jsonata';  // Parser engine (string literals for now)
+  transform?: string[];          // Transform function names
   transformParams?: any;         // Parameters for transform function
   defaultValue?: any;            // Fallback value
-  required: boolean;
+  required?: boolean;
   confidence?: number;           // AI suggestion confidence (0-1)
+
+  // Legacy support
+  sourceExpression?: string;      // Deprecated: use source.path
+  parserEngine?: ParserEngine;   // Deprecated: use parser
 }
 
 // ========== TRANSFORMATION FUNCTIONS ==========
@@ -101,25 +180,25 @@ export interface ValidationResult {
 
 // ========== MAPPING CONFIGURATION ==========
 
+export interface MappingSource {
+  type: 'api' | 'sample';
+  apiConfig?: APIConfig;        // Direct API configuration
+  sampleData?: any;             // For testing with static data
+}
+
 export interface DataMappingConfig {
   id: string;
   name: string;
   description: string;
 
-  // Source configuration
-  source: {
-    connectionId: string;        // Reference to DataSourceConnection
-    connection?: DataSourceConnection; // Populated at runtime
-    endpoint?: string;           // API endpoint or query
-    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
-    headers?: Record<string, string>;
-    body?: any;
-    sampleData?: any;            // Sample response for testing
-  };
+  // Source configuration (API-based)
+  source: MappingSource;
 
-  // Target schema
+  // Target schema (predefined or custom)
   target: {
-    schema: string;              // "OHLCV", "QUOTE", "ORDER", etc.
+    schemaType: 'predefined' | 'custom';
+    schema?: string;              // "OHLCV", "QUOTE", etc. (for predefined)
+    customFields?: CustomField[]; // User-defined fields (for custom)
     schemaDefinition?: UnifiedSchema; // Populated at runtime
   };
 
@@ -314,14 +393,15 @@ export interface FlattenedJSON {
 
 // ========== UI STATE ==========
 
+export type CreateStep = 'api-config' | 'schema-select' | 'field-mapping' | 'cache-settings' | 'test-save';
+
 export interface MappingUIState {
-  view: 'gallery' | 'create' | 'edit' | 'test';
+  view: 'gallery' | 'create' | 'edit' | 'list';
   selectedMapping?: DataMappingConfig;
   selectedTemplate?: MappingTemplate;
-  selectedConnection?: DataSourceConnection;
 
   // For creation/editing
-  currentStep: 'source' | 'schema' | 'mapping' | 'testing' | 'review';
+  currentStep: CreateStep;
 
   // JSON Explorer state
   jsonExplorer: {

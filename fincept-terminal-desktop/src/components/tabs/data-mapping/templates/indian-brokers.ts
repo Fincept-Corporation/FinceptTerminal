@@ -1,6 +1,32 @@
 // Pre-built templates for Indian brokers
 
-import { MappingTemplate, ParserEngine } from '../types';
+import { MappingTemplate, ParserEngine, FieldMapping } from '../types';
+
+// Helper to convert legacy field mappings to new format
+function convertLegacyMapping(legacy: any): FieldMapping {
+  // Map ParserEngine enum to string literals
+  const parserMap: Record<number, FieldMapping['parser']> = {
+    0: 'jsonpath',
+    1: 'jmespath',
+    2: 'direct',
+    3: 'javascript',
+    4: 'jsonata',
+  };
+
+  return {
+    targetField: legacy.targetField,
+    source: {
+      type: 'path' as const,
+      path: legacy.sourceExpression,
+    },
+    parser: parserMap[legacy.parserEngine] || 'direct',
+    transform: legacy.transform ? [legacy.transform] : undefined,
+    transformParams: legacy.transformParams,
+    defaultValue: legacy.defaultValue,
+    required: legacy.required,
+    confidence: legacy.confidence,
+  };
+}
 
 export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
   // ========== UPSTOX TEMPLATES ==========
@@ -18,6 +44,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
       name: 'Upstox Historical → OHLCV',
       description: 'Transform Upstox historical candle data',
       target: {
+        schemaType: 'predefined',
         schema: 'OHLCV',
       },
       extraction: {
@@ -34,7 +61,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
         { targetField: 'low', sourceExpression: '$[3]', required: true, parserEngine: ParserEngine.JSONATA },
         { targetField: 'close', sourceExpression: '$[4]', required: true, parserEngine: ParserEngine.JSONATA },
         { targetField: 'volume', sourceExpression: '$[5]', required: true, parserEngine: ParserEngine.JSONATA },
-      ],
+      ].map(convertLegacyMapping),
       validation: {
         enabled: true,
         strictMode: false,
@@ -70,6 +97,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
       name: 'Upstox Quote → QUOTE',
       description: 'Transform Upstox market quote data',
       target: {
+        schemaType: 'predefined',
         schema: 'QUOTE',
       },
       extraction: {
@@ -91,7 +119,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
         { targetField: 'low', sourceExpression: 'ohlc.low', required: false, parserEngine: ParserEngine.JSONATA },
         { targetField: 'previousClose', sourceExpression: 'ohlc.close', required: false, parserEngine: ParserEngine.JSONATA },
         { targetField: 'change', sourceExpression: 'net_change', required: false, parserEngine: ParserEngine.JSONATA },
-      ],
+      ].map(convertLegacyMapping),
       validation: {
         enabled: true,
         strictMode: false,
@@ -122,6 +150,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
       name: 'Fyers Quote → QUOTE',
       description: 'Transform Fyers quote data',
       target: {
+        schemaType: 'predefined',
         schema: 'QUOTE',
       },
       extraction: {
@@ -142,7 +171,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
         { targetField: 'previousClose', sourceExpression: 'v.prev_close_price', required: false, parserEngine: ParserEngine.JSONATA },
         { targetField: 'change', sourceExpression: 'v.ch', required: false, parserEngine: ParserEngine.JSONATA },
         { targetField: 'changePercent', sourceExpression: 'v.chp', required: false, parserEngine: ParserEngine.JSONATA },
-      ],
+      ].map(convertLegacyMapping),
       validation: {
         enabled: true,
         strictMode: false,
@@ -178,6 +207,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
       name: 'Fyers Position → POSITION',
       description: 'Transform Fyers position data',
       target: {
+        schemaType: 'predefined',
         schema: 'POSITION',
       },
       extraction: {
@@ -193,7 +223,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
         { targetField: 'pnl', sourceExpression: 'pl', required: true, parserEngine: ParserEngine.JSONATA },
         { targetField: 'pnlPercent', sourceExpression: 'plPercent', required: true, parserEngine: ParserEngine.JSONATA },
         { targetField: 'productType', sourceExpression: 'productType', required: false, parserEngine: ParserEngine.JSONATA },
-      ],
+      ].map(convertLegacyMapping),
       validation: {
         enabled: true,
         strictMode: false,
@@ -224,6 +254,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
       name: 'Dhan Position → POSITION',
       description: 'Transform Dhan position data',
       target: {
+        schemaType: 'predefined',
         schema: 'POSITION',
       },
       extraction: {
@@ -238,7 +269,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
         { targetField: 'currentPrice', sourceExpression: 'ltp', required: true, parserEngine: ParserEngine.JSONPATH },
         { targetField: 'pnl', sourceExpression: 'realizedProfit', required: true, parserEngine: ParserEngine.JSONPATH },
         { targetField: 'exchange', sourceExpression: 'exchangeSegment', required: false, parserEngine: ParserEngine.JSONPATH },
-      ],
+      ].map(convertLegacyMapping),
       validation: {
         enabled: true,
         strictMode: false,
@@ -267,6 +298,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
       name: 'Dhan Order → ORDER',
       description: 'Transform Dhan order data',
       target: {
+        schemaType: 'predefined',
         schema: 'ORDER',
       },
       extraction: {
@@ -286,7 +318,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
         { targetField: 'status', sourceExpression: 'orderStatus', required: true, parserEngine: ParserEngine.JSONPATH, transform: 'uppercase' },
         { targetField: 'timestamp', sourceExpression: 'createTime', required: true, parserEngine: ParserEngine.JSONPATH, transform: 'toISODate' },
         { targetField: 'exchange', sourceExpression: 'exchangeSegment', required: false, parserEngine: ParserEngine.JSONPATH },
-      ],
+      ].map(convertLegacyMapping),
       validation: {
         enabled: true,
         strictMode: false,
@@ -317,6 +349,7 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
       name: 'Zerodha OHLC → OHLCV',
       description: 'Transform Zerodha OHLC data',
       target: {
+        schemaType: 'predefined',
         schema: 'OHLCV',
       },
       extraction: {
@@ -327,7 +360,9 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
       fieldMappings: [
         {
           targetField: 'all',
-          sourceExpression: `
+          source: {
+            type: 'expression',
+            path: `
             return Object.entries(data).map(([symbol, ohlc]) => ({
               symbol: symbol,
               timestamp: new Date().toISOString(),
@@ -338,7 +373,8 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
               volume: ohlc.volume || 0
             }))
           `,
-          parserEngine: ParserEngine.CUSTOM_JS,
+          },
+          parser: 'javascript',
           required: true,
         },
       ],
@@ -363,6 +399,141 @@ export const INDIAN_BROKER_TEMPLATES: MappingTemplate[] = [
 4. Response: { "data": { "NSE:SBIN": { "open": 590, ... } } }
     `,
   },
+
+  // ========== SHIPNEXT TEMPLATES ==========
+
+  {
+    id: 'shipnext_ports',
+    name: 'ShipNext Ports API',
+    description: 'Fetch global port data from ShipNext API',
+    category: 'custom',
+    tags: ['shipnext', 'ports', 'maritime', 'shipping', 'logistics'],
+    verified: true,
+    official: false,
+
+    mappingConfig: {
+      name: 'ShipNext Ports',
+      description: 'Fetch global port information from ShipNext',
+      source: {
+        type: 'api',
+        apiConfig: {
+          id: 'shipnext_ports_api',
+          name: 'ShipNext Ports API',
+          description: 'Global maritime port data from ShipNext',
+          baseUrl: 'https://shipnext.com',
+          endpoint: '/api/v1/ports/',
+          method: 'GET',
+          headers: {
+            'Accept': '*/*',
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          queryParams: {
+            'page': '1',
+            'query': '',
+            'country': '',
+          },
+          authentication: {
+            type: 'none',
+            config: {},
+          },
+          timeout: 30000,
+          cacheEnabled: true,
+          cacheTTL: 3600,
+        },
+      },
+      target: {
+        schemaType: 'custom',
+        schema: 'PORT',
+        customFields: [
+          { name: 'id', type: 'string', description: 'Unique port identifier', required: true },
+          { name: 'name', type: 'string', description: 'Port name', required: true },
+          { name: 'country', type: 'string', description: 'Country code', required: false },
+          { name: 'code', type: 'string', description: 'Port code (e.g., LOCODE)', required: false },
+          { name: 'latitude', type: 'number', description: 'Geographic latitude', required: false },
+          { name: 'longitude', type: 'number', description: 'Geographic longitude', required: false },
+          { name: 'type', type: 'string', description: 'Port type', required: false },
+        ],
+      },
+      extraction: {
+        engine: ParserEngine.JSONPATH,
+        rootPath: '$.data[*]',
+        isArray: true,
+      },
+      fieldMappings: [
+        {
+          targetField: 'id',
+          source: { type: 'path', path: '$._id' },
+          parser: 'jsonpath',
+          required: true,
+        },
+        {
+          targetField: 'name',
+          source: { type: 'path', path: '$.name' },
+          parser: 'jsonpath',
+          required: true,
+        },
+        {
+          targetField: 'country',
+          source: { type: 'path', path: '$.country.name' },
+          parser: 'jsonpath',
+          required: false,
+        },
+        {
+          targetField: 'code',
+          source: { type: 'path', path: '$.unLoCode' },
+          parser: 'jsonpath',
+          required: false,
+        },
+        {
+          targetField: 'latitude',
+          source: { type: 'path', path: '$.coordinates[1]' },
+          parser: 'jsonpath',
+          required: false,
+        },
+        {
+          targetField: 'longitude',
+          source: { type: 'path', path: '$.coordinates[0]' },
+          parser: 'jsonpath',
+          required: false,
+        },
+        {
+          targetField: 'type',
+          source: { type: 'path', path: '$.sefName' },
+          parser: 'jsonpath',
+          required: false,
+        },
+      ],
+      validation: {
+        enabled: true,
+        strictMode: false,
+        rules: [],
+      },
+      metadata: {
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        version: 1,
+        tags: ['shipnext', 'ports', 'maritime'],
+        aiGenerated: false,
+      },
+    },
+
+    instructions: `
+1. Open Data Mapping tab
+2. Load this template from the template library
+3. Optional: Modify query parameters:
+   - page: Change pagination (default: 1)
+   - query: Add search term for port name
+   - country: Filter by country code (e.g., 'IN', 'US', 'CN')
+4. Click "Test & Fetch Sample" to verify API response
+5. Field mappings are pre-configured for common port data
+6. Data is cached for 1 hour to reduce API calls
+7. Save the mapping to use it in your workflows
+
+Note: This API does not require authentication. If you encounter CORS issues,
+you may need to configure your Tauri app permissions or use a proxy.
+    `,
+  },
 ];
 
 // Helper to get template by ID
@@ -380,7 +551,7 @@ export function getAllBrokers(): string[] {
   const brokers = new Set<string>();
   INDIAN_BROKER_TEMPLATES.forEach((t) => {
     t.tags.forEach((tag) => {
-      if (['upstox', 'fyers', 'dhan', 'zerodha', 'angelone'].includes(tag)) {
+      if (['upstox', 'fyers', 'dhan', 'zerodha', 'angelone', 'shipnext'].includes(tag)) {
         brokers.add(tag);
       }
     });

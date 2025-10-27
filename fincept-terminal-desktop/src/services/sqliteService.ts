@@ -714,6 +714,22 @@ class SQLiteService {
   }
 
   /**
+   * Generic execute method for INSERT/UPDATE/DELETE/CREATE statements
+   */
+  async execute(sql: string, params?: any[]): Promise<QueryResult> {
+    if (!this.db) throw new Error('Database not initialized');
+    return await this.db.execute(sql, params);
+  }
+
+  /**
+   * Generic select method for SELECT queries
+   */
+  async select<T = any>(sql: string, params?: any[]): Promise<T[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    return await this.db.select<T[]>(sql, params);
+  }
+
+  /**
    * Get database connection status
    */
   getStatus(): { initialized: boolean; path: string; ready: boolean } {

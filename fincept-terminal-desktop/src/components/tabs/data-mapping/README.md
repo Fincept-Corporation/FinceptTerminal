@@ -1,75 +1,124 @@
-# Data Mapping System
+# Data Mapping Tab - Standalone API Integration System
+
+**Version**: 2.0.0 (Complete Rewrite - October 2025)
+**Status**: ✅ Production Ready
+**Dependencies Removed**: Data Sources Tab (now standalone)
+
+## Overview
+
+The Data Mapping Tab is a **standalone API integration system** that enables users to connect **any external API** directly to Fincept Terminal without requiring pre-built adapters. Users can configure APIs, map response data to schemas, and leverage existing terminal features - all with just basic API knowledge.
 
 ## 📁 Folder Structure
 
 ```
 src/components/tabs/data-mapping/
-├── DataMappingTab.tsx              # Main tab component (entry point)
+├── DataMappingTab.tsx              # ✅ Main tab component (rewritten)
 │
-├── types.ts                        # ✅ TypeScript interfaces & types
-├── README.md                       # ✅ This file
-├── AUTH_INTEGRATION.md             # ✅ Authentication strategy docs
+├── types.ts                        # ✅ TypeScript interfaces & types (updated)
+├── README.md                       # ✅ This file (updated)
 │
 ├── schemas/
-│   ├── index.ts                    # ✅ Unified financial data schemas (OHLCV, QUOTE, ORDER, etc.)
-│   └── validators.ts               # TODO: Schema validation functions
+│   ├── index.ts                    # ✅ Schema registry
+│   └── unifiedSchemas.ts           # ✅ Unified financial data schemas
 │
 ├── engine/
-│   ├── MappingEngine.ts            # TODO: Core transformation engine
-│   ├── Validator.ts                # TODO: Data validation
-│   │
-│   └── parsers/
-│       ├── index.ts                # TODO: Parser registry
-│       ├── BaseParser.ts           # TODO: Abstract base class
-│       ├── JSONPathParser.ts       # TODO: JSONPath implementation
-│       ├── JSONataParser.ts        # TODO: JSONata implementation
-│       ├── JMESPathParser.ts       # TODO: JMESPath implementation
-│       ├── JavaScriptParser.ts     # TODO: Sandboxed JS execution
-│       └── DirectParser.ts         # TODO: Simple object access
+│   ├── MappingEngine.ts            # ✅ Core transformation engine (updated)
+│   └── parsers/                    # ✅ Parser implementations
+│       ├── index.ts
+│       ├── BaseParser.ts
+│       ├── JSONPathParser.ts
+│       ├── JSONataParser.ts
+│       ├── JMESPathParser.ts
+│       ├── JavaScriptParser.ts
+│       └── DirectParser.ts
 │
-├── components/
-│   ├── ConnectionSelector.tsx      # TODO: Select from existing data sources
-│   ├── EndpointBuilder.tsx         # TODO: Build API endpoint with params
-│   ├── JSONExplorer.tsx            # TODO: Interactive JSON tree viewer
-│   ├── SchemaSelector.tsx          # TODO: Choose target schema
-│   ├── MappingCanvas.tsx           # TODO: Visual field mapper
-│   ├── FieldMapper.tsx             # TODO: Individual field mapping UI
-│   ├── ExpressionBuilder.tsx       # TODO: Build parser expressions
-│   ├── TransformBuilder.tsx        # TODO: Add transformation functions
-│   ├── LivePreview.tsx             # TODO: Real-time preview
-│   ├── ValidationPanel.tsx         # TODO: Show validation results
-│   ├── TemplateLibrary.tsx         # TODO: Pre-built templates
-│   └── MappingList.tsx             # TODO: List of saved mappings
+├── components/                     # ✅ All UI components
+│   ├── APIConfigurationPanel.tsx   # ✅ API setup UI (NEW)
+│   ├── SchemaBuilder.tsx           # ✅ Schema selection/creation (NEW)
+│   ├── VisualFieldMapper.tsx       # ✅ Field mapping interface (NEW)
+│   ├── CacheSettings.tsx           # ✅ Cache & encryption settings (NEW)
+│   ├── KeyValueEditor.tsx          # ✅ Headers/params editor (NEW)
+│   ├── ErrorPanel.tsx              # ✅ User-friendly errors (NEW)
+│   ├── JSONExplorer.tsx            # ✅ JSON tree viewer
+│   ├── SchemaSelector.tsx          # ✅ Predefined schema picker
+│   ├── LivePreview.tsx             # ✅ Test result display
+│   ├── ExpressionBuilder.tsx       # ✅ Expression builder
+│   └── TemplateLibrary.tsx         # ✅ Template library
 │
-├── templates/
-│   ├── index.ts                    # TODO: Template registry
-│   ├── indian-brokers.ts           # TODO: Upstox, Fyers, Dhan, etc.
-│   ├── global-providers.ts         # TODO: Yahoo, Alpha Vantage, etc.
-│   └── custom.ts                   # TODO: User custom templates
+├── services/                       # ✅ Core services (NEW)
+│   ├── APIClient.ts                # ✅ HTTP client (NEW)
+│   ├── MappingDatabase.ts          # ✅ SQLite operations (NEW)
+│   └── EncryptionService.ts        # ✅ Credential encryption (NEW)
 │
-├── services/
-│   ├── ConnectionService.ts        # TODO: Interface with data-sources
-│   ├── MappingStorage.ts           # TODO: DuckDB persistence
-│   └── AIMapper.ts                 # TODO: AI-powered suggestions
-│
-└── utils/
-    ├── jsonFlattener.ts            # TODO: Flatten nested JSON
-    ├── pathBuilder.ts              # TODO: Build JSONPath/JSONata
-    ├── transformFunctions.ts       # TODO: Library of transforms
-    └── sampleData.ts               # TODO: Sample data for testing
+└── utils/                          # ✅ Utilities
+    ├── urlBuilder.ts               # ✅ URL construction (NEW)
+    └── transformFunctions.ts       # ✅ Data transformations
 ```
+
+## 🎯 Key Features
+
+### 🔌 Direct API Integration (No Pre-Built Adapters Required)
+- Connect **any REST API** directly without pre-built adapters
+- Support for all HTTP methods: GET, POST, PUT, DELETE, PATCH
+- Comprehensive authentication:
+  - API Key (header or query parameter)
+  - Bearer Token
+  - Basic Auth (username/password)
+  - OAuth 2.0 (access token + refresh)
+  - No Authentication
+- Custom headers and query parameters
+- Request body support (JSON) for POST/PUT/PATCH
+- Dynamic URL parameters with `{placeholder}` syntax
+- Timeout configuration (default: 30s)
+
+### 🎯 Flexible Schema System
+- **Predefined Schemas**: Built-in financial schemas (OHLCV, QUOTE, ORDER, POSITION, PORTFOLIO, etc.)
+- **Custom Schemas**: Create your own field definitions for any data type
+- Field types: string, number, boolean, datetime, array, object
+- Field validation: min, max, pattern, required
+- Default values support
+
+### 🗺️ Visual Field Mapping
+- Two-column interface: Source Data (JSON) ↔ Target Schema
+- Multiple parser engines:
+  - **JSONPath**: `$.data.price`
+  - **JMESPath**: `data.price`
+  - **Direct**: `data.price`
+  - **JavaScript**: `data.price * 1.1`
+- Click-to-map or manual expression entry
+- Live preview of mapped values
+- Smart status indicators (mapped/required/optional)
+
+### 🔒 Security & Performance
+- **Encryption**: AES-256-GCM encryption for API credentials (optional, user-controllable)
+- **Caching**: Smart response caching with configurable TTL
+- **SQLite Storage**: Local database for mappings and cache
+- **Parameter Hashing**: Cache invalidation when parameters change
+
+### 📊 Testing & Validation
+- Test API requests before saving
+- Live data preview
+- Schema validation (type checking, required fields, patterns)
+- Detailed error messages with contextual suggestions
 
 ## 🎯 Core Concepts
 
-### 1. **Unified Schemas**
+### 1. **Standalone System** (No Data Sources Dependency)
+- Completely independent from Data Sources Tab
+- Users configure APIs directly in this tab
+- All credentials stored locally with optional encryption
+- No need to create connections in another tab first
+
+### 2. **Unified Schemas**
 Standardized data formats that all sources map to:
 - **OHLCV**: Candlestick/bar data
 - **QUOTE**: Real-time quotes
 - **ORDER**: Trading orders
 - **POSITION**: Portfolio positions
 - **PORTFOLIO**: Account summary
+- **CUSTOM**: User-defined schemas for any data type
 
-### 2. **Parser Engines**
+### 3. **Parser Engines**
 Multiple ways to extract data from complex JSON:
 - **JSONPath**: Simple queries (`$.data.candles[*]`)
 - **JSONata**: Powerful transformations
@@ -77,56 +126,164 @@ Multiple ways to extract data from complex JSON:
 - **JavaScript**: Full custom logic
 - **Direct**: Simple object access
 
-### 3. **Authentication Integration**
-Mappings **reference** existing data source connections:
-- No credential re-entry
-- Uses existing adapters
-- Handles OAuth/API keys automatically
-- See `AUTH_INTEGRATION.md` for details
-
 ### 4. **Mapping Configuration**
 Each mapping stores:
-- Source connection ID
-- API endpoint
+- API configuration (URL, auth, headers, params)
+- Target schema (predefined or custom)
 - Field mappings (source → target)
 - Transformations
 - Validation rules
+- Cache settings
 
-## 🚀 Usage Flow
+## 🚀 6-Step Workflow
 
-### Step 1: User Creates Connection (in Data Sources tab)
-```
-Data Sources Tab
-└─> Add Upstox
-    └─> Enter API credentials
-        └─> Test connection ✓
-            └─> Save as "conn_upstox_prod"
-```
+### Step 1: API Configuration
+Configure your API connection:
+- **Mapping Name** & Description
+- **Base URL**: `https://api.example.com`
+- **Endpoint Path**: `/v1/data/{symbol}` (supports `{placeholder}` syntax)
+- **HTTP Method**: GET, POST, PUT, DELETE, PATCH
+- **Authentication**:
+  - Choose type (None, API Key, Bearer, Basic, OAuth2)
+  - Configure credentials
+- **Headers** & **Query Parameters** (optional)
+- **Request Body** (for POST/PUT/PATCH)
+- **Test API**: Click "Fetch Sample Data" to test connection
 
-### Step 2: User Creates Mapping (in Data Mapping tab)
-```
-Data Mapping Tab
-└─> New Mapping
-    └─> Select connection: "conn_upstox_prod"
-        └─> Choose endpoint: "/historical-candle/{symbol}/day/{from}/{to}"
-            └─> Fetch sample data
-                └─> Map fields visually
-                    └─> Test transformation
-                        └─> Save as "map_upstox_ohlcv"
-```
+### Step 2: Schema Selection
+Choose your target schema:
+- **Option A - Predefined**: Select from built-in schemas (OHLCV, QUOTE, ORDER, etc.)
+- **Option B - Custom**: Create your own fields
+  - Add fields with name, type, description
+  - Mark required fields
+  - Set validation rules (min, max, pattern)
 
-### Step 3: Other Components Use Mapped Data
+### Step 3: Fetch Sample Data
+Verify sample data from Step 1:
+- Review fetched JSON data
+- Expand/collapse JSON tree
+- If no data, go back to Step 1 and click "Fetch Sample Data"
+
+### Step 4: Field Mapping
+Map API response to schema fields:
+- **Left Panel**: Source Data (JSON tree, click to select paths)
+- **Right Panel**: Target Schema (click field to map)
+- **Mapping Methods**:
+  1. Click source path → select parser → click target field
+  2. Or manually enter expression in target field
+- **Preview**: Click play button to preview mapped value
+- **Parser Engines**: JSONPath, JMESPath, Direct, JavaScript
+
+### Step 5: Cache & Security Settings
+Configure performance and security:
+- **Enable Caching**: Toggle on/off
+- **Cache TTL**: Set expiration time (seconds)
+- **Encrypt Credentials**: Toggle on/off (AES-256-GCM)
+- **Clear Cache**: Option to clear this mapping's cache or all cache
+
+### Step 6: Test & Save
+Test and save your mapping:
+- **Click "Run Test"**: Test mapping with sample data
+- **Review Output**: See transformed data
+- **Validation Results**: Check if data meets schema requirements
+- **Save Mapping**: Click "Save Mapping" (only enabled after successful test)
+
+## 📝 Usage Example
+
+### Complete Workflow: Alpha Vantage Stock Price API
+
 ```typescript
-// In ChartComponent.tsx
-const mappingEngine = new MappingEngine();
+// Step 1: API Configuration
+{
+  name: "Alpha Vantage Stock Quote",
+  baseUrl: "https://www.alphavantage.co",
+  endpoint: "/query",
+  method: "GET",
+  authentication: {
+    type: "apikey",
+    config: {
+      apiKey: {
+        location: "query",
+        keyName: "apikey",
+        value: "YOUR_API_KEY"
+      }
+    }
+  },
+  queryParams: {
+    "function": "GLOBAL_QUOTE",
+    "symbol": "{symbol}"
+  },
+  cacheEnabled: true,
+  cacheTTL: 300
+}
 
-const candles = await mappingEngine.execute({
-  mappingId: 'map_upstox_ohlcv',
-  parameters: { symbol: 'SBIN', from: '2024-01-01', to: '2024-10-01' }
+// Step 2: Schema Selection
+schemaType: "predefined"
+selectedSchema: "QUOTE"
+
+// Step 3: Sample Data Fetched
+{
+  "Global Quote": {
+    "01. symbol": "IBM",
+    "05. price": "139.74",
+    "06. volume": "4935889",
+    "07. latest trading day": "2024-10-20"
+  }
+}
+
+// Step 4: Field Mappings
+[
+  {
+    targetField: "symbol",
+    source: { path: "$['Global Quote']['01. symbol']" },
+    parser: "jsonpath"
+  },
+  {
+    targetField: "price",
+    source: { path: "$['Global Quote']['05. price']" },
+    parser: "jsonpath"
+  },
+  {
+    targetField: "volume",
+    source: { path: "$['Global Quote']['06. volume']" },
+    parser: "jsonpath"
+  },
+  {
+    targetField: "timestamp",
+    source: { path: "$['Global Quote']['07. latest trading day']" },
+    parser: "jsonpath"
+  }
+]
+
+// Step 5: Cache Settings
+cacheEnabled: true
+cacheTTL: 300
+
+// Step 6: Test Result
+{
+  symbol: "IBM",
+  price: 139.74,
+  volume: 4935889,
+  timestamp: "2024-10-20"
+}
+```
+
+### Using Saved Mappings
+
+```typescript
+// In any component
+import { mappingEngine } from './data-mapping/engine/MappingEngine';
+
+// Execute mapping with parameters
+const result = await mappingEngine.execute({
+  mapping: savedMapping,
+  parameters: { symbol: 'IBM' }
 });
 
-// Returns standardized OHLCV data
-// [{ symbol, timestamp, open, high, low, close, volume }, ...]
+if (result.success) {
+  console.log('Transformed data:', result.data);
+  // Use standardized data in your application
+}
 ```
 
 ## 📦 Installed Packages

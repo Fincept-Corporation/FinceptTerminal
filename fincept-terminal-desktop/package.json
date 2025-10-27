@@ -54,6 +54,7 @@
     "jmespath": "^0.16.0",
     "jsonata": "^2.1.0",
     "jsonpath": "^1.1.1",
+    "jsonpath-plus": "^10.3.0",
     "langchain": "^0.3.34",
     "lightweight-charts": "^5.0.9",
     "lucide-react": "^0.544.0",

@@ -7,6 +7,7 @@ import { MARKETPLACE_SERVERS, MCPServerDefinition } from './serverDefinitions';
 import { MCPServerWithStats } from '../../../../services/mcpManager';
 import PostgresForm from './forms/PostgresForm';
 import QuestDBForm from './forms/QuestDBForm';
+import KiteForm from './forms/KiteForm';
 import GenericForm from './forms/GenericForm';
 
 interface MCPMarketplaceProps {
@@ -380,6 +381,11 @@ const MCPMarketplace: React.FC<MCPMarketplaceProps> = ({ onInstall, installedSer
                 />
               ) : configureServer.id === 'questdb' ? (
                 <QuestDBForm
+                  onSubmit={handleConfiguredInstall}
+                  onCancel={() => setConfigureServer(null)}
+                />
+              ) : configureServer.id === 'kite' ? (
+                <KiteForm
                   onSubmit={handleConfiguredInstall}
                   onCancel={() => setConfigureServer(null)}
                 />
