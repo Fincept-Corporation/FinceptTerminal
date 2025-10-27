@@ -30,7 +30,7 @@ export function TemplateLibrary({ onSelectTemplate }: TemplateLibraryProps) {
   // Get unique tags for filtering
   const allTags = Array.from(new Set(allTemplates.flatMap((t) => t.tags)));
   const brokerTags = allTags.filter((tag) =>
-    ['upstox', 'fyers', 'dhan', 'zerodha', 'angelone'].includes(tag)
+    ['upstox', 'fyers', 'dhan', 'zerodha', 'angelone', 'shipnext'].includes(tag)
   );
 
   const handleUseTemplate = (template: MappingTemplate) => {

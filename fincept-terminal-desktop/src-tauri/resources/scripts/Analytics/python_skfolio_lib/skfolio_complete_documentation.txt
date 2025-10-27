@@ -1,0 +1,740 @@
+===============================================================================
+                        SKFOLIO LIBRARY COMPLETE DOCUMENTATION
+===============================================================================
+
+Generated on: 2025-10-27
+Purpose: Complete overview of all skfolio modules, classes, functions, and components
+Total Modules: 18
+Total Components: 150+ classes and functions
+
+===============================================================================
+                            TABLE OF CONTENTS
+===============================================================================
+
+1. MODULES OVERVIEW
+2. DETAILED MODULE BREAKDOWN
+   - measures
+   - optimization
+   - portfolio
+   - moments
+   - prior
+   - model_selection
+   - pre_selection
+   - distribution
+   - datasets
+   - cluster
+   - distance
+   - exceptions
+   - metrics
+   - population
+   - preprocessing
+   - typing
+   - uncertainty_set
+   - utils
+3. ENUM VALUES
+4. RISK MEASURES DETAILS
+5. RATIO MEASURES DETAILS
+6. OPTIMIZATION MODELS DETAILS
+7. USAGE EXAMPLES
+
+===============================================================================
+                            1. MODULES OVERVIEW
+===============================================================================
+
+skfolio is a comprehensive Python library for portfolio optimization built on top
+of scikit-learn. It provides 18 main modules covering all aspects of portfolio
+management.
+
+MODULE STRUCTURE:
+├── measures          - Risk and performance measures
+├── optimization     - Portfolio optimization algorithms
+├── portfolio        - Portfolio result objects
+├── moments          - Statistical estimators for returns and covariance
+├── prior           - Prior models for Bayesian estimation
+├── model_selection  - Cross-validation and model selection strategies
+├── pre_selection   - Asset pre-selection methods
+├── distribution    - Statistical distributions and copulas
+├── datasets        - Sample datasets for testing
+├── cluster         - Clustering algorithms for hierarchical methods
+├── distance        - Distance measures for clustering
+├── exceptions      - Custom exception classes
+├── metrics         - Scoring and evaluation metrics
+├── population      - Population-based optimization
+├── preprocessing   - Data preprocessing utilities
+├── typing          - Type hints and utilities
+├── uncertainty_set - Uncertainty sets for robust optimization
+└── utils           - General utilities
+
+===============================================================================
+                            2. DETAILED MODULE BREAKDOWN
+===============================================================================
+
+===============================================
+MODULE: measures (34 items)
+===============================================
+DESCRIPTION:
+Core module containing all risk measures, performance measures, and ratio measures.
+
+CLASSES (5):
+- BaseMeasure          - Base class for all measures
+- ExtraRiskMeasure     - Enum for additional risk measures
+- PerfMeasure         - Enum for performance measures
+- RatioMeasure        - Enum for risk-adjusted performance ratios
+- RiskMeasure         - Enum for risk measures (19 available)
+
+FUNCTIONS (29):
+- average_drawdown            - Calculate average drawdown
+- cdar                       - Calculate Conditional Drawdown at Risk
+- correlation                - Calculate correlation coefficient
+- cvar                       - Calculate Conditional Value at Risk
+- drawdown_at_risk           - Calculate Drawdown at Risk
+- edar                       - Calculate Expected Drawdown at Risk
+- effective_number_assets    - Calculate effective number of assets
+- entropic_risk_measure      - Calculate entropic risk measure
+- evar                       - Calculate Entropic Value at Risk
+- first_lower_partial_moment - Calculate first lower partial moment
+- fourth_central_moment      - Calculate fourth central moment
+- fourth_lower_partial_moment - Calculate fourth lower partial moment
+- get_cumulative_returns     - Get cumulative returns from returns series
+- get_drawdowns              - Calculate drawdown series
+- gini_mean_difference       - Calculate Gini mean difference
+- kurtosis                   - Calculate kurtosis
+- max_drawdown               - Calculate maximum drawdown
+- mean                       - Calculate mean return
+- mean_absolute_deviation    - Calculate mean absolute deviation
+- owa_gmd_weights            - Calculate OWA weights for GMD
+- semi_deviation             - Calculate semi-deviation
+- semi_variance              - Calculate semi-variance
+- skew                       - Calculate skewness
+- standard_deviation         - Calculate standard deviation
+- third_central_moment       - Calculate third central moment
+- ulcer_index                - Calculate ulcer index
+- value_at_risk              - Calculate Value at Risk
+- variance                   - Calculate variance
+- worst_realization          - Calculate worst realization
+
+===============================================
+MODULE: optimization (20 items)
+===============================================
+DESCRIPTION:
+Portfolio optimization algorithms and models.
+
+CLASSES (16):
+- BaseComposition              - Base class for composition methods
+- BaseHierarchicalOptimization - Base for hierarchical optimization
+- BaseOptimization             - Base class for all optimization models
+- ConvexOptimization          - Base for convex optimization problems
+- DistributionallyRobustCVaR  - Distributionally robust CVaR optimization
+- EqualWeighted               - Equal-weighted portfolio strategy
+- HierarchicalEqualRiskContribution - HERC algorithm
+- HierarchicalRiskParity      - HRP algorithm
+- InverseVolatility           - Inverse volatility weighted portfolio
+- MaximumDiversification      - Maximum diversification portfolio
+- MeanRisk                    - Mean-variance and mean-risk optimization
+- NestedClustersOptimization  - NCO algorithm
+- ObjectiveFunction           - Enum for optimization objectives
+- Random                      - Random portfolio generation
+- RiskBudgeting               - Risk budgeting/parity optimization
+- StackingOptimization        - Ensemble optimization method
+
+FUNCTIONS (4):
+- cluster    - Clustering-based optimization
+- convex     - Convex optimization utilities
+- ensemble    - Ensemble optimization methods
+- naive       - Naive optimization strategies
+
+===============================================
+MODULE: portfolio (3 items)
+===============================================
+DESCRIPTION:
+Portfolio objects for storing optimization results and analysis.
+
+CLASSES (3):
+- BasePortfolio         - Base portfolio class
+- MultiPeriodPortfolio  - Multi-period portfolio results
+- Portfolio            - Main portfolio result class
+
+===============================================
+MODULE: moments (19 items)
+===============================================
+DESCRIPTION:
+Statistical estimators for expected returns and covariance matrices.
+
+CLASSES (17):
+- BaseCovariance       - Base class for covariance estimators
+- BaseMu              - Base class for expected return estimators
+- DenoiseCovariance   - Covariance matrix denoising
+- DetoneCovariance    - Covariance matrix detoning
+- EWCovariance        - Exponentially weighted covariance
+- EWMu                - Exponentially weighted mean
+- EmpiricalCovariance - Sample covariance estimator
+- EmpiricalMu          - Sample mean estimator
+- EquilibriumMu       - Equilibrium expected returns
+- GerberCovariance    - Gerber covariance estimator
+- GraphicalLassoCV    - Cross-validated graphical lasso
+- ImpliedCovariance   - Implied covariance from options
+- LedoitWolf          - Ledoit-Wolf shrinkage
+- OAS                 - Oracle Approximating Shrinkage
+- ShrunkCovariance    - General shrinkage covariance
+- ShrunkMu            - Shrinkage expected returns
+- ShrunkMuMethods     - Enum for shrinkage methods
+
+FUNCTIONS (2):
+- covariance          - Compute covariance matrix
+- expected_returns    - Compute expected returns
+
+===============================================
+MODULE: prior (10 items)
+===============================================
+DESCRIPTION:
+Prior models for Bayesian portfolio optimization.
+
+CLASSES (10):
+- BaseLoadingMatrix      - Base class for loading matrices
+- BasePrior             - Base class for prior models
+- BlackLitterman        - Black-Litterman prior model
+- EmpiricalPrior        - Empirical prior model
+- EntropyPooling        - Entropy pooling prior
+- FactorModel           - Factor model prior
+- LoadingMatrixRegression - Regression-based loading matrix
+- OpinionPooling        - Opinion pooling methods
+- ReturnDistribution    - Return distribution prior
+- SyntheticData         - Synthetic data generation
+
+===============================================
+MODULE: model_selection (6 items)
+===============================================
+DESCRIPTION:
+Cross-validation and model selection strategies.
+
+CLASSES (4):
+- BaseCombinatorialCV     - Base for combinatorial CV
+- CombinatorialPurgedCV   - Combinatorial purged cross-validation
+- MultipleRandomizedCV    - Multiple randomized CV
+- WalkForward            - Walk forward validation
+
+FUNCTIONS (2):
+- cross_val_predict       - Cross-validated predictions
+- optimal_folds_number    - Optimal number of folds
+
+===============================================
+MODULE: pre_selection (6 items)
+===============================================
+DESCRIPTION:
+Asset pre-selection methods for dimensionality reduction.
+
+CLASSES (6):
+- DropCorrelated     - Drop highly correlated assets
+- DropZeroVariance   - Drop zero variance assets
+- SelectComplete     - Select complete cases
+- SelectKExtremes    - Select K extreme assets
+- SelectNonDominated - Select non-dominated assets
+- SelectNonExpiring  - Select non-expiring assets
+
+===============================================
+MODULE: distribution (26 items)
+===============================================
+DESCRIPTION:
+Statistical distributions and copulas for dependency modeling.
+
+CLASSES (18):
+- BaseBivariateCopula      - Base bivariate copula
+- BaseDistribution         - Base distribution class
+- BaseMultivariateDist     - Base multivariate distribution
+- BaseUnivariateDist       - Base univariate distribution
+- ClaytonCopula           - Clayton copula
+- CopulaRotation          - Copula rotation methods
+- DependenceMethod        - Enum for dependence methods
+- Gaussian                - Gaussian distribution
+- GaussianCopula          - Gaussian copula
+- GumbelCopula            - Gumbel copula
+- IndependentCopula       - Independent copula
+- JoeCopula               - Joe copula
+- JohnsonSU               - Johnson SU distribution
+- NormalInverseGaussian   - Normal inverse Gaussian distribution
+- SelectionCriterion      - Model selection criteria
+- StudentT                - Student's t distribution
+- StudentTCopula          - Student's t copula
+- VineCopula              - Vine copula
+
+FUNCTIONS (8):
+- compute_pseudo_observations - Compute pseudo observations for copulas
+- copula                      - Copula utilities
+- empirical_tail_concentration - Empirical tail concentration
+- multivariate               - Multivariate distributions
+- plot_tail_concentration    - Plot tail concentration
+- select_bivariate_copula    - Select bivariate copula
+- select_univariate_dist     - Select univariate distribution
+- univariate                 - Univariate distributions
+
+===============================================
+MODULE: datasets (6 items)
+===============================================
+DESCRIPTION:
+Sample datasets for testing and demonstration.
+
+FUNCTIONS (6):
+- load_factors_dataset             - Load factor dataset
+- load_ftse100_dataset            - Load FTSE 100 dataset
+- load_nasdaq_dataset             - Load NASDAQ dataset
+- load_sp500_dataset              - Load S&P 500 dataset
+- load_sp500_implied_vol_dataset  - Load S&P 500 implied volatility
+- load_sp500_index                - Load S&P 500 index data
+
+===============================================
+MODULE: cluster (2 items)
+===============================================
+DESCRIPTION:
+Clustering algorithms for hierarchical portfolio optimization.
+
+CLASSES (2):
+- HierarchicalClustering - Hierarchical clustering algorithm
+- LinkageMethod         - Enum for linkage methods
+
+===============================================
+MODULE: distance (8 items)
+===============================================
+DESCRIPTION:
+Distance measures for clustering and asset grouping.
+
+CLASSES (8):
+- BaseDistance        - Base distance class
+- CovarianceDistance  - Covariance-based distance
+- DistanceCorrelation - Distance correlation
+- KendallDistance     - Kendall tau distance
+- MutualInformation   - Mutual information distance
+- NBinsMethod        - Enum for binning methods
+- PearsonDistance     - Pearson correlation distance
+- SpearmanDistance    - Spearman correlation distance
+
+===============================================
+MODULE: exceptions (6 items)
+===============================================
+DESCRIPTION:
+Custom exception classes for error handling.
+
+CLASSES (6):
+- DuplicateGroupsError      - Duplicate groups in constraints
+- EquationToMatrixError    - Equation to matrix conversion error
+- GroupNotFoundError       - Group not found error
+- NonPositiveVarianceError - Non-positive variance error
+- OptimizationError        - General optimization error
+- SolverError             - Solver-specific error
+
+===============================================
+MODULE: metrics (1 items)
+===============================================
+DESCRIPTION:
+Scoring and evaluation metrics.
+
+FUNCTIONS (1):
+- make_scorer - Create custom scorer functions
+
+===============================================
+MODULE: population (1 items)
+===============================================
+DESCRIPTION:
+Population-based optimization utilities.
+
+CLASSES (1):
+- Population - Population for genetic algorithms
+
+===============================================
+MODULE: preprocessing (1 items)
+===============================================
+DESCRIPTION:
+Data preprocessing utilities.
+
+FUNCTIONS (1):
+- prices_to_returns - Convert price series to returns
+
+===============================================
+MODULE: typing (24 items)
+===============================================
+DESCRIPTION:
+Type hints and utilities for type checking.
+
+CLASSES (6):
+- Callable            - Callable type hint
+- ExtraRiskMeasure     - Extra risk measure types
+- Figure              - Figure type for plotting
+- PerfMeasure         - Performance measure types
+- RatioMeasure        - Ratio measure types
+- RiskMeasure         - Risk measure types
+
+FUNCTIONS (18):
+- CvxMeasure          - CVXPY measure types
+- ExpressionFunction  - Expression function type
+- Factor              - Factor type
+- Groups              - Groups type
+- Inequality          - Inequality constraint type
+- LinearConstraints   - Linear constraint types
+- Measure             - Generic measure type
+- MultiInput          - Multi-input type
+- Names               - Names type
+- ParametersValues    - Parameter values type
+- Result              - Result type
+- RiskResult          - Risk result type
+- Tags                - Tags type
+- Target              - Target type
+- cp                  - CVXPY import
+- go                  - Plotly go import
+- np                  - NumPy import
+- npt                 - NumPy typing
+
+===============================================
+MODULE: uncertainty_set (7 items)
+===============================================
+DESCRIPTION:
+Uncertainty sets for robust portfolio optimization.
+
+CLASSES (7):
+- BaseCovarianceUncertaintySet      - Base covariance uncertainty set
+- BaseMuUncertaintySet             - Base return uncertainty set
+- BootstrapCovarianceUncertaintySet - Bootstrap covariance uncertainty
+- BootstrapMuUncertaintySet        - Bootstrap return uncertainty
+- EmpiricalCovarianceUncertaintySet - Empirical covariance uncertainty
+- EmpiricalMuUncertaintySet        - Empirical return uncertainty
+- UncertaintySet                   - Base uncertainty set class
+
+===============================================
+MODULE: utils (7 items)
+===============================================
+DESCRIPTION:
+General utility functions.
+
+FUNCTIONS (7):
+- bootstrap   - Bootstrap utilities
+- composition - Portfolio composition utilities
+- equations   - Equation solving utilities
+- figure      - Plotting utilities
+- sorting     - Sorting utilities
+- stats       - Statistical utilities
+- tools       - General tools
+
+===============================================================================
+                            3. ENUM VALUES
+===============================================================================
+
+===============================================
+RISK MEASURE ENUM VALUES (19 available)
+===============================================
+1. ANNUALIZED_SEMI_DEVIATION
+2. ANNUALIZED_SEMI_VARIANCE
+3. ANNUALIZED_STANDARD_DEVIATION
+4. ANNUALIZED_VARIANCE
+5. AVERAGE_DRAWDOWN
+6. CDAR
+7. CVAR
+8. EDAR
+9. EVAR
+10. FIRST_LOWER_PARTIAL_MOMENT
+11. GINI_MEAN_DIFFERENCE
+12. MAX_DRAWDOWN
+13. MEAN_ABSOLUTE_DEVIATION
+14. SEMI_DEVIATION
+15. SEMI_VARIANCE
+16. STANDARD_DEVIATION
+17. ULCER_INDEX
+18. VARIANCE
+19. WORST_REALIZATION
+
+===============================================
+RATIO MEASURE ENUM VALUES (18 available)
+===============================================
+1. ANNUALIZED_SHARPE_RATIO
+2. ANNUALIZED_SORTINO_RATIO
+3. AVERAGE_DRAWDOWN_RATIO
+4. CALMAR_RATIO
+5. CDAR_RATIO
+6. CVAR_RATIO
+7. DRAWDOWN_AT_RISK_RATIO
+8. EDAR_RATIO
+9. ENTROPIC_RISK_MEASURE_RATIO
+10. EVAR_RATIO
+11. FIRST_LOWER_PARTIAL_MOMENT_RATIO
+12. GINI_MEAN_DIFFERENCE_RATIO
+13. MEAN_ABSOLUTE_DEVIATION_RATIO
+14. SHARPE_RATIO
+15. SORTINO_RATIO
+16. ULCER_INDEX_RATIO
+17. VALUE_AT_RISK_RATIO
+18. WORST_REALIZATION_RATIO
+
+===============================================
+OBJECTIVE FUNCTION ENUM VALUES (4 available)
+===============================================
+1. MAXIMIZE_RATIO    - Maximize risk-adjusted ratio
+2. MAXIMIZE_RETURN   - Maximize expected return
+3. MAXIMIZE_UTILITY  - Maximize utility function
+4. MINIMIZE_RISK     - Minimize risk measure
+
+===============================================================================
+                            4. RISK MEASURES DETAILS
+===============================================================================
+
+BASIC RISK MEASURES:
+- VARIANCE: Portfolio variance (quadratic risk measure)
+- STANDARD_DEVIATION: Standard deviation of returns
+- SEMI_VARIANCE: Variance of negative returns only
+- SEMI_DEVIATION: Square root of semi-variance
+
+ANNUALIZED RISK MEASURES:
+- ANNUALIZED_VARIANCE: Annualized variance (×252 for daily data)
+- ANNUALIZED_STANDARD_DEVIATION: Annualized standard deviation
+- ANNUALIZED_SEMI_VARIANCE: Annualized semi-variance
+- ANNUALIZED_SEMI_DEVIATION: Annualized semi-deviation
+
+DOWNSIDE RISK MEASURES:
+- CVAR: Conditional Value at Risk (Expected Shortfall)
+- EVAR: Entropic Value at Risk
+- WORST_REALIZATION: Worst return in the sample
+- FIRST_LOWER_PARTIAL_MOMENT: First lower partial moment
+
+DRAWDOWN MEASURES:
+- MAX_DRAWDOWN: Maximum peak-to-trough decline
+- AVERAGE_DRAWDOWN: Average of all drawdowns
+- CDAR: Conditional Drawdown at Risk
+- ULCER_INDEX: Root mean square of drawdown percentages
+
+ADVANCED RISK MEASURES:
+- MEAN_ABSOLUTE_DEVIATION: Mean absolute deviation from mean
+- EDAR: Expected Drawdown at Risk
+- GINI_MEAN_DIFFERENCE: Gini coefficient of returns
+
+===============================================================================
+                            5. RATIO MEASURES DETAILS
+===============================================================================
+
+CLASSIC RATIOS:
+- SHARPE_RATIO: (Portfolio Return - Risk Free Rate) / Volatility
+- SORTINO_RATIO: (Portfolio Return - Risk Free Rate) / Downside Volatility
+- CALMAR_RATIO: Annual Return / |Maximum Drawdown|
+
+ANNUALIZED RATIOS:
+- ANNUALIZED_SHARPE_RATIO: Annualized Sharpe ratio
+- ANNUALIZED_SORTINO_RATIO: Annualized Sortino ratio
+
+DRAWDOWN-BASED RATIOS:
+- AVERAGE_DRAWDOWN_RATIO: Return / Average Drawdown
+- CDAR_RATIO: Return / Conditional Drawdown at Risk
+- ULCER_INDEX_RATIO: Return / Ulcer Index
+
+RISK-BASED RATIOS:
+- CVAR_RATIO: Return / Conditional Value at Risk
+- EVAR_RATIO: Return / Entropic Value at Risk
+- WORST_REALIZATION_RATIO: Return / Worst Realization
+
+ADVANCED RATIOS:
+- GINI_MEAN_DIFFERENCE_RATIO: Return / Gini Mean Difference
+- MEAN_ABSOLUTE_DEVIATION_RATIO: Return / Mean Absolute Deviation
+- FIRST_LOWER_PARTIAL_MOMENT_RATIO: Return / First Lower Partial Moment
+- DRAWDOWN_AT_RISK_RATIO: Return / Drawdown at Risk
+- EDAR_RATIO: Return / Expected Drawdown at Risk
+- ENTROPIC_RISK_MEASURE_RATIO: Return / Entropic Risk Measure
+- VALUE_AT_RISK_RATIO: Return / Value at Risk
+
+===============================================================================
+                            6. OPTIMIZATION MODELS DETAILS
+===============================================================================
+
+CONVEX OPTIMIZATION MODELS:
+1. MeanRisk
+   - Classic mean-variance optimization
+   - Supports all 19 risk measures
+   - Supports all 4 objective functions
+   - Constraints: weights, turnover, groups, linear constraints
+   - Features: regularization, transaction costs, prior estimators
+
+2. RiskBudgeting
+   - Risk parity and equal risk contribution
+   - Minimizes risk contribution differences
+   - Supports all risk measures for risk calculation
+   - Good for diversified risk portfolios
+
+3. MaximumDiversification
+   - Maximizes diversification ratio
+   - Uses correlation-weighted volatilities
+   - Most diversified portfolio for given assets
+
+HIERARCHICAL MODELS:
+4. HierarchicalRiskParity (HRP)
+   - Uses hierarchical clustering
+   - Recursive bisection for allocation
+   - No need for invertible covariance matrix
+   - Robust to estimation errors
+
+5. HierarchicalEqualRiskContribution (HERC)
+   - Combines HRP clustering with risk budgeting
+   - Clusters assets, then applies risk parity within/between clusters
+   - Balances hierarchical structure with risk contributions
+
+6. NestedClustersOptimization (NCO)
+   - Two-layer clustering approach
+   - Inner optimization within clusters
+   - Outer optimization between clusters
+   - Reduces dimensionality and estimation error
+
+NAIVE MODELS:
+7. EqualWeighted
+   - 1/N portfolio strategy
+   - Simple, robust, often performs well
+   - No estimation required
+
+8. InverseVolatility
+   - Weights inversely proportional to volatility
+   - Risk parity based on volatility only
+   - Simple risk-based allocation
+
+9. Random
+   - Random portfolio generation
+   - Useful for comparison and Monte Carlo
+   - Generates random feasible portfolios
+
+ENSEMBLE MODELS:
+10. StackingOptimization
+    - Combines multiple optimization models
+    - Machine learning stacking approach
+    - Can improve robustness and performance
+
+===============================================================================
+                            7. USAGE EXAMPLES
+===============================================================================
+
+BASIC OPTIMIZATION EXAMPLE:
+```python
+import numpy as np
+import pandas as pd
+from skfolio.optimization import MeanRisk
+from skfolio.measures import RiskMeasure, ObjectiveFunction
+
+# Load price data and convert to returns
+prices = pd.read_csv('prices.csv', index_col=0, parse_dates=True)
+returns = prices.pct_change().dropna()
+
+# Create optimization model
+model = MeanRisk(
+    objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+    risk_measure=RiskMeasure.CVAR,
+    min_weights=0.0,
+    max_weights=0.3
+)
+
+# Fit model and get portfolio
+model.fit(returns)
+portfolio = model.predict(returns)
+
+# Access results
+weights = model.weights_
+print("Portfolio weights:", dict(zip(returns.columns, weights)))
+print("Sharpe ratio:", portfolio.sharpe_ratio)
+```
+
+HIERARCHICAL RISK PARITY EXAMPLE:
+```python
+from skfolio.optimization import HierarchicalRiskParity
+
+# Create HRP model
+hrp = HierarchicalRiskParity(
+    risk_measure=RiskMeasure.VARIANCE,
+    linkage_method="ward"
+)
+
+# Fit and predict
+hrp.fit(returns)
+portfolio = hrp.predict(returns)
+
+print("HRP weights:", dict(zip(returns.columns, hrp.weights_)))
+```
+
+RISK BUDGETING EXAMPLE:
+```python
+from skfolio.optimization import RiskBudgeting
+
+# Create risk budgeting model
+rb = RiskBudgeting(
+    risk_measure=RiskMeasure.STANDARD_DEVIATION,
+    budget=1.0
+)
+
+# Fit and predict
+rb.fit(returns)
+portfolio = rb.predict(returns)
+
+print("Risk Budgeting weights:", dict(zip(returns.columns, rb.weights_)))
+```
+
+CROSS-VALIDATION EXAMPLE:
+```python
+from skfolio.model_selection import WalkForward, cross_val_predict
+
+# Create walk-forward validation
+wf = WalkForward(train_size=252, test_size=63)
+
+# Cross-validated predictions
+predictions = cross_val_predict(model, returns, cv=wf)
+
+print("Cross-validated performance:", predictions)
+```
+
+DISTRIBUTION ANALYSIS EXAMPLE:
+```python
+from skfolio.distribution import VineCopula
+
+# Create vine copula model
+vine = VineCopula(log_transform=True)
+vine.fit(returns)
+
+# Generate synthetic scenarios
+synthetic_returns = vine.sample(n_samples=10000)
+
+print("Synthetic returns shape:", synthetic_returns.shape)
+```
+
+UNCERTAINTY SETS EXAMPLE:
+```python
+from skfolio.uncertainty_set import BootstrapMuUncertaintySet
+from skfolio.optimization import MeanRisk
+
+# Create uncertainty set for expected returns
+uncertainty_set = BootstrapMuUncertaintySet(
+    n_bootstrap=200,
+    confidence_level=0.95
+)
+
+# Robust optimization
+model = MeanRisk(
+    objective_function=ObjectiveFunction.MAXIMIZE_RATIO,
+    mu_uncertainty_set_estimator=uncertainty_set
+)
+
+model.fit(returns)
+```
+
+===============================================================================
+                            CONCLUSION
+===============================================================================
+
+The skfolio library provides a comprehensive suite of tools for portfolio
+optimization with:
+
+- 19 different risk measures
+- 18 different performance ratios
+- 10+ optimization models
+- 18 different modules
+- 150+ classes and functions
+- Full scikit-learn compatibility
+- Advanced cross-validation tools
+- Distribution and copula modeling
+- Uncertainty set support
+- Extensive customization options
+
+This documentation covers the complete library structure and provides a solid
+foundation for developing sophisticated portfolio optimization applications.
+
+For more detailed information, refer to the official skfolio documentation and
+source code.
+
+===============================================================================
+                            END OF DOCUMENTATION
+===============================================================================
