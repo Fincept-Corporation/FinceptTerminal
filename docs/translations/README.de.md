@@ -186,7 +186,7 @@ npm run tauri build
 | ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png) | ![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png) |
 |                                    KI-gestützter Finanzassistent                                    |                                           Marktübersicht in Echtzeit                                          |
 
-|                                                 Wirtschaft                                                |                                              Aktienanalyse                                              |
+|                                                 Wirtschaft                                                |                                             Equity Research                                             |
 | :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: |
 | ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) | ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) |
 |                                       Globale Wirtschaftsindikatoren                                      |                                         Umfassende Aktienanalyse                                        |
@@ -204,7 +204,7 @@ npm run tauri build
 |                                                     Handelsanalyse                                                    |
 | :-------------------------------------------------------------------------------------------------------------------: |
 | ![TradeAnalysis](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/TradeAnalysis.png) |
-|                                          Erweiterte Analysen und Backtesting                                          |
+|                                           Advanced analytics and backtesting                                          |
 
 </div>
 
@@ -241,7 +241,7 @@ npm run tauri build
 
 * * *
 
-## 🤝 Mitwirken
+## 🤝 Mitmachen
 
 Wir freuen uns über Beiträge von Entwicklern, Händlern und Finanzexperten!
 
@@ -316,7 +316,7 @@ npm run tauri dev    # Start Tauri app
 -   ✅ macOS 11+ (Intel, Apple Silicon)
 -   ✅ Linux (Ubuntu, Debian, Fedora)
 
-**Sicherheit:**
+**Security:**
 
 -   Tauri-Sandbox-Umgebung
 -   Keine Node.js-Laufzeit
@@ -341,7 +341,7 @@ npm run tauri dev    # Start Tauri app
 
 * * *
 
-## 🌐 Vernetzen Sie sich mit uns
+## 🌐 Connect With Us
 
 <div align="center">
 
@@ -363,7 +363,7 @@ MIT License - see[LIZENZ.txt](https://github.com/Fincept-Corporation/FinceptTerm
 
 ## 🙏 Danksagungen
 
-Gebaut mit:[Not](https://tauri.app/)•[Reagieren](https://react.dev/)•[Rost](https://www.rust-lang.org/)•[RückenwindCSS](https://tailwindcss.com/)•[Radix-Benutzeroberfläche](https://www.radix-ui.com/)
+Gebaut mit:[Not](https://tauri.app/)•[Reagieren](https://react.dev/)•[Rust](https://www.rust-lang.org/)•[RückenwindCSS](https://tailwindcss.com/)•[Radix-Benutzeroberfläche](https://www.radix-ui.com/)
 
 * * *
 
