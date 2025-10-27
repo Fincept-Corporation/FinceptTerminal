@@ -11,9 +11,20 @@ export class JSONPathParser extends BaseParser {
     try {
       const result = jp.query(data, expression);
 
-      // If result is array with single element, unwrap it
-      if (Array.isArray(result) && result.length === 1 && !expression.includes('[*]')) {
-        return result[0];
+      // If result is array with single element, unwrap it (unless it's explicitly an array query)
+      if (Array.isArray(result)) {
+        // Keep as array if expression contains wildcards or is querying an array
+        if (expression.includes('[*]') || expression.includes('..')) {
+          return result;
+        }
+        // Unwrap single-element arrays for simple field access
+        if (result.length === 1) {
+          return result[0];
+        }
+        // Empty array returns undefined
+        if (result.length === 0) {
+          return undefined;
+        }
       }
 
       return result;
