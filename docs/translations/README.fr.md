@@ -2,8 +2,7 @@
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)
-[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
@@ -29,7 +28,7 @@
 | 🍎**macOS**    | Intel (x64)            | [⬇️**Télécharger .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
 | 🐧**Linux**    | x64 (AppImage)         | [⬇️**Télécharger .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
 | 🐧**Linux**    | x64 (Debian)           | [⬇️**Télécharger .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
-| 🪟**Fenêtres** | x64                    | [⬇️**Télécharger .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
+| 🪟**Fenêtres** | hshch                  | [⬇️**Télécharger .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
 
 > ✨**Téléchargements en un clic !**Le téléchargement de ces liens commencera immédiatement – ​​aucune connexion GitHub requise !
 
@@ -51,7 +50,7 @@
 
 ## 🎯 Qu'est-ce que Fincept Terminal ?
 
-**Fincept Terminal**est un terminal financier multiplateforme moderne construit avec**Épreuves**,**Réagir**, et**Manuscrit**. Il propose des outils d'analyse financière de niveau institutionnel aux investisseurs particuliers et aux traders, entièrement gratuits et open source.
+**Terminal Fincept**est un terminal financier multiplateforme moderne construit avec**Épreuves**,**Réagir**, et**Manuscrit**. Il propose des outils d'analyse financière de niveau institutionnel aux investisseurs particuliers et aux traders, entièrement gratuits et open source.
 
 Inspiré par Bloomberg et Refinitiv, Fincept Terminal fournit des données de marché en temps réel, des analyses avancées, des informations basées sur l'IA et une interface professionnelle, le tout sans le prix d'une entreprise.
 
