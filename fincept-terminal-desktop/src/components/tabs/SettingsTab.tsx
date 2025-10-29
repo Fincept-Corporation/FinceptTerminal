@@ -32,6 +32,9 @@ export default function SettingsTab() {
     api_key: ''
   });
 
+  // Polygon.io dedicated field
+  const [polygonApiKey, setPolygonApiKey] = useState('');
+
 
   useEffect(() => {
     initDB();
@@ -71,6 +74,12 @@ export default function SettingsTab() {
     try {
       const creds = await sqliteService.getCredentials();
       setCredentials(creds);
+
+      // Load Polygon.io key if it exists
+      const polygonCred = creds.find(c => c.service_name.toLowerCase() === 'polygon.io');
+      if (polygonCred?.api_key) {
+        setPolygonApiKey(polygonCred.api_key);
+      }
     } catch (error) {
       console.error('Failed to load credentials:', error);
     }
@@ -140,6 +149,49 @@ export default function SettingsTab() {
       }
     } catch (error) {
       showMessage('error', 'Failed to delete credential');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSavePolygonKey = async () => {
+    if (!polygonApiKey.trim()) {
+      showMessage('error', 'Polygon.io API key is required');
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Check if Polygon.io credential already exists
+      const existingCreds = await sqliteService.getCredentials();
+      const existingPolygon = existingCreds.find(c => c.service_name.toLowerCase() === 'polygon.io');
+
+      if (existingPolygon?.id) {
+        // Delete existing credential first
+        await sqliteService.deleteCredential(existingPolygon.id);
+      }
+
+      // Save new credential
+      const credential: Credential = {
+        service_name: 'Polygon.io',
+        username: 'api',
+        password: 'key',
+        api_key: polygonApiKey,
+        api_secret: '',
+        additional_data: ''
+      };
+
+      const result = await sqliteService.saveCredential(credential);
+
+      if (result.success) {
+        showMessage('success', 'Polygon.io API key saved successfully');
+        await loadCredentials();
+      } else {
+        showMessage('error', result.message);
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to save Polygon.io API key');
     } finally {
       setLoading(false);
     }
@@ -321,7 +373,68 @@ export default function SettingsTab() {
                     API KEY MANAGEMENT
                   </h2>
                   <p style={{ color: '#888', fontSize: '10px' }}>
-                    Store API keys for services like FRED, Alpha Vantage, etc. All data is encrypted and stored locally.
+                    Store API keys for services like FRED, Alpha Vantage, Polygon.io, etc. All data is encrypted and stored locally.
+                  </p>
+                </div>
+
+                {/* Polygon.io Dedicated Field */}
+                <div style={{
+                  background: '#0a0a0a',
+                  border: '1px solid #1a1a1a',
+                  padding: '16px',
+                  marginBottom: '20px',
+                  borderRadius: '4px'
+                }}>
+                  <h3 style={{ color: '#ea580c', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
+                    Polygon.io API Key
+                  </h3>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'end' }}>
+                    <div>
+                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                        API KEY *
+                      </label>
+                      <input
+                        type="text"
+                        value={polygonApiKey}
+                        onChange={(e) => setPolygonApiKey(e.target.value)}
+                        placeholder="Enter your Polygon.io API key"
+                        style={{
+                          width: '100%',
+                          background: '#000',
+                          border: '1px solid #2a2a2a',
+                          color: '#fff',
+                          padding: '8px',
+                          fontSize: '10px',
+                          borderRadius: '3px'
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={handleSavePolygonKey}
+                      disabled={loading}
+                      style={{
+                        background: '#ea580c',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '8px 16px',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        borderRadius: '3px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        opacity: loading ? 0.5 : 1,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <Save size={14} />
+                      {loading ? 'SAVING...' : 'SAVE'}
+                    </button>
+                  </div>
+                  <p style={{ color: '#666', fontSize: '9px', marginTop: '8px' }}>
+                    Used for Polygon.io Equities data in the Polygon tab. Get your free API key at <span style={{ color: '#ea580c' }}>polygon.io</span>
                   </p>
                 </div>
 
@@ -346,7 +459,7 @@ export default function SettingsTab() {
                         type="text"
                         value={newApiKey.service_name}
                         onChange={(e) => setNewApiKey({ ...newApiKey, service_name: e.target.value })}
-                        placeholder="e.g., FRED, AlphaVantage"
+                        placeholder="e.g., Polygon.io, FRED, AlphaVantage"
                         style={{
                           width: '100%',
                           background: '#000',

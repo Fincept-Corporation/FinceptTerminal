@@ -1,0 +1,8 @@
+  TCP    [::1]:1420             [::]:0                 LISTENING       8452
+  TCP    [::1]:1420             [::1]:49774            TIME_WAIT       0
+  TCP    [::1]:1420             [::1]:51945            TIME_WAIT       0
+  TCP    [::1]:1420             [::1]:55589            TIME_WAIT       0
+  TCP    [::1]:1420             [::1]:59273            TIME_WAIT       0
+  TCP    [::1]:1420             [::1]:61966            TIME_WAIT       0
+  TCP    [::1]:1420             [::1]:64211            TIME_WAIT       0
+  TCP    [::1]:57094            [::1]:1420             TIME_WAIT       0

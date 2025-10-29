@@ -50,3 +50,6 @@ pub mod openafrica;
 pub mod economic_calendar;
 pub mod databento;
 pub mod sentinelhub;
+
+// Code editor and Jupyter notebook
+pub mod jupyter;

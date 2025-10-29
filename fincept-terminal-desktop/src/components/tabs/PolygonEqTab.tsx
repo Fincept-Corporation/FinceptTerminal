@@ -10,9 +10,10 @@ const COLORS = {
   GRAY: '#787878',
   BLUE: '#6496FA',
   CYAN: '#00FFFF',
-  DARK_BG: '#1a1a1a',
+  DARK_BG: '#0a0a0a',
   PANEL_BG: '#000000',
-  BORDER: '#333333',
+  BORDER: '#222222',
+  PANEL_HEADER_BG: '#1a1a1a',
 };
 
 const PolygonEqTab: React.FC = () => {
@@ -21,43 +22,58 @@ const PolygonEqTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'financials' | 'actions' | 'short' | 'market' | 'reference'>('financials');
 
-  // First 5 endpoints data states
+  // All data states (31 endpoints)
   const [tickerDetails, setTickerDetails] = useState<any>(null);
   const [snapshot, setSnapshot] = useState<any>(null);
   const [news, setNews] = useState<any[]>([]);
   const [relatedTickers, setRelatedTickers] = useState<any[]>([]);
   const [marketStatus, setMarketStatus] = useState<any>(null);
-
-  // Next 5 endpoints data states (Phase 2)
   const [dividends, setDividends] = useState<any[]>([]);
   const [splits, setSplits] = useState<any[]>([]);
   const [lastTrade, setLastTrade] = useState<any>(null);
   const [lastQuote, setLastQuote] = useState<any>(null);
   const [smaData, setSmaData] = useState<any>(null);
-
-  // Phase 3 endpoints data states
   const [emaData, setEmaData] = useState<any>(null);
   const [macdData, setMacdData] = useState<any>(null);
   const [rsiData, setRsiData] = useState<any>(null);
   const [incomeStmt, setIncomeStmt] = useState<any>(null);
   const [balanceSheet, setBalanceSheet] = useState<any>(null);
+  const [allTickers, setAllTickers] = useState<any[]>([]);
+  const [tickerTypes, setTickerTypes] = useState<any[]>([]);
+  const [tickerEvents, setTickerEvents] = useState<any>(null);
+  const [exchanges, setExchanges] = useState<any[]>([]);
+  const [conditionCodes, setConditionCodes] = useState<any[]>([]);
+  const [marketHolidays, setMarketHolidays] = useState<any[]>([]);
+  const [marketStatusFull, setMarketStatusFull] = useState<any>(null);
+  const [smaFull, setSmaFull] = useState<any>(null);
+  const [emaFull, setEmaFull] = useState<any>(null);
+  const [macdFull, setMacdFull] = useState<any>(null);
+  const [cashFlowStatements, setCashFlowStatements] = useState<any>(null);
+  const [financialRatios, setFinancialRatios] = useState<any>(null);
+  const [shortInterest, setShortInterest] = useState<any>(null);
+  const [shortVolume, setShortVolume] = useState<any>(null);
+  const [trades, setTrades] = useState<any>(null);
+  const [quotes, setQuotes] = useState<any>(null);
 
   useEffect(() => {
-    const apiKey = polygonService.getApiKey();
-    setApiKeyConfigured(!!apiKey);
+    const loadApiKey = async () => {
+      const apiKey = await polygonService.loadApiKey();
+      setApiKeyConfigured(!!apiKey);
+    };
+    loadApiKey();
   }, []);
 
-  const handleConfigureApiKey = () => {
-    const key = prompt('Enter your Polygon.io API key:');
-    if (key && key.trim()) {
-      polygonService.setApiKey(key.trim());
-      setApiKeyConfigured(true);
-      fetchAllData();
+  const handleGoToSettings = () => {
+    const settingsTab = document.querySelector('[data-tab="settings"]') as HTMLElement;
+    if (settingsTab) {
+      settingsTab.click();
     }
   };
 
   const fetchAllData = async () => {
+    await polygonService.loadApiKey();
     if (!apiKeyConfigured) return;
 
     console.log('=== FETCHING DATA FOR:', symbol, '===');
@@ -65,196 +81,131 @@ const PolygonEqTab: React.FC = () => {
     setError(null);
 
     try {
-      // Fetch first 15 endpoints in parallel (Phase 1 + Phase 2 + Phase 3)
       const [
-        detailsResp,
-        snapResp,
-        newsResp,
-        relatedResp,
-        marketStatusResp,
-        dividendsResp,
-        splitsResp,
-        lastTradeResp,
-        lastQuoteResp,
-        smaResp,
-        emaResp,
-        macdResp,
-        rsiResp,
-        incomeResp,
-        balanceResp,
+        detailsResp, snapResp, newsResp, relatedResp, marketStatusResp,
+        dividendsResp, splitsResp, lastTradeResp, lastQuoteResp, smaResp,
+        emaResp, macdResp, rsiResp, incomeResp, balanceResp,
+        allTickersResp, tickerTypesResp, tickerEventsResp, exchangesResp, conditionCodesResp,
+        marketHolidaysResp, marketStatusFullResp, smaFullResp, emaFullResp, macdFullResp,
+        cashFlowResp, financialRatiosResp, shortInterestResp, shortVolumeResp, tradesResp, quotesResp,
       ] = await Promise.all([
-        // Phase 1 endpoints
-        polygonService.getTickerDetails(symbol).catch((e) => {
-          console.error('Ticker details error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getSingleTickerSnapshot(symbol).catch((e) => {
-          console.error('Snapshot error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getNews({ ticker: symbol, limit: 10 }).catch((e) => {
-          console.error('News error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getRelatedTickers(symbol).catch((e) => {
-          console.error('Related tickers error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getMarketStatus().catch((e) => {
-          console.error('Market status error:', e);
-          return { success: false, error: e.message };
-        }),
-        // Phase 2 endpoints
-        polygonService.getDividends({ ticker: symbol, limit: 10 }).catch((e) => {
-          console.error('Dividends error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getSplits({ ticker: symbol, limit: 10 }).catch((e) => {
-          console.error('Splits error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getLastTrade(symbol).catch((e) => {
-          console.error('Last trade error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getLastQuote(symbol).catch((e) => {
-          console.error('Last quote error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getSMA(symbol, { window: 20, timespan: 'day', limit: 50 }).catch((e) => {
-          console.error('SMA error:', e);
-          return { success: false, error: e.message };
-        }),
-        // Phase 3 endpoints
-        polygonService.getEMA(symbol, { window: 20, timespan: 'day', limit: 50 }).catch((e) => {
-          console.error('EMA error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getMACD(symbol, { shortWindow: 12, longWindow: 26, signalWindow: 9, timespan: 'day', limit: 50 }).catch((e) => {
-          console.error('MACD error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getRSI(symbol, { window: 14, timespan: 'day', limit: 50 }).catch((e) => {
-          console.error('RSI error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getIncomeStatements(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => {
-          console.error('Income statements error:', e);
-          return { success: false, error: e.message };
-        }),
-        polygonService.getBalanceSheets(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => {
-          console.error('Balance sheets error:', e);
-          return { success: false, error: e.message };
-        }),
+        polygonService.getTickerDetails(symbol).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getSingleTickerSnapshot(symbol).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getNews({ ticker: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getRelatedTickers(symbol).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getMarketStatus().catch((e) => ({ success: false, error: e.message })),
+        polygonService.getDividends({ ticker: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getSplits({ ticker: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getLastTrade(symbol).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getLastQuote(symbol).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getSMA(symbol, { window: 20, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getEMA(symbol, { window: 20, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getMACD(symbol, { shortWindow: 12, longWindow: 26, signalWindow: 9, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getRSI(symbol, { window: 14, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getIncomeStatements(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getBalanceSheets(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getAllTickers({ search: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getTickerTypes().catch((e) => ({ success: false, error: e.message })),
+        polygonService.getTickerEvents(symbol).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getExchanges().catch((e) => ({ success: false, error: e.message })),
+        polygonService.getConditionCodes({ limit: 20 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getMarketHolidays().catch((e) => ({ success: false, error: e.message })),
+        polygonService.getMarketStatus().catch((e) => ({ success: false, error: e.message })),
+        polygonService.getSMA(symbol, { window: 50, timespan: 'day', limit: 100 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getEMA(symbol, { window: 50, timespan: 'day', limit: 100 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getMACD(symbol, { shortWindow: 12, longWindow: 26, signalWindow: 9, timespan: 'day', limit: 100 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getCashFlowStatements(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getFinancialRatios(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getShortInterest(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getShortVolume(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getTrades(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
+        polygonService.getQuotes(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
       ]);
 
-      // Parse Ticker Details
-      if (detailsResp?.success && detailsResp?.ticker_details) {
-        setTickerDetails(detailsResp.ticker_details);
-      }
+      // Parse all responses
+      if (detailsResp?.success && detailsResp?.ticker_details) setTickerDetails(detailsResp.ticker_details);
+      if (snapResp?.success && snapResp?.snapshot) setSnapshot(snapResp.snapshot);
+      if (newsResp?.success && newsResp?.news_articles) setNews(newsResp.news_articles);
+      else setNews([]);
 
-      // Parse Snapshot
-      if (snapResp?.success && snapResp?.snapshot) {
-        setSnapshot(snapResp.snapshot);
-      }
-
-      // Parse News
-      if (newsResp?.success && newsResp?.news_articles) {
-        setNews(newsResp.news_articles);
-      } else {
-        setNews([]);
-      }
-
-      // Parse Related Tickers
       if (relatedResp?.success && relatedResp?.related_tickers) {
-        // Convert string array to object array with ticker property
-        const tickersArray = relatedResp.related_tickers.map((ticker: any) => {
-          if (typeof ticker === 'string') {
-            return { ticker: ticker, name: null };
-          }
-          return ticker;
-        });
+        const tickersArray = relatedResp.related_tickers.map((ticker: any) =>
+          typeof ticker === 'string' ? { ticker: ticker, name: null } : ticker
+        );
         setRelatedTickers(tickersArray);
-      } else {
-        setRelatedTickers([]);
-      }
+      } else setRelatedTickers([]);
 
-      // Parse Market Status
-      if (marketStatusResp?.success && marketStatusResp?.market_status) {
-        setMarketStatus(marketStatusResp.market_status);
-      }
+      if (marketStatusResp?.success && marketStatusResp?.market_status) setMarketStatus(marketStatusResp.market_status);
+      if (dividendsResp?.success && dividendsResp?.dividends) setDividends(dividendsResp.dividends);
+      else setDividends([]);
 
-      // Parse Dividends
-      if (dividendsResp?.success && dividendsResp?.dividends) {
-        setDividends(dividendsResp.dividends);
-      } else {
-        setDividends([]);
-      }
+      if (splitsResp?.success && splitsResp?.splits) setSplits(splitsResp.splits);
+      else setSplits([]);
 
-      // Parse Splits
-      if (splitsResp?.success && splitsResp?.splits) {
-        setSplits(splitsResp.splits);
-      } else {
-        setSplits([]);
-      }
+      if (lastTradeResp?.success && lastTradeResp?.last_trade) setLastTrade(lastTradeResp.last_trade);
+      if (lastQuoteResp?.success && lastQuoteResp?.last_quote) setLastQuote(lastQuoteResp.last_quote);
+      if (smaResp?.success && smaResp?.sma_data) setSmaData(smaResp.sma_data);
+      if (emaResp?.success && emaResp?.ema_data) setEmaData(emaResp.ema_data);
+      if (macdResp?.success && macdResp?.macd_data) setMacdData(macdResp.macd_data);
+      if (rsiResp?.success && rsiResp?.rsi_data) setRsiData(rsiResp.rsi_data);
 
-      // Parse Last Trade
-      if (lastTradeResp?.success && lastTradeResp?.last_trade) {
-        setLastTrade(lastTradeResp.last_trade);
-      }
-
-      // Parse Last Quote
-      if (lastQuoteResp?.success && lastQuoteResp?.last_quote) {
-        setLastQuote(lastQuoteResp.last_quote);
-      }
-
-      // Parse SMA
-      if (smaResp?.success && smaResp?.sma_data) {
-        setSmaData(smaResp.sma_data);
-      }
-
-      // Parse EMA
-      if (emaResp?.success && emaResp?.ema_data) {
-        setEmaData(emaResp.ema_data);
-      }
-
-      // Parse MACD - DEBUG ONLY
-      console.log('=== MACD DEBUG ===');
-      console.log('MACD Response:', JSON.stringify(macdResp, null, 2));
-      if (macdResp?.success && macdResp?.macd_data) {
-        console.log('MACD data structure:', JSON.stringify(macdResp.macd_data, null, 2));
-        console.log('MACD statistics:', macdResp.macd_data.statistics);
-        setMacdData(macdResp.macd_data);
-      } else {
-        console.error('MACD failed:', macdResp?.error);
-      }
-
-      // Parse RSI
-      if (rsiResp?.success && rsiResp?.rsi_data) {
-        setRsiData(rsiResp.rsi_data);
-      }
-
-      // Parse Income Statements - DEBUG ONLY
-      console.log('=== INCOME STATEMENTS DEBUG ===');
-      console.log('Income Response:', JSON.stringify(incomeResp, null, 2));
       if (incomeResp?.success && incomeResp?.income_statement_data) {
-        console.log('Income statement structure:', JSON.stringify(incomeResp.income_statement_data, null, 2));
         setIncomeStmt(incomeResp.income_statement_data);
-      } else {
-        console.error('Income statements failed:', incomeResp?.error);
       }
 
-      // Parse Balance Sheets - DEBUG ONLY
-      console.log('=== BALANCE SHEETS DEBUG ===');
-      console.log('Balance Response:', JSON.stringify(balanceResp, null, 2));
       if (balanceResp?.success && balanceResp?.balance_sheet_data) {
-        console.log('Balance sheet structure:', JSON.stringify(balanceResp.balance_sheet_data, null, 2));
         setBalanceSheet(balanceResp.balance_sheet_data);
-      } else {
-        console.error('Balance sheets failed:', balanceResp?.error);
       }
 
-      console.log('=== DATA FETCH COMPLETE ===');
+      if (allTickersResp?.success && allTickersResp?.tickers) setAllTickers(allTickersResp.tickers);
+      else setAllTickers([]);
+
+      if (tickerTypesResp?.success && tickerTypesResp?.ticker_types) setTickerTypes(tickerTypesResp.ticker_types);
+      else setTickerTypes([]);
+
+      if (tickerEventsResp?.success && tickerEventsResp?.ticker_events) setTickerEvents(tickerEventsResp.ticker_events);
+      else setTickerEvents(null);
+
+      if (exchangesResp?.success && exchangesResp?.exchanges) setExchanges(exchangesResp.exchanges);
+      else setExchanges([]);
+
+      if (conditionCodesResp?.success && conditionCodesResp?.condition_codes) setConditionCodes(conditionCodesResp.condition_codes);
+      else setConditionCodes([]);
+
+      if (marketHolidaysResp?.success && marketHolidaysResp?.market_holidays) setMarketHolidays(marketHolidaysResp.market_holidays);
+      else setMarketHolidays([]);
+
+      if (marketStatusFullResp?.success && marketStatusFullResp?.market_status) setMarketStatusFull(marketStatusFullResp.market_status);
+      else setMarketStatusFull(null);
+
+      if (smaFullResp?.success && smaFullResp?.sma_data) setSmaFull(smaFullResp.sma_data);
+      else setSmaFull(null);
+
+      if (emaFullResp?.success && emaFullResp?.ema_data) setEmaFull(emaFullResp.ema_data);
+      else setEmaFull(null);
+
+      if (macdFullResp?.success && macdFullResp?.macd_data) setMacdFull(macdFullResp.macd_data);
+      else setMacdFull(null);
+
+      if (cashFlowResp?.success) setCashFlowStatements(cashFlowResp);
+      else setCashFlowStatements(null);
+
+      if (financialRatiosResp?.success) setFinancialRatios(financialRatiosResp);
+      else setFinancialRatios(null);
+
+      if (shortInterestResp?.success) setShortInterest(shortInterestResp);
+      else setShortInterest(null);
+
+      if (shortVolumeResp?.success) setShortVolume(shortVolumeResp);
+      else setShortVolume(null);
+
+      if (tradesResp?.success) setTrades(tradesResp);
+      else setTrades(null);
+
+      if (quotesResp?.success) setQuotes(quotesResp);
+      else setQuotes(null);
+
+      console.log('=== DATA FETCH COMPLETE (31/31 ENDPOINTS) ===');
 
     } catch (error: any) {
       console.error('Critical error:', error);
@@ -278,7 +229,6 @@ const PolygonEqTab: React.FC = () => {
   };
 
   const handleRelatedTickerClick = (ticker: string) => {
-    console.log('Clicked related ticker:', ticker);
     setSymbol(ticker);
   };
 
@@ -292,9 +242,11 @@ const PolygonEqTab: React.FC = () => {
     if (num >= 1e12) return `$${(num / 1e12).toFixed(2)}T`;
     if (num >= 1e9) return `$${(num / 1e9).toFixed(2)}B`;
     if (num >= 1e6) return `$${(num / 1e6).toFixed(2)}M`;
+    if (num >= 1e3) return `$${(num / 1e3).toFixed(2)}K`;
     return `$${num.toFixed(2)}`;
   };
 
+  // API Key Config Screen
   if (!apiKeyConfigured) {
     return (
       <div style={{
@@ -310,19 +262,26 @@ const PolygonEqTab: React.FC = () => {
           backgroundColor: COLORS.PANEL_BG,
           border: `2px solid ${COLORS.ORANGE}`,
           padding: '40px',
-          maxWidth: '500px',
+          maxWidth: '600px',
           textAlign: 'center',
         }}>
           <div style={{ color: COLORS.ORANGE, fontSize: '24px', fontWeight: 'bold', marginBottom: '20px' }}>
             POLYGON.IO API KEY REQUIRED
           </div>
-          <div style={{ color: COLORS.GRAY, fontSize: '14px', marginBottom: '20px' }}>
+          <div style={{ color: COLORS.GRAY, fontSize: '14px', marginBottom: '20px', lineHeight: '1.6' }}>
             Configure your Polygon.io API key to access institutional-grade financial data.
             <br /><br />
-            Get your API key at: <span style={{ color: COLORS.CYAN }}>polygon.io</span>
+            <strong style={{ color: COLORS.CYAN }}>Steps to configure:</strong>
+            <ol style={{ textAlign: 'left', marginTop: '10px', paddingLeft: '40px' }}>
+              <li>Get your free API key at: <span style={{ color: COLORS.CYAN }}>polygon.io</span></li>
+              <li>Go to Settings → Credentials section</li>
+              <li>Add new API key with service name: <span style={{ color: COLORS.CYAN }}>Polygon.io</span></li>
+              <li>Paste your API key and save</li>
+              <li>Return to this tab and refresh</li>
+            </ol>
           </div>
           <button
-            onClick={handleConfigureApiKey}
+            onClick={handleGoToSettings}
             style={{
               backgroundColor: COLORS.ORANGE,
               border: 'none',
@@ -333,25 +292,47 @@ const PolygonEqTab: React.FC = () => {
               fontWeight: 'bold',
             }}
           >
-            CONFIGURE API KEY
+            GO TO SETTINGS
           </button>
         </div>
       </div>
     );
   }
 
-  // Calculate price change - use todays_change if available, otherwise calculate from prev_day
+  // Calculate price change
   const currentPrice = snapshot?.day?.close || snapshot?.prev_day?.close || 0;
   const prevClose = snapshot?.prev_day?.close || 0;
-
   let priceChange = snapshot?.todays_change || 0;
   let priceChangePercent = snapshot?.todays_change_perc || 0;
 
-  // If todays_change is 0 but we have current and previous prices, calculate manually
   if (priceChange === 0 && currentPrice > 0 && prevClose > 0) {
     priceChange = currentPrice - prevClose;
     priceChangePercent = ((priceChange / prevClose) * 100);
   }
+
+  // Section Header Component
+  const SectionHeader: React.FC<{ title: string; color?: string }> = ({ title, color = COLORS.ORANGE }) => (
+    <div style={{
+      backgroundColor: COLORS.PANEL_HEADER_BG,
+      borderBottom: `1px solid ${color}`,
+      padding: '6px 10px',
+      color: color,
+      fontSize: '12px',
+      fontWeight: 'bold',
+      letterSpacing: '0.5px',
+    }}>
+      {title}
+    </div>
+  );
+
+  // Data Row Component
+  const DataRow: React.FC<{ label: string; value: string | number; valueColor?: string; small?: boolean }> =
+    ({ label, value, valueColor = COLORS.WHITE, small = false }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: small ? '3px' : '6px', fontSize: small ? '11px' : '12px' }}>
+      <span style={{ color: COLORS.GRAY }}>{label}:</span>
+      <span style={{ color: valueColor, fontWeight: 'bold' }}>{value}</span>
+    </div>
+  );
 
   return (
     <div style={{
@@ -361,33 +342,37 @@ const PolygonEqTab: React.FC = () => {
       fontFamily: 'Consolas, monospace',
       display: 'flex',
       flexDirection: 'column',
-      fontSize: '13px',
-      overflow: 'hidden',
-    }}>
-      {/* Header */}
+      fontSize: '12px',
+      overflow: 'auto',
+    }} className="custom-scrollbar">
+
+      {/* TOP BAR WITH RELATED TICKERS */}
       <div style={{
         backgroundColor: COLORS.PANEL_BG,
         borderBottom: `1px solid ${COLORS.BORDER}`,
-        padding: '10px 15px',
+        padding: '8px 12px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <span style={{ color: COLORS.ORANGE, fontWeight: 'bold', fontSize: '16px' }}>POLYGON.IO TERMINAL</span>
-            <span style={{ color: COLORS.GRAY }}>|</span>
+        {/* First Row: Search and Main Info */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ color: COLORS.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>POLYGON.IO</span>
             <input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              placeholder="Enter symbol..."
+              placeholder="Symbol..."
               style={{
                 backgroundColor: COLORS.DARK_BG,
                 border: `1px solid ${COLORS.BORDER}`,
                 color: COLORS.WHITE,
-                padding: '6px 12px',
-                fontSize: '13px',
-                width: '180px',
+                padding: '4px 10px',
+                fontSize: '12px',
+                width: '120px',
                 fontFamily: 'Consolas, monospace',
               }}
             />
@@ -397,28 +382,37 @@ const PolygonEqTab: React.FC = () => {
                 backgroundColor: COLORS.ORANGE,
                 border: 'none',
                 color: COLORS.DARK_BG,
-                padding: '6px 18px',
-                fontSize: '13px',
+                padding: '4px 14px',
+                fontSize: '11px',
                 cursor: 'pointer',
                 fontWeight: 'bold',
               }}
             >
-              SEARCH
+              GO
             </button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '15px', fontSize: '13px' }}>
-            <span style={{ color: COLORS.CYAN, fontWeight: 'bold', fontSize: '18px' }}>{symbol}</span>
-            {loading && <span style={{ color: COLORS.YELLOW }}>● LOADING...</span>}
-            {!loading && !error && <span style={{ color: COLORS.GREEN }}>● LIVE</span>}
-            {!loading && error && <span style={{ color: COLORS.RED }}>● ERROR</span>}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <span style={{ color: COLORS.CYAN, fontSize: '18px', fontWeight: 'bold' }}>{symbol}</span>
+            <span style={{ color: COLORS.GRAY, fontSize: '12px', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {tickerDetails?.name || ''}
+            </span>
+            <span style={{ color: COLORS.WHITE, fontSize: '16px', fontWeight: 'bold' }}>
+              ${formatNumber(currentPrice)}
+            </span>
+            <span style={{ color: priceChange >= 0 ? COLORS.GREEN : COLORS.RED, fontSize: '13px', fontWeight: 'bold' }}>
+              {priceChange >= 0 ? '▲' : '▼'} {Math.abs(priceChange).toFixed(2)} ({priceChangePercent.toFixed(2)}%)
+            </span>
+            {loading && <span style={{ color: COLORS.YELLOW, fontSize: '10px' }}>● LOAD</span>}
+            {!loading && !error && <span style={{ color: COLORS.GREEN, fontSize: '10px' }}>● LIVE</span>}
             <button
               onClick={() => fetchAllData()}
               style={{
                 backgroundColor: COLORS.BLUE,
                 border: 'none',
                 color: COLORS.WHITE,
-                padding: '5px 15px',
-                fontSize: '12px',
+                padding: '4px 12px',
+                fontSize: '10px',
                 cursor: 'pointer',
                 fontWeight: 'bold',
               }}
@@ -427,931 +421,629 @@ const PolygonEqTab: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Second Row: Related Tickers as Small Boxes */}
+        {relatedTickers.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ color: COLORS.GRAY, fontSize: '10px', fontWeight: 'bold' }}>RELATED:</span>
+            {relatedTickers.slice(0, 8).map((ticker: any, idx: number) => (
+              <div
+                key={idx}
+                onClick={() => handleRelatedTickerClick(ticker.ticker)}
+                style={{
+                  backgroundColor: COLORS.PANEL_HEADER_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '3px 8px',
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  color: COLORS.CYAN,
+                  fontWeight: 'bold',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = COLORS.CYAN;
+                  e.currentTarget.style.color = COLORS.DARK_BG;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = COLORS.PANEL_HEADER_BG;
+                  e.currentTarget.style.color = COLORS.CYAN;
+                }}
+              >
+                {ticker.ticker}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Error Banner */}
       {error && (
         <div style={{
-          backgroundColor: '#331111',
-          border: `1px solid ${COLORS.RED}`,
-          padding: '10px 15px',
-          margin: '10px',
+          backgroundColor: '#1a0000',
+          borderBottom: `1px solid ${COLORS.RED}`,
+          padding: '6px 12px',
           color: COLORS.RED,
-          fontSize: '13px',
+          fontSize: '11px',
           flexShrink: 0,
         }}>
           <strong>ERROR:</strong> {error}
         </div>
       )}
 
-      {/* Price Header */}
-      <div style={{
-        backgroundColor: COLORS.PANEL_BG,
-        border: `1px solid ${COLORS.BORDER}`,
-        padding: '20px',
-        margin: '10px',
-        marginBottom: '0',
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '8px' }}>
-              <span style={{ color: COLORS.ORANGE, fontSize: '28px', fontWeight: 'bold' }}>{symbol}</span>
-              <span style={{ color: COLORS.WHITE, fontSize: '18px' }}>{tickerDetails?.name || 'Loading...'}</span>
-              {tickerDetails?.type && (
-                <span style={{
-                  color: COLORS.BLUE,
-                  fontSize: '12px',
-                  padding: '4px 10px',
-                  backgroundColor: 'rgba(100,150,250,0.2)',
-                  border: `1px solid ${COLORS.BLUE}`,
-                }}>
-                  {tickerDetails.type}
-                </span>
-              )}
-            </div>
-            <div style={{ fontSize: '13px', color: COLORS.GRAY }}>
-              {tickerDetails?.primary_exchange || 'N/A'} | {tickerDetails?.market || 'N/A'} | Market Cap: {formatLargeNumber(tickerDetails?.market_cap)}
+      {/* MAIN CONTENT - All data visible, main window scrolls */}
+      <div style={{ padding: '6px', flexShrink: 0 }}>
+
+        {/* ROW 1: Quote Data + Market Status + Technical Indicators - NO INTERNAL SCROLL */}
+        <div style={{ display: 'grid', gridTemplateColumns: '25% 25% 25% 25%', gap: '8px', marginBottom: '8px' }}>
+
+          {/* Quote Panel */}
+          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <SectionHeader title="QUOTE" color={COLORS.CYAN} />
+            <div style={{ padding: '10px', fontSize: '11px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                <div><span style={{ color: COLORS.GRAY, fontSize: '10px' }}>OPEN:</span> <span style={{ color: COLORS.CYAN }}>${formatNumber(snapshot?.day?.open)}</span></div>
+                <div><span style={{ color: COLORS.GRAY, fontSize: '10px' }}>HIGH:</span> <span style={{ color: COLORS.GREEN }}>${formatNumber(snapshot?.day?.high)}</span></div>
+                <div><span style={{ color: COLORS.GRAY, fontSize: '10px' }}>LOW:</span> <span style={{ color: COLORS.RED }}>${formatNumber(snapshot?.day?.low)}</span></div>
+                <div><span style={{ color: COLORS.GRAY, fontSize: '10px' }}>VOL:</span> <span style={{ color: COLORS.YELLOW }}>{formatNumber(snapshot?.day?.volume, 0)}</span></div>
+              </div>
+              <DataRow label="VWAP" value={`$${formatNumber(snapshot?.day?.vwap)}`} valueColor={COLORS.CYAN} small />
+              <div style={{ borderTop: `1px solid ${COLORS.BORDER}`, marginTop: '6px', paddingTop: '6px' }}>
+                <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '3px' }}>LAST TRADE</div>
+                <DataRow label="Price" value={`$${formatNumber(lastTrade?.price)}`} valueColor={COLORS.GREEN} small />
+                <DataRow label="Size" value={formatNumber(lastTrade?.size, 0)} valueColor={COLORS.WHITE} small />
+              </div>
             </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '32px', fontWeight: 'bold', color: COLORS.WHITE, marginBottom: '5px' }}>
-              ${formatNumber(currentPrice)}
-            </div>
-            <div style={{ fontSize: '16px', color: priceChange >= 0 ? COLORS.GREEN : COLORS.RED }}>
-              {priceChange >= 0 ? '▲' : '▼'} ${Math.abs(priceChange).toFixed(2)} ({priceChangePercent.toFixed(2)}%)
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Main Content - Single Screen Layout */}
-      <div style={{
-        flex: 1,
-        overflow: 'auto',
-        padding: '10px',
-        paddingTop: '0',
-      }} className="custom-scrollbar">
-
-        {/* Row 1: Today's Trading + Market Status + Related Tickers */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
-
-          {/* Today's Trading */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              TODAY'S TRADING DATA
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', fontSize: '13px' }}>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>OPEN:</span>
-                <div style={{ color: COLORS.CYAN, fontSize: '18px', fontWeight: 'bold' }}>${formatNumber(snapshot?.day?.open)}</div>
+          {/* Bid/Ask Panel */}
+          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <SectionHeader title="BID/ASK" color={COLORS.GREEN} />
+            <div style={{ padding: '10px', fontSize: '11px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <div>
+                  <div style={{ color: COLORS.GRAY, fontSize: '10px' }}>BID</div>
+                  <div style={{ color: COLORS.GREEN, fontSize: '14px', fontWeight: 'bold' }}>${formatNumber(lastQuote?.bid_price)}</div>
+                  <div style={{ color: COLORS.GRAY, fontSize: '10px' }}>x{formatNumber(lastQuote?.bid_size, 0)}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: COLORS.GRAY, fontSize: '10px' }}>ASK</div>
+                  <div style={{ color: COLORS.RED, fontSize: '14px', fontWeight: 'bold' }}>${formatNumber(lastQuote?.ask_price)}</div>
+                  <div style={{ color: COLORS.GRAY, fontSize: '10px' }}>x{formatNumber(lastQuote?.ask_size, 0)}</div>
+                </div>
               </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>HIGH:</span>
-                <div style={{ color: COLORS.GREEN, fontSize: '18px', fontWeight: 'bold' }}>${formatNumber(snapshot?.day?.high)}</div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>LOW:</span>
-                <div style={{ color: COLORS.RED, fontSize: '18px', fontWeight: 'bold' }}>${formatNumber(snapshot?.day?.low)}</div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>VOLUME:</span>
-                <div style={{ color: COLORS.YELLOW, fontSize: '18px', fontWeight: 'bold' }}>{formatNumber(snapshot?.day?.volume, 0)}</div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>VWAP:</span>
-                <div style={{ color: COLORS.CYAN, fontSize: '18px', fontWeight: 'bold' }}>${formatNumber(snapshot?.day?.vwap)}</div>
+              <DataRow label="Spread" value={`$${formatNumber((lastQuote?.ask_price || 0) - (lastQuote?.bid_price || 0), 3)}`} valueColor={COLORS.YELLOW} small />
+              <div style={{ borderTop: `1px solid ${COLORS.BORDER}`, marginTop: '6px', paddingTop: '6px' }}>
+                <DataRow label="Mkt Cap" value={formatLargeNumber(tickerDetails?.market_cap)} valueColor={COLORS.GREEN} small />
+                <DataRow label="Exchange" value={tickerDetails?.primary_exchange || 'N/A'} valueColor={COLORS.WHITE} small />
               </div>
             </div>
           </div>
 
           {/* Market Status */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.GREEN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              MARKET STATUS
-            </div>
-            <div style={{ fontSize: '13px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Market:</span>
-                <div style={{
-                  color: marketStatus?.market === 'open' ? COLORS.GREEN : COLORS.RED,
-                  fontWeight: 'bold',
-                  fontSize: '20px',
-                  marginTop: '5px'
-                }}>
-                  {marketStatus?.market?.toUpperCase() || 'N/A'}
-                </div>
+          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <SectionHeader title="MARKET STATUS" color={COLORS.GREEN} />
+            <div style={{ padding: '10px', fontSize: '11px', textAlign: 'center' }}>
+              <div style={{
+                color: marketStatus?.market === 'open' ? COLORS.GREEN : COLORS.RED,
+                fontSize: '16px',
+                fontWeight: 'bold',
+                marginBottom: '6px'
+              }}>
+                {marketStatus?.market?.toUpperCase() || 'N/A'}
               </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Server Time:</span>
-                <div style={{ color: COLORS.CYAN, fontSize: '15px', marginTop: '5px' }}>
-                  {marketStatus?.serverTime || 'N/A'}
-                </div>
+              <div style={{ color: COLORS.CYAN, fontSize: '10px', marginBottom: '8px' }}>
+                {marketStatus?.serverTime || 'N/A'}
               </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Exchanges:</span>
-                <div style={{ color: COLORS.BLUE, fontSize: '15px', marginTop: '5px' }}>
-                  {marketStatus?.exchanges ? Object.keys(marketStatus.exchanges).length : 'N/A'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Currencies:</span>
-                <div style={{ color: COLORS.YELLOW, fontSize: '15px', marginTop: '5px' }}>
-                  {marketStatus?.currencies ? Object.keys(marketStatus.currencies).length : 'N/A'}
-                </div>
-              </div>
+              <DataRow label="Exchanges" value={marketStatus?.exchanges ? Object.keys(marketStatus.exchanges).length : 'N/A'} valueColor={COLORS.BLUE} small />
+              <DataRow label="Currencies" value={marketStatus?.currencies ? Object.keys(marketStatus.currencies).length : 'N/A'} valueColor={COLORS.YELLOW} small />
             </div>
           </div>
 
-          {/* Related Tickers */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.CYAN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              RELATED TICKERS ({relatedTickers.length})
-            </div>
-            <div style={{ maxHeight: '300px', overflow: 'auto' }} className="custom-scrollbar">
-              {relatedTickers.length > 0 ? relatedTickers.map((ticker: any, idx: number) => (
-                <div
-                  key={idx}
-                  onClick={() => handleRelatedTickerClick(ticker.ticker)}
-                  style={{
-                    padding: '10px',
-                    borderBottom: `1px solid ${COLORS.BORDER}`,
-                    cursor: 'pointer',
-                    transition: 'background-color 0.2s',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.BORDER}
-                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                >
-                  <div style={{ color: COLORS.CYAN, fontSize: '14px', fontWeight: 'bold', marginBottom: '3px' }}>
-                    {ticker.ticker}
-                  </div>
-                  {ticker.name && (
-                    <div style={{ color: COLORS.GRAY, fontSize: '12px' }}>
-                      {ticker.name}
-                    </div>
-                  )}
+          {/* Technical Indicators */}
+          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <SectionHeader title="TECHNICALS" color={COLORS.YELLOW} />
+            <div style={{ padding: '10px', fontSize: '11px' }}>
+              <DataRow label="SMA(20)" value={`$${formatNumber(smaData?.statistics?.latest_value)}`} valueColor={COLORS.CYAN} small />
+              <DataRow label="EMA(20)" value={`$${formatNumber(emaData?.statistics?.latest_value)}`} valueColor={COLORS.BLUE} small />
+              <DataRow label="RSI(14)" value={formatNumber(rsiData?.statistics?.rsi_stats?.latest_value, 1)}
+                valueColor={(rsiData?.statistics?.rsi_stats?.latest_value || 0) > 70 ? COLORS.RED : (rsiData?.statistics?.rsi_stats?.latest_value || 0) < 30 ? COLORS.GREEN : COLORS.YELLOW} small />
+              <div style={{ borderTop: `1px solid ${COLORS.BORDER}`, marginTop: '6px', paddingTop: '6px' }}>
+                <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '3px' }}>MACD Signal</div>
+                <div style={{
+                  color: macdData?.macd_values?.[0]?.crossover_analysis?.macd_above_signal ? COLORS.GREEN : COLORS.RED,
+                  fontSize: '12px',
+                  fontWeight: 'bold',
+                  textAlign: 'center'
+                }}>
+                  {macdData?.macd_values?.[0]?.crossover_analysis?.macd_above_signal ? '▲ BULLISH' : '▼ BEARISH'}
                 </div>
-              )) : (
-                <div style={{ color: COLORS.GRAY, fontSize: '13px', padding: '15px', textAlign: 'center' }}>
-                  No related tickers available
-                </div>
-              )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Row 2: Latest News */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px', marginBottom: '10px' }}>
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              LATEST NEWS - {symbol}
-            </div>
-            <div style={{ maxHeight: '400px', overflow: 'auto' }} className="custom-scrollbar">
-              {news.length > 0 ? news.map((article: any) => (
-                <div
-                  key={article.id}
-                  style={{
-                    marginBottom: '15px',
-                    paddingBottom: '15px',
-                    borderBottom: `1px solid ${COLORS.BORDER}`,
-                  }}
-                >
-                  <div style={{ display: 'flex', gap: '15px' }}>
-                    {article.image_url && (
-                      <img
-                        src={article.image_url}
-                        alt=""
-                        style={{ width: '100px', height: '75px', objectFit: 'cover', borderRadius: '4px' }}
-                      />
-                    )}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ color: COLORS.ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '6px' }}>
-                        {article.title}
-                      </div>
-                      <div style={{ color: COLORS.GRAY, fontSize: '12px', marginBottom: '6px' }}>
-                        {article.publisher?.name} | {new Date(article.published_utc).toLocaleString()}
-                      </div>
-                      {article.description && (
-                        <div style={{ color: COLORS.WHITE, fontSize: '12px', marginBottom: '6px', opacity: 0.8 }}>
-                          {article.description.substring(0, 150)}...
-                        </div>
-                      )}
-                      <a
-                        href={article.article_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ color: COLORS.CYAN, fontSize: '12px', textDecoration: 'underline' }}
-                      >
-                        READ MORE →
-                      </a>
-                    </div>
+        {/* ROW 2: News (2 columns) + Trades & Quotes + Chart Placeholder */}
+        <div style={{ display: 'grid', gridTemplateColumns: '50% 25% 25%', gap: '8px', marginBottom: '8px' }}>
+
+          {/* News - Show 4 articles */}
+          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <SectionHeader title={`LATEST NEWS (${news.length})`} color={COLORS.ORANGE} />
+            <div style={{ padding: '10px' }}>
+              {news.length > 0 ? news.slice(0, 4).map((article: any) => (
+                <div key={article.id} style={{
+                  marginBottom: '8px',
+                  paddingBottom: '8px',
+                  borderBottom: `1px solid ${COLORS.BORDER}`,
+                  fontSize: '11px'
+                }}>
+                  <div style={{ color: COLORS.ORANGE, fontWeight: 'bold', marginBottom: '3px' }}>
+                    {article.title.substring(0, 80)}...
                   </div>
+                  <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '3px' }}>
+                    {article.publisher?.name} | {new Date(article.published_utc).toLocaleDateString()}
+                  </div>
+                  <a
+                    href={article.article_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: COLORS.CYAN, fontSize: '10px', textDecoration: 'underline' }}
+                  >
+                    READ MORE →
+                  </a>
                 </div>
               )) : (
-                <div style={{ color: COLORS.GRAY, fontSize: '13px', padding: '15px', textAlign: 'center' }}>
+                <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '15px', fontSize: '11px' }}>
                   No news available
                 </div>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Row 3: Last Trade + Last Quote + SMA */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+          {/* Trades & Quotes Panel */}
+          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <SectionHeader title="TRADES & QUOTES" color={COLORS.CYAN} />
+            <div style={{ padding: '10px', fontSize: '11px' }}>
+              {/* Recent Trades */}
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ color: COLORS.ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>LAST TRADE</div>
+                <DataRow label="Price" value={`$${formatNumber(lastTrade?.price)}`} valueColor={COLORS.GREEN} small />
+                <DataRow label="Size" value={formatNumber(lastTrade?.size, 0)} small />
+                <DataRow label="Time" value={lastTrade?.participant_timestamp ? new Date(lastTrade.participant_timestamp / 1000000).toLocaleTimeString() : 'N/A'} valueColor={COLORS.GRAY} small />
+              </div>
 
-          {/* Last Trade */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.BLUE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              LAST TRADE
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Price:</span>
-                <div style={{ color: COLORS.CYAN, fontSize: '20px', fontWeight: 'bold' }}>
-                  ${formatNumber(lastTrade?.price)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Size:</span>
-                <div style={{ color: COLORS.YELLOW, fontSize: '16px', fontWeight: 'bold' }}>
-                  {formatNumber(lastTrade?.size, 0)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Exchange:</span>
-                <div style={{ color: COLORS.WHITE, fontSize: '14px' }}>
-                  {lastTrade?.tape_description || 'N/A'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Time:</span>
-                <div style={{ color: COLORS.GRAY, fontSize: '12px' }}>
-                  {lastTrade?.trade_time_formatted || 'N/A'}
-                </div>
+              {/* Recent Quotes */}
+              <div style={{ borderTop: `1px solid ${COLORS.BORDER}`, paddingTop: '8px' }}>
+                <div style={{ color: COLORS.ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>LAST QUOTE</div>
+                <DataRow label="Bid" value={`$${formatNumber(lastQuote?.bid_price)}`} valueColor={COLORS.RED} small />
+                <DataRow label="Ask" value={`$${formatNumber(lastQuote?.ask_price)}`} valueColor={COLORS.GREEN} small />
+                <DataRow label="Spread" value={`$${formatNumber((lastQuote?.ask_price || 0) - (lastQuote?.bid_price || 0))}`} valueColor={COLORS.YELLOW} small />
               </div>
             </div>
           </div>
 
-          {/* Last Quote */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.GREEN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              LAST QUOTE
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Bid:</span>
-                <div style={{ color: COLORS.GREEN, fontSize: '18px', fontWeight: 'bold' }}>
-                  ${formatNumber(lastQuote?.bid_price)}
-                  <span style={{ color: COLORS.GRAY, fontSize: '12px', marginLeft: '8px' }}>
-                    x{formatNumber(lastQuote?.bid_size, 0)}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Ask:</span>
-                <div style={{ color: COLORS.RED, fontSize: '18px', fontWeight: 'bold' }}>
-                  ${formatNumber(lastQuote?.ask_price)}
-                  <span style={{ color: COLORS.GRAY, fontSize: '12px', marginLeft: '8px' }}>
-                    x{formatNumber(lastQuote?.ask_size, 0)}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Spread:</span>
-                <div style={{ color: COLORS.YELLOW, fontSize: '16px', fontWeight: 'bold' }}>
-                  ${formatNumber((lastQuote?.ask_price || 0) - (lastQuote?.bid_price || 0), 3)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Time:</span>
-                <div style={{ color: COLORS.GRAY, fontSize: '12px' }}>
-                  {lastQuote?.quote_time_formatted || 'N/A'}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* SMA Indicator */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.CYAN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              SMA (20-DAY)
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Latest Value:</span>
-                <div style={{ color: COLORS.CYAN, fontSize: '20px', fontWeight: 'bold' }}>
-                  ${formatNumber(smaData?.statistics?.latest_value)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Min:</span>
-                <div style={{ color: COLORS.RED, fontSize: '16px', fontWeight: 'bold' }}>
-                  ${formatNumber(smaData?.statistics?.min_value)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Max:</span>
-                <div style={{ color: COLORS.GREEN, fontSize: '16px', fontWeight: 'bold' }}>
-                  ${formatNumber(smaData?.statistics?.max_value)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Average:</span>
-                <div style={{ color: COLORS.YELLOW, fontSize: '14px' }}>
-                  ${formatNumber(smaData?.statistics?.avg_value)}
-                </div>
-              </div>
+          {/* Chart Placeholder */}
+          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
+            <SectionHeader title="CHART" color={COLORS.BLUE} />
+            <div style={{
+              padding: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              color: COLORS.GRAY,
+              fontSize: '9px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📈</div>
+              <div>Chart integration<br/>ready here</div>
             </div>
           </div>
         </div>
 
-        {/* Row 4: EMA + MACD + RSI */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+        {/* ROW 3: TABBED BOTTOM SECTION - All data shown without scroll */}
+        <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
 
-          {/* EMA Indicator */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.BLUE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              EMA (20-DAY)
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Latest Value:</span>
-                <div style={{ color: COLORS.BLUE, fontSize: '20px', fontWeight: 'bold' }}>
-                  ${formatNumber(emaData?.statistics?.latest_value)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Min:</span>
-                <div style={{ color: COLORS.RED, fontSize: '16px', fontWeight: 'bold' }}>
-                  ${formatNumber(emaData?.statistics?.min_value)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Max:</span>
-                <div style={{ color: COLORS.GREEN, fontSize: '16px', fontWeight: 'bold' }}>
-                  ${formatNumber(emaData?.statistics?.max_value)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Average:</span>
-                <div style={{ color: COLORS.YELLOW, fontSize: '14px' }}>
-                  ${formatNumber(emaData?.statistics?.avg_value)}
-                </div>
-              </div>
-            </div>
+          {/* Tab Bar */}
+          <div style={{ display: 'flex', borderBottom: `1px solid ${COLORS.BORDER}`, backgroundColor: COLORS.PANEL_HEADER_BG }}>
+            {[
+              { id: 'financials', label: 'FINANCIALS' },
+              { id: 'actions', label: 'ACTIONS' },
+              { id: 'short', label: 'SHORT' },
+              { id: 'market', label: 'MARKET' },
+              { id: 'reference', label: 'REFERENCE' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                style={{
+                  padding: '6px 15px',
+                  backgroundColor: activeTab === tab.id ? COLORS.PANEL_BG : 'transparent',
+                  border: 'none',
+                  borderBottom: activeTab === tab.id ? `2px solid ${COLORS.ORANGE}` : 'none',
+                  color: activeTab === tab.id ? COLORS.ORANGE : COLORS.GRAY,
+                  fontSize: '9px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  fontFamily: 'Consolas, monospace',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {/* MACD Indicator */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.GREEN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              MACD (12,26,9)
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Latest MACD:</span>
-                <div style={{ color: COLORS.GREEN, fontSize: '18px', fontWeight: 'bold' }}>
-                  {formatNumber(macdData?.macd_values?.[0]?.macd_value)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Signal:</span>
-                <div style={{ color: COLORS.ORANGE, fontSize: '16px', fontWeight: 'bold' }}>
-                  {formatNumber(macdData?.macd_values?.[0]?.signal_line)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Histogram:</span>
-                <div style={{ color: macdData?.macd_values?.[0]?.histogram >= 0 ? COLORS.GREEN : COLORS.RED, fontSize: '16px', fontWeight: 'bold' }}>
-                  {formatNumber(macdData?.macd_values?.[0]?.histogram)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Signal:</span>
-                <div style={{
-                  color: macdData?.macd_values?.[0]?.crossover_analysis?.macd_above_signal ? COLORS.GREEN : COLORS.RED,
-                  fontSize: '14px',
-                  fontWeight: 'bold'
-                }}>
-                  {macdData?.macd_values?.[0]?.crossover_analysis?.macd_above_signal ? 'BULLISH' : 'BEARISH'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Date:</span>
-                <div style={{ color: COLORS.GRAY, fontSize: '12px' }}>
-                  {macdData?.macd_values?.[0]?.date || 'N/A'}
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Tab Content - No scroll, all visible */}
+          <div style={{ padding: '8px' }}>
 
-          {/* RSI Indicator */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              RSI (14-DAY)
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '13px' }}>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Latest RSI:</span>
-                <div style={{
-                  color: (rsiData?.statistics?.rsi_stats?.latest_value || 0) > 70 ? COLORS.RED :
-                         (rsiData?.statistics?.rsi_stats?.latest_value || 0) < 30 ? COLORS.GREEN : COLORS.YELLOW,
-                  fontSize: '24px',
-                  fontWeight: 'bold'
-                }}>
-                  {formatNumber(rsiData?.statistics?.rsi_stats?.latest_value, 1)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Signal:</span>
-                <div style={{
-                  color: (rsiData?.statistics?.rsi_stats?.latest_value || 0) > 70 ? COLORS.RED :
-                         (rsiData?.statistics?.rsi_stats?.latest_value || 0) < 30 ? COLORS.GREEN : COLORS.CYAN,
-                  fontSize: '16px',
-                  fontWeight: 'bold'
-                }}>
-                  {(rsiData?.statistics?.rsi_stats?.latest_value || 0) > 70 ? 'OVERBOUGHT' :
-                   (rsiData?.statistics?.rsi_stats?.latest_value || 0) < 30 ? 'OVERSOLD' : 'NEUTRAL'}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Min:</span>
-                <div style={{ color: COLORS.GREEN, fontSize: '14px' }}>
-                  {formatNumber(rsiData?.statistics?.rsi_stats?.min_value, 1)}
-                </div>
-              </div>
-              <div>
-                <span style={{ color: COLORS.GRAY }}>Max:</span>
-                <div style={{ color: COLORS.RED, fontSize: '14px' }}>
-                  {formatNumber(rsiData?.statistics?.rsi_stats?.max_value, 1)}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+            {/* FINANCIALS TAB */}
+            {activeTab === 'financials' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
 
-        {/* Row 5: Income Statements (Full Width) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px', marginBottom: '10px' }}>
-
-          {/* Income Statements - Enhanced */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.GREEN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              INCOME STATEMENTS (ANNUAL) - DETAILED ANALYSIS
-            </div>
-            <div style={{ maxHeight: '400px', overflow: 'auto' }} className="custom-scrollbar">
-              {incomeStmt?.results && incomeStmt.results.length > 0 ? (
+                {/* Income Statement */}
                 <div>
-                  {incomeStmt.results.slice(0, 2).map((r: any, i: number) => (
-                    <div key={i} style={{ marginBottom: '20px', paddingBottom: '20px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
-                      {/* Header */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                        <div>
-                          <span style={{ color: COLORS.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>FY {r.fiscal_year}</span>
-                          <span style={{ color: COLORS.GRAY, fontSize: '14px', marginLeft: '10px' }}>Period: {r.period_end}</span>
-                          {r.profitability_health && (
-                            <span style={{
-                              color: r.profitability_health.health_rating === 'Good' || r.profitability_health.health_rating === 'Excellent' ? COLORS.GREEN : COLORS.YELLOW,
-                              fontSize: '14px',
-                              marginLeft: '10px',
-                              padding: '3px 10px',
-                              backgroundColor: 'rgba(0,200,0,0.1)',
-                              border: `1px solid ${COLORS.GREEN}`,
-                            }}>
-                              {r.profitability_health.health_rating} ({r.profitability_health.health_score}/100)
-                            </span>
-                          )}
-                        </div>
-                        {r.business_model_analysis && (
-                          <span style={{ color: COLORS.CYAN, fontSize: '14px' }}>
-                            {r.business_model_analysis.model_type}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Core Financials */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-                        <div>
-                          <span style={{ color: COLORS.GRAY, fontSize: '13px' }}>Revenue</span>
-                          <div style={{ color: COLORS.GREEN, fontSize: '20px', fontWeight: 'bold' }}>
-                            {formatLargeNumber(r.revenue)}
+                  <div style={{ color: COLORS.GREEN, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    INCOME STATEMENT
+                  </div>
+                  {incomeStmt?.results && incomeStmt.results.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {incomeStmt.results.slice(0, 1).map((r: any, i: number) => (
+                        <div key={i}>
+                          <div style={{ color: COLORS.ORANGE, fontWeight: 'bold', marginBottom: '4px' }}>
+                            FY {r.fiscal_year}
                           </div>
-                          <div style={{ color: COLORS.GRAY, fontSize: '12px' }}>
-                            EPS: ${formatNumber(r.diluted_earnings_per_share)}
-                          </div>
+                          <DataRow label="Revenue" value={formatLargeNumber(r.revenue)} valueColor={COLORS.GREEN} small />
+                          <DataRow label="Gross Profit" value={formatLargeNumber(r.gross_profit)} valueColor={COLORS.CYAN} small />
+                          <DataRow label="Operating Inc" value={formatLargeNumber(r.operating_income)} valueColor={COLORS.BLUE} small />
+                          <DataRow label="Net Income" value={formatLargeNumber(r.consolidated_net_income_loss)}
+                            valueColor={r.consolidated_net_income_loss >= 0 ? COLORS.GREEN : COLORS.RED} small />
+                          <DataRow label="EBITDA" value={formatLargeNumber(r.ebitda)} valueColor={COLORS.YELLOW} small />
+                          <DataRow label="EPS" value={`$${formatNumber(r.diluted_earnings_per_share)}`} valueColor={COLORS.WHITE} small />
                         </div>
-                        <div>
-                          <span style={{ color: COLORS.GRAY, fontSize: '13px' }}>Gross Profit</span>
-                          <div style={{ color: COLORS.CYAN, fontSize: '20px', fontWeight: 'bold' }}>
-                            {formatLargeNumber(r.gross_profit)}
-                          </div>
-                          <div style={{ color: COLORS.GREEN, fontSize: '12px' }}>
-                            Margin: {formatNumber(r.profitability_ratios?.margin_analysis?.gross_profit_margin * 100, 1)}%
-                          </div>
-                        </div>
-                        <div>
-                          <span style={{ color: COLORS.GRAY, fontSize: '13px' }}>Operating Income</span>
-                          <div style={{ color: COLORS.BLUE, fontSize: '20px', fontWeight: 'bold' }}>
-                            {formatLargeNumber(r.operating_income)}
-                          </div>
-                          <div style={{ color: COLORS.GREEN, fontSize: '12px' }}>
-                            Margin: {formatNumber(r.profitability_ratios?.margin_analysis?.operating_profit_margin * 100, 1)}%
-                          </div>
-                        </div>
-                        <div>
-                          <span style={{ color: COLORS.GRAY, fontSize: '13px' }}>Net Income</span>
-                          <div style={{ color: r.consolidated_net_income_loss >= 0 ? COLORS.GREEN : COLORS.RED, fontSize: '20px', fontWeight: 'bold' }}>
-                            {formatLargeNumber(r.consolidated_net_income_loss)}
-                          </div>
-                          <div style={{ color: COLORS.GREEN, fontSize: '12px' }}>
-                            Margin: {formatNumber(r.profitability_ratios?.margin_analysis?.net_profit_margin * 100, 1)}%
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Additional Metrics */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', fontSize: '13px' }}>
-                        <div>
-                          <span style={{ color: COLORS.GRAY }}>EBITDA:</span>
-                          <span style={{ color: COLORS.YELLOW, marginLeft: '5px', fontWeight: 'bold' }}>
-                            {formatLargeNumber(r.ebitda)}
-                          </span>
-                        </div>
-                        <div>
-                          <span style={{ color: COLORS.GRAY }}>R&D:</span>
-                          <span style={{ color: COLORS.ORANGE, marginLeft: '5px', fontWeight: 'bold' }}>
-                            {formatLargeNumber(r.research_development)}
-                          </span>
-                        </div>
-                        <div>
-                          <span style={{ color: COLORS.GRAY }}>Tax Rate:</span>
-                          <span style={{ color: COLORS.CYAN, marginLeft: '5px', fontWeight: 'bold' }}>
-                            {formatNumber(r.profitability_ratios?.financial_metrics?.effective_tax_rate * 100, 1)}%
-                          </span>
-                        </div>
-                        <div>
-                          <span style={{ color: COLORS.GRAY }}>Shares:</span>
-                          <span style={{ color: COLORS.WHITE, marginLeft: '5px', fontWeight: 'bold' }}>
-                            {formatNumber(r.diluted_shares_outstanding / 1e9, 2)}B
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Health Factors */}
-                      {r.profitability_health?.health_factors && (
-                        <div style={{ marginTop: '10px' }}>
-                          <div style={{ color: COLORS.GRAY, fontSize: '12px', marginBottom: '5px' }}>Health Factors:</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                            {r.profitability_health.health_factors.slice(0, 4).map((factor: string, idx: number) => (
-                              <span key={idx} style={{
-                                color: COLORS.CYAN,
-                                fontSize: '11px',
-                                padding: '3px 8px',
-                                backgroundColor: 'rgba(0,255,255,0.1)',
-                                border: `1px solid ${COLORS.CYAN}`,
-                              }}>
-                                {factor}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No data</div>
+                  )}
                 </div>
-              ) : (
-                <div style={{ color: COLORS.GRAY, fontSize: '13px', padding: '15px', textAlign: 'center' }}>
-                  No income statement data available
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
 
-        {/* Row 6: Balance Sheets (Full Width) */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px', marginBottom: '10px' }}>
-
-          {/* Balance Sheets - Enhanced */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.BLUE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              BALANCE SHEETS (ANNUAL) - DETAILED ANALYSIS
-            </div>
-            <div style={{ maxHeight: '400px', overflow: 'auto' }} className="custom-scrollbar">
-              {balanceSheet?.results && balanceSheet.results.length > 0 ? (
+                {/* Balance Sheet */}
                 <div>
-                  {balanceSheet.results.slice(0, 2).map((r: any, i: number) => (
-                    <div key={i} style={{ marginBottom: '20px', paddingBottom: '20px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
-                      {/* Header */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px' }}>
-                        <div>
-                          <span style={{ color: COLORS.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>FY {r.fiscal_year}</span>
-                          <span style={{ color: COLORS.GRAY, fontSize: '14px', marginLeft: '10px' }}>Period: {r.period_end}</span>
-                          {r.financial_health && (
-                            <span style={{
-                              color: r.financial_health.health_rating === 'Good' || r.financial_health.health_rating === 'Excellent' ? COLORS.GREEN :
-                                     r.financial_health.health_rating === 'Poor' ? COLORS.RED : COLORS.YELLOW,
-                              fontSize: '14px',
-                              marginLeft: '10px',
-                              padding: '3px 10px',
-                              backgroundColor: r.financial_health.health_rating === 'Poor' ? 'rgba(255,0,0,0.1)' : 'rgba(255,165,0,0.1)',
-                              border: `1px solid ${r.financial_health.health_rating === 'Poor' ? COLORS.RED : COLORS.ORANGE}`,
-                            }}>
-                              {r.financial_health.health_rating} ({r.financial_health.health_score}/100)
-                            </span>
-                          )}
+                  <div style={{ color: COLORS.BLUE, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    BALANCE SHEET
+                  </div>
+                  {balanceSheet?.results && balanceSheet.results.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {balanceSheet.results.slice(0, 1).map((r: any, i: number) => (
+                        <div key={i}>
+                          <div style={{ color: COLORS.ORANGE, fontWeight: 'bold', marginBottom: '4px' }}>
+                            FY {r.fiscal_year}
+                          </div>
+                          <DataRow label="Total Assets" value={formatLargeNumber(r.total_assets)} valueColor={COLORS.GREEN} small />
+                          <DataRow label="Current Assets" value={formatLargeNumber(r.total_current_assets)} valueColor={COLORS.CYAN} small />
+                          <DataRow label="Total Liab" value={formatLargeNumber(r.total_liabilities)} valueColor={COLORS.RED} small />
+                          <DataRow label="Total Equity" value={formatLargeNumber(r.total_equity)} valueColor={COLORS.YELLOW} small />
+                          <DataRow label="Cash" value={formatLargeNumber(r.cash_and_equivalents)} valueColor={COLORS.GREEN} small />
+                          <DataRow label="Current Ratio" value={formatNumber(r.financial_ratios?.liquidity_ratios?.current_ratio, 2)}
+                            valueColor={r.financial_ratios?.liquidity_ratios?.current_ratio >= 1 ? COLORS.GREEN : COLORS.RED} small />
                         </div>
-                      </div>
-
-                      {/* Core Balance Sheet */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '15px' }}>
-                        <div>
-                          <span style={{ color: COLORS.GRAY, fontSize: '13px' }}>Total Assets</span>
-                          <div style={{ color: COLORS.GREEN, fontSize: '20px', fontWeight: 'bold' }}>
-                            {formatLargeNumber(r.total_assets)}
-                          </div>
-                          <div style={{ color: COLORS.GRAY, fontSize: '12px' }}>
-                            Current: {formatLargeNumber(r.total_current_assets)}
-                          </div>
-                        </div>
-                        <div>
-                          <span style={{ color: COLORS.GRAY, fontSize: '13px' }}>Total Liabilities</span>
-                          <div style={{ color: COLORS.RED, fontSize: '20px', fontWeight: 'bold' }}>
-                            {formatLargeNumber(r.total_liabilities)}
-                          </div>
-                          <div style={{ color: COLORS.GRAY, fontSize: '12px' }}>
-                            Current: {formatLargeNumber(r.total_current_liabilities)}
-                          </div>
-                        </div>
-                        <div>
-                          <span style={{ color: COLORS.GRAY, fontSize: '13px' }}>Total Equity</span>
-                          <div style={{ color: COLORS.YELLOW, fontSize: '20px', fontWeight: 'bold' }}>
-                            {formatLargeNumber(r.total_equity)}
-                          </div>
-                          <div style={{ color: COLORS.GRAY, fontSize: '12px' }}>
-                            Working Capital: {formatLargeNumber(r.financial_ratios?.liquidity_ratios?.working_capital)}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Liquidity Ratios */}
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ color: COLORS.CYAN, fontSize: '13px', marginBottom: '8px', fontWeight: 'bold' }}>Liquidity Ratios</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', fontSize: '13px' }}>
-                          <div>
-                            <span style={{ color: COLORS.GRAY }}>Current Ratio:</span>
-                            <span style={{
-                              color: r.financial_ratios?.liquidity_ratios?.current_ratio >= 1 ? COLORS.GREEN : COLORS.RED,
-                              marginLeft: '5px',
-                              fontWeight: 'bold'
-                            }}>
-                              {formatNumber(r.financial_ratios?.liquidity_ratios?.current_ratio, 2)}
-                            </span>
-                          </div>
-                          <div>
-                            <span style={{ color: COLORS.GRAY }}>Quick Ratio:</span>
-                            <span style={{ color: COLORS.YELLOW, marginLeft: '5px', fontWeight: 'bold' }}>
-                              {formatNumber(r.financial_ratios?.liquidity_ratios?.quick_ratio, 2)}
-                            </span>
-                          </div>
-                          <div>
-                            <span style={{ color: COLORS.GRAY }}>Cash Ratio:</span>
-                            <span style={{ color: COLORS.CYAN, marginLeft: '5px', fontWeight: 'bold' }}>
-                              {formatNumber(r.financial_ratios?.liquidity_ratios?.cash_ratio, 2)}
-                            </span>
-                          </div>
-                          <div>
-                            <span style={{ color: COLORS.GRAY }}>Cash & Equiv:</span>
-                            <span style={{ color: COLORS.GREEN, marginLeft: '5px', fontWeight: 'bold' }}>
-                              {formatLargeNumber(r.cash_and_equivalents)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Leverage Ratios */}
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ color: COLORS.ORANGE, fontSize: '13px', marginBottom: '8px', fontWeight: 'bold' }}>Leverage Ratios</div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', fontSize: '13px' }}>
-                          <div>
-                            <span style={{ color: COLORS.GRAY }}>Debt/Equity:</span>
-                            <span style={{
-                              color: r.financial_ratios?.leverage_ratios?.debt_to_equity > 2 ? COLORS.RED : COLORS.YELLOW,
-                              marginLeft: '5px',
-                              fontWeight: 'bold'
-                            }}>
-                              {formatNumber(r.financial_ratios?.leverage_ratios?.debt_to_equity, 2)}
-                            </span>
-                          </div>
-                          <div>
-                            <span style={{ color: COLORS.GRAY }}>Debt/Assets:</span>
-                            <span style={{ color: COLORS.CYAN, marginLeft: '5px', fontWeight: 'bold' }}>
-                              {formatNumber(r.financial_ratios?.leverage_ratios?.debt_to_assets, 2)}
-                            </span>
-                          </div>
-                          <div>
-                            <span style={{ color: COLORS.GRAY }}>LT Debt:</span>
-                            <span style={{ color: COLORS.RED, marginLeft: '5px', fontWeight: 'bold' }}>
-                              {formatLargeNumber(r.long_term_debt_and_capital_lease_obligations)}
-                            </span>
-                          </div>
-                          <div>
-                            <span style={{ color: COLORS.GRAY }}>Equity Multi:</span>
-                            <span style={{ color: COLORS.YELLOW, marginLeft: '5px', fontWeight: 'bold' }}>
-                              {formatNumber(r.financial_ratios?.leverage_ratios?.equity_multiplier, 2)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Health Factors */}
-                      {r.financial_health?.health_factors && (
-                        <div style={{ marginTop: '10px' }}>
-                          <div style={{ color: COLORS.GRAY, fontSize: '12px', marginBottom: '5px' }}>Health Factors:</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                            {r.financial_health.health_factors.slice(0, 4).map((factor: string, idx: number) => (
-                              <span key={idx} style={{
-                                color: factor.includes('concern') || factor.includes('distress') || factor.includes('Low') || factor.includes('High debt') || factor.includes('Negative') ? COLORS.RED : COLORS.CYAN,
-                                fontSize: '11px',
-                                padding: '3px 8px',
-                                backgroundColor: factor.includes('concern') ? 'rgba(255,0,0,0.1)' : 'rgba(0,255,255,0.1)',
-                                border: `1px solid ${factor.includes('concern') ? COLORS.RED : COLORS.CYAN}`,
-                              }}>
-                                {factor}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No data</div>
+                  )}
                 </div>
-              ) : (
-                <div style={{ color: COLORS.GRAY, fontSize: '13px', padding: '15px', textAlign: 'center' }}>
-                  No balance sheet data available
+
+                {/* Cash Flow & Ratios */}
+                <div>
+                  <div style={{ color: COLORS.YELLOW, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    CASH FLOW & RATIOS
+                  </div>
+                  <div style={{ fontSize: '8px' }}>
+                    {cashFlowStatements?.cash_flow_data?.results && cashFlowStatements.cash_flow_data.results.length > 0 && (
+                      <div style={{ marginBottom: '6px' }}>
+                        {cashFlowStatements.cash_flow_data.results.slice(0, 1).map((cf: any, idx: number) => (
+                          <div key={idx}>
+                            <DataRow label="Operating CF" value={formatLargeNumber(cf.net_cash_from_operating_activities)} valueColor={COLORS.GREEN} small />
+                            <DataRow label="Investing CF" value={formatLargeNumber(cf.net_cash_from_investing_activities)} valueColor={COLORS.BLUE} small />
+                            <DataRow label="Financing CF" value={formatLargeNumber(cf.net_cash_from_financing_activities)} valueColor={COLORS.ORANGE} small />
+                            <DataRow label="Free CF" value={formatLargeNumber(cf.cash_flow_ratios?.profitability_metrics?.free_cash_flow)} valueColor={COLORS.GREEN} small />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {financialRatios?.ratios_data?.results && financialRatios.ratios_data.results.length > 0 && (
+                      <div>
+                        {financialRatios.ratios_data.results.slice(0, 1).map((ratio: any, idx: number) => (
+                          <div key={idx}>
+                            <DataRow label="P/E Ratio" value={formatNumber(ratio.price_to_earnings_ratio, 2)} valueColor={COLORS.WHITE} small />
+                            <DataRow label="ROE" value={`${formatNumber(ratio.return_on_equity * 100, 2)}%`} valueColor={COLORS.GREEN} small />
+                            <DataRow label="ROA" value={`${formatNumber(ratio.return_on_assets * 100, 2)}%`} valueColor={COLORS.GREEN} small />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* CORPORATE ACTIONS TAB */}
+            {activeTab === 'actions' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+
+                {/* Dividends */}
+                <div>
+                  <div style={{ color: COLORS.GREEN, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    DIVIDENDS ({dividends.length})
+                  </div>
+                  {dividends.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {dividends.slice(0, 8).map((d: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px', paddingBottom: '3px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+                          <span style={{ color: COLORS.CYAN }}>{d.ex_dividend_date}</span>
+                          <span style={{ color: COLORS.GREEN, fontWeight: 'bold' }}>${formatNumber(d.cash_amount, 3)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No dividends</div>
+                  )}
+                </div>
+
+                {/* Stock Splits */}
+                <div>
+                  <div style={{ color: COLORS.YELLOW, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    SPLITS ({splits.length})
+                  </div>
+                  {splits.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {splits.slice(0, 8).map((s: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px', paddingBottom: '3px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+                          <span style={{ color: COLORS.CYAN }}>{s.execution_date}</span>
+                          <span style={{ color: COLORS.YELLOW, fontWeight: 'bold' }}>{s.split_from}:{s.split_to}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No splits</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* SHORT INTEREST TAB */}
+            {activeTab === 'short' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+
+                {/* Short Interest */}
+                <div>
+                  <div style={{ color: COLORS.RED, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    SHORT INTEREST
+                  </div>
+                  {shortInterest?.short_interest_data && shortInterest.short_interest_data.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {shortInterest.short_interest_data.slice(0, 5).map((data: any, idx: number) => (
+                        <div key={idx} style={{ marginBottom: '4px', paddingBottom: '4px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+                          <div style={{ color: COLORS.CYAN, fontWeight: 'bold', marginBottom: '2px' }}>{data.settlement_date}</div>
+                          <DataRow label="Interest" value={formatNumber(data.short_interest)} valueColor={COLORS.WHITE} small />
+                          <DataRow label="% Float" value={`${formatNumber(data.percent_of_float, 2)}%`} valueColor={COLORS.RED} small />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No data</div>
+                  )}
+                </div>
+
+                {/* Short Volume */}
+                <div>
+                  <div style={{ color: COLORS.ORANGE, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    SHORT VOLUME
+                  </div>
+                  {shortVolume?.short_volume_data && shortVolume.short_volume_data.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {shortVolume.short_volume_data.slice(0, 5).map((data: any, idx: number) => (
+                        <div key={idx} style={{ marginBottom: '4px', paddingBottom: '4px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+                          <div style={{ color: COLORS.CYAN, fontWeight: 'bold', marginBottom: '2px' }}>{data.date}</div>
+                          <DataRow label="Volume" value={formatNumber(data.volume)} valueColor={COLORS.WHITE} small />
+                          <DataRow label="Short Vol" value={formatNumber(data.short_volume)} valueColor={COLORS.ORANGE} small />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No data</div>
+                  )}
+                </div>
+
+                {/* Trades & Quotes */}
+                <div>
+                  <div style={{ color: COLORS.GREEN, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    TRADES & QUOTES
+                  </div>
+                  <div style={{ fontSize: '8px' }}>
+                    {trades?.trades && trades.trades.length > 0 ? (
+                      <div style={{ marginBottom: '6px' }}>
+                        {trades.trades.slice(0, 3).map((trade: any, idx: number) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px', fontSize: '7px' }}>
+                            <span style={{ color: COLORS.GRAY }}>{trade.time}</span>
+                            <span style={{ color: COLORS.GREEN }}>${formatNumber(trade.price, 2)}</span>
+                            <span style={{ color: COLORS.WHITE }}>{formatNumber(trade.size)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {quotes?.quotes && quotes.quotes.length > 0 ? (
+                      <div>
+                        {quotes.quotes.slice(0, 3).map((quote: any, idx: number) => (
+                          <div key={idx} style={{ marginBottom: '2px', fontSize: '7px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: COLORS.GRAY }}>{quote.time}</span>
+                              <span style={{ color: COLORS.GREEN }}>B: ${formatNumber(quote.bid_price, 2)}</span>
+                              <span style={{ color: COLORS.RED }}>A: ${formatNumber(quote.ask_price, 2)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MARKET DATA TAB */}
+            {activeTab === 'market' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+
+                {/* Ticker Search */}
+                <div>
+                  <div style={{ color: COLORS.ORANGE, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    TICKER SEARCH ({allTickers.length})
+                  </div>
+                  {allTickers.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {allTickers.slice(0, 8).map((t: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px', paddingBottom: '2px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+                          <span style={{ color: COLORS.CYAN, fontWeight: 'bold' }}>{t.ticker}</span>
+                          <span style={{ color: COLORS.WHITE, fontSize: '7px' }}>{t.name?.substring(0, 20) || 'N/A'}</span>
+                          <span style={{ color: COLORS.YELLOW }}>{t.type}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No results</div>
+                  )}
+                </div>
+
+                {/* Market Holidays */}
+                <div>
+                  <div style={{ color: COLORS.BLUE, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    MARKET HOLIDAYS ({marketHolidays.length})
+                  </div>
+                  {marketHolidays.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {marketHolidays.slice(0, 8).map((holiday: any, i: number) => (
+                        <div key={i} style={{ marginBottom: '3px', paddingBottom: '3px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span style={{ color: COLORS.CYAN, fontWeight: 'bold' }}>{holiday.date}</span>
+                            <span style={{ color: holiday.status === 'closed' ? COLORS.RED : COLORS.YELLOW, fontSize: '7px' }}>{holiday.status?.toUpperCase()}</span>
+                          </div>
+                          <div style={{ color: COLORS.WHITE, fontSize: '7px' }}>{holiday.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No holidays</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* REFERENCE DATA TAB */}
+            {activeTab === 'reference' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+
+                {/* Ticker Types */}
+                <div>
+                  <div style={{ color: COLORS.BLUE, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    TICKER TYPES ({tickerTypes.length})
+                  </div>
+                  {tickerTypes.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {tickerTypes.slice(0, 8).map((tt: any, i: number) => (
+                        <div key={i} style={{ marginBottom: '3px', paddingBottom: '3px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+                          <div style={{ color: COLORS.CYAN, fontWeight: 'bold' }}>{tt.code}</div>
+                          <div style={{ color: COLORS.WHITE, fontSize: '7px' }}>{tt.description?.substring(0, 30)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No types</div>
+                  )}
+                </div>
+
+                {/* Exchanges */}
+                <div>
+                  <div style={{ color: COLORS.GREEN, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    EXCHANGES ({exchanges.length})
+                  </div>
+                  {exchanges.length > 0 ? (
+                    <div style={{ fontSize: '8px' }}>
+                      {exchanges.slice(0, 8).map((ex: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px', paddingBottom: '2px', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+                          <span style={{ color: COLORS.CYAN, fontWeight: 'bold' }}>{ex.mic}</span>
+                          <span style={{ color: COLORS.WHITE, fontSize: '7px' }}>{ex.name?.substring(0, 20)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '10px', fontSize: '8px' }}>No exchanges</div>
+                  )}
+                </div>
+
+                {/* Events & Condition Codes */}
+                <div>
+                  <div style={{ color: COLORS.YELLOW, fontSize: '9px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                    EVENTS & CODES
+                  </div>
+                  <div style={{ fontSize: '8px' }}>
+                    {tickerEvents && tickerEvents.events && tickerEvents.events.length > 0 ? (
+                      <div style={{ marginBottom: '6px' }}>
+                        <div style={{ color: COLORS.CYAN, marginBottom: '3px', fontSize: '8px' }}>Events: {tickerEvents.events.length}</div>
+                        {tickerEvents.events.slice(0, 3).map((evt: any, i: number) => (
+                          <div key={i} style={{ color: COLORS.WHITE, fontSize: '7px', marginBottom: '2px' }}>
+                            {evt.date} - {evt.type}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {conditionCodes.length > 0 ? (
+                      <div>
+                        <div style={{ color: COLORS.CYAN, marginBottom: '3px', fontSize: '8px' }}>Codes: {conditionCodes.length}</div>
+                        {conditionCodes.slice(0, 4).map((cc: any, i: number) => (
+                          <div key={i} style={{ color: COLORS.WHITE, fontSize: '7px', marginBottom: '2px' }}>
+                            {cc.id} - {cc.type}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Row 7: Dividends + Splits */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-
-          {/* Dividends */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.GREEN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              DIVIDEND HISTORY ({dividends.length})
-            </div>
-            <div style={{ maxHeight: '250px', overflow: 'auto' }} className="custom-scrollbar">
-              {dividends.length > 0 ? (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${COLORS.BORDER}` }}>
-                      <th style={{ color: COLORS.GRAY, textAlign: 'left', padding: '8px', fontSize: '11px' }}>Ex-Date</th>
-                      <th style={{ color: COLORS.GRAY, textAlign: 'right', padding: '8px', fontSize: '11px' }}>Amount</th>
-                      <th style={{ color: COLORS.GRAY, textAlign: 'left', padding: '8px', fontSize: '11px' }}>Type</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dividends.map((d: any, i: number) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${COLORS.BORDER}` }}>
-                        <td style={{ color: COLORS.CYAN, padding: '8px' }}>{d.ex_dividend_date}</td>
-                        <td style={{ color: COLORS.GREEN, textAlign: 'right', padding: '8px', fontWeight: 'bold' }}>
-                          ${formatNumber(d.cash_amount, 3)}
-                        </td>
-                        <td style={{ color: COLORS.GRAY, padding: '8px', fontSize: '11px' }}>{d.dividend_type}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div style={{ color: COLORS.GRAY, fontSize: '13px', padding: '15px', textAlign: 'center' }}>
-                  No dividend history available
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Stock Splits */}
-          <div style={{
-            backgroundColor: COLORS.PANEL_BG,
-            border: `1px solid ${COLORS.BORDER}`,
-            padding: '15px',
-          }}>
-            <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '8px' }}>
-              STOCK SPLITS ({splits.length})
-            </div>
-            <div style={{ maxHeight: '250px', overflow: 'auto' }} className="custom-scrollbar">
-              {splits.length > 0 ? (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${COLORS.BORDER}` }}>
-                      <th style={{ color: COLORS.GRAY, textAlign: 'left', padding: '8px', fontSize: '11px' }}>Execution Date</th>
-                      <th style={{ color: COLORS.GRAY, textAlign: 'right', padding: '8px', fontSize: '11px' }}>Ratio</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {splits.map((s: any, i: number) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${COLORS.BORDER}` }}>
-                        <td style={{ color: COLORS.CYAN, padding: '8px' }}>{s.execution_date}</td>
-                        <td style={{ color: COLORS.YELLOW, textAlign: 'right', padding: '8px', fontWeight: 'bold' }}>
-                          {s.split_from}:{s.split_to}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div style={{ color: COLORS.GRAY, fontSize: '13px', padding: '15px', textAlign: 'center' }}>
-                  No split history available
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
       </div>
 
-      {/* Footer */}
+      {/* FOOTER - Compact */}
       <div style={{
         borderTop: `1px solid ${COLORS.BORDER}`,
         backgroundColor: COLORS.PANEL_BG,
-        padding: '6px 15px',
-        fontSize: '11px',
+        padding: '4px 10px',
+        fontSize: '8px',
         color: COLORS.GRAY,
+        display: 'flex',
+        justifyContent: 'space-between',
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Powered by Polygon.io API | Phase 3: 15/31 Endpoints | Institutional-Grade Market Data</span>
-          <span>{symbol} | {new Date().toLocaleString()}</span>
-        </div>
+        <span>Polygon.io API | 31/31 Endpoints | Institutional Data</span>
+        <span>{symbol} | {new Date().toLocaleString()}</span>
       </div>
 
-      {/* Custom Scrollbar */}
+      {/* Custom Scrollbar - Only main window scrolls */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
           height: 8px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
+          background: #0a0a0a;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(120, 120, 120, 0.3);
+          background: rgba(255, 165, 0, 0.3);
           border-radius: 4px;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: rgba(120, 120, 120, 0.5);
+          background: rgba(255, 165, 0, 0.5);
         }
       `}</style>
     </div>
