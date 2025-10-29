@@ -1,24 +1,43 @@
 import { invoke } from '@tauri-apps/api/core';
 
+import { sqliteService } from './sqliteService';
+
 // Polygon.io Service Layer - Comprehensive Coverage of 31 Endpoints
 class PolygonService {
   private apiKey: string = '';
 
-  setApiKey(key: string) {
-    this.apiKey = key;
-    localStorage.setItem('polygon_api_key', key);
+  async loadApiKey(): Promise<string> {
+    try {
+      const credentials = await sqliteService.getCredentials();
+      const polygonCred = credentials.find(c => c.service_name.toLowerCase() === 'polygon.io');
+      if (polygonCred?.api_key) {
+        this.apiKey = polygonCred.api_key;
+        // Set environment variable for Python script
+        localStorage.setItem('POLYGON_API_KEY', polygonCred.api_key);
+        return polygonCred.api_key;
+      }
+    } catch (error) {
+      console.error('Failed to load Polygon API key from database:', error);
+    }
+    return '';
   }
 
   getApiKey(): string {
-    if (!this.apiKey) {
-      this.apiKey = localStorage.getItem('polygon_api_key') || '';
-    }
     return this.apiKey;
   }
 
   private async executeCommand(command: string, args: string[]): Promise<any> {
     try {
-      const result = await invoke<string>('execute_polygon_command', { command, args });
+      // Ensure API key is loaded
+      if (!this.apiKey) {
+        await this.loadApiKey();
+      }
+
+      const result = await invoke<string>('execute_polygon_command', {
+        command,
+        args,
+        apiKey: this.apiKey || null
+      });
       return JSON.parse(result);
     } catch (error) {
       console.error('Polygon API error:', error);

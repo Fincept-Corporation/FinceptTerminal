@@ -2558,10 +2558,10 @@ def get_sma(
                     'min_value': min(sma_values_list),
                     'max_value': max(sma_values_list),
                     'avg_value': sum(sma_values_list) / len(sma_values_list),
-                    'latest_value': sma_values_list[-1] if sma_values_list else None,
-                    'first_value': sma_values_list[0] if sma_values_list else None,
-                    'total_change': sma_values_list[-1] - sma_values_list[0] if len(sma_values_list) > 1 else 0,
-                    'percent_change': ((sma_values_list[-1] - sma_values_list[0]) / sma_values_list[0] * 100) if len(sma_values_list) > 1 and sma_values_list[0] != 0 else 0
+                    'latest_value': sma_values_list[0] if sma_values_list else None,
+                    'first_value': sma_values_list[-1] if sma_values_list else None,
+                    'total_change': sma_values_list[0] - sma_values_list[-1] if len(sma_values_list) > 1 else 0,
+                    'percent_change': ((sma_values_list[0] - sma_values_list[-1]) / sma_values_list[-1] * 100) if len(sma_values_list) > 1 and sma_values_list[-1] != 0 else 0
                 }
             else:
                 sma_stats = {'count': 0, 'message': 'No valid SMA values found'}
@@ -2749,10 +2749,10 @@ def get_ema(
                     'min_value': min(ema_values_list),
                     'max_value': max(ema_values_list),
                     'avg_value': sum(ema_values_list) / len(ema_values_list),
-                    'latest_value': ema_values_list[-1] if ema_values_list else None,
-                    'first_value': ema_values_list[0] if ema_values_list else None,
-                    'total_change': ema_values_list[-1] - ema_values_list[0] if len(ema_values_list) > 1 else 0,
-                    'percent_change': ((ema_values_list[-1] - ema_values_list[0]) / ema_values_list[0] * 100) if len(ema_values_list) > 1 and ema_values_list[0] != 0 else 0
+                    'latest_value': ema_values_list[0] if ema_values_list else None,
+                    'first_value': ema_values_list[-1] if ema_values_list else None,
+                    'total_change': ema_values_list[0] - ema_values_list[-1] if len(ema_values_list) > 1 else 0,
+                    'percent_change': ((ema_values_list[0] - ema_values_list[-1]) / ema_values_list[-1] * 100) if len(ema_values_list) > 1 and ema_values_list[-1] != 0 else 0
                 }
             else:
                 ema_stats = {'count': 0, 'message': 'No valid EMA values found'}
@@ -2988,10 +2988,10 @@ def get_macd(
                     'min_value': min(macd_values_list),
                     'max_value': max(macd_values_list),
                     'avg_value': sum(macd_values_list) / len(macd_values_list),
-                    'latest_value': macd_values_list[-1] if macd_values_list else None,
-                    'first_value': macd_values_list[0] if macd_values_list else None,
-                    'total_change': macd_values_list[-1] - macd_values_list[0] if len(macd_values_list) > 1 else 0,
-                    'percent_change': ((macd_values_list[-1] - macd_values_list[0]) / macd_values_list[0] * 100) if len(macd_values_list) > 1 and macd_values_list[0] != 0 else 0
+                    'latest_value': macd_values_list[0] if macd_values_list else None,
+                    'first_value': macd_values_list[-1] if macd_values_list else None,
+                    'total_change': macd_values_list[0] - macd_values_list[-1] if len(macd_values_list) > 1 else 0,
+                    'percent_change': ((macd_values_list[0] - macd_values_list[-1]) / macd_values_list[-1] * 100) if len(macd_values_list) > 1 and macd_values_list[-1] != 0 else 0
                 }
             else:
                     macd_stats = {'count': 0, 'message': 'No valid MACD values found'}
@@ -3002,8 +3002,8 @@ def get_macd(
                     'min_value': min(signal_values_list),
                     'max_value': max(signal_values_list),
                     'avg_value': sum(signal_values_list) / len(signal_values_list),
-                    'latest_value': signal_values_list[-1] if signal_values_list else None,
-                    'first_value': signal_values_list[0] if signal_values_list else None
+                    'latest_value': signal_values_list[0] if signal_values_list else None,
+                    'first_value': signal_values_list[-1] if signal_values_list else None
                 }
             else:
                 signal_stats = {'message': 'No signal line data found'}
@@ -3014,7 +3014,7 @@ def get_macd(
                     'min_value': min(histogram_values_list),
                     'max_value': max(histogram_values_list),
                     'avg_value': sum(histogram_values_list) / len(histogram_values_list),
-                    'latest_value': histogram_values_list[-1] if histogram_values_list else None,
+                    'latest_value': histogram_values_list[0] if histogram_values_list else None,
                     'positive_periods': sum(1 for h in histogram_values_list if h > 0),
                     'negative_periods': sum(1 for h in histogram_values_list if h < 0),
                     'zero_periods': sum(1 for h in histogram_values_list if abs(h) < 0.001)
@@ -3261,10 +3261,10 @@ def get_rsi(
                     'min_value': min(rsi_values_list),
                     'max_value': max(rsi_values_list),
                     'avg_value': sum(rsi_values_list) / len(rsi_values_list),
-                    'latest_value': rsi_values_list[-1] if rsi_values_list else None,
-                    'first_value': rsi_values_list[0] if rsi_values_list else None,
-                    'total_change': rsi_values_list[-1] - rsi_values_list[0] if len(rsi_values_list) > 1 else 0,
-                    'percent_change': ((rsi_values_list[-1] - rsi_values_list[0]) / rsi_values_list[0] * 100) if len(rsi_values_list) > 1 and rsi_values_list[0] != 0 else 0
+                    'latest_value': rsi_values_list[0] if rsi_values_list else None,
+                    'first_value': rsi_values_list[-1] if rsi_values_list else None,
+                    'total_change': rsi_values_list[0] - rsi_values_list[-1] if len(rsi_values_list) > 1 else 0,
+                    'percent_change': ((rsi_values_list[0] - rsi_values_list[-1]) / rsi_values_list[-1] * 100) if len(rsi_values_list) > 1 and rsi_values_list[-1] != 0 else 0
                 }
             else:
                     rsi_stats = {'count': 0, 'message': 'No valid RSI values found'}

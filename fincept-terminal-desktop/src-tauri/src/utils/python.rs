@@ -103,6 +103,12 @@ pub fn execute_python_command(
     let mut cmd = Command::new(&python_path);
     cmd.arg(&script_path).args(args);
 
+    // Get Polygon API key from window storage via webview
+    // For now, we'll check common environment variable
+    if let Ok(api_key) = std::env::var("POLYGON_API_KEY") {
+        cmd.env("POLYGON_API_KEY", api_key);
+    }
+
     // Hide console window on Windows
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);

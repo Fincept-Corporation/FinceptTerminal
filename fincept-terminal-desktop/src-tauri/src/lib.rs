@@ -371,6 +371,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_cors_fetch::init())
         .plugin(tauri_plugin_sql::Builder::default().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(MCPState {
             processes: Mutex::new(HashMap::new()),
         })
@@ -905,7 +906,15 @@ pub fn run() {
             commands::sentinelhub::execute_sentinelhub_command,
             commands::sentinelhub::get_sentinelhub_imagery,
             commands::sentinelhub::get_sentinelhub_collections,
-            commands::sentinelhub::search_sentinelhub_data
+            commands::sentinelhub::search_sentinelhub_data,
+            // Jupyter Notebook Commands
+            commands::jupyter::execute_python_code,
+            commands::jupyter::open_notebook,
+            commands::jupyter::save_notebook,
+            commands::jupyter::create_new_notebook,
+            commands::jupyter::get_python_version,
+            commands::jupyter::install_python_package,
+            commands::jupyter::list_python_packages
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
