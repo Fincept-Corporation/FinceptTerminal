@@ -15,7 +15,13 @@ pub async fn execute_polygon_command(
     app: tauri::AppHandle,
     command: String,
     args: Vec<String>,
+    api_key: Option<String>,
 ) -> Result<String, String> {
+    // Set API key environment variable if provided
+    if let Some(key) = api_key {
+        std::env::set_var("POLYGON_API_KEY", key);
+    }
+
     // Build command arguments
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
