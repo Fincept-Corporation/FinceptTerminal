@@ -770,7 +770,7 @@ export default function FinxeptTerminal() {
       }}>
         <Tabs value={activeTab} className="h-full">
           <TabsContent value="dashboard" className="h-full m-0 p-0">
-            <DashboardTab />
+            <DashboardTab onNavigateToTab={setActiveTab} />
           </TabsContent>
           <TabsContent value="markets" className="h-full m-0 p-0">
             <MarketsTab />
