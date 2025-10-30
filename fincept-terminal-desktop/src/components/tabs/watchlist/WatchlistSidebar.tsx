@@ -88,9 +88,8 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
           </div>
         ) : (
           watchlists.map((watchlist) => (
-            <button
+            <div
               key={watchlist.id}
-              onClick={() => onSelectWatchlist(watchlist.id)}
               style={{
                 width: '100%',
                 display: 'flex',
@@ -102,12 +101,12 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
                   ? 'rgba(255,165,0,0.1)'
                   : 'rgba(255,255,255,0.02)',
                 border: `1px solid ${selectedWatchlistId === watchlist.id ? ORANGE : 'transparent'}`,
-                textAlign: 'left',
                 cursor: 'pointer',
                 fontSize: '10px',
                 fontFamily: 'Consolas, monospace',
                 transition: 'all 0.2s'
               }}
+              onClick={() => onSelectWatchlist(watchlist.id)}
               onMouseEnter={(e) => {
                 if (selectedWatchlistId !== watchlist.id) {
                   e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)';
@@ -148,7 +147,7 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
               >
                 <Trash2 size={12} />
               </button>
-            </button>
+            </div>
           ))
         )}
       </div>
