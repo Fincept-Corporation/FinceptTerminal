@@ -497,13 +497,21 @@ export default function FinxeptTerminal() {
         position: 'relative',
         flexShrink: 0
       }}>
-        <div style={{
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          height: '100%',
-          scrollbarWidth: 'none', // Firefox
-          msOverflowStyle: 'none', // IE/Edge
-        }} className="hide-scrollbar">
+        <div
+          style={{
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            height: '100%',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+          }}
+          className="hide-scrollbar"
+          onWheel={(e) => {
+            e.preventDefault();
+            const container = e.currentTarget;
+            container.scrollLeft += e.deltaY;
+          }}
+        >
           <style>{`
             .hide-scrollbar::-webkit-scrollbar {
               display: none;

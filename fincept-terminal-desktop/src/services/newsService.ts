@@ -192,13 +192,23 @@ function parseRSSFeed(xmlText: string, feedConfig: typeof RSS_FEEDS[0]): NewsArt
   const articles: NewsArticle[] = [];
 
   try {
+    // Validate XML text before parsing
+    if (!xmlText || xmlText.trim().length === 0) {
+      return articles;
+    }
+
+    // Check if it's actually XML/RSS content
+    if (!xmlText.trim().startsWith('<')) {
+      return articles;
+    }
+
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
 
     // Check for parsing errors
     const parserError = xmlDoc.querySelector('parsererror');
     if (parserError) {
-      console.error('XML parsing error:', parserError.textContent);
+      // Silently skip instead of logging - many feeds have minor issues
       return articles;
     }
 
@@ -287,44 +297,52 @@ function parseRSSFeed(xmlText: string, feedConfig: typeof RSS_FEEDS[0]): NewsArt
   return articles;
 }
 
-// Fetch single RSS feed with single proxy attempt (optimized for speed)
+// Fetch single RSS feed with proxy fallback
 async function fetchRSSFeed(feedConfig: typeof RSS_FEEDS[0]): Promise<NewsArticle[]> {
-  try {
-    // Only use first proxy for speed
-    const proxyUrl = `${CORS_PROXIES[0]}${encodeURIComponent(feedConfig.url)}`;
+  // Try each proxy until one works
+  for (const proxy of CORS_PROXIES) {
+    try {
+      const proxyUrl = `${proxy}${encodeURIComponent(feedConfig.url)}`;
 
-    const response = await fetch(proxyUrl, {
-      headers: {
-        'Accept': 'application/rss+xml, application/xml, text/xml, */*'
-      },
-      signal: AbortSignal.timeout(5000) // Reduced to 5 second timeout
-    });
+      const response = await fetch(proxyUrl, {
+        headers: {
+          'Accept': 'application/rss+xml, application/xml, text/xml, */*'
+        },
+        signal: AbortSignal.timeout(10000) // 10 second timeout per proxy
+      });
 
-    if (!response.ok) {
-      return [];
+      if (!response.ok) {
+        continue; // Try next proxy
+      }
+
+      const xmlText = await response.text();
+
+      // Validate response is XML before parsing
+      if (!xmlText || !xmlText.trim().startsWith('<')) {
+        continue; // Try next proxy
+      }
+
+      const articles = parseRSSFeed(xmlText, feedConfig);
+
+      if (articles.length > 0) {
+        console.log(`✓ Fetched ${articles.length} articles from ${feedConfig.name}`);
+        return articles;
+      }
+    } catch (error) {
+      // Silently try next proxy
+      continue;
     }
-
-    const xmlText = await response.text();
-    const articles = parseRSSFeed(xmlText, feedConfig);
-
-    if (articles.length > 0) {
-      console.log(`✓ Fetched ${articles.length} articles from ${feedConfig.name}`);
-    }
-
-    return articles;
-  } catch (error) {
-    // Silent fail for speed
-    return [];
   }
+
+  // All proxies failed - don't log to reduce console noise
+  return [];
 }
 
-// Fetch all RSS feeds with batching (optimized for speed)
+// Fetch all RSS feeds with batching
 export async function fetchAllNews(): Promise<NewsArticle[]> {
-  console.log('Fetching news feeds (optimized batch mode)...');
-
   const allArticles: NewsArticle[] = [];
-  const BATCH_SIZE = 5; // Fetch 5 feeds at a time
-  const TARGET_ARTICLES = 30; // Stop early if we get enough articles
+  const BATCH_SIZE = 8; // Fetch 8 feeds at a time for better performance
+  let successfulFeeds = 0;
 
   // Process feeds in batches
   for (let i = 0; i < RSS_FEEDS.length; i += BATCH_SIZE) {
@@ -335,16 +353,9 @@ export async function fetchAllNews(): Promise<NewsArticle[]> {
     results.forEach((result) => {
       if (result.status === 'fulfilled' && result.value.length > 0) {
         allArticles.push(...result.value);
+        successfulFeeds++;
       }
     });
-
-    console.log(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: Total articles: ${allArticles.length}`);
-
-    // Early exit if we have enough articles
-    if (allArticles.length >= TARGET_ARTICLES) {
-      console.log(`✓ Reached ${allArticles.length} articles, stopping fetch`);
-      break;
-    }
   }
 
   // Sort by publication date (newest first)
@@ -354,7 +365,7 @@ export async function fetchAllNews(): Promise<NewsArticle[]> {
     return dateB.getTime() - dateA.getTime();
   });
 
-  console.log(`✓ Total articles loaded: ${allArticles.length}`);
+  console.log(`✓ Loaded ${allArticles.length} articles from ${successfulFeeds}/${RSS_FEEDS.length} feeds`);
   return allArticles;
 }
 
@@ -364,37 +375,39 @@ let lastFetchTime = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 let useMockData = false;
 
-export async function fetchNewsWithCache(): Promise<NewsArticle[]> {
+export async function fetchNewsWithCache(forceRefresh: boolean = false): Promise<NewsArticle[]> {
   const now = Date.now();
 
-  // Return cached news if still valid
-  if (cachedNews.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
-    console.log('Returning cached news');
+  // Return cached news if still valid and not forcing refresh
+  if (!forceRefresh && cachedNews.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
     return cachedNews;
   }
 
-  console.log('Fetching fresh news...');
+  // On first load or force refresh, fetch real news immediately
+  try {
+    const fetchedNews = await fetchAllNews();
 
-  // Start with mock data immediately for instant display
-  if (cachedNews.length === 0) {
-    cachedNews = generateMockNews();
-    useMockData = true;
-  }
-
-  // Try to fetch real news in background
-  fetchAllNews().then(fetchedNews => {
-    // If we got at least 10 articles, replace with real data
-    if (fetchedNews.length >= 10) {
-      console.log(`✓ Successfully loaded ${fetchedNews.length} real news articles`);
+    if (fetchedNews.length > 0) {
       cachedNews = fetchedNews;
       useMockData = false;
       lastFetchTime = Date.now();
+      return cachedNews;
     } else {
-      console.warn(`⚠ Only fetched ${fetchedNews.length} articles, keeping mock data`);
+      // Only use mock data if real fetch completely fails and we have no cache
+      if (cachedNews.length === 0) {
+        console.log('⚠ Using demo data - no live feeds available');
+        cachedNews = generateMockNews();
+        useMockData = true;
+      }
     }
-  }).catch(err => {
-    console.error('Failed to fetch news:', err);
-  });
+  } catch (err) {
+    // Only use mock data if real fetch completely fails and we have no cache
+    if (cachedNews.length === 0) {
+      console.log('⚠ Using demo data - fetch failed');
+      cachedNews = generateMockNews();
+      useMockData = true;
+    }
+  }
 
   lastFetchTime = now;
   return cachedNews;

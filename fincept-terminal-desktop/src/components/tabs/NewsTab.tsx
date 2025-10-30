@@ -9,6 +9,8 @@ const NewsTab: React.FC = () => {
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeSources, setActiveSources] = useState<string[]>([]);
+  const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
+  const [showWebView, setShowWebView] = useState(false);
 
   // Professional Financial Terminal Colors
   const TERMINAL_ORANGE = '#FFA500';
@@ -22,6 +24,24 @@ const NewsTab: React.FC = () => {
   const TERMINAL_CYAN = '#00FFFF';
   const TERMINAL_DARK_BG = '#000000';
   const TERMINAL_PANEL_BG = '#0a0a0a';
+
+  // Manual refresh function with force refresh
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      // Force refresh to bypass cache
+      const articles = await fetchNewsWithCache(true);
+      setNewsArticles(articles);
+      setAlertCount(articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length);
+      setActiveSources(getActiveSources());
+      setNewsUpdateCount(prev => prev + 1);
+      setTickerIndex(0); // Reset ticker to first article
+    } catch (error) {
+      console.error('Error fetching news:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fetch real news on mount and every 5 minutes
   useEffect(() => {
@@ -55,10 +75,23 @@ const NewsTab: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Generate news ticker from articles
-  const newsTickerText = newsArticles.slice(0, 15).map(a =>
-    `🔴 ${a.headline.toUpperCase().slice(0, 100)}`
-  ).join(' • ') || 'Loading news feeds...';
+  // Generate continuous ticker text with all news items
+  const generateContinuousTickerText = () => {
+    if (newsArticles.length === 0) {
+      return 'Loading news feeds...';
+    }
+
+    // Create a long string of all news items
+    return newsArticles.map(article =>
+      `🔴 ${article.priority} | ${article.source} | ${article.headline.toUpperCase()}     `
+    ).join('');
+  };
+
+  const newsTickerText = generateContinuousTickerText();
+
+  // Calculate animation duration based on content length (more content = slower speed)
+  // Base: 1600 seconds for 1000 characters, scale proportionally
+  const tickerDuration = Math.max(1200, Math.min(4800, (newsTickerText.length / 1000) * 1600));
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -133,24 +166,46 @@ const NewsTab: React.FC = () => {
           <span style={{ color: TERMINAL_GREEN }}>● {getRSSFeedCount()} SOURCES</span>
           <span style={{ color: TERMINAL_WHITE }}>|</span>
           <span style={{ color: TERMINAL_WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+          <span style={{ color: TERMINAL_WHITE }}>|</span>
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            style={{
+              backgroundColor: loading ? TERMINAL_GRAY : TERMINAL_GREEN,
+              color: TERMINAL_DARK_BG,
+              border: 'none',
+              padding: '2px 8px',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              borderRadius: '2px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+            title="Refresh news feeds"
+          >
+            🔄 {loading ? 'UPDATING...' : 'REFRESH'}
+          </button>
         </div>
 
-        {/* News Ticker */}
+        {/* News Ticker - Continuous seamless scroll like Bloomberg */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', marginBottom: '2px' }}>
           <span style={{ color: TERMINAL_YELLOW, fontWeight: 'bold' }}>BREAKING:</span>
-          <div style={{
+          <div className="ticker-wrap" style={{
             flex: 1,
             overflow: 'hidden',
-            whiteSpace: 'nowrap'
+            position: 'relative',
+            height: '20px'
           }}>
-            <div style={{
-              display: 'inline-block',
-              animation: 'scroll-left 90s linear infinite',
-              color: TERMINAL_WHITE
-            }}>
-              {newsTickerText}
+            <div className="ticker-move">
+              <span className="ticker-item">{newsTickerText}</span>
+              <span className="ticker-item">{newsTickerText}</span>
             </div>
           </div>
+          <span style={{ color: TERMINAL_GREEN, fontSize: '9px' }}>
+            ● LIVE
+          </span>
         </div>
 
         {/* Sources and Stats */}
@@ -261,7 +316,7 @@ const NewsTab: React.FC = () => {
                 backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                 cursor: article.link ? 'pointer' : 'default'
               }}
-              onClick={() => article.link && window.open(article.link, '_blank')}
+              onClick={() => setSelectedArticle(article)}
               >
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
                   <span style={{ color: TERMINAL_GRAY, minWidth: '50px' }}>{article.time}</span>
@@ -310,7 +365,7 @@ const NewsTab: React.FC = () => {
                 backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                 cursor: article.link ? 'pointer' : 'default'
               }}
-              onClick={() => article.link && window.open(article.link, '_blank')}
+              onClick={() => setSelectedArticle(article)}
               >
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
                   <span style={{ color: TERMINAL_GRAY, minWidth: '50px' }}>{article.time}</span>
@@ -421,7 +476,7 @@ const NewsTab: React.FC = () => {
                   backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                   cursor: article.link ? 'pointer' : 'default'
                 }}
-                onClick={() => article.link && window.open(article.link, '_blank')}
+                onClick={() => setSelectedArticle(article)}
                 >
                   <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
                     <span style={{ color: TERMINAL_GRAY, minWidth: '50px' }}>{article.time}</span>
@@ -474,12 +529,461 @@ const NewsTab: React.FC = () => {
         </div>
       </div>
 
+      {/* Article Detail Modal */}
+      {selectedArticle && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}
+        onClick={() => setSelectedArticle(null)}
+        >
+          <div style={{
+            backgroundColor: TERMINAL_PANEL_BG,
+            border: `2px solid ${TERMINAL_ORANGE}`,
+            borderRadius: '4px',
+            width: showWebView ? '90vw' : '600px',
+            maxWidth: '95vw',
+            height: showWebView ? '90vh' : 'auto',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: `0 0 20px ${TERMINAL_ORANGE}`,
+            transition: 'all 0.3s ease'
+          }}
+          onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              backgroundColor: TERMINAL_DARK_BG,
+              borderBottom: `2px solid ${TERMINAL_ORANGE}`,
+              padding: '8px 12px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexShrink: 0
+            }}>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '11px' }}>
+                <span style={{ color: TERMINAL_ORANGE, fontWeight: 'bold' }}>ARTICLE DETAILS</span>
+                <span style={{ color: TERMINAL_WHITE }}>|</span>
+                <span style={{ color: getPriorityColor(selectedArticle.priority), fontWeight: 'bold' }}>
+                  [{selectedArticle.priority}]
+                </span>
+                <span style={{ color: TERMINAL_BLUE }}>[{selectedArticle.category}]</span>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedArticle(null);
+                  setShowWebView(false);
+                }}
+                style={{
+                  backgroundColor: TERMINAL_RED,
+                  color: TERMINAL_WHITE,
+                  border: 'none',
+                  padding: '4px 8px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  borderRadius: '2px'
+                }}
+              >
+                ✕ CLOSE
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{
+              padding: showWebView ? '0' : '12px',
+              overflow: 'auto',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              {/* Reader View */}
+              {showWebView && selectedArticle.link ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  {/* Reader View Header */}
+                  <div style={{
+                    backgroundColor: TERMINAL_DARK_BG,
+                    padding: '8px',
+                    borderBottom: `1px solid ${TERMINAL_GRAY}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '10px'
+                  }}>
+                    <button
+                      onClick={() => setShowWebView(false)}
+                      style={{
+                        backgroundColor: TERMINAL_ORANGE,
+                        color: TERMINAL_DARK_BG,
+                        border: 'none',
+                        padding: '4px 8px',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        borderRadius: '2px'
+                      }}
+                    >
+                      ← BACK TO SUMMARY
+                    </button>
+                    <span style={{ color: TERMINAL_GRAY }}>|</span>
+                    <span style={{ color: TERMINAL_YELLOW, fontWeight: 'bold' }}>READER VIEW</span>
+                    <span style={{ color: TERMINAL_GRAY }}>|</span>
+                    <span style={{ color: TERMINAL_WHITE, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {selectedArticle.source}
+                    </span>
+                    <button
+                      onClick={async () => {
+                        if (window.__TAURI__) {
+                          const { openUrl } = await import('@tauri-apps/plugin-opener');
+                          await openUrl(selectedArticle.link!);
+                        } else {
+                          window.open(selectedArticle.link, '_blank');
+                        }
+                      }}
+                      style={{
+                        backgroundColor: TERMINAL_BLUE,
+                        color: TERMINAL_WHITE,
+                        border: 'none',
+                        padding: '4px 8px',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        borderRadius: '2px'
+                      }}
+                    >
+                      🔗 OPEN FULL ARTICLE
+                    </button>
+                  </div>
+
+                  {/* Reader View Content */}
+                  <div style={{
+                    flex: 1,
+                    overflow: 'auto',
+                    padding: '24px',
+                    backgroundColor: '#1a1a1a',
+                    color: '#e0e0e0'
+                  }}>
+                    {/* Article Header */}
+                    <div style={{
+                      marginBottom: '24px',
+                      paddingBottom: '16px',
+                      borderBottom: `2px solid ${TERMINAL_ORANGE}`
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        gap: '8px',
+                        marginBottom: '12px',
+                        fontSize: '11px'
+                      }}>
+                        <span style={{
+                          backgroundColor: getPriorityColor(selectedArticle.priority),
+                          color: TERMINAL_DARK_BG,
+                          padding: '2px 8px',
+                          borderRadius: '2px',
+                          fontWeight: 'bold'
+                        }}>
+                          {selectedArticle.priority}
+                        </span>
+                        <span style={{
+                          backgroundColor: TERMINAL_BLUE,
+                          color: TERMINAL_WHITE,
+                          padding: '2px 8px',
+                          borderRadius: '2px',
+                          fontWeight: 'bold'
+                        }}>
+                          {selectedArticle.category}
+                        </span>
+                        <span style={{
+                          backgroundColor: getSentimentColor(selectedArticle.sentiment),
+                          color: TERMINAL_DARK_BG,
+                          padding: '2px 8px',
+                          borderRadius: '2px',
+                          fontWeight: 'bold'
+                        }}>
+                          {selectedArticle.sentiment}
+                        </span>
+                      </div>
+
+                      <h1 style={{
+                        fontSize: '24px',
+                        fontWeight: 'bold',
+                        lineHeight: '1.3',
+                        marginBottom: '12px',
+                        color: TERMINAL_WHITE
+                      }}>
+                        {selectedArticle.headline}
+                      </h1>
+
+                      <div style={{
+                        display: 'flex',
+                        gap: '16px',
+                        fontSize: '12px',
+                        color: TERMINAL_GRAY
+                      }}>
+                        <span>📰 {selectedArticle.source}</span>
+                        <span>🕒 {selectedArticle.time}</span>
+                        <span>🌍 {selectedArticle.region}</span>
+                        {selectedArticle.tickers && selectedArticle.tickers.length > 0 && (
+                          <span>📊 {selectedArticle.tickers.join(', ')}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Article Content */}
+                    <div style={{
+                      fontSize: '16px',
+                      lineHeight: '1.8',
+                      color: '#d0d0d0',
+                      maxWidth: '800px',
+                      margin: '0 auto'
+                    }}>
+                      <p style={{ marginBottom: '16px', fontSize: '18px', fontWeight: '500', color: '#e0e0e0' }}>
+                        {selectedArticle.summary}
+                      </p>
+
+                      <div style={{
+                        backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                        border: `1px solid ${TERMINAL_ORANGE}`,
+                        borderRadius: '4px',
+                        padding: '16px',
+                        marginTop: '24px'
+                      }}>
+                        <p style={{ fontSize: '14px', color: TERMINAL_YELLOW, marginBottom: '8px', fontWeight: 'bold' }}>
+                          ℹ️ Reader View Limitation
+                        </p>
+                        <p style={{ fontSize: '13px', lineHeight: '1.6', color: TERMINAL_GRAY, marginBottom: '12px' }}>
+                          Most news websites block embedding for security reasons. This reader view shows the article summary from the RSS feed.
+                        </p>
+                        <p style={{ fontSize: '13px', lineHeight: '1.6', color: TERMINAL_GRAY }}>
+                          For the complete article with images, videos, and full content, please click the "🔗 OPEN FULL ARTICLE" button above to view it in your browser.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Article Metadata */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '8px',
+                    marginBottom: '12px',
+                    padding: '8px',
+                    backgroundColor: 'rgba(255, 165, 0, 0.05)',
+                    border: `1px solid ${TERMINAL_GRAY}`,
+                    fontSize: '10px'
+                  }}>
+                <div>
+                  <span style={{ color: TERMINAL_GRAY }}>SOURCE: </span>
+                  <span style={{ color: TERMINAL_CYAN, fontWeight: 'bold' }}>{selectedArticle.source}</span>
+                </div>
+                <div>
+                  <span style={{ color: TERMINAL_GRAY }}>TIME: </span>
+                  <span style={{ color: TERMINAL_WHITE }}>{selectedArticle.time}</span>
+                </div>
+                <div>
+                  <span style={{ color: TERMINAL_GRAY }}>REGION: </span>
+                  <span style={{ color: TERMINAL_PURPLE }}>{selectedArticle.region}</span>
+                </div>
+                <div>
+                  <span style={{ color: TERMINAL_GRAY }}>SENTIMENT: </span>
+                  <span style={{ color: getSentimentColor(selectedArticle.sentiment), fontWeight: 'bold' }}>
+                    {selectedArticle.sentiment}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ color: TERMINAL_GRAY }}>IMPACT: </span>
+                  <span style={{ color: getImpactColor(selectedArticle.impact), fontWeight: 'bold' }}>
+                    {selectedArticle.impact}
+                  </span>
+                </div>
+                {selectedArticle.tickers && selectedArticle.tickers.length > 0 && (
+                  <div>
+                    <span style={{ color: TERMINAL_GRAY }}>TICKERS: </span>
+                    <span style={{ color: TERMINAL_GREEN, fontWeight: 'bold' }}>
+                      {selectedArticle.tickers.join(', ')}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Article Headline */}
+              <div style={{
+                color: TERMINAL_WHITE,
+                fontSize: '14px',
+                fontWeight: 'bold',
+                lineHeight: '1.4',
+                marginBottom: '12px',
+                padding: '8px',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                borderLeft: `4px solid ${getPriorityColor(selectedArticle.priority)}`
+              }}>
+                {selectedArticle.headline}
+              </div>
+
+              {/* Article Summary */}
+              <div style={{
+                color: TERMINAL_GRAY,
+                fontSize: '12px',
+                lineHeight: '1.6',
+                marginBottom: '16px'
+              }}>
+                {selectedArticle.summary}
+              </div>
+
+                  {/* Action Buttons */}
+                  {selectedArticle.link && (
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      paddingTop: '12px',
+                      borderTop: `1px solid ${TERMINAL_GRAY}`
+                    }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowWebView(true);
+                        }}
+                        style={{
+                          backgroundColor: TERMINAL_GREEN,
+                          color: TERMINAL_DARK_BG,
+                          border: 'none',
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          borderRadius: '2px',
+                          flex: 1
+                        }}
+                      >
+                        📖 READ IN APP
+                      </button>
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const link = selectedArticle.link;
+                          console.log('📰 Opening link in external browser:', link);
+
+                          if (!link) {
+                            console.error('❌ No link available');
+                            return;
+                          }
+
+                          try {
+                            if (window.__TAURI__) {
+                              const { openUrl } = await import('@tauri-apps/plugin-opener');
+                              await openUrl(link);
+                              console.log('✅ Link opened via Tauri opener');
+                            } else {
+                              const a = document.createElement('a');
+                              a.href = link;
+                              a.target = '_blank';
+                              a.rel = 'noopener noreferrer';
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              console.log('✅ Link opened via anchor element');
+                            }
+                          } catch (error) {
+                            console.error('❌ Failed to open link:', error);
+                            await navigator.clipboard.writeText(link);
+                            console.log('📋 Link copied to clipboard');
+                          }
+                        }}
+                        style={{
+                          backgroundColor: TERMINAL_BLUE,
+                          color: TERMINAL_WHITE,
+                          border: 'none',
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          borderRadius: '2px',
+                          flex: 1
+                        }}
+                      >
+                        🔗 OPEN IN BROWSER
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const link = selectedArticle.link;
+                          if (link) {
+                            navigator.clipboard.writeText(link);
+                            console.log('Link copied to clipboard:', link);
+                            e.currentTarget.textContent = '✓ COPIED!';
+                            setTimeout(() => {
+                              e.currentTarget.textContent = '📋 COPY';
+                            }, 2000);
+                          }
+                        }}
+                        style={{
+                          backgroundColor: TERMINAL_GRAY,
+                          color: TERMINAL_WHITE,
+                          border: 'none',
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          borderRadius: '2px'
+                        }}
+                        title="Copy link to clipboard"
+                      >
+                        📋 COPY
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* CSS for animations and transparent scrollbars */}
       <style>{`
-        @keyframes scroll-left {
-          0% { transform: translateX(100%); }
-          100% { transform: translateX(-100%); }
+        .ticker-wrap {
+          width: 100%;
+          overflow: hidden;
+          background-color: transparent;
+          padding: 0;
         }
+
+        .ticker-move {
+          display: inline-block;
+          white-space: nowrap;
+          animation: tickerScroll ${tickerDuration}s linear infinite;
+          padding-right: 100%;
+        }
+
+        .ticker-item {
+          display: inline-block;
+          padding-right: 3em;
+          color: ${TERMINAL_WHITE};
+          font-size: 11px;
+          white-space: nowrap;
+        }
+
+        @keyframes tickerScroll {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-50%);
+          }
+        }
+
         @keyframes blink {
           0%, 50% { opacity: 1; }
           51%, 100% { opacity: 0.3; }
