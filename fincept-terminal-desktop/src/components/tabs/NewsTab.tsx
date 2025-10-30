@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { fetchNewsWithCache, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData } from '../../services/newsService';
 
+// Extend Window interface for Tauri
+declare global {
+  interface Window {
+    __TAURI__?: any;
+  }
+}
+
 const NewsTab: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeFilter, setActiveFilter] = useState('ALL');
@@ -35,7 +42,6 @@ const NewsTab: React.FC = () => {
       setAlertCount(articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length);
       setActiveSources(getActiveSources());
       setNewsUpdateCount(prev => prev + 1);
-      setTickerIndex(0); // Reset ticker to first article
     } catch (error) {
       console.error('Error fetching news:', error);
     } finally {

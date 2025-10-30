@@ -69,7 +69,7 @@ class NotebookService {
         ]
       );
 
-      return result.lastInsertId;
+      return result.lastInsertId || 0;
     } catch (error) {
       console.error('Failed to save notebook to history:', error);
       throw error;
