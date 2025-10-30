@@ -108,7 +108,11 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
 
 const STORAGE_KEY = 'dashboard-widgets';
 
-const DashboardTab: React.FC = () => {
+interface DashboardTabProps {
+  onNavigateToTab?: (tabName: string) => void;
+}
+
+const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   const [widgets, setWidgets] = useState<WidgetInstance[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -298,6 +302,7 @@ const DashboardTab: React.FC = () => {
           <MaritimeWidget
             id={widget.id}
             onRemove={() => handleRemoveWidget(widget.id)}
+            onNavigate={() => onNavigateToTab?.('maritime')}
           />
         );
       default:
