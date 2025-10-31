@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RefreshCw, Download, Plus, Minus, Trash2 } from 'lucide-react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface Provider {
   code: string;
@@ -32,8 +33,9 @@ interface DataPoint {
 type ChartType = 'line' | 'bar' | 'area' | 'scatter' | 'candlestick';
 
 export default function DBnomicsTab() {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const BASE_URL = 'https://api.db.nomics.world/v22';
-  const COLORS = ['#ea580c', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6', '#f97316'];
+  const COLORS = [colors.primary, colors.info, colors.secondary, colors.warning, colors.purple, colors.purple, colors.accent, colors.primary];
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
@@ -319,10 +321,10 @@ export default function DBnomicsTab() {
     const yRange = yMax - yMin;
 
     return (
-      <svg width={w} height={h} viewBox={`0 0 ${actualWidth} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ backgroundColor: '#0a0a0a', width: '100%', height: 'auto', maxHeight: compact ? '240px' : '400px' }}>
+      <svg width={w} height={h} viewBox={`0 0 ${actualWidth} ${h}`} preserveAspectRatio="xMidYMid meet" style={{ backgroundColor: colors.panel, width: '100%', height: 'auto', maxHeight: compact ? '240px' : '400px' }}>
         {/* Axes */}
-        <line x1={ml} y1={mt} x2={ml} y2={h - mb} stroke="#404040" strokeWidth="1" />
-        <line x1={ml} y1={h - mb} x2={actualWidth - mr} y2={h - mb} stroke="#404040" strokeWidth="1" />
+        <line x1={ml} y1={mt} x2={ml} y2={h - mb} stroke={colors.textMuted} strokeWidth="1" />
+        <line x1={ml} y1={h - mb} x2={actualWidth - mr} y2={h - mb} stroke={colors.textMuted} strokeWidth="1" />
 
         {/* Y-axis grid and labels */}
         {[0, 1, 2, 3, 4].map(i => {
@@ -331,7 +333,7 @@ export default function DBnomicsTab() {
           return (
             <g key={i}>
               <line x1={ml} y1={y} x2={actualWidth - mr} y2={y} stroke="#1a1a1a" strokeDasharray="2,2" />
-              <text x={ml - 8} y={y + 3} textAnchor="end" fill="#737373" fontSize="9" fontFamily="monospace">
+              <text x={ml - 8} y={y + 3} textAnchor="end" fill={colors.textMuted} fontSize="9" fontFamily="monospace">
                 {val.toFixed(1)}
               </text>
             </g>
@@ -413,7 +415,7 @@ export default function DBnomicsTab() {
                         y={Math.min(yOpen, yClose)}
                         width={6}
                         height={Math.abs(yClose - yOpen) || 1}
-                        fill={close >= open ? '#10b981' : '#ef4444'}
+                        fill={close >= open ? colors.secondary : colors.alert}
                       />
                     </g>
                   );
@@ -429,7 +431,7 @@ export default function DBnomicsTab() {
           if (idx % Math.max(1, Math.floor(arr.length / 6)) !== 0 && idx !== arr.length - 1) return null;
           const x = ml + (pw * idx) / (arr.length - 1 || 1);
           return (
-            <text key={idx} x={x} y={h - mb + 15} textAnchor="middle" fill="#737373" fontSize="8" fontFamily="monospace">
+            <text key={idx} x={x} y={h - mb + 15} textAnchor="middle" fill={colors.textMuted} fontSize="8" fontFamily="monospace">
               {obs.period.substring(0, 7)}
             </text>
           );
@@ -439,7 +441,7 @@ export default function DBnomicsTab() {
         {seriesArray.map((series, idx) => (
           <g key={idx}>
             <rect x={ml + idx * 120} y={5} width={10} height={10} fill={series.color} />
-            <text x={ml + idx * 120 + 15} y={13} fill="#d4d4d4" fontSize="9" fontFamily="monospace">
+            <text x={ml + idx * 120 + 15} y={13} fill={colors.text} fontSize="9" fontFamily="monospace">
               {series.series_name.substring(0, 12)}
             </text>
           </g>
@@ -449,7 +451,7 @@ export default function DBnomicsTab() {
   };
 
   return (
-    <div style={{ width: '100%', height: '100%', backgroundColor: '#000', color: '#d4d4d4', fontFamily: 'Consolas, monospace', fontSize: '11px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: '100%', height: '100%', backgroundColor: colors.background, color: colors.text, fontFamily: 'Consolas, monospace', fontSize: '11px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         /* Custom scrollbar styles */
         *::-webkit-scrollbar {
@@ -460,7 +462,7 @@ export default function DBnomicsTab() {
           background: #1a1a1a;
         }
         *::-webkit-scrollbar-thumb {
-          background: #404040;
+          background: colors.textMuted;
           border-radius: 4px;
         }
         *::-webkit-scrollbar-thumb:hover {
@@ -468,18 +470,18 @@ export default function DBnomicsTab() {
         }
       `}</style>
       {/* Header */}
-      <div style={{ padding: '8px 12px', borderBottom: '1px solid #404040', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <span style={{ color: '#ea580c', fontWeight: 'bold' }}>DBNOMICS TERMINAL</span>
-        <span style={{ color: '#0f0', fontSize: '10px' }}>● {status}</span>
-        <span style={{ color: '#fbbf24', fontSize: '10px' }}>Providers: {providers.length}</span>
+      <div style={{ padding: '8px 12px', borderBottom: '1px solid colors.textMuted', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <span style={{ color: colors.primary, fontWeight: 'bold' }}>DBNOMICS TERMINAL</span>
+        <span style={{ color: colors.secondary, fontSize: '10px' }}>● {status}</span>
+        <span style={{ color: colors.warning, fontSize: '10px' }}>Providers: {providers.length}</span>
         <div style={{ flex: 1 }}></div>
-        <button onClick={loadProviders} disabled={loading} style={{ padding: '3px 10px', backgroundColor: '#2d2d2d', color: '#d4d4d4', border: '1px solid #404040', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
+        <button onClick={loadProviders} disabled={loading} style={{ padding: '3px 10px', backgroundColor: '#2a2a2a', color: colors.text, border: '1px solid colors.textMuted', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
           LOAD
         </button>
-        <button onClick={() => currentData && loadSeriesData(currentData.series_id, currentData.series_name)} disabled={!currentData} style={{ padding: '3px 10px', backgroundColor: '#2d2d2d', color: '#d4d4d4', border: '1px solid #404040', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
+        <button onClick={() => currentData && loadSeriesData(currentData.series_id, currentData.series_name)} disabled={!currentData} style={{ padding: '3px 10px', backgroundColor: '#2a2a2a', color: colors.text, border: '1px solid colors.textMuted', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
           <RefreshCw size={10} style={{ display: 'inline', marginRight: '4px' }} />REFRESH
         </button>
-        <button onClick={exportData} disabled={!currentData} style={{ padding: '3px 10px', backgroundColor: '#2d2d2d', color: '#d4d4d4', border: '1px solid #404040', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
+        <button onClick={exportData} disabled={!currentData} style={{ padding: '3px 10px', backgroundColor: '#2a2a2a', color: colors.text, border: '1px solid colors.textMuted', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
           <Download size={10} style={{ display: 'inline', marginRight: '4px' }} />EXPORT
         </button>
       </div>
@@ -487,20 +489,20 @@ export default function DBnomicsTab() {
       {/* Main Content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left Panel */}
-        <div style={{ width: '320px', borderRight: '1px solid #404040', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a' }}>
+        <div style={{ width: '320px', borderRight: '1px solid colors.textMuted', display: 'flex', flexDirection: 'column', backgroundColor: colors.panel }}>
           <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '8px' }}>
-            <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '4px' }}>1. PROVIDER</div>
+            <div style={{ color: colors.primary, fontSize: '10px', marginBottom: '4px' }}>1. PROVIDER</div>
             <div
               style={{
                 width: '100%',
                 height: '140px',
                 backgroundColor: '#1a1a1a',
-                border: '1px solid #404040',
+                border: '1px solid colors.textMuted',
                 marginBottom: '12px',
                 overflowY: 'auto',
                 overflowX: 'hidden',
                 scrollbarWidth: 'thin',
-                scrollbarColor: '#404040 #1a1a1a'
+                scrollbarColor: 'colors.textMuted #1a1a1a'
               }}
             >
               {providers.map(p => (
@@ -510,18 +512,18 @@ export default function DBnomicsTab() {
                   style={{
                     padding: '6px 8px',
                     fontSize: '10px',
-                    color: selectedProvider === p.code ? '#fff' : '#d4d4d4',
-                    backgroundColor: selectedProvider === p.code ? '#ea580c' : 'transparent',
+                    color: selectedProvider === p.code ? '#fff' : colors.text,
+                    backgroundColor: selectedProvider === p.code ? colors.primary : 'transparent',
                     cursor: 'pointer',
                     fontFamily: 'Consolas, monospace',
                     lineHeight: '1.4',
                     wordWrap: 'break-word',
                     whiteSpace: 'normal',
-                    borderBottom: '1px solid #0a0a0a'
+                    borderBottom: '1px solid colors.panel'
                   }}
                   onMouseEnter={(e) => {
                     if (selectedProvider !== p.code) {
-                      e.currentTarget.style.backgroundColor = '#2d2d2d';
+                      e.currentTarget.style.backgroundColor = '#2a2a2a';
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -535,18 +537,18 @@ export default function DBnomicsTab() {
               ))}
             </div>
 
-            <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '4px' }}>2. DATASET</div>
+            <div style={{ color: colors.primary, fontSize: '10px', marginBottom: '4px' }}>2. DATASET</div>
             <div
               style={{
                 width: '100%',
                 height: '140px',
                 backgroundColor: '#1a1a1a',
-                border: '1px solid #404040',
+                border: '1px solid colors.textMuted',
                 marginBottom: '12px',
                 overflowY: 'auto',
                 overflowX: 'hidden',
                 scrollbarWidth: 'thin',
-                scrollbarColor: '#404040 #1a1a1a'
+                scrollbarColor: 'colors.textMuted #1a1a1a'
               }}
             >
               {datasets.map(d => (
@@ -556,18 +558,18 @@ export default function DBnomicsTab() {
                   style={{
                     padding: '6px 8px',
                     fontSize: '10px',
-                    color: selectedDataset === d.code ? '#fff' : '#d4d4d4',
-                    backgroundColor: selectedDataset === d.code ? '#ea580c' : 'transparent',
+                    color: selectedDataset === d.code ? '#fff' : colors.text,
+                    backgroundColor: selectedDataset === d.code ? colors.primary : 'transparent',
                     cursor: 'pointer',
                     fontFamily: 'Consolas, monospace',
                     lineHeight: '1.4',
                     wordWrap: 'break-word',
                     whiteSpace: 'normal',
-                    borderBottom: '1px solid #0a0a0a'
+                    borderBottom: '1px solid colors.panel'
                   }}
                   onMouseEnter={(e) => {
                     if (selectedDataset !== d.code) {
-                      e.currentTarget.style.backgroundColor = '#2d2d2d';
+                      e.currentTarget.style.backgroundColor = '#2a2a2a';
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -581,18 +583,18 @@ export default function DBnomicsTab() {
               ))}
             </div>
 
-            <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '4px' }}>3. SERIES</div>
+            <div style={{ color: colors.primary, fontSize: '10px', marginBottom: '4px' }}>3. SERIES</div>
             <div
               style={{
                 width: '100%',
                 height: '140px',
                 backgroundColor: '#1a1a1a',
-                border: '1px solid #404040',
+                border: '1px solid colors.textMuted',
                 marginBottom: '12px',
                 overflowY: 'auto',
                 overflowX: 'hidden',
                 scrollbarWidth: 'thin',
-                scrollbarColor: '#404040 #1a1a1a'
+                scrollbarColor: 'colors.textMuted #1a1a1a'
               }}
             >
               {seriesList.map(s => (
@@ -602,18 +604,18 @@ export default function DBnomicsTab() {
                   style={{
                     padding: '6px 8px',
                     fontSize: '10px',
-                    color: selectedSeries === s.full_id ? '#fff' : '#d4d4d4',
-                    backgroundColor: selectedSeries === s.full_id ? '#ea580c' : 'transparent',
+                    color: selectedSeries === s.full_id ? '#fff' : colors.text,
+                    backgroundColor: selectedSeries === s.full_id ? colors.primary : 'transparent',
                     cursor: 'pointer',
                     fontFamily: 'Consolas, monospace',
                     lineHeight: '1.4',
                     wordWrap: 'break-word',
                     whiteSpace: 'normal',
-                    borderBottom: '1px solid #0a0a0a'
+                    borderBottom: '1px solid colors.panel'
                   }}
                   onMouseEnter={(e) => {
                     if (selectedSeries !== s.full_id) {
-                      e.currentTarget.style.backgroundColor = '#2d2d2d';
+                      e.currentTarget.style.backgroundColor = '#2a2a2a';
                     }
                   }}
                   onMouseLeave={(e) => {
@@ -627,50 +629,50 @@ export default function DBnomicsTab() {
               ))}
             </div>
 
-            <div style={{ height: '1px', backgroundColor: '#404040', margin: '8px 0' }}></div>
+            <div style={{ height: '1px', backgroundColor: colors.textMuted, margin: '8px 0' }}></div>
 
             {/* Actions */}
             <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
-              <button onClick={addToSingleView} disabled={!currentData} style={{ flex: 1, padding: '4px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
+              <button onClick={addToSingleView} disabled={!currentData} style={{ flex: 1, padding: '4px', backgroundColor: '#1a1a1a', color: colors.text, border: '1px solid colors.textMuted', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
                 ADD TO SINGLE
               </button>
-              <button onClick={clearAllSlots} style={{ padding: '4px 8px', backgroundColor: '#1a1a1a', color: '#ef4444', border: '1px solid #404040', cursor: 'pointer', fontSize: '9px' }}>
+              <button onClick={clearAllSlots} style={{ padding: '4px 8px', backgroundColor: '#1a1a1a', color: colors.alert, border: '1px solid colors.textMuted', cursor: 'pointer', fontSize: '9px' }}>
                 <Trash2 size={10} />
               </button>
             </div>
 
-            <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ color: colors.primary, fontSize: '10px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>COMPARISON SLOTS</span>
-              <button onClick={addSlot} style={{ padding: '2px 6px', backgroundColor: '#1a1a1a', color: '#10b981', border: '1px solid #404040', cursor: 'pointer', fontSize: '9px' }}>
+              <button onClick={addSlot} style={{ padding: '2px 6px', backgroundColor: '#1a1a1a', color: colors.secondary, border: '1px solid colors.textMuted', cursor: 'pointer', fontSize: '9px' }}>
                 <Plus size={10} />
               </button>
             </div>
 
             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
               {slots.map((slot, idx) => (
-                <div key={idx} style={{ marginBottom: '6px', padding: '6px', backgroundColor: '#1a1a1a', border: '1px solid #404040', borderRadius: '2px' }}>
+                <div key={idx} style={{ marginBottom: '6px', padding: '6px', backgroundColor: '#1a1a1a', border: '1px solid colors.textMuted', borderRadius: '2px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                    <span style={{ color: '#fbbf24', fontSize: '9px' }}>SLOT {idx + 1} ({slot.length})</span>
+                    <span style={{ color: colors.warning, fontSize: '9px' }}>SLOT {idx + 1} ({slot.length})</span>
                     <div style={{ display: 'flex', gap: '2px' }}>
-                      <button onClick={() => addToSlot(idx)} disabled={!currentData} style={{ padding: '2px 4px', backgroundColor: '#0a0a0a', color: '#10b981', border: '1px solid #404040', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '8px' }}>
+                      <button onClick={() => addToSlot(idx)} disabled={!currentData} style={{ padding: '2px 4px', backgroundColor: colors.panel, color: colors.secondary, border: '1px solid colors.textMuted', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '8px' }}>
                         <Plus size={8} />
                       </button>
                       {slots.length > 1 && (
-                        <button onClick={() => removeSlot(idx)} style={{ padding: '2px 4px', backgroundColor: '#0a0a0a', color: '#ef4444', border: '1px solid #404040', cursor: 'pointer', fontSize: '8px' }}>
+                        <button onClick={() => removeSlot(idx)} style={{ padding: '2px 4px', backgroundColor: colors.panel, color: colors.alert, border: '1px solid colors.textMuted', cursor: 'pointer', fontSize: '8px' }}>
                           <Minus size={8} />
                         </button>
                       )}
                     </div>
                   </div>
                   {slot.map((s, sIdx) => (
-                    <div key={sIdx} style={{ fontSize: '8px', color: '#737373', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                    <div key={sIdx} style={{ fontSize: '8px', color: colors.textMuted, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.series_name}>{s.series_name}</span>
-                      <button onClick={() => removeFromSlot(idx, sIdx)} style={{ padding: '1px 3px', backgroundColor: 'transparent', color: '#ef4444', border: 'none', cursor: 'pointer', fontSize: '8px' }}>
+                      <button onClick={() => removeFromSlot(idx, sIdx)} style={{ padding: '1px 3px', backgroundColor: 'transparent', color: colors.alert, border: 'none', cursor: 'pointer', fontSize: '8px' }}>
                         ×
                       </button>
                     </div>
                   ))}
-                  {slot.length === 0 && <div style={{ fontSize: '8px', color: '#404040', textAlign: 'center' }}>Empty</div>}
+                  {slot.length === 0 && <div style={{ fontSize: '8px', color: colors.textMuted, textAlign: 'center' }}>Empty</div>}
                 </div>
               ))}
             </div>
@@ -680,19 +682,19 @@ export default function DBnomicsTab() {
         {/* Right Panel */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* View Toggle */}
-          <div style={{ padding: '8px 12px', borderBottom: '1px solid #404040', display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button onClick={() => setActiveView('single')} style={{ padding: '4px 12px', backgroundColor: activeView === 'single' ? '#ea580c' : '#2d2d2d', color: '#fff', border: '1px solid #404040', cursor: 'pointer', fontSize: '10px' }}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid colors.textMuted', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button onClick={() => setActiveView('single')} style={{ padding: '4px 12px', backgroundColor: activeView === 'single' ? colors.primary : '#2a2a2a', color: '#fff', border: '1px solid colors.textMuted', cursor: 'pointer', fontSize: '10px' }}>
               SINGLE
             </button>
-            <button onClick={() => setActiveView('comparison')} style={{ padding: '4px 12px', backgroundColor: activeView === 'comparison' ? '#ea580c' : '#2d2d2d', color: '#fff', border: '1px solid #404040', cursor: 'pointer', fontSize: '10px' }}>
+            <button onClick={() => setActiveView('comparison')} style={{ padding: '4px 12px', backgroundColor: activeView === 'comparison' ? colors.primary : '#2a2a2a', color: '#fff', border: '1px solid colors.textMuted', cursor: 'pointer', fontSize: '10px' }}>
               COMPARE
             </button>
 
             {activeView === 'single' ? (
               <>
-                <div style={{ color: '#737373', fontSize: '9px', marginLeft: '8px' }}>Chart Type:</div>
+                <div style={{ color: colors.textMuted, fontSize: '9px', marginLeft: '8px' }}>Chart Type:</div>
                 {(['line', 'bar', 'area', 'scatter', 'candlestick'] as ChartType[]).map(type => (
-                  <button key={type} onClick={() => setSingleChartType(type)} style={{ padding: '3px 8px', backgroundColor: singleChartType === type ? '#3b82f6' : '#2d2d2d', color: '#fff', border: '1px solid #404040', cursor: 'pointer', fontSize: '9px', textTransform: 'uppercase' }}>
+                  <button key={type} onClick={() => setSingleChartType(type)} style={{ padding: '3px 8px', backgroundColor: singleChartType === type ? colors.info : '#2a2a2a', color: '#fff', border: '1px solid colors.textMuted', cursor: 'pointer', fontSize: '9px', textTransform: 'uppercase' }}>
                     {type}
                   </button>
                 ))}
@@ -705,12 +707,12 @@ export default function DBnomicsTab() {
             {activeView === 'single' ? (
               <div>
                 <div style={{ marginBottom: '12px' }}>
-                  <div style={{ color: '#ea580c', fontSize: '11px', marginBottom: '6px' }}>SINGLE VIEW ({singleViewSeries.length} series)</div>
+                  <div style={{ color: colors.primary, fontSize: '11px', marginBottom: '6px' }}>SINGLE VIEW ({singleViewSeries.length} series)</div>
                   {singleViewSeries.map((s, idx) => (
-                    <div key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 6px', backgroundColor: '#1a1a1a', border: '1px solid #404040', borderRadius: '2px', marginRight: '4px', marginBottom: '4px', fontSize: '9px' }}>
+                    <div key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 6px', backgroundColor: '#1a1a1a', border: '1px solid colors.textMuted', borderRadius: '2px', marginRight: '4px', marginBottom: '4px', fontSize: '9px' }}>
                       <div style={{ width: '8px', height: '8px', backgroundColor: s.color, borderRadius: '50%' }}></div>
                       <span>{s.series_name.substring(0, 20)}</span>
-                      <button onClick={() => removeFromSingleView(idx)} style={{ padding: '0 4px', backgroundColor: 'transparent', color: '#ef4444', border: 'none', cursor: 'pointer', fontSize: '10px' }}>×</button>
+                      <button onClick={() => removeFromSingleView(idx)} style={{ padding: '0 4px', backgroundColor: 'transparent', color: colors.alert, border: 'none', cursor: 'pointer', fontSize: '10px' }}>×</button>
                     </div>
                   ))}
                 </div>
@@ -721,12 +723,12 @@ export default function DBnomicsTab() {
 
                     {/* Data Table */}
                     <div style={{ marginTop: '24px' }}>
-                      <div style={{ color: '#ea580c', fontSize: '11px', marginBottom: '8px' }}>DATA TABLE</div>
-                      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '300px', border: '1px solid #404040', backgroundColor: '#0a0a0a' }}>
+                      <div style={{ color: colors.primary, fontSize: '11px', marginBottom: '8px' }}>DATA TABLE</div>
+                      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '300px', border: '1px solid colors.textMuted', backgroundColor: colors.panel }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
                           <thead style={{ position: 'sticky', top: 0, backgroundColor: '#1a1a1a', zIndex: 1 }}>
-                            <tr style={{ borderBottom: '2px solid #404040' }}>
-                              <th style={{ padding: '8px 12px', textAlign: 'left', color: '#ea580c', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Period</th>
+                            <tr style={{ borderBottom: '2px solid colors.textMuted' }}>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', color: colors.primary, fontWeight: 'bold', whiteSpace: 'nowrap' }}>Period</th>
                               {singleViewSeries.map((series, idx) => (
                                 <th key={idx} style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
@@ -746,12 +748,12 @@ export default function DBnomicsTab() {
 
                               return allPeriods.slice(0, 50).map((period, idx) => (
                                 <tr key={idx} style={{ borderBottom: '1px solid #1a1a1a' }}>
-                                  <td style={{ padding: '6px 12px', color: '#d4d4d4', whiteSpace: 'nowrap', fontWeight: 'bold' }}>{period}</td>
+                                  <td style={{ padding: '6px 12px', color: colors.text, whiteSpace: 'nowrap', fontWeight: 'bold' }}>{period}</td>
                                   {singleViewSeries.map((series, sIdx) => {
                                     const obs = series.observations.find(o => o.period === period);
                                     const value = obs ? (typeof obs.value === 'number' ? obs.value : Number(obs.value)) : null;
                                     return (
-                                      <td key={sIdx} style={{ padding: '6px 12px', textAlign: 'right', color: value !== null ? '#a3a3a3' : '#404040', whiteSpace: 'nowrap' }}>
+                                      <td key={sIdx} style={{ padding: '6px 12px', textAlign: 'right', color: value !== null ? '#a3a3a3' : colors.textMuted, whiteSpace: 'nowrap' }}>
                                         {value !== null && !isNaN(value) ? value.toFixed(4) : '—'}
                                       </td>
                                     );
@@ -762,24 +764,24 @@ export default function DBnomicsTab() {
                           </tbody>
                         </table>
                       </div>
-                      <div style={{ color: '#737373', fontSize: '9px', marginTop: '6px', textAlign: 'right' }}>
+                      <div style={{ color: colors.textMuted, fontSize: '9px', marginTop: '6px', textAlign: 'right' }}>
                         Showing latest 50 periods
                       </div>
                     </div>
                   </>
                 ) : (
-                  <div style={{ color: '#737373', textAlign: 'center', paddingTop: '40px' }}>Add series to view</div>
+                  <div style={{ color: colors.textMuted, textAlign: 'center', paddingTop: '40px' }}>Add series to view</div>
                 )}
               </div>
             ) : (
               <div>
-                <div style={{ color: '#ea580c', marginBottom: '12px', fontSize: '11px' }}>COMPARISON DASHBOARD</div>
+                <div style={{ color: colors.primary, marginBottom: '12px', fontSize: '11px' }}>COMPARISON DASHBOARD</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '16px' }}>
                   {slots.map((slot, idx) => (
-                    <div key={idx} style={{ border: '1px solid #404040', padding: '12px', backgroundColor: '#0a0a0a', minHeight: '280px', display: 'flex', flexDirection: 'column' }}>
+                    <div key={idx} style={{ border: '1px solid colors.textMuted', padding: '12px', backgroundColor: colors.panel, minHeight: '280px', display: 'flex', flexDirection: 'column' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                        <div style={{ color: '#fbbf24', fontSize: '10px' }}>SLOT {idx + 1}</div>
-                        <select value={slotChartTypes[idx]} onChange={(e) => { const newTypes = [...slotChartTypes]; newTypes[idx] = e.target.value as ChartType; setSlotChartTypes(newTypes); }} style={{ padding: '2px 4px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', fontSize: '8px', fontFamily: 'Consolas, monospace' }}>
+                        <div style={{ color: colors.warning, fontSize: '10px' }}>SLOT {idx + 1}</div>
+                        <select value={slotChartTypes[idx]} onChange={(e) => { const newTypes = [...slotChartTypes]; newTypes[idx] = e.target.value as ChartType; setSlotChartTypes(newTypes); }} style={{ padding: '2px 4px', backgroundColor: '#1a1a1a', color: colors.text, border: '1px solid colors.textMuted', fontSize: '8px', fontFamily: 'Consolas, monospace' }}>
                           <option value="line">LINE</option>
                           <option value="bar">BAR</option>
                           <option value="area">AREA</option>
@@ -788,7 +790,7 @@ export default function DBnomicsTab() {
                         </select>
                       </div>
                       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '240px' }}>
-                        {slot.length > 0 ? renderChart(slot, slotChartTypes[idx], true) : <div style={{ color: '#404040', textAlign: 'center', fontSize: '10px' }}>Empty Slot</div>}
+                        {slot.length > 0 ? renderChart(slot, slotChartTypes[idx], true) : <div style={{ color: colors.textMuted, textAlign: 'center', fontSize: '10px' }}>Empty Slot</div>}
                       </div>
                     </div>
                   ))}

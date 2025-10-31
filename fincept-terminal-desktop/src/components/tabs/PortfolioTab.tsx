@@ -14,9 +14,12 @@ import PerformanceView from './portfolio/PerformanceView';
 import RiskMetricsView from './portfolio/RiskMetricsView';
 import ReportsView from './portfolio/ReportsView';
 import AlertsView from './portfolio/AlertsView';
-import { BLOOMBERG_COLORS, formatCurrency, formatPercent, formatNumber } from './portfolio/utils';
+import { getBloombergColors, formatCurrency, formatPercent, formatNumber } from './portfolio/utils';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 const PortfolioTab: React.FC = () => {
+  const { colors: themeColors } = useTerminalTheme();
+  const BLOOMBERG_COLORS = getBloombergColors();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
   const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);

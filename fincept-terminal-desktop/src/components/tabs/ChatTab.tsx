@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { Settings, Trash2, Bot, User, Clock, Send, Plus, Search, Edit2, Check, X } from 'lucide-react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { llmApiService, ChatMessage as APIMessage } from '../../services/llmApi';
 import { sqliteService, ChatSession, ChatMessage } from '../../services/sqliteService';
 import { llmConfigService } from '../../services/llmConfig';
@@ -12,6 +13,7 @@ interface ChatTabProps {
 }
 
 const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentSessionUuid, setCurrentSessionUuid] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -32,16 +34,6 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionsListRef = useRef<HTMLDivElement>(null);
-
-  // Bloomberg color scheme
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_RED = '#FF0000';
-  const BLOOMBERG_GREEN = '#00C800';
-  const BLOOMBERG_YELLOW = '#FFFF00';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_PANEL_BG = '#0a0a0a';
 
   // Initialize database on mount
   useEffect(() => {
@@ -452,23 +444,23 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
       alignItems: 'center',
       justifyContent: 'center',
       height: '100%',
-      backgroundColor: BLOOMBERG_PANEL_BG
+      backgroundColor: colors.panel
     }}>
       <div style={{ textAlign: 'center', padding: '24px' }}>
-        <Bot size={48} color={BLOOMBERG_ORANGE} style={{ marginBottom: '16px' }} />
-        <div style={{ color: BLOOMBERG_ORANGE, fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>
+        <Bot size={48} color={colors.primary} style={{ marginBottom: '16px' }} />
+        <div style={{ color: colors.primary, fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>
           FINCEPT AI ASSISTANT
         </div>
-        <div style={{ color: BLOOMBERG_WHITE, fontSize: '14px', marginBottom: '16px' }}>
+        <div style={{ color: colors.text, fontSize: '14px', marginBottom: '16px' }}>
           Financial Intelligence System
         </div>
-        <div style={{ color: BLOOMBERG_YELLOW, fontSize: '12px', marginBottom: '16px' }}>
+        <div style={{ color: colors.warning, fontSize: '12px', marginBottom: '16px' }}>
           Provider: {currentProvider.toUpperCase()} | Model: {llmConfigService.getActiveConfig().model}
         </div>
         <button
           onClick={createNewSession}
           style={{
-            backgroundColor: BLOOMBERG_ORANGE,
+            backgroundColor: colors.primary,
             color: 'black',
             border: 'none',
             padding: '10px 20px',
@@ -494,30 +486,30 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         <div style={{
           maxWidth: '85%',
           minWidth: '120px',
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          border: `1px solid ${message.role === 'user' ? BLOOMBERG_YELLOW : BLOOMBERG_ORANGE}`,
+          backgroundColor: colors.panel,
+          border: `1px solid ${message.role === 'user' ? colors.warning : colors.primary}`,
           borderRadius: '4px',
           padding: '10px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
             {message.role === 'user' ? (
-              <User size={12} color={BLOOMBERG_YELLOW} />
+              <User size={12} color={colors.warning} />
             ) : (
-              <Bot size={12} color={BLOOMBERG_ORANGE} />
+              <Bot size={12} color={colors.primary} />
             )}
             <span style={{
-              color: message.role === 'user' ? BLOOMBERG_YELLOW : BLOOMBERG_ORANGE,
+              color: message.role === 'user' ? colors.warning : colors.primary,
               fontSize: '11px',
               fontWeight: 'bold'
             }}>
               {message.role === 'user' ? 'YOU' : 'AI'}
             </span>
-            <Clock size={10} color={BLOOMBERG_GRAY} />
-            <span style={{ color: BLOOMBERG_GRAY, fontSize: '10px' }}>
+            <Clock size={10} color={colors.textMuted} />
+            <span style={{ color: colors.textMuted, fontSize: '10px' }}>
               {formatTime(message.timestamp)}
             </span>
             {message.provider && (
-              <span style={{ color: BLOOMBERG_GRAY, fontSize: '10px' }}>
+              <span style={{ color: colors.textMuted, fontSize: '10px' }}>
                 | {message.provider}
               </span>
             )}
@@ -525,7 +517,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
           {message.role === 'assistant' ? (
             <MarkdownRenderer content={message.content} />
           ) : (
-            <div style={{ color: BLOOMBERG_WHITE, fontSize: '13px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+            <div style={{ color: colors.text, fontSize: '13px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
               {message.content}
             </div>
           )}
@@ -541,25 +533,25 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
       <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'flex-start' }}>
         <div style={{
           maxWidth: '85%',
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          backgroundColor: colors.panel,
+          border: `2px solid ${colors.primary}`,
           borderRadius: '4px',
           padding: '10px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-            <Bot size={12} color={BLOOMBERG_ORANGE} />
-            <span style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold' }}>
+            <Bot size={12} color={colors.primary} />
+            <span style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold' }}>
               AI TYPING...
             </span>
           </div>
           <div style={{
-            color: BLOOMBERG_WHITE,
+            color: colors.text,
             fontSize: '13px',
             lineHeight: '1.5',
             whiteSpace: 'pre-wrap'
           }}>
             {streamingContent}
-            <span style={{ color: BLOOMBERG_ORANGE }}>▊</span>
+            <span style={{ color: colors.primary }}>▊</span>
           </div>
         </div>
       </div>
@@ -569,12 +561,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG_DARK_BG,
-      color: BLOOMBERG_WHITE,
-      fontFamily: 'Consolas, monospace',
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      fontStyle: fontStyle,
       display: 'flex',
       flexDirection: 'column',
-      fontSize: '11px'
+      fontSize: fontSize.body
     }}>
       <style>{`
         /* Transparent/hidden scrollbar styling */
@@ -600,8 +594,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
       `}</style>
       {/* Compact Header */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         padding: '6px 10px',
         display: 'flex',
         justifyContent: 'space-between',
@@ -609,13 +603,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold', fontSize: '12px' }}>FINCEPT AI</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-          <span style={{ color: BLOOMBERG_YELLOW, fontSize: '10px' }}>
+          <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '12px' }}>FINCEPT AI</span>
+          <span style={{ color: colors.textMuted }}>|</span>
+          <span style={{ color: colors.warning, fontSize: '10px' }}>
             {currentProvider.toUpperCase()}
           </span>
-          <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-          <span style={{ color: BLOOMBERG_WHITE, fontSize: '10px' }}>
+          <span style={{ color: colors.textMuted }}>|</span>
+          <span style={{ color: colors.text, fontSize: '10px' }}>
             {currentTime.toLocaleTimeString('en-US', { hour12: false })}
           </span>
         </div>
@@ -623,9 +617,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
           <button
             onClick={() => setIsSettingsOpen(true)}
             style={{
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              color: colors.text,
               padding: '4px 8px',
               fontSize: '10px',
               cursor: 'pointer',
@@ -640,7 +634,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
           <button
             onClick={createNewSession}
             style={{
-              backgroundColor: BLOOMBERG_ORANGE,
+              backgroundColor: colors.primary,
               border: 'none',
               color: 'black',
               padding: '4px 8px',
@@ -663,23 +657,23 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         {/* Left Panel - Sessions */}
         <div style={{
           width: '250px',
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          borderRight: `1px solid ${BLOOMBERG_GRAY}`,
+          backgroundColor: colors.panel,
+          borderRight: `1px solid ${colors.textMuted}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
           <div style={{ padding: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '11px', fontWeight: 'bold' }}>
+              <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold' }}>
                 SESSIONS ({statistics.totalSessions})
               </div>
               {sessions.length > 0 && (
                 <button
                   onClick={deleteAllSessions}
                   style={{
-                    backgroundColor: BLOOMBERG_RED,
-                    color: BLOOMBERG_WHITE,
+                    backgroundColor: colors.alert,
+                    color: colors.text,
                     border: 'none',
                     padding: '2px 6px',
                     fontSize: '8px',
@@ -695,7 +689,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
 
             {/* Search */}
             <div style={{ position: 'relative', marginBottom: '8px' }}>
-              <Search size={12} color={BLOOMBERG_GRAY} style={{ position: 'absolute', left: '6px', top: '6px' }} />
+              <Search size={12} color={colors.textMuted} style={{ position: 'absolute', left: '6px', top: '6px' }} />
               <input
                 id="session-search"
                 type="text"
@@ -704,9 +698,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
                   width: '100%',
-                  backgroundColor: BLOOMBERG_DARK_BG,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
-                  color: BLOOMBERG_WHITE,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: colors.text,
                   padding: '4px 4px 4px 24px',
                   fontSize: '10px'
                 }}
@@ -714,7 +708,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
             </div>
 
             {/* Stats */}
-            <div style={{ fontSize: '9px', color: BLOOMBERG_GRAY, marginBottom: '6px' }}>
+            <div style={{ fontSize: '9px', color: colors.textMuted, marginBottom: '6px' }}>
               Messages: {statistics.totalMessages} | Tokens: {statistics.totalTokens.toLocaleString()}
             </div>
           </div>
@@ -732,8 +726,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
               <div
                 key={session.session_uuid}
                 style={{
-                  backgroundColor: currentSessionUuid === session.session_uuid ? BLOOMBERG_ORANGE + '30' : BLOOMBERG_DARK_BG,
-                  border: `1px solid ${currentSessionUuid === session.session_uuid ? BLOOMBERG_ORANGE : BLOOMBERG_GRAY}`,
+                  backgroundColor: currentSessionUuid === session.session_uuid ? colors.primary + '30' : colors.background,
+                  border: `1px solid ${currentSessionUuid === session.session_uuid ? colors.primary : colors.textMuted}`,
                   padding: '6px',
                   marginBottom: '4px',
                   cursor: renamingSessionId === session.session_uuid ? 'default' : 'pointer'
@@ -754,9 +748,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                       autoFocus
                       style={{
                         flex: 1,
-                        backgroundColor: BLOOMBERG_DARK_BG,
-                        border: `1px solid ${BLOOMBERG_ORANGE}`,
-                        color: BLOOMBERG_WHITE,
+                        backgroundColor: colors.background,
+                        border: `1px solid ${colors.primary}`,
+                        color: colors.text,
                         fontSize: '11px',
                         padding: '2px 4px',
                         fontFamily: 'Consolas, monospace'
@@ -769,7 +763,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: BLOOMBERG_GREEN,
+                        color: colors.secondary,
                         border: 'none',
                         cursor: 'pointer',
                         padding: '0',
@@ -785,7 +779,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: BLOOMBERG_RED,
+                        color: colors.alert,
                         border: 'none',
                         cursor: 'pointer',
                         padding: '0',
@@ -796,14 +790,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                     </button>
                   </div>
                 ) : (
-                  <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ color: colors.text, fontSize: '11px', marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {session.title}
                   </div>
                 )}
 
                 {/* Actions Row */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: BLOOMBERG_GRAY, fontSize: '9px' }}>
+                  <span style={{ color: colors.textMuted, fontSize: '9px' }}>
                     {session.message_count} msgs • {formatSessionTime(session.updated_at)}
                   </span>
                   <div style={{ display: 'flex', gap: '6px' }}>
@@ -814,7 +808,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: BLOOMBERG_YELLOW,
+                        color: colors.warning,
                         border: 'none',
                         fontSize: '9px',
                         cursor: 'pointer',
@@ -832,7 +826,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                       }}
                       style={{
                         backgroundColor: 'transparent',
-                        color: BLOOMBERG_RED,
+                        color: colors.alert,
                         border: 'none',
                         fontSize: '9px',
                         cursor: 'pointer',
@@ -853,7 +847,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         {/* Center Panel - Chat */}
         <div style={{
           flex: 1,
-          backgroundColor: BLOOMBERG_PANEL_BG,
+          backgroundColor: colors.panel,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
@@ -861,20 +855,20 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
           {/* Chat Header */}
           <div style={{
             padding: '6px 10px',
-            borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+            borderBottom: `1px solid ${colors.textMuted}`,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center'
           }}>
-            <span style={{ color: BLOOMBERG_WHITE, fontSize: '11px' }}>
+            <span style={{ color: colors.text, fontSize: '11px' }}>
               {currentSessionUuid ? sessions.find(s => s.session_uuid === currentSessionUuid)?.title || 'Chat' : 'No Active Session'}
             </span>
             {currentSessionUuid && (
               <button
                 onClick={clearCurrentChat}
                 style={{
-                  backgroundColor: BLOOMBERG_RED,
-                  color: BLOOMBERG_WHITE,
+                  backgroundColor: colors.alert,
+                  color: colors.text,
                   border: 'none',
                   padding: '3px 8px',
                   fontSize: '9px',
@@ -891,14 +885,14 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
             flex: 1,
             padding: '10px',
             overflow: 'auto',
-            backgroundColor: BLOOMBERG_DARK_BG
+            backgroundColor: colors.background
           }}>
             {messages.length === 0 && !streamingContent ? renderWelcomeScreen() : (
               <div>
                 {messages.map(renderMessage)}
                 {streamingContent && renderStreamingMessage()}
                 {isTyping && !streamingContent && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: BLOOMBERG_GRAY, fontSize: '11px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.textMuted, fontSize: '11px' }}>
                     <Bot size={12} />
                     <span>AI is thinking...</span>
                   </div>
@@ -909,7 +903,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
           </div>
 
           {/* Input Area */}
-          <div style={{ padding: '8px', borderTop: `1px solid ${BLOOMBERG_GRAY}` }}>
+          <div style={{ padding: '8px', borderTop: `1px solid ${colors.textMuted}` }}>
             <div style={{ display: 'flex', gap: '6px' }}>
               <textarea
                 value={messageInput}
@@ -923,9 +917,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                 placeholder="Type your message... (Shift+Enter for new line)"
                 style={{
                   flex: 1,
-                  backgroundColor: BLOOMBERG_DARK_BG,
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
-                  color: BLOOMBERG_WHITE,
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: colors.text,
                   padding: '6px',
                   fontSize: '11px',
                   resize: 'none',
@@ -937,7 +931,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                 onClick={handleSendMessage}
                 disabled={!messageInput.trim() || isTyping}
                 style={{
-                  backgroundColor: messageInput.trim() && !isTyping ? BLOOMBERG_ORANGE : BLOOMBERG_GRAY,
+                  backgroundColor: messageInput.trim() && !isTyping ? colors.primary : colors.textMuted,
                   color: 'black',
                   border: 'none',
                   padding: '6px 12px',
@@ -953,7 +947,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
                 SEND
               </button>
             </div>
-            <div style={{ color: BLOOMBERG_GRAY, fontSize: '9px', marginTop: '4px' }}>
+            <div style={{ color: colors.textMuted, fontSize: '9px', marginTop: '4px' }}>
               {messageInput.length > 0 ? `${messageInput.length} chars` : systemStatus}
             </div>
           </div>
@@ -962,12 +956,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         {/* Right Panel - Quick Actions */}
         <div style={{
           width: '200px',
-          backgroundColor: BLOOMBERG_PANEL_BG,
-          borderLeft: `1px solid ${BLOOMBERG_GRAY}`,
+          backgroundColor: colors.panel,
+          borderLeft: `1px solid ${colors.textMuted}`,
           padding: '8px',
           overflow: 'auto'
         }}>
-          <div style={{ color: BLOOMBERG_YELLOW, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+          <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
             QUICK PROMPTS
           </div>
           {[
@@ -981,9 +975,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
               onClick={() => setMessageInput(item.prompt)}
               style={{
                 width: '100%',
-                backgroundColor: BLOOMBERG_DARK_BG,
-                color: BLOOMBERG_WHITE,
-                border: `1px solid ${BLOOMBERG_GRAY}`,
+                backgroundColor: colors.background,
+                color: colors.text,
+                border: `1px solid ${colors.textMuted}`,
                 padding: '5px',
                 fontSize: '9px',
                 textAlign: 'left',
@@ -995,19 +989,19 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
             </button>
           ))}
 
-          <div style={{ color: BLOOMBERG_YELLOW, fontSize: '11px', fontWeight: 'bold', marginTop: '12px', marginBottom: '6px' }}>
+          <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginTop: '12px', marginBottom: '6px' }}>
             SYSTEM INFO
           </div>
-          <div style={{ color: BLOOMBERG_WHITE, fontSize: '9px', marginBottom: '2px' }}>
+          <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
             Provider: {currentProvider.toUpperCase()}
           </div>
-          <div style={{ color: BLOOMBERG_WHITE, fontSize: '9px', marginBottom: '2px' }}>
+          <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
             Model: {llmConfigService.getActiveConfig().model}
           </div>
-          <div style={{ color: BLOOMBERG_WHITE, fontSize: '9px', marginBottom: '2px' }}>
+          <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
             Temp: {llmConfigService.getActiveConfig().temperature}
           </div>
-          <div style={{ color: BLOOMBERG_GREEN, fontSize: '9px' }}>
+          <div style={{ color: colors.secondary, fontSize: '9px' }}>
             Streaming: Enabled
           </div>
         </div>

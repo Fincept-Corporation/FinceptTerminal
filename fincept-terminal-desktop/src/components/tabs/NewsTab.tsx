@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { fetchNewsWithCache, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData } from '../../services/newsService';
 
 // Extend Window interface for Tauri
@@ -9,6 +10,7 @@ declare global {
 }
 
 const NewsTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [newsUpdateCount, setNewsUpdateCount] = useState(0);
@@ -18,19 +20,6 @@ const NewsTab: React.FC = () => {
   const [activeSources, setActiveSources] = useState<string[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [showWebView, setShowWebView] = useState(false);
-
-  // Professional Financial Terminal Colors
-  const TERMINAL_ORANGE = '#FFA500';
-  const TERMINAL_WHITE = '#FFFFFF';
-  const TERMINAL_RED = '#FF0000';
-  const TERMINAL_GREEN = '#00C800';
-  const TERMINAL_YELLOW = '#FFFF00';
-  const TERMINAL_GRAY = '#787878';
-  const TERMINAL_BLUE = '#6496FA';
-  const TERMINAL_PURPLE = '#C864FF';
-  const TERMINAL_CYAN = '#00FFFF';
-  const TERMINAL_DARK_BG = '#000000';
-  const TERMINAL_PANEL_BG = '#0a0a0a';
 
   // Manual refresh function with force refresh
   const handleRefresh = async () => {
@@ -101,29 +90,29 @@ const NewsTab: React.FC = () => {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'FLASH': return TERMINAL_RED;
-      case 'URGENT': return TERMINAL_ORANGE;
-      case 'BREAKING': return TERMINAL_YELLOW;
-      case 'ROUTINE': return TERMINAL_GREEN;
-      default: return TERMINAL_GRAY;
+      case 'FLASH': return colors.alert;
+      case 'URGENT': return colors.primary;
+      case 'BREAKING': return colors.warning;
+      case 'ROUTINE': return colors.secondary;
+      default: return colors.textMuted;
     }
   };
 
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
-      case 'BULLISH': return TERMINAL_GREEN;
-      case 'BEARISH': return TERMINAL_RED;
-      case 'NEUTRAL': return TERMINAL_YELLOW;
-      default: return TERMINAL_GRAY;
+      case 'BULLISH': return colors.secondary;
+      case 'BEARISH': return colors.alert;
+      case 'NEUTRAL': return colors.warning;
+      default: return colors.textMuted;
     }
   };
 
   const getImpactColor = (impact: string) => {
     switch (impact) {
-      case 'HIGH': return TERMINAL_RED;
-      case 'MEDIUM': return TERMINAL_YELLOW;
-      case 'LOW': return TERMINAL_GREEN;
-      default: return TERMINAL_GRAY;
+      case 'HIGH': return colors.alert;
+      case 'MEDIUM': return colors.warning;
+      case 'LOW': return colors.secondary;
+      default: return colors.textMuted;
     }
   };
 
@@ -146,39 +135,41 @@ const NewsTab: React.FC = () => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: TERMINAL_DARK_BG,
-      color: TERMINAL_WHITE,
-      fontFamily: 'Consolas, monospace',
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      fontStyle: fontStyle,
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
-      fontSize: '12px'
+      fontSize: fontSize.body
     }}>
       {/* Complex Header with News Ticker */}
       <div style={{
-        backgroundColor: TERMINAL_PANEL_BG,
-        borderBottom: `1px solid ${TERMINAL_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         padding: '4px 8px',
         flexShrink: 0
       }}>
         {/* Main Status Line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
-          <span style={{ color: TERMINAL_ORANGE, fontWeight: 'bold' }}>FINCEPT TERMINAL PROFESSIONAL NEWS</span>
-          <span style={{ color: TERMINAL_WHITE }}>|</span>
-          <span style={{ color: TERMINAL_RED, fontWeight: 'bold', animation: 'blink 1s infinite' }}>LIVE FEED</span>
-          <span style={{ color: TERMINAL_WHITE }}>|</span>
-          <span style={{ color: TERMINAL_YELLOW }}>ALERTS: {alertCount}</span>
-          <span style={{ color: TERMINAL_WHITE }}>|</span>
-          <span style={{ color: TERMINAL_GREEN }}>● {getRSSFeedCount()} SOURCES</span>
-          <span style={{ color: TERMINAL_WHITE }}>|</span>
-          <span style={{ color: TERMINAL_WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
-          <span style={{ color: TERMINAL_WHITE }}>|</span>
+          <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT TERMINAL PROFESSIONAL NEWS</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.alert, fontWeight: 'bold', animation: 'blink 1s infinite' }}>LIVE FEED</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.warning }}>ALERTS: {alertCount}</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.secondary }}>● {getRSSFeedCount()} SOURCES</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+          <span style={{ color: colors.text }}>|</span>
           <button
             onClick={handleRefresh}
             disabled={loading}
             style={{
-              backgroundColor: loading ? TERMINAL_GRAY : TERMINAL_GREEN,
-              color: TERMINAL_DARK_BG,
+              backgroundColor: loading ? colors.textMuted : colors.secondary,
+              color: colors.background,
               border: 'none',
               padding: '2px 8px',
               fontSize: '11px',
@@ -197,7 +188,7 @@ const NewsTab: React.FC = () => {
 
         {/* News Ticker - Continuous seamless scroll like Bloomberg */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', marginBottom: '2px' }}>
-          <span style={{ color: TERMINAL_YELLOW, fontWeight: 'bold' }}>BREAKING:</span>
+          <span style={{ color: colors.warning, fontWeight: 'bold' }}>BREAKING:</span>
           <div className="ticker-wrap" style={{
             flex: 1,
             overflow: 'hidden',
@@ -209,23 +200,23 @@ const NewsTab: React.FC = () => {
               <span className="ticker-item">{newsTickerText}</span>
             </div>
           </div>
-          <span style={{ color: TERMINAL_GREEN, fontSize: '9px' }}>
+          <span style={{ color: colors.secondary, fontSize: '9px' }}>
             ● LIVE
           </span>
         </div>
 
         {/* Sources and Stats */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '10px', flexWrap: 'wrap' }}>
-          <span style={{ color: TERMINAL_GRAY }}>ACTIVE SOURCES:</span>
+          <span style={{ color: colors.textMuted }}>ACTIVE SOURCES:</span>
           {activeSources.slice(0, 12).map((source, idx) => (
-            <span key={idx} style={{ color: TERMINAL_GREEN }}>{source}●</span>
+            <span key={idx} style={{ color: colors.secondary }}>{source}●</span>
           ))}
-          <span style={{ color: TERMINAL_WHITE }}>|</span>
-          <span style={{ color: TERMINAL_GRAY }}>ARTICLES:</span>
-          <span style={{ color: TERMINAL_CYAN }}>{newsArticles.length}</span>
-          <span style={{ color: TERMINAL_WHITE }}>|</span>
-          <span style={{ color: TERMINAL_GRAY }}>STATUS:</span>
-          <span style={{ color: loading ? TERMINAL_YELLOW : TERMINAL_GREEN }}>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.textMuted }}>ARTICLES:</span>
+          <span style={{ color: colors.accent }}>{newsArticles.length}</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.textMuted }}>STATUS:</span>
+          <span style={{ color: loading ? colors.warning : colors.secondary }}>
             {loading ? 'UPDATING...' : (isUsingMockData() ? '● DEMO MODE' : '● LIVE')}
           </span>
         </div>
@@ -233,8 +224,8 @@ const NewsTab: React.FC = () => {
 
       {/* Function Keys Bar */}
       <div style={{
-        backgroundColor: TERMINAL_PANEL_BG,
-        borderBottom: `1px solid ${TERMINAL_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         padding: '2px 4px',
         flexShrink: 0
       }}>
@@ -268,9 +259,9 @@ const NewsTab: React.FC = () => {
                 }
               }}
               style={{
-                backgroundColor: activeFilter === item.filter ? TERMINAL_ORANGE : TERMINAL_DARK_BG,
-                border: `1px solid ${TERMINAL_GRAY}`,
-                color: activeFilter === item.filter ? TERMINAL_DARK_BG : TERMINAL_WHITE,
+                backgroundColor: activeFilter === item.filter ? colors.primary : colors.background,
+                border: `1px solid ${colors.textMuted}`,
+                color: activeFilter === item.filter ? colors.background : colors.text,
                 padding: '2px 4px',
                 fontSize: '9px',
                 height: '16px',
@@ -280,7 +271,7 @@ const NewsTab: React.FC = () => {
                 fontWeight: activeFilter === item.filter ? 'bold' : 'normal',
                 cursor: 'pointer'
               }}>
-              <span style={{ color: TERMINAL_YELLOW }}>{item.key}:</span>
+              <span style={{ color: colors.warning }}>{item.key}:</span>
               <span style={{ marginLeft: '2px' }}>{item.label}</span>
             </button>
           ))}
@@ -294,22 +285,22 @@ const NewsTab: React.FC = () => {
           {/* Left Panel - Breaking News Stream (Primary Feed) */}
           <div style={{
             flex: 1,
-            backgroundColor: TERMINAL_PANEL_BG,
-            border: `1px solid ${TERMINAL_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: TERMINAL_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
               PRIMARY NEWS FEED [{activeFilter}]
             </div>
-            <div style={{ borderBottom: `1px solid ${TERMINAL_GRAY}`, marginBottom: '4px' }}></div>
+            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
             {loading && newsArticles.length === 0 ? (
-              <div style={{ color: TERMINAL_YELLOW, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
+              <div style={{ color: colors.warning, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
                 Loading news from {getRSSFeedCount()} RSS feeds...
               </div>
             ) : filteredNews.length === 0 ? (
-              <div style={{ color: TERMINAL_GRAY, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
+              <div style={{ color: colors.textMuted, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
                 No articles found for filter: {activeFilter}
               </div>
             ) : null}
@@ -325,25 +316,25 @@ const NewsTab: React.FC = () => {
               onClick={() => setSelectedArticle(article)}
               >
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
-                  <span style={{ color: TERMINAL_GRAY, minWidth: '50px' }}>{article.time}</span>
+                  <span style={{ color: colors.textMuted, minWidth: '50px' }}>{article.time}</span>
                   <span style={{ color: getPriorityColor(article.priority), fontWeight: 'bold', minWidth: '60px' }}>
                     [{article.priority}]
                   </span>
-                  <span style={{ color: TERMINAL_BLUE, minWidth: '50px' }}>[{article.category}]</span>
-                  <span style={{ color: TERMINAL_PURPLE, minWidth: '30px' }}>{article.region}</span>
+                  <span style={{ color: colors.info, minWidth: '50px' }}>[{article.category}]</span>
+                  <span style={{ color: colors.purple, minWidth: '30px' }}>{article.region}</span>
                   <span style={{ color: getSentimentColor(article.sentiment), minWidth: '50px' }}>{article.sentiment}</span>
                 </div>
 
-                <div style={{ color: TERMINAL_WHITE, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
+                <div style={{ color: colors.text, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
                   {article.headline}
                 </div>
 
-                <div style={{ color: TERMINAL_GRAY, fontSize: '9px', lineHeight: '1.2', marginBottom: '2px' }}>
+                <div style={{ color: colors.textMuted, fontSize: '9px', lineHeight: '1.2', marginBottom: '2px' }}>
                   {article.summary}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                  <span style={{ color: TERMINAL_CYAN }}>{article.source}</span>
+                  <span style={{ color: colors.accent }}>{article.source}</span>
                   <span style={{ color: getImpactColor(article.impact) }}>IMPACT: {article.impact}</span>
                 </div>
               </div>
@@ -353,15 +344,15 @@ const NewsTab: React.FC = () => {
           {/* Center Panel - Secondary News Feed */}
           <div style={{
             flex: 1,
-            backgroundColor: TERMINAL_PANEL_BG,
-            border: `1px solid ${TERMINAL_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: TERMINAL_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
               SECONDARY NEWS FEED [{activeFilter}]
             </div>
-            <div style={{ borderBottom: `1px solid ${TERMINAL_GRAY}`, marginBottom: '4px' }}></div>
+            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
             {filteredNews.slice(Math.ceil(filteredNews.length / 3), Math.ceil(filteredNews.length * 2 / 3)).map((article, index) => (
               <div key={article.id} style={{
@@ -374,25 +365,25 @@ const NewsTab: React.FC = () => {
               onClick={() => setSelectedArticle(article)}
               >
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
-                  <span style={{ color: TERMINAL_GRAY, minWidth: '50px' }}>{article.time}</span>
+                  <span style={{ color: colors.textMuted, minWidth: '50px' }}>{article.time}</span>
                   <span style={{ color: getPriorityColor(article.priority), fontWeight: 'bold', minWidth: '60px' }}>
                     [{article.priority}]
                   </span>
-                  <span style={{ color: TERMINAL_BLUE, minWidth: '50px' }}>[{article.category}]</span>
-                  <span style={{ color: TERMINAL_PURPLE, minWidth: '30px' }}>{article.region}</span>
+                  <span style={{ color: colors.info, minWidth: '50px' }}>[{article.category}]</span>
+                  <span style={{ color: colors.purple, minWidth: '30px' }}>{article.region}</span>
                   <span style={{ color: getSentimentColor(article.sentiment), minWidth: '50px' }}>{article.sentiment}</span>
                 </div>
 
-                <div style={{ color: TERMINAL_WHITE, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
+                <div style={{ color: colors.text, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
                   {article.headline}
                 </div>
 
-                <div style={{ color: TERMINAL_GRAY, fontSize: '9px', lineHeight: '1.2', marginBottom: '2px' }}>
+                <div style={{ color: colors.textMuted, fontSize: '9px', lineHeight: '1.2', marginBottom: '2px' }}>
                   {article.summary}
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                  <span style={{ color: TERMINAL_CYAN }}>{article.source}</span>
+                  <span style={{ color: colors.accent }}>{article.source}</span>
                   <span style={{ color: getImpactColor(article.impact) }}>IMPACT: {article.impact}</span>
                 </div>
               </div>
@@ -402,38 +393,38 @@ const NewsTab: React.FC = () => {
           {/* Right Panel - Tertiary Feed + Analytics */}
           <div style={{
             width: '400px',
-            backgroundColor: TERMINAL_PANEL_BG,
-            border: `1px solid ${TERMINAL_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px',
             overflow: 'auto'
           }}>
             {/* News Analytics Section */}
             <div style={{ marginBottom: '12px' }}>
-              <div style={{ color: TERMINAL_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+              <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
                 REAL-TIME NEWS ANALYTICS
               </div>
-              <div style={{ borderBottom: `1px solid ${TERMINAL_GRAY}`, marginBottom: '6px' }}></div>
+              <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '6px' }}></div>
 
               {/* Sentiment Analysis */}
               <div style={{ marginBottom: '8px', fontSize: '9px' }}>
-                <div style={{ color: TERMINAL_YELLOW, fontWeight: 'bold', marginBottom: '3px' }}>
+                <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '3px' }}>
                   SENTIMENT ANALYSIS
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: TERMINAL_GRAY }}>Bullish Articles:</span>
-                  <span style={{ color: TERMINAL_GREEN }}>{bullishCount} ({Math.round((bullishCount/totalCount)*100)}%)</span>
+                  <span style={{ color: colors.textMuted }}>Bullish Articles:</span>
+                  <span style={{ color: colors.secondary }}>{bullishCount} ({Math.round((bullishCount/totalCount)*100)}%)</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: TERMINAL_GRAY }}>Bearish Articles:</span>
-                  <span style={{ color: TERMINAL_RED }}>{bearishCount} ({Math.round((bearishCount/totalCount)*100)}%)</span>
+                  <span style={{ color: colors.textMuted }}>Bearish Articles:</span>
+                  <span style={{ color: colors.alert }}>{bearishCount} ({Math.round((bearishCount/totalCount)*100)}%)</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: TERMINAL_GRAY }}>Neutral Articles:</span>
-                  <span style={{ color: TERMINAL_YELLOW }}>{neutralCount} ({Math.round((neutralCount/totalCount)*100)}%)</span>
+                  <span style={{ color: colors.textMuted }}>Neutral Articles:</span>
+                  <span style={{ color: colors.warning }}>{neutralCount} ({Math.round((neutralCount/totalCount)*100)}%)</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px', paddingTop: '2px', borderTop: `1px solid ${TERMINAL_GRAY}` }}>
-                  <span style={{ color: TERMINAL_CYAN, fontWeight: 'bold' }}>Sentiment Score:</span>
-                  <span style={{ color: parseFloat(sentimentScore) > 0 ? TERMINAL_GREEN : parseFloat(sentimentScore) < 0 ? TERMINAL_RED : TERMINAL_YELLOW, fontWeight: 'bold' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px', paddingTop: '2px', borderTop: `1px solid ${colors.textMuted}` }}>
+                  <span style={{ color: colors.accent, fontWeight: 'bold' }}>Sentiment Score:</span>
+                  <span style={{ color: parseFloat(sentimentScore) > 0 ? colors.secondary : parseFloat(sentimentScore) < 0 ? colors.alert : colors.warning, fontWeight: 'bold' }}>
                     {sentimentScore} ({parseFloat(sentimentScore) > 0 ? 'BULLISH' : parseFloat(sentimentScore) < 0 ? 'BEARISH' : 'NEUTRAL'})
                   </span>
                 </div>
@@ -441,38 +432,38 @@ const NewsTab: React.FC = () => {
 
               {/* News Flow Statistics */}
               <div style={{ marginBottom: '8px', fontSize: '9px' }}>
-                <div style={{ color: TERMINAL_YELLOW, fontWeight: 'bold', marginBottom: '3px' }}>
+                <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '3px' }}>
                   NEWS FLOW STATS
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: TERMINAL_GRAY }}>Total Articles:</span>
-                  <span style={{ color: TERMINAL_WHITE }}>{newsArticles.length}</span>
+                  <span style={{ color: colors.textMuted }}>Total Articles:</span>
+                  <span style={{ color: colors.text }}>{newsArticles.length}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: TERMINAL_GRAY }}>Breaking News:</span>
-                  <span style={{ color: TERMINAL_RED }}>{breakingCount}</span>
+                  <span style={{ color: colors.textMuted }}>Breaking News:</span>
+                  <span style={{ color: colors.alert }}>{breakingCount}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: TERMINAL_GRAY }}>Earnings Reports:</span>
-                  <span style={{ color: TERMINAL_BLUE }}>{earningsCount}</span>
+                  <span style={{ color: colors.textMuted }}>Earnings Reports:</span>
+                  <span style={{ color: colors.info }}>{earningsCount}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: TERMINAL_GRAY }}>Economic Data:</span>
-                  <span style={{ color: TERMINAL_PURPLE }}>{economicCount}</span>
+                  <span style={{ color: colors.textMuted }}>Economic Data:</span>
+                  <span style={{ color: colors.purple }}>{economicCount}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: TERMINAL_GRAY }}>High Priority:</span>
-                  <span style={{ color: TERMINAL_ORANGE }}>{alertCount}</span>
+                  <span style={{ color: colors.textMuted }}>High Priority:</span>
+                  <span style={{ color: colors.primary }}>{alertCount}</span>
                 </div>
               </div>
             </div>
 
             {/* Tertiary News Feed */}
-            <div style={{ borderTop: `2px solid ${TERMINAL_GRAY}`, paddingTop: '4px' }}>
-              <div style={{ color: TERMINAL_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ borderTop: `2px solid ${colors.textMuted}`, paddingTop: '4px' }}>
+              <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
                 ADDITIONAL HEADLINES
               </div>
-              <div style={{ borderBottom: `1px solid ${TERMINAL_GRAY}`, marginBottom: '4px' }}></div>
+              <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
               {filteredNews.slice(Math.ceil(filteredNews.length * 2 / 3)).map((article, index) => (
                 <div key={article.id} style={{
@@ -485,23 +476,23 @@ const NewsTab: React.FC = () => {
                 onClick={() => setSelectedArticle(article)}
                 >
                   <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
-                    <span style={{ color: TERMINAL_GRAY, minWidth: '50px' }}>{article.time}</span>
+                    <span style={{ color: colors.textMuted, minWidth: '50px' }}>{article.time}</span>
                     <span style={{ color: getPriorityColor(article.priority), fontWeight: 'bold', minWidth: '60px' }}>
                       [{article.priority}]
                     </span>
-                    <span style={{ color: TERMINAL_BLUE, minWidth: '50px' }}>[{article.category}]</span>
+                    <span style={{ color: colors.info, minWidth: '50px' }}>[{article.category}]</span>
                   </div>
 
-                  <div style={{ color: TERMINAL_WHITE, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
+                  <div style={{ color: colors.text, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
                     {article.headline}
                   </div>
 
-                  <div style={{ color: TERMINAL_GRAY, fontSize: '9px', lineHeight: '1.2', marginBottom: '2px' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '9px', lineHeight: '1.2', marginBottom: '2px' }}>
                     {article.summary.slice(0, 150)}...
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
-                    <span style={{ color: TERMINAL_CYAN }}>{article.source}</span>
+                    <span style={{ color: colors.accent }}>{article.source}</span>
                     <span style={{ color: getSentimentColor(article.sentiment) }}>{article.sentiment}</span>
                   </div>
                 </div>
@@ -513,11 +504,11 @@ const NewsTab: React.FC = () => {
 
       {/* Status Bar */}
       <div style={{
-        borderTop: `1px solid ${TERMINAL_GRAY}`,
-        backgroundColor: TERMINAL_PANEL_BG,
+        borderTop: `1px solid ${colors.textMuted}`,
+        backgroundColor: colors.panel,
         padding: '2px 8px',
         fontSize: '10px',
-        color: TERMINAL_GRAY,
+        color: colors.textMuted,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -528,7 +519,7 @@ const NewsTab: React.FC = () => {
           <div style={{ display: 'flex', gap: '16px' }}>
             <span>High Priority: {alertCount} | Sentiment: {sentimentScore}</span>
             <span>Session: {currentTime.toTimeString().substring(0, 8)}</span>
-            <span style={{ color: loading ? TERMINAL_YELLOW : TERMINAL_GREEN }}>
+            <span style={{ color: loading ? colors.warning : colors.secondary }}>
               {loading ? 'UPDATING...' : 'FEED: LIVE'}
             </span>
           </div>
@@ -552,8 +543,8 @@ const NewsTab: React.FC = () => {
         onClick={() => setSelectedArticle(null)}
         >
           <div style={{
-            backgroundColor: TERMINAL_PANEL_BG,
-            border: `2px solid ${TERMINAL_ORANGE}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.primary}`,
             borderRadius: '4px',
             width: showWebView ? '90vw' : '600px',
             maxWidth: '95vw',
@@ -562,15 +553,15 @@ const NewsTab: React.FC = () => {
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            boxShadow: `0 0 20px ${TERMINAL_ORANGE}`,
+            boxShadow: `0 0 20px ${colors.primary}`,
             transition: 'all 0.3s ease'
           }}
           onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <div style={{
-              backgroundColor: TERMINAL_DARK_BG,
-              borderBottom: `2px solid ${TERMINAL_ORANGE}`,
+              backgroundColor: colors.background,
+              borderBottom: `2px solid ${colors.primary}`,
               padding: '8px 12px',
               display: 'flex',
               justifyContent: 'space-between',
@@ -578,12 +569,12 @@ const NewsTab: React.FC = () => {
               flexShrink: 0
             }}>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '11px' }}>
-                <span style={{ color: TERMINAL_ORANGE, fontWeight: 'bold' }}>ARTICLE DETAILS</span>
-                <span style={{ color: TERMINAL_WHITE }}>|</span>
+                <span style={{ color: colors.primary, fontWeight: 'bold' }}>ARTICLE DETAILS</span>
+                <span style={{ color: colors.text }}>|</span>
                 <span style={{ color: getPriorityColor(selectedArticle.priority), fontWeight: 'bold' }}>
                   [{selectedArticle.priority}]
                 </span>
-                <span style={{ color: TERMINAL_BLUE }}>[{selectedArticle.category}]</span>
+                <span style={{ color: colors.info }}>[{selectedArticle.category}]</span>
               </div>
               <button
                 onClick={() => {
@@ -591,8 +582,8 @@ const NewsTab: React.FC = () => {
                   setShowWebView(false);
                 }}
                 style={{
-                  backgroundColor: TERMINAL_RED,
-                  color: TERMINAL_WHITE,
+                  backgroundColor: colors.alert,
+                  color: colors.text,
                   border: 'none',
                   padding: '4px 8px',
                   fontSize: '11px',
@@ -618,9 +609,9 @@ const NewsTab: React.FC = () => {
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   {/* Reader View Header */}
                   <div style={{
-                    backgroundColor: TERMINAL_DARK_BG,
+                    backgroundColor: colors.background,
                     padding: '8px',
-                    borderBottom: `1px solid ${TERMINAL_GRAY}`,
+                    borderBottom: `1px solid ${colors.textMuted}`,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
@@ -629,8 +620,8 @@ const NewsTab: React.FC = () => {
                     <button
                       onClick={() => setShowWebView(false)}
                       style={{
-                        backgroundColor: TERMINAL_ORANGE,
-                        color: TERMINAL_DARK_BG,
+                        backgroundColor: colors.primary,
+                        color: colors.background,
                         border: 'none',
                         padding: '4px 8px',
                         fontSize: '10px',
@@ -641,10 +632,10 @@ const NewsTab: React.FC = () => {
                     >
                       ← BACK TO SUMMARY
                     </button>
-                    <span style={{ color: TERMINAL_GRAY }}>|</span>
-                    <span style={{ color: TERMINAL_YELLOW, fontWeight: 'bold' }}>READER VIEW</span>
-                    <span style={{ color: TERMINAL_GRAY }}>|</span>
-                    <span style={{ color: TERMINAL_WHITE, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ color: colors.textMuted }}>|</span>
+                    <span style={{ color: colors.warning, fontWeight: 'bold' }}>READER VIEW</span>
+                    <span style={{ color: colors.textMuted }}>|</span>
+                    <span style={{ color: colors.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {selectedArticle.source}
                     </span>
                     <button
@@ -657,8 +648,8 @@ const NewsTab: React.FC = () => {
                         }
                       }}
                       style={{
-                        backgroundColor: TERMINAL_BLUE,
-                        color: TERMINAL_WHITE,
+                        backgroundColor: colors.info,
+                        color: colors.text,
                         border: 'none',
                         padding: '4px 8px',
                         fontSize: '10px',
@@ -683,7 +674,7 @@ const NewsTab: React.FC = () => {
                     <div style={{
                       marginBottom: '24px',
                       paddingBottom: '16px',
-                      borderBottom: `2px solid ${TERMINAL_ORANGE}`
+                      borderBottom: `2px solid ${colors.primary}`
                     }}>
                       <div style={{
                         display: 'flex',
@@ -693,7 +684,7 @@ const NewsTab: React.FC = () => {
                       }}>
                         <span style={{
                           backgroundColor: getPriorityColor(selectedArticle.priority),
-                          color: TERMINAL_DARK_BG,
+                          color: colors.background,
                           padding: '2px 8px',
                           borderRadius: '2px',
                           fontWeight: 'bold'
@@ -701,8 +692,8 @@ const NewsTab: React.FC = () => {
                           {selectedArticle.priority}
                         </span>
                         <span style={{
-                          backgroundColor: TERMINAL_BLUE,
-                          color: TERMINAL_WHITE,
+                          backgroundColor: colors.info,
+                          color: colors.text,
                           padding: '2px 8px',
                           borderRadius: '2px',
                           fontWeight: 'bold'
@@ -711,7 +702,7 @@ const NewsTab: React.FC = () => {
                         </span>
                         <span style={{
                           backgroundColor: getSentimentColor(selectedArticle.sentiment),
-                          color: TERMINAL_DARK_BG,
+                          color: colors.background,
                           padding: '2px 8px',
                           borderRadius: '2px',
                           fontWeight: 'bold'
@@ -725,7 +716,7 @@ const NewsTab: React.FC = () => {
                         fontWeight: 'bold',
                         lineHeight: '1.3',
                         marginBottom: '12px',
-                        color: TERMINAL_WHITE
+                        color: colors.text
                       }}>
                         {selectedArticle.headline}
                       </h1>
@@ -734,7 +725,7 @@ const NewsTab: React.FC = () => {
                         display: 'flex',
                         gap: '16px',
                         fontSize: '12px',
-                        color: TERMINAL_GRAY
+                        color: colors.textMuted
                       }}>
                         <span>📰 {selectedArticle.source}</span>
                         <span>🕒 {selectedArticle.time}</span>
@@ -759,18 +750,18 @@ const NewsTab: React.FC = () => {
 
                       <div style={{
                         backgroundColor: 'rgba(255, 165, 0, 0.1)',
-                        border: `1px solid ${TERMINAL_ORANGE}`,
+                        border: `1px solid ${colors.primary}`,
                         borderRadius: '4px',
                         padding: '16px',
                         marginTop: '24px'
                       }}>
-                        <p style={{ fontSize: '14px', color: TERMINAL_YELLOW, marginBottom: '8px', fontWeight: 'bold' }}>
+                        <p style={{ fontSize: '14px', color: colors.warning, marginBottom: '8px', fontWeight: 'bold' }}>
                           ℹ️ Reader View Limitation
                         </p>
-                        <p style={{ fontSize: '13px', lineHeight: '1.6', color: TERMINAL_GRAY, marginBottom: '12px' }}>
+                        <p style={{ fontSize: '13px', lineHeight: '1.6', color: colors.textMuted, marginBottom: '12px' }}>
                           Most news websites block embedding for security reasons. This reader view shows the article summary from the RSS feed.
                         </p>
-                        <p style={{ fontSize: '13px', lineHeight: '1.6', color: TERMINAL_GRAY }}>
+                        <p style={{ fontSize: '13px', lineHeight: '1.6', color: colors.textMuted }}>
                           For the complete article with images, videos, and full content, please click the "🔗 OPEN FULL ARTICLE" button above to view it in your browser.
                         </p>
                       </div>
@@ -787,37 +778,37 @@ const NewsTab: React.FC = () => {
                     marginBottom: '12px',
                     padding: '8px',
                     backgroundColor: 'rgba(255, 165, 0, 0.05)',
-                    border: `1px solid ${TERMINAL_GRAY}`,
+                    border: `1px solid ${colors.textMuted}`,
                     fontSize: '10px'
                   }}>
                 <div>
-                  <span style={{ color: TERMINAL_GRAY }}>SOURCE: </span>
-                  <span style={{ color: TERMINAL_CYAN, fontWeight: 'bold' }}>{selectedArticle.source}</span>
+                  <span style={{ color: colors.textMuted }}>SOURCE: </span>
+                  <span style={{ color: colors.accent, fontWeight: 'bold' }}>{selectedArticle.source}</span>
                 </div>
                 <div>
-                  <span style={{ color: TERMINAL_GRAY }}>TIME: </span>
-                  <span style={{ color: TERMINAL_WHITE }}>{selectedArticle.time}</span>
+                  <span style={{ color: colors.textMuted }}>TIME: </span>
+                  <span style={{ color: colors.text }}>{selectedArticle.time}</span>
                 </div>
                 <div>
-                  <span style={{ color: TERMINAL_GRAY }}>REGION: </span>
-                  <span style={{ color: TERMINAL_PURPLE }}>{selectedArticle.region}</span>
+                  <span style={{ color: colors.textMuted }}>REGION: </span>
+                  <span style={{ color: colors.purple }}>{selectedArticle.region}</span>
                 </div>
                 <div>
-                  <span style={{ color: TERMINAL_GRAY }}>SENTIMENT: </span>
+                  <span style={{ color: colors.textMuted }}>SENTIMENT: </span>
                   <span style={{ color: getSentimentColor(selectedArticle.sentiment), fontWeight: 'bold' }}>
                     {selectedArticle.sentiment}
                   </span>
                 </div>
                 <div>
-                  <span style={{ color: TERMINAL_GRAY }}>IMPACT: </span>
+                  <span style={{ color: colors.textMuted }}>IMPACT: </span>
                   <span style={{ color: getImpactColor(selectedArticle.impact), fontWeight: 'bold' }}>
                     {selectedArticle.impact}
                   </span>
                 </div>
                 {selectedArticle.tickers && selectedArticle.tickers.length > 0 && (
                   <div>
-                    <span style={{ color: TERMINAL_GRAY }}>TICKERS: </span>
-                    <span style={{ color: TERMINAL_GREEN, fontWeight: 'bold' }}>
+                    <span style={{ color: colors.textMuted }}>TICKERS: </span>
+                    <span style={{ color: colors.secondary, fontWeight: 'bold' }}>
                       {selectedArticle.tickers.join(', ')}
                     </span>
                   </div>
@@ -826,7 +817,7 @@ const NewsTab: React.FC = () => {
 
               {/* Article Headline */}
               <div style={{
-                color: TERMINAL_WHITE,
+                color: colors.text,
                 fontSize: '14px',
                 fontWeight: 'bold',
                 lineHeight: '1.4',
@@ -840,7 +831,7 @@ const NewsTab: React.FC = () => {
 
               {/* Article Summary */}
               <div style={{
-                color: TERMINAL_GRAY,
+                color: colors.textMuted,
                 fontSize: '12px',
                 lineHeight: '1.6',
                 marginBottom: '16px'
@@ -854,7 +845,7 @@ const NewsTab: React.FC = () => {
                       display: 'flex',
                       gap: '8px',
                       paddingTop: '12px',
-                      borderTop: `1px solid ${TERMINAL_GRAY}`
+                      borderTop: `1px solid ${colors.textMuted}`
                     }}>
                       <button
                         onClick={(e) => {
@@ -862,8 +853,8 @@ const NewsTab: React.FC = () => {
                           setShowWebView(true);
                         }}
                         style={{
-                          backgroundColor: TERMINAL_GREEN,
-                          color: TERMINAL_DARK_BG,
+                          backgroundColor: colors.secondary,
+                          color: colors.background,
                           border: 'none',
                           padding: '6px 12px',
                           fontSize: '11px',
@@ -908,8 +899,8 @@ const NewsTab: React.FC = () => {
                           }
                         }}
                         style={{
-                          backgroundColor: TERMINAL_BLUE,
-                          color: TERMINAL_WHITE,
+                          backgroundColor: colors.info,
+                          color: colors.text,
                           border: 'none',
                           padding: '6px 12px',
                           fontSize: '11px',
@@ -935,8 +926,8 @@ const NewsTab: React.FC = () => {
                           }
                         }}
                         style={{
-                          backgroundColor: TERMINAL_GRAY,
-                          color: TERMINAL_WHITE,
+                          backgroundColor: colors.textMuted,
+                          color: colors.text,
                           border: 'none',
                           padding: '6px 12px',
                           fontSize: '11px',
@@ -976,7 +967,7 @@ const NewsTab: React.FC = () => {
         .ticker-item {
           display: inline-block;
           padding-right: 3em;
-          color: ${TERMINAL_WHITE};
+          color: ${colors.text};
           font-size: 11px;
           white-space: nowrap;
         }

@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { polygonService } from '../../services/polygonService';
-
-const COLORS = {
-  ORANGE: '#FFA500',
-  WHITE: '#FFFFFF',
-  RED: '#FF0000',
-  GREEN: '#00C800',
-  YELLOW: '#FFFF00',
-  GRAY: '#787878',
-  BLUE: '#6496FA',
-  CYAN: '#00FFFF',
-  DARK_BG: '#0a0a0a',
-  PANEL_BG: '#000000',
-  BORDER: '#222222',
-  PANEL_HEADER_BG: '#1a1a1a',
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { yfinanceService, HistoricalDataPoint } from '../../services/yfinanceService';
+import CandlestickChart, { CandlestickDataPoint } from '../charts/CandlestickChart';
 
 const PolygonEqTab: React.FC = () => {
+  const { colors } = useTerminalTheme();
+  const COLORS = {
+    ORANGE: colors.primary,
+    WHITE: colors.text,
+    RED: colors.alert,
+    GREEN: colors.secondary,
+    YELLOW: colors.warning,
+    GRAY: colors.textMuted,
+    BLUE: colors.info,
+    CYAN: colors.accent,
+    DARK_BG: colors.panel,
+    PANEL_BG: colors.background,
+    BORDER: '#222222',
+    PANEL_HEADER_BG: '#1a1a1a',
+  };
   const [symbol, setSymbol] = useState('AAPL');
   const [searchInput, setSearchInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -56,6 +59,7 @@ const PolygonEqTab: React.FC = () => {
   const [shortVolume, setShortVolume] = useState<any>(null);
   const [trades, setTrades] = useState<any>(null);
   const [quotes, setQuotes] = useState<any>(null);
+  const [chartData, setChartData] = useState<CandlestickDataPoint[]>([]);
 
   useEffect(() => {
     const loadApiKey = async () => {
@@ -72,6 +76,32 @@ const PolygonEqTab: React.FC = () => {
     }
   };
 
+  const fetchChartData = async (sym: string) => {
+    try {
+      // Fetch 30 days of historical data from yfinance
+      const historicalData = await yfinanceService.getRecentHistory(sym, 30);
+
+      if (historicalData && historicalData.length > 0) {
+        const candlesticks: CandlestickDataPoint[] = historicalData.map((point: HistoricalDataPoint) => ({
+          timestamp: point.timestamp,
+          open: point.open,
+          high: point.high,
+          low: point.low,
+          close: point.close,
+          volume: point.volume,
+        }));
+        setChartData(candlesticks);
+        console.log(`[PolygonEqTab] Loaded ${candlesticks.length} candlesticks for ${sym}`);
+      } else {
+        setChartData([]);
+        console.warn(`[PolygonEqTab] No chart data available for ${sym}`);
+      }
+    } catch (error) {
+      console.error('[PolygonEqTab] Error fetching chart data:', error);
+      setChartData([]);
+    }
+  };
+
   const fetchAllData = async () => {
     await polygonService.loadApiKey();
     if (!apiKeyConfigured) return;
@@ -81,6 +111,8 @@ const PolygonEqTab: React.FC = () => {
     setError(null);
 
     try {
+      // Fetch chart data in parallel with other data
+      fetchChartData(symbol);
       const [
         detailsResp, snapResp, newsResp, relatedResp, marketStatusResp,
         dividendsResp, splitsResp, lastTradeResp, lastQuoteResp, smaResp,
@@ -344,6 +376,7 @@ const PolygonEqTab: React.FC = () => {
       flexDirection: 'column',
       fontSize: '12px',
       overflow: 'auto',
+      overflowX: 'hidden',
     }} className="custom-scrollbar">
 
       {/* TOP BAR WITH RELATED TICKERS */}
@@ -358,7 +391,7 @@ const PolygonEqTab: React.FC = () => {
       }}>
         {/* First Row: Search and Main Info */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <span style={{ color: COLORS.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>POLYGON.IO</span>
             <input
               type="text"
@@ -390,6 +423,39 @@ const PolygonEqTab: React.FC = () => {
             >
               GO
             </button>
+
+            {/* Related Tickers as Small Boxes */}
+            {relatedTickers.length > 0 && (
+              <>
+                <span style={{ color: COLORS.GRAY, fontSize: '10px', fontWeight: 'bold', marginLeft: '8px' }}>RELATED:</span>
+                {relatedTickers.slice(0, 8).map((ticker: any, idx: number) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleRelatedTickerClick(ticker.ticker)}
+                    style={{
+                      backgroundColor: COLORS.PANEL_HEADER_BG,
+                      border: `1px solid ${COLORS.BORDER}`,
+                      padding: '3px 8px',
+                      cursor: 'pointer',
+                      fontSize: '10px',
+                      color: COLORS.CYAN,
+                      fontWeight: 'bold',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = COLORS.CYAN;
+                      e.currentTarget.style.color = COLORS.DARK_BG;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = COLORS.PANEL_HEADER_BG;
+                      e.currentTarget.style.color = COLORS.CYAN;
+                    }}
+                  >
+                    {ticker.ticker}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -421,39 +487,6 @@ const PolygonEqTab: React.FC = () => {
             </button>
           </div>
         </div>
-
-        {/* Second Row: Related Tickers as Small Boxes */}
-        {relatedTickers.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ color: COLORS.GRAY, fontSize: '10px', fontWeight: 'bold' }}>RELATED:</span>
-            {relatedTickers.slice(0, 8).map((ticker: any, idx: number) => (
-              <div
-                key={idx}
-                onClick={() => handleRelatedTickerClick(ticker.ticker)}
-                style={{
-                  backgroundColor: COLORS.PANEL_HEADER_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  padding: '3px 8px',
-                  cursor: 'pointer',
-                  fontSize: '10px',
-                  color: COLORS.CYAN,
-                  fontWeight: 'bold',
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = COLORS.CYAN;
-                  e.currentTarget.style.color = COLORS.DARK_BG;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = COLORS.PANEL_HEADER_BG;
-                  e.currentTarget.style.color = COLORS.CYAN;
-                }}
-              >
-                {ticker.ticker}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Error Banner */}
@@ -471,10 +504,10 @@ const PolygonEqTab: React.FC = () => {
       )}
 
       {/* MAIN CONTENT - All data visible, main window scrolls */}
-      <div style={{ padding: '6px', flexShrink: 0 }}>
+      <div style={{ padding: '6px', flexShrink: 0, maxWidth: '100%', boxSizing: 'border-box' }}>
 
         {/* ROW 1: Quote Data + Market Status + Technical Indicators - NO INTERNAL SCROLL */}
-        <div style={{ display: 'grid', gridTemplateColumns: '25% 25% 25% 25%', gap: '8px', marginBottom: '8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '8px', marginBottom: '8px' }}>
 
           {/* Quote Panel */}
           <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
@@ -563,33 +596,89 @@ const PolygonEqTab: React.FC = () => {
         </div>
 
         {/* ROW 2: News (2 columns) + Trades & Quotes + Chart Placeholder */}
-        <div style={{ display: 'grid', gridTemplateColumns: '50% 25% 25%', gap: '8px', marginBottom: '8px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '8px', marginBottom: '8px' }}>
 
           {/* News - Show 4 articles */}
           <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
             <SectionHeader title={`LATEST NEWS (${news.length})`} color={COLORS.ORANGE} />
-            <div style={{ padding: '10px' }}>
+            <div style={{ padding: '10px', maxHeight: '240px', overflowY: 'auto' }}>
               {news.length > 0 ? news.slice(0, 4).map((article: any) => (
                 <div key={article.id} style={{
-                  marginBottom: '8px',
-                  paddingBottom: '8px',
+                  marginBottom: '10px',
+                  paddingBottom: '10px',
                   borderBottom: `1px solid ${COLORS.BORDER}`,
-                  fontSize: '11px'
+                  fontSize: '11px',
+                  display: 'flex',
+                  gap: '10px'
                 }}>
-                  <div style={{ color: COLORS.ORANGE, fontWeight: 'bold', marginBottom: '3px' }}>
-                    {article.title.substring(0, 80)}...
+                  {/* Article Image */}
+                  {article.image_url && (
+                    <div style={{
+                      flexShrink: 0,
+                      width: '80px',
+                      height: '60px',
+                      overflow: 'hidden',
+                      borderRadius: '4px',
+                      border: `1px solid ${COLORS.BORDER}`,
+                      backgroundColor: COLORS.DARK_BG
+                    }}>
+                      <img
+                        src={article.image_url}
+                        alt={article.title}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                        onError={(e) => {
+                          // Hide image if it fails to load
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Article Content */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      color: COLORS.ORANGE,
+                      fontWeight: 'bold',
+                      marginBottom: '3px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical'
+                    }}>
+                      {article.title}
+                    </div>
+                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>
+                      {article.publisher?.name} | {new Date(article.published_utc).toLocaleDateString()}
+                    </div>
+                    {article.description && (
+                      <div style={{
+                        color: COLORS.WHITE,
+                        fontSize: '9px',
+                        marginBottom: '4px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        lineHeight: '1.3'
+                      }}>
+                        {article.description}
+                      </div>
+                    )}
+                    <a
+                      href={article.article_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: COLORS.CYAN, fontSize: '10px', textDecoration: 'underline' }}
+                    >
+                      READ MORE →
+                    </a>
                   </div>
-                  <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '3px' }}>
-                    {article.publisher?.name} | {new Date(article.published_utc).toLocaleDateString()}
-                  </div>
-                  <a
-                    href={article.article_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ color: COLORS.CYAN, fontSize: '10px', textDecoration: 'underline' }}
-                  >
-                    READ MORE →
-                  </a>
                 </div>
               )) : (
                 <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '15px', fontSize: '11px' }}>
@@ -621,21 +710,29 @@ const PolygonEqTab: React.FC = () => {
             </div>
           </div>
 
-          {/* Chart Placeholder */}
-          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}` }}>
-            <SectionHeader title="CHART" color={COLORS.BLUE} />
+          {/* Candlestick Chart */}
+          <div style={{ backgroundColor: COLORS.PANEL_BG, border: `1px solid ${COLORS.BORDER}`, display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <SectionHeader title="30-DAY CHART" color={COLORS.BLUE} />
             <div style={{
-              padding: '20px',
+              flex: 1,
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              color: COLORS.GRAY,
-              fontSize: '9px',
-              textAlign: 'center'
+              alignItems: 'stretch',
+              justifyContent: 'stretch',
+              padding: '4px',
             }}>
-              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📈</div>
-              <div>Chart integration<br/>ready here</div>
+              <CandlestickChart
+                data={chartData}
+                width={300}
+                height={230}
+                bullishColor={COLORS.GREEN}
+                bearishColor={COLORS.RED}
+                backgroundColor={COLORS.DARK_BG}
+                gridColor={COLORS.BORDER}
+                textColor={COLORS.GRAY}
+                showGrid={true}
+                showVolume={true}
+                showLabels={true}
+              />
             </div>
           </div>
         </div>

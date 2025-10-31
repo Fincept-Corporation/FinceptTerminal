@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface MarkerData {
   lat: number;
@@ -24,12 +25,14 @@ interface IntelligenceData {
 }
 
 export default function MaritimeTab() {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [markers, setMarkers] = useState<MarkerData[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<TradeRoute | null>(null);
   const [markerType, setMarkerType] = useState<MarkerData['type']>('Ship');
   const [showRoutes, setShowRoutes] = useState(true);
   const [showShips, setShowShips] = useState(true);
   const [showPlanes, setShowPlanes] = useState(true);
+  const [showSatellites, setShowSatellites] = useState(true);
   const [isRotating, setIsRotating] = useState(true);
   const [intelligence, setIntelligence] = useState<IntelligenceData>({
     timestamp: new Date().toISOString(),
@@ -384,7 +387,7 @@ export default function MaritimeTab() {
               lat: pos.lat,
               lng: pos.lng,
               size: 0.15,
-              color: 'rgba(255, 255, 255, 0.95)',
+              color: 'rgba(100, 180, 255, 0.95)',
               altitude: 0.003,
               label: ship.label,
               value: ship.value,
@@ -395,30 +398,37 @@ export default function MaritimeTab() {
 
         allLabels = shipData;
 
-        // Use customLayerData for ships - they rotate with the globe properly
+        // Use htmlElementsData for ships with ship icons (similar to planes)
         const initialShipPoints = generateShipPoints(shipData);
         world.customLayerData(initialShipPoints)
           .customThreeObject(d => {
-            // Create diamond/pyramid shape for ship marker (distinct from circular ports)
-            const geometry = new THREE.TetrahedronGeometry(0.7);
-            const material = new THREE.MeshBasicMaterial({
-              color: 0x00ccff,
-              transparent: true,
-              opacity: 0.9
-            });
-            const mesh = new THREE.Mesh(geometry, material);
+            // Create HTML element for ship icon
+            const el = document.createElement('div');
+            el.innerHTML = '🚢';
+            el.style.color = 'rgba(100, 180, 255, 0.95)';
+            el.style.fontSize = '16px';
+            el.style.cursor = 'pointer';
+            el.style.filter = 'drop-shadow(0 0 4px rgba(100, 180, 255, 0.8))';
+            el.title = \`\${d.label} - \${d.value} (\${d.vessels} vessels)\`;
 
-            // Add subtle glow effect
-            const glowGeometry = new THREE.SphereGeometry(1.0, 8, 8);
-            const glowMaterial = new THREE.MeshBasicMaterial({
-              color: 0x00ccff,
-              transparent: true,
-              opacity: 0.2
-            });
-            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-            mesh.add(glow);
+            // Convert HTML to texture for THREE.js
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.font = '48px Arial';
+            ctx.fillText('🚢', 8, 48);
 
-            return mesh;
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({
+              map: texture,
+              transparent: true,
+              opacity: 0.95
+            });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(2, 2, 1);
+
+            return sprite;
           })
           .customThreeObjectUpdate((obj, d) => {
             Object.assign(obj.position, world.getCoords(d.lat, d.lng, d.altitude));
@@ -510,6 +520,235 @@ export default function MaritimeTab() {
           const updatedPlanePoints = generatePlanePoints(planeData);
           world.htmlElementsData(updatedPlanePoints);
         }, 200);
+      }
+
+      function createSatellites() {
+        // Create satellite data in different orbits with unique orbital paths
+        // Speeds reduced significantly for more realistic and pleasant viewing
+        const satelliteOrbits = [
+          // Low Earth Orbit satellites (LEO) - closer to Earth, faster orbits
+          { name: 'GPS-1', inclination: 55, altitude: 0.35, speed: 0.0008, color: '#00ff00', orbitId: 'gps' },
+          { name: 'GPS-2', inclination: 55, altitude: 0.35, speed: 0.0008, color: '#00ff00', phaseOffset: Math.PI, orbitId: 'gps' },
+          { name: 'IRNSS-1', inclination: 29, altitude: 0.37, speed: 0.0007, color: '#ffd700', orbitId: 'irnss' },
+          { name: 'IRNSS-2', inclination: 29, altitude: 0.37, speed: 0.0007, color: '#ffd700', phaseOffset: Math.PI / 2, orbitId: 'irnss' },
+          { name: 'Starlink-1', inclination: 53, altitude: 0.32, speed: 0.0009, color: '#00ccff', orbitId: 'starlink' },
+          { name: 'Starlink-2', inclination: 53, altitude: 0.32, speed: 0.0009, color: '#00ccff', phaseOffset: 2 * Math.PI / 3, orbitId: 'starlink' },
+          { name: 'Starlink-3', inclination: 53, altitude: 0.32, speed: 0.0009, color: '#00ccff', phaseOffset: 4 * Math.PI / 3, orbitId: 'starlink' },
+          // Medium Earth Orbit (MEO) - higher altitude, medium speed
+          { name: 'GLONASS-1', inclination: 64.8, altitude: 0.42, speed: 0.0006, color: '#ff6b6b', orbitId: 'glonass' },
+          { name: 'GLONASS-2', inclination: 64.8, altitude: 0.42, speed: 0.0006, color: '#ff6b6b', phaseOffset: Math.PI / 3, orbitId: 'glonass' },
+          { name: 'Galileo-1', inclination: 56, altitude: 0.40, speed: 0.0007, color: '#9d4edd', orbitId: 'galileo' },
+          { name: 'Galileo-2', inclination: 56, altitude: 0.40, speed: 0.0007, color: '#9d4edd', phaseOffset: Math.PI / 2, orbitId: 'galileo' },
+          // Geostationary orbit representation (higher altitude, slowest)
+          { name: 'INSAT-1', inclination: 0, altitude: 0.50, speed: 0.0004, color: '#ff9500', orbitId: 'insat' },
+          { name: 'INSAT-2', inclination: 0, altitude: 0.50, speed: 0.0004, color: '#ff9500', phaseOffset: Math.PI, orbitId: 'insat' },
+        ];
+
+        const satellites = satelliteOrbits.map((orbit, idx) => ({
+          id: idx,
+          name: orbit.name,
+          inclination: orbit.inclination,
+          altitude: orbit.altitude,
+          speed: orbit.speed,
+          color: orbit.color,
+          orbitId: orbit.orbitId,
+          phase: orbit.phaseOffset || 0
+        }));
+
+        // Create orbital ring paths - draw complete circles for each unique orbit
+        function createOrbitalPaths() {
+          const uniqueOrbits = new Map();
+
+          satelliteOrbits.forEach(orbit => {
+            if (!uniqueOrbits.has(orbit.orbitId)) {
+              uniqueOrbits.set(orbit.orbitId, {
+                inclination: orbit.inclination,
+                altitude: orbit.altitude,
+                color: orbit.color,
+                name: orbit.orbitId
+              });
+            }
+          });
+
+          const orbitalPaths = [];
+          uniqueOrbits.forEach((orbit, orbitId) => {
+            const numPoints = 100; // Number of points to draw the orbital ring
+            const pathPoints = [];
+
+            for (let i = 0; i <= numPoints; i++) {
+              const angle = (i / numPoints) * 2 * Math.PI;
+              const inclinationRad = (orbit.inclination * Math.PI) / 180;
+
+              // Calculate position on orbit
+              const x = Math.cos(angle);
+              const y = Math.sin(angle) * Math.cos(inclinationRad);
+              const z = Math.sin(angle) * Math.sin(inclinationRad);
+
+              // Convert to lat/lng
+              const lat = Math.asin(y) * (180 / Math.PI);
+              const lng = Math.atan2(z, x) * (180 / Math.PI);
+
+              pathPoints.push([lat, lng]);
+            }
+
+            orbitalPaths.push({
+              id: orbitId,
+              color: orbit.color,
+              altitude: orbit.altitude,
+              points: pathPoints
+            });
+          });
+
+          return orbitalPaths;
+        }
+
+        const orbitalPaths = createOrbitalPaths();
+
+        // Store orbital paths for toggling
+        orbitalPathsData = orbitalPaths;
+
+        // Draw orbital rings using pathsData
+        world.pathsData(orbitalPaths)
+          .pathPoints('points')
+          .pathPointLat(p => p[0])
+          .pathPointLng(p => p[1])
+          .pathColor('color')
+          .pathStroke(0.8)
+          .pathDashLength(0.5)
+          .pathDashGap(0.1)
+          .pathDashAnimateTime(20000)
+          .pathTransitionDuration(0)
+          .pathPointAlt('altitude');
+
+        // Function to calculate satellite position in orbit
+        function calculateSatellitePosition(sat, time) {
+          const angle = sat.phase + time * sat.speed;
+
+          // Convert orbital elements to 3D position
+          const inclinationRad = (sat.inclination * Math.PI) / 180;
+
+          // Orbital position
+          const x = Math.cos(angle);
+          const y = Math.sin(angle) * Math.cos(inclinationRad);
+          const z = Math.sin(angle) * Math.sin(inclinationRad);
+
+          // Convert to lat/lng (approximate)
+          const lat = Math.asin(y) * (180 / Math.PI);
+          const lng = Math.atan2(z, x) * (180 / Math.PI);
+
+          return { lat, lng, altitude: sat.altitude };
+        }
+
+        // Create satellite objects with animation
+        const satelliteData = satellites.map((sat, idx) => ({
+          ...sat,
+          progress: (idx / satellites.length) // Distribute satellites evenly around orbit initially
+        }));
+
+        // Function to generate satellite HTML elements
+        function generateSatellitePoints(satsData) {
+          return satsData.map(sat => {
+            const angle = sat.progress * 2 * Math.PI;
+            const inclinationRad = (sat.inclination * Math.PI) / 180;
+
+            // Calculate position on orbit
+            const x = Math.cos(angle);
+            const y = Math.sin(angle) * Math.cos(inclinationRad);
+            const z = Math.sin(angle) * Math.sin(inclinationRad);
+
+            // Convert to lat/lng
+            const lat = Math.asin(y) * (180 / Math.PI);
+            const lng = Math.atan2(z, x) * (180 / Math.PI);
+
+            return {
+              lat: lat,
+              lng: lng,
+              altitude: sat.altitude,
+              name: sat.name,
+              color: sat.color
+            };
+          });
+        }
+
+        // Initial satellite positions - use objectsData for satellites (separate from planes)
+        const initialSatellitePoints = generateSatellitePoints(satelliteData);
+
+        world.objectsData(initialSatellitePoints)
+          .objectLat('lat')
+          .objectLng('lng')
+          .objectAltitude('altitude')
+          .objectLabel(d => \`
+            <div style="background: rgba(10,10,10,0.92); padding: 5px 9px; border-left: 2px solid \${d.color}; font-family: 'Segoe UI', sans-serif; font-size: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.4);">
+              <span style="color: #e0e0e0; font-weight: 500;">🛰 \${d.name}</span>
+            </div>
+          \`)
+          .objectThreeObject(d => {
+            // Create satellite icon using canvas texture with better visibility
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            // Add colored background circle for visibility
+            ctx.beginPath();
+            ctx.arc(64, 64, 50, 0, 2 * Math.PI);
+            ctx.fillStyle = d.color;
+            ctx.globalAlpha = 0.4;
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+
+            // Add bright border
+            ctx.strokeStyle = d.color;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw satellite emoji larger and centered
+            ctx.font = 'bold 70px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('🛰', 64, 64);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.SpriteMaterial({
+              map: texture,
+              transparent: true,
+              opacity: 1.0,
+              sizeAttenuation: true
+            });
+            const sprite = new THREE.Sprite(material);
+            sprite.scale.set(4, 4, 1);
+
+            // Add pulsing glow ring around satellite
+            const ringGeometry = new THREE.RingGeometry(1.5, 2.0, 16);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+              color: d.color,
+              transparent: true,
+              opacity: 0.6,
+              side: THREE.DoubleSide
+            });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+
+            const group = new THREE.Group();
+            group.add(sprite);
+            group.add(ring);
+
+            return group;
+          });
+
+        // Animate satellites along their orbits at a gentle, realistic pace
+        setInterval(() => {
+          if (showSatellitesFlag) {
+            // Update progress for each satellite with reduced multiplier
+            satelliteData.forEach(sat => {
+              sat.progress = (sat.progress + sat.speed * 0.15) % 1.0;
+            });
+
+            // Regenerate satellite positions
+            const updatedSatellitePoints = generateSatellitePoints(satelliteData);
+            world.objectsData(updatedSatellitePoints);
+          }
+        }, 100);
       }
 
       window.addMarker = function(lat, lng, title, type) {
@@ -612,6 +851,23 @@ export default function MaritimeTab() {
         userPausedRotation = !shouldRotate;
         world.controls().autoRotate = shouldRotate;
         console.log('Globe rotation:', shouldRotate ? 'enabled' : 'disabled');
+      };
+
+      var showSatellitesFlag = true;
+      var orbitalPathsData = [];
+
+      window.toggleSatellites = function() {
+        showSatellitesFlag = !showSatellitesFlag;
+
+        if (!showSatellitesFlag) {
+          // Hide satellites and orbital paths
+          world.objectsData([]);
+          world.pathsData([]);
+        } else {
+          // Show orbital paths again
+          world.pathsData(orbitalPathsData);
+          // Satellites will be updated by the interval
+        }
       };
 
         // Enable auto-rotation with enhanced zoom
@@ -763,6 +1019,7 @@ export default function MaritimeTab() {
         createRoutes();
         createShips();
         createPlanes();
+        createSatellites();
 
         // Handle window resize
         window.addEventListener('resize', () => {
@@ -854,9 +1111,25 @@ export default function MaritimeTab() {
                 <div style={{ color: '#888', fontSize: '8px' }}>ROUTES</div>
                 <div style={{ color: '#0ff', fontSize: '16px', fontWeight: 'bold' }}>{intelligence.monitored_routes}</div>
               </div>
+              <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '8px' }}>
+                <div style={{ color: '#888', fontSize: '8px' }}>AIRCRAFT</div>
+                <div style={{ color: 'rgba(255, 200, 100, 0.95)', fontSize: '16px', fontWeight: 'bold' }}>342</div>
+              </div>
+              <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '8px' }}>
+                <div style={{ color: '#888', fontSize: '8px' }}>SATELLITES</div>
+                <div style={{ color: 'rgba(138, 43, 226, 0.9)', fontSize: '16px', fontWeight: 'bold' }}>13</div>
+              </div>
               <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '8px', gridColumn: 'span 2' }}>
                 <div style={{ color: '#888', fontSize: '8px' }}>TRADE VOLUME (24H)</div>
                 <div style={{ color: '#00ff00', fontSize: '16px', fontWeight: 'bold' }}>{intelligence.trade_volume}</div>
+              </div>
+              <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '8px' }}>
+                <div style={{ color: '#888', fontSize: '8px' }}>MAJOR PORTS</div>
+                <div style={{ color: '#ffa500', fontSize: '14px', fontWeight: 'bold' }}>6</div>
+              </div>
+              <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '8px' }}>
+                <div style={{ color: '#888', fontSize: '8px' }}>AIRPORTS</div>
+                <div style={{ color: '#9d4edd', fontSize: '14px', fontWeight: 'bold' }}>8</div>
               </div>
             </div>
           </div>
@@ -964,6 +1237,26 @@ export default function MaritimeTab() {
                 }}
               >
                 AIRCRAFT
+              </button>
+              <button
+                onClick={() => {
+                  setShowSatellites(!showSatellites);
+                  if (mapRef.current?.contentWindow) {
+                    (mapRef.current.contentWindow as any).toggleSatellites?.();
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  background: showSatellites ? 'rgba(138, 43, 226, 0.9)' : '#0a0a0a',
+                  color: showSatellites ? '#fff' : 'rgba(138, 43, 226, 0.9)',
+                  border: '1px solid rgba(138, 43, 226, 0.9)',
+                  padding: '6px',
+                  fontSize: '9px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                SATELLITES
               </button>
             </div>
             <button
@@ -1151,6 +1444,15 @@ export default function MaritimeTab() {
               </div>
               <div style={{ marginBottom: '4px' }}>
                 <span style={{ color: '#0ff' }}>●</span> AIS transponders: STREAMING
+              </div>
+              <div style={{ marginBottom: '4px' }}>
+                <span style={{ color: 'rgba(138, 43, 226, 0.9)' }}>●</span> Orbital tracking: 13 SATs
+              </div>
+              <div style={{ marginBottom: '4px' }}>
+                <span style={{ color: 'rgba(255, 200, 100, 0.95)' }}>●</span> Air traffic: MONITORED
+              </div>
+              <div style={{ marginBottom: '4px' }}>
+                <span style={{ color: '#0ff' }}>●</span> Maritime routes: {tradeRoutes.length} corridors
               </div>
               <div style={{ marginTop: '8px', padding: '6px', background: '#000', border: '1px solid #1a1a1a', color: '#ffd700' }}>
                 ⚠ CLASSIFIED: For authorized personnel only

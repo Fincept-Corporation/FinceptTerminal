@@ -1,6 +1,8 @@
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import React, { useState } from 'react';
 import { RefreshCw, Download, Globe, TrendingUp, BarChart3, PieChart } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import bisDataService from '@/services/bisDataService';
 
 interface Indicator {
   code: string;
@@ -33,6 +35,8 @@ interface ProfileData {
 }
 
 export default function EconomicsTab() {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const [dataSource, setDataSource] = useState<'econdb' | 'bis'>('econdb');
   const [view, setView] = useState<'indicator' | 'profile' | 'countries'>('indicator');
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('Ready');
@@ -42,6 +46,47 @@ export default function EconomicsTab() {
   const [selectedCountry, setSelectedCountry] = useState('US');
   const [selectedTransform, setSelectedTransform] = useState('level');
   const [indicatorData, setIndicatorData] = useState<IndicatorData | null>(null);
+
+  // BIS-specific state
+  const [bisDataType, setBisDataType] = useState<
+    'policy_rates' | 'effective_exchange' | 'property_prices' | 'total_credit' |
+    'consumer_prices' | 'credit_gap' | 'debt_service' | 'cb_assets'
+  >('policy_rates');
+  const [bisStartDate, setBisStartDate] = useState(() => {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() - 1); // 1 year ago
+    return date.toISOString().split('T')[0];
+  });
+  const [bisEndDate, setBisEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // BIS available countries (only major economies with data)
+  const bisCountries = [
+    { code: 'US', name: 'United States' },
+    { code: 'CN', name: 'China' },
+    { code: 'JP', name: 'Japan' },
+    { code: 'GB', name: 'United Kingdom' },
+    { code: 'IN', name: 'India' },
+    { code: 'BR', name: 'Brazil' },
+    { code: 'CA', name: 'Canada' },
+    { code: 'KR', name: 'South Korea' },
+    { code: 'RU', name: 'Russia' },
+    { code: 'AU', name: 'Australia' },
+    { code: 'MX', name: 'Mexico' },
+    { code: 'ID', name: 'Indonesia' },
+    { code: 'SA', name: 'Saudi Arabia' },
+    { code: 'TR', name: 'Turkey' },
+    { code: 'CH', name: 'Switzerland' },
+    { code: 'ZA', name: 'South Africa' },
+    { code: 'AR', name: 'Argentina' },
+    { code: 'SE', name: 'Sweden' },
+    { code: 'NO', name: 'Norway' },
+    { code: 'PL', name: 'Poland' },
+    { code: 'TH', name: 'Thailand' },
+    { code: 'MY', name: 'Malaysia' },
+    { code: 'SG', name: 'Singapore' },
+    { code: 'HK', name: 'Hong Kong' },
+    { code: 'NZ', name: 'New Zealand' },
+  ];
 
   // Profile view state
   const [profileCountry, setProfileCountry] = useState('US');
@@ -101,21 +146,126 @@ export default function EconomicsTab() {
 
   const fetchIndicator = async () => {
     setLoading(true);
-    setStatus(`Fetching ${selectedIndicator} for ${selectedCountry}...`);
+    setStatus(`Fetching data for ${selectedCountry}...`);
 
     try {
-      const result = await invoke('execute_python_script', {
-        scriptName: 'econdb_data.py',
-        args: ['indicator', selectedIndicator, selectedCountry, '', '', selectedTransform]
-      }) as string;
+      if (dataSource === 'bis') {
+        // Fetch from BIS based on selected data type with date range
+        let result;
 
-      const data = JSON.parse(result);
+        // Map data type to BIS dataset and frequency
+        const bisDatasetMap: Record<string, { flow: string; freq: string }> = {
+          policy_rates: { flow: 'WS_CBPOL', freq: 'D' },
+          effective_exchange: { flow: 'WS_EER', freq: 'M' },
+          property_prices: { flow: 'WS_SPP', freq: 'Q' },
+          total_credit: { flow: 'WS_TC', freq: 'Q' },
+          consumer_prices: { flow: 'WS_LONG_CPI', freq: 'M' },
+          credit_gap: { flow: 'WS_CREDIT_GAP', freq: 'Q' },
+          debt_service: { flow: 'WS_DSR', freq: 'Q' },
+          cb_assets: { flow: 'WS_CBTA', freq: 'M' },
+        };
 
-      if (data.error) {
-        setStatus(`Error: ${data.error}`);
+        const dataset = bisDatasetMap[bisDataType];
+
+        if (bisDataType === 'policy_rates') {
+          result = await bisDataService.getCentralBankPolicyRates([selectedCountry], bisStartDate, bisEndDate);
+        } else if (bisDataType === 'effective_exchange') {
+          result = await bisDataService.getEffectiveExchangeRates([selectedCountry], bisStartDate, bisEndDate);
+        } else {
+          // Use generic get_data for other datasets
+          result = await bisDataService.getData(
+            dataset.flow,
+            `${dataset.freq}.${selectedCountry}`,
+            bisStartDate,
+            bisEndDate
+          );
+        }
+
+        if (result.success && result.data) {
+          // Transform BIS SDMX-JSON data to match indicatorData format
+          let observations: Observation[] = [];
+
+          try {
+            // BIS returns SDMX-JSON format: data.data.dataSets[0].series["0:0"].observations
+            const dataSets = result.data.data?.dataSets || [];
+            if (dataSets.length > 0) {
+              const dataSet = dataSets[0];
+              const series = dataSet.series;
+              const seriesKey = Object.keys(series || {})[0];
+
+              if (seriesKey && series[seriesKey]) {
+                const obsData = series[seriesKey].observations;
+
+                // Try to get TIME_PERIOD dimension values from structure
+                const timeDimension = result.data.structure?.dimensions?.observation?.find(
+                  (d: any) => d.id === 'TIME_PERIOD'
+                );
+                const timeValues = timeDimension?.values || [];
+
+                // Convert SDMX observations to our format
+                observations = Object.entries(obsData || {}).map(([index, value]: [string, any]) => {
+                  const timeIndex = parseInt(index);
+                  let dateValue: string;
+
+                  // Use TIME_PERIOD values if available, otherwise generate from reportingBegin
+                  if (timeValues.length > timeIndex) {
+                    dateValue = timeValues[timeIndex].id || timeValues[timeIndex].name;
+                  } else {
+                    // Fallback: generate date from reportingBegin
+                    const reportingBegin = dataSet.reportingBegin || '2020-01-01';
+                    const startDate = new Date(reportingBegin.split('T')[0]);
+                    const obsDate = new Date(startDate);
+                    obsDate.setDate(obsDate.getDate() + timeIndex);
+                    dateValue = obsDate.toISOString().split('T')[0];
+                  }
+
+                  const numValue = Array.isArray(value) ? parseFloat(value[0]) : parseFloat(value);
+
+                  return {
+                    date: dateValue,
+                    value: isNaN(numValue) ? 0 : numValue
+                  };
+                });
+              }
+            }
+          } catch (parseError) {
+            console.error('Error parsing BIS data:', parseError);
+            setStatus(`Error parsing BIS data: ${parseError}`);
+            return;
+          }
+
+          if (observations.length === 0) {
+            setStatus('No observations found in BIS data');
+            return;
+          }
+
+          setIndicatorData({
+            indicator: bisDataType,
+            country: selectedCountry,
+            transform: 'level',
+            observations: observations,
+            observation_count: observations.length,
+            metadata: result.data
+          });
+          setStatus(`Loaded ${observations.length} observations from BIS`);
+        } else {
+          setStatus(`Error: ${result.error || 'Failed to fetch BIS data'}`);
+        }
       } else {
-        setIndicatorData(data);
-        setStatus(`Loaded ${data.observation_count} observations`);
+        // Fetch from EconDB
+        const result = await invoke('execute_python_script', {
+          scriptName: 'econdb_data.py',
+          args: ['indicator', selectedIndicator, selectedCountry, '', '', selectedTransform]
+        }) as string;
+
+        const data = JSON.parse(result);
+
+        if (data.error) {
+          setStatus(`Error: ${data.error}`);
+        } else {
+          setIndicatorData(data);
+          setStatus(`Loaded ${data.observation_count} observations from EconDB`);
+        }
       }
     } catch (error) {
       setStatus(`Error: ${error}`);
@@ -185,7 +335,7 @@ export default function EconomicsTab() {
     const yRange = yMax - yMin;
 
     return (
-      <svg width={w} height={h} style={{ backgroundColor: '#0a0a0a', width: '100%', height: 'auto' }}>
+      <svg width={w} height={h} style={{ backgroundColor: 'colors.panel', width: '100%', height: 'auto' }}>
         {/* Axes */}
         <line x1={ml} y1={mt} x2={ml} y2={h - mb} stroke="#404040" strokeWidth="1" />
         <line x1={ml} y1={h - mb} x2={w - mr} y2={h - mb} stroke="#404040" strokeWidth="1" />
@@ -241,19 +391,52 @@ export default function EconomicsTab() {
   };
 
   return (
-    <div style={{ width: '100%', height: '100%', backgroundColor: '#000', color: '#d4d4d4', fontFamily: 'Consolas, monospace', fontSize: '11px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ width: '100%', height: '100%', backgroundColor: 'colors.background', color: '#d4d4d4', fontFamily: 'Consolas, monospace', fontSize: '11px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '8px 12px', borderBottom: '1px solid #404040', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-        <span style={{ color: '#ea580c', fontWeight: 'bold' }}>ECONOMICS - ECONDB</span>
+        <span style={{ color: '#ea580c', fontWeight: 'bold' }}>ECONOMICS - {dataSource.toUpperCase()}</span>
         <span style={{ color: '#10b981', fontSize: '10px' }}>● {status}</span>
         <div style={{ flex: 1 }}></div>
-        <button onClick={() => setView('indicator')} style={{ padding: '4px 10px', backgroundColor: view === 'indicator' ? '#ea580c' : '#2d2d2d', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
+
+        {/* Data Source Toggle */}
+        <div style={{ display: 'flex', gap: '4px', marginRight: '12px' }}>
+          <button
+            onClick={() => setDataSource('econdb')}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: dataSource === 'econdb' ? '#3b82f6' : '#2d2d2d',
+              color: colors.text,
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '9px',
+              borderRadius: '2px'
+            }}
+          >
+            EconDB
+          </button>
+          <button
+            onClick={() => setDataSource('bis')}
+            style={{
+              padding: '4px 8px',
+              backgroundColor: dataSource === 'bis' ? '#3b82f6' : '#2d2d2d',
+              color: colors.text,
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '9px',
+              borderRadius: '2px'
+            }}
+          >
+            BIS
+          </button>
+        </div>
+
+        <button onClick={() => setView('indicator')} style={{ padding: '4px 10px', backgroundColor: view === 'indicator' ? '#ea580c' : '#2d2d2d', color: 'colors.text', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
           <BarChart3 size={10} style={{ display: 'inline', marginRight: '4px' }} />INDICATOR
         </button>
-        <button onClick={() => setView('profile')} style={{ padding: '4px 10px', backgroundColor: view === 'profile' ? '#ea580c' : '#2d2d2d', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
+        <button onClick={() => setView('profile')} style={{ padding: '4px 10px', backgroundColor: view === 'profile' ? '#ea580c' : '#2d2d2d', color: 'colors.text', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
           <PieChart size={10} style={{ display: 'inline', marginRight: '4px' }} />PROFILE
         </button>
-        <button onClick={() => setView('countries')} style={{ padding: '4px 10px', backgroundColor: view === 'countries' ? '#ea580c' : '#2d2d2d', color: '#fff', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
+        <button onClick={() => setView('countries')} style={{ padding: '4px 10px', backgroundColor: view === 'countries' ? '#ea580c' : '#2d2d2d', color: 'colors.text', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
           <Globe size={10} style={{ display: 'inline', marginRight: '4px' }} />COUNTRIES
         </button>
       </div>
@@ -261,31 +444,87 @@ export default function EconomicsTab() {
       {/* Main Content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left Panel - Controls */}
-        <div style={{ width: '300px', borderRight: '1px solid #404040', display: 'flex', flexDirection: 'column', backgroundColor: '#0a0a0a', overflowY: 'auto' }}>
+        <div style={{ width: '300px', borderRight: '1px solid #404040', display: 'flex', flexDirection: 'column', backgroundColor: 'colors.panel', overflowY: 'auto' }}>
           {view === 'indicator' && (
             <div style={{ padding: '12px' }}>
-              <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>INDICATOR</div>
-              <select value={selectedIndicator} onChange={(e) => setSelectedIndicator(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
-                {indicators.map(ind => (
-                  <option key={ind.code} value={ind.code}>{ind.name}</option>
-                ))}
-              </select>
+              {dataSource === 'bis' ? (
+                <>
+                  {/* BIS-specific controls */}
+                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>BIS DATA TYPE</div>
+                  <select value={bisDataType} onChange={(e) => setBisDataType(e.target.value as any)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
+                    <optgroup label="Interest Rates & FX">
+                      <option value="policy_rates">Central Bank Policy Rates (Daily)</option>
+                      <option value="effective_exchange">Effective Exchange Rates (Monthly)</option>
+                    </optgroup>
+                    <optgroup label="Property & Credit">
+                      <option value="property_prices">Property Prices (Quarterly)</option>
+                      <option value="total_credit">Total Credit (Quarterly)</option>
+                      <option value="credit_gap">Credit-to-GDP Gaps (Quarterly)</option>
+                      <option value="debt_service">Debt Service Ratios (Quarterly)</option>
+                    </optgroup>
+                    <optgroup label="Other Indicators">
+                      <option value="consumer_prices">Consumer Prices (Monthly)</option>
+                      <option value="cb_assets">Central Bank Assets (Monthly)</option>
+                    </optgroup>
+                  </select>
 
-              <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>COUNTRY</div>
-              <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
-                {countries.map(c => (
-                  <option key={c.code} value={c.code}>{c.name}</option>
-                ))}
-              </select>
+                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>COUNTRY (G20 + Major Economies)</div>
+                  <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
+                    {bisCountries.map(c => (
+                      <option key={c.code} value={c.code}>{c.name}</option>
+                    ))}
+                  </select>
 
-              <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>TRANSFORM</div>
-              <select value={selectedTransform} onChange={(e) => setSelectedTransform(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '16px', fontSize: '10px' }}>
-                {transforms.map(t => (
-                  <option key={t.code} value={t.code}>{t.name}</option>
-                ))}
-              </select>
+                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>START DATE</div>
+                  <input
+                    type="date"
+                    value={bisStartDate}
+                    onChange={(e) => setBisStartDate(e.target.value)}
+                    style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}
+                  />
 
-              <button onClick={fetchIndicator} disabled={loading} style={{ width: '100%', padding: '8px', backgroundColor: '#ea580c', color: '#fff', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px', marginBottom: '8px' }}>
+                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>END DATE</div>
+                  <input
+                    type="date"
+                    value={bisEndDate}
+                    onChange={(e) => setBisEndDate(e.target.value)}
+                    style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}
+                  />
+
+                  <div style={{ padding: '8px', backgroundColor: '#1a1a1a', border: '1px solid #404040', fontSize: '9px', marginBottom: '12px' }}>
+                    <div style={{ color: '#3b82f6', marginBottom: '4px' }}>ℹ️ BIS Data Info</div>
+                    <div style={{ color: '#737373', lineHeight: '1.4' }}>
+                      Limit date range to avoid slow loading. Recommended: 1-2 years max.
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* EconDB controls */}
+                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>INDICATOR</div>
+                  <select value={selectedIndicator} onChange={(e) => setSelectedIndicator(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
+                    {indicators.map(ind => (
+                      <option key={ind.code} value={ind.code}>{ind.name}</option>
+                    ))}
+                  </select>
+
+                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>COUNTRY</div>
+                  <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '12px', fontSize: '10px' }}>
+                    {countries.map(c => (
+                      <option key={c.code} value={c.code}>{c.name}</option>
+                    ))}
+                  </select>
+
+                  <div style={{ color: '#ea580c', fontSize: '10px', marginBottom: '8px' }}>TRANSFORM</div>
+                  <select value={selectedTransform} onChange={(e) => setSelectedTransform(e.target.value)} style={{ width: '100%', padding: '6px', backgroundColor: '#1a1a1a', color: '#d4d4d4', border: '1px solid #404040', marginBottom: '16px', fontSize: '10px' }}>
+                    {transforms.map(t => (
+                      <option key={t.code} value={t.code}>{t.name}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              <button onClick={fetchIndicator} disabled={loading} style={{ width: '100%', padding: '8px', backgroundColor: '#ea580c', color: 'colors.text', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px', marginBottom: '8px' }}>
                 {loading ? 'Loading...' : 'FETCH DATA'}
               </button>
 
@@ -314,7 +553,7 @@ export default function EconomicsTab() {
                 ))}
               </select>
 
-              <button onClick={fetchProfile} disabled={loading} style={{ width: '100%', padding: '8px', backgroundColor: '#ea580c', color: '#fff', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px' }}>
+              <button onClick={fetchProfile} disabled={loading} style={{ width: '100%', padding: '8px', backgroundColor: '#ea580c', color: 'colors.text', border: 'none', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '10px' }}>
                 {loading ? 'Loading...' : 'LOAD PROFILE'}
               </button>
             </div>
@@ -350,7 +589,7 @@ export default function EconomicsTab() {
 
                 <div style={{ marginTop: '24px' }}>
                   <div style={{ color: '#ea580c', fontSize: '11px', marginBottom: '8px' }}>DATA TABLE</div>
-                  <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #404040', backgroundColor: '#0a0a0a' }}>
+                  <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #404040', backgroundColor: 'colors.panel' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
                       <thead style={{ position: 'sticky', top: 0, backgroundColor: '#1a1a1a' }}>
                         <tr>
@@ -379,9 +618,9 @@ export default function EconomicsTab() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
                   {Object.entries(profileData.indicators).map(([name, data]) => (
-                    <div key={name} style={{ padding: '12px', backgroundColor: '#0a0a0a', border: '1px solid #404040' }}>
+                    <div key={name} style={{ padding: '12px', backgroundColor: 'colors.panel', border: '1px solid #404040' }}>
                       <div style={{ color: '#fbbf24', fontSize: '10px', marginBottom: '8px' }}>{name}</div>
-                      <div style={{ color: '#fff', fontSize: '20px', fontWeight: 'bold', marginBottom: '4px' }}>
+                      <div style={{ color: 'colors.text', fontSize: '20px', fontWeight: 'bold', marginBottom: '4px' }}>
                         {typeof data.value === 'number' ? data.value.toFixed(4) : data.value}
                       </div>
                       <div style={{ color: '#737373', fontSize: '9px' }}>{data.date}</div>

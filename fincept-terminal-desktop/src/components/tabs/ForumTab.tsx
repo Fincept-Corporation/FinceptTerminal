@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ForumApiService, ForumPost as APIForumPost, ForumCategory, ForumStats, ForumComment as APIForumComment } from '../../services/forumApi';
 
@@ -38,6 +39,7 @@ interface ForumUser {
 }
 
 const ForumTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const { session } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeCategory, setActiveCategory] = useState('ALL');
@@ -69,7 +71,7 @@ const ForumTab: React.FC = () => {
   const [profileEdit, setProfileEdit] = useState({
     display_name: '',
     bio: '',
-    avatar_color: '#FFA500',
+    avatar_color: 'colors.primary',
     signature: ''
   });
 
@@ -81,17 +83,17 @@ const ForumTab: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<Array<{ user: string; action: string; target: string; time: string }>>([]);
 
   // Bloomberg color scheme
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_RED = '#FF0000';
-  const BLOOMBERG_GREEN = '#00C800';
-  const BLOOMBERG_YELLOW = '#FFFF00';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_BLUE = '#6496FA';
+  const BLOOMBERG_ORANGE = 'colors.primary';
+  const BLOOMBERG_WHITE = 'colors.text';
+  const BLOOMBERG_RED = 'colors.alert';
+  const BLOOMBERG_GREEN = 'colors.secondary';
+  const BLOOMBERG_YELLOW = 'colors.warning';
+  const BLOOMBERG_GRAY = 'colors.textMuted';
+  const BLOOMBERG_BLUE = 'colors.info';
   const BLOOMBERG_PURPLE = '#C864FF';
-  const BLOOMBERG_CYAN = '#00FFFF';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_PANEL_BG = '#0a0a0a';
+  const BLOOMBERG_CYAN = 'colors.accent';
+  const BLOOMBERG_DARK_BG = 'colors.background';
+  const BLOOMBERG_PANEL_BG = 'colors.panel';
 
   // Top contributors - static for now
   const topContributors: ForumUser[] = [
@@ -417,7 +419,7 @@ const ForumTab: React.FC = () => {
         setProfileEdit({
           display_name: profile.display_name || '',
           bio: profile.bio || '',
-          avatar_color: profile.avatar_color || '#FFA500',
+          avatar_color: profile.avatar_color || 'colors.primary',
           signature: profile.signature || ''
         });
         setShowProfile(true);
