@@ -1,24 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, ScatterChart, Scatter, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 const GeopoliticsTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activePanel, setActivePanel] = useState('overview');
   const [alertCount, setAlertCount] = useState(127);
   const [dataUpdateCount, setDataUpdateCount] = useState(0);
-
-  // Bloomberg color scheme
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_RED = '#FF0000';
-  const BLOOMBERG_GREEN = '#00C800';
-  const BLOOMBERG_YELLOW = '#FFFF00';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_BLUE = '#64B4FF';
-  const BLOOMBERG_PURPLE = '#C864FF';
-  const BLOOMBERG_CYAN = '#00FFFF';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_PANEL_BG = '#0a0a0a';
 
   // Risk colors
   const RISK_CRITICAL = '#FF0000';
@@ -133,19 +122,19 @@ const GeopoliticsTab: React.FC = () => {
       case "URGENT": return '#FF6400';
       case "IMMEDIATE": return '#FFC800';
       case "ROUTINE": return '#00C800';
-      default: return BLOOMBERG_GRAY;
+      default: return colors.textMuted;
     }
   };
 
   const createMatrixDisplay = () => (
     <div style={{
-      backgroundColor: BLOOMBERG_PANEL_BG,
-      border: `1px solid ${BLOOMBERG_GRAY}`,
+      backgroundColor: colors.panel,
+      border: `1px solid ${colors.textMuted}`,
       padding: '6px',
       height: '220px',
       overflow: 'auto'
     }}>
-      <div style={{ color: BLOOMBERG_ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
+      <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
         CORRELATION MATRIX - GEOPOLITICAL RISK vs MARKETS
       </div>
       <div style={{
@@ -155,12 +144,12 @@ const GeopoliticsTab: React.FC = () => {
         fontSize: '10px',
         marginBottom: '4px'
       }}>
-        <div style={{ color: BLOOMBERG_WHITE, fontWeight: 'bold' }}>Asset</div>
-        <div style={{ color: BLOOMBERG_RED, fontWeight: 'bold' }}>MIL</div>
-        <div style={{ color: BLOOMBERG_YELLOW, fontWeight: 'bold' }}>ECO</div>
-        <div style={{ color: BLOOMBERG_BLUE, fontWeight: 'bold' }}>CYB</div>
-        <div style={{ color: BLOOMBERG_PURPLE, fontWeight: 'bold' }}>NUC</div>
-        <div style={{ color: BLOOMBERG_CYAN, fontWeight: 'bold' }}>VOL</div>
+        <div style={{ color: colors.text, fontWeight: 'bold' }}>Asset</div>
+        <div style={{ color: colors.alert, fontWeight: 'bold' }}>MIL</div>
+        <div style={{ color: colors.warning, fontWeight: 'bold' }}>ECO</div>
+        <div style={{ color: colors.info, fontWeight: 'bold' }}>CYB</div>
+        <div style={{ color: colors.purple, fontWeight: 'bold' }}>NUC</div>
+        <div style={{ color: colors.accent, fontWeight: 'bold' }}>VOL</div>
       </div>
       {correlationMatrix.map((item, index) => (
         <div key={index} style={{
@@ -171,7 +160,7 @@ const GeopoliticsTab: React.FC = () => {
           marginBottom: '2px',
           backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent'
         }}>
-          <div style={{ color: BLOOMBERG_WHITE }}>{item.asset}</div>
+          <div style={{ color: colors.text }}>{item.asset}</div>
           <div style={{ color: item.military > 0.8 ? RISK_CRITICAL : item.military > 0.6 ? RISK_HIGH : RISK_MEDIUM }}>
             {item.military.toFixed(2)}
           </div>
@@ -195,13 +184,15 @@ const GeopoliticsTab: React.FC = () => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG_DARK_BG,
-      color: BLOOMBERG_WHITE,
-      fontFamily: 'Consolas, monospace',
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      fontStyle: fontStyle,
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
-      fontSize: '12px'
+      fontSize: fontSize.body
     }}>
       <style>{`
         /* Custom scrollbar styles for Geopolitics Tab */
@@ -222,70 +213,70 @@ const GeopoliticsTab: React.FC = () => {
       `}</style>
       {/* Complex Header with Multiple Status Lines */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         padding: '4px 8px',
         flexShrink: 0
       }}>
         {/* Main Status Line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
-          <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>GEOPOLITICAL INTELLIGENCE SYSTEM</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+          <span style={{ color: colors.primary, fontWeight: 'bold' }}>GEOPOLITICAL INTELLIGENCE SYSTEM</span>
+          <span style={{ color: colors.text }}>|</span>
           <span style={{ color: RISK_HIGH, fontWeight: 'bold' }}>GLOBAL RISK: 7.34/10</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_RED }}>ACTIVE CONFLICTS: 15</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_YELLOW }}>SANCTIONS: 3,127 (+3)</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: alertCount > 125 ? BLOOMBERG_RED : BLOOMBERG_YELLOW }}>ALERTS: {alertCount}</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GREEN, animation: 'blink 1s infinite' }}>● INTEL: LIVE</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.alert }}>ACTIVE CONFLICTS: 15</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.warning }}>SANCTIONS: 3,127 (+3)</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: alertCount > 125 ? colors.alert : colors.warning }}>ALERTS: {alertCount}</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.secondary, animation: 'blink 1s infinite' }}>● INTEL: LIVE</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
         </div>
 
         {/* Secondary Status Line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', marginBottom: '2px' }}>
-          <span style={{ color: BLOOMBERG_GRAY }}>FEEDS:</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>SIGINT●</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>HUMINT●</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>CYBINT●</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>ECONINT●</span>
-          <span style={{ color: BLOOMBERG_YELLOW }}>GEOINT◐</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>LATENCY:</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>89ms</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>UPDATES:</span>
-          <span style={{ color: BLOOMBERG_BLUE }}>{dataUpdateCount}</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>CLASSIFICATION:</span>
-          <span style={{ color: BLOOMBERG_RED }}>TOP SECRET//SCI</span>
+          <span style={{ color: colors.textMuted }}>FEEDS:</span>
+          <span style={{ color: colors.secondary }}>SIGINT●</span>
+          <span style={{ color: colors.secondary }}>HUMINT●</span>
+          <span style={{ color: colors.secondary }}>CYBINT●</span>
+          <span style={{ color: colors.secondary }}>ECONINT●</span>
+          <span style={{ color: colors.warning }}>GEOINT◐</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.textMuted }}>LATENCY:</span>
+          <span style={{ color: colors.secondary }}>89ms</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.textMuted }}>UPDATES:</span>
+          <span style={{ color: colors.info }}>{dataUpdateCount}</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.textMuted }}>CLASSIFICATION:</span>
+          <span style={{ color: colors.alert }}>TOP SECRET//SCI</span>
         </div>
 
         {/* Market Ticker */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px' }}>
-          <span style={{ color: BLOOMBERG_GRAY }}>MARKETS:</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>NIFTY: 24,867 (+234)</span>
-          <span style={{ color: BLOOMBERG_BLUE }}>INR: 83.14 (-0.08)</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>BRENT: $82.45 (+2.1)</span>
-          <span style={{ color: BLOOMBERG_YELLOW }}>GOLD: $2,047 (+18.3)</span>
-          <span style={{ color: BLOOMBERG_RED }}>VIX: 18.45 (-1.2)</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>DXY: 104.78 (+0.3)</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>ENERGY:</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>+3.8%</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>DEFENSE:</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>+4.2%</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>TECH:</span>
-          <span style={{ color: BLOOMBERG_RED }}>-2.1%</span>
+          <span style={{ color: colors.textMuted }}>MARKETS:</span>
+          <span style={{ color: colors.secondary }}>NIFTY: 24,867 (+234)</span>
+          <span style={{ color: colors.info }}>INR: 83.14 (-0.08)</span>
+          <span style={{ color: colors.secondary }}>BRENT: $82.45 (+2.1)</span>
+          <span style={{ color: colors.warning }}>GOLD: $2,047 (+18.3)</span>
+          <span style={{ color: colors.alert }}>VIX: 18.45 (-1.2)</span>
+          <span style={{ color: colors.secondary }}>DXY: 104.78 (+0.3)</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.textMuted }}>ENERGY:</span>
+          <span style={{ color: colors.secondary }}>+3.8%</span>
+          <span style={{ color: colors.textMuted }}>DEFENSE:</span>
+          <span style={{ color: colors.secondary }}>+4.2%</span>
+          <span style={{ color: colors.textMuted }}>TECH:</span>
+          <span style={{ color: colors.alert }}>-2.1%</span>
         </div>
       </div>
 
       {/* Function Keys with Sub-categories */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         padding: '3px 6px',
         flexShrink: 0
       }}>
@@ -305,9 +296,9 @@ const GeopoliticsTab: React.FC = () => {
             { key: "F12", label: "CYBER", status: "●" }
           ].map(item => (
             <button key={item.key} style={{
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              color: colors.text,
               padding: '2px 4px',
               fontSize: '12px',
               height: '18px',
@@ -315,12 +306,12 @@ const GeopoliticsTab: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <span style={{ color: BLOOMBERG_YELLOW }}>{item.key}:</span>
+              <span style={{ color: colors.warning }}>{item.key}:</span>
               <span style={{ marginLeft: '2px' }}>{item.label}</span>
               <span style={{
                 marginLeft: '2px',
-                color: item.status === '●' ? BLOOMBERG_GREEN :
-                       item.status === '◐' ? BLOOMBERG_YELLOW : BLOOMBERG_GRAY
+                color: item.status === '●' ? colors.secondary :
+                       item.status === '◐' ? colors.warning : colors.textMuted
               }}>
                 {item.status}
               </span>
@@ -335,15 +326,15 @@ const GeopoliticsTab: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px', marginBottom: '4px', height: '180px' }}>
           {/* Real-time Intelligence Stream */}
           <div style={{
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
               REAL-TIME INTELLIGENCE STREAM [CLASSIFICATION: TS//SCI]
             </div>
-            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '4px' }}></div>
+            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
             {intelligenceStream.map((intel, index) => (
               <div key={index} style={{
@@ -353,18 +344,18 @@ const GeopoliticsTab: React.FC = () => {
                 paddingLeft: '4px'
               }}>
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '1px' }}>
-                  <span style={{ color: BLOOMBERG_GRAY, minWidth: '50px' }}>{intel.time}</span>
+                  <span style={{ color: colors.textMuted, minWidth: '50px' }}>{intel.time}</span>
                   <span style={{ color: getPriorityColor(intel.priority), fontWeight: 'bold', minWidth: '60px' }}>
                     [{intel.priority}]
                   </span>
-                  <span style={{ color: BLOOMBERG_BLUE, minWidth: '50px' }}>[{intel.source}]</span>
-                  <span style={{ color: BLOOMBERG_PURPLE, minWidth: '30px' }}>{intel.region}</span>
-                  <span style={{ color: BLOOMBERG_YELLOW, minWidth: '30px' }}>{intel.confidence}%</span>
+                  <span style={{ color: colors.info, minWidth: '50px' }}>[{intel.source}]</span>
+                  <span style={{ color: colors.purple, minWidth: '30px' }}>{intel.region}</span>
+                  <span style={{ color: colors.warning, minWidth: '30px' }}>{intel.confidence}%</span>
                 </div>
-                <div style={{ color: BLOOMBERG_WHITE, lineHeight: '1.1', marginBottom: '1px' }}>
+                <div style={{ color: colors.text, lineHeight: '1.1', marginBottom: '1px' }}>
                   {intel.event}
                 </div>
-                <div style={{ color: BLOOMBERG_GRAY, fontSize: '7px' }}>
+                <div style={{ color: colors.textMuted, fontSize: '7px' }}>
                   Classification: {intel.classification}
                 </div>
               </div>
@@ -373,12 +364,12 @@ const GeopoliticsTab: React.FC = () => {
 
           {/* Country Risk Matrix */}
           <div style={{
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
               COUNTRY RISK ASSESSMENT MATRIX
             </div>
             <div style={{
@@ -388,13 +379,13 @@ const GeopoliticsTab: React.FC = () => {
               fontSize: '12px',
               marginBottom: '4px'
             }}>
-              <div style={{ color: BLOOMBERG_WHITE, fontWeight: 'bold' }}>CTRY</div>
-              <div style={{ color: BLOOMBERG_RED, fontWeight: 'bold' }}>MIL</div>
-              <div style={{ color: BLOOMBERG_YELLOW, fontWeight: 'bold' }}>ECO</div>
-              <div style={{ color: BLOOMBERG_BLUE, fontWeight: 'bold' }}>POL</div>
-              <div style={{ color: BLOOMBERG_PURPLE, fontWeight: 'bold' }}>TOT</div>
-              <div style={{ color: BLOOMBERG_CYAN, fontWeight: 'bold' }}>TRD</div>
-              <div style={{ color: BLOOMBERG_GRAY, fontWeight: 'bold' }}>SAN</div>
+              <div style={{ color: colors.text, fontWeight: 'bold' }}>CTRY</div>
+              <div style={{ color: colors.alert, fontWeight: 'bold' }}>MIL</div>
+              <div style={{ color: colors.warning, fontWeight: 'bold' }}>ECO</div>
+              <div style={{ color: colors.info, fontWeight: 'bold' }}>POL</div>
+              <div style={{ color: colors.purple, fontWeight: 'bold' }}>TOT</div>
+              <div style={{ color: colors.accent, fontWeight: 'bold' }}>TRD</div>
+              <div style={{ color: colors.textMuted, fontWeight: 'bold' }}>SAN</div>
             </div>
             {countryRiskData.map((country, index) => (
               <div key={index} style={{
@@ -405,18 +396,18 @@ const GeopoliticsTab: React.FC = () => {
                 marginBottom: '1px',
                 backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent'
               }}>
-                <div style={{ color: BLOOMBERG_WHITE, fontWeight: 'bold' }}>{country.country}</div>
+                <div style={{ color: colors.text, fontWeight: 'bold' }}>{country.country}</div>
                 <div style={{ color: getRiskColor(country.military) }}>{country.military.toFixed(1)}</div>
                 <div style={{ color: getRiskColor(country.economic) }}>{country.economic.toFixed(1)}</div>
                 <div style={{ color: getRiskColor(country.political) }}>{country.political.toFixed(1)}</div>
                 <div style={{ color: getRiskColor(country.total) }}>{country.total.toFixed(1)}</div>
                 <div style={{
-                  color: country.trend === 'up' ? BLOOMBERG_RED :
-                         country.trend === 'down' ? BLOOMBERG_GREEN : BLOOMBERG_YELLOW
+                  color: country.trend === 'up' ? colors.alert :
+                         country.trend === 'down' ? colors.secondary : colors.warning
                 }}>
                   {country.trend === 'up' ? '↑' : country.trend === 'down' ? '↓' : '→'}
                 </div>
-                <div style={{ color: country.sanctions > 500 ? BLOOMBERG_RED : country.sanctions > 50 ? BLOOMBERG_YELLOW : BLOOMBERG_GREEN }}>
+                <div style={{ color: country.sanctions > 500 ? colors.alert : country.sanctions > 50 ? colors.warning : colors.secondary }}>
                   {country.sanctions}
                 </div>
               </div>
@@ -425,15 +416,15 @@ const GeopoliticsTab: React.FC = () => {
 
           {/* Economic Indicators Dashboard */}
           <div style={{
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
               ECONOMIC THREAT INDICATORS
             </div>
-            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '4px' }}></div>
+            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
             {economicIndicators.map((indicator, index) => (
               <div key={index} style={{
@@ -446,31 +437,31 @@ const GeopoliticsTab: React.FC = () => {
                 padding: '1px 2px'
               }}>
                 <div style={{ flex: 1 }}>
-                  <span style={{ color: BLOOMBERG_WHITE, fontWeight: indicator.alert ? 'bold' : 'normal' }}>
+                  <span style={{ color: colors.text, fontWeight: indicator.alert ? 'bold' : 'normal' }}>
                     {indicator.name}
                   </span>
-                  {indicator.alert && <span style={{ color: BLOOMBERG_RED, marginLeft: '2px' }}>⚠</span>}
+                  {indicator.alert && <span style={{ color: colors.alert, marginLeft: '2px' }}>⚠</span>}
                 </div>
                 <div style={{
-                  color: indicator.change > 0 ? BLOOMBERG_GREEN :
-                         indicator.change < 0 ? BLOOMBERG_RED : BLOOMBERG_GRAY,
+                  color: indicator.change > 0 ? colors.secondary :
+                         indicator.change < 0 ? colors.alert : colors.textMuted,
                   minWidth: '60px',
                   textAlign: 'right'
                 }}>
                   {indicator.current.toLocaleString()}
                 </div>
                 <div style={{
-                  color: indicator.change > 0 ? BLOOMBERG_GREEN :
-                         indicator.change < 0 ? BLOOMBERG_RED : BLOOMBERG_GRAY,
+                  color: indicator.change > 0 ? colors.secondary :
+                         indicator.change < 0 ? colors.alert : colors.textMuted,
                   minWidth: '40px',
                   textAlign: 'right'
                 }}>
                   {indicator.change > 0 ? '+' : ''}{indicator.change}
                 </div>
                 <div style={{
-                  color: indicator.impact === 'Critical' ? BLOOMBERG_RED :
-                         indicator.impact === 'High' ? BLOOMBERG_ORANGE :
-                         indicator.impact === 'Medium' ? BLOOMBERG_YELLOW : BLOOMBERG_GREEN,
+                  color: indicator.impact === 'Critical' ? colors.alert :
+                         indicator.impact === 'High' ? colors.primary :
+                         indicator.impact === 'Medium' ? colors.warning : colors.secondary,
                   minWidth: '20px',
                   textAlign: 'center',
                   fontSize: '11px'
@@ -486,55 +477,55 @@ const GeopoliticsTab: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '4px', marginBottom: '4px', height: '240px' }}>
           {/* Complex Risk Forecast Chart */}
           <div style={{
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
               MULTI-VECTOR RISK FORECAST - 90 DAY PREDICTIVE MODEL
             </div>
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={riskForecastData.slice(0, 30)}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="day" stroke={BLOOMBERG_WHITE} fontSize={10} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={10} domain={[5, 10]} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="day" stroke={colors.text} fontSize={10} />
+                <YAxis stroke={colors.text} fontSize={10} domain={[5, 10]} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: BLOOMBERG_DARK_BG,
-                    border: `1px solid ${BLOOMBERG_GRAY}`,
-                    color: BLOOMBERG_WHITE,
+                    backgroundColor: colors.background,
+                    border: `1px solid ${colors.textMuted}`,
+                    color: colors.text,
                     fontSize: '10px'
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '10px' }} />
-                <Line type="monotone" dataKey="baseRisk" stroke={BLOOMBERG_GREEN} strokeWidth={1} name="Base Risk" dot={false} />
-                <Line type="monotone" dataKey="militaryRisk" stroke={BLOOMBERG_RED} strokeWidth={1} name="Military" dot={false} />
-                <Line type="monotone" dataKey="economicRisk" stroke={BLOOMBERG_YELLOW} strokeWidth={1} name="Economic" dot={false} />
-                <Line type="monotone" dataKey="cyberRisk" stroke={BLOOMBERG_BLUE} strokeWidth={1} name="Cyber" dot={false} />
-                <Line type="monotone" dataKey="nuclearRisk" stroke={BLOOMBERG_PURPLE} strokeWidth={1} name="Nuclear" dot={false} />
+                <Line type="monotone" dataKey="baseRisk" stroke={colors.secondary} strokeWidth={1} name="Base Risk" dot={false} />
+                <Line type="monotone" dataKey="militaryRisk" stroke={colors.alert} strokeWidth={1} name="Military" dot={false} />
+                <Line type="monotone" dataKey="economicRisk" stroke={colors.warning} strokeWidth={1} name="Economic" dot={false} />
+                <Line type="monotone" dataKey="cyberRisk" stroke={colors.info} strokeWidth={1} name="Cyber" dot={false} />
+                <Line type="monotone" dataKey="nuclearRisk" stroke={colors.purple} strokeWidth={1} name="Nuclear" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           {/* Threat Radar Chart */}
           <div style={{
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
               THREAT RADAR
             </div>
             <ResponsiveContainer width="100%" height={200}>
               <RadarChart data={threatRadarData}>
-                <PolarGrid stroke={BLOOMBERG_GRAY} />
-                <PolarAngleAxis dataKey="threat" tick={{ fontSize: 10, fill: BLOOMBERG_WHITE }} />
-                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 9, fill: BLOOMBERG_GRAY }} />
+                <PolarGrid stroke={colors.textMuted} />
+                <PolarAngleAxis dataKey="threat" tick={{ fontSize: 10, fill: colors.text }} />
+                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 9, fill: colors.textMuted }} />
                 <Radar
                   name="Current Threat"
                   dataKey="current"
-                  stroke={BLOOMBERG_RED}
-                  fill={BLOOMBERG_RED}
+                  stroke={colors.alert}
+                  fill={colors.alert}
                   fillOpacity={0.3}
                   strokeWidth={2}
                 />
@@ -550,12 +541,12 @@ const GeopoliticsTab: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px', height: '200px' }}>
           {/* Market Impact Analysis */}
           <div style={{
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
               MARKET IMPACT ANALYSIS
             </div>
             <div style={{
@@ -565,11 +556,11 @@ const GeopoliticsTab: React.FC = () => {
               fontSize: '12px',
               marginBottom: '4px'
             }}>
-              <div style={{ color: BLOOMBERG_WHITE, fontWeight: 'bold' }}>SECTOR</div>
-              <div style={{ color: BLOOMBERG_BLUE, fontWeight: 'bold' }}>CORR</div>
-              <div style={{ color: BLOOMBERG_GREEN, fontWeight: 'bold' }}>IMPL</div>
-              <div style={{ color: BLOOMBERG_YELLOW, fontWeight: 'bold' }}>VOLUME</div>
-              <div style={{ color: BLOOMBERG_PURPLE, fontWeight: 'bold' }}>CHG</div>
+              <div style={{ color: colors.text, fontWeight: 'bold' }}>SECTOR</div>
+              <div style={{ color: colors.info, fontWeight: 'bold' }}>CORR</div>
+              <div style={{ color: colors.secondary, fontWeight: 'bold' }}>IMPL</div>
+              <div style={{ color: colors.warning, fontWeight: 'bold' }}>VOLUME</div>
+              <div style={{ color: colors.purple, fontWeight: 'bold' }}>CHG</div>
             </div>
             {marketImpactData.map((market, index) => (
               <div key={index} style={{
@@ -580,15 +571,15 @@ const GeopoliticsTab: React.FC = () => {
                 marginBottom: '1px',
                 backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent'
               }}>
-                <div style={{ color: BLOOMBERG_WHITE }}>{market.sector}</div>
-                <div style={{ color: market.correlation > 0.8 ? BLOOMBERG_RED : market.correlation > 0.6 ? BLOOMBERG_YELLOW : BLOOMBERG_GREEN }}>
+                <div style={{ color: colors.text }}>{market.sector}</div>
+                <div style={{ color: market.correlation > 0.8 ? colors.alert : market.correlation > 0.6 ? colors.warning : colors.secondary }}>
                   {market.correlation.toFixed(2)}
                 </div>
-                <div style={{ color: market.impact > 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED }}>
+                <div style={{ color: market.impact > 0 ? colors.secondary : colors.alert }}>
                   {market.impact > 0 ? '+' : ''}{market.impact.toFixed(1)}
                 </div>
-                <div style={{ color: BLOOMBERG_GRAY }}>{market.volume}</div>
-                <div style={{ color: market.change.startsWith('+') ? BLOOMBERG_GREEN : BLOOMBERG_RED }}>
+                <div style={{ color: colors.textMuted }}>{market.volume}</div>
+                <div style={{ color: market.change.startsWith('+') ? colors.secondary : colors.alert }}>
                   {market.change}
                 </div>
               </div>
@@ -597,20 +588,20 @@ const GeopoliticsTab: React.FC = () => {
 
           {/* Critical Trade Routes */}
           <div style={{
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
               CRITICAL TRADE ROUTE RISK
             </div>
-            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '4px' }}></div>
+            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
             {tradeRouteRisk.map((route, index) => (
               <div key={index} style={{ marginBottom: '6px', fontSize: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: BLOOMBERG_WHITE, fontWeight: 'bold', fontSize: '9px' }}>
+                  <span style={{ color: colors.text, fontWeight: 'bold', fontSize: '9px' }}>
                     {route.route}
                   </span>
                   <span style={{ color: getRiskColor(route.risk) }}>
@@ -618,14 +609,14 @@ const GeopoliticsTab: React.FC = () => {
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Throughput:</span>
-                  <span style={{ color: BLOOMBERG_BLUE }}>{route.throughput}</span>
+                  <span style={{ color: colors.textMuted }}>Throughput:</span>
+                  <span style={{ color: colors.info }}>{route.throughput}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Threat:</span>
-                  <span style={{ color: BLOOMBERG_YELLOW }}>{route.threat}</span>
+                  <span style={{ color: colors.textMuted }}>Threat:</span>
+                  <span style={{ color: colors.warning }}>{route.threat}</span>
                 </div>
-                <div style={{ color: BLOOMBERG_CYAN, fontSize: '7px', lineHeight: '1.1' }}>
+                <div style={{ color: colors.accent, fontSize: '7px', lineHeight: '1.1' }}>
                   India: {route.india}
                 </div>
               </div>
@@ -634,42 +625,42 @@ const GeopoliticsTab: React.FC = () => {
 
           {/* India Strategic Dashboard */}
           <div style={{
-            backgroundColor: BLOOMBERG_PANEL_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
             padding: '4px',
             overflow: 'auto'
           }}>
-            <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
               INDIA STRATEGIC POSITION ANALYSIS
             </div>
-            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '4px' }}></div>
+            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
             <div style={{ marginBottom: '6px' }}>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
+              <div style={{ color: colors.warning, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
                 KEY METRICS
               </div>
               <div style={{ fontSize: '8px', lineHeight: '1.2' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>GDP Growth:</span>
-                  <span style={{ color: BLOOMBERG_GREEN }}>6.7% YoY</span>
+                  <span style={{ color: colors.textMuted }}>GDP Growth:</span>
+                  <span style={{ color: colors.secondary }}>6.7% YoY</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>FDI Inflows:</span>
-                  <span style={{ color: BLOOMBERG_GREEN }}>$83.6B</span>
+                  <span style={{ color: colors.textMuted }}>FDI Inflows:</span>
+                  <span style={{ color: colors.secondary }}>$83.6B</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Defense Budget:</span>
-                  <span style={{ color: BLOOMBERG_BLUE }}>$75.6B</span>
+                  <span style={{ color: colors.textMuted }}>Defense Budget:</span>
+                  <span style={{ color: colors.info }}>$75.6B</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Border Infra:</span>
-                  <span style={{ color: BLOOMBERG_YELLOW }}>67% Complete</span>
+                  <span style={{ color: colors.textMuted }}>Border Infra:</span>
+                  <span style={{ color: colors.warning }}>67% Complete</span>
                 </div>
               </div>
             </div>
 
             <div style={{ marginBottom: '6px' }}>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
+              <div style={{ color: colors.warning, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
                 THREAT MATRIX
               </div>
               <div style={{ fontSize: '7px' }}>
@@ -681,7 +672,7 @@ const GeopoliticsTab: React.FC = () => {
                   { threat: "Trade Disruption", level: 5.2, status: "LOW" }
                 ].map((item, index) => (
                   <div key={index} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                    <span style={{ color: BLOOMBERG_WHITE }}>{item.threat}:</span>
+                    <span style={{ color: colors.text }}>{item.threat}:</span>
                     <span style={{ color: getRiskColor(item.level) }}>{item.level} [{item.status}]</span>
                   </div>
                 ))}
@@ -689,10 +680,10 @@ const GeopoliticsTab: React.FC = () => {
             </div>
 
             <div>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
+              <div style={{ color: colors.warning, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
                 STRATEGIC INITIATIVES
               </div>
-              <div style={{ fontSize: '7px', color: BLOOMBERG_GREEN }}>
+              <div style={{ fontSize: '7px', color: colors.secondary }}>
                 <div>✓ Quad Alliance Operationalization</div>
                 <div>✓ IMEC Corridor Development</div>
                 <div>✓ Semiconductor Self-Reliance</div>
@@ -706,11 +697,11 @@ const GeopoliticsTab: React.FC = () => {
 
       {/* Enhanced Status Bar */}
       <div style={{
-        borderTop: `1px solid ${BLOOMBERG_GRAY}`,
-        backgroundColor: BLOOMBERG_PANEL_BG,
+        borderTop: `1px solid ${colors.textMuted}`,
+        backgroundColor: colors.panel,
         padding: '2px 8px',
         fontSize: '10px',
-        color: BLOOMBERG_GRAY,
+        color: colors.textMuted,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -721,7 +712,7 @@ const GeopoliticsTab: React.FC = () => {
           <div style={{ display: 'flex', gap: '16px' }}>
             <span>Classification: TOP SECRET//SCI//NOFORN</span>
             <span>Session: {currentTime.toTimeString().substring(0, 8)}</span>
-            <span style={{ color: BLOOMBERG_GREEN }}>SCIF: AUTHORIZED</span>
+            <span style={{ color: colors.secondary }}>SCIF: AUTHORIZED</span>
           </div>
         </div>
       </div>

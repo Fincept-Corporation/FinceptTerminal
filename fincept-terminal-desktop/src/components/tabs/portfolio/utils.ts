@@ -1,19 +1,25 @@
 // Portfolio Utility Functions
 // Formatting, calculations, and helper functions
+import { terminalThemeService } from '@/services/terminalThemeService';
 
-export const BLOOMBERG_COLORS = {
-  ORANGE: '#FFA500',
-  WHITE: '#FFFFFF',
-  RED: '#FF0000',
-  GREEN: '#00C800',
-  GRAY: '#787878',
-  DARK_BG: '#1a1a1a',
-  PANEL_BG: '#000000',
-  CYAN: '#00FFFF',
-  YELLOW: '#FFFF00',
-  BLUE: '#6496FA',
-  PURPLE: '#C864FF'
+export const getBloombergColors = () => {
+  const theme = terminalThemeService.getTheme();
+  return {
+    ORANGE: theme.colors.primary,
+    WHITE: theme.colors.text,
+    RED: theme.colors.alert,
+    GREEN: theme.colors.secondary,
+    GRAY: theme.colors.textMuted,
+    DARK_BG: '#1a1a1a',
+    PANEL_BG: theme.colors.background,
+    CYAN: theme.colors.accent,
+    YELLOW: theme.colors.warning,
+    BLUE: theme.colors.info,
+    PURPLE: theme.colors.purple
+  };
 };
+
+export const BLOOMBERG_COLORS = getBloombergColors();
 
 // Currency symbols and formatting
 const CURRENCY_SYMBOLS: Record<string, string> = {

@@ -1,3 +1,4 @@
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Download, TrendingUp, BarChart3, Loader2, AlertCircle, FolderTree, X, Plus, ArrowLeft, ChevronRight } from 'lucide-react';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -57,6 +58,7 @@ const POPULAR_CATEGORIES = [
 ];
 
 export default function ScreenerTab() {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [seriesIds, setSeriesIds] = useState('GDP');
   const [startDate, setStartDate] = useState('2000-01-01');
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
@@ -329,10 +331,10 @@ export default function ScreenerTab() {
   }, [searchQuery, showBrowser]);
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#000', overflow: 'hidden' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'colors.background', overflow: 'hidden' }}>
       <style>{`
         *::-webkit-scrollbar { width: 8px; height: 8px; }
-        *::-webkit-scrollbar-track { background: #0a0a0a; }
+        *::-webkit-scrollbar-track { background: colors.panel; }
         *::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
         *::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
       `}</style>
@@ -353,7 +355,7 @@ export default function ScreenerTab() {
           padding: '20px'
         }}>
           <div style={{
-            background: '#0a0a0a',
+            background: 'colors.panel',
             border: '2px solid #ea580c',
             borderRadius: '8px',
             width: '90%',
@@ -370,7 +372,7 @@ export default function ScreenerTab() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: 'linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%)'
+              background: 'linear-gradient(180deg, #1a1a1a 0%, colors.panel 100%)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <FolderTree size={20} color="#ea580c" />
@@ -403,9 +405,9 @@ export default function ScreenerTab() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   style={{
                     width: '100%',
-                    background: '#000',
+                    background: 'colors.background',
                     border: '1px solid #2a2a2a',
-                    color: '#fff',
+                    color: 'colors.text',
                     padding: '12px 12px 12px 40px',
                     fontSize: '11px',
                     borderRadius: '4px'
@@ -440,7 +442,7 @@ export default function ScreenerTab() {
                       <button
                         onClick={navigateBack}
                         style={{
-                          background: '#0a0a0a',
+                          background: 'colors.panel',
                           border: '1px solid #2a2a2a',
                           color: '#ea580c',
                           padding: '4px 8px',
@@ -478,9 +480,9 @@ export default function ScreenerTab() {
                             key={`pop-${cat.id}-${idx}`}
                             onClick={() => navigateToCategory({ id: cat.id, name: cat.name.replace(/[^\w\s]/gi, '').trim() })}
                             style={{
-                              background: '#0a0a0a',
+                              background: 'colors.panel',
                               border: '1px solid #2a2a2a',
-                              color: '#fff',
+                              color: 'colors.text',
                               padding: '6px 8px',
                               fontSize: '9px',
                               cursor: 'pointer',
@@ -515,9 +517,9 @@ export default function ScreenerTab() {
                           key={`cat-${cat.id}-${idx}`}
                           onClick={() => navigateToCategory(cat)}
                           style={{
-                            background: '#0a0a0a',
+                            background: 'colors.panel',
                             border: '1px solid #2a2a2a',
-                            color: '#fff',
+                            color: 'colors.text',
                             padding: '8px 10px',
                             fontSize: '10px',
                             cursor: 'pointer',
@@ -553,7 +555,7 @@ export default function ScreenerTab() {
                         <div
                           key={result.id}
                           style={{
-                            background: '#0a0a0a',
+                            background: 'colors.panel',
                             border: '1px solid #1a1a1a',
                             borderRadius: '4px',
                             padding: '12px',
@@ -572,7 +574,7 @@ export default function ScreenerTab() {
                                 Pop: {result.popularity}
                               </span>
                             </div>
-                            <p style={{ color: '#fff', fontSize: '10px', marginBottom: '4px' }}>
+                            <p style={{ color: 'colors.text', fontSize: '10px', marginBottom: '4px' }}>
                               {result.title}
                             </p>
                             <div style={{ display: 'flex', gap: '12px', fontSize: '9px', color: '#666' }}>
@@ -587,7 +589,7 @@ export default function ScreenerTab() {
                             style={{
                               background: currentSeriesIdsSet.has(result.id) ? '#1a3a1a' : '#ea580c',
                               border: 'none',
-                              color: '#fff',
+                              color: 'colors.text',
                               padding: '6px 12px',
                               fontSize: '10px',
                               cursor: currentSeriesIdsSet.has(result.id) ? 'not-allowed' : 'pointer',
@@ -618,7 +620,7 @@ export default function ScreenerTab() {
                         <div
                           key={result.id}
                           style={{
-                            background: '#0a0a0a',
+                            background: 'colors.panel',
                             border: '1px solid #1a1a1a',
                             borderRadius: '4px',
                             padding: '12px',
@@ -637,7 +639,7 @@ export default function ScreenerTab() {
                                 Pop: {result.popularity}
                               </span>
                             </div>
-                            <p style={{ color: '#fff', fontSize: '10px', marginBottom: '4px' }}>
+                            <p style={{ color: 'colors.text', fontSize: '10px', marginBottom: '4px' }}>
                               {result.title}
                             </p>
                             <div style={{ display: 'flex', gap: '12px', fontSize: '9px', color: '#666' }}>
@@ -652,7 +654,7 @@ export default function ScreenerTab() {
                             style={{
                               background: currentSeriesIdsSet.has(result.id) ? '#1a3a1a' : '#ea580c',
                               border: 'none',
-                              color: '#fff',
+                              color: 'colors.text',
                               padding: '6px 12px',
                               fontSize: '10px',
                               cursor: currentSeriesIdsSet.has(result.id) ? 'not-allowed' : 'pointer',
@@ -697,7 +699,7 @@ export default function ScreenerTab() {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              background: '#0a0a0a'
+              background: 'colors.panel'
             }}>
               <span style={{ color: '#666', fontSize: '9px' }}>
                 Federal Reserve Economic Data (FRED) | 800,000+ series available
@@ -707,7 +709,7 @@ export default function ScreenerTab() {
                 style={{
                   background: '#ea580c',
                   border: 'none',
-                  color: '#fff',
+                  color: 'colors.text',
                   padding: '8px 16px',
                   fontSize: '10px',
                   cursor: 'pointer',
@@ -726,7 +728,7 @@ export default function ScreenerTab() {
       <div style={{
         borderBottom: '2px solid #ea580c',
         padding: '12px 16px',
-        background: 'linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%)',
+        background: 'linear-gradient(180deg, #1a1a1a 0%, colors.panel 100%)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -742,7 +744,7 @@ export default function ScreenerTab() {
           <button
             onClick={() => setChartType(chartType === 'line' ? 'area' : 'line')}
             style={{
-              background: '#0a0a0a',
+              background: 'colors.panel',
               border: '1px solid #2a2a2a',
               color: '#ea580c',
               padding: '6px 12px',
@@ -758,7 +760,7 @@ export default function ScreenerTab() {
             onClick={exportToCSV}
             disabled={data.length === 0}
             style={{
-              background: '#0a0a0a',
+              background: 'colors.panel',
               border: '1px solid #2a2a2a',
               color: data.length > 0 ? '#00ff00' : '#666',
               padding: '6px 12px',
@@ -804,7 +806,7 @@ export default function ScreenerTab() {
       <div style={{
         borderBottom: '1px solid #1a1a1a',
         padding: '16px',
-        background: '#0a0a0a',
+        background: 'colors.panel',
         flexShrink: 0
       }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '12px', marginBottom: '12px' }}>
@@ -819,9 +821,9 @@ export default function ScreenerTab() {
               placeholder="GDP,UNRATE,CPIAUCSL"
               style={{
                 width: '100%',
-                background: '#000',
+                background: 'colors.background',
                 border: '1px solid #2a2a2a',
-                color: '#fff',
+                color: 'colors.text',
                 padding: '8px',
                 fontSize: '10px',
                 borderRadius: '3px'
@@ -838,9 +840,9 @@ export default function ScreenerTab() {
               onChange={(e) => setStartDate(e.target.value)}
               style={{
                 width: '100%',
-                background: '#000',
+                background: 'colors.background',
                 border: '1px solid #2a2a2a',
-                color: '#fff',
+                color: 'colors.text',
                 padding: '8px',
                 fontSize: '10px',
                 borderRadius: '3px'
@@ -857,9 +859,9 @@ export default function ScreenerTab() {
               onChange={(e) => setEndDate(e.target.value)}
               style={{
                 width: '100%',
-                background: '#000',
+                background: 'colors.background',
                 border: '1px solid #2a2a2a',
-                color: '#fff',
+                color: 'colors.text',
                 padding: '8px',
                 fontSize: '10px',
                 borderRadius: '3px'
@@ -872,7 +874,7 @@ export default function ScreenerTab() {
             style={{
               background: '#ea580c',
               border: 'none',
-              color: '#fff',
+              color: 'colors.text',
               padding: '0 20px',
               fontSize: '10px',
               cursor: loading ? 'not-allowed' : 'pointer',
@@ -902,7 +904,7 @@ export default function ScreenerTab() {
                   key={series.id}
                   onClick={() => addPopularSeries(series.id)}
                   style={{
-                    background: currentSeriesIdsSet.has(series.id) ? '#1a3a1a' : '#0a0a0a',
+                    background: currentSeriesIdsSet.has(series.id) ? '#1a3a1a' : 'colors.panel',
                     border: `1px solid ${currentSeriesIdsSet.has(series.id) ? '#00ff00' : '#2a2a2a'}`,
                     color: currentSeriesIdsSet.has(series.id) ? '#00ff00' : '#666',
                     padding: '4px 8px',
@@ -922,7 +924,7 @@ export default function ScreenerTab() {
             style={{
               background: 'linear-gradient(135deg, #ea580c 0%, #c2410c 100%)',
               border: '1px solid #ea580c',
-              color: '#fff',
+              color: 'colors.text',
               padding: '8px 16px',
               fontSize: '10px',
               cursor: apiKeyConfigured ? 'pointer' : 'not-allowed',
@@ -948,7 +950,7 @@ export default function ScreenerTab() {
         {/* Chart Section */}
         <div style={{ flex: 2, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{
-            background: '#0a0a0a',
+            background: 'colors.panel',
             border: '1px solid #1a1a1a',
             borderRadius: '4px',
             padding: '16px',
@@ -956,7 +958,7 @@ export default function ScreenerTab() {
             display: 'flex',
             flexDirection: 'column'
           }}>
-            <h3 style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <h3 style={{ color: 'colors.text', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
               TIME SERIES CHART
             </h3>
 
@@ -999,7 +1001,7 @@ export default function ScreenerTab() {
                       <XAxis dataKey="date" stroke="#666" style={{ fontSize: '10px' }} />
                       <YAxis stroke="#666" style={{ fontSize: '10px' }} />
                       <Tooltip
-                        contentStyle={{ background: '#0a0a0a', border: '1px solid #2a2a2a', borderRadius: '3px', fontSize: '10px' }}
+                        contentStyle={{ background: 'colors.panel', border: '1px solid #2a2a2a', borderRadius: '3px', fontSize: '10px' }}
                         labelStyle={{ color: '#ea580c' }}
                       />
                       <Legend wrapperStyle={{ fontSize: '10px' }} />
@@ -1008,7 +1010,7 @@ export default function ScreenerTab() {
                           key={series.series_id}
                           type="monotone"
                           dataKey={series.series_id}
-                          stroke={['#ea580c', '#00ff00', '#00ffff', '#ff00ff', '#ffff00'][idx % 5]}
+                          stroke={['#ea580c', '#00ff00', '#00ffff', '#ff00ff', 'colors.textf00'][idx % 5]}
                           strokeWidth={2}
                           dot={false}
                         />
@@ -1020,7 +1022,7 @@ export default function ScreenerTab() {
                       <XAxis dataKey="date" stroke="#666" style={{ fontSize: '10px' }} />
                       <YAxis stroke="#666" style={{ fontSize: '10px' }} />
                       <Tooltip
-                        contentStyle={{ background: '#0a0a0a', border: '1px solid #2a2a2a', borderRadius: '3px', fontSize: '10px' }}
+                        contentStyle={{ background: 'colors.panel', border: '1px solid #2a2a2a', borderRadius: '3px', fontSize: '10px' }}
                         labelStyle={{ color: '#ea580c' }}
                       />
                       <Legend wrapperStyle={{ fontSize: '10px' }} />
@@ -1029,8 +1031,8 @@ export default function ScreenerTab() {
                           key={series.series_id}
                           type="monotone"
                           dataKey={series.series_id}
-                          stroke={['#ea580c', '#00ff00', '#00ffff', '#ff00ff', '#ffff00'][idx % 5]}
-                          fill={['#ea580c33', '#00ff0033', '#00ffff33', '#ff00ff33', '#ffff0033'][idx % 5]}
+                          stroke={['#ea580c', '#00ff00', '#00ffff', '#ff00ff', 'colors.textf00'][idx % 5]}
+                          fill={['#ea580c33', '#00ff0033', '#00ffff33', '#ff00ff33', 'colors.textf0033'][idx % 5]}
                         />
                       ))}
                     </AreaChart>
@@ -1047,7 +1049,7 @@ export default function ScreenerTab() {
             <div
               key={series.series_id}
               style={{
-                background: '#0a0a0a',
+                background: 'colors.panel',
                 border: '1px solid #1a1a1a',
                 borderRadius: '4px',
                 padding: '12px',
@@ -1070,7 +1072,7 @@ export default function ScreenerTab() {
 
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                 <table style={{ width: '100%', fontSize: '9px', borderCollapse: 'collapse' }}>
-                  <thead style={{ position: 'sticky', top: 0, background: '#0a0a0a' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'colors.panel' }}>
                     <tr style={{ borderBottom: '1px solid #1a1a1a' }}>
                       <th style={{ color: '#888', textAlign: 'left', padding: '4px' }}>Date</th>
                       <th style={{ color: '#888', textAlign: 'right', padding: '4px' }}>Value</th>
@@ -1078,9 +1080,9 @@ export default function ScreenerTab() {
                   </thead>
                   <tbody>
                     {series.observations.slice(-20).reverse().map((obs, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid #0a0a0a' }}>
+                      <tr key={idx} style={{ borderBottom: '1px solid colors.panel' }}>
                         <td style={{ color: '#666', padding: '4px' }}>{obs.date}</td>
-                        <td style={{ color: '#fff', textAlign: 'right', padding: '4px', fontFamily: 'monospace' }}>
+                        <td style={{ color: 'colors.text', textAlign: 'right', padding: '4px', fontFamily: 'monospace' }}>
                           {obs.value.toFixed(2)}
                         </td>
                       </tr>
@@ -1097,7 +1099,7 @@ export default function ScreenerTab() {
       <div style={{
         borderTop: '1px solid #1a1a1a',
         padding: '8px 16px',
-        background: '#0a0a0a',
+        background: 'colors.panel',
         fontSize: '9px',
         color: '#666',
         display: 'flex',

@@ -345,6 +345,21 @@ class SQLiteService {
       )
     `);
 
+    // WebSocket Provider Configurations table
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS ws_provider_configs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider_name TEXT NOT NULL UNIQUE,
+        enabled INTEGER DEFAULT 1,
+        api_key TEXT,
+        api_secret TEXT,
+        endpoint TEXT,
+        config_data TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
     // Create indexes
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_credentials_service ON credentials(service_name)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category)`);
@@ -362,6 +377,7 @@ class SQLiteService {
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_date ON portfolio_snapshots(snapshot_date DESC)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_watchlist_stocks_watchlist ON watchlist_stocks(watchlist_id)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_watchlist_stocks_symbol ON watchlist_stocks(symbol)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_ws_providers_enabled ON ws_provider_configs(enabled)`);
   }
 
   private async seedDefaultSettings(): Promise<void> {
@@ -1209,6 +1225,173 @@ class SQLiteService {
     await this.db.execute(
       `DELETE FROM market_data_cache WHERE datetime(cached_at) <= datetime('now', '-${maxAgeMinutes} minutes')`
     );
+  }
+
+  // ==================== WEBSOCKET PROVIDER CONFIGS ====================
+
+  /**
+   * Save or update WebSocket provider configuration
+   */
+  async saveWSProviderConfig(config: {
+    provider_name: string;
+    enabled: boolean;
+    api_key?: string;
+    api_secret?: string;
+    endpoint?: string;
+    config_data?: string;
+  }): Promise<{ success: boolean; message: string; id?: number }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      // Check if exists
+      const existing = await this.db.select<Array<{ id: number }>>(
+        'SELECT id FROM ws_provider_configs WHERE provider_name = $1',
+        [config.provider_name]
+      );
+
+      if (existing.length > 0) {
+        // Update
+        await this.db.execute(
+          `UPDATE ws_provider_configs SET enabled = $1, api_key = $2, api_secret = $3,
+           endpoint = $4, config_data = $5, updated_at = datetime('now') WHERE id = $6`,
+          [config.enabled ? 1 : 0, config.api_key || null, config.api_secret || null,
+           config.endpoint || null, config.config_data || null, existing[0].id]
+        );
+        return { success: true, message: 'Provider config updated successfully', id: existing[0].id };
+      } else {
+        // Insert
+        const result = await this.db.execute(
+          `INSERT INTO ws_provider_configs (provider_name, enabled, api_key, api_secret, endpoint, config_data)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [config.provider_name, config.enabled ? 1 : 0, config.api_key || null,
+           config.api_secret || null, config.endpoint || null, config.config_data || null]
+        );
+        return { success: true, message: 'Provider config saved successfully', id: result.lastInsertId || undefined };
+      }
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Get all WebSocket provider configurations
+   */
+  async getWSProviderConfigs(): Promise<Array<{
+    id: number;
+    provider_name: string;
+    enabled: boolean;
+    api_key: string | null;
+    api_secret: string | null;
+    endpoint: string | null;
+    config_data: string | null;
+    created_at: string;
+    updated_at: string;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const configs = await this.db.select<Array<any>>(
+      'SELECT * FROM ws_provider_configs ORDER BY provider_name ASC'
+    );
+
+    return configs.map(c => ({
+      ...c,
+      enabled: c.enabled === 1
+    }));
+  }
+
+  /**
+   * Get WebSocket provider configuration by name
+   */
+  async getWSProviderConfig(providerName: string): Promise<{
+    id: number;
+    provider_name: string;
+    enabled: boolean;
+    api_key: string | null;
+    api_secret: string | null;
+    endpoint: string | null;
+    config_data: string | null;
+    created_at: string;
+    updated_at: string;
+  } | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const configs = await this.db.select<Array<any>>(
+      'SELECT * FROM ws_provider_configs WHERE provider_name = $1',
+      [providerName]
+    );
+
+    if (configs.length === 0) return null;
+
+    return {
+      ...configs[0],
+      enabled: configs[0].enabled === 1
+    };
+  }
+
+  /**
+   * Get only enabled WebSocket provider configurations
+   */
+  async getEnabledWSProviderConfigs(): Promise<Array<{
+    id: number;
+    provider_name: string;
+    enabled: boolean;
+    api_key: string | null;
+    api_secret: string | null;
+    endpoint: string | null;
+    config_data: string | null;
+    created_at: string;
+    updated_at: string;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const configs = await this.db.select<Array<any>>(
+      'SELECT * FROM ws_provider_configs WHERE enabled = 1 ORDER BY provider_name ASC'
+    );
+
+    return configs.map(c => ({
+      ...c,
+      enabled: true
+    }));
+  }
+
+  /**
+   * Toggle WebSocket provider enabled status
+   */
+  async toggleWSProviderEnabled(providerName: string): Promise<{ success: boolean; message: string; enabled: boolean }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const config = await this.getWSProviderConfig(providerName);
+
+      if (!config) {
+        return { success: false, message: 'Provider not found', enabled: false };
+      }
+
+      const newEnabled = !config.enabled;
+
+      await this.db.execute(
+        `UPDATE ws_provider_configs SET enabled = $1, updated_at = datetime('now') WHERE provider_name = $2`,
+        [newEnabled ? 1 : 0, providerName]
+      );
+
+      return { success: true, message: `Provider ${newEnabled ? 'enabled' : 'disabled'} successfully`, enabled: newEnabled };
+    } catch (error: any) {
+      return { success: false, message: error.message, enabled: false };
+    }
+  }
+
+  /**
+   * Delete WebSocket provider configuration
+   */
+  async deleteWSProviderConfig(providerName: string): Promise<{ success: boolean; message: string }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      await this.db.execute('DELETE FROM ws_provider_configs WHERE provider_name = $1', [providerName]);
+      return { success: true, message: 'Provider config deleted successfully' };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
   }
 }
 

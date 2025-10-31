@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MarketplaceApiService, Dataset } from '@/services/marketplaceApi';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface MarketProduct {
   id: string;
@@ -22,6 +23,20 @@ interface MarketProduct {
 }
 
 const MarketplaceTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const C = {
+    ORANGE: colors.primary,
+    WHITE: colors.text,
+    RED: colors.alert,
+    GREEN: colors.secondary,
+    YELLOW: colors.warning,
+    GRAY: colors.textMuted,
+    BLUE: colors.info,
+    PURPLE: colors.purple,
+    CYAN: colors.accent,
+    DARK_BG: colors.background,
+    PANEL_BG: colors.panel
+  };
   const { session } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<'BROWSE' | 'DETAILS' | 'CART' | 'UPLOAD' | 'MY_PURCHASES' | 'ANALYTICS' | 'ADMIN_STATS'>('BROWSE');
   const [selectedProduct, setSelectedProduct] = useState<MarketProduct | null>(null);
@@ -43,21 +58,6 @@ const MarketplaceTab: React.FC = () => {
     price_tier: 'free',
     tags: ''
   });
-
-  // Colors
-  const C = {
-    ORANGE: '#FFA500',
-    WHITE: '#FFFFFF',
-    RED: '#FF0000',
-    GREEN: '#00C800',
-    YELLOW: '#FFFF00',
-    GRAY: '#787878',
-    BLUE: '#6496FA',
-    PURPLE: '#C864FF',
-    CYAN: '#00FFFF',
-    DARK_BG: '#000000',
-    PANEL_BG: '#0a0a0a'
-  };
 
   // Fetch datasets from API
   const fetchDatasets = async () => {

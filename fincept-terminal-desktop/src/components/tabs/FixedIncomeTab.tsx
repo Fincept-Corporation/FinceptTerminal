@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface Bond {
   ticker: string;
@@ -19,21 +20,10 @@ interface Bond {
 }
 
 const FixedIncomeTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedType, setSelectedType] = useState('ALL');
   const [selectedRating, setSelectedRating] = useState('ALL');
-
-  const COLOR_ORANGE = '#FFA500';
-  const COLOR_WHITE = '#FFFFFF';
-  const COLOR_RED = '#FF0000';
-  const COLOR_GREEN = '#00C800';
-  const COLOR_YELLOW = '#FFFF00';
-  const COLOR_GRAY = '#787878';
-  const COLOR_BLUE = '#6496FA';
-  const COLOR_PURPLE = '#C864FF';
-  const COLOR_CYAN = '#00FFFF';
-  const COLOR_DARK_BG = '#000000';
-  const COLOR_PANEL_BG = '#0a0a0a';
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -200,27 +190,27 @@ const FixedIncomeTab: React.FC = () => {
 
   const getTypeColor = (type: string) => {
     switch(type) {
-      case 'TREASURY': return COLOR_BLUE;
-      case 'CORPORATE': return COLOR_GREEN;
-      case 'MUNICIPAL': return COLOR_PURPLE;
-      case 'AGENCY': return COLOR_CYAN;
-      default: return COLOR_WHITE;
+      case 'TREASURY': return colors.info;
+      case 'CORPORATE': return colors.secondary;
+      case 'MUNICIPAL': return colors.purple;
+      case 'AGENCY': return colors.accent;
+      default: return colors.text;
     }
   };
 
   const getRatingColor = (rating: string) => {
-    if (rating.startsWith('AA')) return COLOR_GREEN;
-    if (rating.startsWith('A')) return COLOR_CYAN;
-    if (rating.startsWith('BB')) return COLOR_YELLOW;
-    if (rating.startsWith('B')) return COLOR_ORANGE;
-    return COLOR_RED;
+    if (rating.startsWith('AA')) return colors.secondary;
+    if (rating.startsWith('A')) return colors.accent;
+    if (rating.startsWith('BB')) return colors.warning;
+    if (rating.startsWith('B')) return colors.primary;
+    return colors.alert;
   };
 
   return (
     <div style={{
       height: '100%',
-      backgroundColor: COLOR_DARK_BG,
-      color: COLOR_WHITE,
+      backgroundColor: colors.background,
+      color: colors.text,
       fontFamily: 'Consolas, monospace',
       overflow: 'hidden',
       display: 'flex',
@@ -229,21 +219,21 @@ const FixedIncomeTab: React.FC = () => {
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: COLOR_PANEL_BG,
-        borderBottom: `2px solid ${COLOR_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `2px solid ${colors.textMuted}`,
         padding: '8px 16px',
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '16px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '16px' }}>
               FIXED INCOME MARKETS
             </span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_CYAN }}>US TREASURIES • CORPORATES • CREDIT</span>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.accent }}>US TREASURIES • CORPORATES • CREDIT</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>
+            <span style={{ color: colors.textMuted, fontSize: '11px' }}>
               LAST UPDATE: {currentTime.toLocaleTimeString()}
             </span>
           </div>
@@ -256,12 +246,12 @@ const FixedIncomeTab: React.FC = () => {
         <div style={{ width: '320px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* Yield Curve */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
-            borderLeft: `6px solid ${COLOR_BLUE}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
+            borderLeft: `6px solid ${colors.info}`,
             padding: '12px'
           }}>
-            <div style={{ color: COLOR_ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
               US TREASURY YIELD CURVE
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -274,17 +264,17 @@ const FixedIncomeTab: React.FC = () => {
                   backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: COLOR_GRAY, fontSize: '11px', width: '60px' }}>
+                    <span style={{ color: colors.textMuted, fontSize: '11px', width: '60px' }}>
                       {point.label}
                     </span>
                     <div style={{
                       width: `${point.yield * 15}px`,
                       height: '16px',
-                      backgroundColor: COLOR_BLUE,
+                      backgroundColor: colors.info,
                       opacity: 0.7
                     }} />
                   </div>
-                  <span style={{ color: COLOR_CYAN, fontSize: '12px', fontWeight: 'bold' }}>
+                  <span style={{ color: colors.accent, fontSize: '12px', fontWeight: 'bold' }}>
                     {point.yield.toFixed(3)}%
                   </span>
                 </div>
@@ -294,12 +284,12 @@ const FixedIncomeTab: React.FC = () => {
 
           {/* Credit Spreads */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
-            borderLeft: `6px solid ${COLOR_YELLOW}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
+            borderLeft: `6px solid ${colors.warning}`,
             padding: '12px'
           }}>
-            <div style={{ color: COLOR_ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
               CREDIT SPREADS (OAS)
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -307,17 +297,17 @@ const FixedIncomeTab: React.FC = () => {
                 <div key={index} style={{
                   padding: '8px',
                   backgroundColor: 'rgba(255,255,255,0.02)',
-                  border: `1px solid ${COLOR_GRAY}`
+                  border: `1px solid ${colors.textMuted}`
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <span style={{ color: getRatingColor(spread.rating), fontWeight: 'bold', fontSize: '11px' }}>
                       {spread.rating}
                     </span>
-                    <span style={{ color: COLOR_CYAN, fontWeight: 'bold', fontSize: '11px' }}>
+                    <span style={{ color: colors.accent, fontWeight: 'bold', fontSize: '11px' }}>
                       {spread.spread} bps
                     </span>
                   </div>
-                  <div style={{ fontSize: '10px', color: spread.change > 0 ? COLOR_RED : COLOR_GREEN }}>
+                  <div style={{ fontSize: '10px', color: spread.change > 0 ? colors.alert : colors.secondary }}>
                     {spread.change > 0 ? '▲' : '▼'} {Math.abs(spread.change)} bps
                   </div>
                 </div>
@@ -327,30 +317,30 @@ const FixedIncomeTab: React.FC = () => {
 
           {/* Key Metrics */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
-            borderLeft: `6px solid ${COLOR_GREEN}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
+            borderLeft: `6px solid ${colors.secondary}`,
             padding: '12px'
           }}>
-            <div style={{ color: COLOR_ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
               KEY METRICS
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: COLOR_GRAY }}>10Y-2Y Spread:</span>
-                <span style={{ color: COLOR_CYAN, fontWeight: 'bold' }}>78 bps</span>
+                <span style={{ color: colors.textMuted }}>10Y-2Y Spread:</span>
+                <span style={{ color: colors.accent, fontWeight: 'bold' }}>78 bps</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: COLOR_GRAY }}>Fed Funds Rate:</span>
-                <span style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>5.50%</span>
+                <span style={{ color: colors.textMuted }}>Fed Funds Rate:</span>
+                <span style={{ color: colors.secondary, fontWeight: 'bold' }}>5.50%</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: COLOR_GRAY }}>Inflation (CPI):</span>
-                <span style={{ color: COLOR_YELLOW, fontWeight: 'bold' }}>3.2%</span>
+                <span style={{ color: colors.textMuted }}>Inflation (CPI):</span>
+                <span style={{ color: colors.warning, fontWeight: 'bold' }}>3.2%</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: COLOR_GRAY }}>Real Yield (10Y):</span>
-                <span style={{ color: COLOR_PURPLE, fontWeight: 'bold' }}>1.03%</span>
+                <span style={{ color: colors.textMuted }}>Real Yield (10Y):</span>
+                <span style={{ color: colors.purple, fontWeight: 'bold' }}>1.03%</span>
               </div>
             </div>
           </div>
@@ -360,21 +350,21 @@ const FixedIncomeTab: React.FC = () => {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Filters */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
             padding: '12px',
             marginBottom: '12px'
           }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>TYPE:</span>
+              <span style={{ color: colors.textMuted, fontSize: '11px' }}>TYPE:</span>
               {['ALL', 'TREASURY', 'CORPORATE', 'MUNICIPAL', 'AGENCY'].map((type) => (
                 <button key={type}
                   onClick={() => setSelectedType(type)}
                   style={{
                     padding: '6px 12px',
-                    backgroundColor: selectedType === type ? COLOR_ORANGE : COLOR_DARK_BG,
-                    border: `2px solid ${selectedType === type ? COLOR_ORANGE : COLOR_GRAY}`,
-                    color: selectedType === type ? COLOR_DARK_BG : COLOR_WHITE,
+                    backgroundColor: selectedType === type ? colors.primary : colors.background,
+                    border: `2px solid ${selectedType === type ? colors.primary : colors.textMuted}`,
+                    color: selectedType === type ? colors.background : colors.text,
                     fontSize: '10px',
                     fontWeight: 'bold',
                     cursor: 'pointer',
@@ -383,16 +373,16 @@ const FixedIncomeTab: React.FC = () => {
                   {type}
                 </button>
               ))}
-              <span style={{ color: COLOR_GRAY, marginLeft: '16px' }}>|</span>
-              <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>RATING:</span>
+              <span style={{ color: colors.textMuted, marginLeft: '16px' }}>|</span>
+              <span style={{ color: colors.textMuted, fontSize: '11px' }}>RATING:</span>
               {['ALL', 'AAA', 'AA', 'A', 'BBB', 'BB'].map((rating) => (
                 <button key={rating}
                   onClick={() => setSelectedRating(rating)}
                   style={{
                     padding: '6px 12px',
-                    backgroundColor: selectedRating === rating ? COLOR_CYAN : COLOR_DARK_BG,
-                    border: `2px solid ${selectedRating === rating ? COLOR_CYAN : COLOR_GRAY}`,
-                    color: selectedRating === rating ? COLOR_DARK_BG : COLOR_WHITE,
+                    backgroundColor: selectedRating === rating ? colors.accent : colors.background,
+                    border: `2px solid ${selectedRating === rating ? colors.accent : colors.textMuted}`,
+                    color: selectedRating === rating ? colors.background : colors.text,
                     fontSize: '10px',
                     fontWeight: 'bold',
                     cursor: 'pointer',
@@ -406,8 +396,8 @@ const FixedIncomeTab: React.FC = () => {
 
           {/* Bond Table */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
             flex: 1,
             overflow: 'auto'
           }}>
@@ -417,21 +407,21 @@ const FixedIncomeTab: React.FC = () => {
               gridTemplateColumns: '100px 180px 80px 100px 80px 80px 70px 60px 80px 80px',
               padding: '10px 12px',
               backgroundColor: 'rgba(255,165,0,0.1)',
-              borderBottom: `2px solid ${COLOR_ORANGE}`,
+              borderBottom: `2px solid ${colors.primary}`,
               position: 'sticky',
               top: 0,
               zIndex: 10
             }}>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>TICKER</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>ISSUER</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>COUPON</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>MATURITY</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>YIELD</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>PRICE</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>RATING</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>DUR</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>SPREAD</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>VOLUME</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>TICKER</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>ISSUER</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>COUPON</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>MATURITY</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>YIELD</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>PRICE</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>RATING</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>DUR</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>SPREAD</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>VOLUME</div>
             </div>
 
             {/* Table Body */}
@@ -442,7 +432,7 @@ const FixedIncomeTab: React.FC = () => {
                   gridTemplateColumns: '100px 180px 80px 100px 80px 80px 70px 60px 80px 80px',
                   padding: '10px 12px',
                   backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                  borderBottom: `1px solid ${COLOR_GRAY}`,
+                  borderBottom: `1px solid ${colors.textMuted}`,
                   cursor: 'pointer',
                   fontSize: '11px'
                 }}
@@ -453,22 +443,22 @@ const FixedIncomeTab: React.FC = () => {
                   e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
                 }}>
                 <div style={{ color: getTypeColor(bond.type), fontWeight: 'bold' }}>{bond.ticker}</div>
-                <div style={{ color: COLOR_WHITE }}>{bond.issuer}</div>
-                <div style={{ color: COLOR_CYAN }}>{bond.coupon.toFixed(3)}%</div>
-                <div style={{ color: COLOR_GRAY }}>{bond.maturity}</div>
+                <div style={{ color: colors.text }}>{bond.issuer}</div>
+                <div style={{ color: colors.accent }}>{bond.coupon.toFixed(3)}%</div>
+                <div style={{ color: colors.textMuted }}>{bond.maturity}</div>
                 <div>
-                  <div style={{ color: COLOR_YELLOW, fontWeight: 'bold' }}>{bond.yield.toFixed(3)}%</div>
-                  <div style={{ color: bond.yieldChange > 0 ? COLOR_RED : COLOR_GREEN, fontSize: '9px' }}>
+                  <div style={{ color: colors.warning, fontWeight: 'bold' }}>{bond.yield.toFixed(3)}%</div>
+                  <div style={{ color: bond.yieldChange > 0 ? colors.alert : colors.secondary, fontSize: '9px' }}>
                     {bond.yieldChange > 0 ? '▲' : '▼'} {Math.abs(bond.yieldChange).toFixed(3)}%
                   </div>
                 </div>
-                <div style={{ color: COLOR_WHITE }}>{bond.price.toFixed(2)}</div>
+                <div style={{ color: colors.text }}>{bond.price.toFixed(2)}</div>
                 <div style={{ color: getRatingColor(bond.rating), fontWeight: 'bold' }}>{bond.rating}</div>
-                <div style={{ color: COLOR_PURPLE }}>{bond.duration.toFixed(1)}</div>
-                <div style={{ color: bond.spread > 150 ? COLOR_RED : COLOR_GREEN }}>
+                <div style={{ color: colors.purple }}>{bond.duration.toFixed(1)}</div>
+                <div style={{ color: bond.spread > 150 ? colors.alert : colors.secondary }}>
                   {bond.spread > 0 ? `+${bond.spread}` : '-'}
                 </div>
-                <div style={{ color: COLOR_GRAY }}>{bond.volume}</div>
+                <div style={{ color: colors.textMuted }}>{bond.volume}</div>
               </div>
             ))}
           </div>
@@ -477,24 +467,24 @@ const FixedIncomeTab: React.FC = () => {
 
       {/* Footer */}
       <div style={{
-        borderTop: `3px solid ${COLOR_ORANGE}`,
-        backgroundColor: COLOR_PANEL_BG,
+        borderTop: `3px solid ${colors.primary}`,
+        backgroundColor: colors.panel,
         padding: '12px 16px',
         fontSize: '11px',
-        color: COLOR_WHITE,
+        color: colors.text,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '13px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '13px' }}>
               FIXED INCOME v1.0
             </span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_CYAN }}>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.accent }}>
               Real-time bond prices & yields
             </span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_GREEN }}>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.secondary }}>
               Showing: {filteredBonds.length} bonds
             </span>
           </div>
@@ -504,16 +494,16 @@ const FixedIncomeTab: React.FC = () => {
           justifyContent: 'space-between',
           fontSize: '10px',
           paddingTop: '8px',
-          borderTop: `1px solid ${COLOR_GRAY}`
+          borderTop: `1px solid ${colors.textMuted}`
         }}>
           <div style={{ display: 'flex', gap: '16px' }}>
-            <span style={{ color: COLOR_GRAY }}><span style={{ color: COLOR_BLUE }}>F1</span> Help</span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_GRAY }}><span style={{ color: COLOR_BLUE }}>F2</span> Export</span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_GRAY }}><span style={{ color: COLOR_BLUE }}>F3</span> Calculator</span>
+            <span style={{ color: colors.textMuted }}><span style={{ color: colors.info }}>F1</span> Help</span>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.textMuted }}><span style={{ color: colors.info }}>F2</span> Export</span>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.textMuted }}><span style={{ color: colors.info }}>F3</span> Calculator</span>
           </div>
-          <div style={{ color: COLOR_GRAY }}>
+          <div style={{ color: colors.textMuted }}>
             © 2025 Fincept Labs • All Rights Reserved
           </div>
         </div>

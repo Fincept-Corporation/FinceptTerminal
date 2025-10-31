@@ -1,23 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, ScatterChart, Scatter, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ComposedChart, ReferenceLine, Treemap, FunnelChart, Funnel, LabelList } from 'recharts';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 const AnalyticsTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [dataUpdateCount, setDataUpdateCount] = useState(0);
   const [alertCount, setAlertCount] = useState(23);
-
-  // Bloomberg color scheme (exact from DearPyGUI)
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_RED = '#FF0000';
-  const BLOOMBERG_GREEN = '#00C800';
-  const BLOOMBERG_YELLOW = '#FFFF00';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_BLUE = '#6496FA';
-  const BLOOMBERG_PURPLE = '#C864FF';
-  const BLOOMBERG_CYAN = '#00FFFF';
-  const BLOOMBERG_DARK_BG = '#000000';
-  const BLOOMBERG_PANEL_BG = '#0a0a0a';
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -203,20 +192,20 @@ const AnalyticsTab: React.FC = () => {
     height?: string
   }) => (
     <div style={{
-      backgroundColor: BLOOMBERG_PANEL_BG,
-      border: `1px solid ${BLOOMBERG_GRAY}`,
+      backgroundColor: colors.panel,
+      border: `1px solid ${colors.textMuted}`,
       padding: '4px',
       height,
       width,
       overflow: 'hidden'
     }}>
       <div style={{
-        color: BLOOMBERG_ORANGE,
+        color: colors.primary,
         fontSize: '10px',
         fontWeight: 'bold',
         marginBottom: '2px',
         textAlign: 'center',
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        borderBottom: `1px solid ${colors.textMuted}`,
         paddingBottom: '2px'
       }}>
         {title}
@@ -230,8 +219,8 @@ const AnalyticsTab: React.FC = () => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG_DARK_BG,
-      color: BLOOMBERG_WHITE,
+      backgroundColor: colors.background,
+      color: colors.text,
       fontFamily: 'Consolas, monospace',
       overflow: 'hidden',
       display: 'flex',
@@ -240,46 +229,46 @@ const AnalyticsTab: React.FC = () => {
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         padding: '4px 8px',
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
-          <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>FINANCIAL ANALYTICS DASHBOARD</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GREEN, fontWeight: 'bold' }}>PORTFOLIO VALUE: $2.45M</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_BLUE }}>P&L TODAY: +$12,456 (+0.51%)</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_YELLOW }}>ALERTS: {alertCount}</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>● LIVE DATA</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+          <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINANCIAL ANALYTICS DASHBOARD</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.secondary, fontWeight: 'bold' }}>PORTFOLIO VALUE: $2.45M</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.info }}>P&L TODAY: +$12,456 (+0.51%)</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.warning }}>ALERTS: {alertCount}</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.secondary }}>● LIVE DATA</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>
-          <span style={{ color: BLOOMBERG_GRAY }}>ANALYTICS:</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>RISK●</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>PERFORMANCE●</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>ATTRIBUTION●</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>TECHNICAL●</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>MODELS:</span>
-          <span style={{ color: BLOOMBERG_BLUE }}>VaR: $45K</span>
-          <span style={{ color: BLOOMBERG_YELLOW }}>Sharpe: 1.84</span>
-          <span style={{ color: BLOOMBERG_PURPLE }}>Beta: 0.97</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GRAY }}>UPDATES:</span>
-          <span style={{ color: BLOOMBERG_CYAN }}>{dataUpdateCount}</span>
+          <span style={{ color: colors.textMuted }}>ANALYTICS:</span>
+          <span style={{ color: colors.secondary }}>RISK●</span>
+          <span style={{ color: colors.secondary }}>PERFORMANCE●</span>
+          <span style={{ color: colors.secondary }}>ATTRIBUTION●</span>
+          <span style={{ color: colors.secondary }}>TECHNICAL●</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.textMuted }}>MODELS:</span>
+          <span style={{ color: colors.info }}>VaR: $45K</span>
+          <span style={{ color: colors.warning }}>Sharpe: 1.84</span>
+          <span style={{ color: colors.purple }}>Beta: 0.97</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.textMuted }}>UPDATES:</span>
+          <span style={{ color: colors.accent }}>{dataUpdateCount}</span>
         </div>
       </div>
 
       {/* Function Keys Bar */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         padding: '2px 4px',
         flexShrink: 0
       }}>
@@ -297,9 +286,9 @@ const AnalyticsTab: React.FC = () => {
             { key: "F10", label: "ALERT", status: "●" }
           ].map(item => (
             <button key={item.key} style={{
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              color: colors.text,
               padding: '2px 4px',
               fontSize: '9px',
               height: '16px',
@@ -307,11 +296,11 @@ const AnalyticsTab: React.FC = () => {
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <span style={{ color: BLOOMBERG_YELLOW }}>{item.key}:</span>
+              <span style={{ color: colors.warning }}>{item.key}:</span>
               <span style={{ marginLeft: '2px' }}>{item.label}</span>
               <span style={{
                 marginLeft: '2px',
-                color: item.status === '●' ? BLOOMBERG_GREEN : BLOOMBERG_YELLOW
+                color: item.status === '●' ? colors.secondary : colors.warning
               }}>
                 {item.status}
               </span>
@@ -333,12 +322,12 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="PRICE & VOLUME">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={priceData.slice(0, 15)}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="time" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Line type="monotone" dataKey="price" stroke={BLOOMBERG_BLUE} strokeWidth={1} dot={false} />
-                <Bar dataKey="volume" fill={BLOOMBERG_GRAY} opacity={0.3} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="time" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Line type="monotone" dataKey="price" stroke={colors.info} strokeWidth={1} dot={false} />
+                <Bar dataKey="volume" fill={colors.textMuted} opacity={0.3} />
               </ComposedChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -353,13 +342,13 @@ const AnalyticsTab: React.FC = () => {
                   cx="50%"
                   cy="50%"
                   outerRadius={50}
-                  fill={BLOOMBERG_BLUE}
+                  fill={colors.info}
                 >
                   {sectorData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={[BLOOMBERG_BLUE, BLOOMBERG_GREEN, BLOOMBERG_YELLOW, BLOOMBERG_RED, BLOOMBERG_PURPLE, BLOOMBERG_CYAN][index % 6]} />
+                    <Cell key={`cell-${index}`} fill={[colors.info, colors.secondary, colors.warning, colors.alert, colors.purple, colors.accent][index % 6]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
               </PieChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -367,11 +356,11 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="CORRELATION SCATTER">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart data={correlationData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Scatter dataKey="y" fill={BLOOMBERG_GREEN} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Scatter dataKey="y" fill={colors.secondary} />
               </ScatterChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -379,11 +368,11 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="PORTFOLIO COMPOSITION">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={portfolioData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="asset" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="allocation" fill={BLOOMBERG_ORANGE} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="asset" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Bar dataKey="allocation" fill={colors.primary} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -391,12 +380,12 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="RISK METRICS">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={riskMetrics.slice(0, 20)}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="day" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Line type="monotone" dataKey="var" stroke={BLOOMBERG_RED} strokeWidth={1} dot={false} />
-                <Line type="monotone" dataKey="sharpe" stroke={BLOOMBERG_GREEN} strokeWidth={1} dot={false} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="day" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Line type="monotone" dataKey="var" stroke={colors.alert} strokeWidth={1} dot={false} />
+                <Line type="monotone" dataKey="sharpe" stroke={colors.secondary} strokeWidth={1} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -405,11 +394,11 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="MOMENTUM ANALYSIS">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={momentumData.slice(0, 10)}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="stock" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="momentum" fill={BLOOMBERG_GREEN} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="stock" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Bar dataKey="momentum" fill={colors.secondary} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -417,11 +406,11 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="INTRADAY LIQUIDITY">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={liquidityData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="hour" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Area type="monotone" dataKey="volume" stroke={BLOOMBERG_CYAN} fill={BLOOMBERG_CYAN} fillOpacity={0.3} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="hour" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Area type="monotone" dataKey="volume" stroke={colors.accent} fill={colors.accent} fillOpacity={0.3} />
               </AreaChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -429,13 +418,13 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="TECHNICAL INDICATORS">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={technicalData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="period" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Line type="monotone" dataKey="price" stroke={BLOOMBERG_WHITE} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="sma20" stroke={BLOOMBERG_YELLOW} strokeWidth={1} dot={false} />
-                <Line type="monotone" dataKey="ema12" stroke={BLOOMBERG_GREEN} strokeWidth={1} dot={false} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="period" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Line type="monotone" dataKey="price" stroke={colors.text} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="sma20" stroke={colors.warning} strokeWidth={1} dot={false} />
+                <Line type="monotone" dataKey="ema12" stroke={colors.secondary} strokeWidth={1} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -443,12 +432,12 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="FUNDAMENTAL RATIOS">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={fundamentalData} layout="horizontal">
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis type="number" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis type="category" dataKey="metric" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="value" fill={BLOOMBERG_BLUE} />
-                <Bar dataKey="benchmark" fill={BLOOMBERG_GRAY} opacity={0.5} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis type="number" stroke={colors.text} fontSize={8} />
+                <YAxis type="category" dataKey="metric" stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Bar dataKey="value" fill={colors.info} />
+                <Bar dataKey="benchmark" fill={colors.textMuted} opacity={0.5} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -456,13 +445,13 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="OPTIONS FLOW">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={optionsData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="strike" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="calls" fill={BLOOMBERG_GREEN} />
-                <Bar dataKey="puts" fill={BLOOMBERG_RED} />
-                <Line type="monotone" dataKey="iv" stroke={BLOOMBERG_YELLOW} strokeWidth={1} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="strike" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Bar dataKey="calls" fill={colors.secondary} />
+                <Bar dataKey="puts" fill={colors.alert} />
+                <Line type="monotone" dataKey="iv" stroke={colors.warning} strokeWidth={1} />
               </ComposedChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -471,12 +460,12 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="VOLATILITY SURFACE">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={volatilityData.slice(0, 30)}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="day" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Area type="monotone" dataKey="realized" stackId="1" stroke={BLOOMBERG_GREEN} fill={BLOOMBERG_GREEN} fillOpacity={0.6} />
-                <Area type="monotone" dataKey="implied" stackId="1" stroke={BLOOMBERG_YELLOW} fill={BLOOMBERG_YELLOW} fillOpacity={0.6} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="day" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Area type="monotone" dataKey="realized" stackId="1" stroke={colors.secondary} fill={colors.secondary} fillOpacity={0.6} />
+                <Area type="monotone" dataKey="implied" stackId="1" stroke={colors.warning} fill={colors.warning} fillOpacity={0.6} />
               </AreaChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -484,12 +473,12 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="ECONOMIC INDICATORS">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={economicData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="indicator" stroke={BLOOMBERG_WHITE} fontSize={7} angle={-45} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="current" fill={BLOOMBERG_BLUE} />
-                <Bar dataKey="forecast" fill={BLOOMBERG_ORANGE} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="indicator" stroke={colors.text} fontSize={7} angle={-45} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Bar dataKey="current" fill={colors.info} />
+                <Bar dataKey="forecast" fill={colors.primary} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -497,12 +486,12 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="MARKET SENTIMENT">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sentimentData.slice(0, 15)}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="date" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Area type="monotone" dataKey="bullish" stackId="1" stroke={BLOOMBERG_GREEN} fill={BLOOMBERG_GREEN} fillOpacity={0.4} />
-                <Area type="monotone" dataKey="bearish" stackId="1" stroke={BLOOMBERG_RED} fill={BLOOMBERG_RED} fillOpacity={0.4} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="date" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Area type="monotone" dataKey="bullish" stackId="1" stroke={colors.secondary} fill={colors.secondary} fillOpacity={0.4} />
+                <Area type="monotone" dataKey="bearish" stackId="1" stroke={colors.alert} fill={colors.alert} fillOpacity={0.4} />
               </AreaChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -510,13 +499,13 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="FUND FLOWS">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={flowsData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="date" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="inflows" fill={BLOOMBERG_GREEN} />
-                <Bar dataKey="outflows" fill={BLOOMBERG_RED} />
-                <Line type="monotone" dataKey="net" stroke={BLOOMBERG_YELLOW} strokeWidth={2} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="date" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Bar dataKey="inflows" fill={colors.secondary} />
+                <Bar dataKey="outflows" fill={colors.alert} />
+                <Line type="monotone" dataKey="net" stroke={colors.warning} strokeWidth={2} />
               </ComposedChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -524,12 +513,12 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="PERFORMANCE ATTRIBUTION">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={performanceData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="period" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="return" fill={BLOOMBERG_GREEN} />
-                <Bar dataKey="benchmark" fill={BLOOMBERG_GRAY} opacity={0.5} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="period" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Bar dataKey="return" fill={colors.secondary} />
+                <Bar dataKey="benchmark" fill={colors.textMuted} opacity={0.5} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -538,11 +527,11 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="FACTOR ATTRIBUTION">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={attribution} layout="horizontal">
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis type="number" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis type="category" dataKey="factor" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="contribution" fill={BLOOMBERG_GREEN} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis type="number" stroke={colors.text} fontSize={8} />
+                <YAxis type="category" dataKey="factor" stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Bar dataKey="contribution" fill={colors.secondary} />
               </BarChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -550,13 +539,13 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="MONEY FLOW INDEX">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={moneyFlowData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="day" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Line type="monotone" dataKey="mfi" stroke={BLOOMBERG_PURPLE} strokeWidth={1} dot={false} />
-                <ReferenceLine y={20} stroke={BLOOMBERG_RED} strokeDasharray="2 2" />
-                <ReferenceLine y={80} stroke={BLOOMBERG_RED} strokeDasharray="2 2" />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="day" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Line type="monotone" dataKey="mfi" stroke={colors.purple} strokeWidth={1} dot={false} />
+                <ReferenceLine y={20} stroke={colors.alert} strokeDasharray="2 2" />
+                <ReferenceLine y={80} stroke={colors.alert} strokeDasharray="2 2" />
               </LineChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -564,24 +553,24 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="GLOBAL MARKETS">
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart data={marketData}>
-                <PolarGrid stroke={BLOOMBERG_GRAY} />
-                <PolarAngleAxis dataKey="market" tick={{ fontSize: 9, fill: BLOOMBERG_WHITE }} />
-                <PolarRadiusAxis tick={{ fontSize: 8, fill: BLOOMBERG_GRAY }} />
+                <PolarGrid stroke={colors.textMuted} />
+                <PolarAngleAxis dataKey="market" tick={{ fontSize: 9, fill: colors.text }} />
+                <PolarRadiusAxis tick={{ fontSize: 8, fill: colors.textMuted }} />
                 <Radar
                   name="Return"
                   dataKey="return"
-                  stroke={BLOOMBERG_GREEN}
-                  fill={BLOOMBERG_GREEN}
+                  stroke={colors.secondary}
+                  fill={colors.secondary}
                   fillOpacity={0.3}
                 />
                 <Radar
                   name="Volatility"
                   dataKey="volatility"
-                  stroke={BLOOMBERG_RED}
-                  fill={BLOOMBERG_RED}
+                  stroke={colors.alert}
+                  fill={colors.alert}
                   fillOpacity={0.2}
                 />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
               </RadarChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -589,11 +578,11 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="YIELD CURVE">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={bondData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="maturity" stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Area type="monotone" dataKey="yield" stroke={BLOOMBERG_YELLOW} fill={BLOOMBERG_YELLOW} fillOpacity={0.3} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="maturity" stroke={colors.text} fontSize={8} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Area type="monotone" dataKey="yield" stroke={colors.warning} fill={colors.warning} fillOpacity={0.3} />
               </AreaChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -601,12 +590,12 @@ const AnalyticsTab: React.FC = () => {
           <ChartBox title="STRESS SCENARIOS">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={stressData}>
-                <CartesianGrid strokeDasharray="1 1" stroke={BLOOMBERG_GRAY} opacity={0.3} />
-                <XAxis dataKey="scenario" stroke={BLOOMBERG_WHITE} fontSize={7} angle={-45} />
-                <YAxis stroke={BLOOMBERG_WHITE} fontSize={8} />
-                <Tooltip contentStyle={{ backgroundColor: BLOOMBERG_DARK_BG, border: `1px solid ${BLOOMBERG_GRAY}`, fontSize: '9px' }} />
-                <Bar dataKey="probability" fill={BLOOMBERG_BLUE} />
-                <Line type="monotone" dataKey="impact" stroke={BLOOMBERG_RED} strokeWidth={2} />
+                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="scenario" stroke={colors.text} fontSize={7} angle={-45} />
+                <YAxis stroke={colors.text} fontSize={8} />
+                <Tooltip contentStyle={{ backgroundColor: colors.background, border: `1px solid ${colors.textMuted}`, fontSize: '9px' }} />
+                <Bar dataKey="probability" fill={colors.info} />
+                <Line type="monotone" dataKey="impact" stroke={colors.alert} strokeWidth={2} />
               </ComposedChart>
             </ResponsiveContainer>
           </ChartBox>
@@ -615,11 +604,11 @@ const AnalyticsTab: React.FC = () => {
 
       {/* Status Bar */}
       <div style={{
-        borderTop: `1px solid ${BLOOMBERG_GRAY}`,
-        backgroundColor: BLOOMBERG_PANEL_BG,
+        borderTop: `1px solid ${colors.textMuted}`,
+        backgroundColor: colors.panel,
         padding: '2px 8px',
         fontSize: '10px',
-        color: BLOOMBERG_GRAY,
+        color: colors.textMuted,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -630,7 +619,7 @@ const AnalyticsTab: React.FC = () => {
           <div style={{ display: 'flex', gap: '16px' }}>
             <span>Risk: VaR $45K | Sharpe: 1.84 | Beta: 0.97</span>
             <span>Session: {currentTime.toTimeString().substring(0, 8)}</span>
-            <span style={{ color: BLOOMBERG_GREEN }}>SYSTEM: ACTIVE</span>
+            <span style={{ color: colors.secondary }}>SYSTEM: ACTIVE</span>
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import GridLayout, { Layout } from 'react-grid-layout';
 import { Plus, RotateCcw, Save } from 'lucide-react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import {
   NewsWidget,
   MarketDataWidget,
@@ -17,14 +18,6 @@ import {
 import { AddWidgetModal } from './dashboard/AddWidgetModal';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
-
-const BLOOMBERG_ORANGE = '#FFA500';
-const BLOOMBERG_WHITE = '#FFFFFF';
-const BLOOMBERG_GREEN = '#00C800';
-const BLOOMBERG_YELLOW = '#FFFF00';
-const BLOOMBERG_GRAY = '#787878';
-const BLOOMBERG_DARK_BG = '#000000';
-const BLOOMBERG_PANEL_BG = '#0a0a0a';
 
 interface WidgetInstance extends WidgetConfig {
   layout: Layout;
@@ -113,6 +106,7 @@ interface DashboardTabProps {
 }
 
 const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [widgets, setWidgets] = useState<WidgetInstance[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -313,9 +307,11 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG_DARK_BG,
-      color: BLOOMBERG_WHITE,
-      fontFamily: 'Consolas, monospace',
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      fontStyle: fontStyle,
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
@@ -339,7 +335,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
 
         /* Grid layout drag handle styling */
         .react-grid-item.react-grid-placeholder {
-          background: ${BLOOMBERG_ORANGE} !important;
+          background: ${colors.primary} !important;
           opacity: 0.3;
           border-radius: 4px;
         }
@@ -374,33 +370,33 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         }
 
         .react-resizable-handle::after {
-          border-right: 2px solid ${BLOOMBERG_ORANGE};
-          border-bottom: 2px solid ${BLOOMBERG_ORANGE};
+          border-right: 2px solid ${colors.primary};
+          border-bottom: 2px solid ${colors.primary};
         }
       `}</style>
 
       {/* Header Bar */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         padding: '8px 12px',
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold', fontSize: '14px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: fontSize.subheading }}>
               CUSTOMIZABLE DASHBOARD
             </span>
-            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-            <span style={{ color: BLOOMBERG_GREEN, fontSize: '10px' }}>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.secondary, fontSize: fontSize.small }}>
               ● LIVE
             </span>
-            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-            <span style={{ color: BLOOMBERG_YELLOW, fontSize: '11px' }}>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.warning, fontSize: fontSize.body }}>
               {currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC
             </span>
-            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-            <span style={{ color: BLOOMBERG_GRAY, fontSize: '10px' }}>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.textMuted, fontSize: fontSize.small }}>
               WIDGETS: {widgets.length}
             </span>
           </div>
@@ -409,11 +405,11 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             <button
               onClick={() => setShowAddModal(true)}
               style={{
-                background: BLOOMBERG_GREEN,
+                background: colors.secondary,
                 color: 'black',
                 border: 'none',
                 padding: '6px 12px',
-                fontSize: '10px',
+                fontSize: fontSize.small,
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 display: 'flex',
@@ -428,11 +424,11 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             <button
               onClick={saveLayout}
               style={{
-                background: BLOOMBERG_ORANGE,
+                background: colors.primary,
                 color: 'black',
                 border: 'none',
                 padding: '6px 12px',
-                fontSize: '10px',
+                fontSize: fontSize.small,
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 display: 'flex',
@@ -447,11 +443,11 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             <button
               onClick={resetLayout}
               style={{
-                background: BLOOMBERG_GRAY,
+                background: colors.textMuted,
                 color: 'black',
                 border: 'none',
                 padding: '6px 12px',
-                fontSize: '10px',
+                fontSize: fontSize.small,
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 display: 'flex',
@@ -469,18 +465,18 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
 
       {/* Info Bar */}
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         padding: '4px 12px',
-        fontSize: '10px',
-        color: BLOOMBERG_GRAY,
+        fontSize: fontSize.small,
+        color: colors.textMuted,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', gap: '16px' }}>
-          <span>💡 <span style={{ color: BLOOMBERG_WHITE }}>Drag widgets to rearrange</span></span>
-          <span>🔧 <span style={{ color: BLOOMBERG_WHITE }}>Resize from bottom-right corner</span></span>
-          <span>✖️ <span style={{ color: BLOOMBERG_WHITE }}>Remove widgets with X button</span></span>
-          <span>📐 <span style={{ color: BLOOMBERG_WHITE }}>Responsive layout - uses full width</span></span>
+          <span>💡 <span style={{ color: colors.text }}>Drag widgets to rearrange</span></span>
+          <span>🔧 <span style={{ color: colors.text }}>Resize from bottom-right corner</span></span>
+          <span>✖️ <span style={{ color: colors.text }}>Remove widgets with X button</span></span>
+          <span>📐 <span style={{ color: colors.text }}>Responsive layout - uses full width</span></span>
         </div>
       </div>
 
@@ -503,17 +499,17 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             height: '100%',
             gap: '16px'
           }}>
-            <div style={{ color: BLOOMBERG_GRAY, fontSize: '14px' }}>
+            <div style={{ color: colors.textMuted, fontSize: fontSize.subheading }}>
               No widgets on dashboard
             </div>
             <button
               onClick={() => setShowAddModal(true)}
               style={{
-                background: BLOOMBERG_ORANGE,
+                background: colors.primary,
                 color: 'black',
                 border: 'none',
                 padding: '12px 24px',
-                fontSize: '12px',
+                fontSize: fontSize.body,
                 fontWeight: 'bold',
                 cursor: 'pointer',
                 borderRadius: '4px'
@@ -547,18 +543,18 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
 
       {/* Status Bar */}
       <div style={{
-        borderTop: `1px solid ${BLOOMBERG_GRAY}`,
-        backgroundColor: BLOOMBERG_PANEL_BG,
+        borderTop: `1px solid ${colors.textMuted}`,
+        backgroundColor: colors.panel,
         padding: '4px 12px',
-        fontSize: '9px',
-        color: BLOOMBERG_GRAY,
+        fontSize: fontSize.tiny,
+        color: colors.textMuted,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Fincept Customizable Dashboard v2.0.0 | Drag & drop workspace</span>
           <span>
             Widgets: {widgets.length} | Layout: {widgets.length > 0 ? 'Custom' : 'Empty'} |
-            Status: <span style={{ color: BLOOMBERG_GREEN }}>ACTIVE</span>
+            Status: <span style={{ color: colors.secondary }}>ACTIVE</span>
           </span>
         </div>
       </div>

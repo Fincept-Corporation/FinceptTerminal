@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Edit2 } from 'lucide-react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { marketDataService, QuoteData } from '../../services/marketDataService';
 import { tickerStorage } from '../../services/tickerStorageService';
 import { sqliteService } from '../../services/sqliteService';
 import TickerEditModal from './TickerEditModal';
 
 const MarketsTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [isUpdating, setIsUpdating] = useState(false);
@@ -24,15 +26,6 @@ const MarketsTab: React.FC = () => {
 
   // User preferences
   const [preferences, setPreferences] = useState(tickerStorage.loadPreferences());
-
-  // Bloomberg colors
-  const BLOOMBERG_ORANGE = '#FFA500';
-  const BLOOMBERG_WHITE = '#FFFFFF';
-  const BLOOMBERG_RED = '#FF0000';
-  const BLOOMBERG_GREEN = '#00C800';
-  const BLOOMBERG_GRAY = '#787878';
-  const BLOOMBERG_DARK_BG = '#1a1a1a';
-  const BLOOMBERG_PANEL_BG = '#000000';
 
   // Fetch market data progressively (display as data arrives)
   const fetchMarketData = async () => {
@@ -147,8 +140,8 @@ const MarketsTab: React.FC = () => {
   // Create market panel
   const createMarketPanel = (title: string, quotes: QuoteData[]) => (
     <div style={{
-      backgroundColor: BLOOMBERG_PANEL_BG,
-      border: `1px solid ${BLOOMBERG_GRAY}`,
+      backgroundColor: colors.panel,
+      border: `1px solid ${colors.textMuted}`,
       flex: '1 1 calc(33.333% - 16px)',
       minWidth: '300px',
       maxWidth: '600px',
@@ -159,13 +152,13 @@ const MarketsTab: React.FC = () => {
     }}>
       {/* Panel Header with Edit Icon */}
       <div style={{
-        backgroundColor: BLOOMBERG_DARK_BG,
-        color: BLOOMBERG_ORANGE,
+        backgroundColor: colors.background,
+        color: colors.primary,
         padding: '8px',
-        fontSize: '14px',
+        fontSize: fontSize.subheading,
         fontWeight: 'bold',
         textAlign: 'center',
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        borderBottom: `1px solid ${colors.textMuted}`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -174,7 +167,7 @@ const MarketsTab: React.FC = () => {
         {title.toUpperCase()}
         <Edit2
           size={14}
-          style={{ cursor: 'pointer', color: BLOOMBERG_WHITE }}
+          style={{ cursor: 'pointer', color: colors.text }}
           onClick={() => openEditModal(title)}
         />
       </div>
@@ -185,11 +178,11 @@ const MarketsTab: React.FC = () => {
         gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
         gap: '4px',
         padding: '4px 8px',
-        backgroundColor: BLOOMBERG_DARK_BG,
-        color: BLOOMBERG_WHITE,
-        fontSize: '12px',
+        backgroundColor: colors.background,
+        color: colors.text,
+        fontSize: fontSize.body,
         fontWeight: 'bold',
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`
+        borderBottom: `1px solid ${colors.textMuted}`
       }}>
         <div>SYMBOL</div>
         <div style={{ textAlign: 'right' }}>PRICE</div>
@@ -203,8 +196,8 @@ const MarketsTab: React.FC = () => {
       <div style={{ flex: 1, overflow: 'auto' }}>
         {quotes.length === 0 ? (
           <div style={{
-            color: BLOOMBERG_GRAY,
-            fontSize: '11px',
+            color: colors.textMuted,
+            fontSize: fontSize.body,
             textAlign: 'center',
             padding: '16px'
           }}>
@@ -217,28 +210,28 @@ const MarketsTab: React.FC = () => {
               gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr',
               gap: '4px',
               padding: '2px 8px',
-              fontSize: '10px',
+              fontSize: fontSize.small,
               backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent',
               borderBottom: `1px solid rgba(120,120,120,0.3)`,
               minHeight: '18px',
               alignItems: 'center'
             }}>
-              <div style={{ color: BLOOMBERG_WHITE }}>{quote.symbol}</div>
-              <div style={{ color: BLOOMBERG_WHITE, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
+              <div style={{ color: colors.text }}>{quote.symbol}</div>
+              <div style={{ color: colors.text, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
               <div style={{
-                color: quote.change >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+                color: quote.change >= 0 ? colors.secondary : colors.alert,
                 textAlign: 'right'
               }}>{formatChange(quote.change)}</div>
               <div style={{
-                color: quote.change_percent >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+                color: quote.change_percent >= 0 ? colors.secondary : colors.alert,
                 textAlign: 'right'
               }}>{formatPercent(quote.change_percent)}</div>
               <div style={{
-                color: BLOOMBERG_WHITE,
+                color: colors.text,
                 textAlign: 'right'
               }}>{quote.high ? quote.high.toFixed(2) : '-'}</div>
               <div style={{
-                color: BLOOMBERG_WHITE,
+                color: colors.text,
                 textAlign: 'right'
               }}>{quote.low ? quote.low.toFixed(2) : '-'}</div>
             </div>
@@ -254,8 +247,8 @@ const MarketsTab: React.FC = () => {
 
     return (
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        border: `1px solid ${colors.textMuted}`,
         flex: '1 1 calc(33.333% - 16px)',
         minWidth: '300px',
         maxWidth: '600px',
@@ -266,13 +259,13 @@ const MarketsTab: React.FC = () => {
       }}>
         {/* Panel Header */}
         <div style={{
-          backgroundColor: BLOOMBERG_DARK_BG,
-          color: BLOOMBERG_ORANGE,
+          backgroundColor: colors.background,
+          color: colors.primary,
           padding: '8px',
-          fontSize: '14px',
+          fontSize: fontSize.subheading,
           fontWeight: 'bold',
           textAlign: 'center',
-          borderBottom: `1px solid ${BLOOMBERG_GRAY}`
+          borderBottom: `1px solid ${colors.textMuted}`
         }}>
           {title.toUpperCase()} - LIVE DATA
         </div>
@@ -283,11 +276,11 @@ const MarketsTab: React.FC = () => {
           gridTemplateColumns: '1fr 2fr 1fr 1fr 1fr',
           gap: '4px',
           padding: '4px 8px',
-          backgroundColor: BLOOMBERG_DARK_BG,
-          color: BLOOMBERG_WHITE,
-          fontSize: '12px',
+          backgroundColor: colors.background,
+          color: colors.text,
+          fontSize: fontSize.body,
           fontWeight: 'bold',
-          borderBottom: `1px solid ${BLOOMBERG_GRAY}`
+          borderBottom: `1px solid ${colors.textMuted}`
         }}>
           <div>SYMBOL</div>
           <div>NAME</div>
@@ -300,8 +293,8 @@ const MarketsTab: React.FC = () => {
         <div style={{ flex: 1, overflow: 'auto' }}>
           {quotes.length === 0 ? (
             <div style={{
-              color: BLOOMBERG_GRAY,
-              fontSize: '11px',
+              color: colors.textMuted,
+              fontSize: fontSize.body,
               textAlign: 'center',
               padding: '16px'
             }}>
@@ -316,23 +309,23 @@ const MarketsTab: React.FC = () => {
                   gridTemplateColumns: '1fr 2fr 1fr 1fr 1fr',
                   gap: '4px',
                   padding: '2px 8px',
-                  fontSize: '10px',
+                  fontSize: fontSize.small,
                   backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent',
                   borderBottom: `1px solid rgba(120,120,120,0.3)`,
                   minHeight: '18px',
                   alignItems: 'center'
                 }}>
-                  <div style={{ color: BLOOMBERG_WHITE }}>{quote.symbol}</div>
-                  <div style={{ color: BLOOMBERG_WHITE, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ color: colors.text }}>{quote.symbol}</div>
+                  <div style={{ color: colors.text, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {tickerInfo?.name || quote.symbol}
                   </div>
-                  <div style={{ color: BLOOMBERG_WHITE, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
+                  <div style={{ color: colors.text, textAlign: 'right' }}>{quote.price.toFixed(2)}</div>
                   <div style={{
-                    color: quote.change >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+                    color: quote.change >= 0 ? colors.secondary : colors.alert,
                     textAlign: 'right'
                   }}>{formatChange(quote.change)}</div>
                   <div style={{
-                    color: quote.change_percent >= 0 ? BLOOMBERG_GREEN : BLOOMBERG_RED,
+                    color: quote.change_percent >= 0 ? colors.secondary : colors.alert,
                     textAlign: 'right'
                   }}>{formatPercent(quote.change_percent)}</div>
                 </div>
@@ -347,9 +340,11 @@ const MarketsTab: React.FC = () => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: BLOOMBERG_DARK_BG,
-      color: BLOOMBERG_WHITE,
-      fontFamily: 'Consolas, monospace',
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      fontStyle: fontStyle,
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
@@ -377,16 +372,16 @@ const MarketsTab: React.FC = () => {
         alignItems: 'center',
         flexWrap: 'wrap',
         padding: '8px 12px',
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         fontSize: '13px',
         gap: '8px',
         flexShrink: 0
       }}>
-        <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>FINCEPT</span>
-        <span style={{ color: BLOOMBERG_WHITE }}>MARKET TERMINAL - LIVE DATA</span>
-        <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-        <span style={{ color: BLOOMBERG_WHITE, fontSize: '11px' }}>
+        <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT</span>
+        <span style={{ color: colors.text }}>MARKET TERMINAL - LIVE DATA</span>
+        <span style={{ color: colors.textMuted }}>|</span>
+        <span style={{ color: colors.text, fontSize: '11px' }}>
           {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
         </span>
       </div>
@@ -397,8 +392,8 @@ const MarketsTab: React.FC = () => {
         alignItems: 'center',
         flexWrap: 'wrap',
         padding: '8px 12px',
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        borderBottom: `1px solid ${BLOOMBERG_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `1px solid ${colors.textMuted}`,
         fontSize: '12px',
         gap: '8px',
         flexShrink: 0
@@ -406,7 +401,7 @@ const MarketsTab: React.FC = () => {
         <button
           onClick={fetchMarketData}
           style={{
-            backgroundColor: BLOOMBERG_ORANGE,
+            backgroundColor: colors.primary,
             color: 'black',
             border: 'none',
             padding: '4px 12px',
@@ -420,7 +415,7 @@ const MarketsTab: React.FC = () => {
         <button
           onClick={() => setAutoUpdate(!autoUpdate)}
           style={{
-            backgroundColor: autoUpdate ? BLOOMBERG_GREEN : BLOOMBERG_GRAY,
+            backgroundColor: autoUpdate ? colors.secondary : colors.textMuted,
             color: 'black',
             border: 'none',
             padding: '4px 12px',
@@ -435,9 +430,9 @@ const MarketsTab: React.FC = () => {
           value={updateInterval}
           onChange={(e) => setUpdateInterval(Number(e.target.value))}
           style={{
-            backgroundColor: BLOOMBERG_DARK_BG,
-            border: `1px solid ${BLOOMBERG_GRAY}`,
-            color: BLOOMBERG_WHITE,
+            backgroundColor: colors.background,
+            border: `1px solid ${colors.textMuted}`,
+            color: colors.text,
             padding: '4px 8px',
             fontSize: '11px',
             cursor: 'pointer'
@@ -448,14 +443,14 @@ const MarketsTab: React.FC = () => {
           <option value={1800000}>30 min</option>
           <option value={3600000}>1 hour</option>
         </select>
-        <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-        <span style={{ color: BLOOMBERG_GRAY, fontSize: '11px' }}>LAST UPDATE:</span>
-        <span style={{ color: BLOOMBERG_WHITE, fontSize: '11px' }}>
+        <span style={{ color: colors.textMuted }}>|</span>
+        <span style={{ color: colors.textMuted, fontSize: '11px' }}>LAST UPDATE:</span>
+        <span style={{ color: colors.text, fontSize: '11px' }}>
           {lastUpdate.toTimeString().substring(0, 8)}
         </span>
-        <span style={{ color: BLOOMBERG_GRAY }}>|</span>
-        <span style={{ color: isUpdating ? BLOOMBERG_ORANGE : BLOOMBERG_GREEN, fontSize: '14px' }}>●</span>
-        <span style={{ color: isUpdating ? BLOOMBERG_ORANGE : BLOOMBERG_GREEN, fontSize: '11px', fontWeight: 'bold' }}>
+        <span style={{ color: colors.textMuted }}>|</span>
+        <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '14px' }}>●</span>
+        <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '11px', fontWeight: 'bold' }}>
           {isUpdating ? 'UPDATING' : 'LIVE'}
         </span>
       </div>
@@ -470,7 +465,7 @@ const MarketsTab: React.FC = () => {
       }}>
         {/* Global Markets */}
         <div style={{
-          color: BLOOMBERG_ORANGE,
+          color: colors.primary,
           fontSize: '14px',
           fontWeight: 'bold',
           marginBottom: '8px',
@@ -478,7 +473,7 @@ const MarketsTab: React.FC = () => {
         }}>
           GLOBAL MARKETS
         </div>
-        <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '16px' }}></div>
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }}></div>
 
         <div style={{
           display: 'flex',
@@ -493,7 +488,7 @@ const MarketsTab: React.FC = () => {
 
         {/* Regional Markets */}
         <div style={{
-          color: BLOOMBERG_ORANGE,
+          color: colors.primary,
           fontSize: '14px',
           fontWeight: 'bold',
           marginBottom: '8px',
@@ -502,7 +497,7 @@ const MarketsTab: React.FC = () => {
         }}>
           REGIONAL MARKETS - LIVE DATA
         </div>
-        <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '16px' }}></div>
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }}></div>
 
         <div style={{
           display: 'flex',
@@ -517,11 +512,11 @@ const MarketsTab: React.FC = () => {
 
       {/* Status Bar */}
       <div style={{
-        borderTop: `1px solid ${BLOOMBERG_GRAY}`,
-        backgroundColor: BLOOMBERG_PANEL_BG,
+        borderTop: `1px solid ${colors.textMuted}`,
+        backgroundColor: colors.panel,
         padding: '6px 12px',
         fontSize: '10px',
-        color: BLOOMBERG_GRAY,
+        color: colors.textMuted,
         flexShrink: 0
       }}>
         <div style={{
@@ -535,7 +530,7 @@ const MarketsTab: React.FC = () => {
           <span style={{ whiteSpace: 'nowrap' }}>
             Connected: {Object.keys(regionalData).length} regional markets
             {dbInitialized && (
-              <span style={{ marginLeft: '8px', color: BLOOMBERG_GREEN }}>
+              <span style={{ marginLeft: '8px', color: colors.secondary }}>
                 | Cache: ENABLED
               </span>
             )}
