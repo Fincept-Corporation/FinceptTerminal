@@ -3,6 +3,7 @@ import { Play, Save, FileText, Plus, X, RefreshCw, Terminal as TerminalIcon, Dow
 import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { notebookService } from '@/services/notebookService';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface EditorFile {
   id: string;
@@ -68,6 +69,7 @@ interface NotebookHistory {
 }
 
 export default function CodeEditorTab() {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [editorMode, setEditorMode] = useState<'code' | 'notebook'>('code');
   const [files, setFiles] = useState<EditorFile[]>([
     {
@@ -113,19 +115,19 @@ plot_candlestick AAPL, "Apple Stock Chart"`,
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Colors
+  // Use theme colors with legacy variable name for minimal changes
   const C = {
-    ORANGE: '#FF8C00',
-    WHITE: '#FFFFFF',
-    GREEN: '#00FF00',
-    RED: '#FF0000',
-    YELLOW: '#FFFF00',
-    BLUE: '#4169E1',
-    CYAN: '#00FFFF',
-    GRAY: '#787878',
-    DARK_BG: '#000000',
-    PANEL_BG: '#0a0a0a',
-    EDITOR_BG: '#1a1a1a'
+    ORANGE: colors.primary,
+    WHITE: colors.text,
+    GREEN: colors.secondary,
+    RED: colors.alert,
+    YELLOW: colors.warning,
+    BLUE: colors.info,
+    CYAN: colors.accent,
+    GRAY: colors.textMuted,
+    DARK_BG: colors.background,
+    PANEL_BG: colors.panel,
+    EDITOR_BG: colors.panel
   };
 
   const activeFile = files.find(f => f.id === activeFileId) || files[0];

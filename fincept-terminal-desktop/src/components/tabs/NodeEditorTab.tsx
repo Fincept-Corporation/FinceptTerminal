@@ -1,3 +1,4 @@
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import ReactFlow, {
   Node,
@@ -123,7 +124,7 @@ const CustomNode = ({ data, id, selected }: any) => {
               }}
               autoFocus
               style={{
-                background: '#0a0a0a',
+                background: 'colors.panel',
                 border: `1px solid ${data.color}`,
                 color: data.color,
                 fontSize: '11px',
@@ -251,6 +252,7 @@ const NODE_CONFIGS = [
 ];
 
 export default function NodeEditorTab() {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [mcpNodeConfigs, setMcpNodeConfigs] = useState<MCPNodeConfig[]>([]);
 
   // Load MCP node configurations on mount
@@ -506,7 +508,7 @@ export default function NodeEditorTab() {
       style={{
         width: '100%',
         height: '100%',
-        backgroundColor: '#0a0a0a',
+        backgroundColor: 'colors.panel',
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -784,7 +786,7 @@ export default function NodeEditorTab() {
                   key={config.type}
                   onClick={() => addNode(config)}
                   style={{
-                    backgroundColor: '#0a0a0a',
+                    backgroundColor: 'colors.panel',
                     color: config.color,
                     border: `1px solid ${config.color}40`,
                     padding: '8px 12px',
@@ -802,7 +804,7 @@ export default function NodeEditorTab() {
                     e.currentTarget.style.borderColor = config.color;
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#0a0a0a';
+                    e.currentTarget.style.backgroundColor = 'colors.panel';
                     e.currentTarget.style.borderColor = `${config.color}40`;
                   }}
                 >
@@ -823,7 +825,7 @@ export default function NodeEditorTab() {
             <div style={{ marginBottom: '12px' }}>
               <div
                 style={{
-                  color: '#FFA500',
+                  color: 'colors.primary',
                   fontSize: '10px',
                   marginBottom: '6px',
                   textTransform: 'uppercase',
@@ -838,9 +840,9 @@ export default function NodeEditorTab() {
                   key={config.id}
                   onClick={() => addNode(config)}
                   style={{
-                    backgroundColor: '#0a0a0a',
-                    color: '#FFA500',
-                    border: '1px solid #FFA50040',
+                    backgroundColor: 'colors.panel',
+                    color: 'colors.primary',
+                    border: '1px solid colors.primary40',
                     padding: '8px 12px',
                     fontSize: '11px',
                     cursor: 'pointer',
@@ -852,18 +854,18 @@ export default function NodeEditorTab() {
                     marginBottom: '6px',
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = '#FFA50020';
-                    e.currentTarget.style.borderColor = '#FFA500';
+                    e.currentTarget.style.backgroundColor = 'colors.primary20';
+                    e.currentTarget.style.borderColor = 'colors.primary';
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = '#0a0a0a';
-                    e.currentTarget.style.borderColor = '#FFA50040';
+                    e.currentTarget.style.backgroundColor = 'colors.panel';
+                    e.currentTarget.style.borderColor = 'colors.primary40';
                   }}
                 >
                   <span style={{ fontSize: '14px' }}>{config.icon}</span>
                   <div style={{ flex: 1, textAlign: 'left' }}>
                     <div>{config.label}</div>
-                    <div style={{ fontSize: '9px', color: '#787878' }}>
+                    <div style={{ fontSize: '9px', color: 'colors.textMuted' }}>
                       {config.serverId}
                     </div>
                   </div>
@@ -885,7 +887,7 @@ export default function NodeEditorTab() {
           onSelectionChange={onSelectionChange}
           nodeTypes={nodeTypes}
           fitView
-          style={{ background: '#0a0a0a' }}
+          style={{ background: 'colors.panel' }}
           defaultEdgeOptions={{
             animated: true,
             style: { stroke: '#ea580c', strokeWidth: 2 },
@@ -895,7 +897,7 @@ export default function NodeEditorTab() {
             color="#2d2d2d"
             gap={20}
             size={1}
-            style={{ backgroundColor: '#0a0a0a' }}
+            style={{ backgroundColor: 'colors.panel' }}
           />
           <Controls
             style={{

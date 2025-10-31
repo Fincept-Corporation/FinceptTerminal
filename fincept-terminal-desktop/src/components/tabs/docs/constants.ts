@@ -1,12 +1,19 @@
-export const COLORS = {
-  ORANGE: '#FF8C00',
-  WHITE: '#FFFFFF',
-  GREEN: '#00FF00',
-  BLUE: '#4169E1',
-  CYAN: '#00FFFF',
-  YELLOW: '#FFFF00',
-  GRAY: '#787878',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0a0a0a',
-  CODE_BG: '#1a1a1a'
-} as const;
+import { terminalThemeService } from '@/services/terminalThemeService';
+
+export const getColors = () => {
+  const theme = terminalThemeService.getTheme();
+  return {
+    ORANGE: theme.colors.primary,
+    WHITE: theme.colors.text,
+    GREEN: theme.colors.secondary,
+    BLUE: theme.colors.info,
+    CYAN: theme.colors.accent,
+    YELLOW: theme.colors.warning,
+    GRAY: theme.colors.textMuted,
+    DARK_BG: theme.colors.background,
+    PANEL_BG: theme.colors.panel,
+    CODE_BG: '#1a1a1a'
+  };
+};
+
+export const COLORS = getColors();

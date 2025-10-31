@@ -1,15 +1,47 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, Plus, Trash2, Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3 } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link } from 'lucide-react';
 import { sqliteService, type Credential, type LLMConfig, type LLMGlobalSettings } from '@/services/sqliteService';
 import { ollamaService } from '@/services/ollamaService';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { terminalThemeService, FONT_FAMILIES, COLOR_THEMES, FontSettings } from '@/services/terminalThemeService';
+import { getWebSocketManager, ConnectionStatus, getAvailableProviders } from '@/services/websocket';
+import { useWebSocketManager } from '@/hooks/useWebSocket';
 
 export default function SettingsTab() {
-  const [activeSection, setActiveSection] = useState<'credentials' | 'profile' | 'terminal' | 'notifications' | 'llm'>('credentials');
+  const { theme, updateTheme, resetTheme, colors, fontSize: themeFontSize, fontFamily: themeFontFamily, fontWeight: themeFontWeight, fontStyle } = useTerminalTheme();
+  const [activeSection, setActiveSection] = useState<'credentials' | 'profile' | 'terminal' | 'notifications' | 'llm' | 'dataConnections'>('credentials');
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [dbInitialized, setDbInitialized] = useState(false);
+
+  // WebSocket Data Connections State
+  const { stats, statuses, metrics } = useWebSocketManager();
+  const [wsProviders, setWsProviders] = useState<Array<{
+    id: number;
+    provider_name: string;
+    enabled: boolean;
+    api_key: string | null;
+    api_secret: string | null;
+    endpoint: string | null;
+    config_data: string | null;
+  }>>([]);
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [providerForm, setProviderForm] = useState({
+    provider_name: '',
+    enabled: true,
+    api_key: '',
+    api_secret: '',
+    endpoint: ''
+  });
+
+  // Terminal appearance states
+  const [fontFamily, setFontFamily] = useState(theme.font.family);
+  const [baseSize, setBaseSize] = useState(theme.font.baseSize);
+  const [fontWeight, setFontWeight] = useState(theme.font.weight);
+  const [fontItalic, setFontItalic] = useState(theme.font.italic);
+  const [selectedTheme, setSelectedTheme] = useState(terminalThemeService.getCurrentThemeKey());
 
   // LLM Configuration States
   const [llmConfigs, setLlmConfigs] = useState<LLMConfig[]>([]);
@@ -38,6 +70,7 @@ export default function SettingsTab() {
 
   useEffect(() => {
     initDB();
+    loadWSProviders();
   }, []);
 
   const initDB = async () => {
@@ -58,6 +91,7 @@ export default function SettingsTab() {
       // Load initial data
       await loadCredentials();
       await loadLLMConfigs();
+      await loadWSProviders();
 
       showMessage('success', `Database ready: ${healthCheck.message}`);
     } catch (error) {
@@ -67,6 +101,138 @@ export default function SettingsTab() {
       setDbInitialized(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadWSProviders = async () => {
+    try {
+      const providers = await sqliteService.getWSProviderConfigs();
+      setWsProviders(providers);
+    } catch (error) {
+      console.error('Failed to load WS providers:', error);
+    }
+  };
+
+  const handleSaveWSProvider = async () => {
+    if (!providerForm.provider_name.trim()) {
+      showMessage('error', 'Provider name is required');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const result = await sqliteService.saveWSProviderConfig(providerForm);
+
+      if (result.success) {
+        showMessage('success', result.message);
+
+        // Initialize provider in WebSocket Manager
+        const manager = getWebSocketManager();
+        manager.setProviderConfig(providerForm.provider_name, {
+          provider_name: providerForm.provider_name,
+          enabled: providerForm.enabled,
+          api_key: providerForm.api_key || undefined,
+          api_secret: providerForm.api_secret || undefined,
+          endpoint: providerForm.endpoint || undefined
+        });
+
+        // Reset form
+        setProviderForm({
+          provider_name: '',
+          enabled: true,
+          api_key: '',
+          api_secret: '',
+          endpoint: ''
+        });
+        setSelectedProvider(null);
+        await loadWSProviders();
+      } else {
+        showMessage('error', result.message);
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to save provider configuration');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleWSProvider = async (providerName: string) => {
+    try {
+      const result = await sqliteService.toggleWSProviderEnabled(providerName);
+      if (result.success) {
+        showMessage('success', result.message);
+        await loadWSProviders();
+
+        // Reconnect or disconnect based on new state
+        const manager = getWebSocketManager();
+        if (result.enabled) {
+          const config = await sqliteService.getWSProviderConfig(providerName);
+          if (config) {
+            manager.setProviderConfig(providerName, config);
+          }
+        } else {
+          await manager.disconnect(providerName);
+        }
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to toggle provider');
+    }
+  };
+
+  const handleDeleteWSProvider = async (providerName: string) => {
+    if (!confirm(`Delete configuration for ${providerName}?`)) return;
+
+    try {
+      setLoading(true);
+      const result = await sqliteService.deleteWSProviderConfig(providerName);
+
+      if (result.success) {
+        showMessage('success', result.message);
+
+        // Disconnect from WebSocket Manager
+        const manager = getWebSocketManager();
+        await manager.disconnect(providerName);
+
+        await loadWSProviders();
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to delete provider');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConnectProvider = async (providerName: string) => {
+    try {
+      const manager = getWebSocketManager();
+      const config = await sqliteService.getWSProviderConfig(providerName);
+      if (config) {
+        manager.setProviderConfig(providerName, config);
+        await manager.connect(providerName);
+        showMessage('success', `Connected to ${providerName}`);
+      }
+    } catch (error) {
+      showMessage('error', `Failed to connect to ${providerName}`);
+    }
+  };
+
+  const handleDisconnectProvider = async (providerName: string) => {
+    try {
+      const manager = getWebSocketManager();
+      await manager.disconnect(providerName);
+      showMessage('success', `Disconnected from ${providerName}`);
+    } catch (error) {
+      showMessage('error', `Failed to disconnect from ${providerName}`);
+    }
+  };
+
+  const handleTestProvider = async (providerName: string) => {
+    try {
+      const manager = getWebSocketManager();
+      const latency = await manager.ping(providerName);
+      showMessage('success', `Ping: ${latency}ms`);
+    } catch (error) {
+      showMessage('error', `Ping failed for ${providerName}`);
     }
   };
 
@@ -265,28 +431,69 @@ export default function SettingsTab() {
 
   const getCurrentLLMConfig = () => llmConfigs.find(c => c.provider === activeProvider);
 
+  // Terminal appearance handlers
+  const handleSaveTerminalAppearance = () => {
+    const newTheme = {
+      font: {
+        family: fontFamily,
+        baseSize: baseSize,
+        weight: fontWeight,
+        italic: fontItalic
+      },
+      colors: COLOR_THEMES[selectedTheme]
+    };
+    updateTheme(newTheme);
+    showMessage('success', 'Terminal appearance saved successfully');
+  };
+
+  const handleResetTerminalAppearance = () => {
+    resetTheme();
+    const defaultTheme = terminalThemeService.getTheme();
+    setFontFamily(defaultTheme.font.family);
+    setBaseSize(defaultTheme.font.baseSize);
+    setFontWeight(defaultTheme.font.weight);
+    setFontItalic(defaultTheme.font.italic);
+    setSelectedTheme('bloomberg-classic');
+    showMessage('success', 'Reset to default appearance');
+  };
+
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#000' }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: colors.background }}>
       <style>{`
         *::-webkit-scrollbar { width: 8px; height: 8px; }
-        *::-webkit-scrollbar-track { background: #0a0a0a; }
+        *::-webkit-scrollbar-track { background: ${colors.panel}; }
         *::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
         *::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
+        @keyframes slideIn {
+          from { transform: translateX(-10px); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
       `}</style>
 
       {/* Header */}
       <div style={{
-        borderBottom: '2px solid #ea580c',
+        borderBottom: `2px solid ${colors.primary}`,
         padding: '12px 16px',
-        background: 'linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%)',
+        background: `linear-gradient(180deg, #1a1a1a 0%, ${colors.panel} 100%)`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <SettingsIcon size={20} color="#ea580c" />
-          <span style={{ color: '#ea580c', fontSize: '16px', fontWeight: 'bold', letterSpacing: '1px' }}>
+          <SettingsIcon size={20} color={colors.primary} />
+          <span style={{ color: colors.primary, fontSize: '16px', fontWeight: 'bold', letterSpacing: '1px' }}>
             TERMINAL SETTINGS
           </span>
         </div>
@@ -323,11 +530,12 @@ export default function SettingsTab() {
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
 
         {/* Sidebar Navigation */}
-        <div style={{ width: '220px', borderRight: '1px solid #1a1a1a', background: '#0a0a0a', flexShrink: 0 }}>
+        <div style={{ width: '220px', borderRight: '1px solid #1a1a1a', background: colors.panel, flexShrink: 0 }}>
           <div style={{ padding: '16px 0' }}>
             {[
               { id: 'credentials', icon: Lock, label: 'Credentials' },
               { id: 'llm', icon: Bot, label: 'LLM Configuration' },
+              { id: 'dataConnections', icon: Wifi, label: 'Data Connections' },
               { id: 'profile', icon: User, label: 'User Profile' },
               { id: 'terminal', icon: Terminal, label: 'Terminal Config' },
               { id: 'notifications', icon: Bell, label: 'Notifications' }
@@ -339,7 +547,7 @@ export default function SettingsTab() {
                   padding: '12px 16px',
                   cursor: 'pointer',
                   background: activeSection === item.id ? '#1a1a1a' : 'transparent',
-                  borderLeft: activeSection === item.id ? '3px solid #ea580c' : '3px solid transparent',
+                  borderLeft: activeSection === item.id ? `3px solid ${colors.primary}` : '3px solid transparent',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
@@ -352,8 +560,8 @@ export default function SettingsTab() {
                   if (activeSection !== item.id) e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <item.icon size={16} color={activeSection === item.id ? '#ea580c' : '#666'} />
-                <span style={{ color: activeSection === item.id ? '#fff' : '#666', fontSize: '11px', fontWeight: activeSection === item.id ? 'bold' : 'normal' }}>
+                <item.icon size={16} color={activeSection === item.id ? colors.primary : colors.textMuted} />
+                <span style={{ color: activeSection === item.id ? colors.text : colors.textMuted, fontSize: '11px', fontWeight: activeSection === item.id ? 'bold' : 'normal' }}>
                   {item.label}
                 </span>
               </div>
@@ -369,29 +577,29 @@ export default function SettingsTab() {
             {activeSection === 'credentials' && (
               <div>
                 <div style={{ marginBottom: '24px' }}>
-                  <h2 style={{ color: '#ea580c', fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  <h2 style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
                     API KEY MANAGEMENT
                   </h2>
-                  <p style={{ color: '#888', fontSize: '10px' }}>
+                  <p style={{ color: colors.textMuted, fontSize: '10px' }}>
                     Store API keys for services like FRED, Alpha Vantage, Polygon.io, etc. All data is encrypted and stored locally.
                   </p>
                 </div>
 
                 {/* Polygon.io Dedicated Field */}
                 <div style={{
-                  background: '#0a0a0a',
+                  background: colors.panel,
                   border: '1px solid #1a1a1a',
                   padding: '16px',
                   marginBottom: '20px',
                   borderRadius: '4px'
                 }}>
-                  <h3 style={{ color: '#ea580c', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
+                  <h3 style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
                     Polygon.io API Key
                   </h3>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'end' }}>
                     <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         API KEY *
                       </label>
                       <input
@@ -401,9 +609,9 @@ export default function SettingsTab() {
                         placeholder="Enter your Polygon.io API key"
                         style={{
                           width: '100%',
-                          background: '#000',
+                          background: colors.background,
                           border: '1px solid #2a2a2a',
-                          color: '#fff',
+                          color: colors.text,
                           padding: '8px',
                           fontSize: '10px',
                           borderRadius: '3px'
@@ -414,8 +622,8 @@ export default function SettingsTab() {
                       onClick={handleSavePolygonKey}
                       disabled={loading}
                       style={{
-                        background: '#ea580c',
-                        color: '#fff',
+                        background: colors.primary,
+                        color: colors.text,
                         border: 'none',
                         padding: '8px 16px',
                         fontSize: '10px',
@@ -433,26 +641,26 @@ export default function SettingsTab() {
                       {loading ? 'SAVING...' : 'SAVE'}
                     </button>
                   </div>
-                  <p style={{ color: '#666', fontSize: '9px', marginTop: '8px' }}>
-                    Used for Polygon.io Equities data in the Polygon tab. Get your free API key at <span style={{ color: '#ea580c' }}>polygon.io</span>
+                  <p style={{ color: colors.textMuted, fontSize: '9px', marginTop: '8px' }}>
+                    Used for Polygon.io Equities data in the Polygon tab. Get your free API key at <span style={{ color: colors.primary }}>polygon.io</span>
                   </p>
                 </div>
 
                 {/* Add New API Key */}
                 <div style={{
-                  background: '#0a0a0a',
+                  background: colors.panel,
                   border: '1px solid #1a1a1a',
                   padding: '16px',
                   marginBottom: '20px',
                   borderRadius: '4px'
                 }}>
-                  <h3 style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
+                  <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
                     Add New API Key
                   </h3>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '12px', alignItems: 'end' }}>
                     <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         SERVICE NAME *
                       </label>
                       <input
@@ -462,9 +670,9 @@ export default function SettingsTab() {
                         placeholder="e.g., Polygon.io, FRED, AlphaVantage"
                         style={{
                           width: '100%',
-                          background: '#000',
+                          background: colors.background,
                           border: '1px solid #2a2a2a',
-                          color: '#fff',
+                          color: colors.text,
                           padding: '8px',
                           fontSize: '10px',
                           borderRadius: '3px'
@@ -472,7 +680,7 @@ export default function SettingsTab() {
                       />
                     </div>
                     <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         API KEY *
                       </label>
                       <input
@@ -482,9 +690,9 @@ export default function SettingsTab() {
                         placeholder="Your API key"
                         style={{
                           width: '100%',
-                          background: '#000',
+                          background: colors.background,
                           border: '1px solid #2a2a2a',
-                          color: '#fff',
+                          color: colors.text,
                           padding: '8px',
                           fontSize: '10px',
                           borderRadius: '3px'
@@ -495,8 +703,8 @@ export default function SettingsTab() {
                       onClick={handleSaveApiKey}
                       disabled={loading}
                       style={{
-                        background: '#ea580c',
-                        color: '#fff',
+                        background: colors.primary,
+                        color: colors.text,
                         border: 'none',
                         padding: '8px 16px',
                         fontSize: '10px',
@@ -518,20 +726,20 @@ export default function SettingsTab() {
 
                 {/* Saved API Keys List */}
                 <div>
-                  <h3 style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
+                  <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
                     Saved API Keys ({credentials.length})
                   </h3>
 
                   {credentials.length === 0 ? (
                     <div style={{
-                      background: '#0a0a0a',
+                      background: colors.panel,
                       border: '1px solid #1a1a1a',
                       padding: '32px',
                       textAlign: 'center',
                       borderRadius: '4px'
                     }}>
-                      <Lock size={32} color="#333" style={{ margin: '0 auto 12px' }} />
-                      <p style={{ color: '#666', fontSize: '11px' }}>No API keys saved yet</p>
+                      <Lock size={32} color={colors.textMuted} style={{ margin: '0 auto 12px' }} />
+                      <p style={{ color: colors.textMuted, fontSize: '11px' }}>No API keys saved yet</p>
                     </div>
                   ) : (
                     <div style={{ display: 'grid', gap: '12px' }}>
@@ -539,7 +747,7 @@ export default function SettingsTab() {
                         <div
                           key={cred.id}
                           style={{
-                            background: '#0a0a0a',
+                            background: colors.panel,
                             border: '1px solid #1a1a1a',
                             padding: '16px',
                             borderRadius: '4px',
@@ -549,12 +757,12 @@ export default function SettingsTab() {
                           }}
                         >
                           <div style={{ flex: 1 }}>
-                            <h4 style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+                            <h4 style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
                               {cred.service_name}
                             </h4>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ color: '#888', fontSize: '9px' }}>API Key:</span>
-                              <span style={{ color: '#fff', fontFamily: 'monospace', fontSize: '10px' }}>
+                              <span style={{ color: colors.textMuted, fontSize: '9px' }}>API Key:</span>
+                              <span style={{ color: colors.text, fontFamily: 'monospace', fontSize: '10px' }}>
                                 {showPasswords[cred.id!] ? cred.api_key : '•'.repeat(20)}
                               </span>
                               <button
@@ -567,10 +775,10 @@ export default function SettingsTab() {
                                   display: 'flex'
                                 }}
                               >
-                                {showPasswords[cred.id!] ? <EyeOff size={14} color="#888" /> : <Eye size={14} color="#888" />}
+                                {showPasswords[cred.id!] ? <EyeOff size={14} color={colors.textMuted} /> : <Eye size={14} color={colors.textMuted} />}
                               </button>
                             </div>
-                            <p style={{ color: '#666', fontSize: '9px', marginTop: '4px' }}>
+                            <p style={{ color: colors.textMuted, fontSize: '9px', marginTop: '4px' }}>
                               Added: {cred.created_at ? new Date(cred.created_at).toLocaleDateString() : 'N/A'}
                             </p>
                           </div>
@@ -604,17 +812,17 @@ export default function SettingsTab() {
             {activeSection === 'llm' && (
               <div>
                 <div style={{ marginBottom: '24px' }}>
-                  <h2 style={{ color: '#ea580c', fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  <h2 style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
                     LLM CONFIGURATION
                   </h2>
-                  <p style={{ color: '#888', fontSize: '10px' }}>
+                  <p style={{ color: colors.textMuted, fontSize: '10px' }}>
                     Configure AI providers for the Chat tab. Changes here are reflected in both Chat and Settings screens.
                   </p>
                 </div>
 
                 {/* Provider Selection */}
                 <div style={{ marginBottom: '20px' }}>
-                  <h3 style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
                     Select Active Provider
                   </h3>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -623,9 +831,9 @@ export default function SettingsTab() {
                         key={config.provider}
                         onClick={() => setActiveProvider(config.provider)}
                         style={{
-                          background: activeProvider === config.provider ? '#ea580c' : '#0a0a0a',
-                          color: activeProvider === config.provider ? '#000' : '#fff',
-                          border: `1px solid ${activeProvider === config.provider ? '#ea580c' : '#2a2a2a'}`,
+                          background: activeProvider === config.provider ? colors.primary : colors.panel,
+                          color: activeProvider === config.provider ? colors.background : colors.text,
+                          border: `1px solid ${activeProvider === config.provider ? colors.primary : '#2a2a2a'}`,
                           padding: '8px 16px',
                           fontSize: '10px',
                           fontWeight: 'bold',
@@ -643,20 +851,20 @@ export default function SettingsTab() {
                 {/* Current Provider Config */}
                 {getCurrentLLMConfig() && (
                   <div style={{
-                    background: '#0a0a0a',
+                    background: colors.panel,
                     border: '1px solid #1a1a1a',
                     padding: '16px',
                     marginBottom: '20px',
                     borderRadius: '4px'
                   }}>
-                    <h3 style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
+                    <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
                       {getCurrentLLMConfig()!.provider.toUpperCase()} Configuration
                     </h3>
 
                     <div style={{ display: 'grid', gap: '12px' }}>
                       {getCurrentLLMConfig()!.provider !== 'ollama' && (
                         <div>
-                          <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                          <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                             API KEY *
                           </label>
                           <input
@@ -666,9 +874,9 @@ export default function SettingsTab() {
                             placeholder={`Enter ${activeProvider} API key`}
                             style={{
                               width: '100%',
-                              background: '#000',
+                              background: colors.background,
                               border: '1px solid #2a2a2a',
-                              color: '#fff',
+                              color: colors.text,
                               padding: '8px',
                               fontSize: '10px',
                               borderRadius: '3px'
@@ -679,7 +887,7 @@ export default function SettingsTab() {
 
                       {(getCurrentLLMConfig()!.provider === 'ollama' || getCurrentLLMConfig()!.provider === 'deepseek' || getCurrentLLMConfig()!.provider === 'openrouter') && (
                         <div>
-                          <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                          <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                             BASE URL
                           </label>
                           <input
@@ -689,9 +897,9 @@ export default function SettingsTab() {
                             placeholder={getCurrentLLMConfig()!.provider === 'ollama' ? 'http://localhost:11434' : 'Base URL'}
                             style={{
                               width: '100%',
-                              background: '#000',
+                              background: colors.background,
                               border: '1px solid #2a2a2a',
-                              color: '#fff',
+                              color: colors.text,
                               padding: '8px',
                               fontSize: '10px',
                               borderRadius: '3px'
@@ -702,7 +910,7 @@ export default function SettingsTab() {
 
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <label style={{ color: '#888', fontSize: '9px' }}>
+                          <label style={{ color: colors.textMuted, fontSize: '9px' }}>
                             MODEL
                           </label>
                           {getCurrentLLMConfig()!.provider === 'ollama' && (
@@ -713,7 +921,7 @@ export default function SettingsTab() {
                                 style={{
                                   background: 'transparent',
                                   border: '1px solid #2a2a2a',
-                                  color: '#ea580c',
+                                  color: colors.primary,
                                   padding: '4px 8px',
                                   fontSize: '9px',
                                   cursor: ollamaLoading ? 'not-allowed' : 'pointer',
@@ -732,7 +940,7 @@ export default function SettingsTab() {
                                 style={{
                                   background: 'transparent',
                                   border: '1px solid #2a2a2a',
-                                  color: '#888',
+                                  color: colors.textMuted,
                                   padding: '4px 8px',
                                   fontSize: '9px',
                                   cursor: 'pointer',
@@ -757,9 +965,9 @@ export default function SettingsTab() {
                               disabled={ollamaLoading || ollamaModels.length === 0}
                               style={{
                                 width: '100%',
-                                background: '#000',
+                                background: colors.background,
                                 border: '1px solid #2a2a2a',
-                                color: '#fff',
+                                color: colors.text,
                                 padding: '8px',
                                 fontSize: '10px',
                                 borderRadius: '3px',
@@ -810,9 +1018,9 @@ export default function SettingsTab() {
                             placeholder="Model name"
                             style={{
                               width: '100%',
-                              background: '#000',
+                              background: colors.background,
                               border: '1px solid #2a2a2a',
-                              color: '#fff',
+                              color: colors.text,
                               padding: '8px',
                               fontSize: '10px',
                               borderRadius: '3px'
@@ -826,19 +1034,19 @@ export default function SettingsTab() {
 
                 {/* Global Settings */}
                 <div style={{
-                  background: '#0a0a0a',
+                  background: colors.panel,
                   border: '1px solid #1a1a1a',
                   padding: '16px',
                   marginBottom: '20px',
                   borderRadius: '4px'
                 }}>
-                  <h3 style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
+                  <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
                     Global AI Settings
                   </h3>
 
                   <div style={{ display: 'grid', gap: '12px' }}>
                     <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         TEMPERATURE (0.0 - 2.0)
                       </label>
                       <input
@@ -850,9 +1058,9 @@ export default function SettingsTab() {
                         onChange={(e) => setLlmGlobalSettings({ ...llmGlobalSettings, temperature: parseFloat(e.target.value) })}
                         style={{
                           width: '100%',
-                          background: '#000',
+                          background: colors.background,
                           border: '1px solid #2a2a2a',
-                          color: '#fff',
+                          color: colors.text,
                           padding: '8px',
                           fontSize: '10px',
                           borderRadius: '3px'
@@ -861,7 +1069,7 @@ export default function SettingsTab() {
                     </div>
 
                     <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         MAX TOKENS
                       </label>
                       <input
@@ -872,9 +1080,9 @@ export default function SettingsTab() {
                         onChange={(e) => setLlmGlobalSettings({ ...llmGlobalSettings, max_tokens: parseInt(e.target.value) })}
                         style={{
                           width: '100%',
-                          background: '#000',
+                          background: colors.background,
                           border: '1px solid #2a2a2a',
-                          color: '#fff',
+                          color: colors.text,
                           padding: '8px',
                           fontSize: '10px',
                           borderRadius: '3px'
@@ -883,7 +1091,7 @@ export default function SettingsTab() {
                     </div>
 
                     <div>
-                      <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         SYSTEM PROMPT
                       </label>
                       <textarea
@@ -892,9 +1100,9 @@ export default function SettingsTab() {
                         rows={4}
                         style={{
                           width: '100%',
-                          background: '#000',
+                          background: colors.background,
                           border: '1px solid #2a2a2a',
-                          color: '#fff',
+                          color: colors.text,
                           padding: '8px',
                           fontSize: '10px',
                           borderRadius: '3px',
@@ -909,8 +1117,8 @@ export default function SettingsTab() {
                   onClick={handleSaveLLMConfig}
                   disabled={loading}
                   style={{
-                    background: '#ea580c',
-                    color: '#fff',
+                    background: colors.primary,
+                    color: colors.text,
                     border: 'none',
                     padding: '10px 20px',
                     fontSize: '11px',
@@ -929,10 +1137,740 @@ export default function SettingsTab() {
               </div>
             )}
 
+            {/* Terminal Appearance Section */}
+            {activeSection === 'terminal' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Font Settings */}
+                <div style={{ background: colors.panel, border: `1px solid ${colors.textMuted}`, borderRadius: '4px', padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <Type size={18} color={colors.primary} />
+                    <span style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold' }}>FONT SETTINGS</span>
+                  </div>
+
+                  {/* Font Family */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ color: colors.textMuted, fontSize: '11px', display: 'block', marginBottom: '6px' }}>Font Family</label>
+                    <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} style={{ width: '100%', padding: '8px', background: colors.background, border: '1px solid #444', color: colors.text, borderRadius: '3px' }}>
+                      {FONT_FAMILIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                  </div>
+
+                  {/* Base Font Size */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <label style={{ color: colors.textMuted, fontSize: '11px' }}>Base Font Size</label>
+                      <span style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold' }}>{baseSize}px</span>
+                    </div>
+                    <input type="range" min="9" max="18" value={baseSize} onChange={(e) => setBaseSize(Number(e.target.value))} style={{ width: '100%' }} />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                      <span style={{ color: colors.textMuted, fontSize: '9px' }}>Small (9px)</span>
+                      <span style={{ color: colors.textMuted, fontSize: '9px' }}>Large (18px)</span>
+                    </div>
+                  </div>
+
+                  {/* Font Weight */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <label style={{ color: colors.textMuted, fontSize: '11px', display: 'block', marginBottom: '6px' }}>Font Weight</label>
+                    <select value={fontWeight} onChange={(e) => setFontWeight(e.target.value as FontSettings['weight'])} style={{ width: '100%', padding: '8px', background: colors.background, border: '1px solid #444', color: colors.text, borderRadius: '3px' }}>
+                      <option value="normal">Normal</option>
+                      <option value="semibold">Semi-Bold</option>
+                      <option value="bold">Bold</option>
+                    </select>
+                  </div>
+
+                  {/* Font Style */}
+                  <div style={{ marginBottom: '0' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={fontItalic} onChange={(e) => setFontItalic(e.target.checked)} />
+                      <span style={{ color: colors.textMuted, fontSize: '11px' }}>Enable Italic</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Color Theme */}
+                <div style={{ background: colors.panel, border: `1px solid ${colors.textMuted}`, borderRadius: '4px', padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <Palette size={18} color={colors.primary} />
+                    <span style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold' }}>COLOR THEME</span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {Object.entries(COLOR_THEMES).map(([key, themeObj]) => (
+                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: selectedTheme === key ? '#1a1a1a' : 'transparent', border: `1px solid ${selectedTheme === key ? colors.primary : colors.textMuted}`, borderRadius: '4px', cursor: 'pointer' }}>
+                        <input type="radio" name="theme" value={key} checked={selectedTheme === key} onChange={() => setSelectedTheme(key)} />
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <div style={{ width: '20px', height: '20px', background: themeObj.primary, border: '1px solid #444' }} title="Primary" />
+                          <div style={{ width: '20px', height: '20px', background: themeObj.secondary, border: '1px solid #444' }} title="Secondary" />
+                          <div style={{ width: '20px', height: '20px', background: themeObj.alert, border: '1px solid #444' }} title="Alert" />
+                        </div>
+                        <span style={{ color: colors.text, fontSize: '12px', flex: 1 }}>{themeObj.name}</span>
+                        {selectedTheme === key && <span style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold' }}>✓ ACTIVE</span>}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Preview Panel */}
+                <div style={{ background: theme.colors.background, border: `2px solid ${theme.colors.primary}`, borderRadius: '4px', padding: '16px' }}>
+                  <div style={{ color: theme.colors.primary, fontSize: `${baseSize + 2}px`, fontFamily: `${fontFamily}, monospace`, fontWeight: fontWeight === 'normal' ? '400' : fontWeight === 'semibold' ? '600' : '700', fontStyle: fontItalic ? 'italic' : 'normal', marginBottom: '12px' }}>
+                    FINCEPT TERMINAL PREVIEW
+                  </div>
+                  <div style={{ color: theme.colors.text, fontSize: `${baseSize}px`, fontFamily: `${fontFamily}, monospace`, fontWeight: fontWeight === 'normal' ? '400' : fontWeight === 'semibold' ? '600' : '700', fontStyle: fontItalic ? 'italic' : 'normal', marginBottom: '8px' }}>
+                    Body Text: Lorem ipsum dolor sit amet
+                  </div>
+                  <div style={{ color: theme.colors.textMuted, fontSize: `${baseSize - 1}px`, fontFamily: `${fontFamily}, monospace`, fontWeight: fontWeight === 'normal' ? '400' : fontWeight === 'semibold' ? '600' : '700', fontStyle: fontItalic ? 'italic' : 'normal', marginBottom: '8px' }}>
+                    Small Text: Market data and timestamps
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                    <span style={{ color: theme.colors.secondary }}>● LIVE</span>
+                    <span style={{ color: theme.colors.alert }}>● ALERT</span>
+                    <span style={{ color: theme.colors.warning }}>● WARNING</span>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button onClick={handleSaveTerminalAppearance} style={{ flex: 1, background: colors.primary, color: colors.background, border: 'none', padding: '12px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <Save size={14} /> SAVE APPEARANCE
+                  </button>
+                  <button onClick={handleResetTerminalAppearance} style={{ background: colors.textMuted, color: colors.text, border: 'none', padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <RefreshCw size={14} /> RESET
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Data Connections Section */}
+            {activeSection === 'dataConnections' && (
+              <div>
+                <div style={{ marginBottom: '24px' }}>
+                  <h2 style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
+                    WEBSOCKET DATA CONNECTIONS
+                  </h2>
+                  <p style={{ color: colors.textMuted, fontSize: '10px' }}>
+                    Manage WebSocket connections to financial data providers. Configure API keys, endpoints, and monitor connection health.
+                  </p>
+                </div>
+
+                {/* Connection Overview Stats */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
+                  <div style={{ background: colors.panel, border: `2px solid ${stats.registry.connectedProviders > 0 ? '#00ff00' : '#3a3a3a'}`, padding: '12px', borderRadius: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                      <Activity size={12} color={stats.registry.connectedProviders > 0 ? '#00ff00' : colors.textMuted} />
+                      <div style={{ color: colors.textMuted, fontSize: '9px' }}>ACTIVE CONNECTIONS</div>
+                    </div>
+                    <div style={{ color: stats.registry.connectedProviders > 0 ? '#00ff00' : colors.textMuted, fontSize: '24px', fontWeight: 'bold' }}>
+                      {stats.registry.connectedProviders}
+                    </div>
+                    <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
+                      of {wsProviders.length} configured
+                    </div>
+                  </div>
+                  <div style={{ background: colors.panel, border: '1px solid #1a1a1a', padding: '12px', borderRadius: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                      <Zap size={12} color={colors.primary} />
+                      <div style={{ color: colors.textMuted, fontSize: '9px' }}>TOTAL SUBSCRIPTIONS</div>
+                    </div>
+                    <div style={{ color: colors.primary, fontSize: '24px', fontWeight: 'bold' }}>
+                      {stats.activeSubscriptions}
+                    </div>
+                    <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
+                      across all providers
+                    </div>
+                  </div>
+                  <div style={{ background: colors.panel, border: '1px solid #1a1a1a', padding: '12px', borderRadius: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                      <Database size={12} color={colors.text} />
+                      <div style={{ color: colors.textMuted, fontSize: '9px' }}>CONFIGURED PROVIDERS</div>
+                    </div>
+                    <div style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold' }}>
+                      {wsProviders.length}
+                    </div>
+                    <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
+                      {wsProviders.filter(p => p.enabled).length} enabled
+                    </div>
+                  </div>
+                  <div style={{ background: colors.panel, border: '1px solid #1a1a1a', padding: '12px', borderRadius: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                      <Activity size={12} color={stats.eventBus ? colors.secondary : colors.textMuted} />
+                      <div style={{ color: colors.textMuted, fontSize: '9px' }}>EVENT BUS</div>
+                    </div>
+                    <div style={{ color: colors.secondary, fontSize: '24px', fontWeight: 'bold' }}>
+                      {stats.eventBus?.subscriptions || 0}
+                    </div>
+                    <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
+                      subscriptions
+                    </div>
+                  </div>
+                </div>
+
+                {/* Add New Provider */}
+                <div style={{
+                  background: colors.panel,
+                  border: '1px solid #1a1a1a',
+                  padding: '16px',
+                  marginBottom: '20px',
+                  borderRadius: '4px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold' }}>
+                      {selectedProvider ? `Edit Provider: ${selectedProvider.toUpperCase()}` : 'Add New Provider'}
+                    </h3>
+                    {selectedProvider && (
+                      <button
+                        onClick={() => {
+                          setSelectedProvider(null);
+                          setProviderForm({
+                            provider_name: '',
+                            enabled: true,
+                            api_key: '',
+                            api_secret: '',
+                            endpoint: ''
+                          });
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: `1px solid ${colors.textMuted}`,
+                          color: colors.textMuted,
+                          padding: '4px 8px',
+                          fontSize: '9px',
+                          cursor: 'pointer',
+                          borderRadius: '3px',
+                          fontWeight: 'bold'
+                        }}
+                      >
+                        CANCEL EDIT
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                    <div>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                        PROVIDER NAME * (e.g., kraken, fyers, polygon)
+                      </label>
+                      <select
+                        value={providerForm.provider_name}
+                        onChange={(e) => setProviderForm({ ...providerForm, provider_name: e.target.value })}
+                        disabled={!!selectedProvider}
+                        style={{
+                          width: '100%',
+                          background: selectedProvider ? '#1a1a1a' : colors.background,
+                          border: '1px solid #2a2a2a',
+                          color: selectedProvider ? colors.textMuted : colors.text,
+                          padding: '8px',
+                          fontSize: '10px',
+                          borderRadius: '3px',
+                          cursor: selectedProvider ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        <option value="">Select a provider</option>
+                        {getAvailableProviders().map(p => (
+                          <option key={p} value={p}>{p.toUpperCase()}</option>
+                        ))}
+                      </select>
+                      {selectedProvider && (
+                        <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
+                          Provider name cannot be changed during edit
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                        ENDPOINT (optional, uses default if empty)
+                      </label>
+                      <input
+                        type="text"
+                        value={providerForm.endpoint}
+                        onChange={(e) => setProviderForm({ ...providerForm, endpoint: e.target.value })}
+                        placeholder="wss://..."
+                        style={{
+                          width: '100%',
+                          background: colors.background,
+                          border: '1px solid #2a2a2a',
+                          color: colors.text,
+                          padding: '8px',
+                          fontSize: '10px',
+                          borderRadius: '3px'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                        API KEY (if required)
+                      </label>
+                      <input
+                        type="password"
+                        value={providerForm.api_key}
+                        onChange={(e) => setProviderForm({ ...providerForm, api_key: e.target.value })}
+                        placeholder="Optional"
+                        style={{
+                          width: '100%',
+                          background: colors.background,
+                          border: '1px solid #2a2a2a',
+                          color: colors.text,
+                          padding: '8px',
+                          fontSize: '10px',
+                          borderRadius: '3px'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                        API SECRET (if required)
+                      </label>
+                      <input
+                        type="password"
+                        value={providerForm.api_secret}
+                        onChange={(e) => setProviderForm({ ...providerForm, api_secret: e.target.value })}
+                        placeholder="Optional"
+                        style={{
+                          width: '100%',
+                          background: colors.background,
+                          border: '1px solid #2a2a2a',
+                          color: colors.text,
+                          padding: '8px',
+                          fontSize: '10px',
+                          borderRadius: '3px'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={providerForm.enabled}
+                        onChange={(e) => setProviderForm({ ...providerForm, enabled: e.target.checked })}
+                      />
+                      <span style={{ color: colors.textMuted, fontSize: '10px' }}>Enable this provider</span>
+                    </label>
+
+                    <button
+                      onClick={handleSaveWSProvider}
+                      disabled={loading}
+                      style={{
+                        marginLeft: 'auto',
+                        background: colors.primary,
+                        color: colors.text,
+                        border: 'none',
+                        padding: '8px 16px',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        borderRadius: '3px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        opacity: loading ? 0.5 : 1
+                      }}
+                    >
+                      <Save size={14} />
+                      {loading ? 'SAVING...' : (selectedProvider ? 'UPDATE PROVIDER' : 'SAVE PROVIDER')}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Provider Cards */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold' }}>
+                      Configured Providers ({wsProviders.length})
+                    </h3>
+                    {wsProviders.length > 0 && (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const manager = getWebSocketManager();
+                              await manager.reconnectAll();
+                              showMessage('success', 'Reconnecting all providers...');
+                            } catch (error) {
+                              showMessage('error', 'Failed to reconnect providers');
+                            }
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: `1px solid ${colors.primary}`,
+                            color: colors.primary,
+                            padding: '6px 12px',
+                            fontSize: '9px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            borderRadius: '3px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            letterSpacing: '0.5px'
+                          }}
+                        >
+                          <RefreshCw size={12} />
+                          RECONNECT ALL
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!confirm('Disconnect all active providers?')) return;
+                            try {
+                              const manager = getWebSocketManager();
+                              for (const provider of wsProviders) {
+                                await manager.disconnect(provider.provider_name);
+                              }
+                              showMessage('success', 'Disconnected all providers');
+                            } catch (error) {
+                              showMessage('error', 'Failed to disconnect all providers');
+                            }
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid #ff0000',
+                            color: '#ff0000',
+                            padding: '6px 12px',
+                            fontSize: '9px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            borderRadius: '3px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            letterSpacing: '0.5px'
+                          }}
+                        >
+                          <WifiOff size={12} />
+                          DISCONNECT ALL
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {wsProviders.length === 0 ? (
+                    <div style={{
+                      background: colors.panel,
+                      border: '1px solid #1a1a1a',
+                      padding: '32px',
+                      textAlign: 'center',
+                      borderRadius: '4px'
+                    }}>
+                      <Wifi size={32} color={colors.textMuted} style={{ margin: '0 auto 12px' }} />
+                      <p style={{ color: colors.textMuted, fontSize: '11px' }}>No providers configured yet</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: '12px' }}>
+                      {wsProviders.map((provider) => {
+                        const providerStatus = statuses.get(provider.provider_name);
+                        const providerMetrics = metrics.get(provider.provider_name);
+                        const isConnected = providerStatus === ConnectionStatus.CONNECTED;
+                        const isConnecting = providerStatus === ConnectionStatus.CONNECTING;
+                        const isReconnecting = providerStatus === ConnectionStatus.RECONNECTING;
+                        const hasError = providerStatus === ConnectionStatus.ERROR;
+
+                        // Calculate connection uptime
+                        let uptimeText = 'Not connected';
+                        if (providerMetrics?.connectedAt) {
+                          const uptimeMs = Date.now() - providerMetrics.connectedAt;
+                          const uptimeMin = Math.floor(uptimeMs / 60000);
+                          const uptimeSec = Math.floor((uptimeMs % 60000) / 1000);
+                          if (uptimeMin > 0) {
+                            uptimeText = `${uptimeMin}m ${uptimeSec}s`;
+                          } else {
+                            uptimeText = `${uptimeSec}s`;
+                          }
+                        }
+
+                        return (
+                          <div
+                            key={provider.id}
+                            style={{
+                              background: colors.panel,
+                              border: `2px solid ${isConnected ? '#00ff00' : hasError ? '#ff0000' : isConnecting || isReconnecting ? colors.primary : '#1a1a1a'}`,
+                              padding: '16px',
+                              borderRadius: '4px',
+                              position: 'relative',
+                              overflow: 'hidden'
+                            }}
+                          >
+                            {/* Connection status indicator bar */}
+                            {isConnected && (
+                              <div style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                height: '3px',
+                                background: 'linear-gradient(90deg, #00ff00, #00ff00, rgba(0, 255, 0, 0.3))',
+                                backgroundSize: '200% 100%',
+                                animation: 'pulse 2s ease-in-out infinite'
+                              }} />
+                            )}
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+                                  {isConnected ? (
+                                    <Wifi size={16} color="#00ff00" />
+                                  ) : isConnecting || isReconnecting ? (
+                                    <Activity size={16} color={colors.primary} style={{ animation: 'spin 1s linear infinite' }} />
+                                  ) : (
+                                    <WifiOff size={16} color={hasError ? '#ff0000' : colors.textMuted} />
+                                  )}
+                                  <h4 style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                    {provider.provider_name}
+                                  </h4>
+                                  <span style={{
+                                    padding: '3px 8px',
+                                    background: isConnected ? '#0a3a0a' : hasError ? '#3a0a0a' : isConnecting || isReconnecting ? 'rgba(234, 88, 12, 0.1)' : '#2a2a2a',
+                                    border: `1px solid ${isConnected ? '#00ff00' : hasError ? '#ff0000' : isConnecting || isReconnecting ? colors.primary : '#555'}`,
+                                    borderRadius: '3px',
+                                    fontSize: '8px',
+                                    fontWeight: 'bold',
+                                    color: isConnected ? '#00ff00' : hasError ? '#ff0000' : isConnecting || isReconnecting ? colors.primary : '#888',
+                                    letterSpacing: '0.5px'
+                                  }}>
+                                    {providerStatus || 'DISCONNECTED'}
+                                  </span>
+                                  {provider.enabled ? (
+                                    <span style={{
+                                      padding: '3px 8px',
+                                      background: '#0a3a0a',
+                                      border: '1px solid #00ff00',
+                                      borderRadius: '3px',
+                                      fontSize: '8px',
+                                      fontWeight: 'bold',
+                                      color: '#00ff00',
+                                      letterSpacing: '0.5px'
+                                    }}>
+                                      ENABLED
+                                    </span>
+                                  ) : (
+                                    <span style={{
+                                      padding: '3px 8px',
+                                      background: '#2a2a2a',
+                                      border: '1px solid #555',
+                                      borderRadius: '3px',
+                                      fontSize: '8px',
+                                      fontWeight: 'bold',
+                                      color: '#888',
+                                      letterSpacing: '0.5px'
+                                    }}>
+                                      DISABLED
+                                    </span>
+                                  )}
+                                </div>
+
+                                {provider.endpoint && (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', background: colors.background, padding: '4px 6px', borderRadius: '3px' }}>
+                                    <Link size={10} color={colors.textMuted} />
+                                    <span style={{ color: colors.text, fontSize: '9px', fontFamily: 'monospace' }}>
+                                      {provider.endpoint}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Connection metrics */}
+                                {isConnected && providerMetrics && (
+                                  <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+                                    gap: '8px',
+                                    marginTop: '10px',
+                                    padding: '8px',
+                                    background: colors.background,
+                                    borderRadius: '3px'
+                                  }}>
+                                    <div>
+                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>LATENCY</div>
+                                      <div style={{ color: '#00ff00', fontSize: '11px', fontWeight: 'bold' }}>
+                                        {providerMetrics.latency ? `${providerMetrics.latency}ms` : 'N/A'}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>MESSAGES</div>
+                                      <div style={{ color: colors.text, fontSize: '11px', fontWeight: 'bold' }}>
+                                        {providerMetrics.messagesReceived.toLocaleString()}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>MSG/SEC</div>
+                                      <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold' }}>
+                                        {providerMetrics.messagesPerSecond.toFixed(1)}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>SUBSCRIPTIONS</div>
+                                      <div style={{ color: colors.secondary, fontSize: '11px', fontWeight: 'bold' }}>
+                                        {providerMetrics.subscriptions}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>UPTIME</div>
+                                      <div style={{ color: colors.text, fontSize: '11px', fontWeight: 'bold' }}>
+                                        {uptimeText}
+                                      </div>
+                                    </div>
+                                    {providerMetrics.errors && providerMetrics.errors.length > 0 && (
+                                      <div>
+                                        <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>ERRORS</div>
+                                        <div style={{ color: '#ff0000', fontSize: '11px', fontWeight: 'bold' }}>
+                                          {providerMetrics.errors.length}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Show last error if connection failed */}
+                                {hasError && providerMetrics?.errors && providerMetrics.errors.length > 0 && (
+                                  <div style={{
+                                    marginTop: '8px',
+                                    padding: '6px 8px',
+                                    background: '#3a0a0a',
+                                    border: '1px solid #ff0000',
+                                    borderRadius: '3px'
+                                  }}>
+                                    <div style={{ color: '#ff0000', fontSize: '8px', fontWeight: 'bold', marginBottom: '2px' }}>LAST ERROR:</div>
+                                    <div style={{ color: colors.textMuted, fontSize: '9px', fontFamily: 'monospace' }}>
+                                      {providerMetrics.errors[providerMetrics.errors.length - 1].error}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                {isConnected ? (
+                                  <button
+                                    onClick={() => handleDisconnectProvider(provider.provider_name)}
+                                    style={{
+                                      background: 'transparent',
+                                      border: '1px solid #ff0000',
+                                      color: '#ff0000',
+                                      padding: '4px 8px',
+                                      fontSize: '9px',
+                                      cursor: 'pointer',
+                                      borderRadius: '3px',
+                                      fontWeight: 'bold'
+                                    }}
+                                  >
+                                    DISCONNECT
+                                  </button>
+                                ) : (
+                                  <button
+                                    onClick={() => handleConnectProvider(provider.provider_name)}
+                                    disabled={!provider.enabled}
+                                    style={{
+                                      background: 'transparent',
+                                      border: '1px solid #00ff00',
+                                      color: '#00ff00',
+                                      padding: '4px 8px',
+                                      fontSize: '9px',
+                                      cursor: provider.enabled ? 'pointer' : 'not-allowed',
+                                      borderRadius: '3px',
+                                      fontWeight: 'bold',
+                                      opacity: provider.enabled ? 1 : 0.5
+                                    }}
+                                  >
+                                    CONNECT
+                                  </button>
+                                )}
+
+                                {isConnected && (
+                                  <button
+                                    onClick={() => handleTestProvider(provider.provider_name)}
+                                    style={{
+                                      background: 'transparent',
+                                      border: `1px solid ${colors.primary}`,
+                                      color: colors.primary,
+                                      padding: '4px 8px',
+                                      fontSize: '9px',
+                                      cursor: 'pointer',
+                                      borderRadius: '3px',
+                                      fontWeight: 'bold'
+                                    }}
+                                  >
+                                    PING
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={async () => {
+                                    // Load provider data into form for editing
+                                    setSelectedProvider(provider.provider_name);
+                                    setProviderForm({
+                                      provider_name: provider.provider_name,
+                                      enabled: provider.enabled,
+                                      api_key: provider.api_key || '',
+                                      api_secret: provider.api_secret || '',
+                                      endpoint: provider.endpoint || ''
+                                    });
+                                    // Scroll to form
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    showMessage('success', `Editing ${provider.provider_name} configuration`);
+                                  }}
+                                  style={{
+                                    background: 'transparent',
+                                    border: `1px solid ${colors.primary}`,
+                                    color: colors.primary,
+                                    padding: '4px 8px',
+                                    fontSize: '9px',
+                                    cursor: 'pointer',
+                                    borderRadius: '3px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontWeight: 'bold'
+                                  }}
+                                >
+                                  <Edit3 size={10} />
+                                  EDIT
+                                </button>
+
+                                <button
+                                  onClick={() => handleToggleWSProvider(provider.provider_name)}
+                                  style={{
+                                    background: 'transparent',
+                                    border: `1px solid ${colors.textMuted}`,
+                                    color: colors.textMuted,
+                                    padding: '4px 8px',
+                                    fontSize: '9px',
+                                    cursor: 'pointer',
+                                    borderRadius: '3px',
+                                    fontWeight: 'bold'
+                                  }}
+                                >
+                                  {provider.enabled ? 'DISABLE' : 'ENABLE'}
+                                </button>
+
+                                <button
+                                  onClick={() => handleDeleteWSProvider(provider.provider_name)}
+                                  style={{
+                                    background: 'transparent',
+                                    border: '1px solid #ff0000',
+                                    color: '#ff0000',
+                                    padding: '4px 8px',
+                                    fontSize: '9px',
+                                    cursor: 'pointer',
+                                    borderRadius: '3px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontWeight: 'bold'
+                                  }}
+                                >
+                                  <Trash2 size={10} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Other sections remain the same... */}
-            {activeSection === 'profile' && <div style={{ color: '#888' }}>User Profile section (implementation same as before)</div>}
-            {activeSection === 'terminal' && <div style={{ color: '#888' }}>Terminal Config section (implementation same as before)</div>}
-            {activeSection === 'notifications' && <div style={{ color: '#888' }}>Notifications section (implementation same as before)</div>}
+            {activeSection === 'profile' && <div style={{ color: colors.textMuted }}>User Profile section (implementation same as before)</div>}
+            {activeSection === 'notifications' && <div style={{ color: colors.textMuted }}>Notifications section (implementation same as before)</div>}
 
           </div>
         </div>
@@ -940,9 +1878,9 @@ export default function SettingsTab() {
 
       {/* Footer */}
       <div style={{
-        borderTop: '2px solid #ea580c',
+        borderTop: `2px solid ${colors.primary}`,
         padding: '8px 16px',
-        background: 'linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%)',
+        background: `linear-gradient(180deg, ${colors.panel} 0%, #1a1a1a 100%)`,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
@@ -951,13 +1889,13 @@ export default function SettingsTab() {
         gap: '12px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '9px' }}>
-          <span style={{ color: '#ea580c', fontWeight: 'bold' }}>SETTINGS v2.0.0</span>
-          <span style={{ color: '#666' }}>|</span>
-          <span style={{ color: '#888' }}>Database: SQLite</span>
-          <span style={{ color: '#666' }}>|</span>
-          <span style={{ color: '#888' }}>Storage: File-based</span>
+          <span style={{ color: colors.primary, fontWeight: 'bold' }}>SETTINGS v2.0.0</span>
+          <span style={{ color: colors.textMuted }}>|</span>
+          <span style={{ color: colors.textMuted }}>Database: SQLite</span>
+          <span style={{ color: colors.textMuted }}>|</span>
+          <span style={{ color: colors.textMuted }}>Storage: File-based</span>
         </div>
-        <div style={{ fontSize: '9px', color: '#666' }}>
+        <div style={{ fontSize: '9px', color: colors.textMuted }}>
           All data stored securely in fincept_terminal.db
         </div>
       </div>

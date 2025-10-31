@@ -2,25 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { UserApiService } from '@/services/userApi';
-
-// Bloomberg Terminal Colors
-const C = {
-  ORANGE: '#FFA500',
-  WHITE: '#FFFFFF',
-  RED: '#FF0000',
-  GREEN: '#00C800',
-  YELLOW: '#FFFF00',
-  GRAY: '#787878',
-  BLUE: '#6496FA',
-  PURPLE: '#C864FF',
-  CYAN: '#00FFFF',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0a0a0a'
-};
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 type ProfileScreen = 'overview' | 'usage' | 'payments' | 'subscriptions' | 'support' | 'settings';
 
 const ProfileTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const C = {
+    ORANGE: colors.primary,
+    WHITE: colors.text,
+    RED: colors.alert,
+    GREEN: colors.secondary,
+    YELLOW: colors.warning,
+    GRAY: colors.textMuted,
+    BLUE: colors.info,
+    PURPLE: colors.purple,
+    CYAN: colors.accent,
+    DARK_BG: colors.background,
+    PANEL_BG: colors.panel
+  };
   const { session, logout } = useAuth();
   const navigation = useNavigation();
   const [currentTime, setCurrentTime] = useState(new Date());

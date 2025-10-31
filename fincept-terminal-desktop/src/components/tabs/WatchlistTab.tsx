@@ -10,9 +10,12 @@ import StockListView from './watchlist/StockListView';
 import StockDetailPanel from './watchlist/StockDetailPanel';
 import CreateWatchlistModal from './watchlist/CreateWatchlistModal';
 import AddStockModal from './watchlist/AddStockModal';
-import { BLOOMBERG_COLORS, SortCriteria, sortStocks, getNextWatchlistColor } from './watchlist/utils';
+import { getBloombergColors, SortCriteria, sortStocks, getNextWatchlistColor } from './watchlist/utils';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 const WatchlistTab: React.FC = () => {
+  const { colors: themeColors } = useTerminalTheme();
+  const BLOOMBERG_COLORS = getBloombergColors();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [watchlists, setWatchlists] = useState<Array<Watchlist & { stock_count: number }>>([]);
   const [selectedWatchlist, setSelectedWatchlist] = useState<(Watchlist & { stock_count: number }) | null>(null);

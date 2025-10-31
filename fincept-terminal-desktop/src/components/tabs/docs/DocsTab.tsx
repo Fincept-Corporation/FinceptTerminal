@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { Book, Search, Code, ChevronRight } from 'lucide-react';
 import { DOC_SECTIONS } from './content';
 import { DocSubsection } from './types';
-import { COLORS } from './constants';
+import { getColors } from './constants';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 export default function DocsTab() {
+  const { colors: themeColors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const COLORS = getColors();
   const [selectedSection, setSelectedSection] = useState('getting-started');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSections, setExpandedSections] = useState<string[]>(['finscript']);

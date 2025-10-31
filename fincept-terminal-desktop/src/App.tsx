@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { NavigationProvider } from './contexts/NavigationContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { setPaymentWindowManager } from './services/paymentApi';
 
 // Import screens
@@ -200,9 +201,11 @@ const App: React.FC = () => {
   if (session?.authenticated && currentScreen === 'dashboard') {
     return (
       <>
-        <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab}>
-          <DashboardScreen />
-        </NavigationProvider>
+        <ThemeProvider>
+          <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab}>
+            <DashboardScreen />
+          </NavigationProvider>
+        </ThemeProvider>
         {/* In-App Payment Window Overlay */}
         <PaymentOverlay paymentWindow={paymentWindow} />
       </>

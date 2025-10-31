@@ -1,19 +1,25 @@
 // Watchlist Utilities - Shared constants, formatting, and helper functions
+import { terminalThemeService } from '@/services/terminalThemeService';
 
 // Bloomberg Color Scheme
-export const BLOOMBERG_COLORS = {
-  ORANGE: '#FFA500',
-  WHITE: '#FFFFFF',
-  RED: '#FF0000',
-  GREEN: '#00C800',
-  YELLOW: '#FFFF00',
-  GRAY: '#787878',
-  BLUE: '#6496FA',
-  PURPLE: '#C864FF',
-  CYAN: '#00FFFF',
-  DARK_BG: '#000000',
-  PANEL_BG: '#0a0a0a'
+export const getBloombergColors = () => {
+  const theme = terminalThemeService.getTheme();
+  return {
+    ORANGE: theme.colors.primary,
+    WHITE: theme.colors.text,
+    RED: theme.colors.alert,
+    GREEN: theme.colors.secondary,
+    YELLOW: theme.colors.warning,
+    GRAY: theme.colors.textMuted,
+    BLUE: theme.colors.info,
+    PURPLE: theme.colors.purple,
+    CYAN: theme.colors.accent,
+    DARK_BG: theme.colors.background,
+    PANEL_BG: theme.colors.panel
+  };
 };
+
+export const BLOOMBERG_COLORS = getBloombergColors();
 
 // Format currency values
 export const formatCurrency = (value: number | undefined | null): string => {

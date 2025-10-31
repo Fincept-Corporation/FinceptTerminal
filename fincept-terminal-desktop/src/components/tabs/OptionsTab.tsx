@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface OptionContract {
   strike: number;
@@ -25,22 +26,11 @@ interface OptionContract {
 }
 
 const OptionsTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
   const [selectedExpiry, setSelectedExpiry] = useState('2025-03-21');
   const [showGreeks, setShowGreeks] = useState(true);
-
-  const COLOR_ORANGE = '#FFA500';
-  const COLOR_WHITE = '#FFFFFF';
-  const COLOR_RED = '#FF0000';
-  const COLOR_GREEN = '#00C800';
-  const COLOR_YELLOW = '#FFFF00';
-  const COLOR_GRAY = '#787878';
-  const COLOR_BLUE = '#6496FA';
-  const COLOR_PURPLE = '#C864FF';
-  const COLOR_CYAN = '#00FFFF';
-  const COLOR_DARK_BG = '#000000';
-  const COLOR_PANEL_BG = '#0a0a0a';
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -129,8 +119,8 @@ const OptionsTab: React.FC = () => {
   return (
     <div style={{
       height: '100%',
-      backgroundColor: COLOR_DARK_BG,
-      color: COLOR_WHITE,
+      backgroundColor: colors.background,
+      color: colors.text,
       fontFamily: 'Consolas, monospace',
       overflow: 'hidden',
       display: 'flex',
@@ -139,26 +129,26 @@ const OptionsTab: React.FC = () => {
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: COLOR_PANEL_BG,
-        borderBottom: `2px solid ${COLOR_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `2px solid ${colors.textMuted}`,
         padding: '8px 16px',
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '16px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '16px' }}>
               OPTIONS CHAIN
             </span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
+            <span style={{ color: colors.textMuted }}>|</span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>SYMBOL:</span>
+              <span style={{ color: colors.textMuted, fontSize: '11px' }}>SYMBOL:</span>
               <select
                 value={selectedSymbol}
                 onChange={(e) => setSelectedSymbol(e.target.value)}
                 style={{
-                  backgroundColor: COLOR_DARK_BG,
-                  color: COLOR_CYAN,
-                  border: `2px solid ${COLOR_GRAY}`,
+                  backgroundColor: colors.background,
+                  color: colors.accent,
+                  border: `2px solid ${colors.textMuted}`,
                   padding: '4px 8px',
                   fontSize: '11px',
                   fontFamily: 'Consolas, monospace',
@@ -168,21 +158,21 @@ const OptionsTab: React.FC = () => {
                   <option key={sym} value={sym}>{sym}</option>
                 ))}
               </select>
-              <span style={{ color: COLOR_GRAY }}>|</span>
-              <span style={{ color: COLOR_GREEN, fontSize: '14px', fontWeight: 'bold' }}>
+              <span style={{ color: colors.textMuted }}>|</span>
+              <span style={{ color: colors.secondary, fontSize: '14px', fontWeight: 'bold' }}>
                 ${underlyingPrice.toFixed(2)}
               </span>
             </div>
-            <span style={{ color: COLOR_GRAY }}>|</span>
+            <span style={{ color: colors.textMuted }}>|</span>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>EXPIRY:</span>
+              <span style={{ color: colors.textMuted, fontSize: '11px' }}>EXPIRY:</span>
               <select
                 value={selectedExpiry}
                 onChange={(e) => setSelectedExpiry(e.target.value)}
                 style={{
-                  backgroundColor: COLOR_DARK_BG,
-                  color: COLOR_YELLOW,
-                  border: `2px solid ${COLOR_GRAY}`,
+                  backgroundColor: colors.background,
+                  color: colors.warning,
+                  border: `2px solid ${colors.textMuted}`,
                   padding: '4px 8px',
                   fontSize: '11px',
                   fontFamily: 'Consolas, monospace',
@@ -199,9 +189,9 @@ const OptionsTab: React.FC = () => {
               onClick={() => setShowGreeks(!showGreeks)}
               style={{
                 padding: '6px 12px',
-                backgroundColor: showGreeks ? COLOR_ORANGE : COLOR_DARK_BG,
-                border: `2px solid ${COLOR_ORANGE}`,
-                color: showGreeks ? COLOR_DARK_BG : COLOR_ORANGE,
+                backgroundColor: showGreeks ? colors.primary : colors.background,
+                border: `2px solid ${colors.primary}`,
+                color: showGreeks ? colors.background : colors.primary,
                 fontSize: '10px',
                 fontWeight: 'bold',
                 cursor: 'pointer',
@@ -209,7 +199,7 @@ const OptionsTab: React.FC = () => {
               }}>
               {showGreeks ? 'HIDE GREEKS' : 'SHOW GREEKS'}
             </button>
-            <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>
+            <span style={{ color: colors.textMuted, fontSize: '11px' }}>
               {currentTime.toLocaleTimeString()}
             </span>
           </div>
@@ -222,70 +212,70 @@ const OptionsTab: React.FC = () => {
         <div style={{ width: '280px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* Portfolio Greeks */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
-            borderLeft: `6px solid ${COLOR_GREEN}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
+            borderLeft: `6px solid ${colors.secondary}`,
             padding: '12px'
           }}>
-            <div style={{ color: COLOR_ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
               PORTFOLIO GREEKS
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{
                 padding: '8px',
                 backgroundColor: 'rgba(0,200,0,0.05)',
-                border: `1px solid ${COLOR_GREEN}`
+                border: `1px solid ${colors.secondary}`
               }}>
-                <div style={{ color: COLOR_GRAY, fontSize: '10px', marginBottom: '2px' }}>DELTA</div>
-                <div style={{ color: COLOR_GREEN, fontSize: '16px', fontWeight: 'bold' }}>
+                <div style={{ color: colors.textMuted, fontSize: '10px', marginBottom: '2px' }}>DELTA</div>
+                <div style={{ color: colors.secondary, fontSize: '16px', fontWeight: 'bold' }}>
                   {portfolioGreeks.totalDelta.toFixed(2)}
                 </div>
-                <div style={{ color: COLOR_GRAY, fontSize: '9px' }}>Directional exposure</div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>Directional exposure</div>
               </div>
               <div style={{
                 padding: '8px',
                 backgroundColor: 'rgba(100,150,250,0.05)',
-                border: `1px solid ${COLOR_BLUE}`
+                border: `1px solid ${colors.info}`
               }}>
-                <div style={{ color: COLOR_GRAY, fontSize: '10px', marginBottom: '2px' }}>GAMMA</div>
-                <div style={{ color: COLOR_BLUE, fontSize: '16px', fontWeight: 'bold' }}>
+                <div style={{ color: colors.textMuted, fontSize: '10px', marginBottom: '2px' }}>GAMMA</div>
+                <div style={{ color: colors.info, fontSize: '16px', fontWeight: 'bold' }}>
                   {portfolioGreeks.totalGamma.toFixed(2)}
                 </div>
-                <div style={{ color: COLOR_GRAY, fontSize: '9px' }}>Delta sensitivity</div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>Delta sensitivity</div>
               </div>
               <div style={{
                 padding: '8px',
                 backgroundColor: 'rgba(255,0,0,0.05)',
-                border: `1px solid ${COLOR_RED}`
+                border: `1px solid ${colors.alert}`
               }}>
-                <div style={{ color: COLOR_GRAY, fontSize: '10px', marginBottom: '2px' }}>THETA</div>
-                <div style={{ color: COLOR_RED, fontSize: '16px', fontWeight: 'bold' }}>
+                <div style={{ color: colors.textMuted, fontSize: '10px', marginBottom: '2px' }}>THETA</div>
+                <div style={{ color: colors.alert, fontSize: '16px', fontWeight: 'bold' }}>
                   {portfolioGreeks.totalTheta.toFixed(2)}
                 </div>
-                <div style={{ color: COLOR_GRAY, fontSize: '9px' }}>Time decay (per day)</div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>Time decay (per day)</div>
               </div>
               <div style={{
                 padding: '8px',
                 backgroundColor: 'rgba(200,100,255,0.05)',
-                border: `1px solid ${COLOR_PURPLE}`
+                border: `1px solid ${colors.purple}`
               }}>
-                <div style={{ color: COLOR_GRAY, fontSize: '10px', marginBottom: '2px' }}>VEGA</div>
-                <div style={{ color: COLOR_PURPLE, fontSize: '16px', fontWeight: 'bold' }}>
+                <div style={{ color: colors.textMuted, fontSize: '10px', marginBottom: '2px' }}>VEGA</div>
+                <div style={{ color: colors.purple, fontSize: '16px', fontWeight: 'bold' }}>
                   {portfolioGreeks.totalVega.toFixed(2)}
                 </div>
-                <div style={{ color: COLOR_GRAY, fontSize: '9px' }}>Volatility exposure</div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>Volatility exposure</div>
               </div>
             </div>
           </div>
 
           {/* Volatility Surface */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
-            borderLeft: `6px solid ${COLOR_PURPLE}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
+            borderLeft: `6px solid ${colors.purple}`,
             padding: '12px'
           }}>
-            <div style={{ color: COLOR_ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
               IMPLIED VOLATILITY
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -293,15 +283,15 @@ const OptionsTab: React.FC = () => {
                 <div key={index} style={{
                   padding: '8px',
                   backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                  borderBottom: `1px solid ${COLOR_GRAY}`
+                  borderBottom: `1px solid ${colors.textMuted}`
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>{vol.expiry}</span>
-                    <span style={{ color: COLOR_PURPLE, fontSize: '12px', fontWeight: 'bold' }}>
+                    <span style={{ color: colors.textMuted, fontSize: '11px' }}>{vol.expiry}</span>
+                    <span style={{ color: colors.purple, fontSize: '12px', fontWeight: 'bold' }}>
                       {(vol.atm * 100).toFixed(1)}%
                     </span>
                   </div>
-                  <div style={{ fontSize: '9px', color: vol.skew < 0 ? COLOR_RED : COLOR_GREEN }}>
+                  <div style={{ fontSize: '9px', color: vol.skew < 0 ? colors.alert : colors.secondary }}>
                     Skew: {(vol.skew * 100).toFixed(2)}%
                   </div>
                 </div>
@@ -311,30 +301,30 @@ const OptionsTab: React.FC = () => {
 
           {/* Quick Stats */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
-            borderLeft: `6px solid ${COLOR_CYAN}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
+            borderLeft: `6px solid ${colors.accent}`,
             padding: '12px'
           }}>
-            <div style={{ color: COLOR_ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
               QUICK STATS
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '11px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: COLOR_GRAY }}>Total Call Vol:</span>
-                <span style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>35,198</span>
+                <span style={{ color: colors.textMuted }}>Total Call Vol:</span>
+                <span style={{ color: colors.secondary, fontWeight: 'bold' }}>35,198</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: COLOR_GRAY }}>Total Put Vol:</span>
-                <span style={{ color: COLOR_RED, fontWeight: 'bold' }}>23,409</span>
+                <span style={{ color: colors.textMuted }}>Total Put Vol:</span>
+                <span style={{ color: colors.alert, fontWeight: 'bold' }}>23,409</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: COLOR_GRAY }}>Put/Call Ratio:</span>
-                <span style={{ color: COLOR_YELLOW, fontWeight: 'bold' }}>0.67</span>
+                <span style={{ color: colors.textMuted }}>Put/Call Ratio:</span>
+                <span style={{ color: colors.warning, fontWeight: 'bold' }}>0.67</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: COLOR_GRAY }}>Max Pain:</span>
-                <span style={{ color: COLOR_CYAN, fontWeight: 'bold' }}>$177.50</span>
+                <span style={{ color: colors.textMuted }}>Max Pain:</span>
+                <span style={{ color: colors.accent, fontWeight: 'bold' }}>$177.50</span>
               </div>
             </div>
           </div>
@@ -343,8 +333,8 @@ const OptionsTab: React.FC = () => {
         {/* Right Panel - Options Chain */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
             flex: 1,
             overflow: 'auto'
           }}>
@@ -356,7 +346,7 @@ const OptionsTab: React.FC = () => {
                 : '100px 80px 80px 80px 100px 80px 100px 80px 80px 80px 100px 80px',
               padding: '10px 12px',
               backgroundColor: 'rgba(255,165,0,0.1)',
-              borderBottom: `2px solid ${COLOR_ORANGE}`,
+              borderBottom: `2px solid ${colors.primary}`,
               position: 'sticky',
               top: 0,
               zIndex: 10,
@@ -365,30 +355,30 @@ const OptionsTab: React.FC = () => {
               {showGreeks ? (
                 <>
                   {/* Calls */}
-                  <div style={{ color: COLOR_GREEN, fontWeight: 'bold', textAlign: 'center' }}>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold', textAlign: 'center' }}>
                     ========== CALLS ==========
                   </div>
-                  <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', textAlign: 'center' }}>STRIKE</div>
+                  <div style={{ color: colors.primary, fontWeight: 'bold', textAlign: 'center' }}>STRIKE</div>
                   {/* Puts */}
-                  <div style={{ color: COLOR_RED, fontWeight: 'bold', textAlign: 'center' }}>
+                  <div style={{ color: colors.alert, fontWeight: 'bold', textAlign: 'center' }}>
                     ========== PUTS ==========
                   </div>
                 </>
               ) : (
                 <>
-                  <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>C.BID</div>
-                  <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>C.ASK</div>
-                  <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>C.LAST</div>
-                  <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>C.VOL</div>
-                  <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>C.OI</div>
-                  <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>C.IV</div>
-                  <div style={{ color: COLOR_ORANGE, fontWeight: 'bold' }}>STRIKE</div>
-                  <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>P.BID</div>
-                  <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>P.ASK</div>
-                  <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>P.LAST</div>
-                  <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>P.VOL</div>
-                  <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>P.OI</div>
-                  <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>P.IV</div>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold' }}>C.BID</div>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold' }}>C.ASK</div>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold' }}>C.LAST</div>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold' }}>C.VOL</div>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold' }}>C.OI</div>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold' }}>C.IV</div>
+                  <div style={{ color: colors.primary, fontWeight: 'bold' }}>STRIKE</div>
+                  <div style={{ color: colors.alert, fontWeight: 'bold' }}>P.BID</div>
+                  <div style={{ color: colors.alert, fontWeight: 'bold' }}>P.ASK</div>
+                  <div style={{ color: colors.alert, fontWeight: 'bold' }}>P.LAST</div>
+                  <div style={{ color: colors.alert, fontWeight: 'bold' }}>P.VOL</div>
+                  <div style={{ color: colors.alert, fontWeight: 'bold' }}>P.OI</div>
+                  <div style={{ color: colors.alert, fontWeight: 'bold' }}>P.IV</div>
                 </>
               )}
             </div>
@@ -398,34 +388,34 @@ const OptionsTab: React.FC = () => {
                 display: 'grid',
                 gridTemplateColumns: '80px 70px 70px 70px 80px 60px 60px 60px 60px 60px 80px 70px 70px 70px 80px 60px 60px 60px 60px 60px',
                 padding: '8px 12px',
-                backgroundColor: COLOR_PANEL_BG,
-                borderBottom: `1px solid ${COLOR_GRAY}`,
+                backgroundColor: colors.panel,
+                borderBottom: `1px solid ${colors.textMuted}`,
                 position: 'sticky',
                 top: '32px',
                 zIndex: 9,
                 fontSize: '9px'
               }}>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>BID</div>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>ASK</div>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>LAST</div>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>VOL</div>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>OI</div>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>IV</div>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>Δ</div>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>Γ</div>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>Θ</div>
-                <div style={{ color: COLOR_GREEN, fontWeight: 'bold' }}>V</div>
-                <div style={{ color: COLOR_ORANGE, fontWeight: 'bold' }}>STRIKE</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>BID</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>ASK</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>LAST</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>VOL</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>OI</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>IV</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>Δ</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>Γ</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>Θ</div>
-                <div style={{ color: COLOR_RED, fontWeight: 'bold' }}>V</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>BID</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>ASK</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>LAST</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>VOL</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>OI</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>IV</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>Δ</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>Γ</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>Θ</div>
+                <div style={{ color: colors.secondary, fontWeight: 'bold' }}>V</div>
+                <div style={{ color: colors.primary, fontWeight: 'bold' }}>STRIKE</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>BID</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>ASK</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>LAST</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>VOL</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>OI</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>IV</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>Δ</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>Γ</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>Θ</div>
+                <div style={{ color: colors.alert, fontWeight: 'bold' }}>V</div>
               </div>
             )}
 
@@ -443,28 +433,28 @@ const OptionsTab: React.FC = () => {
                       : '100px 80px 80px 80px 100px 80px 100px 80px 80px 80px 100px 80px',
                     padding: '8px 12px',
                     backgroundColor: isATM ? 'rgba(255,165,0,0.1)' : (index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'),
-                    borderBottom: `1px solid ${COLOR_GRAY}`,
+                    borderBottom: `1px solid ${colors.textMuted}`,
                     fontSize: '10px'
                   }}>
                   {/* Calls */}
-                  <div style={{ color: COLOR_GREEN }}>${option.callBid.toFixed(2)}</div>
-                  <div style={{ color: COLOR_GREEN }}>${option.callAsk.toFixed(2)}</div>
-                  <div style={{ color: COLOR_WHITE, fontWeight: 'bold' }}>${option.callLast.toFixed(2)}</div>
-                  <div style={{ color: COLOR_CYAN }}>{option.callVolume.toLocaleString()}</div>
-                  <div style={{ color: COLOR_GRAY }}>{option.callOI.toLocaleString()}</div>
-                  <div style={{ color: COLOR_PURPLE }}>{(option.callIV * 100).toFixed(1)}%</div>
+                  <div style={{ color: colors.secondary }}>${option.callBid.toFixed(2)}</div>
+                  <div style={{ color: colors.secondary }}>${option.callAsk.toFixed(2)}</div>
+                  <div style={{ color: colors.text, fontWeight: 'bold' }}>${option.callLast.toFixed(2)}</div>
+                  <div style={{ color: colors.accent }}>{option.callVolume.toLocaleString()}</div>
+                  <div style={{ color: colors.textMuted }}>{option.callOI.toLocaleString()}</div>
+                  <div style={{ color: colors.purple }}>{(option.callIV * 100).toFixed(1)}%</div>
                   {showGreeks && (
                     <>
-                      <div style={{ color: COLOR_GREEN }}>{option.callDelta.toFixed(2)}</div>
-                      <div style={{ color: COLOR_BLUE }}>{option.callGamma.toFixed(3)}</div>
-                      <div style={{ color: COLOR_RED }}>{option.callTheta.toFixed(3)}</div>
-                      <div style={{ color: COLOR_PURPLE }}>{option.callVega.toFixed(3)}</div>
+                      <div style={{ color: colors.secondary }}>{option.callDelta.toFixed(2)}</div>
+                      <div style={{ color: colors.info }}>{option.callGamma.toFixed(3)}</div>
+                      <div style={{ color: colors.alert }}>{option.callTheta.toFixed(3)}</div>
+                      <div style={{ color: colors.purple }}>{option.callVega.toFixed(3)}</div>
                     </>
                   )}
 
                   {/* Strike */}
                   <div style={{
-                    color: isATM ? COLOR_ORANGE : COLOR_WHITE,
+                    color: isATM ? colors.primary : colors.text,
                     fontWeight: isATM ? 'bold' : 'normal',
                     fontSize: isATM ? '12px' : '10px',
                     textAlign: 'center',
@@ -475,18 +465,18 @@ const OptionsTab: React.FC = () => {
                   </div>
 
                   {/* Puts */}
-                  <div style={{ color: COLOR_RED }}>${option.putBid.toFixed(2)}</div>
-                  <div style={{ color: COLOR_RED }}>${option.putAsk.toFixed(2)}</div>
-                  <div style={{ color: COLOR_WHITE, fontWeight: 'bold' }}>${option.putLast.toFixed(2)}</div>
-                  <div style={{ color: COLOR_CYAN }}>{option.putVolume.toLocaleString()}</div>
-                  <div style={{ color: COLOR_GRAY }}>{option.putOI.toLocaleString()}</div>
-                  <div style={{ color: COLOR_PURPLE }}>{(option.putIV * 100).toFixed(1)}%</div>
+                  <div style={{ color: colors.alert }}>${option.putBid.toFixed(2)}</div>
+                  <div style={{ color: colors.alert }}>${option.putAsk.toFixed(2)}</div>
+                  <div style={{ color: colors.text, fontWeight: 'bold' }}>${option.putLast.toFixed(2)}</div>
+                  <div style={{ color: colors.accent }}>{option.putVolume.toLocaleString()}</div>
+                  <div style={{ color: colors.textMuted }}>{option.putOI.toLocaleString()}</div>
+                  <div style={{ color: colors.purple }}>{(option.putIV * 100).toFixed(1)}%</div>
                   {showGreeks && (
                     <>
-                      <div style={{ color: COLOR_RED }}>{option.putDelta.toFixed(2)}</div>
-                      <div style={{ color: COLOR_BLUE }}>{option.putGamma.toFixed(3)}</div>
-                      <div style={{ color: COLOR_RED }}>{option.putTheta.toFixed(3)}</div>
-                      <div style={{ color: COLOR_PURPLE }}>{option.putVega.toFixed(3)}</div>
+                      <div style={{ color: colors.alert }}>{option.putDelta.toFixed(2)}</div>
+                      <div style={{ color: colors.info }}>{option.putGamma.toFixed(3)}</div>
+                      <div style={{ color: colors.alert }}>{option.putTheta.toFixed(3)}</div>
+                      <div style={{ color: colors.purple }}>{option.putVega.toFixed(3)}</div>
                     </>
                   )}
                 </div>
@@ -498,24 +488,24 @@ const OptionsTab: React.FC = () => {
 
       {/* Footer */}
       <div style={{
-        borderTop: `3px solid ${COLOR_ORANGE}`,
-        backgroundColor: COLOR_PANEL_BG,
+        borderTop: `3px solid ${colors.primary}`,
+        backgroundColor: colors.panel,
         padding: '12px 16px',
         fontSize: '11px',
-        color: COLOR_WHITE,
+        color: colors.text,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '13px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '13px' }}>
               OPTIONS ANALYTICS v1.0
             </span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_CYAN }}>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.accent }}>
               Real-time options chain with Greeks
             </span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_GREEN }}>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.secondary }}>
               {selectedSymbol} • Exp: {selectedExpiry}
             </span>
           </div>
@@ -525,16 +515,16 @@ const OptionsTab: React.FC = () => {
           justifyContent: 'space-between',
           fontSize: '10px',
           paddingTop: '8px',
-          borderTop: `1px solid ${COLOR_GRAY}`
+          borderTop: `1px solid ${colors.textMuted}`
         }}>
           <div style={{ display: 'flex', gap: '16px' }}>
-            <span style={{ color: COLOR_GRAY }}><span style={{ color: COLOR_BLUE }}>F1</span> Help</span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_GRAY }}><span style={{ color: COLOR_BLUE }}>F2</span> Strategy Builder</span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_GRAY }}><span style={{ color: COLOR_BLUE }}>F3</span> Risk Analysis</span>
+            <span style={{ color: colors.textMuted }}><span style={{ color: colors.info }}>F1</span> Help</span>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.textMuted }}><span style={{ color: colors.info }}>F2</span> Strategy Builder</span>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.textMuted }}><span style={{ color: colors.info }}>F3</span> Risk Analysis</span>
           </div>
-          <div style={{ color: COLOR_GRAY }}>
+          <div style={{ color: colors.textMuted }}>
             © 2025 Fincept Labs • All Rights Reserved
           </div>
         </div>

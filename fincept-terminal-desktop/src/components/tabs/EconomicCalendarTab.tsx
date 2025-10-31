@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface EconomicEvent {
   time: string;
@@ -14,22 +15,11 @@ interface EconomicEvent {
 }
 
 const EconomicCalendarTab: React.FC = () => {
+  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState('2025-03-15');
   const [selectedImportance, setSelectedImportance] = useState('ALL');
   const [selectedCountry, setSelectedCountry] = useState('ALL');
-
-  const COLOR_ORANGE = '#FFA500';
-  const COLOR_WHITE = '#FFFFFF';
-  const COLOR_RED = '#FF0000';
-  const COLOR_GREEN = '#00C800';
-  const COLOR_YELLOW = '#FFFF00';
-  const COLOR_GRAY = '#787878';
-  const COLOR_BLUE = '#6496FA';
-  const COLOR_PURPLE = '#C864FF';
-  const COLOR_CYAN = '#00FFFF';
-  const COLOR_DARK_BG = '#000000';
-  const COLOR_PANEL_BG = '#0a0a0a';
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -206,27 +196,27 @@ const EconomicCalendarTab: React.FC = () => {
 
   const getImportanceColor = (importance: string) => {
     switch(importance) {
-      case 'HIGH': return COLOR_RED;
-      case 'MEDIUM': return COLOR_ORANGE;
-      case 'LOW': return COLOR_YELLOW;
-      default: return COLOR_GRAY;
+      case 'HIGH': return colors.alert;
+      case 'MEDIUM': return colors.primary;
+      case 'LOW': return colors.warning;
+      default: return colors.textMuted;
     }
   };
 
   const getImpactColor = (impact: string) => {
     switch(impact) {
-      case 'POSITIVE': return COLOR_GREEN;
-      case 'NEGATIVE': return COLOR_RED;
-      case 'NEUTRAL': return COLOR_GRAY;
-      default: return COLOR_WHITE;
+      case 'POSITIVE': return colors.secondary;
+      case 'NEGATIVE': return colors.alert;
+      case 'NEUTRAL': return colors.textMuted;
+      default: return colors.text;
     }
   };
 
   return (
     <div style={{
       height: '100%',
-      backgroundColor: COLOR_DARK_BG,
-      color: COLOR_WHITE,
+      backgroundColor: colors.background,
+      color: colors.text,
       fontFamily: 'Consolas, monospace',
       overflow: 'hidden',
       display: 'flex',
@@ -235,18 +225,18 @@ const EconomicCalendarTab: React.FC = () => {
     }}>
       {/* Header */}
       <div style={{
-        backgroundColor: COLOR_PANEL_BG,
-        borderBottom: `2px solid ${COLOR_GRAY}`,
+        backgroundColor: colors.panel,
+        borderBottom: `2px solid ${colors.textMuted}`,
         padding: '8px 16px',
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '16px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '16px' }}>
               ECONOMIC CALENDAR
             </span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_CYAN }}>GLOBAL EVENTS • INDICATORS • CENTRAL BANKS</span>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.accent }}>GLOBAL EVENTS • INDICATORS • CENTRAL BANKS</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <input
@@ -254,15 +244,15 @@ const EconomicCalendarTab: React.FC = () => {
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               style={{
-                backgroundColor: COLOR_DARK_BG,
-                color: COLOR_CYAN,
-                border: `2px solid ${COLOR_GRAY}`,
+                backgroundColor: colors.background,
+                color: colors.accent,
+                border: `2px solid ${colors.textMuted}`,
                 padding: '4px 8px',
                 fontSize: '11px',
                 fontFamily: 'Consolas, monospace'
               }}
             />
-            <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>
+            <span style={{ color: colors.textMuted, fontSize: '11px' }}>
               {currentTime.toLocaleTimeString()}
             </span>
           </div>
@@ -275,12 +265,12 @@ const EconomicCalendarTab: React.FC = () => {
         <div style={{ width: '340px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {/* Economic Indicators */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
-            borderLeft: `6px solid ${COLOR_CYAN}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
+            borderLeft: `6px solid ${colors.accent}`,
             padding: '12px'
           }}>
-            <div style={{ color: COLOR_ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
               KEY INDICATORS
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -288,24 +278,24 @@ const EconomicCalendarTab: React.FC = () => {
                 <div key={index} style={{
                   padding: '10px',
                   backgroundColor: 'rgba(255,255,255,0.02)',
-                  border: `1px solid ${COLOR_GRAY}`
+                  border: `1px solid ${colors.textMuted}`
                 }}>
-                  <div style={{ color: COLOR_GRAY, fontSize: '10px', marginBottom: '4px' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '10px', marginBottom: '4px' }}>
                     {indicator.name}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: COLOR_CYAN, fontSize: '16px', fontWeight: 'bold' }}>
+                    <span style={{ color: colors.accent, fontSize: '16px', fontWeight: 'bold' }}>
                       {indicator.value}
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <span style={{
-                        color: indicator.trend === 'up' ? COLOR_GREEN : indicator.trend === 'down' ? COLOR_RED : COLOR_GRAY,
+                        color: indicator.trend === 'up' ? colors.secondary : indicator.trend === 'down' ? colors.alert : colors.textMuted,
                         fontSize: '12px'
                       }}>
                         {indicator.trend === 'up' ? '▲' : indicator.trend === 'down' ? '▼' : '●'}
                       </span>
                       <span style={{
-                        color: indicator.change > 0 ? COLOR_GREEN : indicator.change < 0 ? COLOR_RED : COLOR_GRAY,
+                        color: indicator.change > 0 ? colors.secondary : indicator.change < 0 ? colors.alert : colors.textMuted,
                         fontSize: '11px'
                       }}>
                         {indicator.change > 0 ? '+' : ''}{indicator.change.toFixed(1)}%
@@ -319,12 +309,12 @@ const EconomicCalendarTab: React.FC = () => {
 
           {/* Central Bank Meetings */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
-            borderLeft: `6px solid ${COLOR_PURPLE}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
+            borderLeft: `6px solid ${colors.purple}`,
             padding: '12px'
           }}>
-            <div style={{ color: COLOR_ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
               UPCOMING CB MEETINGS
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -332,20 +322,20 @@ const EconomicCalendarTab: React.FC = () => {
                 <div key={index} style={{
                   padding: '10px',
                   backgroundColor: 'rgba(200,100,255,0.05)',
-                  border: `1px solid ${COLOR_PURPLE}`
+                  border: `1px solid ${colors.purple}`
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ color: COLOR_PURPLE, fontWeight: 'bold', fontSize: '12px' }}>
+                    <span style={{ color: colors.purple, fontWeight: 'bold', fontSize: '12px' }}>
                       {meeting.bank}
                     </span>
-                    <span style={{ color: COLOR_GRAY, fontSize: '10px' }}>
+                    <span style={{ color: colors.textMuted, fontSize: '10px' }}>
                       {meeting.date}
                     </span>
                   </div>
-                  <div style={{ color: COLOR_WHITE, fontSize: '11px', marginBottom: '4px' }}>
+                  <div style={{ color: colors.text, fontSize: '11px', marginBottom: '4px' }}>
                     {meeting.decision}
                   </div>
-                  <div style={{ color: COLOR_CYAN, fontSize: '10px' }}>
+                  <div style={{ color: colors.accent, fontSize: '10px' }}>
                     Expected: {meeting.expected}
                   </div>
                 </div>
@@ -355,41 +345,41 @@ const EconomicCalendarTab: React.FC = () => {
 
           {/* Impact Summary */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
-            borderLeft: `6px solid ${COLOR_GREEN}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
+            borderLeft: `6px solid ${colors.secondary}`,
             padding: '12px'
           }}>
-            <div style={{ color: COLOR_ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <div style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px' }}>
               TODAY'S IMPACT
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{
                 padding: '10px',
                 backgroundColor: 'rgba(255,0,0,0.05)',
-                border: `1px solid ${COLOR_RED}`
+                border: `1px solid ${colors.alert}`
               }}>
-                <div style={{ color: COLOR_GRAY, fontSize: '10px', marginBottom: '4px' }}>HIGH IMPACT</div>
-                <div style={{ color: COLOR_RED, fontSize: '20px', fontWeight: 'bold' }}>7</div>
-                <div style={{ color: COLOR_GRAY, fontSize: '9px' }}>events scheduled</div>
+                <div style={{ color: colors.textMuted, fontSize: '10px', marginBottom: '4px' }}>HIGH IMPACT</div>
+                <div style={{ color: colors.alert, fontSize: '20px', fontWeight: 'bold' }}>7</div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>events scheduled</div>
               </div>
               <div style={{
                 padding: '10px',
                 backgroundColor: 'rgba(255,165,0,0.05)',
-                border: `1px solid ${COLOR_ORANGE}`
+                border: `1px solid ${colors.primary}`
               }}>
-                <div style={{ color: COLOR_GRAY, fontSize: '10px', marginBottom: '4px' }}>MEDIUM IMPACT</div>
-                <div style={{ color: COLOR_ORANGE, fontSize: '20px', fontWeight: 'bold' }}>3</div>
-                <div style={{ color: COLOR_GRAY, fontSize: '9px' }}>events scheduled</div>
+                <div style={{ color: colors.textMuted, fontSize: '10px', marginBottom: '4px' }}>MEDIUM IMPACT</div>
+                <div style={{ color: colors.primary, fontSize: '20px', fontWeight: 'bold' }}>3</div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>events scheduled</div>
               </div>
               <div style={{
                 padding: '10px',
                 backgroundColor: 'rgba(255,255,0,0.05)',
-                border: `1px solid ${COLOR_YELLOW}`
+                border: `1px solid ${colors.warning}`
               }}>
-                <div style={{ color: COLOR_GRAY, fontSize: '10px', marginBottom: '4px' }}>LOW IMPACT</div>
-                <div style={{ color: COLOR_YELLOW, fontSize: '20px', fontWeight: 'bold' }}>2</div>
-                <div style={{ color: COLOR_GRAY, fontSize: '9px' }}>events scheduled</div>
+                <div style={{ color: colors.textMuted, fontSize: '10px', marginBottom: '4px' }}>LOW IMPACT</div>
+                <div style={{ color: colors.warning, fontSize: '20px', fontWeight: 'bold' }}>2</div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>events scheduled</div>
               </div>
             </div>
           </div>
@@ -399,21 +389,21 @@ const EconomicCalendarTab: React.FC = () => {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {/* Filters */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
             padding: '12px',
             marginBottom: '12px'
           }}>
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>IMPORTANCE:</span>
+              <span style={{ color: colors.textMuted, fontSize: '11px' }}>IMPORTANCE:</span>
               {['ALL', 'HIGH', 'MEDIUM', 'LOW'].map((importance) => (
                 <button key={importance}
                   onClick={() => setSelectedImportance(importance)}
                   style={{
                     padding: '6px 12px',
-                    backgroundColor: selectedImportance === importance ? getImportanceColor(importance) : COLOR_DARK_BG,
-                    border: `2px solid ${selectedImportance === importance ? getImportanceColor(importance) : COLOR_GRAY}`,
-                    color: selectedImportance === importance ? COLOR_DARK_BG : COLOR_WHITE,
+                    backgroundColor: selectedImportance === importance ? getImportanceColor(importance) : colors.background,
+                    border: `2px solid ${selectedImportance === importance ? getImportanceColor(importance) : colors.textMuted}`,
+                    color: selectedImportance === importance ? colors.background : colors.text,
                     fontSize: '10px',
                     fontWeight: 'bold',
                     cursor: 'pointer',
@@ -422,16 +412,16 @@ const EconomicCalendarTab: React.FC = () => {
                   {importance}
                 </button>
               ))}
-              <span style={{ color: COLOR_GRAY, marginLeft: '16px' }}>|</span>
-              <span style={{ color: COLOR_GRAY, fontSize: '11px' }}>COUNTRY:</span>
+              <span style={{ color: colors.textMuted, marginLeft: '16px' }}>|</span>
+              <span style={{ color: colors.textMuted, fontSize: '11px' }}>COUNTRY:</span>
               {['ALL', 'US', 'EU', 'GB', 'JP', 'CN'].map((country) => (
                 <button key={country}
                   onClick={() => setSelectedCountry(country)}
                   style={{
                     padding: '6px 12px',
-                    backgroundColor: selectedCountry === country ? COLOR_CYAN : COLOR_DARK_BG,
-                    border: `2px solid ${selectedCountry === country ? COLOR_CYAN : COLOR_GRAY}`,
-                    color: selectedCountry === country ? COLOR_DARK_BG : COLOR_WHITE,
+                    backgroundColor: selectedCountry === country ? colors.accent : colors.background,
+                    border: `2px solid ${selectedCountry === country ? colors.accent : colors.textMuted}`,
+                    color: selectedCountry === country ? colors.background : colors.text,
                     fontSize: '10px',
                     fontWeight: 'bold',
                     cursor: 'pointer',
@@ -445,8 +435,8 @@ const EconomicCalendarTab: React.FC = () => {
 
           {/* Events Table */}
           <div style={{
-            backgroundColor: COLOR_PANEL_BG,
-            border: `2px solid ${COLOR_GRAY}`,
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.textMuted}`,
             flex: 1,
             overflow: 'auto'
           }}>
@@ -456,19 +446,19 @@ const EconomicCalendarTab: React.FC = () => {
               gridTemplateColumns: '70px 60px 280px 80px 100px 100px 100px 80px',
               padding: '10px 12px',
               backgroundColor: 'rgba(255,165,0,0.1)',
-              borderBottom: `2px solid ${COLOR_ORANGE}`,
+              borderBottom: `2px solid ${colors.primary}`,
               position: 'sticky',
               top: 0,
               zIndex: 10
             }}>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>TIME</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>CTRY</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>INDICATOR</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>IMPACT</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>ACTUAL</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>FORECAST</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>PREVIOUS</div>
-              <div style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '10px' }}>RESULT</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>TIME</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>CTRY</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>INDICATOR</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>IMPACT</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>ACTUAL</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>FORECAST</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>PREVIOUS</div>
+              <div style={{ color: colors.primary, fontWeight: 'bold', fontSize: '10px' }}>RESULT</div>
             </div>
 
             {/* Table Body */}
@@ -479,7 +469,7 @@ const EconomicCalendarTab: React.FC = () => {
                   gridTemplateColumns: '70px 60px 280px 80px 100px 100px 100px 80px',
                   padding: '12px',
                   backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                  borderBottom: `1px solid ${COLOR_GRAY}`,
+                  borderBottom: `1px solid ${colors.textMuted}`,
                   cursor: 'pointer',
                   fontSize: '11px'
                 }}
@@ -489,13 +479,13 @@ const EconomicCalendarTab: React.FC = () => {
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent';
                 }}>
-                <div style={{ color: COLOR_CYAN, fontWeight: 'bold' }}>{event.time}</div>
+                <div style={{ color: colors.accent, fontWeight: 'bold' }}>{event.time}</div>
                 <div style={{ fontSize: '16px' }}>{event.flag}</div>
                 <div>
-                  <div style={{ color: COLOR_WHITE, fontWeight: 'bold', marginBottom: '2px' }}>
+                  <div style={{ color: colors.text, fontWeight: 'bold', marginBottom: '2px' }}>
                     {event.indicator}
                   </div>
-                  <div style={{ color: COLOR_GRAY, fontSize: '9px' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '9px' }}>
                     {event.category}
                   </div>
                 </div>
@@ -511,9 +501,9 @@ const EconomicCalendarTab: React.FC = () => {
                     {event.importance}
                   </span>
                 </div>
-                <div style={{ color: COLOR_WHITE, fontWeight: 'bold' }}>{event.actual}</div>
-                <div style={{ color: COLOR_YELLOW }}>{event.forecast}</div>
-                <div style={{ color: COLOR_GRAY }}>{event.previous}</div>
+                <div style={{ color: colors.text, fontWeight: 'bold' }}>{event.actual}</div>
+                <div style={{ color: colors.warning }}>{event.forecast}</div>
+                <div style={{ color: colors.textMuted }}>{event.previous}</div>
                 <div>
                   <span style={{
                     color: getImpactColor(event.impact),
@@ -530,24 +520,24 @@ const EconomicCalendarTab: React.FC = () => {
 
       {/* Footer */}
       <div style={{
-        borderTop: `3px solid ${COLOR_ORANGE}`,
-        backgroundColor: COLOR_PANEL_BG,
+        borderTop: `3px solid ${colors.primary}`,
+        backgroundColor: colors.panel,
         padding: '12px 16px',
         fontSize: '11px',
-        color: COLOR_WHITE,
+        color: colors.text,
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ color: COLOR_ORANGE, fontWeight: 'bold', fontSize: '13px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '13px' }}>
               ECONOMIC CALENDAR v1.0
             </span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_CYAN }}>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.accent }}>
               Real-time economic events & data
             </span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_GREEN }}>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.secondary }}>
               Showing: {filteredEvents.length} events
             </span>
           </div>
@@ -557,16 +547,16 @@ const EconomicCalendarTab: React.FC = () => {
           justifyContent: 'space-between',
           fontSize: '10px',
           paddingTop: '8px',
-          borderTop: `1px solid ${COLOR_GRAY}`
+          borderTop: `1px solid ${colors.textMuted}`
         }}>
           <div style={{ display: 'flex', gap: '16px' }}>
-            <span style={{ color: COLOR_GRAY }}><span style={{ color: COLOR_BLUE }}>F1</span> Help</span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_GRAY }}><span style={{ color: COLOR_BLUE }}>F2</span> Export</span>
-            <span style={{ color: COLOR_GRAY }}>|</span>
-            <span style={{ color: COLOR_GRAY }}><span style={{ color: COLOR_BLUE }}>F3</span> Alerts</span>
+            <span style={{ color: colors.textMuted }}><span style={{ color: colors.info }}>F1</span> Help</span>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.textMuted }}><span style={{ color: colors.info }}>F2</span> Export</span>
+            <span style={{ color: colors.textMuted }}>|</span>
+            <span style={{ color: colors.textMuted }}><span style={{ color: colors.info }}>F3</span> Alerts</span>
           </div>
-          <div style={{ color: COLOR_GRAY }}>
+          <div style={{ color: colors.textMuted }}>
             © 2025 Fincept Labs • All Rights Reserved
           </div>
         </div>

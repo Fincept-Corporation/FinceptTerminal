@@ -34,6 +34,7 @@ import MCPTab from '@/components/tabs/mcp';
 import FyersTab from '@/components/tabs/fyers';
 import SupportTicketTab from '@/components/tabs/SupportTicketTab';
 import PolygonEqTab from '@/components/tabs/PolygonEqTab';
+import KrakenTab from '@/components/tabs/KrakenTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -674,6 +675,12 @@ export default function FinxeptTerminal() {
               Maritime
             </TabsTrigger>
             <TabsTrigger
+              value="kraken"
+              style={activeTab === 'kraken' ? tabStyles.active : tabStyles.default}
+            >
+              Kraken
+            </TabsTrigger>
+            <TabsTrigger
               value="settings"
               style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
             >
@@ -840,6 +847,9 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="maritime" className="h-full m-0 p-0">
             <MaritimeTab />
+          </TabsContent>
+          <TabsContent value="kraken" className="h-full m-0 p-0">
+            <KrakenTab />
           </TabsContent>
           <TabsContent value="settings" className="h-full m-0 p-0">
             <SettingsTab />
