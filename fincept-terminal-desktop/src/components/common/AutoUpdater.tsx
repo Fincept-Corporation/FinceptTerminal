@@ -81,14 +81,20 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
       console.log('[AutoUpdater] Starting download and installation...');
 
       // Download and install with progress tracking
+      let totalBytes = 0;
+      let downloadedBytes = 0;
+
       await updateInfo.downloadAndInstall((event) => {
         switch (event.event) {
           case 'Started':
-            console.log(`[AutoUpdater] Download started - Total size: ${event.data.contentLength} bytes`);
+            totalBytes = (event.data as any).contentLength || 0;
+            downloadedBytes = 0;
+            console.log(`[AutoUpdater] Download started - Total size: ${totalBytes} bytes`);
             setDownloadProgress(0);
             break;
           case 'Progress':
-            const progress = (event.data.chunkLength / (event.data.contentLength || 1)) * 100;
+            downloadedBytes += event.data.chunkLength;
+            const progress = totalBytes > 0 ? (downloadedBytes / totalBytes) * 100 : 0;
             console.log(`[AutoUpdater] Download progress: ${progress.toFixed(2)}%`);
             setDownloadProgress(progress);
             break;
