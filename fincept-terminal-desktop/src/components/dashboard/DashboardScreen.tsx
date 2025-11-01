@@ -16,7 +16,6 @@ import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 import PortfolioTab from '@/components/tabs/PortfolioTab';
 import AnalyticsTab from '@/components/tabs/AnalyticsTab';
 import EquityResearchTab from '@/components/tabs/EquityResearchTab';
-import FixedIncomeTab from '@/components/tabs/FixedIncomeTab';
 import OptionsTab from '@/components/tabs/OptionsTab';
 import EconomicCalendarTab from '@/components/tabs/EconomicCalendarTab';
 import ScreenerTab from '@/components/tabs/ScreenerTab';
@@ -28,7 +27,6 @@ import MaritimeTab from '@/components/tabs/MaritimeTab';
 import SettingsTab from '@/components/tabs/SettingsTab';
 import NodeEditorTab from '@/components/tabs/NodeEditorTab';
 import DataSourcesTab from '@/components/tabs/data-sources/DataSourcesTab';
-import AgentsTab from '@/components/tabs/agents/AgentsTab';
 import DataMappingTab from '@/components/tabs/data-mapping/DataMappingTab';
 import MCPTab from '@/components/tabs/mcp';
 import FyersTab from '@/components/tabs/fyers';
@@ -621,12 +619,6 @@ export default function FinxeptTerminal() {
               Polygon EQ
             </TabsTrigger>
             <TabsTrigger
-              value="fixedincome"
-              style={activeTab === 'fixedincome' ? tabStyles.active : tabStyles.default}
-            >
-              Fixed Income
-            </TabsTrigger>
-            <TabsTrigger
               value="options"
               style={activeTab === 'options' ? tabStyles.active : tabStyles.default}
             >
@@ -697,12 +689,6 @@ export default function FinxeptTerminal() {
               style={activeTab === 'datasources' ? tabStyles.active : tabStyles.default}
             >
               Data Sources
-            </TabsTrigger>
-            <TabsTrigger
-              value="agents"
-              style={activeTab === 'agents' ? tabStyles.active : tabStyles.default}
-            >
-              Agents
             </TabsTrigger>
             <TabsTrigger
               value="datamapping"
@@ -821,9 +807,6 @@ export default function FinxeptTerminal() {
           <TabsContent value="polygon" className="h-full m-0 p-0">
             <PolygonEqTab />
           </TabsContent>
-          <TabsContent value="fixedincome" className="h-full m-0 p-0">
-            <FixedIncomeTab />
-          </TabsContent>
           <TabsContent value="options" className="h-full m-0 p-0">
             <OptionsTab />
           </TabsContent>
@@ -862,9 +845,6 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="support" className="h-full m-0 p-0">
             <SupportTicketTab />
-          </TabsContent>
-          <TabsContent value="agents" className="h-full m-0 p-0">
-            <AgentsTab />
           </TabsContent>
           <TabsContent value="datamapping" className="h-full m-0 p-0">
             <DataMappingTab />

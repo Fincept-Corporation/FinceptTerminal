@@ -322,17 +322,54 @@ export class WebSocketManager {
   }
 
   /**
-   * Reconnect a provider
+   * Reconnect a provider and restore subscriptions
    */
   async reconnect(provider: string): Promise<void> {
+    // Get active subscriptions for this provider before reconnection
+    const providerSubs = this.getProviderSubscriptions(provider);
+
+    // Store subscription details
+    const subsToRestore = providerSubs.map(sub => ({
+      topic: sub.topic,
+      callback: sub.callback,
+      // Extract params from topic if needed
+      params: {} // TODO: Store params in Subscription if needed
+    }));
+
+    // Reconnect the adapter
     await this.registry.reconnect(provider);
+
+    // Resubscribe to all topics
+    const adapter = this.registry.get(provider);
+    if (adapter && subsToRestore.length > 0) {
+      this.log(`Resubscribing to ${subsToRestore.length} topics for ${provider}`);
+
+      for (const subInfo of subsToRestore) {
+        try {
+          const parsed = parseTopic(subInfo.topic);
+          const adapterTopic = parsed.symbol ? `${parsed.channel}.${parsed.symbol}` : parsed.channel;
+          await adapter.subscribe(adapterTopic, subInfo.params);
+          this.log(`Resubscribed to: ${subInfo.topic}`);
+        } catch (error) {
+          console.error(`[WebSocketManager] Failed to resubscribe to ${subInfo.topic}:`, error);
+        }
+      }
+    }
   }
 
   /**
-   * Reconnect all providers
+   * Reconnect all providers and restore subscriptions
    */
   async reconnectAll(): Promise<void> {
-    await this.registry.reconnectAll();
+    const providers = this.registry.getProviders();
+
+    for (const provider of providers) {
+      try {
+        await this.reconnect(provider);
+      } catch (error) {
+        console.error(`[WebSocketManager] Failed to reconnect ${provider}:`, error);
+      }
+    }
   }
 
   /**

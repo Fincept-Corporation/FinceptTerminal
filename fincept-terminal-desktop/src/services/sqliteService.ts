@@ -64,6 +64,21 @@ export interface ChatMessage {
   tokens_used?: number;
 }
 
+export interface DataSource {
+  id: string;
+  alias: string;
+  display_name: string;
+  description?: string;
+  type: 'websocket' | 'rest_api';
+  provider: string;
+  category?: string;
+  config: string; // JSON string
+  enabled: boolean;
+  tags?: string; // JSON array string
+  created_at?: string;
+  updated_at?: string;
+}
+
 class SQLiteService {
   private db: Database | null = null;
   private dbPath = 'sqlite:fincept_terminal.db';
@@ -360,6 +375,24 @@ class SQLiteService {
       )
     `);
 
+    // Unified Data Sources table (combines WebSocket and REST API sources)
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS data_sources (
+        id TEXT PRIMARY KEY,
+        alias TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        description TEXT,
+        type TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        category TEXT,
+        config TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        tags TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+
     // Create indexes
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_credentials_service ON credentials(service_name)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category)`);
@@ -378,6 +411,10 @@ class SQLiteService {
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_watchlist_stocks_watchlist ON watchlist_stocks(watchlist_id)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_watchlist_stocks_symbol ON watchlist_stocks(symbol)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_ws_providers_enabled ON ws_provider_configs(enabled)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_data_sources_alias ON data_sources(alias)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_data_sources_type ON data_sources(type)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_data_sources_provider ON data_sources(provider)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_data_sources_enabled ON data_sources(enabled)`);
   }
 
   private async seedDefaultSettings(): Promise<void> {
@@ -1392,6 +1429,221 @@ class SQLiteService {
     } catch (error: any) {
       return { success: false, message: error.message };
     }
+  }
+
+  // ==================== UNIFIED DATA SOURCES ====================
+
+  /**
+   * Save or update a unified data source
+   */
+  async saveDataSource(source: Omit<DataSource, 'created_at' | 'updated_at'>): Promise<{ success: boolean; message: string; id: string }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      // Check if alias exists
+      const existing = await this.db.select<Array<{ id: string }>>(
+        'SELECT id FROM data_sources WHERE alias = $1',
+        [source.alias]
+      );
+
+      if (existing.length > 0 && existing[0].id !== source.id) {
+        return { success: false, message: 'Alias already exists', id: existing[0].id };
+      }
+
+      // Check if ID exists (update case)
+      const existingById = await this.db.select<Array<{ id: string }>>(
+        'SELECT id FROM data_sources WHERE id = $1',
+        [source.id]
+      );
+
+      if (existingById.length > 0) {
+        // Update
+        await this.db.execute(
+          `UPDATE data_sources SET alias = $1, display_name = $2, description = $3,
+           type = $4, provider = $5, category = $6, config = $7, enabled = $8,
+           tags = $9, updated_at = datetime('now') WHERE id = $10`,
+          [source.alias, source.display_name, source.description || null,
+           source.type, source.provider, source.category || null,
+           source.config, source.enabled ? 1 : 0, source.tags || null, source.id]
+        );
+        return { success: true, message: 'Data source updated successfully', id: source.id };
+      } else {
+        // Insert
+        await this.db.execute(
+          `INSERT INTO data_sources (id, alias, display_name, description, type, provider, category, config, enabled, tags)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+          [source.id, source.alias, source.display_name, source.description || null,
+           source.type, source.provider, source.category || null,
+           source.config, source.enabled ? 1 : 0, source.tags || null]
+        );
+        return { success: true, message: 'Data source saved successfully', id: source.id };
+      }
+    } catch (error: any) {
+      return { success: false, message: error.message, id: source.id };
+    }
+  }
+
+  /**
+   * Get all data sources
+   */
+  async getAllDataSources(): Promise<DataSource[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sources = await this.db.select<Array<any>>(
+      'SELECT * FROM data_sources ORDER BY display_name ASC'
+    );
+
+    return sources.map(s => ({
+      ...s,
+      enabled: s.enabled === 1
+    }));
+  }
+
+  /**
+   * Get data source by ID
+   */
+  async getDataSourceById(id: string): Promise<DataSource | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sources = await this.db.select<Array<any>>(
+      'SELECT * FROM data_sources WHERE id = $1',
+      [id]
+    );
+
+    if (sources.length === 0) return null;
+
+    return {
+      ...sources[0],
+      enabled: sources[0].enabled === 1
+    };
+  }
+
+  /**
+   * Get data source by alias
+   */
+  async getDataSourceByAlias(alias: string): Promise<DataSource | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sources = await this.db.select<Array<any>>(
+      'SELECT * FROM data_sources WHERE alias = $1',
+      [alias]
+    );
+
+    if (sources.length === 0) return null;
+
+    return {
+      ...sources[0],
+      enabled: sources[0].enabled === 1
+    };
+  }
+
+  /**
+   * Get data sources by type
+   */
+  async getDataSourcesByType(type: 'websocket' | 'rest_api'): Promise<DataSource[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sources = await this.db.select<Array<any>>(
+      'SELECT * FROM data_sources WHERE type = $1 ORDER BY display_name ASC',
+      [type]
+    );
+
+    return sources.map(s => ({
+      ...s,
+      enabled: s.enabled === 1
+    }));
+  }
+
+  /**
+   * Get data sources by provider
+   */
+  async getDataSourcesByProvider(provider: string): Promise<DataSource[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sources = await this.db.select<Array<any>>(
+      'SELECT * FROM data_sources WHERE provider = $1 ORDER BY display_name ASC',
+      [provider]
+    );
+
+    return sources.map(s => ({
+      ...s,
+      enabled: s.enabled === 1
+    }));
+  }
+
+  /**
+   * Get only enabled data sources
+   */
+  async getEnabledDataSources(): Promise<DataSource[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sources = await this.db.select<Array<any>>(
+      'SELECT * FROM data_sources WHERE enabled = 1 ORDER BY display_name ASC'
+    );
+
+    return sources.map(s => ({
+      ...s,
+      enabled: true
+    }));
+  }
+
+  /**
+   * Toggle data source enabled status
+   */
+  async toggleDataSourceEnabled(id: string): Promise<{ success: boolean; message: string; enabled: boolean }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      const source = await this.getDataSourceById(id);
+
+      if (!source) {
+        return { success: false, message: 'Data source not found', enabled: false };
+      }
+
+      const newEnabled = !source.enabled;
+
+      await this.db.execute(
+        `UPDATE data_sources SET enabled = $1, updated_at = datetime('now') WHERE id = $2`,
+        [newEnabled ? 1 : 0, id]
+      );
+
+      return { success: true, message: `Data source ${newEnabled ? 'enabled' : 'disabled'} successfully`, enabled: newEnabled };
+    } catch (error: any) {
+      return { success: false, message: error.message, enabled: false };
+    }
+  }
+
+  /**
+   * Delete data source
+   */
+  async deleteDataSource(id: string): Promise<{ success: boolean; message: string }> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    try {
+      await this.db.execute('DELETE FROM data_sources WHERE id = $1', [id]);
+      return { success: true, message: 'Data source deleted successfully' };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Search data sources by name or description
+   */
+  async searchDataSources(query: string): Promise<DataSource[]> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sources = await this.db.select<Array<any>>(
+      `SELECT * FROM data_sources
+       WHERE display_name LIKE $1 OR description LIKE $1 OR alias LIKE $1
+       ORDER BY display_name ASC`,
+      [`%${query}%`]
+    );
+
+    return sources.map(s => ({
+      ...s,
+      enabled: s.enabled === 1
+    }));
   }
 }
 

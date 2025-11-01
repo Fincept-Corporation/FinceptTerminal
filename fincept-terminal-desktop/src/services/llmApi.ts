@@ -355,8 +355,10 @@ class LLMApiService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || `OpenRouter API error: ${response.status}`);
+        const errorData = await response.json();
+        console.error('OpenRouter full error response:', JSON.stringify(errorData, null, 2));
+        const errorMessage = errorData.error?.message || errorData.message || JSON.stringify(errorData);
+        throw new Error(`OpenRouter error (${response.status}): ${errorMessage}`);
       }
 
       if (onStream) {

@@ -30,10 +30,16 @@ import {
   Brain,
   FileText,
   Edit3,
-  X
+  X,
+  Monitor
 } from 'lucide-react';
 import MCPToolNode from './node-editor/MCPToolNode';
 import { generateMCPNodeConfigs, MCPNodeConfig } from './node-editor/mcpNodeConfigs';
+import PythonAgentNode from './node-editor/PythonAgentNode';
+import ResultsDisplayNode from './node-editor/ResultsDisplayNode';
+import AgentMediatorNode from './node-editor/AgentMediatorNode';
+import { pythonAgentService, AgentMetadata } from '@/services/pythonAgentService';
+import { nodeExecutionManager } from '@/services/nodeExecutionManager';
 
 // Custom Node Component
 const CustomNode = ({ data, id, selected }: any) => {
@@ -202,49 +208,17 @@ const CustomNode = ({ data, id, selected }: any) => {
 
 const NODE_CONFIGS = [
   {
-    type: 'data-source',
-    label: 'Data Source',
+    type: 'agent-mediator',
+    label: 'Agent Mediator',
     color: '#3b82f6',
-    category: 'Input',
-    hasInput: false,
-    hasOutput: true,
-  },
-  {
-    type: 'transformation',
-    label: 'Transform',
-    color: '#8b5cf6',
     category: 'Processing',
     hasInput: true,
     hasOutput: true,
   },
   {
-    type: 'analysis',
-    label: 'Analysis',
-    color: '#10b981',
-    category: 'Processing',
-    hasInput: true,
-    hasOutput: true,
-  },
-  {
-    type: 'visualization',
-    label: 'Visualization',
+    type: 'results-display',
+    label: 'Results Display',
     color: '#f59e0b',
-    category: 'Output',
-    hasInput: true,
-    hasOutput: false,
-  },
-  {
-    type: 'agent',
-    label: 'AI Agent',
-    color: '#ec4899',
-    category: 'Processing',
-    hasInput: true,
-    hasOutput: true,
-  },
-  {
-    type: 'output',
-    label: 'Output',
-    color: '#06b6d4',
     category: 'Output',
     hasInput: true,
     hasOutput: false,
@@ -254,8 +228,44 @@ const NODE_CONFIGS = [
 export default function NodeEditorTab() {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [mcpNodeConfigs, setMcpNodeConfigs] = useState<MCPNodeConfig[]>([]);
+  const [agentConfigs, setAgentConfigs] = useState<AgentMetadata[]>([]);
 
-  // Load MCP node configurations on mount
+  // Load saved workflow from localStorage or start with blank slate
+  const loadSavedWorkflow = useCallback(() => {
+    try {
+      const saved = localStorage.getItem('nodeEditorWorkflow');
+      if (saved) {
+        const workflow = JSON.parse(saved);
+        console.log('[NodeEditor] Loaded saved workflow:', workflow.nodes.length, 'nodes');
+        return workflow;
+      }
+    } catch (error) {
+      console.error('[NodeEditor] Failed to load saved workflow:', error);
+    }
+    return { nodes: [], edges: [] };
+  }, []);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(loadSavedWorkflow().nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(loadSavedWorkflow().edges);
+
+  // Auto-save workflow to localStorage whenever nodes or edges change
+  useEffect(() => {
+    const saveWorkflow = () => {
+      try {
+        const workflow = { nodes, edges };
+        localStorage.setItem('nodeEditorWorkflow', JSON.stringify(workflow));
+        console.log('[NodeEditor] Auto-saved workflow:', nodes.length, 'nodes,', edges.length, 'edges');
+      } catch (error) {
+        console.error('[NodeEditor] Failed to save workflow:', error);
+      }
+    };
+
+    // Debounce saves to avoid too frequent writes
+    const timeoutId = setTimeout(saveWorkflow, 500);
+    return () => clearTimeout(timeoutId);
+  }, [nodes, edges]);
+
+  // Load MCP node configurations and Python agents on mount
   useEffect(() => {
     const loadMCPNodes = async () => {
       try {
@@ -266,118 +276,30 @@ export default function NodeEditorTab() {
         console.error('[NodeEditor] Failed to load MCP configs:', error);
       }
     };
+
+    const loadAgents = async () => {
+      try {
+        const agents = await pythonAgentService.getAvailableAgents();
+        setAgentConfigs(agents);
+        console.log('[NodeEditor] Loaded Python agents:', agents.length);
+      } catch (error) {
+        console.error('[NodeEditor] Failed to load agents:', error);
+      }
+    };
+
     loadMCPNodes();
+    loadAgents();
   }, []);
-
-  const [nodes, setNodes, onNodesChange] = useNodesState([
-    {
-      id: '1',
-      type: 'custom',
-      position: { x: 100, y: 150 },
-      data: {
-        label: 'Market Data',
-        nodeType: 'data-source',
-        color: '#3b82f6',
-        hasInput: false,
-        hasOutput: true,
-        onLabelChange: handleLabelChange,
-      },
-    },
-    {
-      id: '2',
-      type: 'custom',
-      position: { x: 400, y: 150 },
-      data: {
-        label: 'Normalize Data',
-        nodeType: 'transformation',
-        color: '#8b5cf6',
-        hasInput: true,
-        hasOutput: true,
-        onLabelChange: handleLabelChange,
-      },
-    },
-    {
-      id: '3',
-      type: 'custom',
-      position: { x: 400, y: 280 },
-      data: {
-        label: 'Technical Analysis',
-        nodeType: 'analysis',
-        color: '#10b981',
-        hasInput: true,
-        hasOutput: true,
-        onLabelChange: handleLabelChange,
-      },
-    },
-    {
-      id: '4',
-      type: 'custom',
-      position: { x: 700, y: 150 },
-      data: {
-        label: 'Chart Output',
-        nodeType: 'visualization',
-        color: '#f59e0b',
-        hasInput: true,
-        hasOutput: false,
-        onLabelChange: handleLabelChange,
-      },
-    },
-    {
-      id: '5',
-      type: 'custom',
-      position: { x: 700, y: 280 },
-      data: {
-        label: 'Trading Agent',
-        nodeType: 'agent',
-        color: '#ec4899',
-        hasInput: true,
-        hasOutput: true,
-        onLabelChange: handleLabelChange,
-      },
-    },
-  ]);
-
-  const [edges, setEdges, onEdgesChange] = useEdgesState([
-    {
-      id: 'e1-2',
-      source: '1',
-      target: '2',
-      animated: true,
-      style: { stroke: '#ea580c', strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#ea580c' },
-    },
-    {
-      id: 'e1-3',
-      source: '1',
-      target: '3',
-      animated: true,
-      style: { stroke: '#ea580c', strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#ea580c' },
-    },
-    {
-      id: 'e2-4',
-      source: '2',
-      target: '4',
-      animated: true,
-      style: { stroke: '#ea580c', strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#ea580c' },
-    },
-    {
-      id: 'e3-5',
-      source: '3',
-      target: '5',
-      animated: true,
-      style: { stroke: '#ea580c', strokeWidth: 2 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#ea580c' },
-    },
-  ]);
 
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [showNodeMenu, setShowNodeMenu] = useState(false);
 
   const nodeTypes: NodeTypes = useMemo(() => ({
     custom: CustomNode,
-    'mcp-tool': MCPToolNode
+    'mcp-tool': MCPToolNode,
+    'python-agent': PythonAgentNode,
+    'results-display': ResultsDisplayNode,
+    'agent-mediator': AgentMediatorNode
   }), []);
 
   // Handle label change
@@ -412,15 +334,92 @@ export default function NodeEditorTab() {
     [setEdges]
   );
 
-  // Add new node (handles both regular nodes and MCP tool nodes)
+  // Add new node (handles regular nodes, MCP tool nodes, Python agent nodes, and agent mediator)
   const addNode = (config: any) => {
     const isMCPNode = config.type === 'mcp-tool';
+    const isPythonAgent = config.type === 'python-agent';
+    const isResultsDisplay = config.type === 'results-display';
+    const isAgentMediator = config.type === 'agent-mediator';
 
     const newNode: Node = {
       id: `node_${Date.now()}`,
-      type: isMCPNode ? 'mcp-tool' : 'custom',
+      type: isPythonAgent ? 'python-agent' : (isMCPNode ? 'mcp-tool' : (isResultsDisplay ? 'results-display' : (isAgentMediator ? 'agent-mediator' : 'custom'))),
       position: { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 },
-      data: isMCPNode ? {
+      data: isPythonAgent ? {
+        agentType: config.id,  // Use 'id' field which contains agent_type like 'warren_buffett'
+        agentCategory: config.category,
+        label: config.name,
+        icon: config.icon,
+        color: config.color,
+        parameters: config.parameters.reduce((acc: any, param: any) => {
+          if (param.default_value !== null && param.default_value !== undefined) {
+            acc[param.name] = param.default_value;
+          }
+          return acc;
+        }, {}),
+        selectedLLM: 'active', // Default to active provider
+        status: 'idle',
+        onExecute: async (nodeId: string) => {
+          console.log('[NodeEditor] Executing single Python agent node:', config.id);
+          // Execute just this node
+          try {
+            setNodes((nds) =>
+              nds.map((n) => n.id === nodeId ? { ...n, data: { ...n.data, status: 'running' } } : n)
+            );
+
+            const result = await pythonAgentService.executeAgent(
+              config.id,
+              config.parameters.reduce((acc: any, param: any) => {
+                if (param.default_value !== null && param.default_value !== undefined) {
+                  acc[param.name] = param.default_value;
+                }
+                return acc;
+              }, {}),
+              {}
+            );
+
+            setNodes((nds) =>
+              nds.map((n) =>
+                n.id === nodeId
+                  ? {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        status: result.success ? 'completed' : 'error',
+                        result: result.success ? result.data : undefined,
+                        error: result.success ? undefined : result.error,
+                      },
+                    }
+                  : n
+              )
+            );
+          } catch (error: any) {
+            setNodes((nds) =>
+              nds.map((n) =>
+                n.id === nodeId ? { ...n, data: { ...n.data, status: 'error', error: error.message } } : n
+              )
+            );
+          }
+        },
+        onParameterChange: (params: Record<string, any>) => {
+          console.log('[NodeEditor] Agent parameters changed:', params);
+        },
+        onLLMChange: (provider: string) => {
+          setNodes((nds) =>
+            nds.map((n) =>
+              n.id === newNode.id
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      selectedLLM: provider,
+                    },
+                  }
+                : n
+            )
+          );
+        },
+      } : (isMCPNode ? {
         serverId: config.serverId,
         toolName: config.toolName,
         label: config.label,
@@ -431,6 +430,38 @@ export default function NodeEditorTab() {
         onExecute: (result: any) => {
           console.log('[NodeEditor] MCP tool executed with result:', result);
         },
+      } : (isResultsDisplay ? {
+        label: config.label,
+        color: config.color,
+        inputData: undefined,
+      } : (isAgentMediator ? {
+        label: config.label,
+        selectedProvider: undefined, // Will use active provider by default
+        customPrompt: undefined,
+        status: 'idle',
+        result: undefined,
+        error: undefined,
+        inputData: undefined,
+        onExecute: (nodeId: string) => {
+          console.log('[NodeEditor] Agent mediator execute clicked:', nodeId);
+          // Workflow execution will handle this
+        },
+        onConfigChange: (newConfig: any) => {
+          setNodes((nds) =>
+            nds.map((n) =>
+              n.id === newNode.id
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      selectedProvider: newConfig.selectedProvider,
+                      customPrompt: newConfig.customPrompt,
+                    },
+                  }
+                : n
+            )
+          );
+        },
       } : {
         label: config.label,
         nodeType: config.type,
@@ -438,7 +469,7 @@ export default function NodeEditorTab() {
         hasInput: config.hasInput,
         hasOutput: config.hasOutput,
         onLabelChange: handleLabelChange,
-      },
+      }))),
     };
     setNodes((nds) => [...nds, newNode]);
     setShowNodeMenu(false);
@@ -487,8 +518,20 @@ export default function NodeEditorTab() {
     };
   }, [handleKeyDown]);
 
-  // Export workflow
-  const exportWorkflow = () => {
+  // Save workflow manually
+  const saveWorkflow = useCallback(() => {
+    try {
+      const workflow = { nodes, edges };
+      localStorage.setItem('nodeEditorWorkflow', JSON.stringify(workflow));
+      console.log('[NodeEditor] Manually saved workflow:', nodes.length, 'nodes,', edges.length, 'edges');
+      // Could add visual feedback here
+    } catch (error) {
+      console.error('[NodeEditor] Failed to save workflow:', error);
+    }
+  }, [nodes, edges]);
+
+  // Export workflow to JSON file
+  const exportWorkflow = useCallback(() => {
     const workflow = {
       nodes: nodes,
       edges: edges,
@@ -501,7 +544,40 @@ export default function NodeEditorTab() {
     linkElement.setAttribute('href', dataUri);
     linkElement.setAttribute('download', exportFileDefaultName);
     linkElement.click();
-  };
+  }, [nodes, edges]);
+
+  // Import workflow from JSON file
+  const importWorkflow = useCallback(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e: any) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event: any) => {
+          try {
+            const workflow = JSON.parse(event.target.result);
+            setNodes(workflow.nodes || []);
+            setEdges(workflow.edges || []);
+            console.log('[NodeEditor] Imported workflow:', workflow.nodes?.length || 0, 'nodes');
+          } catch (error) {
+            console.error('[NodeEditor] Failed to import workflow:', error);
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
+  }, [setNodes, setEdges]);
+
+  // Clear workflow (start fresh)
+  const clearWorkflow = useCallback(() => {
+    setNodes([]);
+    setEdges([]);
+    localStorage.removeItem('nodeEditorWorkflow');
+    console.log('[NodeEditor] Cleared workflow');
+  }, [setNodes, setEdges]);
 
   return (
     <div
@@ -563,6 +639,55 @@ export default function NodeEditorTab() {
         </button>
 
         <button
+          onClick={async () => {
+            try {
+              console.log('[NodeEditor] Starting workflow execution...');
+              await nodeExecutionManager.executeWorkflow(
+                nodes,
+                edges,
+                (nodeId, status, result) => {
+                  console.log(`[NodeEditor] Node ${nodeId} status: ${status}`, result);
+                  // Update node status
+                  setNodes((nds) =>
+                    nds.map((node) => {
+                      if (node.id === nodeId) {
+                        // For results-display nodes, update inputData
+                        if (node.type === 'results-display') {
+                          console.log('[NodeEditor] Updating results-display node:', nodeId, 'with data:', result);
+                          console.log('[NodeEditor] Status:', status);
+                          // Force update to trigger re-render
+                          const currentData = node.data as any;
+                          return {
+                            ...node,
+                            data: {
+                              ...node.data,
+                              inputData: status === 'completed' ? result : (status === 'error' ? undefined : currentData.inputData),
+                              status,
+                            },
+                          };
+                        }
+                        // For other nodes, update status and result
+                        return {
+                          ...node,
+                          data: {
+                            ...node.data,
+                            status,
+                            result: status === 'completed' ? result : undefined,
+                            error: status === 'error' ? result : undefined,
+                          },
+                        };
+                      }
+                      return node;
+                    })
+                  );
+                }
+              );
+              console.log('[NodeEditor] Workflow execution completed');
+            } catch (error: any) {
+              console.error('[NodeEditor] Workflow execution failed:', error);
+              // Don't use alert - just log the error
+            }
+          }}
           style={{
             backgroundColor: 'transparent',
             color: '#10b981',
@@ -591,6 +716,7 @@ export default function NodeEditorTab() {
         <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
 
         <button
+          onClick={saveWorkflow}
           style={{
             backgroundColor: 'transparent',
             color: '#a3a3a3',
@@ -611,12 +737,14 @@ export default function NodeEditorTab() {
             e.currentTarget.style.backgroundColor = 'transparent';
             e.currentTarget.style.color = '#a3a3a3';
           }}
+          title="Save workflow to browser storage"
         >
           <Save size={14} />
           SAVE
         </button>
 
         <button
+          onClick={importWorkflow}
           style={{
             backgroundColor: 'transparent',
             color: '#a3a3a3',
@@ -637,6 +765,7 @@ export default function NodeEditorTab() {
             e.currentTarget.style.backgroundColor = 'transparent';
             e.currentTarget.style.color = '#a3a3a3';
           }}
+          title="Import workflow from file"
         >
           <Upload size={14} />
           IMPORT
@@ -667,6 +796,40 @@ export default function NodeEditorTab() {
         >
           <Download size={14} />
           EXPORT
+        </button>
+
+        <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
+
+        <button
+          onClick={() => {
+            if (window.confirm('Are you sure you want to clear all nodes? This cannot be undone.')) {
+              clearWorkflow();
+            }
+          }}
+          style={{
+            backgroundColor: 'transparent',
+            color: '#ef4444',
+            border: '1px solid #ef4444',
+            padding: '6px 12px',
+            fontSize: '11px',
+            cursor: 'pointer',
+            borderRadius: '3px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#ef4444';
+            e.currentTarget.style.color = 'white';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'transparent';
+            e.currentTarget.style.color = '#ef4444';
+          }}
+          title="Clear all nodes and connections"
+        >
+          <Trash2 size={14} />
+          CLEAR ALL
         </button>
 
         {selectedNodes.length > 0 && (
@@ -811,6 +974,7 @@ export default function NodeEditorTab() {
                   {config.type === 'data-source' && <Database size={16} />}
                   {config.type === 'transformation' && <Zap size={16} />}
                   {config.type === 'analysis' && <TrendingUp size={16} />}
+                  {config.type === 'results-display' && <Monitor size={16} />}
                   {config.type === 'visualization' && <BarChart3 size={16} />}
                   {config.type === 'agent' && <Brain size={16} />}
                   {config.type === 'output' && <FileText size={16} />}
@@ -871,6 +1035,72 @@ export default function NodeEditorTab() {
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Python Agents Section */}
+          {agentConfigs.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <div
+                style={{
+                  color: '#22c55e',
+                  fontSize: '10px',
+                  marginBottom: '6px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  fontWeight: 'bold',
+                }}
+              >
+                🤖 PYTHON AGENTS ({agentConfigs.length})
+              </div>
+              {['trader', 'hedge-fund', 'economic', 'geopolitics'].map((category) => {
+                const categoryAgents = agentConfigs.filter(a => a.category === category);
+                if (categoryAgents.length === 0) return null;
+
+                return (
+                  <div key={category} style={{ marginBottom: '8px' }}>
+                    <div style={{ color: '#737373', fontSize: '9px', marginBottom: '4px', paddingLeft: '4px' }}>
+                      {category.toUpperCase()}
+                    </div>
+                    {categoryAgents.map((agent) => (
+                      <button
+                        key={agent.id}
+                        onClick={() => addNode({ ...agent, type: 'python-agent' })}
+                        style={{
+                          backgroundColor: 'colors.panel',
+                          color: agent.color,
+                          border: `1px solid ${agent.color}40`,
+                          padding: '8px 12px',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          borderRadius: '3px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          marginBottom: '6px',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = `${agent.color}20`;
+                          e.currentTarget.style.borderColor = agent.color;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'colors.panel';
+                          e.currentTarget.style.borderColor = `${agent.color}40`;
+                        }}
+                      >
+                        <span style={{ fontSize: '14px' }}>{agent.icon}</span>
+                        <div style={{ flex: 1, textAlign: 'left' }}>
+                          <div>{agent.name}</div>
+                          <div style={{ fontSize: '9px', color: '#737373' }}>
+                            {agent.description.substring(0, 40)}...
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

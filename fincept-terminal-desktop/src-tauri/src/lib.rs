@@ -914,7 +914,11 @@ pub fn run() {
             commands::jupyter::create_new_notebook,
             commands::jupyter::get_python_version,
             commands::jupyter::install_python_package,
-            commands::jupyter::list_python_packages
+            commands::jupyter::list_python_packages,
+            // Python Agent Commands
+            commands::agents::list_available_agents,
+            commands::agents::execute_python_agent,
+            commands::agents::get_agent_metadata
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
