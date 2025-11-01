@@ -51,7 +51,6 @@
     ],
     "externalBin": [],
     "windows": {
-      "signCommand": "relic sign --file %1 --key azure --config relic.conf",
       "digestAlgorithm": "sha256",
       "timestampUrl": "http://timestamp.digicert.com",
       "webviewInstallMode": {
