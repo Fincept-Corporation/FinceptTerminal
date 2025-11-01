@@ -71,16 +71,18 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: './fincept-terminal-desktop/src-tauri -> target'
 
       - name: Sync node version and setup cache
         uses: actions/setup-node@v4
         with:
           node-version: 'lts/*'
           cache: 'npm'
+          cache-dependency-path: './fincept-terminal-desktop/package-lock.json'
 
       - name: Install frontend dependencies
         run: npm install
+        working-directory: ./fincept-terminal-desktop
 
       - name: Build the app with updater
         uses: tauri-apps/tauri-action@v0
@@ -89,6 +91,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          projectPath: fincept-terminal-desktop
           tagName: ${{ github.ref_name }}
           releaseName: 'FinceptTerminal ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
