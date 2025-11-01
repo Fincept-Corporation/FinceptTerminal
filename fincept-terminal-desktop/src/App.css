@@ -113,6 +113,8 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    /* Fix passive event listener warning */
+    touch-action: pan-y pan-x;
   }
   body {
     @apply bg-background text-foreground;

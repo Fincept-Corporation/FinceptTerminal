@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { WidgetType, DEFAULT_WIDGET_CONFIGS } from './widgets';
 import { watchlistService } from '../../../services/watchlistService';
+import { getAllDataSources } from '../../../services/dataSourceRegistry';
+import { DataSource } from '../../../services/sqliteService';
 
 const BLOOMBERG_ORANGE = '#FFA500';
 const BLOOMBERG_WHITE = '#FFFFFF';
@@ -22,16 +24,21 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
 }) => {
   const [selectedType, setSelectedType] = useState<WidgetType>('news');
   const [watchlists, setWatchlists] = useState<any[]>([]);
+  const [dataSources, setDataSources] = useState<DataSource[]>([]);
 
   // Widget-specific configs
   const [newsCategory, setNewsCategory] = useState('ALL');
   const [marketCategory, setMarketCategory] = useState('Indices');
   const [selectedWatchlist, setSelectedWatchlist] = useState('');
   const [forumCategory, setForumCategory] = useState('Trending');
+  const [selectedDataSource, setSelectedDataSource] = useState('');
 
   useEffect(() => {
     if (isOpen && selectedType === 'watchlist') {
       loadWatchlists();
+    }
+    if (isOpen && selectedType === 'datasource') {
+      loadDataSources();
     }
   }, [isOpen, selectedType]);
 
@@ -45,6 +52,19 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
       }
     } catch (error) {
       console.error('Failed to load watchlists:', error);
+    }
+  };
+
+  const loadDataSources = async () => {
+    try {
+      const sources = await getAllDataSources();
+      const enabled = sources.filter(s => s.enabled);
+      setDataSources(enabled);
+      if (enabled.length > 0) {
+        setSelectedDataSource(enabled[0].alias);
+      }
+    } catch (error) {
+      console.error('Failed to load data sources:', error);
     }
   };
 
@@ -72,6 +92,13 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
         break;
       case 'forum':
         config = { forumCategoryName: forumCategory, forumLimit: 5 };
+        break;
+      case 'datasource':
+        const ds = dataSources.find(d => d.alias === selectedDataSource);
+        config = {
+          dataSourceAlias: selectedDataSource,
+          dataSourceDisplayName: ds?.display_name
+        };
         break;
     }
 
@@ -142,7 +169,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
               WIDGET TYPE
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-              {(['news', 'market', 'watchlist', 'forum', 'crypto', 'commodities', 'indices', 'forex', 'maritime'] as WidgetType[]).map(type => (
+              {(['news', 'market', 'watchlist', 'forum', 'crypto', 'commodities', 'indices', 'forex', 'maritime', 'datasource'] as WidgetType[]).map(type => (
                 <button
                   key={type}
                   onClick={() => setSelectedType(type)}
@@ -256,6 +283,34 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
               </select>
             )}
 
+            {/* Data Source Config */}
+            {selectedType === 'datasource' && (
+              dataSources.length > 0 ? (
+                <select
+                  value={selectedDataSource}
+                  onChange={(e) => setSelectedDataSource(e.target.value)}
+                  style={{
+                    width: '100%',
+                    backgroundColor: BLOOMBERG_DARK_BG,
+                    border: `1px solid ${BLOOMBERG_GRAY}`,
+                    color: BLOOMBERG_WHITE,
+                    padding: '8px',
+                    fontSize: '11px'
+                  }}
+                >
+                  {dataSources.map(ds => (
+                    <option key={ds.alias} value={ds.alias}>
+                      {ds.display_name} ({ds.alias}) - {ds.type === 'websocket' ? 'WebSocket' : 'REST API'}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px' }}>
+                  No data sources available. Create one in Settings → Data Sources first.
+                </div>
+              )
+            )}
+
             {/* Crypto, Commodities, Indices, Forex, Maritime - No Config */}
             {['crypto', 'commodities', 'indices', 'forex', 'maritime'].includes(selectedType) && (
               <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
@@ -283,15 +338,15 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
             </button>
             <button
               onClick={handleAdd}
-              disabled={selectedType === 'watchlist' && watchlists.length === 0}
+              disabled={(selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)}
               style={{
-                backgroundColor: (selectedType === 'watchlist' && watchlists.length === 0) ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
+                backgroundColor: ((selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)) ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
                 color: BLOOMBERG_DARK_BG,
                 border: 'none',
                 padding: '8px 16px',
                 fontSize: '11px',
                 fontWeight: 'bold',
-                cursor: (selectedType === 'watchlist' && watchlists.length === 0) ? 'not-allowed' : 'pointer',
+                cursor: ((selectedType === 'watchlist' && watchlists.length === 0) || (selectedType === 'datasource' && dataSources.length === 0)) ? 'not-allowed' : 'pointer',
                 borderRadius: '2px'
               }}
             >
