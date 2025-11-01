@@ -26,8 +26,25 @@ dist-ssr
 src/services/node_modules
 src-tauri/target
 
-# Python embeddable package (download separately)
-src-tauri/resources/python/
+# Python embeddable package - include the executables and core files
+# But ignore large library directories to keep repo size manageable
+src-tauri/resources/python/Lib/*
+!src-tauri/resources/python/Lib/site-packages/
+src-tauri/resources/python/Scripts/*
+!src-tauri/resources/python/Scripts/*.exe
+# Always include these critical files:
+!src-tauri/resources/python/python.exe
+!src-tauri/resources/python/python312.dll
+!src-tauri/resources/python/*.pyd
+!src-tauri/resources/python/*.zip
+!src-tauri/resources/python/*.txt
+!src-tauri/resources/python/*.py
+!src-tauri/resources/python/_pth
+
+# Bun executable - always include
+!src-tauri/resources/bun/bun.exe
+
+# Scripts should always be included
 !src-tauri/resources/scripts/
 fincept-terminal-desktop/nul
 "**/.claude/" 
