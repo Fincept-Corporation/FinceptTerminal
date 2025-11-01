@@ -4,6 +4,9 @@ import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye,
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { APP_VERSION } from '@/constants/version';
+import { useAutoUpdater } from '@/hooks/useAutoUpdater';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import ForumTab from '@/components/tabs/ForumTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import MarketsTab from '@/components/tabs/MarketsTab';
@@ -120,6 +123,7 @@ export default function FinxeptTerminal() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const { updateAvailable, updateInfo, installUpdate, dismissUpdate } = useAutoUpdater();
 
   React.useEffect(() => {
     document.body.style.margin = '0';
@@ -851,6 +855,42 @@ export default function FinxeptTerminal() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Update Available Dialog */}
+      <Dialog open={updateAvailable} onOpenChange={(open) => !open && dismissUpdate()}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Update Available</DialogTitle>
+            <DialogDescription>
+              A new version of FinceptTerminal is available.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="mb-4">
+              <p className="text-sm font-semibold mb-2">Version: {updateInfo?.version}</p>
+              {updateInfo?.body && (
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-semibold mb-1">Release Notes:</p>
+                  <div className="max-h-48 overflow-y-auto bg-muted p-3 rounded-md">
+                    <pre className="whitespace-pre-wrap text-xs">{updateInfo.body}</pre>
+                  </div>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The update will download and install automatically. Your app will restart after installation.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={dismissUpdate}>
+              Later
+            </Button>
+            <Button onClick={installUpdate}>
+              Update Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
