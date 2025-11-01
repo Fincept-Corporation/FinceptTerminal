@@ -12,6 +12,7 @@ import {
   GlobalIndicesWidget,
   ForexWidget,
   MaritimeWidget,
+  DataSourceWidget,
   WidgetType,
   WidgetConfig
 } from './dashboard/widgets';
@@ -297,6 +298,15 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             id={widget.id}
             onRemove={() => handleRemoveWidget(widget.id)}
             onNavigate={() => onNavigateToTab?.('maritime')}
+          />
+        );
+      case 'datasource':
+        return (
+          <DataSourceWidget
+            id={widget.id}
+            alias={widget.config?.dataSourceAlias || ''}
+            displayName={widget.config?.dataSourceDisplayName}
+            onRemove={() => handleRemoveWidget(widget.id)}
           />
         );
       default:

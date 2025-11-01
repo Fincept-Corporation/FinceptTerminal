@@ -6,6 +6,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { terminalThemeService, FONT_FAMILIES, COLOR_THEMES, FontSettings } from '@/services/terminalThemeService';
 import { getWebSocketManager, ConnectionStatus, getAvailableProviders } from '@/services/websocket';
 import { useWebSocketManager } from '@/hooks/useWebSocket';
+import { DataSourcesPanel } from '@/components/settings/DataSourcesPanel';
 
 export default function SettingsTab() {
   const { theme, updateTheme, resetTheme, colors, fontSize: themeFontSize, fontFamily: themeFontFamily, fontWeight: themeFontWeight, fontStyle } = useTerminalTheme();
@@ -17,7 +18,7 @@ export default function SettingsTab() {
   const [dbInitialized, setDbInitialized] = useState(false);
 
   // WebSocket Data Connections State
-  const { stats, statuses, metrics } = useWebSocketManager();
+  const { stats, statuses, metrics, manager } = useWebSocketManager();
   const [wsProviders, setWsProviders] = useState<Array<{
     id: number;
     provider_name: string;
@@ -35,6 +36,8 @@ export default function SettingsTab() {
     api_secret: '',
     endpoint: ''
   });
+  const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
+  const [programmaticProviders, setProgrammaticProviders] = useState<Set<string>>(new Set());
 
   // Terminal appearance states
   const [fontFamily, setFontFamily] = useState(theme.font.family);
@@ -69,16 +72,40 @@ export default function SettingsTab() {
 
 
   useEffect(() => {
-    initDB();
-    loadWSProviders();
+    checkAndLoadData();
   }, []);
 
-  const initDB = async () => {
+  // Track programmatic providers that get initialized
+  useEffect(() => {
+    const detectedProviders = new Set<string>([
+      ...Array.from(statuses.keys()),
+      ...manager.getSubscriptions().map(sub => sub.topic.split('.')[0])
+    ]);
+
+    // Filter out database-configured providers
+    detectedProviders.forEach(p => {
+      if (wsProviders.find(wp => wp.provider_name === p)) {
+        detectedProviders.delete(p);
+      }
+    });
+
+    if (detectedProviders.size > 0) {
+      setProgrammaticProviders(prev => new Set([...prev, ...detectedProviders]));
+    }
+  }, [statuses, wsProviders]);
+
+  const checkAndLoadData = async () => {
     try {
       setLoading(true);
 
-      // Initialize database
-      await sqliteService.initialize();
+      // Check if database is already initialized
+      const isReady = sqliteService.isReady();
+
+      if (!isReady) {
+        // Database not initialized, initialize it now
+        console.log('[SettingsTab] Database not initialized, initializing now...');
+        await sqliteService.initialize();
+      }
 
       // Verify database health
       const healthCheck = await sqliteService.healthCheck();
@@ -93,11 +120,11 @@ export default function SettingsTab() {
       await loadLLMConfigs();
       await loadWSProviders();
 
-      showMessage('success', `Database ready: ${healthCheck.message}`);
+      console.log('[SettingsTab] Data loaded successfully');
     } catch (error) {
-      console.error('Failed to initialize database:', error);
+      console.error('[SettingsTab] Failed to load data:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      showMessage('error', `Database initialization failed: ${errorMsg}`);
+      showMessage('error', `Failed to load settings: ${errorMsg}`);
       setDbInitialized(false);
     } finally {
       setLoading(false);
@@ -108,6 +135,21 @@ export default function SettingsTab() {
     try {
       const providers = await sqliteService.getWSProviderConfigs();
       setWsProviders(providers);
+
+      // Auto-initialize enabled providers in WebSocket Manager
+      const wsManager = getWebSocketManager();
+      for (const provider of providers) {
+        if (provider.enabled) {
+          wsManager.setProviderConfig(provider.provider_name, {
+            provider_name: provider.provider_name,
+            enabled: provider.enabled,
+            api_key: provider.api_key || undefined,
+            api_secret: provider.api_secret || undefined,
+            endpoint: provider.endpoint || undefined
+          });
+          console.log(`[Settings] Auto-initialized provider: ${provider.provider_name}`);
+        }
+      }
     } catch (error) {
       console.error('Failed to load WS providers:', error);
     }
@@ -205,14 +247,30 @@ export default function SettingsTab() {
   const handleConnectProvider = async (providerName: string) => {
     try {
       const manager = getWebSocketManager();
+
+      // First try to get config from database
       const config = await sqliteService.getWSProviderConfig(providerName);
+
       if (config) {
         manager.setProviderConfig(providerName, config);
-        await manager.connect(providerName);
+
+        // Check if there are existing subscriptions to restore
+        const hasSubscriptions = manager.getProviderSubscriptions(providerName).length > 0;
+
+        if (hasSubscriptions) {
+          // Use reconnect to restore subscriptions
+          await manager.reconnect(providerName);
+        } else {
+          // Just connect if no subscriptions
+          await manager.connect(providerName);
+        }
+
         showMessage('success', `Connected to ${providerName}`);
+      } else {
+        showMessage('error', `No configuration found for ${providerName}`);
       }
     } catch (error) {
-      showMessage('error', `Failed to connect to ${providerName}`);
+      showMessage('error', `Failed to connect to ${providerName}: ${error}`);
     }
   };
 
@@ -233,6 +291,23 @@ export default function SettingsTab() {
       showMessage('success', `Ping: ${latency}ms`);
     } catch (error) {
       showMessage('error', `Ping failed for ${providerName}`);
+    }
+  };
+
+  const handleUnsubscribe = async (subscriptionId: string, topic: string) => {
+    try {
+      const manager = getWebSocketManager();
+      const subscriptions = manager.getSubscriptions();
+      const sub = subscriptions.find(s => s.id === subscriptionId);
+
+      if (sub) {
+        sub.unsubscribe();
+        showMessage('success', `Unsubscribed from ${topic}`);
+      } else {
+        showMessage('error', 'Subscription not found');
+      }
+    } catch (error) {
+      showMessage('error', `Failed to unsubscribe from ${topic}`);
     }
   };
 
@@ -535,7 +610,7 @@ export default function SettingsTab() {
             {[
               { id: 'credentials', icon: Lock, label: 'Credentials' },
               { id: 'llm', icon: Bot, label: 'LLM Configuration' },
-              { id: 'dataConnections', icon: Wifi, label: 'Data Connections' },
+              { id: 'dataConnections', icon: Database, label: 'Data Sources' },
               { id: 'profile', icon: User, label: 'User Profile' },
               { id: 'terminal', icon: Terminal, label: 'Terminal Config' },
               { id: 'notifications', icon: Bell, label: 'Notifications' }
@@ -1240,635 +1315,12 @@ export default function SettingsTab() {
               </div>
             )}
 
-            {/* Data Connections Section */}
+            {/* Data Sources Section (Unified WebSocket + REST API) */}
             {activeSection === 'dataConnections' && (
-              <div>
-                <div style={{ marginBottom: '24px' }}>
-                  <h2 style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
-                    WEBSOCKET DATA CONNECTIONS
-                  </h2>
-                  <p style={{ color: colors.textMuted, fontSize: '10px' }}>
-                    Manage WebSocket connections to financial data providers. Configure API keys, endpoints, and monitor connection health.
-                  </p>
-                </div>
-
-                {/* Connection Overview Stats */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
-                  <div style={{ background: colors.panel, border: `2px solid ${stats.registry.connectedProviders > 0 ? '#00ff00' : '#3a3a3a'}`, padding: '12px', borderRadius: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                      <Activity size={12} color={stats.registry.connectedProviders > 0 ? '#00ff00' : colors.textMuted} />
-                      <div style={{ color: colors.textMuted, fontSize: '9px' }}>ACTIVE CONNECTIONS</div>
-                    </div>
-                    <div style={{ color: stats.registry.connectedProviders > 0 ? '#00ff00' : colors.textMuted, fontSize: '24px', fontWeight: 'bold' }}>
-                      {stats.registry.connectedProviders}
-                    </div>
-                    <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
-                      of {wsProviders.length} configured
-                    </div>
-                  </div>
-                  <div style={{ background: colors.panel, border: '1px solid #1a1a1a', padding: '12px', borderRadius: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                      <Zap size={12} color={colors.primary} />
-                      <div style={{ color: colors.textMuted, fontSize: '9px' }}>TOTAL SUBSCRIPTIONS</div>
-                    </div>
-                    <div style={{ color: colors.primary, fontSize: '24px', fontWeight: 'bold' }}>
-                      {stats.activeSubscriptions}
-                    </div>
-                    <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
-                      across all providers
-                    </div>
-                  </div>
-                  <div style={{ background: colors.panel, border: '1px solid #1a1a1a', padding: '12px', borderRadius: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                      <Database size={12} color={colors.text} />
-                      <div style={{ color: colors.textMuted, fontSize: '9px' }}>CONFIGURED PROVIDERS</div>
-                    </div>
-                    <div style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold' }}>
-                      {wsProviders.length}
-                    </div>
-                    <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
-                      {wsProviders.filter(p => p.enabled).length} enabled
-                    </div>
-                  </div>
-                  <div style={{ background: colors.panel, border: '1px solid #1a1a1a', padding: '12px', borderRadius: '4px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                      <Activity size={12} color={stats.eventBus ? colors.secondary : colors.textMuted} />
-                      <div style={{ color: colors.textMuted, fontSize: '9px' }}>EVENT BUS</div>
-                    </div>
-                    <div style={{ color: colors.secondary, fontSize: '24px', fontWeight: 'bold' }}>
-                      {stats.eventBus?.subscriptions || 0}
-                    </div>
-                    <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
-                      subscriptions
-                    </div>
-                  </div>
-                </div>
-
-                {/* Add New Provider */}
-                <div style={{
-                  background: colors.panel,
-                  border: '1px solid #1a1a1a',
-                  padding: '16px',
-                  marginBottom: '20px',
-                  borderRadius: '4px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold' }}>
-                      {selectedProvider ? `Edit Provider: ${selectedProvider.toUpperCase()}` : 'Add New Provider'}
-                    </h3>
-                    {selectedProvider && (
-                      <button
-                        onClick={() => {
-                          setSelectedProvider(null);
-                          setProviderForm({
-                            provider_name: '',
-                            enabled: true,
-                            api_key: '',
-                            api_secret: '',
-                            endpoint: ''
-                          });
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: `1px solid ${colors.textMuted}`,
-                          color: colors.textMuted,
-                          padding: '4px 8px',
-                          fontSize: '9px',
-                          cursor: 'pointer',
-                          borderRadius: '3px',
-                          fontWeight: 'bold'
-                        }}
-                      >
-                        CANCEL EDIT
-                      </button>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                    <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                        PROVIDER NAME * (e.g., kraken, fyers, polygon)
-                      </label>
-                      <select
-                        value={providerForm.provider_name}
-                        onChange={(e) => setProviderForm({ ...providerForm, provider_name: e.target.value })}
-                        disabled={!!selectedProvider}
-                        style={{
-                          width: '100%',
-                          background: selectedProvider ? '#1a1a1a' : colors.background,
-                          border: '1px solid #2a2a2a',
-                          color: selectedProvider ? colors.textMuted : colors.text,
-                          padding: '8px',
-                          fontSize: '10px',
-                          borderRadius: '3px',
-                          cursor: selectedProvider ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        <option value="">Select a provider</option>
-                        {getAvailableProviders().map(p => (
-                          <option key={p} value={p}>{p.toUpperCase()}</option>
-                        ))}
-                      </select>
-                      {selectedProvider && (
-                        <div style={{ color: colors.textMuted, fontSize: '8px', marginTop: '4px' }}>
-                          Provider name cannot be changed during edit
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                        ENDPOINT (optional, uses default if empty)
-                      </label>
-                      <input
-                        type="text"
-                        value={providerForm.endpoint}
-                        onChange={(e) => setProviderForm({ ...providerForm, endpoint: e.target.value })}
-                        placeholder="wss://..."
-                        style={{
-                          width: '100%',
-                          background: colors.background,
-                          border: '1px solid #2a2a2a',
-                          color: colors.text,
-                          padding: '8px',
-                          fontSize: '10px',
-                          borderRadius: '3px'
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                        API KEY (if required)
-                      </label>
-                      <input
-                        type="password"
-                        value={providerForm.api_key}
-                        onChange={(e) => setProviderForm({ ...providerForm, api_key: e.target.value })}
-                        placeholder="Optional"
-                        style={{
-                          width: '100%',
-                          background: colors.background,
-                          border: '1px solid #2a2a2a',
-                          color: colors.text,
-                          padding: '8px',
-                          fontSize: '10px',
-                          borderRadius: '3px'
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                        API SECRET (if required)
-                      </label>
-                      <input
-                        type="password"
-                        value={providerForm.api_secret}
-                        onChange={(e) => setProviderForm({ ...providerForm, api_secret: e.target.value })}
-                        placeholder="Optional"
-                        style={{
-                          width: '100%',
-                          background: colors.background,
-                          border: '1px solid #2a2a2a',
-                          color: colors.text,
-                          padding: '8px',
-                          fontSize: '10px',
-                          borderRadius: '3px'
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={providerForm.enabled}
-                        onChange={(e) => setProviderForm({ ...providerForm, enabled: e.target.checked })}
-                      />
-                      <span style={{ color: colors.textMuted, fontSize: '10px' }}>Enable this provider</span>
-                    </label>
-
-                    <button
-                      onClick={handleSaveWSProvider}
-                      disabled={loading}
-                      style={{
-                        marginLeft: 'auto',
-                        background: colors.primary,
-                        color: colors.text,
-                        border: 'none',
-                        padding: '8px 16px',
-                        fontSize: '10px',
-                        fontWeight: 'bold',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        borderRadius: '3px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        opacity: loading ? 0.5 : 1
-                      }}
-                    >
-                      <Save size={14} />
-                      {loading ? 'SAVING...' : (selectedProvider ? 'UPDATE PROVIDER' : 'SAVE PROVIDER')}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Provider Cards */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold' }}>
-                      Configured Providers ({wsProviders.length})
-                    </h3>
-                    {wsProviders.length > 0 && (
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          onClick={async () => {
-                            try {
-                              const manager = getWebSocketManager();
-                              await manager.reconnectAll();
-                              showMessage('success', 'Reconnecting all providers...');
-                            } catch (error) {
-                              showMessage('error', 'Failed to reconnect providers');
-                            }
-                          }}
-                          style={{
-                            background: 'transparent',
-                            border: `1px solid ${colors.primary}`,
-                            color: colors.primary,
-                            padding: '6px 12px',
-                            fontSize: '9px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            borderRadius: '3px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            letterSpacing: '0.5px'
-                          }}
-                        >
-                          <RefreshCw size={12} />
-                          RECONNECT ALL
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (!confirm('Disconnect all active providers?')) return;
-                            try {
-                              const manager = getWebSocketManager();
-                              for (const provider of wsProviders) {
-                                await manager.disconnect(provider.provider_name);
-                              }
-                              showMessage('success', 'Disconnected all providers');
-                            } catch (error) {
-                              showMessage('error', 'Failed to disconnect all providers');
-                            }
-                          }}
-                          style={{
-                            background: 'transparent',
-                            border: '1px solid #ff0000',
-                            color: '#ff0000',
-                            padding: '6px 12px',
-                            fontSize: '9px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            borderRadius: '3px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            letterSpacing: '0.5px'
-                          }}
-                        >
-                          <WifiOff size={12} />
-                          DISCONNECT ALL
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {wsProviders.length === 0 ? (
-                    <div style={{
-                      background: colors.panel,
-                      border: '1px solid #1a1a1a',
-                      padding: '32px',
-                      textAlign: 'center',
-                      borderRadius: '4px'
-                    }}>
-                      <Wifi size={32} color={colors.textMuted} style={{ margin: '0 auto 12px' }} />
-                      <p style={{ color: colors.textMuted, fontSize: '11px' }}>No providers configured yet</p>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid', gap: '12px' }}>
-                      {wsProviders.map((provider) => {
-                        const providerStatus = statuses.get(provider.provider_name);
-                        const providerMetrics = metrics.get(provider.provider_name);
-                        const isConnected = providerStatus === ConnectionStatus.CONNECTED;
-                        const isConnecting = providerStatus === ConnectionStatus.CONNECTING;
-                        const isReconnecting = providerStatus === ConnectionStatus.RECONNECTING;
-                        const hasError = providerStatus === ConnectionStatus.ERROR;
-
-                        // Calculate connection uptime
-                        let uptimeText = 'Not connected';
-                        if (providerMetrics?.connectedAt) {
-                          const uptimeMs = Date.now() - providerMetrics.connectedAt;
-                          const uptimeMin = Math.floor(uptimeMs / 60000);
-                          const uptimeSec = Math.floor((uptimeMs % 60000) / 1000);
-                          if (uptimeMin > 0) {
-                            uptimeText = `${uptimeMin}m ${uptimeSec}s`;
-                          } else {
-                            uptimeText = `${uptimeSec}s`;
-                          }
-                        }
-
-                        return (
-                          <div
-                            key={provider.id}
-                            style={{
-                              background: colors.panel,
-                              border: `2px solid ${isConnected ? '#00ff00' : hasError ? '#ff0000' : isConnecting || isReconnecting ? colors.primary : '#1a1a1a'}`,
-                              padding: '16px',
-                              borderRadius: '4px',
-                              position: 'relative',
-                              overflow: 'hidden'
-                            }}
-                          >
-                            {/* Connection status indicator bar */}
-                            {isConnected && (
-                              <div style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                height: '3px',
-                                background: 'linear-gradient(90deg, #00ff00, #00ff00, rgba(0, 255, 0, 0.3))',
-                                backgroundSize: '200% 100%',
-                                animation: 'pulse 2s ease-in-out infinite'
-                              }} />
-                            )}
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-                              <div style={{ flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                                  {isConnected ? (
-                                    <Wifi size={16} color="#00ff00" />
-                                  ) : isConnecting || isReconnecting ? (
-                                    <Activity size={16} color={colors.primary} style={{ animation: 'spin 1s linear infinite' }} />
-                                  ) : (
-                                    <WifiOff size={16} color={hasError ? '#ff0000' : colors.textMuted} />
-                                  )}
-                                  <h4 style={{ color: colors.primary, fontSize: '13px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                    {provider.provider_name}
-                                  </h4>
-                                  <span style={{
-                                    padding: '3px 8px',
-                                    background: isConnected ? '#0a3a0a' : hasError ? '#3a0a0a' : isConnecting || isReconnecting ? 'rgba(234, 88, 12, 0.1)' : '#2a2a2a',
-                                    border: `1px solid ${isConnected ? '#00ff00' : hasError ? '#ff0000' : isConnecting || isReconnecting ? colors.primary : '#555'}`,
-                                    borderRadius: '3px',
-                                    fontSize: '8px',
-                                    fontWeight: 'bold',
-                                    color: isConnected ? '#00ff00' : hasError ? '#ff0000' : isConnecting || isReconnecting ? colors.primary : '#888',
-                                    letterSpacing: '0.5px'
-                                  }}>
-                                    {providerStatus || 'DISCONNECTED'}
-                                  </span>
-                                  {provider.enabled ? (
-                                    <span style={{
-                                      padding: '3px 8px',
-                                      background: '#0a3a0a',
-                                      border: '1px solid #00ff00',
-                                      borderRadius: '3px',
-                                      fontSize: '8px',
-                                      fontWeight: 'bold',
-                                      color: '#00ff00',
-                                      letterSpacing: '0.5px'
-                                    }}>
-                                      ENABLED
-                                    </span>
-                                  ) : (
-                                    <span style={{
-                                      padding: '3px 8px',
-                                      background: '#2a2a2a',
-                                      border: '1px solid #555',
-                                      borderRadius: '3px',
-                                      fontSize: '8px',
-                                      fontWeight: 'bold',
-                                      color: '#888',
-                                      letterSpacing: '0.5px'
-                                    }}>
-                                      DISABLED
-                                    </span>
-                                  )}
-                                </div>
-
-                                {provider.endpoint && (
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', background: colors.background, padding: '4px 6px', borderRadius: '3px' }}>
-                                    <Link size={10} color={colors.textMuted} />
-                                    <span style={{ color: colors.text, fontSize: '9px', fontFamily: 'monospace' }}>
-                                      {provider.endpoint}
-                                    </span>
-                                  </div>
-                                )}
-
-                                {/* Connection metrics */}
-                                {isConnected && providerMetrics && (
-                                  <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
-                                    gap: '8px',
-                                    marginTop: '10px',
-                                    padding: '8px',
-                                    background: colors.background,
-                                    borderRadius: '3px'
-                                  }}>
-                                    <div>
-                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>LATENCY</div>
-                                      <div style={{ color: '#00ff00', fontSize: '11px', fontWeight: 'bold' }}>
-                                        {providerMetrics.latency ? `${providerMetrics.latency}ms` : 'N/A'}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>MESSAGES</div>
-                                      <div style={{ color: colors.text, fontSize: '11px', fontWeight: 'bold' }}>
-                                        {providerMetrics.messagesReceived.toLocaleString()}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>MSG/SEC</div>
-                                      <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold' }}>
-                                        {providerMetrics.messagesPerSecond.toFixed(1)}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>SUBSCRIPTIONS</div>
-                                      <div style={{ color: colors.secondary, fontSize: '11px', fontWeight: 'bold' }}>
-                                        {providerMetrics.subscriptions}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>UPTIME</div>
-                                      <div style={{ color: colors.text, fontSize: '11px', fontWeight: 'bold' }}>
-                                        {uptimeText}
-                                      </div>
-                                    </div>
-                                    {providerMetrics.errors && providerMetrics.errors.length > 0 && (
-                                      <div>
-                                        <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>ERRORS</div>
-                                        <div style={{ color: '#ff0000', fontSize: '11px', fontWeight: 'bold' }}>
-                                          {providerMetrics.errors.length}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Show last error if connection failed */}
-                                {hasError && providerMetrics?.errors && providerMetrics.errors.length > 0 && (
-                                  <div style={{
-                                    marginTop: '8px',
-                                    padding: '6px 8px',
-                                    background: '#3a0a0a',
-                                    border: '1px solid #ff0000',
-                                    borderRadius: '3px'
-                                  }}>
-                                    <div style={{ color: '#ff0000', fontSize: '8px', fontWeight: 'bold', marginBottom: '2px' }}>LAST ERROR:</div>
-                                    <div style={{ color: colors.textMuted, fontSize: '9px', fontFamily: 'monospace' }}>
-                                      {providerMetrics.errors[providerMetrics.errors.length - 1].error}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                {isConnected ? (
-                                  <button
-                                    onClick={() => handleDisconnectProvider(provider.provider_name)}
-                                    style={{
-                                      background: 'transparent',
-                                      border: '1px solid #ff0000',
-                                      color: '#ff0000',
-                                      padding: '4px 8px',
-                                      fontSize: '9px',
-                                      cursor: 'pointer',
-                                      borderRadius: '3px',
-                                      fontWeight: 'bold'
-                                    }}
-                                  >
-                                    DISCONNECT
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleConnectProvider(provider.provider_name)}
-                                    disabled={!provider.enabled}
-                                    style={{
-                                      background: 'transparent',
-                                      border: '1px solid #00ff00',
-                                      color: '#00ff00',
-                                      padding: '4px 8px',
-                                      fontSize: '9px',
-                                      cursor: provider.enabled ? 'pointer' : 'not-allowed',
-                                      borderRadius: '3px',
-                                      fontWeight: 'bold',
-                                      opacity: provider.enabled ? 1 : 0.5
-                                    }}
-                                  >
-                                    CONNECT
-                                  </button>
-                                )}
-
-                                {isConnected && (
-                                  <button
-                                    onClick={() => handleTestProvider(provider.provider_name)}
-                                    style={{
-                                      background: 'transparent',
-                                      border: `1px solid ${colors.primary}`,
-                                      color: colors.primary,
-                                      padding: '4px 8px',
-                                      fontSize: '9px',
-                                      cursor: 'pointer',
-                                      borderRadius: '3px',
-                                      fontWeight: 'bold'
-                                    }}
-                                  >
-                                    PING
-                                  </button>
-                                )}
-
-                                <button
-                                  onClick={async () => {
-                                    // Load provider data into form for editing
-                                    setSelectedProvider(provider.provider_name);
-                                    setProviderForm({
-                                      provider_name: provider.provider_name,
-                                      enabled: provider.enabled,
-                                      api_key: provider.api_key || '',
-                                      api_secret: provider.api_secret || '',
-                                      endpoint: provider.endpoint || ''
-                                    });
-                                    // Scroll to form
-                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                    showMessage('success', `Editing ${provider.provider_name} configuration`);
-                                  }}
-                                  style={{
-                                    background: 'transparent',
-                                    border: `1px solid ${colors.primary}`,
-                                    color: colors.primary,
-                                    padding: '4px 8px',
-                                    fontSize: '9px',
-                                    cursor: 'pointer',
-                                    borderRadius: '3px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    fontWeight: 'bold'
-                                  }}
-                                >
-                                  <Edit3 size={10} />
-                                  EDIT
-                                </button>
-
-                                <button
-                                  onClick={() => handleToggleWSProvider(provider.provider_name)}
-                                  style={{
-                                    background: 'transparent',
-                                    border: `1px solid ${colors.textMuted}`,
-                                    color: colors.textMuted,
-                                    padding: '4px 8px',
-                                    fontSize: '9px',
-                                    cursor: 'pointer',
-                                    borderRadius: '3px',
-                                    fontWeight: 'bold'
-                                  }}
-                                >
-                                  {provider.enabled ? 'DISABLE' : 'ENABLE'}
-                                </button>
-
-                                <button
-                                  onClick={() => handleDeleteWSProvider(provider.provider_name)}
-                                  style={{
-                                    background: 'transparent',
-                                    border: '1px solid #ff0000',
-                                    color: '#ff0000',
-                                    padding: '4px 8px',
-                                    fontSize: '9px',
-                                    cursor: 'pointer',
-                                    borderRadius: '3px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    fontWeight: 'bold'
-                                  }}
-                                >
-                                  <Trash2 size={10} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <DataSourcesPanel colors={colors} />
             )}
 
-            {/* Other sections remain the same... */}
+            {/* Other sections */}
             {activeSection === 'profile' && <div style={{ color: colors.textMuted }}>User Profile section (implementation same as before)</div>}
             {activeSection === 'notifications' && <div style={{ color: colors.textMuted }}>Notifications section (implementation same as before)</div>}
 

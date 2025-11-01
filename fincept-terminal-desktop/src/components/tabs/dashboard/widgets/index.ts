@@ -8,9 +8,10 @@ export { CommoditiesWidget } from './CommoditiesWidget';
 export { GlobalIndicesWidget } from './GlobalIndicesWidget';
 export { ForexWidget } from './ForexWidget';
 export { MaritimeWidget } from './MaritimeWidget';
+export { DataSourceWidget } from './DataSourceWidget';
 
 // Widget type definitions
-export type WidgetType = 'news' | 'market' | 'watchlist' | 'forum' | 'crypto' | 'commodities' | 'indices' | 'forex' | 'maritime';
+export type WidgetType = 'news' | 'market' | 'watchlist' | 'forum' | 'crypto' | 'commodities' | 'indices' | 'forex' | 'maritime' | 'datasource';
 
 export interface WidgetConfig {
   id: string;
@@ -33,6 +34,10 @@ export interface WidgetConfig {
     forumCategoryId?: number;
     forumCategoryName?: string;
     forumLimit?: number;
+
+    // Data Source widget config
+    dataSourceAlias?: string;
+    dataSourceDisplayName?: string;
   };
 }
 
@@ -92,5 +97,13 @@ export const DEFAULT_WIDGET_CONFIGS: Record<WidgetType, Partial<WidgetConfig>> =
     type: 'maritime',
     title: 'Maritime Intelligence',
     config: {}
+  },
+  datasource: {
+    type: 'datasource',
+    title: 'Data Source',
+    config: {
+      dataSourceAlias: '',
+      dataSourceDisplayName: ''
+    }
   }
 };

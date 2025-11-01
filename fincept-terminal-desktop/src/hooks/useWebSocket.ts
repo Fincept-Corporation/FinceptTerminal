@@ -302,6 +302,28 @@ export function useWebSocket(
     };
   }, [topic, autoSubscribe, autoConnect]); // Intentionally limited dependencies
 
+  /**
+   * Monitor connection status and resubscribe if connection is restored
+   */
+  useEffect(() => {
+    if (!topic || !autoSubscribe) return;
+
+    const manager = getWebSocketManager();
+    const provider = topic.split('.')[0];
+
+    const checkInterval = setInterval(() => {
+      const providerStatus = manager.getStatus(provider);
+
+      // If connected but no active subscription, resubscribe
+      if (providerStatus === ConnectionStatus.CONNECTED && !subscriptionRef.current) {
+        console.log(`[useWebSocket] Auto-resubscribing to ${topic} after reconnection`);
+        subscribe(topic, params);
+      }
+    }, 2000);
+
+    return () => clearInterval(checkInterval);
+  }, [topic, autoSubscribe, params, subscribe]);
+
   return {
     message,
     messages,
@@ -322,11 +344,15 @@ export function useWebSocket(
 export function useWebSocketManager() {
   const manager = getWebSocketManager();
   const [stats, setStats] = useState(manager.getStats());
+  const [statuses, setStatuses] = useState(manager.getAllStatuses());
+  const [metrics, setMetrics] = useState(manager.getAllMetrics());
 
   useEffect(() => {
-    // Update stats periodically
+    // Update stats, statuses, and metrics periodically
     const interval = setInterval(() => {
       setStats(manager.getStats());
+      setStatuses(manager.getAllStatuses());
+      setMetrics(manager.getAllMetrics());
     }, 1000);
 
     return () => clearInterval(interval);
@@ -335,8 +361,8 @@ export function useWebSocketManager() {
   return {
     manager,
     stats,
-    statuses: manager.getAllStatuses(),
-    metrics: manager.getAllMetrics()
+    statuses,
+    metrics
   };
 }
 

@@ -4,16 +4,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, BarSeries } from 'lightweight-charts';
 
 const COLORS = {
-  ORANGE: 'colors.primary',
-  WHITE: 'colors.text',
-  RED: 'colors.alert',
-  GREEN: 'colors.secondary',
-  YELLOW: 'colors.warning',
-  GRAY: 'colors.textMuted',
-  BLUE: 'colors.info',
-  CYAN: 'colors.accent',
-  DARK_BG: 'colors.background',
-  PANEL_BG: 'colors.panel',
+  ORANGE: '#FFA500',
+  WHITE: '#FFFFFF',
+  RED: '#ef4444',
+  GREEN: '#10b981',
+  YELLOW: '#fbbf24',
+  GRAY: '#787878',
+  BLUE: '#3b82f6',
+  CYAN: '#06b6d4',
+  DARK_BG: '#0a0a0a',
+  PANEL_BG: '#1a1a1a',
   BORDER: '#333333',
   MAGENTA: '#FF00FF',
   PURPLE: '#9D4EDD',
@@ -836,7 +836,7 @@ const EquityResearchTab: React.FC = () => {
                 <div style={{ color: COLORS.ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
                   PRICE CHART & VOLUME - {chartPeriod}
                 </div>
-                <div ref={chartContainerRef} style={{ backgroundColor: COLORS.DARK_BG }} />
+                <div ref={chartContainerRef} style={{ backgroundColor: COLORS.DARK_BG, minHeight: '400px', width: '100%' }} />
               </div>
 
               {/* Company Description */}
