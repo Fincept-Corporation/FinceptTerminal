@@ -1,13 +1,14 @@
 {
   "name": "fincept-terminal-desktop",
   "private": true,
-  "version": "3.0.0",
+  "version": "3.0.10",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "bump-version": "node scripts/bump-version.js"
   },
   "dependencies": {
     "@langchain/community": "^0.3.56",
