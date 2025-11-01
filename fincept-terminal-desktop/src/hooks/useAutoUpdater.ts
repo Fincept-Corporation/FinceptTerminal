@@ -2,13 +2,17 @@ import { useEffect, useState } from 'react';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+const CHECK_INTERVAL_MS = 30 * 60 * 1000; // Check every 30 minutes
 const LAST_CHECK_KEY = 'updater_last_check';
+const DISMISSED_VERSION_KEY = 'updater_dismissed_version';
 
 interface UseAutoUpdaterReturn {
   updateAvailable: boolean;
   updateInfo: Update | null;
   isChecking: boolean;
+  isInstalling: boolean;
+  installProgress: number;
+  error: string | null;
   checkForUpdate: () => Promise<void>;
   installUpdate: () => Promise<void>;
   dismissUpdate: () => void;
@@ -18,16 +22,33 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<Update | null>(null);
   const [isChecking, setIsChecking] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
+  const [installProgress, setInstallProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const checkForUpdate = async (silent = false) => {
     try {
       setIsChecking(true);
+      setError(null);
 
+      console.log('[AutoUpdater] Checking for updates...');
       const update = await check();
 
       if (update?.available) {
-        console.log(`[Updater] Update available: v${update.version}`);
-        console.log(`[Updater] Release notes: ${update.body}`);
+        console.log(`[AutoUpdater] Update available: v${update.version}`);
+        console.log(`[AutoUpdater] Current version: v${update.currentVersion}`);
+        console.log(`[AutoUpdater] Release date: ${update.date}`);
+        console.log(`[AutoUpdater] Release notes: ${update.body}`);
+
+        // Check if this version was previously dismissed
+        const dismissedVersion = localStorage.getItem(DISMISSED_VERSION_KEY);
+        if (dismissedVersion === update.version) {
+          console.log('[AutoUpdater] Update was previously dismissed by user');
+          if (!silent) {
+            setError('This update was previously dismissed. A new update will be shown when available.');
+          }
+          return;
+        }
 
         setUpdateInfo(update);
         setUpdateAvailable(true);
@@ -35,12 +56,20 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
         // Update last check timestamp
         localStorage.setItem(LAST_CHECK_KEY, Date.now().toString());
       } else {
+        console.log('[AutoUpdater] No updates available - you are on the latest version');
         if (!silent) {
-          console.log('[Updater] No updates available');
+          setError('You are running the latest version!');
+          setTimeout(() => setError(null), 3000);
         }
       }
-    } catch (error) {
-      console.error('[Updater] Error checking for updates:', error);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('[AutoUpdater] Error checking for updates:', errorMessage);
+
+      // Only show error if it's not a network-related error or if not silent
+      if (!silent && !errorMessage.toLowerCase().includes('network') && !errorMessage.toLowerCase().includes('fetch')) {
+        setError(`Failed to check for updates: ${errorMessage}`);
+      }
     } finally {
       setIsChecking(false);
     }
@@ -48,62 +77,97 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
 
   const installUpdate = async () => {
     if (!updateInfo) {
-      console.error('[Updater] No update info available');
+      console.error('[AutoUpdater] No update info available');
+      setError('No update information available');
       return;
     }
 
     try {
-      console.log('[Updater] Downloading and installing update...');
-      await updateInfo.downloadAndInstall();
+      setIsInstalling(true);
+      setInstallProgress(0);
+      setError(null);
 
-      console.log('[Updater] Update installed, relaunching app...');
-      await relaunch();
-    } catch (error) {
-      console.error('[Updater] Error installing update:', error);
+      console.log('[AutoUpdater] Starting download and installation...');
+
+      // Download and install with progress tracking
+      await updateInfo.downloadAndInstall((event) => {
+        switch (event.event) {
+          case 'Started':
+            console.log(`[AutoUpdater] Download started - Size: ${event.data.contentLength} bytes`);
+            setInstallProgress(0);
+            break;
+          case 'Progress':
+            const progress = (event.data.chunkLength / (event.data.contentLength || 1)) * 100;
+            console.log(`[AutoUpdater] Download progress: ${progress.toFixed(2)}%`);
+            setInstallProgress(Math.min(progress, 100));
+            break;
+          case 'Finished':
+            console.log('[AutoUpdater] Download complete, installing...');
+            setInstallProgress(100);
+            break;
+        }
+      });
+
+      console.log('[AutoUpdater] Update installed successfully!');
+      console.log('[AutoUpdater] Relaunching application in 2 seconds...');
+
+      // Give user a moment to see the success message
+      setTimeout(async () => {
+        try {
+          await relaunch();
+        } catch (relaunchError) {
+          console.error('[AutoUpdater] Failed to relaunch:', relaunchError);
+          setError('Update installed but failed to relaunch. Please restart manually.');
+          setIsInstalling(false);
+        }
+      }, 2000);
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      console.error('[AutoUpdater] Error installing update:', errorMessage);
+      setError(`Failed to install update: ${errorMessage}`);
+      setIsInstalling(false);
+      setInstallProgress(0);
     }
   };
 
   const dismissUpdate = () => {
+    if (updateInfo?.version) {
+      // Store the dismissed version so we don't show it again
+      localStorage.setItem(DISMISSED_VERSION_KEY, updateInfo.version);
+      console.log(`[AutoUpdater] Update v${updateInfo.version} dismissed by user`);
+    }
     setUpdateAvailable(false);
     setUpdateInfo(null);
+    setError(null);
   };
 
   useEffect(() => {
-    // Check if we should run an update check
-    const shouldCheckForUpdate = () => {
-      const lastCheck = localStorage.getItem(LAST_CHECK_KEY);
-
-      if (!lastCheck) {
-        return true; // First time, check immediately
-      }
-
-      const lastCheckTime = parseInt(lastCheck, 10);
-      const timeSinceLastCheck = Date.now() - lastCheckTime;
-
-      return timeSinceLastCheck >= SEVEN_DAYS_MS;
-    };
-
-    // Perform initial check on mount if needed
-    if (shouldCheckForUpdate()) {
-      console.log('[Updater] Performing background update check...');
+    // Perform initial check on mount (delayed by 5 seconds to not interfere with app startup)
+    const initialCheckTimer = setTimeout(() => {
+      console.log('[AutoUpdater] Performing initial background update check...');
       checkForUpdate(true);
-    }
+    }, 5000);
 
-    // Set up periodic checks every 7 days
+    // Set up periodic checks every 30 minutes
     const interval = setInterval(() => {
-      if (shouldCheckForUpdate()) {
-        console.log('[Updater] Performing scheduled update check...');
-        checkForUpdate(true);
-      }
-    }, SEVEN_DAYS_MS);
+      console.log('[AutoUpdater] Performing periodic update check...');
+      checkForUpdate(true);
+    }, CHECK_INTERVAL_MS);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialCheckTimer);
+      clearInterval(interval);
+    };
   }, []);
 
   return {
     updateAvailable,
     updateInfo,
     isChecking,
+    isInstalling,
+    installProgress,
+    error,
     checkForUpdate: () => checkForUpdate(false),
     installUpdate,
     dismissUpdate,

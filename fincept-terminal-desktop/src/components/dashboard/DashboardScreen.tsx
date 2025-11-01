@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut } from 'lucide-react';
+import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { APP_VERSION } from '@/constants/version';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import ForumTab from '@/components/tabs/ForumTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import MarketsTab from '@/components/tabs/MarketsTab';
@@ -123,7 +125,7 @@ export default function FinxeptTerminal() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const { updateAvailable, updateInfo, installUpdate, dismissUpdate } = useAutoUpdater();
+  const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate } = useAutoUpdater();
 
   React.useEffect(() => {
     document.body.style.margin = '0';
@@ -858,36 +860,99 @@ export default function FinxeptTerminal() {
 
       {/* Update Available Dialog */}
       <Dialog open={updateAvailable} onOpenChange={(open) => !open && dismissUpdate()}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Update Available</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5" />
+              Update Available
+            </DialogTitle>
             <DialogDescription>
               A new version of FinceptTerminal is available.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <div className="mb-4">
-              <p className="text-sm font-semibold mb-2">Version: {updateInfo?.version}</p>
-              {updateInfo?.body && (
-                <div className="text-sm text-muted-foreground">
-                  <p className="font-semibold mb-1">Release Notes:</p>
-                  <div className="max-h-48 overflow-y-auto bg-muted p-3 rounded-md">
-                    <pre className="whitespace-pre-wrap text-xs">{updateInfo.body}</pre>
-                  </div>
+
+          <div className="space-y-4 py-4">
+            {updateInfo && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Current Version:</span>
+                  <span className="font-mono">{updateInfo.currentVersion}</span>
                 </div>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              The update will download and install automatically. Your app will restart after installation.
-            </p>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">New Version:</span>
+                  <span className="font-mono font-bold text-green-600">{updateInfo.version}</span>
+                </div>
+                {updateInfo.date && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Release Date:</span>
+                    <span>{new Date(updateInfo.date).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {updateInfo?.body && (
+              <div className="rounded-md bg-muted p-3 text-sm">
+                <p className="font-semibold mb-2">Release Notes:</p>
+                <div className="max-h-48 overflow-y-auto">
+                  <p className="text-muted-foreground whitespace-pre-wrap text-xs">{updateInfo.body}</p>
+                </div>
+              </div>
+            )}
+
+            {isInstalling && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span>{installProgress === 100 ? 'Installing...' : 'Downloading...'}</span>
+                  <span>{installProgress.toFixed(0)}%</span>
+                </div>
+                <Progress value={installProgress} />
+              </div>
+            )}
+
+            {installProgress === 100 && isInstalling && (
+              <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertTitle>Update Ready!</AlertTitle>
+                <AlertDescription>
+                  The application will restart in a moment...
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {error && (
+              <Alert variant="destructive">
+                <XCircle className="h-4 w-4" />
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {!isInstalling && (
+              <p className="text-xs text-muted-foreground">
+                The update will download and install automatically. Your app will restart after installation.
+              </p>
+            )}
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={dismissUpdate}>
-              Later
-            </Button>
-            <Button onClick={installUpdate}>
-              Update Now
-            </Button>
+            {!isInstalling && !error && (
+              <>
+                <Button variant="outline" onClick={dismissUpdate}>
+                  Later
+                </Button>
+                <Button onClick={installUpdate}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Update Now
+                </Button>
+              </>
+            )}
+            {isInstalling && (
+              <Button disabled>
+                <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                {installProgress === 100 ? 'Installing...' : 'Downloading...'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
