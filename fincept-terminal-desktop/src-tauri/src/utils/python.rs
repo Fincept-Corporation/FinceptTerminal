@@ -24,10 +24,26 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         "python"
     };
 
-    Ok(resource_dir
+    let python_path = resource_dir
         .join("resources")
         .join("python")
-        .join(python_exe))
+        .join(python_exe);
+
+    // Debug logging
+    eprintln!("[Python] Resource dir: {}", resource_dir.display());
+    eprintln!("[Python] Looking for Python at: {}", python_path.display());
+    eprintln!("[Python] Python exists: {}", python_path.exists());
+
+    // Verify Python exists
+    if !python_path.exists() {
+        return Err(format!(
+            "Python executable not found at: {}. Resource dir: {}",
+            python_path.display(),
+            resource_dir.display()
+        ));
+    }
+
+    Ok(python_path)
 }
 
 /// Get the bundled Bun executable path at runtime
