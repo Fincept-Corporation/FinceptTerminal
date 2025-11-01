@@ -95,7 +95,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'FinceptTerminal ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
           includeUpdaterJson: true
