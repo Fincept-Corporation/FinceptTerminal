@@ -49,7 +49,7 @@ const ResultsDisplayNode: React.FC<ResultsDisplayNodeProps> = ({ data, selected 
 
   const renderMarkdown = (text: string) => {
     const lines = text.split('\n');
-    const elements: JSX.Element[] = [];
+    const elements: React.ReactElement[] = [];
     let inTable = false;
 
     lines.forEach((line, i) => {
