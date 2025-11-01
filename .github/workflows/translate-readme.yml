@@ -2,8 +2,12 @@ name: Translate README
 
 on:
   push:
+    branches:
+      - main
     paths:
       - 'README.md'
+    tags-ignore:
+      - '**'
   workflow_dispatch:
 
 jobs:
