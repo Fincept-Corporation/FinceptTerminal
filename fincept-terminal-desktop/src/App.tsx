@@ -5,7 +5,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from './contexts/AuthContext';
 import { NavigationProvider } from './contexts/NavigationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { DataSourceProvider } from './contexts/DataSourceContext';
 import { setPaymentWindowManager } from './services/paymentApi';
+import { workflowService } from './services/workflowService';
 
 // Import screens
 import LoginScreen from './components/auth/LoginScreen';
@@ -105,6 +107,16 @@ const App: React.FC = () => {
     console.log('PaymentManager: Initialized in-app payment window manager');
   }, []);
 
+  // Cleanup running workflows on app unmount
+  useEffect(() => {
+    return () => {
+      console.log('[App] App unmounting, cleaning up running workflows...');
+      workflowService.cleanupRunningWorkflows().catch((error) => {
+        console.error('[App] Failed to cleanup running workflows:', error);
+      });
+    };
+  }, []);
+
   // Handle payment success URL parameters
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -201,11 +213,13 @@ const App: React.FC = () => {
   if (session?.authenticated && currentScreen === 'dashboard') {
     return (
       <>
-        <ThemeProvider>
-          <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab}>
-            <DashboardScreen />
-          </NavigationProvider>
-        </ThemeProvider>
+        <DataSourceProvider>
+          <ThemeProvider>
+            <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab}>
+              <DashboardScreen />
+            </NavigationProvider>
+          </ThemeProvider>
+        </DataSourceProvider>
         {/* In-App Payment Window Overlay */}
         <PaymentOverlay paymentWindow={paymentWindow} />
       </>

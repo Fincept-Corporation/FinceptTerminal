@@ -14,6 +14,7 @@ use sha2::{Sha256, Digest};
 mod data_sources;
 mod commands;
 mod utils;
+mod finscript;
 
 // MCP Server Process with communication channels
 struct MCPProcess {
@@ -37,6 +38,15 @@ struct SpawnResult {
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+// Cleanup workflow on app close (called from frontend)
+#[tauri::command]
+async fn cleanup_running_workflows() -> Result<(), String> {
+    println!("[Tauri] Cleaning up running workflows...");
+    // This is just a marker command - the actual cleanup happens in the frontend
+    // via workflowService.cleanupRunningWorkflows()
+    Ok(())
 }
 
 // Spawn an MCP server process with background stdout reader
@@ -379,6 +389,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            cleanup_running_workflows,
             spawn_mcp_server,
             send_mcp_request,
             send_mcp_notification,
@@ -917,6 +928,7 @@ pub fn run() {
             commands::jupyter::get_python_version,
             commands::jupyter::install_python_package,
             commands::jupyter::list_python_packages,
+            commands::finscript_cmd::execute_finscript,
             // Python Agent Commands
             commands::agents::list_available_agents,
             commands::agents::execute_python_agent,

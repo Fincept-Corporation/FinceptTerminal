@@ -35,7 +35,7 @@ export const CryptoWidget: React.FC<CryptoWidgetProps> = ({ id, onRemove }) => {
 
   useEffect(() => {
     loadQuotes();
-    const interval = setInterval(loadQuotes, 30000); // Refresh every 30 seconds
+    const interval = setInterval(loadQuotes, 10 * 60 * 1000); // Refresh every 10 minutes
     return () => clearInterval(interval);
   }, []);
 

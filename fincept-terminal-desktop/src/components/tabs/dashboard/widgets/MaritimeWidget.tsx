@@ -43,7 +43,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
         ...prev,
         active_vessels: prev.active_vessels + Math.floor(Math.random() * 10 - 5)
       }));
-    }, 5000);
+    }, 10 * 60 * 1000); // Refresh every 10 minutes
     return () => clearInterval(interval);
   }, []);
 

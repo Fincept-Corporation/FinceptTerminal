@@ -223,6 +223,212 @@ class LLMApiService {
     }
   }
 
+  // Gemini with function calling
+  private async callGeminiWithTools(
+    userMessage: string,
+    conversationHistory: ChatMessage[],
+    tools: Array<any>,
+    config: LLMConfig,
+    onStream?: StreamCallback,
+    onToolCall?: (toolName: string, args: any, result?: any) => void
+  ): Promise<LLMResponse> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${config.apiKey}`;
+
+    // Convert MCP tools to Gemini function format
+    const functionDeclarations = tools.map(tool => {
+      // Clean schema for Gemini - remove $schema and additionalProperties
+      const cleanSchema = tool.inputSchema ? { ...tool.inputSchema } : { type: 'object', properties: {} };
+      delete cleanSchema.$schema;
+      delete cleanSchema.additionalProperties;
+
+      return {
+        name: `${tool.serverId}__${tool.name}`,
+        description: tool.description || '',
+        parameters: cleanSchema
+      };
+    });
+
+    console.log('[MCP] Sending tools to Gemini:', functionDeclarations.length, 'tools');
+
+    // Convert messages to Gemini format
+    const systemPrompt = conversationHistory.find(m => m.role === 'system')?.content || config.systemPrompt || '';
+    const conversationMessages = conversationHistory.filter(m => m.role !== 'system');
+
+    const contents = [
+      ...conversationMessages.map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }]
+      })),
+      {
+        role: 'user',
+        parts: [{ text: userMessage }]
+      }
+    ];
+
+    try {
+      // First call - with tools
+      let response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents,
+          systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+          tools: [{ functionDeclarations }],
+          generationConfig: {
+            temperature: config.temperature,
+            maxOutputTokens: config.maxTokens
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
+      }
+
+      let data = await response.json();
+      const candidate = data.candidates?.[0];
+
+      // Track tool result content for fallback
+      let resultContent = '';
+
+      // Check if Gemini wants to call functions
+      const functionCall = candidate?.content?.parts?.find((part: any) => part.functionCall);
+
+      if (functionCall) {
+        console.log('[MCP] Gemini requested function call:', functionCall.functionCall.name);
+
+        const toolName = functionCall.functionCall.name;
+        const toolArgs = functionCall.functionCall.args || {};
+
+        // Notify UI
+        if (onToolCall) {
+          onToolCall(toolName, toolArgs);
+        }
+
+        // Execute tool
+        const { mcpManager } = await import('./mcpManager');
+        const [serverId, actualToolName] = toolName.includes('__')
+          ? toolName.split('__')
+          : [toolName, toolName];
+
+        let toolResult: any;
+        try {
+          toolResult = await mcpManager.callTool(serverId, actualToolName, toolArgs);
+
+          // Format result
+          if (toolResult.content && Array.isArray(toolResult.content)) {
+            resultContent = toolResult.content
+              .map((c: any) => {
+                if (c.text) return c.text;
+                if (c.data) return typeof c.data === 'string' ? c.data : JSON.stringify(c.data, null, 2);
+                return JSON.stringify(c, null, 2);
+              })
+              .join('\n\n');
+          } else if (toolResult.content) {
+            resultContent = typeof toolResult.content === 'string'
+              ? toolResult.content
+              : JSON.stringify(toolResult.content, null, 2);
+          } else {
+            resultContent = JSON.stringify(toolResult, null, 2);
+          }
+
+          // Notify UI of result
+          if (onToolCall) {
+            onToolCall(toolName, toolArgs, toolResult);
+          }
+
+          console.log('[MCP] Tool result:', resultContent);
+
+          // Second call with function response
+          contents.push({
+            role: 'model',
+            parts: [{ functionCall: functionCall.functionCall } as any]
+          });
+
+          contents.push({
+            role: 'user',
+            parts: [{
+              functionResponse: {
+                name: toolName,
+                response: { result: resultContent }
+              }
+            } as any]
+          });
+
+        } catch (error) {
+          console.error('[MCP] Tool execution error:', error);
+          contents.push({
+            role: 'user',
+            parts: [{
+              functionResponse: {
+                name: toolName,
+                response: { error: error instanceof Error ? error.message : 'Unknown error' }
+              }
+            } as any]
+          });
+        }
+
+        // Get final response
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            contents,
+            systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+            generationConfig: {
+              temperature: config.temperature,
+              maxOutputTokens: config.maxTokens
+            }
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
+        }
+
+        data = await response.json();
+      }
+
+      // Extract final content
+      let finalContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+      // If Gemini didn't generate text after tool call, return the tool result
+      if (!finalContent && resultContent) {
+        finalContent = resultContent;
+      }
+
+      console.log('[MCP] Gemini final response length:', finalContent.length);
+
+      // Signal completion to UI
+      if (onStream && finalContent) {
+        onStream(finalContent, false);
+        onStream('', true);
+      }
+
+      return {
+        content: finalContent,
+        usage: {
+          promptTokens: data.usageMetadata?.promptTokenCount || 0,
+          completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
+          totalTokens: data.usageMetadata?.totalTokenCount || 0
+        }
+      };
+
+    } catch (error) {
+      console.error('Gemini function calling error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
   // DeepSeek API (OpenAI-compatible)
   private async callDeepSeek(
     messages: ChatMessage[],
@@ -473,9 +679,11 @@ class LLMApiService {
         };
       }
 
-      // Only OpenAI and OpenRouter support function calling well
-      if (activeConfig.provider !== 'openai' && activeConfig.provider !== 'openrouter') {
-        // Fall back to regular chat for other providers
+      // OpenAI, OpenRouter, Gemini, and DeepSeek support function calling
+      const supportsTools = ['openai', 'openrouter', 'gemini', 'deepseek'].includes(activeConfig.provider);
+
+      if (!supportsTools) {
+        // Fall back to regular chat for other providers (Ollama, etc.)
         return this.chat(userMessage, conversationHistory, onStream);
       }
 
@@ -496,7 +704,12 @@ class LLMApiService {
         systemPrompt: globalSettings.system_prompt
       };
 
-      // Build messages
+      // Handle Gemini separately since it has different API format
+      if (activeConfig.provider === 'gemini') {
+        return this.callGeminiWithTools(userMessage, conversationHistory, tools, config, onStream, onToolCall);
+      }
+
+      // Build messages for OpenAI/OpenRouter/DeepSeek (all use OpenAI format)
       let messages: any[] = [
         { role: 'system', content: config.systemPrompt || 'You are a helpful assistant with access to tools. Use them when needed.' },
         ...conversationHistory.map(msg => ({ role: msg.role, content: msg.content })),
@@ -514,7 +727,22 @@ class LLMApiService {
         }
       }));
 
-      const url = `${config.baseUrl || 'https://api.openai.com/v1'}/chat/completions`;
+      console.log('[MCP] Sending tools to API:', functions.length, 'tools');
+      console.log('[MCP] Tool names:', functions.map(f => f.function.name));
+
+      // Determine base URL based on provider
+      let baseUrl = config.baseUrl;
+      if (!baseUrl) {
+        if (activeConfig.provider === 'deepseek') {
+          baseUrl = 'https://api.deepseek.com';
+        } else if (activeConfig.provider === 'openrouter') {
+          baseUrl = 'https://openrouter.ai/api/v1';
+        } else {
+          baseUrl = 'https://api.openai.com/v1';
+        }
+      }
+
+      const url = `${baseUrl}/chat/completions`;
 
       // First call - with tools
       let response = await fetch(url, {
@@ -547,6 +775,8 @@ class LLMApiService {
 
       // Check if AI wants to call tools
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        console.log('[MCP] AI requested tool calls:', assistantMessage.tool_calls.length);
+
         // Add assistant's tool call message to conversation
         messages.push(assistantMessage);
 
@@ -574,10 +804,23 @@ class LLMApiService {
 
             const toolResult = await mcpManager.callTool(serverId, actualToolName, toolArgs);
 
-            // Format result for OpenAI
-            const resultContent = toolResult.content
-              .map((c: any) => c.text || JSON.stringify(c.data || c))
-              .join('\n');
+            // Format result for OpenAI - Better formatting
+            let resultContent = '';
+            if (toolResult.content && Array.isArray(toolResult.content)) {
+              resultContent = toolResult.content
+                .map((c: any) => {
+                  if (c.text) return c.text;
+                  if (c.data) return typeof c.data === 'string' ? c.data : JSON.stringify(c.data, null, 2);
+                  return JSON.stringify(c, null, 2);
+                })
+                .join('\n\n');
+            } else if (toolResult.content) {
+              resultContent = typeof toolResult.content === 'string'
+                ? toolResult.content
+                : JSON.stringify(toolResult.content, null, 2);
+            } else {
+              resultContent = JSON.stringify(toolResult, null, 2);
+            }
 
             // Add tool result to conversation
             messages.push({
@@ -630,8 +873,12 @@ class LLMApiService {
         assistantMessage = data.choices[0].message;
       }
 
+      // Ensure content exists
+      const finalContent = assistantMessage.content || '';
+      console.log('[MCP] Final response length:', finalContent.length);
+
       return {
-        content: assistantMessage.content || '',
+        content: finalContent,
         usage: {
           promptTokens: data.usage?.prompt_tokens || 0,
           completionTokens: data.usage?.completion_tokens || 0,

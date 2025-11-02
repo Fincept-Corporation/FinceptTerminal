@@ -41,13 +41,25 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const response = categoryId
-        ? await ForumApiService.getPostsByCategory(categoryId, 'latest', limit)
-        : await ForumApiService.getTrendingPosts(limit, 'week');
+      // Get API credentials from session/localStorage
+      const apiKey = localStorage.getItem('fincept_api_key') || undefined;
+      const deviceId = localStorage.getItem('fincept_device_id') || undefined;
+
+      console.log('[ForumWidget] Loading posts with:', { categoryId, limit, apiKey: !!apiKey, deviceId: !!deviceId });
+
+      // If no categoryId is provided, default to category 1 (like ForumTab does)
+      // The backend requires a category ID, there is no "get all posts" endpoint
+      const targetCategoryId = categoryId || 1;
+
+      const response = await ForumApiService.getPostsByCategory(targetCategoryId, 'latest', limit, apiKey, deviceId);
+
+      console.log('[ForumWidget] Response:', response);
 
       if (response.success) {
         // Handle both response formats
         const postsData = (response.data as any)?.data?.posts || (response.data as any)?.posts || [];
+        console.log('[ForumWidget] Posts data:', postsData);
+
         const formattedPosts = postsData.map((post: any) => ({
           id: post.post_uuid,
           title: post.title,
@@ -57,11 +69,15 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
           replies: post.reply_count || 0,
           time: new Date(post.created_at).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' })
         }));
+
+        console.log('[ForumWidget] Formatted posts:', formattedPosts);
         setPosts(formattedPosts);
       } else {
-        setError(response.error || 'Failed to load forum posts');
+        console.error('[ForumWidget] Error response:', response);
+        setError(response.error || `HTTP ${response.status_code || 'error'}`);
       }
     } catch (err) {
+      console.error('[ForumWidget] Exception:', err);
       setError(err instanceof Error ? err.message : 'Failed to load forum posts');
     } finally {
       setLoading(false);
@@ -70,7 +86,7 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
 
   useEffect(() => {
     loadPosts();
-    const interval = setInterval(loadPosts, 2 * 60 * 1000); // Refresh every 2 minutes
+    const interval = setInterval(loadPosts, 10 * 60 * 1000); // Refresh every 10 minutes
     return () => clearInterval(interval);
   }, [categoryId, limit]);
 

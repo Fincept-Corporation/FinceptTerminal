@@ -536,14 +536,14 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             rowHeight={60}
             width={containerWidth - 16}
             onLayoutChange={handleLayoutChange}
-            draggableHandle=".drag-handle"
+            draggableHandle=".widget-drag-handle"
             isDraggable={true}
             isResizable={true}
             compactType="vertical"
             preventCollision={false}
           >
             {widgets.map(widget => (
-              <div key={widget.id} className="drag-handle">
+              <div key={widget.id}>
                 {renderWidget(widget)}
               </div>
             ))}

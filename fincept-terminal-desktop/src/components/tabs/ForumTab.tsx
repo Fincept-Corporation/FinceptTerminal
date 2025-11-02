@@ -71,7 +71,7 @@ const ForumTab: React.FC = () => {
   const [profileEdit, setProfileEdit] = useState({
     display_name: '',
     bio: '',
-    avatar_color: 'colors.primary',
+    avatar_color: colors.primary,
     signature: ''
   });
 
@@ -82,18 +82,18 @@ const ForumTab: React.FC = () => {
   const [trendingTopics, setTrendingTopics] = useState<Array<{ topic: string; mentions: number; sentiment: string; change: string }>>([]);
   const [recentActivity, setRecentActivity] = useState<Array<{ user: string; action: string; target: string; time: string }>>([]);
 
-  // Bloomberg color scheme
-  const BLOOMBERG_ORANGE = 'colors.primary';
-  const BLOOMBERG_WHITE = 'colors.text';
-  const BLOOMBERG_RED = 'colors.alert';
-  const BLOOMBERG_GREEN = 'colors.secondary';
-  const BLOOMBERG_YELLOW = 'colors.warning';
-  const BLOOMBERG_GRAY = 'colors.textMuted';
-  const BLOOMBERG_BLUE = 'colors.info';
-  const BLOOMBERG_PURPLE = '#C864FF';
-  const BLOOMBERG_CYAN = 'colors.accent';
-  const BLOOMBERG_DARK_BG = 'colors.background';
-  const BLOOMBERG_PANEL_BG = 'colors.panel';
+  // Bloomberg color scheme - use actual theme colors
+  const BLOOMBERG_ORANGE = colors.primary;
+  const BLOOMBERG_WHITE = colors.text;
+  const BLOOMBERG_RED = colors.alert;
+  const BLOOMBERG_GREEN = colors.secondary;
+  const BLOOMBERG_YELLOW = colors.warning;
+  const BLOOMBERG_GRAY = colors.textMuted;
+  const BLOOMBERG_BLUE = colors.info;
+  const BLOOMBERG_PURPLE = colors.purple;
+  const BLOOMBERG_CYAN = colors.accent;
+  const BLOOMBERG_DARK_BG = colors.background;
+  const BLOOMBERG_PANEL_BG = colors.panel;
 
   // Top contributors - static for now
   const topContributors: ForumUser[] = [
@@ -178,7 +178,8 @@ const ForumTab: React.FC = () => {
         setCategories(formattedCategories);
       }
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      // Silently fail - backend may not be available
+      console.debug('Forum API not available (categories)');
     }
   };
 
@@ -209,7 +210,8 @@ const ForumTab: React.FC = () => {
         setForumPosts(formattedPosts);
       }
     } catch (error) {
-      console.error('Error fetching posts:', error);
+      // Silently fail - backend may not be available
+      console.debug('Forum API not available (posts)');
     } finally {
       setIsLoading(false);
     }
@@ -228,7 +230,8 @@ const ForumTab: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('Error fetching forum stats:', error);
+      // Silently fail - backend may not be available
+      console.debug('Forum API not available (stats)');
     }
   };
 
@@ -302,7 +305,8 @@ const ForumTab: React.FC = () => {
         setPostComments(formattedComments);
       }
     } catch (error) {
-      console.error('Error fetching post details:', error);
+      // Silently fail - backend may not be available
+      console.debug('Forum API not available (post details)');
     }
   };
 
@@ -419,7 +423,7 @@ const ForumTab: React.FC = () => {
         setProfileEdit({
           display_name: profile.display_name || '',
           bio: profile.bio || '',
-          avatar_color: profile.avatar_color || 'colors.primary',
+          avatar_color: profile.avatar_color || colors.primary,
           signature: profile.signature || ''
         });
         setShowProfile(true);

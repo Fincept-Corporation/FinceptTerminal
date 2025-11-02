@@ -78,16 +78,39 @@ export default function CodeEditorTab() {
       content: `// FinScript - Financial Analysis Language
 // Example: EMA/WMA Crossover Strategy
 
-if ema(AAPL, 21) > wma(AAPL, 50) {
-    buy "EMA 21 crosses WMA 50 - Buy Signal"
+// Calculate technical indicators
+ema_fast = ema(AAPL, 21)
+wma_slow = wma(AAPL, 50)
+rsi_value = rsi(AAPL, 14)
+
+// Get last values for comparison
+ema_current = last(ema_fast)
+wma_current = last(wma_slow)
+rsi_current = last(rsi_value)
+
+// EMA/WMA Crossover Strategy
+if ema_current > wma_current {
+    buy "EMA 21 crosses above WMA 50 - Bullish Signal"
 }
 
-if ema(AAPL, 21) < wma(AAPL, 50) {
-    sell "EMA 21 crosses below WMA 50 - Sell Signal"
+if ema_current < wma_current {
+    sell "EMA 21 crosses below WMA 50 - Bearish Signal"
 }
 
+// RSI Overbought/Oversold Strategy
+if rsi_current > 70 {
+    sell "RSI Overbought - Consider Selling"
+}
+
+if rsi_current < 30 {
+    buy "RSI Oversold - Consider Buying"
+}
+
+// Plot indicators
 plot ema(AAPL, 7), "EMA (7)"
-plot wma(AAPL, 21), "WMA (21)"
+plot ema_fast, "EMA (21)"
+plot wma_slow, "WMA (50)"
+plot rsi_value, "RSI (14)"
 plot_candlestick AAPL, "Apple Stock Chart"`,
       language: 'finscript',
       unsaved: false
@@ -351,33 +374,74 @@ plot_candlestick AAPL, "Apple Stock Chart"`,
       timestamp: new Date()
     }]);
 
-    // Simulate execution (in production, this would call the Rust backend)
-    setTimeout(() => {
-      const mockOutput = `
+    try {
+      const result = await invoke<{
+        success: boolean;
+        output: string;
+        signals: Array<{
+          signal_type: string;
+          message: string;
+          timestamp: string;
+          price?: number;
+        }>;
+        plots: Array<{
+          plot_type: string;
+          label: string;
+          data: Array<any>;
+        }>;
+        errors: string[];
+        execution_time_ms: number;
+      }>('execute_finscript', {
+        code: activeFile.content
+      });
+
+      let outputText = `
 === FinScript Execution Results ===
 File: ${activeFile.name}
-Status: Completed Successfully
+Status: ${result.success ? 'Completed Successfully' : 'Failed'}
+Execution Time: ${result.execution_time_ms}ms
 
-Fetching data for AAPL...
-Calculating EMA(7), EMA(21), WMA(21), WMA(50)...
+${result.output}
 
-Signal Generated:
-  ✓ BUY: EMA 21 crosses WMA 50 - Buy Signal
-
-Chart Generated:
-  ✓ Candlestick Chart: Apple Stock Chart
-  ✓ Plot: EMA (7) - Current: 184.52
-  ✓ Plot: WMA (21) - Current: 182.34
-
-Execution Time: 1.24s
-Memory Used: 2.4 MB
 `;
+
+      if (result.signals.length > 0) {
+        outputText += `\nSignals Generated:\n`;
+        result.signals.forEach(signal => {
+          const icon = signal.signal_type === 'Buy' ? '✓ BUY' : '✗ SELL';
+          outputText += `  ${icon}: ${signal.message}\n`;
+        });
+      }
+
+      if (result.plots.length > 0) {
+        outputText += `\nPlots Generated:\n`;
+        result.plots.forEach(plot => {
+          outputText += `  ✓ ${plot.plot_type}: ${plot.label} (${plot.data.length} data points)\n`;
+        });
+      }
+
+      if (result.errors.length > 0) {
+        outputText += `\nErrors:\n`;
+        result.errors.forEach(error => {
+          outputText += `  ✗ ${error}\n`;
+        });
+      }
+
       setOutput([...output, {
-        output: mockOutput,
+        output: outputText,
+        error: result.errors.length > 0 ? result.errors.join('\n') : undefined,
+        timestamp: new Date()
+      }]);
+
+      setIsRunning(false);
+    } catch (error) {
+      setOutput([...output, {
+        output: `Execution failed: ${error}`,
+        error: String(error),
         timestamp: new Date()
       }]);
       setIsRunning(false);
-    }, 1500);
+    }
   };
 
   const runCode = () => {
@@ -440,6 +504,37 @@ Memory Used: 2.4 MB
       case 'javascript': return C.YELLOW;
       default: return C.GRAY;
     }
+  };
+
+  const highlightFinScript = (code: string) => {
+    const keywords = ['if', 'else', 'buy', 'sell', 'plot', 'plot_candlestick', 'plot_bar', 'plot_area'];
+    const functions = ['ema', 'sma', 'wma', 'rsi', 'macd', 'last', 'high', 'low', 'open', 'close', 'volume'];
+    const operators = ['>', '<', '>=', '<=', '==', '!=', '&&', '||', '+', '-', '*', '/'];
+
+    let highlighted = code;
+
+    // Highlight comments
+    highlighted = highlighted.replace(/(\/\/.*$)/gm, '<span style="color: #787878; font-style: italic;">$1</span>');
+
+    // Highlight strings
+    highlighted = highlighted.replace(/"([^"]*)"/g, '<span style="color: #98c379;">\"$1\"</span>');
+
+    // Highlight numbers
+    highlighted = highlighted.replace(/\b(\d+\.?\d*)\b/g, '<span style="color: #d19a66;">$1</span>');
+
+    // Highlight keywords
+    keywords.forEach(keyword => {
+      const regex = new RegExp(`\\b(${keyword})\\b`, 'g');
+      highlighted = highlighted.replace(regex, `<span style="color: ${C.ORANGE}; font-weight: bold;">$1</span>`);
+    });
+
+    // Highlight functions
+    functions.forEach(func => {
+      const regex = new RegExp(`\\b(${func})(?=\\()`, 'g');
+      highlighted = highlighted.replace(regex, `<span style="color: ${C.CYAN};">$1</span>`);
+    });
+
+    return highlighted;
   };
 
   // Jupyter Notebook Functions

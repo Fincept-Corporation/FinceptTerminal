@@ -39,7 +39,7 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
 
   useEffect(() => {
     loadQuotes();
-    const interval = setInterval(loadQuotes, 60000); // Refresh every minute
+    const interval = setInterval(loadQuotes, 10 * 60 * 1000); // Refresh every 10 minutes
     return () => clearInterval(interval);
   }, [tickers.join(',')]);
 

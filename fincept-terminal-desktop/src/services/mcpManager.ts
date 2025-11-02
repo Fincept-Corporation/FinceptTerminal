@@ -214,11 +214,15 @@ class MCPManager {
     const serversWithStats = await Promise.all(
       servers.map(async (server) => {
         const stats = await sqliteService.getMCPServerStats(server.id);
+        // Check actual status by verifying client exists and is connected
+        const client = this.clients.get(server.id);
+        const actualStatus = client && client.isConnected() ? 'running' : 'stopped';
+
         return {
           ...server,
           args: JSON.parse(server.args),
           env: server.env ? JSON.parse(server.env) : undefined,
-          status: (server.status as 'running' | 'stopped' | 'error'),
+          status: actualStatus as 'running' | 'stopped' | 'error',
           toolCount: stats.toolCount,
           callsToday: stats.callsToday,
           lastUsed: stats.lastUsed || undefined

@@ -44,7 +44,7 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
 
   useEffect(() => {
     loadNews();
-    const interval = setInterval(loadNews, 5 * 60 * 1000); // Refresh every 5 minutes
+    const interval = setInterval(loadNews, 10 * 60 * 1000); // Refresh every 10 minutes
     return () => clearInterval(interval);
   }, [category, limit]);
 

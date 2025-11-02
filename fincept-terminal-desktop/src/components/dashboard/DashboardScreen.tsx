@@ -137,17 +137,28 @@ export default function FinxeptTerminal() {
     document.documentElement.style.overflow = 'hidden';
     document.documentElement.style.overscrollBehavior = 'none';
 
-    // Initialize database on app start
+    // Initialize database and MCP servers on app start
     (async () => {
       try {
+        // Initialize database first
         const { sqliteService } = await import('@/services/sqliteService');
         if (!sqliteService.isReady()) {
-          console.log('Initializing database on app start...');
+          console.log('[App] Initializing database on app start...');
           await sqliteService.initialize();
-          console.log('Database initialized successfully');
+          console.log('[App] Database initialized successfully');
+        }
+
+        // Auto-start MCP servers that have auto_start enabled
+        try {
+          const { mcpManager } = await import('@/services/mcpManager');
+          console.log('[App] Starting MCP auto-start servers...');
+          await mcpManager.startAutoStartServers();
+          console.log('[App] MCP servers auto-started successfully');
+        } catch (mcpError) {
+          console.warn('[App] MCP auto-start failed (this is OK if no servers are configured):', mcpError);
         }
       } catch (error) {
-        console.error('Failed to initialize database on app start:', error);
+        console.error('[App] Failed to initialize on app start:', error);
       }
     })();
 

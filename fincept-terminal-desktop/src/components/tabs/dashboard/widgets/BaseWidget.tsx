@@ -50,14 +50,20 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
         minHeight: '28px',
         flexShrink: 0
       }}>
-        <div style={{
-          color: headerColor,
-          fontSize: '11px',
-          fontWeight: 'bold',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}>
+        <div
+          className="widget-drag-handle"
+          style={{
+            color: headerColor,
+            fontSize: '11px',
+            fontWeight: 'bold',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            cursor: 'move',
+            flex: 1,
+            userSelect: 'none'
+          }}
+        >
           {title}
         </div>
         <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>

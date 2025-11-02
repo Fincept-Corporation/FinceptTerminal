@@ -393,6 +393,22 @@ class SQLiteService {
       )
     `);
 
+    // Workflows table
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS workflows (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        status TEXT CHECK(status IN ('draft', 'running', 'completed', 'failed')),
+        nodes TEXT NOT NULL,
+        edges TEXT NOT NULL,
+        results TEXT,
+        created_at INTEGER,
+        updated_at INTEGER,
+        executed_at INTEGER
+      )
+    `);
+
     // Create indexes
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_credentials_service ON credentials(service_name)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category)`);
@@ -415,6 +431,8 @@ class SQLiteService {
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_data_sources_type ON data_sources(type)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_data_sources_provider ON data_sources(provider)`);
     await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_data_sources_enabled ON data_sources(enabled)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_workflows_status ON workflows(status)`);
+    await this.db.execute(`CREATE INDEX IF NOT EXISTS idx_workflows_updated ON workflows(updated_at DESC)`);
   }
 
   private async seedDefaultSettings(): Promise<void> {
@@ -1038,11 +1056,11 @@ class SQLiteService {
     // Delete existing tools for this server
     await this.db.execute('DELETE FROM mcp_tools WHERE server_id = $1', [serverId]);
 
-    // Insert new tools
+    // Insert new tools (use INSERT OR REPLACE to handle React Strict Mode double mounting)
     for (const tool of tools) {
       const toolId = `${serverId}__${tool.name}`;
       await this.db.execute(
-        `INSERT INTO mcp_tools (id, server_id, name, description, input_schema)
+        `INSERT OR REPLACE INTO mcp_tools (id, server_id, name, description, input_schema)
          VALUES ($1, $2, $3, $4, $5)`,
         [toolId, serverId, tool.name, tool.description || '', JSON.stringify(tool.inputSchema)]
       );
@@ -1644,6 +1662,129 @@ class SQLiteService {
       ...s,
       enabled: s.enabled === 1
     }));
+  }
+
+  // ==================== WORKFLOW MANAGEMENT ====================
+
+  /**
+   * Save workflow
+   */
+  async saveWorkflow(workflow: {
+    id: string;
+    name: string;
+    description?: string;
+    status: string;
+    nodes: any[];
+    edges: any[];
+    results?: any;
+    created_at: number;
+    updated_at: number;
+    executed_at?: number;
+  }): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execute(
+      `INSERT OR REPLACE INTO workflows (id, name, description, status, nodes, edges, results, created_at, updated_at, executed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [
+        workflow.id,
+        workflow.name,
+        workflow.description || null,
+        workflow.status,
+        JSON.stringify(workflow.nodes),
+        JSON.stringify(workflow.edges),
+        workflow.results ? JSON.stringify(workflow.results) : null,
+        workflow.created_at,
+        workflow.updated_at,
+        workflow.executed_at || null
+      ]
+    );
+  }
+
+  /**
+   * Get workflows with optional status filter
+   */
+  async getWorkflows(status?: string): Promise<Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    status: string;
+    nodes: any[];
+    edges: any[];
+    results: any;
+    created_at: number;
+    updated_at: number;
+    executed_at: number | null;
+  }>> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const sql = status
+      ? 'SELECT * FROM workflows WHERE status = $1 ORDER BY updated_at DESC'
+      : 'SELECT * FROM workflows ORDER BY updated_at DESC';
+
+    const params = status ? [status] : [];
+
+    const workflows = await this.db.select<Array<any>>(sql, params);
+
+    return workflows.map(w => ({
+      ...w,
+      nodes: JSON.parse(w.nodes),
+      edges: JSON.parse(w.edges),
+      results: w.results ? JSON.parse(w.results) : null
+    }));
+  }
+
+  /**
+   * Get single workflow by ID
+   */
+  async getWorkflow(id: string): Promise<{
+    id: string;
+    name: string;
+    description: string | null;
+    status: string;
+    nodes: any[];
+    edges: any[];
+    results: any;
+    created_at: number;
+    updated_at: number;
+    executed_at: number | null;
+  } | null> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const workflows = await this.db.select<Array<any>>(
+      'SELECT * FROM workflows WHERE id = $1',
+      [id]
+    );
+
+    if (workflows.length === 0) return null;
+
+    return {
+      ...workflows[0],
+      nodes: JSON.parse(workflows[0].nodes),
+      edges: JSON.parse(workflows[0].edges),
+      results: workflows[0].results ? JSON.parse(workflows[0].results) : null
+    };
+  }
+
+  /**
+   * Update workflow status and results
+   */
+  async updateWorkflowStatus(id: string, status: string, results?: any): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execute(
+      `UPDATE workflows SET status = $1, results = $2, updated_at = $3 WHERE id = $4`,
+      [status, results ? JSON.stringify(results) : null, Date.now(), id]
+    );
+  }
+
+  /**
+   * Delete workflow
+   */
+  async deleteWorkflow(id: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execute('DELETE FROM workflows WHERE id = $1', [id]);
   }
 }
 
