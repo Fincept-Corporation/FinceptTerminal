@@ -31,11 +31,16 @@ const MCPTab: React.FC = () => {
   useEffect(() => {
     const initializeServers = async () => {
       try {
-        await mcpManager.startAutoStartServers();
+        // Ensure database is initialized first
+        await sqliteService.initialize();
+
+        // Don't auto-start here - DashboardScreen already handles it
+        // Just load the data
+        await loadData();
       } catch (error) {
-        console.error('Failed to auto-start servers:', error);
+        console.error('Failed to initialize MCP tab:', error);
+        setStatusMessage('Initialization failed');
       }
-      loadData();
     };
 
     initializeServers();

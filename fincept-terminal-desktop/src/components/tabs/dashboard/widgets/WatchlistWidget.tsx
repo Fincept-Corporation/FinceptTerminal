@@ -47,7 +47,7 @@ export const WatchlistWidget: React.FC<WatchlistWidgetProps> = ({
 
   useEffect(() => {
     loadStocks();
-    const interval = setInterval(loadStocks, 60000); // Refresh every minute
+    const interval = setInterval(loadStocks, 10 * 60 * 1000); // Refresh every 10 minutes
     return () => clearInterval(interval);
   }, [watchlistId]);
 

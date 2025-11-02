@@ -18,13 +18,21 @@ import {
 } from 'lucide-react';
 import { DATA_SOURCE_CONFIGS } from './dataSourceConfigs';
 import { DataSourceConfig, DataSourceConnection, DataSourceCategory } from './types';
-import { testConnection, hasAdapter } from './adapters';
+import { hasAdapter } from './adapters';
+import { useDataSources } from '../../../contexts/DataSourceContext';
 
 export default function DataSourcesTab() {
+  const {
+    connections,
+    addConnection,
+    updateConnection,
+    deleteConnection,
+    testConnection,
+  } = useDataSources();
+
   const [view, setView] = useState<'gallery' | 'connections'>('gallery');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<DataSourceCategory | 'all'>('all');
-  const [connections, setConnections] = useState<DataSourceConnection[]>([]);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [selectedDataSource, setSelectedDataSource] = useState<DataSourceConfig | null>(null);
   const [configFormData, setConfigFormData] = useState<Record<string, any>>({});
@@ -92,18 +100,12 @@ export default function DataSourcesTab() {
 
     if (editingConnection) {
       // Update existing connection
-      const updatedConnection: DataSourceConnection = {
-        ...editingConnection,
+      updateConnection(editingConnection.id, {
         name: configFormData.name || editingConnection.name,
         config: { ...configFormData },
-        updatedAt: new Date().toISOString(),
-      };
+      });
 
-      setConnections(
-        connections.map((c) => (c.id === editingConnection.id ? updatedConnection : c))
-      );
-
-      console.log('Updated connection:', updatedConnection);
+      console.log('Updated connection:', editingConnection.id);
     } else {
       // Create new connection
       const newConnection: DataSourceConnection = {
@@ -117,7 +119,7 @@ export default function DataSourcesTab() {
         updatedAt: new Date().toISOString(),
       };
 
-      setConnections([...connections, newConnection]);
+      addConnection(newConnection);
       console.log('Saved connection:', newConnection);
     }
 
@@ -126,14 +128,11 @@ export default function DataSourcesTab() {
     setConfigFormData({});
     setEditingConnection(null);
     setView('connections');
-
-    // TODO: Save to DuckDB
   };
 
   // Handle delete connection
-  const handleDeleteConnection = (id: string) => {
-    setConnections(connections.filter((c) => c.id !== id));
-    // TODO: Delete from DuckDB
+  const handleDeleteConnectionClick = (id: string) => {
+    deleteConnection(id);
   };
 
   // Handle test connection
@@ -141,48 +140,13 @@ export default function DataSourcesTab() {
     console.log('Testing connection:', connection);
 
     // Update status to testing
-    setConnections(connections.map((c) =>
-      c.id === connection.id
-        ? { ...c, status: 'testing' as const, lastTested: new Date().toISOString() }
-        : c
-    ));
+    updateConnection(connection.id, {
+      status: 'testing',
+      lastTested: new Date().toISOString(),
+    });
 
-    try {
-      // Use the real adapter to test the connection
-      const result = await testConnection(connection);
-
-      // Update connection with test result
-      setConnections(connections.map((c) =>
-        c.id === connection.id
-          ? {
-              ...c,
-              status: result.success ? ('connected' as const) : ('error' as const),
-              errorMessage: result.success ? undefined : result.message,
-              lastTested: new Date().toISOString(),
-            }
-          : c
-      ));
-
-      // Log the result
-      if (result.success) {
-        console.log('Connection test successful:', result);
-      } else {
-        console.error('Connection test failed:', result.message);
-      }
-    } catch (error) {
-      // Handle unexpected errors
-      console.error('Connection test error:', error);
-      setConnections(connections.map((c) =>
-        c.id === connection.id
-          ? {
-              ...c,
-              status: 'error' as const,
-              errorMessage: error instanceof Error ? error.message : 'Unknown error occurred',
-              lastTested: new Date().toISOString(),
-            }
-          : c
-      ));
-    }
+    // Test connection (context will handle status updates)
+    await testConnection(connection);
   };
 
   return (
@@ -583,7 +547,7 @@ export default function DataSourcesTab() {
                           EDIT
                         </button>
                         <button
-                          onClick={() => handleDeleteConnection(connection.id)}
+                          onClick={() => handleDeleteConnectionClick(connection.id)}
                           style={{
                             backgroundColor: 'transparent',
                             color: '#ef4444',

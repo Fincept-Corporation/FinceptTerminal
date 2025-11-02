@@ -53,6 +53,7 @@ pub mod sentinelhub;
 
 // Code editor and Jupyter notebook
 pub mod jupyter;
+pub mod finscript_cmd;
 
 // Python Agents
 pub mod agents;

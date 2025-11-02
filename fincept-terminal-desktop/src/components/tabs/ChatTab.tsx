@@ -26,6 +26,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
   const [currentProvider, setCurrentProvider] = useState('ollama');
   const [streamingContent, setStreamingContent] = useState('');
   const [statistics, setStatistics] = useState({ totalSessions: 0, totalMessages: 0, totalTokens: 0 });
+  const [mcpToolsCount, setMcpToolsCount] = useState(0);
 
   // Rename and search functionality
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
@@ -58,6 +59,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         await loadSessions();
         await loadStatistics();
         await loadLLMProvider();
+        await loadMCPToolsCount();
 
         setSystemStatus('STATUS: READY');
       } catch (error) {
@@ -79,6 +81,15 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Periodically check for MCP tools updates
+  useEffect(() => {
+    const mcpCheckInterval = setInterval(() => {
+      loadMCPToolsCount();
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(mcpCheckInterval);
   }, []);
 
   // Auto-scroll to bottom
@@ -126,6 +137,25 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
       }
     } catch (error) {
       console.error('Failed to load LLM provider:', error);
+    }
+  };
+
+  const loadMCPToolsCount = async (retryCount = 0, maxRetries = 5) => {
+    try {
+      const { mcpToolService } = await import('../../services/mcpToolService');
+      const tools = await mcpToolService.getAllTools();
+      setMcpToolsCount(tools.length);
+      console.log(`[Chat] MCP Tools available: ${tools.length}`);
+
+      // If we got 0 tools and haven't exceeded max retries, try again after a delay
+      if (tools.length === 0 && retryCount < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff, max 10s
+        console.log(`[Chat] No tools found, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})...`);
+        setTimeout(() => loadMCPToolsCount(retryCount + 1, maxRetries), delay);
+      }
+    } catch (error) {
+      console.log('[Chat] MCP not available:', error);
+      setMcpToolsCount(0);
     }
   };
 
@@ -340,11 +370,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
               }
             },
             (toolName: string, args: any, result?: any) => {
-              // Tool call callback
+              // Tool call callback - don't show in UI, only in console
               if (!result) {
-                setSystemStatus(`STATUS: Calling tool ${toolName}...`);
+                console.log(`[Tool Call] ${toolName}`, args);
+                setSystemStatus(`STATUS: Fetching data...`);
               } else {
-                setSystemStatus(`STATUS: Tool ${toolName} completed`);
+                console.log(`[Tool Result] ${toolName}`, result);
+                setSystemStatus(`STATUS: Processing response...`);
               }
             }
           )
@@ -1001,8 +1033,17 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
           <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
             Temp: {llmConfigService.getActiveConfig().temperature}
           </div>
-          <div style={{ color: colors.secondary, fontSize: '9px' }}>
+          <div style={{ color: colors.secondary, fontSize: '9px', marginBottom: '2px' }}>
             Streaming: Enabled
+          </div>
+          <div style={{
+            color: mcpToolsCount > 0 ? colors.secondary : colors.textMuted,
+            fontSize: '9px',
+            marginTop: '6px',
+            paddingTop: '6px',
+            borderTop: `1px solid ${colors.textMuted}`
+          }}>
+            MCP Tools: {mcpToolsCount > 0 ? `${mcpToolsCount} Available ✓` : 'None'}
           </div>
         </div>
       </div>
