@@ -1,46 +1,18 @@
-# Terminal Fincept ✨
+# Terminal Fincept
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
 [Anglais](README.md)\|[Espagnol](docs/translations/README.es.md)\|[Chinois](docs/translations/README.zh-CN.md)\|[japonais](docs/translations/README.ja.md)\|[Français](docs/translations/README.fr.md)\|[Allemand](docs/translations/README.de.md)\|[coréen](docs/translations/README.ko.md)\|[hindi](docs/translations/README.hi.md)
 
-### _Plateforme d'analyse financière professionnelle_
+### **Votre réflexion est la seule limite. Les données ne le sont pas.**
 
-**Des informations de niveau Bloomberg pour tout le monde. Source ouverte. Multiplateforme.**
+Plateforme de renseignement financier de pointe avec analyses de niveau CFA, automatisation de l'IA et connectivité de données illimitée.
 
-[📥 Télécharger](#-getting-started)•[✨ Caractéristiques](#-features)•[📸 Captures d'écran](#-platform-preview)•[🤝 Contribuer](#-contributing)
-
-<!-- DOWNLOAD_SECTION_START -->
-
-## 📥 Téléchargez la dernière version
-
-**Version:**`v3.0.0`\|**Commettre:**`d834bb1`\|**Libéré:**2025-10-23 12:14 UTC
-
-### 🎯 Téléchargements directs - Cliquez pour télécharger immédiatement !
-
-| Plate-forme    | Architecture           | Téléchargement direct                                                                                                                                             |
-| -------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🍎**macOS**    | Apple Silicium (ARM64) | [⬇️**Télécharger .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
-| 🍎**macOS**    | Intel (x64)            | [⬇️**Télécharger .dmg**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
-| 🐧**Linux**    | x64 (AppImage)         | [⬇️**Télécharger .AppImage**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧**Linux**    | x64 (Debian)           | [⬇️**Télécharger .deb**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
-| 🪟**Fenêtres** | hshch                  | [⬇️**Télécharger .msi**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
-
-> ✨**Téléchargements en un clic !**Le téléchargement de ces liens commencera immédiatement – ​​aucune connexion GitHub requise !
-
-### 📊 Statut et informations de la construction
-
-![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)![Latest Release](https://img.shields.io/github/v/release/Fincept-Corporation/FinceptTerminal?include_prereleases&label=Latest%20Build)![Downloads](https://img.shields.io/github/downloads/Fincept-Corporation/FinceptTerminal/total?label=Total%20Downloads)
-
-**Page de sortie :**[Afficher toutes les versions et journaux des modifications](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
-
-* * *
-
-<!-- DOWNLOAD_SECTION_END -->
+[📥 Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 Documents](docs/)•[💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -48,286 +20,190 @@
 
 * * *
 
-## 🎯 Qu'est-ce que Fincept Terminal ?
+## 🎯 Ce qui nous distingue
 
-**Terminal Fincept**est un terminal financier multiplateforme moderne construit avec**Épreuves**,**Réagir**, et**Manuscrit**. Il propose des outils d'analyse financière de niveau institutionnel aux investisseurs particuliers et aux traders, entièrement gratuits et open source.
+**Terminal Fincept**est une plateforme financière open source conçue pour ceux qui refusent d'être limités par les logiciels traditionnels. Nous sommes en compétition sur**profondeur d'analyse**et**accessibilité des données**– pas sur les informations privilégiées ou les flux exclusifs.
 
-Inspiré par Bloomberg et Refinitiv, Fincept Terminal fournit des données de marché en temps réel, des analyses avancées, des informations basées sur l'IA et une interface professionnelle, le tout sans le prix d'une entreprise.
-
-### 🌟 Pourquoi choisir Fincept Terminal ?
-
-| Plateformes traditionnelles    | Terminal Fincept                  |
-| ------------------------------ | --------------------------------- |
-| 💸 20 000 $+ par an            | 🆓**Gratuit et open source**      |
-| 🏢 Entreprise uniquement       | 👤**Accessible à tous**           |
-| 🔒 Verrouillage du fournisseur | 💻**Bureau multiplateforme**      |
-| ⚙️ Personnalisation limitée    | 🎨**Entièrement personnalisable** |
-
-**Pile technologique :**Tauri (Rust) • React 19 • TypeScript • TailwindCSS
+| **Fonctionnalité**      | **Terminal Fincept**                                                                                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 📊**Analytique**        | Programme complet CFA niveaux 1, 2, 3 en Python • Modèles DCF • Optimisation du portefeuille • Mesures de risque (VaR, Sharpe)                        |
+| 🤖**AI Agents**         | Plus de 20 personnalités d'investisseurs (Buffett, Dalio, Graham) • Stratégies de hedge funds (Bridgewater, Citadel, Renaissance) • Support LLM local |
+| 🌐**Accès aux données** | Plus de 100 connecteurs (DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • Mappeur d'API personnalisé • Aucune restriction de données                   |
+| 🔗**Inter-domaine**     | Intégrer la chaîne d'approvisionnement → portefeuille • Géopolitique → actions • Maritime → macro • Vos données, à votre façon                        |
+| 🎨**Flux de travail**   | Éditeur de nœuds visuels • Agents Python • Outils MCP • Automatisation sans code                                                                      |
+| 🚢**Intelligence**      | Suivi maritime 3D • Surveillance par satellite • Cadres géopolitiques • Analyse des routes commerciales                                               |
+| 💰**Tarifs**            | 100 % gratuit et open source (licence MIT)                                                                                                            |
 
 * * *
 
-## 🚀 Pour commencer
-
-### **Option 1 : Télécharger depuis le Microsoft Store**🎉
-
-<div align="center">
-
-[![Get it from Microsoft Store](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
-
-**Installation la plus simple • Mises à jour automatiques • Windows 10/11**
-
-</div>
-
-### **Option 2 : Télécharger le programme d'installation**
-
-**Fenêtres :**
-
--   📦[Download MSI Installer](http://product.fincept.in/FinceptTerminalV2Alpha.msi)(Windows 10/11)
-
-**macOS et Linux :**
-
--   Des installateurs pré-construits seront bientôt disponibles.
-
-### **Option 3 : Construire à partir de la source**
-
-#### 🚀**Configuration rapide (automatisée)**
-
-**Pour Windows :**
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-
-# 2. Run setup script (as Administrator)
-setup.bat
-```
-
-**Pour Linux/macOS :**
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-
-# 2. Make script executable and run
-chmod +x setup.sh
-./setup.sh
-```
-
-Le script de configuration automatisé :
-
--   ✅ Installez Node.js LTS (v22.14.0)
--   ✅ Installer Rust (dernière version stable)
--   ✅ Installer les dépendances du projet
--   ✅ Configurez tout automatiquement
-
-#### ⚙️**Configuration manuelle**
-
-**Prérequis :**Node.js 18+, Rust 1.70+, Git
-
-```bash
-# Clone the repository
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-terminal-desktop
-
-# Install dependencies
-npm install
-
-# Run in development
-npm run tauri dev
-
-# Build for production
-npm run tauri build
-```
-
-* * *
-
-## ✨ Caractéristiques
+## 🚀 Capacités de base
 
 <table>
 <tr>
 <td width="50%">
 
-### 📊 Intelligence de marché
+### **📊 Analyses de niveau CFA**
 
-🌍 Couverture mondiale (actions, forex, crypto, matières premières)<br>📈 Données en temps réel et mises à jour en streaming<br>📰 Intégration d'actualités multi-sources<br>📉 Listes de surveillance personnalisées
+![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png)
 
-### 🧠 Analyse basée sur l'IA
+**Gestion de portefeuille**
 
-🤖 Interface de discussion GenAI<br>📊 Analyse des sentiments en temps réel<br>💡 Informations et recommandations basées sur l'IA<br>🎯 Reconnaissance automatisée des formes
+-   Ratio de Sharpe, VaR (95%), prélèvement maximum
+-   Optimisation du portefeuille (max Sharpe)
+-   Stratégies d'allocation multi-actifs
+
+**Évaluation des actions**
+
+-   Modèles DCF (FCFF, FCFE)
+-   Modèles de remise de dividendes
+-   Multiples et revenus résiduels
+
+**Produits dérivés et risques**
+
+-   Prix ​​des options et Grecs
+-   Stratégies de couverture
+-   Analyse avancée des risques
 
 </td>
 <td width="50%">
 
-### 📈 Outils professionnels
+### **🤖 Automatisation basée sur l'IA**
 
-📊 Cartographie avancée (plus de 50 indicateurs)<br>💼 Finances et recherche de l'entreprise<br>📋 Suivi de portefeuille multi-comptes<br>⚡ Stratégie de backtesting<br>🔔 Prix personnalisés et alertes techniques
+![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png)
 
-### 🌐 Perspectives mondiales
+**Agents investisseurs**
 
-🏛️ Données économiques (taux, PIB, inflation)<br>🗺️ Routes commerciales et logistique maritime<br>🌍 Évaluation des risques géopolitiques
+-   Warren Buffett, Benjamin Graham, Seth Klarman
+-   Ray Dalio, George Soros, Peter Lynch
+-   Plus de 20 personnages d'investissement légendaires
+
+**Systèmes de hedge funds**
+
+-   Approche tous temps de Bridgewater
+-   Quant multi-stratégie Citadel
+-   Modèles statistiques de Renaissance Technologies
+
+**Générateur de flux de travail**
+
+-   Éditeur visuel ReactFlow
+-   Intégration de plus de 100 outils MCP
+-   Orchestration des agents Python
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### **🌐 Accès illimité aux données**
+
+![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png)
+
+**Plus de 100 connecteurs de données**
+
+-   **Bases de données**: PostgreSQL, MySQL, MongoDB, Redis, Snowflake
+-   **Données de marché**: Kraken, Polygon.io, Alpha Vantage, Yahoo Finance
+-   **Économie**: DBnomics (série 100M+), Banque mondiale, FMI, OCDE
+-   **Streaming**: Kafka, WebSocket, MQTT
+-   **Mappeur d'API personnalisé** : Connectez N'IMPORTE QUELLE API en quelques minutes
+
+</td>
+<td width="50%">
+
+### **🔬 Renseignement mondial**
+
+![Global Trade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png)
+
+**Maritime et chaîne d'approvisionnement**
+
+-   Globe 3D avec suivi de navire/avion/satellite
+-   Données AIS en temps réel • Routes commerciales • Trajectoires orbitales
+
+**Analyse géopolitique**
+
+-   Cadre du Grand Échiquier
+-   Modèles de prisonniers de géographie
+-   Suivi des banques centrales et des politiques
+
+**Recherche sur les actions**
+
+-   Analyse des actions mondiales • Visualisation des données financières
+-   Cibles des analystes • Indicateurs de valorisation
 
 </td>
 </tr>
 </table>
 
-**Expérience utilisateur :**Interface utilisateur de style Bloomberg • Raccourcis des touches de fonction (F1-F12) • Mode sombre • Flux de travail basé sur des onglets
-
 * * *
 
-## 🎬 Aperçu de la plateforme
+## 🎬 Plus de fonctionnalités
 
 <div align="center">
 
-|                                         Module de discussion                                        |                                                Tableau de bord                                                |
-| :-------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------: |
-| ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png) | ![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png) |
-|                                Assistant financier alimenté par l'IA                                |                                         Aperçu du marché en temps réel                                        |
-
-|                                                  Économie                                                 |                                        Recherche sur les actions                                        |
-| :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: |
-| ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) | ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) |
-|                                      Indicateurs économiques mondiaux                                     |                                       Analyse complète des stocks                                       |
-
-|                                                 Forum                                                 |                                                    Géopolitique                                                   |
-| :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
-| ![Forum](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Forum.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
-|                                       Discussions communautaires                                      |                                          Surveillance globale des risques                                         |
-
-|                                                  Commerce mondial                                                 |                                                  Marchés                                                  |
-| :---------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------: |
-| ![GlobalTrade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png) | ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png) |
-|                                          Flux commerciaux internationaux                                          |                                       Marchés multi-actifs en direct                                      |
-
-|                                                  Analyse commerciale                                                  |
-| :-------------------------------------------------------------------------------------------------------------------: |
-| ![TradeAnalysis](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/TradeAnalysis.png) |
-|                                            Analyses avancées et backtesting                                           |
+|                                             Analyse économique                                            |                                        Recherche sur les actions                                        |                                                Risque géopolitique                                                |
+| :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
+| ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) | ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
+|                                 PIB, inflation, taux, cycles de croissance                                |                             États financiers, DCF, couverture des analystes                             |                              Surveillance globale des risques et analyse de scénarios                             |
 
 </div>
 
 * * *
 
-## 🛣️ Feuille de route
+## 🔗 La fonctionnalité qui tue : l'intelligence inter-domaines
 
-### **Statut actuel**
+**Contrairement aux terminaux traditionnels où chaque module est isolé, Fincept Terminal vous permet d'intégrer des données dans TOUS les domaines :**
 
--   ✅ Cadre d'application Tauri
--   ✅ Système d'authentification (invité + enregistré)
--   ✅ Interface utilisateur de style Bloomberg
--   ✅ Intégration des paiements
--   ✅ Fonctionnalités du forum
--   🚧 Données de marché en temps réel
--   🚧 Cartographie avancée
--   🚧 AI assistant
+    Supply Chain Data → Portfolio Optimization
+    Shipping Volumes → GDP Forecasts → Equity Positions
+    Geopolitical Events → Currency Moves → Options Hedging
+    Maritime Intelligence → Commodity Prices → Macro Strategies
 
-### **À venir (T2 2025)**
+**Créez vos propres indicateurs propriétaires en combinant des sources de données disparates. Votre avantage concurrentiel.**
 
--   📊 Streaming complet des données de marché
--   📈 Graphiques interactifs avec plus de 50 indicateurs
--   🤖 Production AI features
--   💼 Gestion de portefeuille
--   🔔 Système d'alerte
+* * *
 
-### **Avenir**
+## 📥 Télécharger
 
--   🌍 Prise en charge multilingue
--   🏢 Intégrations de courtiers
--   📱 Application compagnon mobile
--   🔌 Système de plugins
--   🎨 Marché thématique
+**vz. 0,11**| Windows • MacOS • Linux
+
+[![Download](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge)](https://github.com/Fincept-Corporation/FinceptTerminal/releases)[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20App-blue?style=for-the-badge&logo=microsoft)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
+
+**Construire à partir de la source :**
+
+```bash
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal/fincept-terminal-desktop
+npm install && npm run tauri dev
+```
+
+* * *
+
+## 🛣️ Quelle est la prochaine étape
+
+**T1 2025 :**Streaming en temps réel amélioré • Backtesting avancé • Générateur de stratégies d'options • Plus de 50 agents IA**2025 :**Trading papier • Gestion multi-portefeuilles • Application mobile • Trading social**Avenir:**Fonctionnalités institutionnelles • API programmatique • Interface utilisateur de formation ML • Solutions en marque blanche
 
 * * *
 
 ## 🤝 Contribuer
 
-Nous apprécions les contributions des développeurs, des traders et des professionnels de la finance !
+Nous construisons ensemble l’avenir de l’analyse financière.
 
-**Façons de contribuer :**
+**Contribuer:**Nouveaux connecteurs de données • Agents IA • Modules d'analyse • Documentation • Traductions
 
--   🐛 Signaler les bugs et les problèmes
--   💡 Proposer de nouvelles fonctionnalités
--   🔧 Soumettre le code (React, Rust, TypeScript)
--   📚 Améliorer la documentation
--   🎨 Contributions à la conception
-
-**Liens rapides :**
-
--   [Lignes directrices de contribution](docs/CONTRIBUTING.md)
--   [Code de conduite](docs/CODE_OF_CONDUCT.md)
--   [Guide de démarrage](docs/GETTING_STARTED.md)
--   [Documentation architecturale](docs/ARCHITECTURE.md)
--   [Guide du contributeur Python](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
--   [Guide du contributeur TypeScript](docs/TYPESCRIPT_CONTRIBUTOR_GUIDE.md)
--   [Guide du contributeur Rust](docs/RUST_CONTRIBUTOR_GUIDE.md)
--   [Signaler un bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)
--   [Fonctionnalité de demande](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)
--   [Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
-
-**Configuration du développement :**
-
-```bash
-# Fork and clone
-git clone https://github.com/YOUR_USERNAME/FinceptTerminal.git
-cd FinceptTerminal
-
-# Automated setup (recommended for first-time contributors)
-# Windows: run setup.bat as Administrator
-# Linux/macOS: chmod +x setup.sh && ./setup.sh
-
-# Or manual setup
-cd fincept-terminal-desktop
-npm install
-npm run dev          # Start Vite dev server
-npm run tauri dev    # Start Tauri app
-```
+[Guide de contribution](docs/CONTRIBUTING.md)•[Signaler un bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[Fonctionnalité de demande](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 * * *
 
-## 🏗️ Structure du projet
+## 📜 Licence
 
-    fincept-terminal-desktop/
-    ├── src/
-    │   ├── components/      # React components (auth, dashboard, tabs, ui)
-    │   ├── contexts/        # React Context (Auth, Theme)
-    │   ├── services/        # API service layers
-    │   └── hooks/           # Custom React hooks
-    ├── src-tauri/
-    │   ├── src/             # Rust backend
-    │   ├── Cargo.toml       # Rust dependencies
-    │   └── tauri.conf.json  # Tauri config
-    └── package.json         # Node dependencies
+**MA Licence**• Gratuit pour toujours • Aucune restriction
+
+© 2024-2025 Fincept Corporation
 
 * * *
 
-## 📊 Détails techniques
+<div align="center">
 
-**Performance:**
-
--   Taille binaire : ~15 Mo
--   Mémoire : ~ 150 Mo (contre 500 Mo+ pour Electron)
--   Démarrage : &lt;2 secondes
-
-**Prise en charge de la plateforme :**
-
--   ✅ Windows 10/11 (x64, ARM64)
--   ✅ macOS 11+ (Intel, Apple Silicon)
--   ✅Linux (Ubuntu, Debian, Fedora)
-
-**Sécurité:**
-
--   Environnement bac à sable Tauri
--   Pas d'exécution Node.js
--   Stockage des identifiants cryptés
--   Appels d'API HTTPS uniquement
-
-* * *
-
-## 📈 Histoire des étoiles
-
-**⭐ STAR LE REPO ET PARTAGER LE PROJET ❤️**
+### **Votre réflexion est la seule limite. Les données ne le sont pas.**
 
 <div align="center">
 <a href="https://star-history.com/#Fincept-Corporation/FinceptTerminal&Date">
@@ -339,40 +215,8 @@ npm run tauri dev    # Start Tauri app
 </a>
 </div>
 
-* * *
+[![Email](https://img.shields.io/badge/Email-support@fincept.in-blue)](mailto:support@fincept.in)
 
-## 🌐 Connectez-vous avec nous
-
-<div align="center">
-
-[![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?style=for-the-badge&logo=github)](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)[![Email Support](https://img.shields.io/badge/Email-dev@fincept.in-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:dev@fincept.in)[![Contact Form](https://img.shields.io/badge/Contact-Form-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://forms.gle/DUsDHwxBNRVstYMi6)
-
-**Construit par la communauté, pour la communauté**_Rendre l’analyse financière professionnelle accessible à tous_
-
-⭐**Star nous**• 🔄**Partager**• 🤝**Contribuer**
-
-</div>
-
-* * *
-
-## 📜 Licence
-
-Licence MIT - voir[LICENCE.txt](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)
-
-* * *
-
-## 🙏 Remerciements
-
-Construit avec :[Épreuves](https://tauri.app/)•[Réagir](https://react.dev/)•[Rouiller](https://www.rust-lang.org/)•[Vent arrièreCSS](https://tailwindcss.com/)•[Radix UI](https://www.radix-ui.com/)
-
-* * *
-
-**Note:**Une version antérieure a été construite avec Python/DearPyGUI et est archivée dans`legacy-python-depreciated/`. L'application actuelle basée sur Tauri est une réécriture complète avec des technologies modernes.
-
-* * *
-
-<div align="center">
-
-**© 2024-2025 Fincept Corporation • Open Source • Licence MIT**
+⭐**Étoile**• 🔄**Partager**• 🤝**Contribuer**
 
 </div>
