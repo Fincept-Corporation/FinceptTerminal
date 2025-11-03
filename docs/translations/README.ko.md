@@ -1,46 +1,18 @@
-# 핀셉트 터미널 ✨
+# 핀셉트 터미널
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
 [영어](README.md)\|[스페인 사람](docs/translations/README.es.md)\|[중국인](docs/translations/README.zh-CN.md)\|[일본어](docs/translations/README.ja.md)\|[프랑스 국민](docs/translations/README.fr.md)\|[독일 사람](docs/translations/README.de.md)\|[한국어](docs/translations/README.ko.md)\|[힌디 어](docs/translations/README.hi.md)
 
-### _전문 재무 분석 플랫폼_
+### **당신의 생각이 유일한 한계입니다. 데이터는 그렇지 않습니다.**
 
-**모두를 위한 Bloomberg 수준의 통찰력. 오픈 소스. 크로스 플랫폼.**
+CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
 
-[📥 다운로드](#-getting-started)•[✨ 특징](#-features)•[📸 스크린샷](#-platform-preview)•[🤝 기여](#-contributing)
-
-<!-- DOWNLOAD_SECTION_START -->
-
-## 📥 최신 빌드 다운로드
-
-**버전:**`v3.0.0`\|**저지르다:**`d834bb1`\|**출시된:**2025-10-23 12:14 UTC
-
-### 🎯 직접 다운로드 - 즉시 다운로드하려면 클릭하세요!
-
-| 플랫폼         | 건축학           | 직접 다운로드                                                                                                                                                  |
-| ----------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🍎**macOS** | 애플 실리콘(ARM64) | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)       |
-| 🍎**macOS** | 인텔(x64)       | [⬇️**.dmg 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)         |
-| 🐧**Linux** | x64(앱이미지)     | [⬇️**.App이미지 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧**리눅스**   | x64(데비안)      | [⬇️**.deb 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)         |
-| 🪟**윈도우**   | 쉿             | [⬇️**.msi 다운로드**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)       |
-
-> ✨**원클릭 다운로드!**이 링크는 즉시 다운로드되기 시작합니다. GitHub 로그인이 필요하지 않습니다!
-
-### 📊 빌드 상태 및 정보
-
-![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)![Latest Release](https://img.shields.io/github/v/release/Fincept-Corporation/FinceptTerminal?include_prereleases&label=Latest%20Build)![Downloads](https://img.shields.io/github/downloads/Fincept-Corporation/FinceptTerminal/total?label=Total%20Downloads)
-
-**릴리스 페이지:**[모든 릴리스 및 변경 로그 보기](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
-
-* * *
-
-<!-- DOWNLOAD_SECTION_END -->
+[📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 문서](docs/)•[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -48,286 +20,190 @@
 
 * * *
 
-## 🎯 핀셉트 터미널이란?
+## 🎯 우리를 차별화하는 요소
 
-**핀셉트 터미널**현대적인 크로스 플랫폼 금융 터미널입니다.**고난**,**반응하다**, 그리고**타입스크립트**. 개인 투자자와 거래자에게 기관 수준의 재무 분석 도구를 완전 무료 오픈 소스로 제공합니다.
+**핀셉트 터미널**전통적인 소프트웨어의 제한을 거부하는 사람들을 위해 구축된 오픈 소스 금융 플랫폼입니다. 우리는 경쟁합니다**분석 깊이**그리고**데이터 접근성**—내부자 정보나 독점 피드가 아닙니다.
 
-Bloomberg 및 Refinitiv에서 영감을 받은 Fincept Terminal은 기업 가격표 없이 실시간 시장 데이터, 고급 분석, AI 기반 통찰력 및 전문 인터페이스를 모두 제공합니다.
-
-### 🌟 Fincept 터미널을 선택하는 이유는 무엇입니까?
-
-| 전통적인 플랫폼       | 핀셉트 터미널             |
-| -------------- | ------------------- |
-| 💸 연간 $20,000+ | 🆓**무료 및 오픈 소스**    |
-| 🏢 기업 전용       | 👤**누구나 이용 가능**     |
-| 🔒 공급업체 잠금     | 💻**크로스 플랫폼 데스크탑**  |
-| ⚙️ 제한된 사용자 정의  | 🎨**완전히 사용자 정의 가능** |
-
-**Tech Stack:**Tauri(Rust) • React 19 • TypeScript • TailwindCSS
+| **특징**        | **핀셉트 터미널**                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------- |
+| 📊**해석학**     | Python으로 CFA 레벨 1, 2, 3 커리큘럼 완료 • DCF 모델 • 포트폴리오 최적화 • 위험 지표(VaR, Sharpe)                         |
+| 🤖**AI 에이전트** | 20명 이상의 투자자 페르소나(Buffett, Dalio, Graham) • 헤지펀드 전략(Bridgewater, Citadel, Renaissance) • 현지 LLM 지원 |
+| 🌐**데이터 액세스** | 100개 이상의 커넥터(DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • 맞춤형 API 매퍼 • 데이터 제한 없음               |
+| 🔗**교차 도메인**  | 공급망 통합 → 포트폴리오 • 지정학 → 형평성 • 해양 → 거시적 • 귀하의 데이터를 귀하의 방식으로                                         |
+| 🎨**워크플로**    | 시각적 노드 편집기 • Python 에이전트 • MCP 도구 • 코드 없는 자동화                                                     |
+| 🚢**지능**      | 3D 해상 추적 • 위성 모니터링 • 지정학적 프레임워크 • 무역 경로 분석                                                        |
+| 💰**가격**      | 100% 무료 및 오픈 소스(MIT 라이선스)                                                                         |
 
 * * *
 
-## 🚀 시작하기
-
-### **옵션 1: Microsoft Store에서 다운로드**🎉
-
-<div align="center">
-
-[![Get it from Microsoft Store](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
-
-**가장 쉬운 설치 • 자동 업데이트 • Windows 10/11**
-
-</div>
-
-### **옵션 2: 설치 프로그램 다운로드**
-
-**윈도우:**
-
--   📦[MSI 설치 프로그램 다운로드](http://product.fincept.in/FinceptTerminalV2Alpha.msi)(윈도우 10/11)
-
-**macOS 및 Linux:**
-
--   사전 구축된 설치 프로그램이 곧 출시될 예정입니다.
-
-### **옵션 3: 소스에서 빌드**
-
-#### 🚀**빠른 설정(자동)**
-
-**Windows의 경우:**
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-
-# 2. Run setup script (as Administrator)
-setup.bat
-```
-
-**Linux/macOS의 경우:**
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-
-# 2. Make script executable and run
-chmod +x setup.sh
-./setup.sh
-```
-
-자동화된 설정 스크립트는 다음을 수행합니다.
-
--   ✅ Node.js LTS(v22.14.0) 설치
--   ✅ Rust 설치(최신 안정 버전)
--   ✅ 프로젝트 종속성 설치
--   ✅ 모든 것을 자동으로 설정하세요
-
-#### ⚙️**수동 설정**
-
-**전제 조건:**Node.js 18+, Rust 1.70+, Git
-
-```bash
-# Clone the repository
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-terminal-desktop
-
-# Install dependencies
-npm install
-
-# Run in development
-npm run tauri dev
-
-# Build for production
-npm run tauri build
-```
-
-* * *
-
-## ✨ 특징
+## 🚀 핵심 기능
 
 <table>
 <tr>
 <td width="50%">
 
-### 📊 시장 정보
+### **📊 CFA 수준 분석**
 
-🌍 글로벌 범위(주식, 외환, 암호화폐, 원자재)<br>📈 실시간 데이터 및 스트리밍 업데이트<br>📰 다중 소스 뉴스 통합<br>📉 맞춤 관심 목록
+![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png)
 
-### 🧠 AI 기반 분석
+**포트폴리오 관리**
 
-🤖 GenAI 채팅 인터페이스<br>📊 실시간 감정 분석<br>💡 AI 기반 통찰력 및 권장 사항<br>🎯 자동 패턴 인식
+-   샤프비율, VaR(95%), 최대 하락폭
+-   포트폴리오 최적화(최대 Sharpe)
+-   다중 자산 배분 전략
+
+**지분 가치 평가**
+
+-   DCF 모델(FCFF, FCFE)
+-   배당 할인 모델
+-   배수 및 잔여 소득
+
+**파생상품 및 위험**
+
+-   옵션 가격과 그릭스
+-   헤징 전략
+-   고급 위험 분석
 
 </td>
 <td width="50%">
 
-### 📈 전문 도구
+### **🤖 AI 기반 자동화**
 
-📊 고급 차트(50개 이상의 지표)<br>💼 회사 재무 및 연구<br>📋 다중 계정 포트폴리오 추적<br>⚡ 백테스팅 전략<br>🔔 맞춤형 가격 및 기술 알림
+![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png)
 
-### 🌐 글로벌 인사이트
+**투자자 대리인**
 
-🏛️ 경제 데이터(이자율, GDP, 인플레이션)<br>🗺️ 무역로 및 해상 물류<br>🌍 지정학적 위험 평가
+-   워렌 버핏, 벤저민 그레이엄, 세스 클라먼
+-   레이 달리오, 조지 소로스, 피터 린치
+-   20명 이상의 전설적인 투자 페르소나
+
+**헤지펀드 시스템**
+
+-   브리지워터 전천후 접근 방식
+-   Citadel 다중 전략 퀀트
+-   르네상스 테크놀로지스 통계 모델
+
+**워크플로 빌더**
+
+-   ReactFlow 비주얼 편집기
+-   100개 이상의 MCP 도구 통합
+-   Python 에이전트 오케스트레이션
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### **🌐 무제한 데이터 액세스**
+
+![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png)
+
+**100개 이상의 데이터 커넥터**
+
+-   **데이터베이스**: PostgreSQL, MySQL, MongoDB, Redis, 스노우플레이크
+-   **시장 데이터**: 크라켄, Polygon.io, Alpha Vantage, Yahoo Finance
+-   **경제학**: DBnomics(1억+ 시리즈), World Bank, IMF, OECD
+-   **스트리밍**: 카프카, 웹소켓, MQTT
+-   **맞춤형 API 매퍼**: 몇 분 만에 모든 API에 연결
+
+</td>
+<td width="50%">
+
+### **🔬 글로벌 인텔리전스**
+
+![Global Trade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png)
+
+**해양 및 공급망**
+
+-   선박/항공기/위성 추적 기능이 있는 3D 지구본
+-   실시간 AIS 데이터 • 교역로 • 궤도 경로
+
+**지정학적 분석**
+
+-   그랜드 체스판 프레임워크
+-   지리학 모델의 포로
+-   중앙은행 및 정책 추적
+
+**주식 조사**
+
+-   글로벌 주식 분석 • 재무 시각화
+-   분석가 대상 • 가치 평가 지표
 
 </td>
 </tr>
 </table>
 
-**사용자 경험:**Bloomberg 스타일 UI • 기능 키 단축키(F1~F12) • 다크 모드 • 탭 기반 워크플로
-
 * * *
 
-## 🎬 플랫폼 미리보기
+## 🎬 더 많은 기능
 
 <div align="center">
 
-|                                                채팅 모듈                                                |                                                      계기반                                                      |
-| :-------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------: |
-| ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png) | ![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png) |
-|                                             AI 기반 금융 보조원                                            |                                                   실시간 시장 개요                                                   |
-
-|                                                     경제                                                    |                                                  주식 조사                                                  |
-| :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: |
-| ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) | ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) |
-|                                                 글로벌 경제 지표                                                 |                                                종합적인 주식 분석                                               |
-
-|                                                   법정                                                  |                                                        지정학                                                        |
-| :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
-| ![Forum](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Forum.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
-|                                                커뮤니티 토론                                                |                                                    글로벌 위험 모니터링                                                    |
-
-|                                                       글로벌 무역                                                      |                                                     시장                                                    |
-| :---------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------: |
-| ![GlobalTrade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png) | ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png) |
-|                                                      국제 무역 흐름                                                     |                                                실시간 다중 자산 시장                                               |
-
-|                                                         무역 분석                                                         |
-| :-------------------------------------------------------------------------------------------------------------------: |
-| ![TradeAnalysis](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/TradeAnalysis.png) |
-|                                                      고급 분석 및 백테스트                                                     |
+|                                                   경제 분석                                                   |                                                  주식 조사                                                  |                                                      지정학적 위험                                                      |
+| :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
+| ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) | ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
+|                                            GDP, 인플레이션, 금리, 성장주기                                           |                                           재무제표, DCF, 애널리스트 취재                                           |                                               글로벌 리스크 모니터링 및 시나리오 분석                                              |
 
 </div>
 
 * * *
 
-## 🛣️ 로드맵
+## 🔗 킬러 기능: 도메인 간 인텔리전스
 
-### **현황**
+**각 모듈이 분리되어 있는 기존 터미널과 달리 Fincept 터미널을 사용하면 모든 도메인에 걸쳐 데이터를 통합할 수 있습니다.**
 
--   ✅ Tauri 애플리케이션 프레임워크
--   ✅ 인증 시스템(게스트+등록자)
--   ✅ Bloomberg 스타일 UI
--   ✅ 결제 통합
--   ✅ 포럼 기능
--   🚧 실시간 시장 데이터
--   🚧 고급 차트 작성
--   🚧 AI 비서
+    Supply Chain Data → Portfolio Optimization
+    Shipping Volumes → GDP Forecasts → Equity Positions
+    Geopolitical Events → Currency Moves → Options Hedging
+    Maritime Intelligence → Commodity Prices → Macro Strategies
 
-### **출시 예정(2025년 2분기)**
+**서로 다른 데이터 소스를 결합하여 고유한 지표를 구축하세요. 귀하의 경쟁 우위.**
 
--   📊 완전한 시장 데이터 스트리밍
--   📈 50개 이상의 지표가 포함된 대화형 차트
--   🤖 프로덕션 AI 기능
--   💼 포트폴리오 관리
--   🔔 경고 시스템
+* * *
 
-### **미래**
+## 📥 다운로드
 
--   🌍 다국어 지원
--   🏢 브로커 통합
--   📱 모바일 컴패니언 앱
--   🔌 플러그인 시스템
--   🎨 테마 마켓플레이스
+**vz. 0.11**| 윈도우 • macOS • 리눅스
+
+[![Download](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge)](https://github.com/Fincept-Corporation/FinceptTerminal/releases)[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20App-blue?style=for-the-badge&logo=microsoft)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
+
+**소스에서 빌드:**
+
+```bash
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal/fincept-terminal-desktop
+npm install && npm run tauri dev
+```
+
+* * *
+
+## 🛣️ 다음은 무엇입니까?
+
+**2025년 1분기:**향상된 실시간 스트리밍 • 고급 백테스팅 • 옵션 전략 빌더 • 50개 이상의 AI 에이전트**2025년:**서류 거래 • 다중 포트폴리오 관리 • 모바일 앱 • 소셜 트레이딩**미래:**기관 기능 • 프로그래밍 방식 API • ML 교육 UI • 화이트 라벨 솔루션
 
 * * *
 
 ## 🤝 기여하기
 
-우리는 개발자, 거래자, 금융 전문가의 기여를 환영합니다!
+우리는 재무 분석의 미래를 함께 만들어가고 있습니다.
 
-**기여 방법:**
+**기여하다:**새로운 데이터 커넥터 • AI 에이전트 • 분석 모듈 • 문서 • 번역
 
--   🐛 버그 및 문제 신고
--   💡 새로운 기능 제안
--   🔧 코드 제출(React, Rust, TypeScript)
--   📚 문서 개선
--   🎨 디자인 기여
-
-**빠른 링크:**
-
--   [기여 지침](docs/CONTRIBUTING.md)
--   [행동 강령](docs/CODE_OF_CONDUCT.md)
--   [시작하기 가이드](docs/GETTING_STARTED.md)
--   [아키텍처 문서](docs/ARCHITECTURE.md)
--   [Python 기여자 가이드](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
--   [TypeScript 기여자 가이드](docs/TYPESCRIPT_CONTRIBUTOR_GUIDE.md)
--   [Rust 기여자 가이드](docs/RUST_CONTRIBUTOR_GUIDE.md)
--   [버그 신고](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)
--   [기능 요청](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)
--   [토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
-
-**개발 설정:**
-
-```bash
-# Fork and clone
-git clone https://github.com/YOUR_USERNAME/FinceptTerminal.git
-cd FinceptTerminal
-
-# Automated setup (recommended for first-time contributors)
-# Windows: run setup.bat as Administrator
-# Linux/macOS: chmod +x setup.sh && ./setup.sh
-
-# Or manual setup
-cd fincept-terminal-desktop
-npm install
-npm run dev          # Start Vite dev server
-npm run tauri dev    # Start Tauri app
-```
+[기여 가이드](docs/CONTRIBUTING.md)•[버그 신고](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[기능 요청](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 * * *
 
-## 🏗️ 프로젝트 구조
+## 📜 라이센스
 
-    fincept-terminal-desktop/
-    ├── src/
-    │   ├── components/      # React components (auth, dashboard, tabs, ui)
-    │   ├── contexts/        # React Context (Auth, Theme)
-    │   ├── services/        # API service layers
-    │   └── hooks/           # Custom React hooks
-    ├── src-tauri/
-    │   ├── src/             # Rust backend
-    │   ├── Cargo.toml       # Rust dependencies
-    │   └── tauri.conf.json  # Tauri config
-    └── package.json         # Node dependencies
+**내 라이센스**• 영원히 무료 • 제한 없음
+
+© 2024-2025 핀셉트 코퍼레이션
 
 * * *
 
-## 📊 기술 세부정보
+<div align="center">
 
-**성능:**
-
--   바이너리 크기: ~15MB
--   메모리: ~150MB(Electron의 경우 500MB 이상)
--   시작: &lt;2초
-
-**플랫폼 지원:**
-
--   ✅ 윈도우 10/11(x64, ARM64)
--   ✅ macOS 11+(Intel, Apple Silicon)
--   ✅ 리눅스(우분투, 데비안, 페도라)
-
-**보안:**
-
--   Tauri 샌드박스 환경
--   Node.js 런타임 없음
--   암호화된 자격 증명 저장소
--   HTTPS 전용 API 호출
-
-* * *
-
-## 📈 스타 히스토리
-
-**⭐ 저장소에 별표를 표시하고 프로젝트를 공유하세요 ❤️**
+### **당신의 생각이 유일한 한계입니다. 데이터는 그렇지 않습니다.**
 
 <div align="center">
 <a href="https://star-history.com/#Fincept-Corporation/FinceptTerminal&Date">
@@ -339,40 +215,8 @@ npm run tauri dev    # Start Tauri app
 </a>
 </div>
 
-* * *
+[![Email](https://img.shields.io/badge/Email-support@fincept.in-blue)](mailto:support@fincept.in)
 
-## 🌐 우리와 연결하세요
-
-<div align="center">
-
-[![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?style=for-the-badge&logo=github)](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)[![Email Support](https://img.shields.io/badge/Email-dev@fincept.in-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:dev@fincept.in)[![Contact Form](https://img.shields.io/badge/Contact-Form-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://forms.gle/DUsDHwxBNRVstYMi6)
-
-**커뮤니티에 의해, 커뮤니티를 위해 구축됨**_모든 사람이 전문적인 재무 분석에 접근할 수 있도록 만들기_
-
-⭐**우리를 스타**• 🔄**공유하다**• 🤝**기여하다**
-
-</div>
-
-* * *
-
-## 📜 라이선스
-
-MIT 라이센스 - 참조[라이센스.txt](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)
-
-* * *
-
-## 🙏 감사의 말씀
-
-다음으로 제작:[고난](https://tauri.app/)•[반응하다](https://react.dev/)•[녹](https://www.rust-lang.org/)•[순풍CSS](https://tailwindcss.com/)•[기수 UI](https://www.radix-ui.com/)
-
-* * *
-
-**메모:**이전 버전은 Python/DearPyGUI로 빌드되었으며 다음 위치에 보관되어 있습니다.`legacy-python-depreciated/`. 현재 Tauri 기반 애플리케이션은 현대 기술로 완전히 재작성되었습니다.
-
-* * *
-
-<div align="center">
-
-**© 2024-2025 Fincept Corporation • 오픈 소스 • MIT 라이센스**
+⭐**별**• 🔄**공유하다**• 🤝**기여하다**
 
 </div>

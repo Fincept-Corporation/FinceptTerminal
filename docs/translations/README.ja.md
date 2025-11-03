@@ -1,46 +1,18 @@
-# Finceptターミナル✨
+# フィンセプトターミナル
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
 [英語](README.md)\|[スペイン語](docs/translations/README.es.md)\|[中文](docs/translations/README.zh-CN.md)\|[日本語](docs/translations/README.ja.md)\|[フランス語](docs/translations/README.fr.md)\|[ドイツ語](docs/translations/README.de.md)\|[韓国人](docs/translations/README.ko.md)\|[ヒンディー語](docs/translations/README.hi.md)
 
-### _プロフェッショナルな財務分析プラットフォーム_
+### **あなたの思考だけが限界です。データはそうではありません。**
 
-**ブルームバーグレベルの洞察を誰にでも。オープンソース。クロスプラットフォーム。**
+CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた最先端の金融インテリジェンス プラットフォーム。
 
-[📥 ダウンロード](#-getting-started)•[✨ 特徴](#-features)•[📸 スクリーンショット](#-platform-preview)•[🤝 貢献する](#-contributing)
-
-<!-- DOWNLOAD_SECTION_START -->
-
-## 📥 最新ビルドをダウンロード
-
-**バージョン:**`v3.0.0`\|**専念：**`d834bb1`\|**リリース:**2025-10-23 12:14 UTC
-
-### 🎯 直接ダウンロード - クリックしてすぐにダウンロードしてください!
-
-| プラットフォーム    | 建築              | 直接ダウンロード                                                                                                                                                     |
-| ----------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 🍎**macOS** | アップルシリコン（ARM64） | [⬇️**.dmgをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-arm64.dmg)         |
-| 🍎**macOS** | インテル (x64)      | [⬇️**.dmgをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-macOS-x64.dmg)           |
-| 🐧**Linux** | x64 (アプリイメージ)   | [⬇️**.AppImageをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.AppImage) |
-| 🐧**Linux** | x64 (Debian)    | [⬇️**.debをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Linux-x64.deb)           |
-| 🪟**窓**     | ふーん             | [⬇️**.msiをダウンロード**](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.0-build-51/FinceptTerminal-v3.0.0-Windows-x64.msi)         |
-
-> ✨**ワンクリックでダウンロード！**これらのリンクはすぐにダウンロードを開始します。GitHub へのログインは必要ありません。
-
-### 📊 ビルドのステータスと情報
-
-![Build Status](https://github.com/Fincept-Corporation/FinceptTerminal/actions/workflows/build.yml/badge.svg)![Latest Release](https://img.shields.io/github/v/release/Fincept-Corporation/FinceptTerminal?include_prereleases&label=Latest%20Build)![Downloads](https://img.shields.io/github/downloads/Fincept-Corporation/FinceptTerminal/total?label=Total%20Downloads)
-
-**リリースページ:**[すべてのリリースと変更ログを表示する](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
-
-* * *
-
-<!-- DOWNLOAD_SECTION_END -->
+[📥 ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 ドキュメント](docs/)•[💬 ディスカッション](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -48,286 +20,190 @@
 
 * * *
 
-## 🎯 Fincept ターミナルとは何ですか?
+## 🎯 当社の特徴
 
-**フィンセプトターミナル**は、次の機能を備えた最新のクロスプラットフォーム金融端末です。**苦難**,**反応する**、 そして**TypeScript**。完全に無料でオープンソースの機関グレードの財務分析ツールを個人投資家やトレーダーに提供します。
+**フィンセプトターミナル**は、従来のソフトウェアによる制限を拒否する人々のために構築されたオープンソースの金融プラットフォームです。私たちは次の点で競争します**分析の深さ**そして**データへのアクセシビリティ**—インサイダー情報や独占フィードではありません。
 
-ブルームバーグとリフィニティブからインスピレーションを得た Fincept ターミナルは、リアルタイムの市場データ、高度な分析、AI を活用した洞察、プロフェッショナルなインターフェイスをすべてエンタープライズ価格なしで提供します。
-
-### 🌟 Fincept ターミナルを選ぶ理由?
-
-| 従来のプラットフォーム       | フィンセプトターミナル             |
-| ----------------- | ----------------------- |
-| 💸 年間 20,000 ドル以上 | 🆓**無料＆オープンソース**        |
-| 🏢 エンタープライズのみ     | 👤**誰でも利用可能**           |
-| 🔒 ベンダーロックイン      | 💻**クロスプラットフォームデスクトップ** |
-| ⚙️限定的なカスタマイズ      | 🎨**完全にカスタマイズ可能**       |
-
-**技術スタック:**Tauri (Rust) • React 19 • TypeScript • TailwindCSS
+| **特徴**         | **フィンセプトターミナル**                                                                     |
+| -------------- | ----------------------------------------------------------------------------------- |
+| 📊**分析**       | Python で CFA レベル 1、2、3 カリキュラムを完了する • DCF モデル • ポートフォリオの最適化 • リスク指標 (VaR、Sharpe)     |
+| 🤖**AIエージェント** | 20 人以上の投資家ペルソナ (バフェット、ダリオ、グラハム) • ヘッジファンド戦略 (ブリッジウォーター、シタデル、ルネッサンス) • ローカル LLM サポート |
+| 🌐**データアクセス**  | 100 以上のコネクタ (DBnomics、Polygon、Kraken、PostgreSQL、Kafka) • カスタム API マッパー • データ制限なし    |
+| 🔗**クロスドメイン**  | サプライチェーン → ポートフォリオの統合 • 地政学 → 株式 • 海事 → マクロ • データを自分の方法で統合                          |
+| 🎨**ワークフロー**   | ビジュアルノードエディター • Pythonエージェント • MCPツール • コード不要の自動化                                   |
+| 🚢**知能**       | 3D 海洋追跡 • 衛星監視 • 地政学的枠組み • 貿易ルート分析                                                  |
+| 💰**価格設定**     | 100％無料＆オープンソース（MITライセンス）                                                            |
 
 * * *
 
-## 🚀 はじめに
-
-### **オプション 1: Microsoft Store からダウンロードする**🎉
-
-<div align="center">
-
-[![Get it from Microsoft Store](https://get.microsoft.com/images/en-us%20dark.svg)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
-
-**最も簡単なインストール • 自動アップデート • Windows 10/11**
-
-</div>
-
-### **オプション 2: インストーラーをダウンロードする**
-
-**Windows:**
-
--   📦[MSI インストーラーをダウンロード](http://product.fincept.in/FinceptTerminalV2Alpha.msi)(Windows 10/11)
-
-**macOS と Linux:**
-
--   事前に構築されたインストーラーは近日公開予定です。
-
-### **オプション 3: ソースからビルドする**
-
-#### 🚀**クイックセットアップ（自動）**
-
-**Windowsの場合:**
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-
-# 2. Run setup script (as Administrator)
-setup.bat
-```
-
-**Linux/macOS の場合:**
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
-
-# 2. Make script executable and run
-chmod +x setup.sh
-./setup.sh
-```
-
-自動セットアップ スクリプトは次のことを行います。
-
--   ✅ Node.js LTS (v22.14.0) をインストールする
--   ✅ Rust (最新の安定版) をインストールする
--   ✅ プロジェクトの依存関係をインストールする
--   ✅ すべてを自動的にセットアップします
-
-#### ⚙️**手動セットアップ**
-
-**前提条件:**Node.js 18 以降、Rust 1.70 以降、Git
-
-```bash
-# Clone the repository
-git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal/fincept-terminal-desktop
-
-# Install dependencies
-npm install
-
-# Run in development
-npm run tauri dev
-
-# Build for production
-npm run tauri build
-```
-
-* * *
-
-## ✨ 特徴
+## 🚀 コア機能
 
 <table>
 <tr>
 <td width="50%">
 
-### 📊 マーケットインテリジェンス
+### **📊 CFA レベルの分析**
 
-🌍 グローバルなカバレッジ (株式、外国為替、仮想通貨、商品)<br>📈 リアルタイムのデータとストリーミング更新<br>📰 マルチソースニュースの統合<br>📉 カスタムウォッチリスト
+![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png)
 
-### 🧠 AI を活用した分析
+**ポートフォリオ管理**
 
-🤖 GenAIチャットインターフェース<br>📊 リアルタイムの感情分析<br>💡 AI 主導の洞察と推奨事項<br>🎯 自動パターン認識
+-   シャープレシオ、VaR (95%)、最大ドローダウン
+-   ポートフォリオの最適化 (最大シャープ)
+-   マルチアセット配分戦略
+
+**株式評価**
+
+-   DCFモデル（FCFF、FCFE）
+-   配当割引モデル
+-   マルチプルと残余収入
+
+**デリバティブとリスク**
+
+-   オプション価格設定とギリシャ人
+-   ヘッジ戦略
+-   高度なリスク分析
 
 </td>
 <td width="50%">
 
-### 📈 プロフェッショナルツール
+### **🤖 AI を活用した自動化**
 
-📊 高度なチャート作成 (50 以上のインジケーター)<br>💼 会社の財務と調査<br>📋 マルチアカウントポートフォリオ追跡<br>⚡ バックテスト戦略<br>🔔 カスタム価格と技術アラート
+![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png)
 
-### 🌐 グローバルな洞察
+**投資家エージェント**
 
-🏛️ 経済データ (金利、GDP、インフレ)<br>🗺️ 貿易ルートと海上物流<br>🌍 地政学的リスク評価
+-   ウォーレン・バフェット、ベンジャミン・グレアム、セス・クラマン
+-   レイ・ダリオ、ジョージ・ソロス、ピーター・リンチ
+-   20 人以上の伝説的な投資家
+
+**ヘッジファンドシステム**
+
+-   ブリッジウォーターの全天候型アプローチ
+-   シタデルのマルチ戦略クオンツ
+-   ルネッサンス テクノロジーの統計モデル
+
+**ワークフロービルダー**
+
+-   ReactFlow ビジュアルエディター
+-   100 以上の MCP ツールの統合
+-   Python エージェント オーケストレーション
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### **🌐 無制限のデータアクセス**
+
+![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png)
+
+**100以上のデータコネクタ**
+
+-   **データベース**: PostgreSQL、MySQL、MongoDB、Redis、Snowflake
+-   **市場データ**: Kraken、Polygon.io、Alpha Vantage、Yahoo Finance
+-   **経済**: DBnomics (100M+ シリーズ)、世界銀行、IMF、OECD
+-   **ストリーミング**：カフカ、WebSocket、MQTT
+-   **カスタム API マッパー**: あらゆる API を数分で接続
+
+</td>
+<td width="50%">
+
+### **🔬 グローバルインテリジェンス**
+
+![Global Trade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png)
+
+**海事とサプライチェーン**
+
+-   船舶/航空機/衛星追跡機能付き 3D 地球儀
+-   リアルタイム AIS データ • 貿易ルート • 軌道経路
+
+**Geopolitical Analysis**
+
+-   グランドチェスボードフレームワーク
+-   地理モデルの囚人
+-   中央銀行と政策の追跡
+
+**株式調査**
+
+-   世界的な株式分析 – 財務の可視化
+-   アナリストのターゲット • 評価指標
 
 </td>
 </tr>
 </table>
 
-**ユーザーエクスペリエンス:**ブルームバーグ スタイルの UI • ファンクション キーのショートカット (F1 ～ F12) • ダーク モード • タブベースのワークフロー
-
 * * *
 
-## 🎬 プラットフォームのプレビュー
+## 🎬 その他の機能
 
 <div align="center">
 
-|                                              チャットモジュール                                              |                                                    ダッシュボード                                                    |
-| :-------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------: |
-| ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png) | ![Dashboard](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Dashboard.png) |
-|                                           AI を活用した財務アシスタント                                          |                                                  リアルタイムの市場概要                                                  |
-
-|                                                     経済                                                    |                                                   株式調査                                                  |
-| :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: |
-| ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) | ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) |
-|                                                   世界経済指標                                                  |                                       Comprehensive stock analysis                                      |
-
-|                                                 フォーラム                                                 |                                                        地政学                                                        |
-| :---------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
-| ![Forum](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Forum.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
-|                                            コミュニティのディスカッション                                            |                                                   グローバルリスクモニタリング                                                  |
-
-|                                                        世界貿易                                                       |                                                     市場                                                    |
-| :---------------------------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------------------: |
-| ![GlobalTrade](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/GlobalTrade.png) | ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png) |
-|                                             International trade flows                                             |                                                ライブマルチアセット市場                                               |
-
-|                                                          貿易分析                                                         |
-| :-------------------------------------------------------------------------------------------------------------------: |
-| ![TradeAnalysis](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/TradeAnalysis.png) |
-|                                                      高度な分析とバックテスト                                                     |
+|                                                    経済分析                                                   |                                                   株式調査                                                  |                                                      地政学的リスク                                                      |
+| :-------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------: |
+| ![Economy](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Economy.png) | ![Equity](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Equity.png) | ![Geopolitics](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png) |
+|                                             GDP、インフレ、金利、成長サイクル                                            |                                           財務諸表、DCF、アナリストのカバレッジ                                          |                                                 グローバルなリスク監視とシナリオ分析                                                |
 
 </div>
 
 * * *
 
-## 🛣️ロードマップ
+## 🔗 キラー機能: クロスドメイン インテリジェンス
 
-### **現在の状況**
+**各モジュールが分離されている従来のターミナルとは異なり、Fincept ターミナルではすべてのドメインにわたってデータを統合できます。**
 
--   ✅ Tauri アプリケーションフレームワーク
--   ✅ 認証システム（ゲスト+登録済み）
--   ✅ ブルームバーグスタイルのUI
--   ✅ 支払いの統合
--   ✅ フォーラム機能
--   🚧 リアルタイムの市場データ
--   🚧 高度なグラフ作成
--   🚧 AIアシスタント
+    Supply Chain Data → Portfolio Optimization
+    Shipping Volumes → GDP Forecasts → Equity Positions
+    Geopolitical Events → Currency Moves → Options Hedging
+    Maritime Intelligence → Commodity Prices → Macro Strategies
 
-### **近日公開 (2025 年第 2 四半期)**
+**異種のデータソースを組み合わせて独自のインジケーターを構築します。あなたの競争力。**
 
--   📊 完全な市場データのストリーミング
--   📈 50以上のインジケーターを備えたインタラクティブなチャート
--   🤖 プロダクション AI 機能
--   💼 ポートフォリオ管理
--   🔔 警報システム
+* * *
 
-### **未来**
+## 📥 ダウンロード
 
--   🌍 多言語サポート
--   🏢 ブローカーの統合
--   📱 モバイルコンパニオンアプリ
--   🔌プラグインシステム
--   🎨 テーママーケットプレイス
+**対。 0.11**| Windows • macOS • Linux
+
+[![Download](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge)](https://github.com/Fincept-Corporation/FinceptTerminal/releases)[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20App-blue?style=for-the-badge&logo=microsoft)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
+
+**ソースからビルド:**
+
+```bash
+git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
+cd FinceptTerminal/fincept-terminal-desktop
+npm install && npm run tauri dev
+```
+
+* * *
+
+## 🛣️ 次は何ですか
+
+**2025 年第 1 四半期:**強化されたリアルタイム ストリーミング • 高度なバックテスト • オプション戦略ビルダー • 50 以上の AI エージェント**2025年:**ペーパートレーディング • マルチポートフォリオ管理 • モバイルアプリ • ソーシャルトレーディング**未来：**制度上の機能 • プログラマティック API • ML トレーニング UI • ホワイトラベル ソリューション
 
 * * *
 
 ## 🤝 貢献しています
 
-開発者、トレーダー、金融専門家からの貢献を歓迎します。
+私たちは財務分析の未来を一緒に構築しています。
 
-**貢献する方法:**
+**貢献する：**新しいデータコネクタ • AI エージェント • 分析モジュール • ドキュメント • 翻訳
 
--   🐛 バグや問題を報告する
--   💡 新機能を提案する
--   🔧 コードを送信する (React、Rust、TypeScript)
--   📚 ドキュメントを改善する
--   🎨 デザインへの貢献
-
-**クイックリンク:**
-
--   [貢献ガイドライン](docs/CONTRIBUTING.md)
--   [行動規範](docs/CODE_OF_CONDUCT.md)
--   [スタートガイド](docs/GETTING_STARTED.md)
--   [アーキテクチャに関するドキュメント](docs/ARCHITECTURE.md)
--   [Python 貢献者ガイド](docs/PYTHON_CONTRIBUTOR_GUIDE.md)
--   [TypeScript 貢献者ガイド](docs/TYPESCRIPT_CONTRIBUTOR_GUIDE.md)
--   [Rust 貢献者ガイド](docs/RUST_CONTRIBUTOR_GUIDE.md)
--   [バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=bug_report.md)
--   [リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/issues/new?template=feature_request.md)
--   [ディスカッション](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
-
-**開発セットアップ:**
-
-```bash
-# Fork and clone
-git clone https://github.com/YOUR_USERNAME/FinceptTerminal.git
-cd FinceptTerminal
-
-# Automated setup (recommended for first-time contributors)
-# Windows: run setup.bat as Administrator
-# Linux/macOS: chmod +x setup.sh && ./setup.sh
-
-# Or manual setup
-cd fincept-terminal-desktop
-npm install
-npm run dev          # Start Vite dev server
-npm run tauri dev    # Start Tauri app
-```
+[貢献ガイド](docs/CONTRIBUTING.md)•[バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 * * *
 
-## 🏗️ プロジェクトの構造
+## 📜ライセンス
 
-    fincept-terminal-desktop/
-    ├── src/
-    │   ├── components/      # React components (auth, dashboard, tabs, ui)
-    │   ├── contexts/        # React Context (Auth, Theme)
-    │   ├── services/        # API service layers
-    │   └── hooks/           # Custom React hooks
-    ├── src-tauri/
-    │   ├── src/             # Rust backend
-    │   ├── Cargo.toml       # Rust dependencies
-    │   └── tauri.conf.json  # Tauri config
-    └── package.json         # Node dependencies
+**私のライセンス**• 永久無料 • 制限なし
+
+© 2024-2025 Fincept Corporation
 
 * * *
 
-## 📊 技術的な詳細
+<div align="center">
 
-**パフォーマンス：**
-
--   バイナリサイズ: ~15MB
--   メモリ: ~150MB (Electron の場合は 500MB+)
--   起動: &lt;2秒
-
-**プラットフォームのサポート:**
-
--   ✅ Windows 10/11 (x64、ARM64)
--   ✅ macOS 11+ (インテル、Apple シリコン)
--   ✅ Linux (Ubuntu、Debian、Fedora)
-
-**安全：**
-
--   Tauri サンドボックス環境
--   Node.js ランタイムなし
--   暗号化された認証情報のストレージ
--   HTTPS のみの API 呼び出し
-
-* * *
-
-## 📈 スターの歴史
-
-**⭐ リポにスターを付けてプロジェクトを共有しましょう ❤️**
+### **あなたの思考だけが限界です。データはそうではありません。**
 
 <div align="center">
 <a href="https://star-history.com/#Fincept-Corporation/FinceptTerminal&Date">
@@ -339,40 +215,8 @@ npm run tauri dev    # Start Tauri app
 </a>
 </div>
 
-* * *
+[![Email](https://img.shields.io/badge/Email-support@fincept.in-blue)](mailto:support@fincept.in)
 
-## 🌐 私たちとつながりましょう
-
-<div align="center">
-
-[![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-181717?style=for-the-badge&logo=github)](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)[![Email Support](https://img.shields.io/badge/Email-dev@fincept.in-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:dev@fincept.in)[![Contact Form](https://img.shields.io/badge/Contact-Form-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://forms.gle/DUsDHwxBNRVstYMi6)
-
-**コミュニティによってコミュニティのために構築される**_誰もが専門的な財務分析を利用できるようにする_
-
-⭐**私たちにスターを付けてください**• 🔄**共有**• 🤝**貢献する**
-
-</div>
-
-* * *
-
-## 📜ライセンス
-
-MIT ライセンス - を参照[ライセンス.txt](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)
-
-* * *
-
-## 🙏 謝辞
-
-構築されたもの:[苦難](https://tauri.app/)•[反応する](https://react.dev/)•[さび](https://www.rust-lang.org/)•[TailwindCSS](https://tailwindcss.com/)•[基数UI](https://www.radix-ui.com/)
-
-* * *
-
-**注記：**以前のバージョンは Python/DearPyGUI で構築され、次の場所にアーカイブされています。`legacy-python-depreciated/`。現在の Tauri ベースのアプリケーションは、最新のテクノロジーを使用して完全に書き直されました。
-
-* * *
-
-<div align="center">
-
-**© 2024-2025 Fincept Corporation • オープンソース • MIT ライセンス**
+⭐**星**• 🔄**共有**• 🤝**貢献する**
 
 </div>
