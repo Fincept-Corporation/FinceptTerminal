@@ -779,6 +779,211 @@ class PortfolioService {
       ready: this.isReady()
     };
   }
+
+  // ==================== PORTFOLIO ANALYTICS (Python-based) ====================
+
+  /**
+   * Calculate advanced portfolio metrics using Python analytics
+   */
+  async calculateAdvancedMetrics(portfolioId: string, riskFreeRate: number = 0.03): Promise<any> {
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    const holdings = await this.getPortfolioHoldings(portfolioId);
+
+    if (holdings.length === 0) {
+      throw new Error('Portfolio has no holdings to analyze');
+    }
+
+    // Get historical returns for each asset (simplified - would need real data)
+    const returnsData: {[key: string]: number[]} = {};
+
+    for (const holding of holdings) {
+      // TODO: Fetch actual historical returns
+      // For now, generate sample data
+      returnsData[holding.symbol] = Array.from({length: 252}, () => (Math.random() - 0.5) * 0.02);
+    }
+
+    const weights = holdings.map(h => h.weight / 100);
+
+    const result = await invoke<string>('calculate_portfolio_metrics', {
+      returnsData: JSON.stringify(returnsData),
+      weights: JSON.stringify(weights),
+      riskFreeRate
+    });
+
+    return JSON.parse(result);
+  }
+
+  /**
+   * Optimize portfolio weights using Python optimization
+   */
+  async optimizePortfolioWeights(portfolioId: string, method: 'max_sharpe' | 'min_volatility' = 'max_sharpe', riskFreeRate: number = 0.03): Promise<any> {
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    const holdings = await this.getPortfolioHoldings(portfolioId);
+
+    if (holdings.length < 2) {
+      throw new Error('Need at least 2 assets to optimize portfolio');
+    }
+
+    const returnsData: {[key: string]: number[]} = {};
+
+    for (const holding of holdings) {
+      // TODO: Fetch actual historical returns
+      returnsData[holding.symbol] = Array.from({length: 252}, () => (Math.random() - 0.5) * 0.02);
+    }
+
+    const result = await invoke<string>('optimize_portfolio', {
+      returnsData: JSON.stringify(returnsData),
+      method,
+      riskFreeRate
+    });
+
+    return JSON.parse(result);
+  }
+
+  /**
+   * Generate efficient frontier for portfolio
+   */
+  async generateEfficientFrontier(portfolioId: string, numPoints: number = 50, riskFreeRate: number = 0.03): Promise<any> {
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    const holdings = await this.getPortfolioHoldings(portfolioId);
+
+    const returnsData: {[key: string]: number[]} = {};
+
+    for (const holding of holdings) {
+      // TODO: Fetch actual historical returns
+      returnsData[holding.symbol] = Array.from({length: 252}, () => (Math.random() - 0.5) * 0.02);
+    }
+
+    const result = await invoke<string>('generate_efficient_frontier', {
+      returnsData: JSON.stringify(returnsData),
+      numPoints,
+      riskFreeRate
+    });
+
+    return JSON.parse(result);
+  }
+
+  /**
+   * Get comprehensive portfolio analytics overview
+   */
+  async getAnalyticsOverview(portfolioId: string): Promise<any> {
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    const holdings = await this.getPortfolioHoldings(portfolioId);
+
+    const returnsData: {[key: string]: number[]} = {};
+
+    for (const holding of holdings) {
+      // TODO: Fetch actual historical returns
+      returnsData[holding.symbol] = Array.from({length: 252}, () => (Math.random() - 0.5) * 0.02);
+    }
+
+    const weights = holdings.map(h => h.weight / 100);
+
+    const result = await invoke<string>('get_portfolio_overview', {
+      returnsData: JSON.stringify(returnsData),
+      weights: JSON.stringify(weights)
+    });
+
+    return JSON.parse(result);
+  }
+
+  /**
+   * Calculate comprehensive risk metrics (VaR, CVaR, volatility, etc.)
+   */
+  async calculateRiskMetrics(portfolioId: string): Promise<any> {
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    const holdings = await this.getPortfolioHoldings(portfolioId);
+
+    if (holdings.length === 0) {
+      throw new Error('Portfolio has no holdings to analyze');
+    }
+
+    const returnsData: {[key: string]: number[]} = {};
+
+    for (const holding of holdings) {
+      returnsData[holding.symbol] = Array.from({length: 252}, () => (Math.random() - 0.5) * 0.02);
+    }
+
+    const weights = holdings.map(h => h.weight / 100);
+
+    const result = await invoke<string>('calculate_risk_metrics', {
+      returnsData: JSON.stringify(returnsData),
+      weights: JSON.stringify(weights)
+    });
+
+    return JSON.parse(result);
+  }
+
+  /**
+   * Generate strategic asset allocation plan based on age and risk tolerance
+   */
+  async generateAssetAllocation(age: number, riskTolerance: 'conservative' | 'moderate' | 'aggressive', yearsToRetirement: number): Promise<any> {
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    const result = await invoke<string>('generate_asset_allocation', {
+      age,
+      riskTolerance,
+      yearsToRetirement
+    });
+
+    return JSON.parse(result);
+  }
+
+  /**
+   * Calculate retirement planning projections
+   */
+  async calculateRetirementPlan(currentAge: number, retirementAge: number, currentSavings: number, annualContribution: number): Promise<any> {
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    const result = await invoke<string>('calculate_retirement_plan', {
+      currentAge,
+      retirementAge,
+      currentSavings,
+      annualContribution
+    });
+
+    return JSON.parse(result);
+  }
+
+  /**
+   * Analyze behavioral finance biases in portfolio
+   */
+  async analyzeBehavioralBiases(portfolioId: string): Promise<any> {
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    const holdings = await this.getPortfolioHoldings(portfolioId);
+
+    const portfolioData: any = {
+      weights: holdings.map(h => h.weight / 100),
+      symbols: holdings.map(h => h.symbol),
+      returns: holdings.map(h => h.unrealized_pnl_percent / 100)
+    };
+
+    const result = await invoke<string>('analyze_behavioral_biases', {
+      portfolioData: JSON.stringify(portfolioData)
+    });
+
+    return JSON.parse(result);
+  }
+
+  /**
+   * Analyze ETF costs and efficiency
+   */
+  async analyzeEtfCosts(symbols: string[], expenseRatios: number[]): Promise<any> {
+    const { invoke } = await import('@tauri-apps/api/core');
+
+    const result = await invoke<string>('analyze_etf_costs', {
+      symbols: JSON.stringify(symbols),
+      expenseRatios: JSON.stringify(expenseRatios)
+    });
+
+    return JSON.parse(result);
+  }
 }
 
 // Export singleton instance

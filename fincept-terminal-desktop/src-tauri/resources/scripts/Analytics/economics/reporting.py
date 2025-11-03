@@ -1,5 +1,5 @@
 
-Economic Reporting Module
+"""Economic Reporting Module
 =============================
 
 Economic analysis reporting and visualization
@@ -25,6 +25,8 @@ PARAMETERS:
   - base_currency: Base currency for analysis (default: 'USD')
   - seasonal_adjustment: Seasonal adjustment method (default: true)
   - lookback_period: Historical analysis period (default: 10 years)
+"""
+
 
 
 import pandas as pd

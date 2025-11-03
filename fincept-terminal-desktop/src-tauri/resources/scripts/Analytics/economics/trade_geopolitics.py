@@ -1,5 +1,5 @@
 
-Economic Trade Geopolitics Module
+"""Economic Trade Geopolitics Module
 =============================
 
 Trade and geopolitical risk analysis
@@ -26,6 +26,8 @@ PARAMETERS:
   - seasonal_adjustment: Seasonal adjustment method (default: true)
   - lookback_period: Historical analysis period (default: 10 years)
 
+
+"""
 
 from decimal import Decimal
 from typing import Dict, List, Any, Tuple

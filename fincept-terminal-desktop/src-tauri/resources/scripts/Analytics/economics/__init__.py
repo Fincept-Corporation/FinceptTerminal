@@ -1,8 +1,8 @@
-
-Economic   Init   Module
+"""
+Economic Init Module
 =============================
 
-  Init   analysis and calculation tools
+Init analysis and calculation tools
 
 ===== DATA SOURCES REQUIRED =====
 INPUT:
@@ -25,7 +25,7 @@ PARAMETERS:
   - base_currency: Base currency for analysis (default: 'USD')
   - seasonal_adjustment: Seasonal adjustment method (default: true)
   - lookback_period: Historical analysis period (default: 10 years)
-
+"""
 
 from .core import (
     EconomicsBase,

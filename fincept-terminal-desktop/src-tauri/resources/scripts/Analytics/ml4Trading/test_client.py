@@ -1,5 +1,5 @@
 
-Machine Learning Test Client Module
+"""Machine Learning Test Client Module
 ======================================
 
 Testing client for ML trading strategies
@@ -25,13 +25,14 @@ PARAMETERS:
   - prediction_horizon: Prediction horizon (default: 1 day)
   - feature_selection: Feature selection method (default: 'recursive')
   - validation_method: Model validation approach (default: 'time_series_split')
-
+"""
 
 #!/usr/bin/env python3
 """
 Test script for the enhanced OpenRouter API client
 Run this to verify your setup and test basic functionality
 """
+
 
 import os
 import sys

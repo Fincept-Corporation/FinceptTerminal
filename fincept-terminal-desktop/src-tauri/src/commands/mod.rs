@@ -53,7 +53,10 @@ pub mod sentinelhub;
 
 // Code editor and Jupyter notebook
 pub mod jupyter;
-pub mod finscript_cmd;
+// pub mod finscript_cmd; // TODO: Implement FinScript commands
 
 // Python Agents
 pub mod agents;
+
+// Portfolio Analytics
+pub mod portfolio;
