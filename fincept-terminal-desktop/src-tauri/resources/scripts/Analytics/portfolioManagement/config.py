@@ -1,5 +1,5 @@
 
-Portfolio Config Module
+"""Portfolio Config Module
 ===============================
 
 Portfolio management configuration
@@ -25,7 +25,7 @@ PARAMETERS:
   - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
   - max_weight: Maximum single asset weight (default: 0.10)
   - benchmark: Portfolio benchmark index (default: 'market_index')
-
+"""
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union

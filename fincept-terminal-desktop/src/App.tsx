@@ -111,7 +111,7 @@ const App: React.FC = () => {
   useEffect(() => {
     return () => {
       console.log('[App] App unmounting, cleaning up running workflows...');
-      workflowService.cleanupRunningWorkflows().catch((error) => {
+      workflowService.cleanupRunningWorkflows().catch((error: Error) => {
         console.error('[App] Failed to cleanup running workflows:', error);
       });
     };

@@ -1,5 +1,5 @@
 
-Equity Investment Validators Module
+"""Equity Investment Validators Module
 ======================================
 
 Data validation and quality checks
@@ -25,6 +25,8 @@ PARAMETERS:
   - terminal_growth: Terminal growth rate assumption (default: 0.025)
   - earnings_multiple: Target earnings multiple (default: 15.0)
   - reporting_currency: Reporting currency (default: 'USD')
+"""
+
 
 
 import pandas as pd

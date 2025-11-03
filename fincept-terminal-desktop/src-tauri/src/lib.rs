@@ -14,7 +14,7 @@ use sha2::{Sha256, Digest};
 mod data_sources;
 mod commands;
 mod utils;
-mod finscript;
+// mod finscript; // TODO: Implement FinScript module
 
 // MCP Server Process with communication channels
 struct MCPProcess {
@@ -928,11 +928,21 @@ pub fn run() {
             commands::jupyter::get_python_version,
             commands::jupyter::install_python_package,
             commands::jupyter::list_python_packages,
-            commands::finscript_cmd::execute_finscript,
+            // commands::finscript_cmd::execute_finscript, // TODO: Implement FinScript
             // Python Agent Commands
             commands::agents::list_available_agents,
             commands::agents::execute_python_agent,
-            commands::agents::get_agent_metadata
+            commands::agents::get_agent_metadata,
+            // Portfolio Analytics Commands
+            commands::portfolio::calculate_portfolio_metrics,
+            commands::portfolio::optimize_portfolio,
+            commands::portfolio::generate_efficient_frontier,
+            commands::portfolio::get_portfolio_overview,
+            commands::portfolio::calculate_risk_metrics,
+            commands::portfolio::generate_asset_allocation,
+            commands::portfolio::calculate_retirement_plan,
+            commands::portfolio::analyze_behavioral_biases,
+            commands::portfolio::analyze_etf_costs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

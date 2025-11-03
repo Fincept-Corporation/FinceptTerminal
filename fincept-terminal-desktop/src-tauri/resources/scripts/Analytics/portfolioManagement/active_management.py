@@ -1,5 +1,5 @@
 
-Portfolio Active Management Module
+"""Portfolio Active Management Module
 ===============================
 
 Active portfolio management strategies
@@ -25,6 +25,8 @@ PARAMETERS:
   - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
   - max_weight: Maximum single asset weight (default: 0.10)
   - benchmark: Portfolio benchmark index (default: 'market_index')
+"""
+
 
 
 import numpy as np

@@ -1,5 +1,5 @@
 
-Equity Investment Market Efficiency Module
+"""Equity Investment Market Efficiency Module
 ======================================
 
 Market efficiency and anomaly analysis
@@ -25,6 +25,8 @@ PARAMETERS:
   - terminal_growth: Terminal growth rate assumption (default: 0.025)
   - earnings_multiple: Target earnings multiple (default: 15.0)
   - reporting_currency: Reporting currency (default: 'USD')
+"""
+
 
 
 import numpy as np

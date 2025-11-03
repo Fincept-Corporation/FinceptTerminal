@@ -1,5 +1,5 @@
 
-Portfolio Behavioral Finance Module
+"""Portfolio Behavioral Finance Module
 ===============================
 
 Behavioral finance analysis and applications
@@ -25,5 +25,6 @@ PARAMETERS:
   - rebalance_frequency: Portfolio rebalancing frequency (default: 'quarterly')
   - max_weight: Maximum single asset weight (default: 0.10)
   - benchmark: Portfolio benchmark index (default: 'market_index')
+"""
 
 

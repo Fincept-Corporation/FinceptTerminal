@@ -1,5 +1,5 @@
 
-Derivatives Utils Module
+"""Derivatives Utils Module
 =================================
 
 Fixed income utility functions
@@ -25,6 +25,8 @@ PARAMETERS:
   - dividend_yield: Dividend yield for underlying assets (default: 0.0)
   - time_steps: Number of time steps for simulation (default: 100)
   - confidence_level: Confidence level for risk metrics (default: 0.95)
+"""
+
 
 
 import numpy as np

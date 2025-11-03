@@ -1,4 +1,4 @@
-
+"""
 Equity Investment Multiples Valuation Module
 ======================================
 
@@ -25,7 +25,7 @@ PARAMETERS:
   - terminal_growth: Terminal growth rate assumption (default: 0.025)
   - earnings_multiple: Target earnings multiple (default: 15.0)
   - reporting_currency: Reporting currency (default: 'USD')
-
+"""
 
 import numpy as np
 import pandas as pd
@@ -34,7 +34,7 @@ from dataclasses import dataclass
 import statistics
 from scipy import stats
 
-from fincept_terminal.Analytics.equityInvestment.base.base_models import (
+from ..base.base_models import (
     BaseValuationModel, CompanyData, MarketData, ValuationResult,
     ValuationMethod, CalculationEngine, ModelValidator, ValidationError
 )

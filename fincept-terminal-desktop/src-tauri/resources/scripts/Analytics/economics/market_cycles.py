@@ -1,5 +1,5 @@
 
-Economic Market Cycles Module
+"""Economic Market Cycles Module
 =============================
 
 Business cycle identification and analysis
@@ -30,6 +30,8 @@ PARAMETERS:
 from decimal import Decimal
 from typing import Dict, List, Tuple, Optional, Any, Union
 from datetime import datetime, timedelta
+"""
+
 import pandas as pd
 import numpy as np
 from .core import EconomicsBase, ValidationError, CalculationError, DataError

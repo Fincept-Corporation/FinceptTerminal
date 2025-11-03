@@ -691,7 +691,7 @@ export default function NodeEditorTab() {
             description: description,
             saveAsDraft: false
           },
-          (nodeId, status, result) => {
+          (nodeId: string, status: string, result?: any) => {
             setNodes((nds) =>
               nds.map((node) => {
                 if (node.id === nodeId) {

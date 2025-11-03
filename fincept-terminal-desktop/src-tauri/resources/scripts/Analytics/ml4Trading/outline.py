@@ -1,5 +1,5 @@
 
-Machine Learning Outline Module
+"""Machine Learning Outline Module
 ======================================
 
 ML trading framework and architecture
@@ -25,6 +25,8 @@ PARAMETERS:
   - prediction_horizon: Prediction horizon (default: 1 day)
   - feature_selection: Feature selection method (default: 'recursive')
   - validation_method: Model validation approach (default: 'time_series_split')
+"""
+
 
 
 import numpy as np

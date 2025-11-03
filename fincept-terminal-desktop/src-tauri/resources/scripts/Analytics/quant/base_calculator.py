@@ -1,5 +1,5 @@
 
-Quantitative Base Calculator Module
+"""Quantitative Base Calculator Module
 =================================
 
 Base calculations for quantitative analysis
@@ -25,6 +25,8 @@ PARAMETERS:
   - rebalance_frequency: Strategy rebalancing frequency (default: 'monthly')
   - universe_size: Investment universe size (default: 1000)
   - risk_model: Risk model for portfolio construction (default: 'barra')
+"""
+
 
 
 import numpy as np

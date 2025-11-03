@@ -445,7 +445,7 @@ export default function DataSourcesTab() {
                 </button>
               </div>
             ) : (
-              connections.map((connection) => {
+              connections.map((connection: DataSourceConnection) => {
                 const config = DATA_SOURCE_CONFIGS.find((ds) => ds.type === connection.type);
                 return (
                   <div
