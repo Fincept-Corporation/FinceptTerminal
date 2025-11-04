@@ -45,7 +45,9 @@ const PredictionTab: React.FC = () => {
   const { colors, fontSize, fontFamily } = useTerminalTheme();
 
   // State
+  const [market, setMarket] = useState<'US' | 'BIST' | 'Crypto'>('US');
   const [symbol, setSymbol] = useState('AAPL');
+  const [cryptoQuote, setCryptoQuote] = useState<'USDT' | 'TRY' | 'BUSD'>('USDT');
   const [predictionHorizon, setPredictionHorizon] = useState(30);
   const [selectedModel, setSelectedModel] = useState<'ensemble' | 'arima' | 'lstm' | 'xgboost'>('ensemble');
   const [isLoading, setIsLoading] = useState(false);
@@ -54,12 +56,38 @@ const PredictionTab: React.FC = () => {
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [activeTab, setActiveTab] = useState('price-prediction');
 
+  // Market-specific suggestions
+  const getSymbolSuggestions = () => {
+    if (market === 'BIST') {
+      return ['AKBNK.IS', 'GARAN.IS', 'THYAO.IS', 'ASELS.IS', 'EREGL.IS'];
+    } else if (market === 'Crypto') {
+      return ['BTC', 'ETH', 'BNB', 'SOL', 'ADA'];
+    } else {
+      return ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'NVDA'];
+    }
+  };
+
+  // Update symbol when market changes
+  React.useEffect(() => {
+    const suggestions = getSymbolSuggestions();
+    setSymbol(suggestions[0]);
+  }, [market]);
+
   // Execute price prediction
   const handlePricePredict = async () => {
     setIsLoading(true);
     try {
-      const result = await predictionService.quickPredict(symbol, predictionHorizon);
-      setPredictionResult(result);
+      let result;
+
+      if (market === 'BIST') {
+        result = await predictionService.predictBISTStock(symbol, predictionHorizon, true);
+      } else if (market === 'Crypto') {
+        result = await predictionService.predictCrypto(symbol, predictionHorizon, cryptoQuote, true);
+      } else {
+        result = await predictionService.quickPredict(symbol, predictionHorizon);
+      }
+
+      setPredictionResult(result as any);
 
       if (!result.success) {
         alert(`Prediction failed: ${result.error}`);
@@ -208,16 +236,47 @@ const PredictionTab: React.FC = () => {
           <CardTitle>Prediction Controls</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+            <div>
+              <label className="text-sm mb-2 block">Market</label>
+              <Select value={market} onValueChange={(v: any) => setMarket(v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="US">🇺🇸 US Stocks</SelectItem>
+                  <SelectItem value="BIST">🇹🇷 BIST (Türkiye)</SelectItem>
+                  <SelectItem value="Crypto">₿ Cryptocurrency</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <label className="text-sm mb-2 block">Symbol</label>
               <Input
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                placeholder="AAPL"
+                placeholder={market === 'BIST' ? 'AKBNK.IS' : market === 'Crypto' ? 'BTC' : 'AAPL'}
                 className="uppercase"
               />
+              <div className="text-xs opacity-60 mt-1">
+                {getSymbolSuggestions().slice(0, 3).join(', ')}
+              </div>
             </div>
+            {market === 'Crypto' && (
+              <div>
+                <label className="text-sm mb-2 block">Quote Currency</label>
+                <Select value={cryptoQuote} onValueChange={(v: any) => setCryptoQuote(v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USDT">USDT (Tether)</SelectItem>
+                    <SelectItem value="TRY">TRY (₺ Türk Lirası)</SelectItem>
+                    <SelectItem value="BUSD">BUSD</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <label className="text-sm mb-2 block">Forecast Horizon (Days)</label>
               <Input
@@ -227,20 +286,6 @@ const PredictionTab: React.FC = () => {
                 min={1}
                 max={90}
               />
-            </div>
-            <div>
-              <label className="text-sm mb-2 block">Model</label>
-              <Select value={selectedModel} onValueChange={(v: any) => setSelectedModel(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ensemble">Ensemble (All Models)</SelectItem>
-                  <SelectItem value="arima">ARIMA</SelectItem>
-                  <SelectItem value="lstm">LSTM</SelectItem>
-                  <SelectItem value="xgboost">XGBoost</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <div className="flex items-end">
               <Button

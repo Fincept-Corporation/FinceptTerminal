@@ -137,8 +137,41 @@ export interface BacktestParams {
   step_size?: number;
 }
 
+export interface TurkishMarketPrediction {
+  success: boolean;
+  market: 'BIST' | 'Crypto';
+  symbol: string;
+  quote?: string;
+  method: string;
+  predictions: any;
+  signals: any[];
+  current_price: number;
+  currency?: string;
+  volatility?: number;
+  error?: string;
+}
+
+export interface MarketRecommendations {
+  success: boolean;
+  market: 'BIST' | 'Crypto';
+  quote?: string;
+  recommendations: Array<{
+    symbol: string;
+    signal: 'BUY' | 'SELL' | 'HOLD';
+    expected_return: number;
+    strength: number;
+    confidence: string;
+    current_price: number;
+    volatility?: number;
+  }>;
+  total_analyzed: number;
+  timestamp: string;
+  error?: string;
+}
+
 class PredictionService {
   private pythonPath: string = 'python3';
+  private turkishMarketScript: string = 'scripts/Analytics/prediction/turkish_market_predictor.py';
 
   /**
    * Execute Python prediction script
@@ -439,6 +472,132 @@ class PredictionService {
       return {
         success: false,
         error: error.message || 'Portfolio predictions failed',
+      };
+    }
+  }
+
+  /**
+   * Predict BIST stock
+   */
+  async predictBISTStock(
+    symbol: string,
+    daysAhead: number = 30,
+    useAdvanced: boolean = true
+  ): Promise<TurkishMarketPrediction> {
+    try {
+      const result = await this.executePythonScript(this.turkishMarketScript, {
+        market: 'bist',
+        action: 'predict',
+        symbol,
+        days_ahead: daysAhead,
+        use_advanced: useAdvanced,
+      });
+
+      return result as TurkishMarketPrediction;
+    } catch (error: any) {
+      return {
+        success: false,
+        market: 'BIST',
+        symbol,
+        method: '',
+        predictions: null,
+        signals: [],
+        current_price: 0,
+        error: error.message || 'BIST prediction failed',
+      };
+    }
+  }
+
+  /**
+   * Get BIST stock recommendations
+   */
+  async getBISTRecommendations(
+    symbols?: string[],
+    topN: number = 5
+  ): Promise<MarketRecommendations> {
+    try {
+      const result = await this.executePythonScript(this.turkishMarketScript, {
+        market: 'bist',
+        action: 'recommendations',
+        symbols,
+        top_n: topN,
+      });
+
+      return result as MarketRecommendations;
+    } catch (error: any) {
+      return {
+        success: false,
+        market: 'BIST',
+        recommendations: [],
+        total_analyzed: 0,
+        timestamp: new Date().toISOString(),
+        error: error.message || 'BIST recommendations failed',
+      };
+    }
+  }
+
+  /**
+   * Predict cryptocurrency
+   */
+  async predictCrypto(
+    symbol: string,
+    daysAhead: number = 30,
+    quote: string = 'USDT',
+    useAdvanced: boolean = true
+  ): Promise<TurkishMarketPrediction> {
+    try {
+      const result = await this.executePythonScript(this.turkishMarketScript, {
+        market: 'crypto',
+        action: 'predict',
+        symbol,
+        quote,
+        days_ahead: daysAhead,
+        use_advanced: useAdvanced,
+      });
+
+      return result as TurkishMarketPrediction;
+    } catch (error: any) {
+      return {
+        success: false,
+        market: 'Crypto',
+        symbol,
+        quote,
+        method: '',
+        predictions: null,
+        signals: [],
+        current_price: 0,
+        error: error.message || 'Crypto prediction failed',
+      };
+    }
+  }
+
+  /**
+   * Get cryptocurrency recommendations
+   */
+  async getCryptoRecommendations(
+    symbols?: string[],
+    quote: string = 'USDT',
+    topN: number = 5
+  ): Promise<MarketRecommendations> {
+    try {
+      const result = await this.executePythonScript(this.turkishMarketScript, {
+        market: 'crypto',
+        action: 'recommendations',
+        symbols,
+        quote,
+        top_n: topN,
+      });
+
+      return result as MarketRecommendations;
+    } catch (error: any) {
+      return {
+        success: false,
+        market: 'Crypto',
+        quote,
+        recommendations: [],
+        total_analyzed: 0,
+        timestamp: new Date().toISOString(),
+        error: error.message || 'Crypto recommendations failed',
       };
     }
   }
