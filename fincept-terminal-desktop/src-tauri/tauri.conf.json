@@ -46,8 +46,12 @@
     "longDescription": "FinceptTerminal is an AI-Powered Finance Terminal For Investment Research. Access real-time market data, advanced analytics, and institutional-grade tools for informed investment decisions.",
     "resources": [
       "resources/scripts",
-      "resources/python",
-      "resources/bun"
+      "resources/python-windows",
+      "resources/python-macos",
+      "resources/python-linux",
+      "resources/bun-windows",
+      "resources/bun-macos",
+      "resources/bun-linux"
     ],
     "externalBin": [],
     "windows": {

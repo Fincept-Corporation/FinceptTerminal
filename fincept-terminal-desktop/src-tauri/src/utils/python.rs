@@ -18,19 +18,25 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .resource_dir()
         .map_err(|e| format!("Failed to get resource directory: {}", e))?;
 
-    let python_exe = if cfg!(target_os = "windows") {
-        "python.exe"
+    // Determine platform-specific directory and executable name
+    let (python_dir, python_exe) = if cfg!(target_os = "windows") {
+        ("python-windows", "python.exe")
+    } else if cfg!(target_os = "macos") {
+        ("python-macos", "python3")
     } else {
-        "python"
+        ("python-linux", "python3")
     };
 
     let python_path = resource_dir
         .join("resources")
+        .join(python_dir)
         .join("python")
+        .join("bin")
         .join(python_exe);
 
     // Debug logging
     eprintln!("[Python] Resource dir: {}", resource_dir.display());
+    eprintln!("[Python] Platform dir: {}", python_dir);
     eprintln!("[Python] Looking for Python at: {}", python_path.display());
     eprintln!("[Python] Python exists: {}", python_path.exists());
 
@@ -53,16 +59,25 @@ pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .resource_dir()
         .map_err(|e| format!("Failed to get resource directory: {}", e))?;
 
-    let bun_exe = if cfg!(target_os = "windows") {
-        "bun.exe"
+    // Determine platform-specific directory and executable name
+    let (bun_dir, bun_exe) = if cfg!(target_os = "windows") {
+        ("bun-windows", "bun.exe")
+    } else if cfg!(target_os = "macos") {
+        ("bun-macos", "bun")
     } else {
-        "bun"
+        ("bun-linux", "bun")
     };
 
     let bun_path = resource_dir
         .join("resources")
-        .join("bun")
+        .join(bun_dir)
         .join(bun_exe);
+
+    // Debug logging
+    eprintln!("[Bun] Resource dir: {}", resource_dir.display());
+    eprintln!("[Bun] Platform dir: {}", bun_dir);
+    eprintln!("[Bun] Looking for Bun at: {}", bun_path.display());
+    eprintln!("[Bun] Bun exists: {}", bun_path.exists());
 
     // Verify Bun exists
     if !bun_path.exists() {
