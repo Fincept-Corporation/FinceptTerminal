@@ -82,6 +82,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Install Python packages for bundled Python
+        run: |
+          if [ "${{ matrix.platform }}" == "windows-latest" ]; then
+            ./src-tauri/resources/python-windows/python.exe -m pip install -r ./src-tauri/resources/requirements.txt
+          elif [ "${{ matrix.platform }}" == "macos-latest" ]; then
+            ./src-tauri/resources/python-macos/python/bin/python3 -m pip install -r ./src-tauri/resources/requirements.txt
+          elif [ "${{ matrix.platform }}" == "ubuntu-22.04" ]; then
+            ./src-tauri/resources/python-linux/python/bin/python3 -m pip install -r ./src-tauri/resources/requirements.txt
+          fi
+        shell: bash
+
       - name: Build the app with updater
         uses: tauri-apps/tauri-action@v0
         env:
