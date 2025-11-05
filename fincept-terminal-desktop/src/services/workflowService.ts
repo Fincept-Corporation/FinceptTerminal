@@ -11,10 +11,59 @@ export interface Workflow {
 class WorkflowService {
   private workflows: Map<string, Workflow> = new Map();
   private runningWorkflows: Set<string> = new Set();
+  private readonly STORAGE_KEY = 'fincept_workflows';
+
+  constructor() {
+    // Load workflows from localStorage on startup
+    this.loadFromStorage();
+  }
+
+  private loadFromStorage(): void {
+    try {
+      const stored = localStorage.getItem(this.STORAGE_KEY);
+      if (stored) {
+        const workflows: Workflow[] = JSON.parse(stored);
+        workflows.forEach(wf => this.workflows.set(wf.id, wf));
+        console.log(`[WorkflowService] Loaded ${workflows.length} workflows from storage`);
+      }
+    } catch (error) {
+      console.error('[WorkflowService] Failed to load workflows:', error);
+    }
+  }
+
+  private saveToStorage(): void {
+    try {
+      const workflows = Array.from(this.workflows.values());
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(workflows));
+      console.log(`[WorkflowService] Saved ${workflows.length} workflows to storage`);
+    } catch (error) {
+      console.error('[WorkflowService] Failed to save workflows:', error);
+    }
+  }
 
   async saveWorkflow(workflow: Workflow): Promise<void> {
     this.workflows.set(workflow.id, workflow);
+    this.saveToStorage();
     console.log(`[WorkflowService] Saved workflow: ${workflow.id}`);
+  }
+
+  async saveDraft(
+    name: string,
+    description: string,
+    nodes: any[],
+    edges: any[]
+  ): Promise<string> {
+    const id = `draft_${Date.now()}`;
+    const workflow: Workflow = {
+      id,
+      name,
+      description,
+      nodes,
+      edges,
+      status: 'draft'
+    };
+    await this.saveWorkflow(workflow);
+    return id;
   }
 
   async loadWorkflow(id: string): Promise<Workflow | undefined> {
@@ -24,6 +73,7 @@ class WorkflowService {
   async deleteWorkflow(id: string): Promise<void> {
     this.workflows.delete(id);
     this.runningWorkflows.delete(id);
+    this.saveToStorage();
     console.log(`[WorkflowService] Deleted workflow: ${id}`);
   }
 
@@ -85,6 +135,7 @@ class WorkflowService {
       workflow.edges = edges;
       workflow.status = 'draft';
       this.workflows.set(id, workflow);
+      this.saveToStorage();
       console.log(`[WorkflowService] Updated draft: ${id}`);
     }
   }

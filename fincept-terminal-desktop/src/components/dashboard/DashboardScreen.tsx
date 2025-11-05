@@ -21,8 +21,6 @@ import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 import PortfolioTab from '@/components/tabs/PortfolioTab';
 import AnalyticsTab from '@/components/tabs/AnalyticsTab';
 import EquityResearchTab from '@/components/tabs/EquityResearchTab';
-import OptionsTab from '@/components/tabs/OptionsTab';
-import EconomicCalendarTab from '@/components/tabs/EconomicCalendarTab';
 import ScreenerTab from '@/components/tabs/ScreenerTab';
 import DBnomicsTab from '@/components/tabs/DBnomicsTab';
 import EconomicsTab from '@/components/tabs/EconomicsTab';
@@ -636,18 +634,6 @@ export default function FinxeptTerminal() {
               Polygon EQ
             </TabsTrigger>
             <TabsTrigger
-              value="options"
-              style={activeTab === 'options' ? tabStyles.active : tabStyles.default}
-            >
-              Options
-            </TabsTrigger>
-            <TabsTrigger
-              value="calendar"
-              style={activeTab === 'calendar' ? tabStyles.active : tabStyles.default}
-            >
-              Economic Calendar
-            </TabsTrigger>
-            <TabsTrigger
               value="screener"
               style={activeTab === 'screener' ? tabStyles.active : tabStyles.default}
             >
@@ -823,12 +809,6 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="polygon" className="h-full m-0 p-0">
             <PolygonEqTab />
-          </TabsContent>
-          <TabsContent value="options" className="h-full m-0 p-0">
-            <OptionsTab />
-          </TabsContent>
-          <TabsContent value="calendar" className="h-full m-0 p-0">
-            <EconomicCalendarTab />
           </TabsContent>
           <TabsContent value="screener" className="h-full m-0 p-0">
             <ScreenerTab />
