@@ -635,8 +635,8 @@ export default function SettingsTab() {
                   if (activeSection !== item.id) e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <item.icon size={16} color={activeSection === item.id ? colors.primary : colors.textMuted} />
-                <span style={{ color: activeSection === item.id ? colors.text : colors.textMuted, fontSize: '11px', fontWeight: activeSection === item.id ? 'bold' : 'normal' }}>
+                <item.icon size={16} color={activeSection === item.id ? colors.primary : colors.text} />
+                <span style={{ color: colors.text, fontSize: '11px', fontWeight: activeSection === item.id ? 'bold' : 'normal' }}>
                   {item.label}
                 </span>
               </div>
@@ -655,7 +655,7 @@ export default function SettingsTab() {
                   <h2 style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
                     API KEY MANAGEMENT
                   </h2>
-                  <p style={{ color: colors.textMuted, fontSize: '10px' }}>
+                  <p style={{ color: colors.text, fontSize: '10px' }}>
                     Store API keys for services like FRED, Alpha Vantage, Polygon.io, etc. All data is encrypted and stored locally.
                   </p>
                 </div>
@@ -674,7 +674,7 @@ export default function SettingsTab() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'end' }}>
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         API KEY *
                       </label>
                       <input
@@ -716,7 +716,7 @@ export default function SettingsTab() {
                       {loading ? 'SAVING...' : 'SAVE'}
                     </button>
                   </div>
-                  <p style={{ color: colors.textMuted, fontSize: '9px', marginTop: '8px' }}>
+                  <p style={{ color: colors.text, fontSize: '9px', marginTop: '8px' }}>
                     Used for Polygon.io Equities data in the Polygon tab. Get your free API key at <span style={{ color: colors.primary }}>polygon.io</span>
                   </p>
                 </div>
@@ -735,7 +735,7 @@ export default function SettingsTab() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '12px', alignItems: 'end' }}>
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         SERVICE NAME *
                       </label>
                       <input
@@ -755,7 +755,7 @@ export default function SettingsTab() {
                       />
                     </div>
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         API KEY *
                       </label>
                       <input
@@ -813,8 +813,8 @@ export default function SettingsTab() {
                       textAlign: 'center',
                       borderRadius: '4px'
                     }}>
-                      <Lock size={32} color={colors.textMuted} style={{ margin: '0 auto 12px' }} />
-                      <p style={{ color: colors.textMuted, fontSize: '11px' }}>No API keys saved yet</p>
+                      <Lock size={32} color={colors.text} style={{ margin: '0 auto 12px' }} />
+                      <p style={{ color: colors.text, fontSize: '11px' }}>No API keys saved yet</p>
                     </div>
                   ) : (
                     <div style={{ display: 'grid', gap: '12px' }}>
@@ -836,7 +836,7 @@ export default function SettingsTab() {
                               {cred.service_name}
                             </h4>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ color: colors.textMuted, fontSize: '9px' }}>API Key:</span>
+                              <span style={{ color: colors.text, fontSize: '9px' }}>API Key:</span>
                               <span style={{ color: colors.text, fontFamily: 'monospace', fontSize: '10px' }}>
                                 {showPasswords[cred.id!] ? cred.api_key : '•'.repeat(20)}
                               </span>
@@ -850,10 +850,10 @@ export default function SettingsTab() {
                                   display: 'flex'
                                 }}
                               >
-                                {showPasswords[cred.id!] ? <EyeOff size={14} color={colors.textMuted} /> : <Eye size={14} color={colors.textMuted} />}
+                                {showPasswords[cred.id!] ? <EyeOff size={14} color={colors.text} /> : <Eye size={14} color={colors.text} />}
                               </button>
                             </div>
-                            <p style={{ color: colors.textMuted, fontSize: '9px', marginTop: '4px' }}>
+                            <p style={{ color: colors.text, fontSize: '9px', marginTop: '4px' }}>
                               Added: {cred.created_at ? new Date(cred.created_at).toLocaleDateString() : 'N/A'}
                             </p>
                           </div>
@@ -890,7 +890,7 @@ export default function SettingsTab() {
                   <h2 style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
                     LLM CONFIGURATION
                   </h2>
-                  <p style={{ color: colors.textMuted, fontSize: '10px' }}>
+                  <p style={{ color: colors.text, fontSize: '10px' }}>
                     Configure AI providers for the Chat tab. Changes here are reflected in both Chat and Settings screens.
                   </p>
                 </div>
@@ -939,7 +939,7 @@ export default function SettingsTab() {
                     <div style={{ display: 'grid', gap: '12px' }}>
                       {getCurrentLLMConfig()!.provider !== 'ollama' && (
                         <div>
-                          <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                          <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                             API KEY *
                           </label>
                           <input
@@ -962,7 +962,7 @@ export default function SettingsTab() {
 
                       {(getCurrentLLMConfig()!.provider === 'ollama' || getCurrentLLMConfig()!.provider === 'deepseek' || getCurrentLLMConfig()!.provider === 'openrouter') && (
                         <div>
-                          <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                          <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                             BASE URL
                           </label>
                           <input
@@ -985,7 +985,7 @@ export default function SettingsTab() {
 
                       <div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <label style={{ color: colors.textMuted, fontSize: '9px' }}>
+                          <label style={{ color: colors.text, fontSize: '9px' }}>
                             MODEL
                           </label>
                           {getCurrentLLMConfig()!.provider === 'ollama' && (
@@ -1015,7 +1015,7 @@ export default function SettingsTab() {
                                 style={{
                                   background: 'transparent',
                                   border: '1px solid #2a2a2a',
-                                  color: colors.textMuted,
+                                  color: colors.text,
                                   padding: '4px 8px',
                                   fontSize: '9px',
                                   cursor: 'pointer',
@@ -1121,7 +1121,7 @@ export default function SettingsTab() {
 
                   <div style={{ display: 'grid', gap: '12px' }}>
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         TEMPERATURE (0.0 - 2.0)
                       </label>
                       <input
@@ -1144,7 +1144,7 @@ export default function SettingsTab() {
                     </div>
 
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         MAX TOKENS
                       </label>
                       <input
@@ -1166,7 +1166,7 @@ export default function SettingsTab() {
                     </div>
 
                     <div>
-                      <label style={{ color: colors.textMuted, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                      <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
                         SYSTEM PROMPT
                       </label>
                       <textarea
@@ -1216,7 +1216,7 @@ export default function SettingsTab() {
             {activeSection === 'terminal' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {/* Font Settings */}
-                <div style={{ background: colors.panel, border: `1px solid ${colors.textMuted}`, borderRadius: '4px', padding: '16px' }}>
+                <div style={{ background: colors.panel, border: `1px solid ${colors.text}`, borderRadius: '4px', padding: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                     <Type size={18} color={colors.primary} />
                     <span style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold' }}>FONT SETTINGS</span>
@@ -1224,7 +1224,7 @@ export default function SettingsTab() {
 
                   {/* Font Family */}
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ color: colors.textMuted, fontSize: '11px', display: 'block', marginBottom: '6px' }}>Font Family</label>
+                    <label style={{ color: colors.text, fontSize: '11px', display: 'block', marginBottom: '6px' }}>Font Family</label>
                     <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} style={{ width: '100%', padding: '8px', background: colors.background, border: '1px solid #444', color: colors.text, borderRadius: '3px' }}>
                       {FONT_FAMILIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                     </select>
@@ -1233,19 +1233,19 @@ export default function SettingsTab() {
                   {/* Base Font Size */}
                   <div style={{ marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <label style={{ color: colors.textMuted, fontSize: '11px' }}>Base Font Size</label>
+                      <label style={{ color: colors.text, fontSize: '11px' }}>Base Font Size</label>
                       <span style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold' }}>{baseSize}px</span>
                     </div>
                     <input type="range" min="9" max="18" value={baseSize} onChange={(e) => setBaseSize(Number(e.target.value))} style={{ width: '100%' }} />
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-                      <span style={{ color: colors.textMuted, fontSize: '9px' }}>Small (9px)</span>
-                      <span style={{ color: colors.textMuted, fontSize: '9px' }}>Large (18px)</span>
+                      <span style={{ color: colors.text, fontSize: '9px' }}>Small (9px)</span>
+                      <span style={{ color: colors.text, fontSize: '9px' }}>Large (18px)</span>
                     </div>
                   </div>
 
                   {/* Font Weight */}
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ color: colors.textMuted, fontSize: '11px', display: 'block', marginBottom: '6px' }}>Font Weight</label>
+                    <label style={{ color: colors.text, fontSize: '11px', display: 'block', marginBottom: '6px' }}>Font Weight</label>
                     <select value={fontWeight} onChange={(e) => setFontWeight(e.target.value as FontSettings['weight'])} style={{ width: '100%', padding: '8px', background: colors.background, border: '1px solid #444', color: colors.text, borderRadius: '3px' }}>
                       <option value="normal">Normal</option>
                       <option value="semibold">Semi-Bold</option>
@@ -1257,13 +1257,13 @@ export default function SettingsTab() {
                   <div style={{ marginBottom: '0' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                       <input type="checkbox" checked={fontItalic} onChange={(e) => setFontItalic(e.target.checked)} />
-                      <span style={{ color: colors.textMuted, fontSize: '11px' }}>Enable Italic</span>
+                      <span style={{ color: colors.text, fontSize: '11px' }}>Enable Italic</span>
                     </label>
                   </div>
                 </div>
 
                 {/* Color Theme */}
-                <div style={{ background: colors.panel, border: `1px solid ${colors.textMuted}`, borderRadius: '4px', padding: '16px' }}>
+                <div style={{ background: colors.panel, border: `1px solid ${colors.text}`, borderRadius: '4px', padding: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                     <Palette size={18} color={colors.primary} />
                     <span style={{ color: colors.text, fontSize: '14px', fontWeight: 'bold' }}>COLOR THEME</span>
@@ -1271,7 +1271,7 @@ export default function SettingsTab() {
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {Object.entries(COLOR_THEMES).map(([key, themeObj]) => (
-                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: selectedTheme === key ? '#1a1a1a' : 'transparent', border: `1px solid ${selectedTheme === key ? colors.primary : colors.textMuted}`, borderRadius: '4px', cursor: 'pointer' }}>
+                      <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px', background: selectedTheme === key ? '#1a1a1a' : 'transparent', border: `1px solid ${selectedTheme === key ? colors.primary : colors.text}`, borderRadius: '4px', cursor: 'pointer' }}>
                         <input type="radio" name="theme" value={key} checked={selectedTheme === key} onChange={() => setSelectedTheme(key)} />
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <div style={{ width: '20px', height: '20px', background: themeObj.primary, border: '1px solid #444' }} title="Primary" />
@@ -1293,7 +1293,7 @@ export default function SettingsTab() {
                   <div style={{ color: theme.colors.text, fontSize: `${baseSize}px`, fontFamily: `${fontFamily}, monospace`, fontWeight: fontWeight === 'normal' ? '400' : fontWeight === 'semibold' ? '600' : '700', fontStyle: fontItalic ? 'italic' : 'normal', marginBottom: '8px' }}>
                     Body Text: Lorem ipsum dolor sit amet
                   </div>
-                  <div style={{ color: theme.colors.textMuted, fontSize: `${baseSize - 1}px`, fontFamily: `${fontFamily}, monospace`, fontWeight: fontWeight === 'normal' ? '400' : fontWeight === 'semibold' ? '600' : '700', fontStyle: fontItalic ? 'italic' : 'normal', marginBottom: '8px' }}>
+                  <div style={{ color: theme.colors.text, fontSize: `${baseSize - 1}px`, fontFamily: `${fontFamily}, monospace`, fontWeight: fontWeight === 'normal' ? '400' : fontWeight === 'semibold' ? '600' : '700', fontStyle: fontItalic ? 'italic' : 'normal', marginBottom: '8px' }}>
                     Small Text: Market data and timestamps
                   </div>
                   <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
@@ -1308,7 +1308,7 @@ export default function SettingsTab() {
                   <button onClick={handleSaveTerminalAppearance} style={{ flex: 1, background: colors.primary, color: colors.background, border: 'none', padding: '12px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                     <Save size={14} /> SAVE APPEARANCE
                   </button>
-                  <button onClick={handleResetTerminalAppearance} style={{ background: colors.textMuted, color: colors.text, border: 'none', padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button onClick={handleResetTerminalAppearance} style={{ background: colors.text, color: colors.text, border: 'none', padding: '12px 16px', fontSize: '12px', fontWeight: 'bold', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <RefreshCw size={14} /> RESET
                   </button>
                 </div>
@@ -1321,8 +1321,8 @@ export default function SettingsTab() {
             )}
 
             {/* Other sections */}
-            {activeSection === 'profile' && <div style={{ color: colors.textMuted }}>User Profile section (implementation same as before)</div>}
-            {activeSection === 'notifications' && <div style={{ color: colors.textMuted }}>Notifications section (implementation same as before)</div>}
+            {activeSection === 'profile' && <div style={{ color: colors.text }}>User Profile section (implementation same as before)</div>}
+            {activeSection === 'notifications' && <div style={{ color: colors.text }}>Notifications section (implementation same as before)</div>}
 
           </div>
         </div>
@@ -1342,12 +1342,12 @@ export default function SettingsTab() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '9px' }}>
           <span style={{ color: colors.primary, fontWeight: 'bold' }}>SETTINGS v2.0.0</span>
-          <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{ color: colors.textMuted }}>Database: SQLite</span>
-          <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{ color: colors.textMuted }}>Storage: File-based</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.text }}>Database: SQLite</span>
+          <span style={{ color: colors.text }}>|</span>
+          <span style={{ color: colors.text }}>Storage: File-based</span>
         </div>
-        <div style={{ fontSize: '9px', color: colors.textMuted }}>
+        <div style={{ fontSize: '9px', color: colors.text }}>
           All data stored securely in fincept_terminal.db
         </div>
       </div>

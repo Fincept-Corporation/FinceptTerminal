@@ -18,50 +18,15 @@ export interface NewsArticle {
   pubDate?: Date;
 }
 
-// 20+ RSS Feed Sources - Real working feeds
+// Verified working RSS feeds (2025)
 const RSS_FEEDS = [
-  // Major Financial News
-  {
-    name: 'Reuters Business',
-    url: 'https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best',
-    category: 'MARKETS',
-    region: 'GLOBAL',
-    source: 'REUTERS'
-  },
-  {
-    name: 'CNBC Top News',
-    url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'CNBC'
-  },
-  {
-    name: 'MarketWatch',
-    url: 'https://www.marketwatch.com/rss/topstories',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'MARKETWATCH'
-  },
-  {
-    name: 'WSJ Markets',
-    url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'WSJ'
-  },
+  // Major Financial News - Tested & Working
   {
     name: 'Yahoo Finance',
     url: 'https://finance.yahoo.com/news/rssindex',
     category: 'MARKETS',
     region: 'US',
     source: 'YAHOO'
-  },
-  {
-    name: 'Seeking Alpha',
-    url: 'https://seekingalpha.com/feed.xml',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'SEEKING ALPHA'
   },
   {
     name: 'Investing.com',
@@ -71,14 +36,28 @@ const RSS_FEEDS = [
     source: 'INVESTING.COM'
   },
   {
-    name: 'Barrons',
-    url: 'https://www.barrons.com/articles/rss',
+    name: 'MarketWatch',
+    url: 'https://www.marketwatch.com/rss/topstories',
     category: 'MARKETS',
     region: 'US',
-    source: 'BARRONS'
+    source: 'MARKETWATCH'
+  },
+  {
+    name: 'CNBC Markets',
+    url: 'https://www.cnbc.com/id/10000664/device/rss/rss.html',
+    category: 'MARKETS',
+    region: 'US',
+    source: 'CNBC'
+  },
+  {
+    name: 'Benzinga',
+    url: 'https://www.benzinga.com/feed',
+    category: 'MARKETS',
+    region: 'US',
+    source: 'BENZINGA'
   },
 
-  // Cryptocurrency
+  // Cryptocurrency - Working feeds
   {
     name: 'CoinDesk',
     url: 'https://www.coindesk.com/arc/outboundfeeds/rss/',
@@ -101,7 +80,7 @@ const RSS_FEEDS = [
     source: 'DECRYPT'
   },
 
-  // Technology
+  // Technology - Working feeds
   {
     name: 'TechCrunch',
     url: 'https://techcrunch.com/feed/',
@@ -124,9 +103,9 @@ const RSS_FEEDS = [
     source: 'ARS TECHNICA'
   },
 
-  // Business & Economics
+  // Business & Economics - Working feeds
   {
-    name: 'Forbes',
+    name: 'Forbes Business',
     url: 'https://www.forbes.com/business/feed/',
     category: 'MARKETS',
     region: 'US',
@@ -139,52 +118,24 @@ const RSS_FEEDS = [
     region: 'US',
     source: 'BUSINESS INSIDER'
   },
-  {
-    name: 'The Economist',
-    url: 'https://www.economist.com/finance-and-economics/rss.xml',
-    category: 'ECONOMIC',
-    region: 'GLOBAL',
-    source: 'THE ECONOMIST'
-  },
 
-  // Energy & Commodities
+  // Energy & Commodities - Working feeds
   {
     name: 'Oil Price',
     url: 'https://oilprice.com/rss/main',
     category: 'ENERGY',
     region: 'GLOBAL',
     source: 'OILPRICE'
-  },
-  {
-    name: 'Rigzone',
-    url: 'https://www.rigzone.com/news/rss.asp',
-    category: 'ENERGY',
-    region: 'GLOBAL',
-    source: 'RIGZONE'
-  },
-
-  // Global Markets
-  {
-    name: 'FXStreet',
-    url: 'https://www.fxstreet.com/rss/news',
-    category: 'MARKETS',
-    region: 'GLOBAL',
-    source: 'FXSTREET'
-  },
-  {
-    name: 'Benzinga',
-    url: 'https://www.benzinga.com/feed',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'BENZINGA'
   }
 ];
 
 // Multiple CORS proxies for fallback
 const CORS_PROXIES = [
   'https://api.allorigins.win/raw?url=',
+  'https://api.codetabs.com/v1/proxy?quest=',
   'https://corsproxy.io/?',
-  'https://api.codetabs.com/v1/proxy?quest='
+  'https://proxy.cors.sh/',
+  'https://api.allorigins.win/get?url='
 ];
 
 // Parse RSS XML to articles
@@ -300,48 +251,69 @@ function parseRSSFeed(xmlText: string, feedConfig: typeof RSS_FEEDS[0]): NewsArt
 // Fetch single RSS feed with proxy fallback
 async function fetchRSSFeed(feedConfig: typeof RSS_FEEDS[0]): Promise<NewsArticle[]> {
   // Try each proxy until one works
-  for (const proxy of CORS_PROXIES) {
+  for (let i = 0; i < CORS_PROXIES.length; i++) {
     try {
+      const proxy = CORS_PROXIES[i];
       const proxyUrl = `${proxy}${encodeURIComponent(feedConfig.url)}`;
+
+      // Create manual timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       const response = await fetch(proxyUrl, {
         headers: {
           'Accept': 'application/rss+xml, application/xml, text/xml, */*'
         },
-        signal: AbortSignal.timeout(10000) // 10 second timeout per proxy
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
+        console.log(`✗ ${feedConfig.name} via proxy ${i+1}: HTTP ${response.status}`);
         continue; // Try next proxy
       }
 
-      const xmlText = await response.text();
+      let xmlText = await response.text();
+
+      // Handle allorigins JSON wrapper format
+      if (proxy.includes('allorigins.win/get')) {
+        try {
+          const json = JSON.parse(xmlText);
+          xmlText = json.contents || xmlText;
+        } catch (e) {
+          // Not JSON, use as-is
+        }
+      }
 
       // Validate response is XML before parsing
       if (!xmlText || !xmlText.trim().startsWith('<')) {
+        console.log(`✗ ${feedConfig.name} via proxy ${i+1}: Not XML`);
         continue; // Try next proxy
       }
 
       const articles = parseRSSFeed(xmlText, feedConfig);
 
       if (articles.length > 0) {
-        console.log(`✓ Fetched ${articles.length} articles from ${feedConfig.name}`);
+        console.log(`✓ Fetched ${articles.length} articles from ${feedConfig.name} via proxy ${i+1}`);
         return articles;
+      } else {
+        console.log(`✗ ${feedConfig.name} via proxy ${i+1}: Parsed 0 articles`);
       }
-    } catch (error) {
-      // Silently try next proxy
+    } catch (error: any) {
+      console.log(`✗ ${feedConfig.name} via proxy ${i+1}: ${error.message}`);
       continue;
     }
   }
 
-  // All proxies failed - don't log to reduce console noise
+  console.log(`✗ ${feedConfig.name}: All ${CORS_PROXIES.length} proxies failed`);
   return [];
 }
 
 // Fetch all RSS feeds with batching
 export async function fetchAllNews(): Promise<NewsArticle[]> {
   const allArticles: NewsArticle[] = [];
-  const BATCH_SIZE = 8; // Fetch 8 feeds at a time for better performance
+  const BATCH_SIZE = 5; // Reduced batch size for more reliable fetching
   let successfulFeeds = 0;
 
   // Process feeds in batches
@@ -372,7 +344,7 @@ export async function fetchAllNews(): Promise<NewsArticle[]> {
 // Fetch news with caching (cache for 5 minutes)
 let cachedNews: NewsArticle[] = [];
 let lastFetchTime = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 10 * 60 * 1000; // 10 minutes default
 let useMockData = false;
 
 export async function fetchNewsWithCache(forceRefresh: boolean = false): Promise<NewsArticle[]> {
@@ -380,8 +352,11 @@ export async function fetchNewsWithCache(forceRefresh: boolean = false): Promise
 
   // Return cached news if still valid and not forcing refresh
   if (!forceRefresh && cachedNews.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
+    console.log(`📋 Using cached news (${cachedNews.length} articles)`);
     return cachedNews;
   }
+
+  console.log(`🔄 Fetching fresh news from ${RSS_FEEDS.length} feeds...`);
 
   // On first load or force refresh, fetch real news immediately
   try {
@@ -391,6 +366,7 @@ export async function fetchNewsWithCache(forceRefresh: boolean = false): Promise
       cachedNews = fetchedNews;
       useMockData = false;
       lastFetchTime = Date.now();
+      console.log(`✅ Cache updated with ${cachedNews.length} articles`);
       return cachedNews;
     } else {
       // Only use mock data if real fetch completely fails and we have no cache
@@ -398,19 +374,23 @@ export async function fetchNewsWithCache(forceRefresh: boolean = false): Promise
         console.log('⚠ Using demo data - no live feeds available');
         cachedNews = generateMockNews();
         useMockData = true;
+        lastFetchTime = Date.now();
+      } else {
+        console.log('⚠ Fetch returned 0 articles, keeping cache');
       }
+      return cachedNews;
     }
   } catch (err) {
+    console.error('❌ Fetch error:', err);
     // Only use mock data if real fetch completely fails and we have no cache
     if (cachedNews.length === 0) {
       console.log('⚠ Using demo data - fetch failed');
       cachedNews = generateMockNews();
       useMockData = true;
+      lastFetchTime = Date.now();
     }
+    return cachedNews;
   }
-
-  lastFetchTime = now;
-  return cachedNews;
 }
 
 // Check if currently using mock data

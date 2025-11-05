@@ -20,6 +20,8 @@ const NewsTab: React.FC = () => {
   const [activeSources, setActiveSources] = useState<string[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [showWebView, setShowWebView] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(10); // minutes
+  const [showIntervalSettings, setShowIntervalSettings] = useState(false);
 
   // Manual refresh function with force refresh
   const handleRefresh = async () => {
@@ -57,11 +59,11 @@ const NewsTab: React.FC = () => {
 
     loadNews();
 
-    // Refresh news every 5 minutes
-    const newsRefreshInterval = setInterval(loadNews, 5 * 60 * 1000);
+    // Refresh news based on user interval
+    const newsRefreshInterval = setInterval(loadNews, refreshInterval * 60 * 1000);
 
     return () => clearInterval(newsRefreshInterval);
-  }, []);
+  }, [refreshInterval]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -184,7 +186,66 @@ const NewsTab: React.FC = () => {
           >
             🔄 {loading ? 'UPDATING...' : 'REFRESH'}
           </button>
+          <span style={{ color: colors.text }}>|</span>
+          <button
+            onClick={() => setShowIntervalSettings(!showIntervalSettings)}
+            style={{
+              backgroundColor: colors.info,
+              color: colors.background,
+              border: 'none',
+              padding: '2px 8px',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              borderRadius: '2px'
+            }}
+            title="Auto-refresh settings"
+          >
+            ⏱ {refreshInterval}min
+          </button>
         </div>
+
+        {/* Interval Settings Dropdown */}
+        {showIntervalSettings && (
+          <div style={{
+            position: 'absolute',
+            top: '30px',
+            right: '8px',
+            backgroundColor: colors.panel,
+            border: `2px solid ${colors.primary}`,
+            borderRadius: '4px',
+            padding: '8px',
+            zIndex: 1000,
+            boxShadow: `0 4px 8px rgba(0,0,0,0.3)`
+          }}>
+            <div style={{ fontSize: '11px', color: colors.warning, fontWeight: 'bold', marginBottom: '6px' }}>
+              AUTO-REFRESH INTERVAL
+            </div>
+            {[1, 2, 5, 10, 15, 30].map(min => (
+              <button
+                key={min}
+                onClick={() => {
+                  setRefreshInterval(min);
+                  setShowIntervalSettings(false);
+                }}
+                style={{
+                  width: '100%',
+                  backgroundColor: refreshInterval === min ? colors.primary : colors.background,
+                  color: refreshInterval === min ? colors.background : colors.text,
+                  border: `1px solid ${colors.textMuted}`,
+                  padding: '4px 8px',
+                  fontSize: '10px',
+                  fontWeight: refreshInterval === min ? 'bold' : 'normal',
+                  cursor: 'pointer',
+                  marginBottom: '2px',
+                  textAlign: 'left'
+                }}
+              >
+                {min} minute{min > 1 ? 's' : ''}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* News Ticker - Continuous seamless scroll like Bloomberg */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', marginBottom: '2px' }}>

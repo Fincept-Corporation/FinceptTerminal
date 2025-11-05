@@ -1,4 +1,5 @@
 import { Node, Edge } from 'reactflow';
+import { workflowService } from '@/services/workflowService';
 
 interface ExecuteOptions {
   name: string;
@@ -44,7 +45,17 @@ class WorkflowExecutor {
     edges: Edge[]
   ): Promise<string> {
     console.log('[WorkflowExecutor] Saving draft:', name);
-    return `draft_${Date.now()}`;
+
+    // Actually save the draft to workflowService
+    const workflowId = await workflowService.saveDraft(
+      name,
+      description,
+      nodes,
+      edges
+    );
+
+    console.log('[WorkflowExecutor] Draft saved with ID:', workflowId);
+    return workflowId;
   }
 }
 

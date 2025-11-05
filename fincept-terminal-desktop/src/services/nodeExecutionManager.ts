@@ -332,13 +332,22 @@ class NodeExecutionManager {
     inputs: Record<string, any>
   ): Promise<ExecutionResult> {
     // Results display just receives and displays data
-    console.log('[NodeExecutionManager] Results display node receiving data:', JSON.stringify(inputs, null, 2));
+    console.log('[NodeExecutionManager] ========================================');
+    console.log('[NodeExecutionManager] Results Display Node Execution');
+    console.log('[NodeExecutionManager] Node ID:', node.id);
+    console.log('[NodeExecutionManager] Raw inputs:', inputs);
+    console.log('[NodeExecutionManager] Input keys:', Object.keys(inputs));
+    console.log('[NodeExecutionManager] Input type:', typeof inputs);
+    console.log('[NodeExecutionManager] ========================================');
 
     // Extract actual data if it's wrapped in a success object
     let displayData = inputs;
     if (inputs.success !== undefined && inputs.data !== undefined) {
       displayData = inputs.data;
+      console.log('[NodeExecutionManager] Unwrapped data from success wrapper');
     }
+
+    console.log('[NodeExecutionManager] Final display data:', displayData);
 
     return {
       nodeId: node.id,
