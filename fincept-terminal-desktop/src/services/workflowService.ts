@@ -89,14 +89,20 @@ class WorkflowService {
 
     this.runningWorkflows.add(id);
     workflow.status = 'running';
+    this.saveToStorage(); // Save the 'running' state
 
     console.log(`[WorkflowService] Executing workflow: ${id}`);
 
-    // Simulate workflow execution
-    // In a real implementation, this would execute the nodes
-
-    workflow.status = 'completed';
-    this.runningWorkflows.delete(id);
+    // Simulate async workflow execution
+    setTimeout(() => {
+      const completedWorkflow = this.workflows.get(id);
+      if (completedWorkflow) {
+        completedWorkflow.status = 'completed';
+        this.runningWorkflows.delete(id);
+        this.saveToStorage(); // Save the 'completed' state
+        console.log(`[WorkflowService] Workflow ${id} completed`);
+      }
+    }, 100); // Simulate a 100ms execution time
   }
 
   async stopWorkflow(id: string): Promise<void> {
