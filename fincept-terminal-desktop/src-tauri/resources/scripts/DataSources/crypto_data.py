@@ -39,6 +39,10 @@ class CryptoDataService:
     def __init__(self):
         self.binance_base = "https://api.binance.com/api/v3"
         self.coingecko_base = "https://api.coingecko.com/api/v3"
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json'
+        }
 
     def get_binance_price(self, symbol: str, quote: str = "USDT") -> Dict:
         """
@@ -56,7 +60,7 @@ class CryptoDataService:
             url = f"{self.binance_base}/ticker/24hr"
             params = {"symbol": pair}
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             data = response.json()
@@ -87,10 +91,85 @@ class CryptoDataService:
         """Türk Lirası cinsinden fiyat"""
         return self.get_binance_price(symbol, quote="TRY")
 
+    def get_coingecko_historical(self, symbol: str, days: int = 365) -> Dict:
+        """
+        CoinGecko historical price data (fallback for Binance)
+
+        Args:
+            symbol: Crypto symbol (BTC, ETH, etc.)
+            days: Number of days of history
+
+        Returns:
+            OHLCV data in Binance format
+        """
+        # Map common symbols to CoinGecko IDs
+        symbol_to_id = {
+            'BTC': 'bitcoin', 'ETH': 'ethereum', 'USDT': 'tether',
+            'BNB': 'binancecoin', 'XRP': 'ripple', 'ADA': 'cardano',
+            'SOL': 'solana', 'DOGE': 'dogecoin', 'TRX': 'tron',
+            'MATIC': 'matic-network', 'UNI': 'uniswap', 'LINK': 'chainlink',
+            'AVAX': 'avalanche-2', 'AAVE': 'aave', 'CHZ': 'chiliz'
+        }
+
+        coin_id = symbol_to_id.get(symbol.upper(), symbol.lower())
+
+        try:
+            url = f"{self.coingecko_base}/coins/{coin_id}/market_chart"
+            params = {
+                'vs_currency': 'usd',
+                'days': days,
+                'interval': 'daily'
+            }
+
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+            prices = data.get('prices', [])
+            volumes = data.get('total_volumes', [])
+
+            dates = []
+            close_prices = []
+            volume_data = []
+
+            for i, (timestamp, price) in enumerate(prices):
+                dates.append(datetime.fromtimestamp(timestamp / 1000).strftime('%Y-%m-%d %H:%M:%S'))
+                close_prices.append(price)
+                # Use close for OHLC (CoinGecko doesn't provide OHLC in this endpoint)
+                if i < len(volumes):
+                    volume_data.append(volumes[i][1])
+                else:
+                    volume_data.append(0)
+
+            # For simplicity, use close price for all OHLC values
+            return {
+                'success': True,
+                'symbol': symbol,
+                'quote': 'USD',
+                'pair': f"{symbol}USD",
+                'interval': '1d',
+                'dates': dates,
+                'open': close_prices,
+                'high': close_prices,
+                'low': close_prices,
+                'close': close_prices,
+                'volume': volume_data,
+                'data_points': len(dates),
+                'source': 'CoinGecko'
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'symbol': symbol
+            }
+
     def get_historical_klines(self, symbol: str, interval: str = "1d",
                              limit: int = 365, quote: str = "USDT") -> Dict:
         """
         Binance geçmiş fiyat verileri (Klines/Candlestick)
+        Falls back to CoinGecko if Binance fails
 
         Args:
             symbol: Kripto sembolü
@@ -110,7 +189,7 @@ class CryptoDataService:
                 "limit": min(limit, 1000)
             }
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             klines = response.json()
@@ -147,11 +226,9 @@ class CryptoDataService:
             }
 
         except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'symbol': symbol
-            }
+            # Fallback to CoinGecko if Binance fails
+            print(f"Binance failed ({str(e)}), trying CoinGecko...", file=sys.stderr)
+            return self.get_coingecko_historical(symbol, days=limit)
 
     def get_coingecko_info(self, coin_id: str) -> Dict:
         """
@@ -172,7 +249,7 @@ class CryptoDataService:
                 'developer_data': 'true'
             }
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             data = response.json()
@@ -232,7 +309,7 @@ class CryptoDataService:
                 'sparkline': 'false'
             }
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             coins = response.json()
@@ -262,7 +339,7 @@ class CryptoDataService:
         try:
             url = f"{self.coingecko_base}/search/trending"
 
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             data = response.json()
@@ -297,7 +374,7 @@ class CryptoDataService:
         try:
             url = f"{self.coingecko_base}/global"
 
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             data = response.json()
@@ -328,7 +405,7 @@ class CryptoDataService:
             url = "https://api.alternative.me/fng/"
             params = {'limit': 1}
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             data = response.json()

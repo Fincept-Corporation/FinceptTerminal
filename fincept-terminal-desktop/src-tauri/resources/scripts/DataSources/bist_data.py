@@ -58,6 +58,9 @@ class BISTDataService:
 
     def __init__(self):
         self.base_url = "https://query1.finance.yahoo.com/v8/finance"
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
 
     def get_stock_info(self, symbol: str) -> Dict:
         """
@@ -76,7 +79,7 @@ class BISTDataService:
                 "range": "1d"
             }
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             data = response.json()
@@ -126,7 +129,7 @@ class BISTDataService:
                 "interval": interval
             }
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             data = response.json()
@@ -169,7 +172,7 @@ class BISTDataService:
                 "range": "5d"
             }
 
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, headers=self.headers, timeout=10)
             response.raise_for_status()
 
             data = response.json()

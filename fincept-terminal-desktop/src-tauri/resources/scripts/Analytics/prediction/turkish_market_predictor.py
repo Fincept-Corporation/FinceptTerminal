@@ -14,13 +14,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 
 # Import prediction modules
+# Import simple prediction (no dependencies)
+try:
+    from simple_prediction_demo import simple_prediction
+except ImportError:
+    simple_prediction = None
+
+# Import advanced predictor (requires numpy, etc.)
 try:
     from stock_price_predictor import StockPricePredictor
-    from simple_prediction_demo import simple_prediction
     ADVANCED_AVAILABLE = True
 except ImportError:
     ADVANCED_AVAILABLE = False
-    simple_prediction = None
+    StockPricePredictor = None
 
 # Import data services
 try:
