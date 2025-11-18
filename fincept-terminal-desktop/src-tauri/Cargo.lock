@@ -1145,6 +1145,7 @@ version = "3.0.11"
 dependencies = [
  "anyhow",
  "chrono",
+ "once_cell",
  "reqwest 0.11.27",
  "serde",
  "serde_json",

@@ -3,9 +3,6 @@ use std::path::PathBuf;
 use std::process::Command;
 use tauri::Manager;
 
-#[cfg(not(target_os = "windows"))]
-use std::env;
-
 // Windows-specific imports to hide console windows
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -13,6 +10,13 @@ use std::os::windows::process::CommandExt;
 // Windows creation flags to hide console window
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+#[cfg(not(target_os = "windows"))]
+use once_cell::sync::OnceCell;
+#[cfg(not(target_os = "windows"))]
+use std::env;
+#[cfg(not(target_os = "windows"))]
+static PYTHON_PATH: OnceCell<PathBuf> = OnceCell::new();
 
 /// Get the Python executable path at runtime (Windows uses bundled runtime)
 #[cfg(target_os = "windows")]
@@ -47,12 +51,7 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 /// macOS/Linux rely on an existing Python 3 installation
 #[cfg(not(target_os = "windows"))]
 pub fn get_python_path(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let python_path = find_system_python()?;
-    eprintln!(
-        "[Python] Using system interpreter at: {}",
-        python_path.display()
-    );
-    Ok(python_path)
+    cached_python_path()
 }
 
 /// Get the bundled Bun executable path at runtime
@@ -111,7 +110,7 @@ pub fn python_command() -> Command {
 
 #[cfg(not(target_os = "windows"))]
 pub fn python_command() -> Command {
-    match find_system_python() {
+    match cached_python_path() {
         Ok(path) => Command::new(path),
         Err(err) => {
             eprintln!("[Python] {err} - falling back to `python3` on PATH");
@@ -190,6 +189,17 @@ fn find_system_python() -> Result<PathBuf, String> {
         "Unable to locate a Python 3 executable. Install Python via Homebrew (`brew install python@3`), Conda, or set the FINCEPT_PYTHON_PATH environment variable."
             .to_string(),
     )
+}
+
+#[cfg(not(target_os = "windows"))]
+fn cached_python_path() -> Result<PathBuf, String> {
+    PYTHON_PATH
+        .get_or_try_init(|| {
+            let path = find_system_python()?;
+            eprintln!("[Python] Using system interpreter at: {}", path.display());
+            Ok(path)
+        })
+        .map(|p| p.clone())
 }
 
 #[cfg(not(target_os = "windows"))]
