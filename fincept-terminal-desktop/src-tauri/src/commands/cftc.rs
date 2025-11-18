@@ -20,7 +20,8 @@ pub async fn execute_cftc_command(
 
 /// Get Commitment of Traders (COT) data
 #[tauri::command]
-pub async fn get_cftc_cot_data(app: tauri::AppHandle, 
+pub async fn get_cftc_cot_data(
+    app: tauri::AppHandle,
     identifier: String,
     report_type: Option<String>,
     futures_only: Option<bool>,
@@ -55,7 +56,8 @@ pub async fn get_cftc_cot_data(app: tauri::AppHandle,
 
 /// Search for available COT markets
 #[tauri::command]
-pub async fn search_cftc_cot_markets(app: tauri::AppHandle, 
+pub async fn search_cftc_cot_markets(
+    app: tauri::AppHandle,
     query: String,
 ) -> Result<String, String> {
     let args = vec![query];
@@ -64,7 +66,7 @@ pub async fn search_cftc_cot_markets(app: tauri::AppHandle,
 
 /// Get information about available COT report types
 #[tauri::command]
-pub async fn get_cftc_available_report_types(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_cftc_available_report_types(app: tauri::AppHandle) -> Result<String, String> {
     execute_cftc_command(app, "available_report_types".to_string(), vec![]).await
 }
 
@@ -72,7 +74,8 @@ pub async fn get_cftc_available_report_types(app: tauri::AppHandle, ) -> Result<
 
 /// Analyze market sentiment from COT data
 #[tauri::command]
-pub async fn analyze_cftc_market_sentiment(app: tauri::AppHandle, 
+pub async fn analyze_cftc_market_sentiment(
+    app: tauri::AppHandle,
     identifier: String,
     report_type: Option<String>,
 ) -> Result<String, String> {
@@ -87,7 +90,8 @@ pub async fn analyze_cftc_market_sentiment(app: tauri::AppHandle,
 
 /// Get summary of current positions for a market
 #[tauri::command]
-pub async fn get_cftc_position_summary(app: tauri::AppHandle, 
+pub async fn get_cftc_position_summary(
+    app: tauri::AppHandle,
     identifier: String,
     report_type: Option<String>,
 ) -> Result<String, String> {
@@ -104,7 +108,8 @@ pub async fn get_cftc_position_summary(app: tauri::AppHandle,
 
 /// Get comprehensive COT overview for multiple markets
 #[tauri::command]
-pub async fn get_cftc_comprehensive_cot_overview(app: tauri::AppHandle, 
+pub async fn get_cftc_comprehensive_cot_overview(
+    app: tauri::AppHandle,
     identifiers: Option<String>,
     report_type: Option<String>,
 ) -> Result<String, String> {
@@ -122,7 +127,8 @@ pub async fn get_cftc_comprehensive_cot_overview(app: tauri::AppHandle,
 
 /// Get historical COT trend data for analysis
 #[tauri::command]
-pub async fn get_cftc_cot_historical_trend(app: tauri::AppHandle, 
+pub async fn get_cftc_cot_historical_trend(
+    app: tauri::AppHandle,
     identifier: String,
     report_type: Option<String>,
     period: Option<i32>,
@@ -145,7 +151,8 @@ pub async fn get_cftc_cot_historical_trend(app: tauri::AppHandle,
 
 /// Get legacy COT reports (traditional commercial/non-commercial classification)
 #[tauri::command]
-pub async fn get_cftc_legacy_cot(app: tauri::AppHandle, 
+pub async fn get_cftc_legacy_cot(
+    app: tauri::AppHandle,
     identifier: String,
     futures_only: Option<bool>,
     start_date: Option<String>,
@@ -177,7 +184,8 @@ pub async fn get_cftc_legacy_cot(app: tauri::AppHandle,
 
 /// Get disaggregated COT reports (detailed trader classifications)
 #[tauri::command]
-pub async fn get_cftc_disaggregated_cot(app: tauri::AppHandle, 
+pub async fn get_cftc_disaggregated_cot(
+    app: tauri::AppHandle,
     identifier: String,
     futures_only: Option<bool>,
     start_date: Option<String>,
@@ -209,7 +217,8 @@ pub async fn get_cftc_disaggregated_cot(app: tauri::AppHandle,
 
 /// Get TFF reports for financial futures
 #[tauri::command]
-pub async fn get_cftc_tff_reports(app: tauri::AppHandle, 
+pub async fn get_cftc_tff_reports(
+    app: tauri::AppHandle,
     identifier: String,
     futures_only: Option<bool>,
     start_date: Option<String>,
@@ -241,7 +250,8 @@ pub async fn get_cftc_tff_reports(app: tauri::AppHandle,
 
 /// Get supplemental COT reports
 #[tauri::command]
-pub async fn get_cftc_supplemental_cot(app: tauri::AppHandle, 
+pub async fn get_cftc_supplemental_cot(
+    app: tauri::AppHandle,
     identifier: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -267,7 +277,8 @@ pub async fn get_cftc_supplemental_cot(app: tauri::AppHandle,
 
 /// Get COT data for precious metals (gold, silver, platinum, palladium)
 #[tauri::command]
-pub async fn get_cftc_precious_metals_cot(app: tauri::AppHandle, 
+pub async fn get_cftc_precious_metals_cot(
+    app: tauri::AppHandle,
     report_type: Option<String>,
     futures_only: Option<bool>,
     limit: Option<i32>,
@@ -293,7 +304,8 @@ pub async fn get_cftc_precious_metals_cot(app: tauri::AppHandle,
 
 /// Get COT data for energy markets (crude oil, natural gas, gasoline, heating oil)
 #[tauri::command]
-pub async fn get_cftc_energy_cot(app: tauri::AppHandle, 
+pub async fn get_cftc_energy_cot(
+    app: tauri::AppHandle,
     report_type: Option<String>,
     futures_only: Option<bool>,
     limit: Option<i32>,
@@ -319,7 +331,8 @@ pub async fn get_cftc_energy_cot(app: tauri::AppHandle,
 
 /// Get COT data for agricultural commodities (corn, wheat, soybeans, cotton, etc.)
 #[tauri::command]
-pub async fn get_cftc_agricultural_cot(app: tauri::AppHandle, 
+pub async fn get_cftc_agricultural_cot(
+    app: tauri::AppHandle,
     report_type: Option<String>,
     futures_only: Option<bool>,
     limit: Option<i32>,
@@ -345,7 +358,8 @@ pub async fn get_cftc_agricultural_cot(app: tauri::AppHandle,
 
 /// Get COT data for financial futures (currencies, stock indices, interest rates)
 #[tauri::command]
-pub async fn get_cftc_financial_cot(app: tauri::AppHandle, 
+pub async fn get_cftc_financial_cot(
+    app: tauri::AppHandle,
     futures_only: Option<bool>,
     limit: Option<i32>,
 ) -> Result<String, String> {
@@ -366,7 +380,8 @@ pub async fn get_cftc_financial_cot(app: tauri::AppHandle,
 
 /// Get COT data for cryptocurrency futures (bitcoin, ether)
 #[tauri::command]
-pub async fn get_cftc_crypto_cot(app: tauri::AppHandle, 
+pub async fn get_cftc_crypto_cot(
+    app: tauri::AppHandle,
     report_type: Option<String>,
     futures_only: Option<bool>,
     limit: Option<i32>,
@@ -394,7 +409,8 @@ pub async fn get_cftc_crypto_cot(app: tauri::AppHandle,
 
 /// Get COT position changes and momentum analysis
 #[tauri::command]
-pub async fn get_cftc_position_changes(app: tauri::AppHandle, 
+pub async fn get_cftc_position_changes(
+    app: tauri::AppHandle,
     identifier: String,
     report_type: Option<String>,
     period: Option<i32>,
@@ -415,7 +431,8 @@ pub async fn get_cftc_position_changes(app: tauri::AppHandle,
 
 /// Get COT extreme positions analysis (historical extremes)
 #[tauri::command]
-pub async fn get_cftc_extreme_positions(app: tauri::AppHandle, 
+pub async fn get_cftc_extreme_positions(
+    app: tauri::AppHandle,
     identifier: String,
     report_type: Option<String>,
 ) -> Result<String, String> {

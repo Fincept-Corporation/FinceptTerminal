@@ -11,7 +11,7 @@ pub async fn unesco_get_indicator_data(
     end_year: Option<i32>,
     footnotes: Option<bool>,
     indicator_metadata: Option<bool>,
-    version: Option<String>
+    version: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -61,7 +61,8 @@ pub async fn unesco_get_indicator_data(
         cmd.arg(&version);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -83,7 +84,7 @@ pub async fn unesco_export_indicator_data(
     end_year: Option<i32>,
     footnotes: Option<bool>,
     indicator_metadata: Option<bool>,
-    version: Option<String>
+    version: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -134,7 +135,8 @@ pub async fn unesco_export_indicator_data(
         cmd.arg(&version);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -158,7 +160,8 @@ pub async fn unesco_list_geo_units(version: Option<String>) -> Result<String, St
         cmd.arg(&version);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -171,7 +174,10 @@ pub async fn unesco_list_geo_units(version: Option<String>) -> Result<String, St
 }
 
 #[command]
-pub async fn unesco_export_geo_units(format_type: String, version: Option<String>) -> Result<String, String> {
+pub async fn unesco_export_geo_units(
+    format_type: String,
+    version: Option<String>,
+) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
         .arg("export_geo_units")
@@ -181,7 +187,8 @@ pub async fn unesco_export_geo_units(format_type: String, version: Option<String
         cmd.arg(&version);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -197,7 +204,7 @@ pub async fn unesco_export_geo_units(format_type: String, version: Option<String
 pub async fn unesco_list_indicators(
     glossary_terms: Option<bool>,
     disaggregations: Option<bool>,
-    version: Option<String>
+    version: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -220,7 +227,8 @@ pub async fn unesco_list_indicators(
         cmd.arg(&version);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -237,7 +245,7 @@ pub async fn unesco_export_indicators(
     format_type: String,
     glossary_terms: Option<bool>,
     disaggregations: Option<bool>,
-    version: Option<String>
+    version: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -261,7 +269,8 @@ pub async fn unesco_export_indicators(
         cmd.arg(&version);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -315,7 +324,7 @@ pub async fn unesco_list_versions() -> Result<String, String> {
 pub async fn unesco_get_education_overview(
     country_codes: Option<Vec<String>>,
     start_year: Option<i32>,
-    end_year: Option<i32>
+    end_year: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -337,7 +346,8 @@ pub async fn unesco_get_education_overview(
         cmd.arg(end_year.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -353,7 +363,7 @@ pub async fn unesco_get_education_overview(
 pub async fn unesco_get_global_education_trends(
     indicator_code: Option<String>,
     start_year: Option<i32>,
-    end_year: Option<i32>
+    end_year: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -373,7 +383,8 @@ pub async fn unesco_get_global_education_trends(
         cmd.arg(end_year.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -390,7 +401,7 @@ pub async fn unesco_get_country_comparison(
     indicator_code: String,
     country_codes: Vec<String>,
     start_year: Option<i32>,
-    end_year: Option<i32>
+    end_year: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -411,7 +422,8 @@ pub async fn unesco_get_country_comparison(
         cmd.arg(end_year.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -426,7 +438,7 @@ pub async fn unesco_get_country_comparison(
 #[command]
 pub async fn unesco_search_indicators_by_theme(
     theme: String,
-    limit: Option<i32>
+    limit: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -437,7 +449,8 @@ pub async fn unesco_search_indicators_by_theme(
         cmd.arg(limit.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -454,7 +467,7 @@ pub async fn unesco_get_regional_education_data(
     region_id: String,
     indicator_codes: Option<Vec<String>>,
     start_year: Option<i32>,
-    end_year: Option<i32>
+    end_year: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -477,7 +490,8 @@ pub async fn unesco_get_regional_education_data(
         cmd.arg(end_year.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -493,11 +507,10 @@ pub async fn unesco_get_regional_education_data(
 pub async fn unesco_get_science_technology_data(
     country_codes: Option<Vec<String>>,
     start_year: Option<i32>,
-    end_year: Option<i32>
+    end_year: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("sti_data");
+    cmd.arg("resources/scripts/unesco_data.py").arg("sti_data");
 
     if let Some(country_codes) = country_codes {
         for country in country_codes {
@@ -515,7 +528,8 @@ pub async fn unesco_get_science_technology_data(
         cmd.arg(end_year.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -531,7 +545,7 @@ pub async fn unesco_get_science_technology_data(
 pub async fn unesco_get_culture_data(
     country_codes: Option<Vec<String>>,
     start_year: Option<i32>,
-    end_year: Option<i32>
+    end_year: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -553,7 +567,8 @@ pub async fn unesco_get_culture_data(
         cmd.arg(end_year.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -569,7 +584,7 @@ pub async fn unesco_get_culture_data(
 pub async fn unesco_export_country_dataset(
     country_code: String,
     format_type: String,
-    include_metadata: Option<bool>
+    include_metadata: Option<bool>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/unesco_data.py")
@@ -583,7 +598,8 @@ pub async fn unesco_export_country_dataset(
         }
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {

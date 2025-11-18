@@ -18,9 +18,7 @@ pub async fn execute_economic_calendar_command(
 
 /// Get today's economic events
 #[tauri::command]
-pub async fn get_economic_calendar_today(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_economic_calendar_today(app: tauri::AppHandle) -> Result<String, String> {
     execute_economic_calendar_command(app, "today".to_string(), vec![]).await
 }
 
@@ -58,8 +56,6 @@ pub async fn get_economic_calendar_by_country(
 
 /// Get high impact events
 #[tauri::command]
-pub async fn get_economic_calendar_high_impact(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_economic_calendar_high_impact(app: tauri::AppHandle) -> Result<String, String> {
     execute_economic_calendar_command(app, "high_impact".to_string(), vec![]).await
 }

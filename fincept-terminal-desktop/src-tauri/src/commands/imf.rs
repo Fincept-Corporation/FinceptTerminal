@@ -18,7 +18,8 @@ pub async fn execute_imf_command(
 
 /// Get economic indicators data (IRFCL and FSI)
 #[tauri::command]
-pub async fn get_imf_economic_indicators(app: tauri::AppHandle, 
+pub async fn get_imf_economic_indicators(
+    app: tauri::AppHandle,
     countries: Option<String>,
     symbols: Option<String>,
     frequency: Option<String>,
@@ -50,7 +51,8 @@ pub async fn get_imf_economic_indicators(app: tauri::AppHandle,
 
 /// Get direction of trade data (exports, imports, balance)
 #[tauri::command]
-pub async fn get_imf_direction_of_trade(app: tauri::AppHandle, 
+pub async fn get_imf_direction_of_trade(
+    app: tauri::AppHandle,
     countries: Option<String>,
     counterparts: Option<String>,
     direction: Option<String>,
@@ -82,7 +84,8 @@ pub async fn get_imf_direction_of_trade(app: tauri::AppHandle,
 
 /// Get list of available IMF indicators
 #[tauri::command]
-pub async fn get_imf_available_indicators(app: tauri::AppHandle, 
+pub async fn get_imf_available_indicators(
+    app: tauri::AppHandle,
     query: Option<String>,
 ) -> Result<String, String> {
     let mut args = Vec::new();
@@ -94,7 +97,8 @@ pub async fn get_imf_available_indicators(app: tauri::AppHandle,
 
 /// Get comprehensive economic data for a country
 #[tauri::command]
-pub async fn get_imf_comprehensive_economic_data(app: tauri::AppHandle, 
+pub async fn get_imf_comprehensive_economic_data(
+    app: tauri::AppHandle,
     country: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -112,7 +116,8 @@ pub async fn get_imf_comprehensive_economic_data(app: tauri::AppHandle,
 
 /// Get IMF reserves data (top line indicators)
 #[tauri::command]
-pub async fn get_imf_reserves_data(app: tauri::AppHandle, 
+pub async fn get_imf_reserves_data(
+    app: tauri::AppHandle,
     countries: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -141,7 +146,8 @@ pub async fn get_imf_reserves_data(app: tauri::AppHandle,
 
 /// Get IMF trade data (exports, imports, balance)
 #[tauri::command]
-pub async fn get_imf_trade_summary(app: tauri::AppHandle, 
+pub async fn get_imf_trade_summary(
+    app: tauri::AppHandle,
     country: String,
     counterpart: Option<String>,
     frequency: Option<String>,

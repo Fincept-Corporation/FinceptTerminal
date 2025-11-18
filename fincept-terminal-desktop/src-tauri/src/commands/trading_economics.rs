@@ -67,9 +67,7 @@ pub async fn get_trading_economics_calendar(
 
 /// Get market snapshots
 #[tauri::command]
-pub async fn get_trading_economics_markets(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_trading_economics_markets(app: tauri::AppHandle) -> Result<String, String> {
     execute_trading_economics_command(app, "markets".to_string(), vec![]).await
 }
 

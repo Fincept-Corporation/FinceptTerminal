@@ -20,7 +20,8 @@ pub async fn execute_multpl_command(
 
 /// Get data for a specific series
 #[tauri::command]
-pub async fn get_multpl_series(app: tauri::AppHandle, 
+pub async fn get_multpl_series(
+    app: tauri::AppHandle,
     series_name: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -37,7 +38,8 @@ pub async fn get_multpl_series(app: tauri::AppHandle,
 
 /// Get data for multiple series
 #[tauri::command]
-pub async fn get_multpl_multiple_series(app: tauri::AppHandle, 
+pub async fn get_multpl_multiple_series(
+    app: tauri::AppHandle,
     series_names: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -54,7 +56,7 @@ pub async fn get_multpl_multiple_series(app: tauri::AppHandle,
 
 /// Get list of available series
 #[tauri::command]
-pub async fn get_multpl_available_series(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_available_series(app: tauri::AppHandle) -> Result<String, String> {
     execute_multpl_command(app, "available_series".to_string(), vec![]).await
 }
 
@@ -62,7 +64,8 @@ pub async fn get_multpl_available_series(app: tauri::AppHandle, ) -> Result<Stri
 
 /// Get Shiller P/E ratio data
 #[tauri::command]
-pub async fn get_multpl_shiller_pe(app: tauri::AppHandle, 
+pub async fn get_multpl_shiller_pe(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -78,7 +81,8 @@ pub async fn get_multpl_shiller_pe(app: tauri::AppHandle,
 
 /// Get P/E ratio data
 #[tauri::command]
-pub async fn get_multpl_pe_ratio(app: tauri::AppHandle, 
+pub async fn get_multpl_pe_ratio(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -94,7 +98,8 @@ pub async fn get_multpl_pe_ratio(app: tauri::AppHandle,
 
 /// Get dividend yield data
 #[tauri::command]
-pub async fn get_multpl_dividend_yield(app: tauri::AppHandle, 
+pub async fn get_multpl_dividend_yield(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -110,7 +115,8 @@ pub async fn get_multpl_dividend_yield(app: tauri::AppHandle,
 
 /// Get earnings yield data
 #[tauri::command]
-pub async fn get_multpl_earnings_yield(app: tauri::AppHandle, 
+pub async fn get_multpl_earnings_yield(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -126,7 +132,8 @@ pub async fn get_multpl_earnings_yield(app: tauri::AppHandle,
 
 /// Get price-to-sales ratio data
 #[tauri::command]
-pub async fn get_multpl_price_to_sales(app: tauri::AppHandle, 
+pub async fn get_multpl_price_to_sales(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -144,7 +151,8 @@ pub async fn get_multpl_price_to_sales(app: tauri::AppHandle,
 
 /// Get Shiller P/E data by month
 #[tauri::command]
-pub async fn get_multpl_shiller_pe_monthly(app: tauri::AppHandle,
+pub async fn get_multpl_shiller_pe_monthly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -153,7 +161,8 @@ pub async fn get_multpl_shiller_pe_monthly(app: tauri::AppHandle,
 
 /// Get Shiller P/E data by year
 #[tauri::command]
-pub async fn get_multpl_shiller_pe_yearly(app: tauri::AppHandle,
+pub async fn get_multpl_shiller_pe_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -162,7 +171,8 @@ pub async fn get_multpl_shiller_pe_yearly(app: tauri::AppHandle,
 
 /// Get P/E ratio data by year
 #[tauri::command]
-pub async fn get_multpl_pe_yearly(app: tauri::AppHandle,
+pub async fn get_multpl_pe_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -171,7 +181,8 @@ pub async fn get_multpl_pe_yearly(app: tauri::AppHandle,
 
 /// Get dividend data by year
 #[tauri::command]
-pub async fn get_multpl_dividend_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_dividend_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -180,7 +191,8 @@ pub async fn get_multpl_dividend_yearly(app: tauri::AppHandle,
 
 /// Get dividend data by month
 #[tauri::command]
-pub async fn get_multpl_dividend_monthly(app: tauri::AppHandle, 
+pub async fn get_multpl_dividend_monthly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -189,16 +201,24 @@ pub async fn get_multpl_dividend_monthly(app: tauri::AppHandle,
 
 /// Get dividend growth data by year
 #[tauri::command]
-pub async fn get_multpl_dividend_growth_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_dividend_growth_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
-    get_multpl_series(app, "dividend_growth_year".to_string(), start_date, end_date).await
+    get_multpl_series(
+        app,
+        "dividend_growth_year".to_string(),
+        start_date,
+        end_date,
+    )
+    .await
 }
 
 /// Get dividend yield data by year
 #[tauri::command]
-pub async fn get_multpl_dividend_yield_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_dividend_yield_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -207,7 +227,8 @@ pub async fn get_multpl_dividend_yield_yearly(app: tauri::AppHandle,
 
 /// Get earnings data by year
 #[tauri::command]
-pub async fn get_multpl_earnings_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_earnings_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -216,7 +237,8 @@ pub async fn get_multpl_earnings_yearly(app: tauri::AppHandle,
 
 /// Get earnings data by month
 #[tauri::command]
-pub async fn get_multpl_earnings_monthly(app: tauri::AppHandle, 
+pub async fn get_multpl_earnings_monthly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -225,16 +247,24 @@ pub async fn get_multpl_earnings_monthly(app: tauri::AppHandle,
 
 /// Get earnings growth data by year
 #[tauri::command]
-pub async fn get_multpl_earnings_growth_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_earnings_growth_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
-    get_multpl_series(app, "earnings_growth_year".to_string(), start_date, end_date).await
+    get_multpl_series(
+        app,
+        "earnings_growth_year".to_string(),
+        start_date,
+        end_date,
+    )
+    .await
 }
 
 /// Get earnings yield data by year
 #[tauri::command]
-pub async fn get_multpl_earnings_yield_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_earnings_yield_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -243,7 +273,8 @@ pub async fn get_multpl_earnings_yield_yearly(app: tauri::AppHandle,
 
 /// Get real price data by year
 #[tauri::command]
-pub async fn get_multpl_real_price_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_real_price_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -252,16 +283,24 @@ pub async fn get_multpl_real_price_yearly(app: tauri::AppHandle,
 
 /// Get inflation-adjusted price data by year
 #[tauri::command]
-pub async fn get_multpl_inflation_adjusted_price_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_inflation_adjusted_price_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
-    get_multpl_series(app, "inflation_adjusted_price_year".to_string(), start_date, end_date).await
+    get_multpl_series(
+        app,
+        "inflation_adjusted_price_year".to_string(),
+        start_date,
+        end_date,
+    )
+    .await
 }
 
 /// Get sales data by year
 #[tauri::command]
-pub async fn get_multpl_sales_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_sales_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -270,7 +309,8 @@ pub async fn get_multpl_sales_yearly(app: tauri::AppHandle,
 
 /// Get sales growth data by year
 #[tauri::command]
-pub async fn get_multpl_sales_growth_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_sales_growth_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -279,7 +319,8 @@ pub async fn get_multpl_sales_growth_yearly(app: tauri::AppHandle,
 
 /// Get real sales data by year
 #[tauri::command]
-pub async fn get_multpl_real_sales_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_real_sales_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -288,7 +329,8 @@ pub async fn get_multpl_real_sales_yearly(app: tauri::AppHandle,
 
 /// Get price-to-sales data by year
 #[tauri::command]
-pub async fn get_multpl_price_to_sales_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_price_to_sales_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -297,16 +339,24 @@ pub async fn get_multpl_price_to_sales_yearly(app: tauri::AppHandle,
 
 /// Get price-to-book value data by year
 #[tauri::command]
-pub async fn get_multpl_price_to_book_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_price_to_book_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
-    get_multpl_series(app, "price_to_book_value_year".to_string(), start_date, end_date).await
+    get_multpl_series(
+        app,
+        "price_to_book_value_year".to_string(),
+        start_date,
+        end_date,
+    )
+    .await
 }
 
 /// Get book value data by year
 #[tauri::command]
-pub async fn get_multpl_book_value_yearly(app: tauri::AppHandle, 
+pub async fn get_multpl_book_value_yearly(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -317,25 +367,25 @@ pub async fn get_multpl_book_value_yearly(app: tauri::AppHandle,
 
 /// Get valuation overview with key metrics
 #[tauri::command]
-pub async fn get_multpl_valuation_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_valuation_overview(app: tauri::AppHandle) -> Result<String, String> {
     execute_multpl_command(app, "get_valuation_overview".to_string(), vec![]).await
 }
 
 /// Get dividend overview
 #[tauri::command]
-pub async fn get_multpl_dividend_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_dividend_overview(app: tauri::AppHandle) -> Result<String, String> {
     execute_multpl_command(app, "get_dividend_overview".to_string(), vec![]).await
 }
 
 /// Get earnings overview
 #[tauri::command]
-pub async fn get_multpl_earnings_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_earnings_overview(app: tauri::AppHandle) -> Result<String, String> {
     execute_multpl_command(app, "get_earnings_overview".to_string(), vec![]).await
 }
 
 /// Get comprehensive overview across all categories
 #[tauri::command]
-pub async fn get_multpl_comprehensive_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_comprehensive_overview(app: tauri::AppHandle) -> Result<String, String> {
     execute_multpl_command(app, "get_comprehensive_overview".to_string(), vec![]).await
 }
 
@@ -343,14 +393,19 @@ pub async fn get_multpl_comprehensive_overview(app: tauri::AppHandle, ) -> Resul
 
 /// Get complete valuation analysis
 #[tauri::command]
-pub async fn get_multpl_valuation_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_valuation_analysis(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get all valuation metrics
     let valuation_series = vec![
-        "shiller_pe_month", "shiller_pe_year", "pe_year", "pe_month",
-        "price_to_sales_year", "price_to_sales_quarter",
-        "price_to_book_value_year", "price_to_book_value_quarter"
+        "shiller_pe_month",
+        "shiller_pe_year",
+        "pe_year",
+        "pe_month",
+        "price_to_sales_year",
+        "price_to_sales_quarter",
+        "price_to_book_value_year",
+        "price_to_book_value_quarter",
     ];
 
     for series in valuation_series {
@@ -363,18 +418,23 @@ pub async fn get_multpl_valuation_analysis(app: tauri::AppHandle, ) -> Result<St
     Ok(serde_json::json!({
         "valuation_analysis": results,
         "analysis_type": "complete_valuation_metrics"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get complete dividend analysis
 #[tauri::command]
-pub async fn get_multpl_dividend_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_dividend_analysis(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get all dividend metrics
     let dividend_series = vec![
-        "dividend_year", "dividend_month", "dividend_growth_quarter",
-        "dividend_growth_year", "dividend_yield_year", "dividend_yield_month"
+        "dividend_year",
+        "dividend_month",
+        "dividend_growth_quarter",
+        "dividend_growth_year",
+        "dividend_yield_year",
+        "dividend_yield_month",
     ];
 
     for series in dividend_series {
@@ -387,19 +447,25 @@ pub async fn get_multpl_dividend_analysis(app: tauri::AppHandle, ) -> Result<Str
     Ok(serde_json::json!({
         "dividend_analysis": results,
         "analysis_type": "complete_dividend_metrics"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get complete earnings analysis
 #[tauri::command]
-pub async fn get_multpl_earnings_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_earnings_analysis(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get all earnings metrics
     let earnings_series = vec![
-        "earnings_year", "earnings_month", "earnings_growth_year",
-        "earnings_growth_quarter", "real_earnings_growth_year",
-        "real_earnings_growth_quarter", "earnings_yield_year", "earnings_yield_month"
+        "earnings_year",
+        "earnings_month",
+        "earnings_growth_year",
+        "earnings_growth_quarter",
+        "real_earnings_growth_year",
+        "real_earnings_growth_quarter",
+        "earnings_yield_year",
+        "earnings_yield_month",
     ];
 
     for series in earnings_series {
@@ -412,19 +478,25 @@ pub async fn get_multpl_earnings_analysis(app: tauri::AppHandle, ) -> Result<Str
     Ok(serde_json::json!({
         "earnings_analysis": results,
         "analysis_type": "complete_earnings_metrics"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get complete sales analysis
 #[tauri::command]
-pub async fn get_multpl_sales_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_sales_analysis(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get all sales metrics
     let sales_series = vec![
-        "sales_year", "sales_quarter", "sales_growth_year", "sales_growth_quarter",
-        "real_sales_year", "real_sales_quarter", "real_sales_growth_year",
-        "real_sales_growth_quarter"
+        "sales_year",
+        "sales_quarter",
+        "sales_growth_year",
+        "sales_growth_quarter",
+        "real_sales_year",
+        "real_sales_quarter",
+        "real_sales_growth_year",
+        "real_sales_growth_quarter",
     ];
 
     for series in sales_series {
@@ -437,18 +509,21 @@ pub async fn get_multpl_sales_analysis(app: tauri::AppHandle, ) -> Result<String
     Ok(serde_json::json!({
         "sales_analysis": results,
         "analysis_type": "complete_sales_metrics"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get historical price analysis
 #[tauri::command]
-pub async fn get_multpl_price_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_price_analysis(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get all price metrics
     let price_series = vec![
-        "real_price_year", "real_price_month",
-        "inflation_adjusted_price_year", "inflation_adjusted_price_month"
+        "real_price_year",
+        "real_price_month",
+        "inflation_adjusted_price_year",
+        "inflation_adjusted_price_month",
     ];
 
     for series in price_series {
@@ -461,12 +536,14 @@ pub async fn get_multpl_price_analysis(app: tauri::AppHandle, ) -> Result<String
     Ok(serde_json::json!({
         "price_analysis": results,
         "analysis_type": "complete_price_metrics"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get custom date range analysis for multiple series
 #[tauri::command]
-pub async fn get_multpl_custom_analysis(app: tauri::AppHandle, 
+pub async fn get_multpl_custom_analysis(
+    app: tauri::AppHandle,
     series_names: String,
     start_date: String,
     end_date: String,
@@ -478,7 +555,14 @@ pub async fn get_multpl_custom_analysis(app: tauri::AppHandle,
 
     for series in series_list {
         let trimmed_series = series.trim();
-        match get_multpl_series(app.clone(), trimmed_series.to_string(), Some(start_date.clone()), Some(end_date.clone())).await {
+        match get_multpl_series(
+            app.clone(),
+            trimmed_series.to_string(),
+            Some(start_date.clone()),
+            Some(end_date.clone()),
+        )
+        .await
+        {
             Ok(data) => results.push((trimmed_series.to_string(), data)),
             Err(e) => results.push((trimmed_series.to_string(), format!("Error: {}", e))),
         }
@@ -491,12 +575,14 @@ pub async fn get_multpl_custom_analysis(app: tauri::AppHandle,
             "start": start_date,
             "end": end_date
         }
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get year-over-year comparison for a specific series
 #[tauri::command]
-pub async fn get_multpl_year_over_year_comparison(app: tauri::AppHandle, 
+pub async fn get_multpl_year_over_year_comparison(
+    app: tauri::AppHandle,
     series_name: String,
     years: Option<i32>, // Number of years to compare, default 10
 ) -> Result<String, String> {
@@ -507,24 +593,28 @@ pub async fn get_multpl_year_over_year_comparison(app: tauri::AppHandle,
         .to_string();
 
     match get_multpl_series(app, series_name.clone(), Some(start_date), Some(end_date)).await {
-        Ok(data) => {
-            Ok(serde_json::json!({
-                "year_over_year_comparison": data,
-                "series_name": series_name,
-                "years_compared": years_to_compare
-            }).to_string())
-        }
-        Err(e) => Err(e)
+        Ok(data) => Ok(serde_json::json!({
+            "year_over_year_comparison": data,
+            "series_name": series_name,
+            "years_compared": years_to_compare
+        })
+        .to_string()),
+        Err(e) => Err(e),
     }
 }
 
 /// Get current market valuation summary
 #[tauri::command]
-pub async fn get_multpl_current_valuation(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_multpl_current_valuation(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get current key valuation metrics
-    let key_metrics = vec!["shiller_pe_month", "pe_month", "dividend_yield_month", "earnings_yield_month"];
+    let key_metrics = vec![
+        "shiller_pe_month",
+        "pe_month",
+        "dividend_yield_month",
+        "earnings_yield_month",
+    ];
 
     for metric in key_metrics {
         match get_multpl_series(app.clone(), metric.to_string(), None, None).await {
@@ -537,5 +627,6 @@ pub async fn get_multpl_current_valuation(app: tauri::AppHandle, ) -> Result<Str
         "current_valuation": results,
         "analysis_type": "current_market_valuation",
         "timestamp": chrono::Utc::now().to_rfc3339()
-    }).to_string())
+    })
+    .to_string())
 }

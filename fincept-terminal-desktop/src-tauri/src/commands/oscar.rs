@@ -8,7 +8,7 @@ pub async fn oscar_get_instruments(
     sort: Option<String>,
     order: Option<String>,
     filter_on: Option<String>,
-    filter_value: Option<String>
+    filter_value: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
@@ -42,7 +42,8 @@ pub async fn oscar_get_instruments(
         cmd.arg(&filter_value);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -75,7 +76,7 @@ pub async fn oscar_get_instrument_by_slug(slug: String) -> Result<String, String
 #[command]
 pub async fn oscar_search_instruments_by_type(
     instrument_type: String,
-    page: Option<i32>
+    page: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
@@ -86,7 +87,8 @@ pub async fn oscar_search_instruments_by_type(
         cmd.arg(page.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -101,7 +103,7 @@ pub async fn oscar_search_instruments_by_type(
 #[command]
 pub async fn oscar_search_instruments_by_agency(
     agency: String,
-    page: Option<i32>
+    page: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
@@ -112,7 +114,8 @@ pub async fn oscar_search_instruments_by_agency(
         cmd.arg(page.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -128,7 +131,7 @@ pub async fn oscar_search_instruments_by_agency(
 pub async fn oscar_search_instruments_by_year_range(
     start_year: i32,
     end_year: i32,
-    page: Option<i32>
+    page: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
@@ -140,7 +143,8 @@ pub async fn oscar_search_instruments_by_year_range(
         cmd.arg(page.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -177,11 +181,10 @@ pub async fn oscar_get_satellites(
     sort: Option<String>,
     order: Option<String>,
     filter_on: Option<String>,
-    filter_value: Option<String>
+    filter_value: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/oscar_data.py")
-        .arg("satellites");
+    cmd.arg("resources/scripts/oscar_data.py").arg("satellites");
 
     if let Some(page) = page {
         cmd.arg(page.to_string());
@@ -211,7 +214,8 @@ pub async fn oscar_get_satellites(
         cmd.arg(&filter_value);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -244,7 +248,7 @@ pub async fn oscar_get_satellite_by_slug(slug: String) -> Result<String, String>
 #[command]
 pub async fn oscar_search_satellites_by_orbit(
     orbit_type: String,
-    page: Option<i32>
+    page: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
@@ -255,7 +259,8 @@ pub async fn oscar_search_satellites_by_orbit(
         cmd.arg(page.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -270,7 +275,7 @@ pub async fn oscar_search_satellites_by_orbit(
 #[command]
 pub async fn oscar_search_satellites_by_agency(
     agency: String,
-    page: Option<i32>
+    page: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
@@ -281,7 +286,8 @@ pub async fn oscar_search_satellites_by_agency(
         cmd.arg(page.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -301,11 +307,10 @@ pub async fn oscar_get_variables(
     sort: Option<String>,
     order: Option<String>,
     filter_on: Option<String>,
-    filter_value: Option<String>
+    filter_value: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/oscar_data.py")
-        .arg("variables");
+    cmd.arg("resources/scripts/oscar_data.py").arg("variables");
 
     if let Some(page) = page {
         cmd.arg(page.to_string());
@@ -335,7 +340,8 @@ pub async fn oscar_get_variables(
         cmd.arg(&filter_value);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -368,7 +374,7 @@ pub async fn oscar_get_variable_by_slug(slug: String) -> Result<String, String> 
 #[command]
 pub async fn oscar_search_variables_by_instrument(
     instrument: String,
-    page: Option<i32>
+    page: Option<i32>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/oscar_data.py")
@@ -379,7 +385,8 @@ pub async fn oscar_search_variables_by_instrument(
         cmd.arg(page.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -401,7 +408,8 @@ pub async fn oscar_get_ecv_variables(page: Option<i32>) -> Result<String, String
         cmd.arg(page.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -459,7 +467,8 @@ pub async fn oscar_search_weather_instruments(page: Option<i32>) -> Result<Strin
         cmd.arg(page.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -481,7 +490,8 @@ pub async fn oscar_get_climate_monitoring_instruments(page: Option<i32>) -> Resu
         cmd.arg(page.to_string());
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {

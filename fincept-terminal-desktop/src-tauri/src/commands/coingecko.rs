@@ -65,17 +65,13 @@ pub async fn search_coingecko_coins(
 
 /// Get trending cryptocurrencies
 #[tauri::command]
-pub async fn get_coingecko_trending(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_coingecko_trending(app: tauri::AppHandle) -> Result<String, String> {
     execute_coingecko_command(app, "trending".to_string(), vec![]).await
 }
 
 /// Get global cryptocurrency market data
 #[tauri::command]
-pub async fn get_coingecko_global_data(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_coingecko_global_data(app: tauri::AppHandle) -> Result<String, String> {
     execute_coingecko_command(app, "global".to_string(), vec![]).await
 }
 

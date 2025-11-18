@@ -20,7 +20,8 @@ pub async fn execute_fmp_command(
 
 /// Get real-time stock quotes for multiple symbols
 #[tauri::command]
-pub async fn get_fmp_equity_quote(app: tauri::AppHandle, 
+pub async fn get_fmp_equity_quote(
+    app: tauri::AppHandle,
     symbols: String,
 ) -> Result<String, String> {
     let args = vec![symbols];
@@ -29,7 +30,8 @@ pub async fn get_fmp_equity_quote(app: tauri::AppHandle,
 
 /// Get company profile and basic information
 #[tauri::command]
-pub async fn get_fmp_company_profile(app: tauri::AppHandle, 
+pub async fn get_fmp_company_profile(
+    app: tauri::AppHandle,
     symbol: String,
 ) -> Result<String, String> {
     let args = vec![symbol];
@@ -38,7 +40,8 @@ pub async fn get_fmp_company_profile(app: tauri::AppHandle,
 
 /// Get historical price data for a symbol
 #[tauri::command]
-pub async fn get_fmp_historical_prices(app: tauri::AppHandle, 
+pub async fn get_fmp_historical_prices(
+    app: tauri::AppHandle,
     symbol: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -63,7 +66,8 @@ pub async fn get_fmp_historical_prices(app: tauri::AppHandle,
 
 /// Get income statement data
 #[tauri::command]
-pub async fn get_fmp_income_statement(app: tauri::AppHandle, 
+pub async fn get_fmp_income_statement(
+    app: tauri::AppHandle,
     symbol: String,
     period: Option<String>,
     limit: Option<i32>,
@@ -84,7 +88,8 @@ pub async fn get_fmp_income_statement(app: tauri::AppHandle,
 
 /// Get balance sheet data
 #[tauri::command]
-pub async fn get_fmp_balance_sheet(app: tauri::AppHandle, 
+pub async fn get_fmp_balance_sheet(
+    app: tauri::AppHandle,
     symbol: String,
     period: Option<String>,
     limit: Option<i32>,
@@ -105,7 +110,8 @@ pub async fn get_fmp_balance_sheet(app: tauri::AppHandle,
 
 /// Get cash flow statement data
 #[tauri::command]
-pub async fn get_fmp_cash_flow_statement(app: tauri::AppHandle, 
+pub async fn get_fmp_cash_flow_statement(
+    app: tauri::AppHandle,
     symbol: String,
     period: Option<String>,
     limit: Option<i32>,
@@ -126,7 +132,8 @@ pub async fn get_fmp_cash_flow_statement(app: tauri::AppHandle,
 
 /// Get financial ratios data
 #[tauri::command]
-pub async fn get_fmp_financial_ratios(app: tauri::AppHandle, 
+pub async fn get_fmp_financial_ratios(
+    app: tauri::AppHandle,
     symbol: String,
     period: Option<String>,
     limit: Option<i32>,
@@ -147,7 +154,8 @@ pub async fn get_fmp_financial_ratios(app: tauri::AppHandle,
 
 /// Get key metrics data
 #[tauri::command]
-pub async fn get_fmp_key_metrics(app: tauri::AppHandle, 
+pub async fn get_fmp_key_metrics(
+    app: tauri::AppHandle,
     symbol: String,
     period: Option<String>,
     limit: Option<i32>,
@@ -170,13 +178,13 @@ pub async fn get_fmp_key_metrics(app: tauri::AppHandle,
 
 /// Get market snapshots and indices
 #[tauri::command]
-pub async fn get_fmp_market_snapshots(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_fmp_market_snapshots(app: tauri::AppHandle) -> Result<String, String> {
     execute_fmp_command(app, "market_snapshots".to_string(), vec![]).await
 }
 
 /// Get current treasury rates
 #[tauri::command]
-pub async fn get_fmp_treasury_rates(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_fmp_treasury_rates(app: tauri::AppHandle) -> Result<String, String> {
     execute_fmp_command(app, "treasury_rates".to_string(), vec![]).await
 }
 
@@ -184,18 +192,14 @@ pub async fn get_fmp_treasury_rates(app: tauri::AppHandle, ) -> Result<String, S
 
 /// Get ETF information
 #[tauri::command]
-pub async fn get_fmp_etf_info(app: tauri::AppHandle, 
-    symbol: String,
-) -> Result<String, String> {
+pub async fn get_fmp_etf_info(app: tauri::AppHandle, symbol: String) -> Result<String, String> {
     let args = vec![symbol];
     execute_fmp_command(app, "etf_info".to_string(), args).await
 }
 
 /// Get ETF holdings data
 #[tauri::command]
-pub async fn get_fmp_etf_holdings(app: tauri::AppHandle, 
-    symbol: String,
-) -> Result<String, String> {
+pub async fn get_fmp_etf_holdings(app: tauri::AppHandle, symbol: String) -> Result<String, String> {
     let args = vec![symbol];
     execute_fmp_command(app, "etf_holdings".to_string(), args).await
 }
@@ -204,13 +208,14 @@ pub async fn get_fmp_etf_holdings(app: tauri::AppHandle,
 
 /// Get list of available cryptocurrencies
 #[tauri::command]
-pub async fn get_fmp_crypto_list(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_fmp_crypto_list(app: tauri::AppHandle) -> Result<String, String> {
     execute_fmp_command(app, "crypto_list".to_string(), vec![]).await
 }
 
 /// Get historical cryptocurrency prices
 #[tauri::command]
-pub async fn get_fmp_crypto_historical(app: tauri::AppHandle, 
+pub async fn get_fmp_crypto_historical(
+    app: tauri::AppHandle,
     symbol: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -229,7 +234,8 @@ pub async fn get_fmp_crypto_historical(app: tauri::AppHandle,
 
 /// Get news for a specific company
 #[tauri::command]
-pub async fn get_fmp_company_news(app: tauri::AppHandle, 
+pub async fn get_fmp_company_news(
+    app: tauri::AppHandle,
     symbol: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
@@ -244,7 +250,7 @@ pub async fn get_fmp_company_news(app: tauri::AppHandle,
 
 /// Get general financial news
 #[tauri::command]
-pub async fn get_fmp_general_news(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_fmp_general_news(app: tauri::AppHandle) -> Result<String, String> {
     execute_fmp_command(app, "general_news".to_string(), vec![]).await
 }
 
@@ -252,7 +258,7 @@ pub async fn get_fmp_general_news(app: tauri::AppHandle, ) -> Result<String, Str
 
 /// Get economic calendar data
 #[tauri::command]
-pub async fn get_fmp_economic_calendar(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_fmp_economic_calendar(app: tauri::AppHandle) -> Result<String, String> {
     execute_fmp_command(app, "economic_calendar".to_string(), vec![]).await
 }
 
@@ -260,7 +266,8 @@ pub async fn get_fmp_economic_calendar(app: tauri::AppHandle, ) -> Result<String
 
 /// Get insider trading data for a symbol
 #[tauri::command]
-pub async fn get_fmp_insider_trading(app: tauri::AppHandle, 
+pub async fn get_fmp_insider_trading(
+    app: tauri::AppHandle,
     symbol: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
@@ -277,7 +284,8 @@ pub async fn get_fmp_insider_trading(app: tauri::AppHandle,
 
 /// Get institutional ownership data
 #[tauri::command]
-pub async fn get_fmp_institutional_ownership(app: tauri::AppHandle, 
+pub async fn get_fmp_institutional_ownership(
+    app: tauri::AppHandle,
     symbol: String,
     limit: Option<i32>,
 ) -> Result<String, String> {
@@ -294,7 +302,8 @@ pub async fn get_fmp_institutional_ownership(app: tauri::AppHandle,
 
 /// Get comprehensive company overview including profile, quotes, and key metrics
 #[tauri::command]
-pub async fn get_fmp_company_overview(app: tauri::AppHandle, 
+pub async fn get_fmp_company_overview(
+    app: tauri::AppHandle,
     symbol: String,
 ) -> Result<String, String> {
     let args = vec![symbol];
@@ -303,7 +312,8 @@ pub async fn get_fmp_company_overview(app: tauri::AppHandle,
 
 /// Get all financial statements for a company
 #[tauri::command]
-pub async fn get_fmp_financial_statements(app: tauri::AppHandle, 
+pub async fn get_fmp_financial_statements(
+    app: tauri::AppHandle,
     symbol: String,
     period: Option<String>,
     limit: Option<i32>,
@@ -324,7 +334,8 @@ pub async fn get_fmp_financial_statements(app: tauri::AppHandle,
 
 /// Get multiple stock quotes efficiently
 #[tauri::command]
-pub async fn get_fmp_market_quotes(app: tauri::AppHandle, 
+pub async fn get_fmp_market_quotes(
+    app: tauri::AppHandle,
     symbols: String,
 ) -> Result<String, String> {
     let args = vec![symbols];
@@ -333,14 +344,17 @@ pub async fn get_fmp_market_quotes(app: tauri::AppHandle,
 
 /// Get stock price performance data
 #[tauri::command]
-pub async fn get_fmp_price_performance(app: tauri::AppHandle, 
+pub async fn get_fmp_price_performance(
+    app: tauri::AppHandle,
     symbol: String,
 ) -> Result<String, String> {
     // This would use the price_performance endpoint
     // For now, we'll use historical prices as a proxy
     let args = vec![
         symbol,
-        (chrono::Utc::now() - chrono::Duration::days(30)).format("%Y-%m-%d").to_string(),
+        (chrono::Utc::now() - chrono::Duration::days(30))
+            .format("%Y-%m-%d")
+            .to_string(),
         chrono::Utc::now().format("%Y-%m-%d").to_string(),
         "1d".to_string(),
     ];
@@ -349,7 +363,8 @@ pub async fn get_fmp_price_performance(app: tauri::AppHandle,
 
 /// Get stock screener data
 #[tauri::command]
-pub async fn get_fmp_stock_screener(app: tauri::AppHandle, 
+pub async fn get_fmp_stock_screener(
+    app: tauri::AppHandle,
     market_cap_more_than: Option<f64>,
     market_cap_lower_than: Option<f64>,
     price_more_than: Option<f64>,
@@ -428,7 +443,8 @@ pub async fn get_fmp_stock_screener(app: tauri::AppHandle,
 
 /// Get stock price targets and analyst data
 #[tauri::command]
-pub async fn get_fmp_price_targets(app: tauri::AppHandle, 
+pub async fn get_fmp_price_targets(
+    app: tauri::AppHandle,
     symbol: String,
 ) -> Result<String, String> {
     let args = vec![symbol];

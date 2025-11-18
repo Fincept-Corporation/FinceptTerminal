@@ -1,7 +1,7 @@
 // agents.rs - Python Agent Execution Commands
+use crate::utils::python::get_python_path;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
-use crate::utils::python::get_python_path;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -57,7 +57,9 @@ fn get_agent_script_path(agent_type: &str) -> Option<&'static str> {
         "joel_greenblatt" => Some("agents/TraderInvestorsAgent/joel_greenblatt_agent_cli.py"),
         "david_einhorn" => Some("agents/TraderInvestorsAgent/david_einhorn_agent_cli.py"),
         "bill_miller" => Some("agents/TraderInvestorsAgent/bill_miller_agent_cli.py"),
-        "jean_marie_eveillard" => Some("agents/TraderInvestorsAgent/jean_marie_eveillard_agent_cli.py"),
+        "jean_marie_eveillard" => {
+            Some("agents/TraderInvestorsAgent/jean_marie_eveillard_agent_cli.py")
+        }
         "marty_whitman" => Some("agents/TraderInvestorsAgent/marty_whitman_agent_cli.py"),
 
         // Hedge Fund Agents - All use unified CLI wrapper
@@ -568,7 +570,8 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "Citadel".to_string(),
             agent_type: "citadel".to_string(),
             category: "hedge-fund".to_string(),
-            description: "Ken Griffin: Multi-strategy global macro and quantitative trading".to_string(),
+            description: "Ken Griffin: Multi-strategy global macro and quantitative trading"
+                .to_string(),
             script_path: script_path.to_string(),
             parameters: get_hedge_fund_agent_parameters(),
             required_inputs: vec![],
@@ -671,7 +674,10 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             script_path: script_path.to_string(),
             parameters: get_economic_agent_parameters(),
             required_inputs: vec![],
-            outputs: vec!["market_efficiency".to_string(), "policy_recommendations".to_string()],
+            outputs: vec![
+                "market_efficiency".to_string(),
+                "policy_recommendations".to_string(),
+            ],
             icon: "💼".to_string(),
             color: "#22c55e".to_string(),
         }),
@@ -685,7 +691,10 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             script_path: script_path.to_string(),
             parameters: get_economic_agent_parameters(),
             required_inputs: vec![],
-            outputs: vec!["fiscal_impact".to_string(), "policy_recommendations".to_string()],
+            outputs: vec![
+                "fiscal_impact".to_string(),
+                "policy_recommendations".to_string(),
+            ],
             icon: "🏛️".to_string(),
             color: "#3b82f6".to_string(),
         }),
@@ -699,7 +708,10 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             script_path: script_path.to_string(),
             parameters: get_economic_agent_parameters(),
             required_inputs: vec![],
-            outputs: vec!["market_freedom".to_string(), "policy_recommendations".to_string()],
+            outputs: vec![
+                "market_freedom".to_string(),
+                "policy_recommendations".to_string(),
+            ],
             icon: "📈".to_string(),
             color: "#f97316".to_string(),
         }),
@@ -713,7 +725,10 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             script_path: script_path.to_string(),
             parameters: get_economic_agent_parameters(),
             required_inputs: vec![],
-            outputs: vec!["equality_index".to_string(), "policy_recommendations".to_string()],
+            outputs: vec![
+                "equality_index".to_string(),
+                "policy_recommendations".to_string(),
+            ],
             icon: "🔴".to_string(),
             color: "#dc2626".to_string(),
         }),
@@ -727,7 +742,10 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             script_path: script_path.to_string(),
             parameters: get_economic_agent_parameters(),
             required_inputs: vec![],
-            outputs: vec!["balance_score".to_string(), "policy_recommendations".to_string()],
+            outputs: vec![
+                "balance_score".to_string(),
+                "policy_recommendations".to_string(),
+            ],
             icon: "⚖️".to_string(),
             color: "#8b5cf6".to_string(),
         }),
@@ -741,7 +759,10 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             script_path: script_path.to_string(),
             parameters: get_economic_agent_parameters(),
             required_inputs: vec![],
-            outputs: vec!["trade_strength".to_string(), "policy_recommendations".to_string()],
+            outputs: vec![
+                "trade_strength".to_string(),
+                "policy_recommendations".to_string(),
+            ],
             icon: "⚓".to_string(),
             color: "#0891b2".to_string(),
         }),
@@ -752,7 +773,9 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "Russia Geography".to_string(),
             agent_type: "russia_geography".to_string(),
             category: "geopolitics".to_string(),
-            description: "Tim Marshall: Geographic determinism - plains vulnerability, warm-water ports".to_string(),
+            description:
+                "Tim Marshall: Geographic determinism - plains vulnerability, warm-water ports"
+                    .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -766,7 +789,9 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "China Geography".to_string(),
             agent_type: "china_geography".to_string(),
             category: "geopolitics".to_string(),
-            description: "Tim Marshall: Maritime vulnerability, unity challenges, Himalayan barrier".to_string(),
+            description:
+                "Tim Marshall: Maritime vulnerability, unity challenges, Himalayan barrier"
+                    .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -780,7 +805,8 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "USA Geography".to_string(),
             agent_type: "usa_geography".to_string(),
             category: "geopolitics".to_string(),
-            description: "Tim Marshall: Geographic advantages, natural moats, resource abundance".to_string(),
+            description: "Tim Marshall: Geographic advantages, natural moats, resource abundance"
+                .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -794,7 +820,8 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "Europe Geography".to_string(),
             agent_type: "europe_geography".to_string(),
             category: "geopolitics".to_string(),
-            description: "Tim Marshall: Fragmentation vs integration, geographic barriers".to_string(),
+            description: "Tim Marshall: Fragmentation vs integration, geographic barriers"
+                .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -808,7 +835,8 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "Middle East Geography".to_string(),
             agent_type: "middle_east_geography".to_string(),
             category: "geopolitics".to_string(),
-            description: "Tim Marshall: Desert geography, resource curse, artificial borders".to_string(),
+            description: "Tim Marshall: Desert geography, resource curse, artificial borders"
+                .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -823,7 +851,8 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "American World Order".to_string(),
             agent_type: "american_world".to_string(),
             category: "geopolitics".to_string(),
-            description: "Kissinger: Liberal internationalism, democratic values, exceptionalism".to_string(),
+            description: "Kissinger: Liberal internationalism, democratic values, exceptionalism"
+                .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -837,7 +866,9 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "Chinese World Order".to_string(),
             agent_type: "chinese_world".to_string(),
             category: "geopolitics".to_string(),
-            description: "Kissinger: Middle Kingdom centrality, hierarchical system, tributary model".to_string(),
+            description:
+                "Kissinger: Middle Kingdom centrality, hierarchical system, tributary model"
+                    .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -851,7 +882,8 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "Balance of Power".to_string(),
             agent_type: "balance_power".to_string(),
             category: "geopolitics".to_string(),
-            description: "Kissinger: Equilibrium maintenance, power transitions, realpolitik".to_string(),
+            description: "Kissinger: Equilibrium maintenance, power transitions, realpolitik"
+                .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -879,7 +911,8 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "Nuclear Order".to_string(),
             agent_type: "nuclear_order".to_string(),
             category: "geopolitics".to_string(),
-            description: "Kissinger: Deterrence theory, arms control, nuclear diplomacy".to_string(),
+            description: "Kissinger: Deterrence theory, arms control, nuclear diplomacy"
+                .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -894,7 +927,8 @@ fn get_agent_metadata_internal(agent_type: &str) -> Option<AgentMetadata> {
             name: "Eurasian Balkans".to_string(),
             agent_type: "eurasian_balkans".to_string(),
             category: "geopolitics".to_string(),
-            description: "Brzezinski: Pivotal region, strategic instability, power competition".to_string(),
+            description: "Brzezinski: Pivotal region, strategic instability, power competition"
+                .to_string(),
             script_path: script_path.to_string(),
             parameters: get_geopolitics_agent_parameters(),
             required_inputs: vec![],
@@ -941,37 +975,73 @@ pub async fn list_available_agents() -> Result<Vec<AgentMetadata>, String> {
 
     // Trader agents
     let trader_types = vec![
-        "warren_buffett", "charlie_munger", "benjamin_graham",
-        "seth_klarman", "howard_marks", "joel_greenblatt",
-        "david_einhorn", "bill_miller", "jean_marie_eveillard", "marty_whitman"
+        "warren_buffett",
+        "charlie_munger",
+        "benjamin_graham",
+        "seth_klarman",
+        "howard_marks",
+        "joel_greenblatt",
+        "david_einhorn",
+        "bill_miller",
+        "jean_marie_eveillard",
+        "marty_whitman",
     ];
 
     // Hedge fund agents
     let hedge_fund_types = vec![
-        "macro_cycle", "central_bank", "behavioral", "institutional_flow",
-        "innovation", "geopolitical", "currency", "supply_chain",
-        "sentiment", "regulatory", "bridgewater", "citadel",
-        "renaissance", "two_sigma", "de_shaw", "elliott",
-        "pershing_square", "arq_capital"
+        "macro_cycle",
+        "central_bank",
+        "behavioral",
+        "institutional_flow",
+        "innovation",
+        "geopolitical",
+        "currency",
+        "supply_chain",
+        "sentiment",
+        "regulatory",
+        "bridgewater",
+        "citadel",
+        "renaissance",
+        "two_sigma",
+        "de_shaw",
+        "elliott",
+        "pershing_square",
+        "arq_capital",
     ];
 
     // Economic agents
     let economic_types = vec![
-        "capitalism", "keynesian", "neoliberal", "socialism",
-        "mixed_economy", "mercantilist"
+        "capitalism",
+        "keynesian",
+        "neoliberal",
+        "socialism",
+        "mixed_economy",
+        "mercantilist",
     ];
 
     // Geopolitics agents
     let geopolitics_types = vec![
-        "russia_geography", "china_geography", "usa_geography", "europe_geography", "middle_east_geography",
-        "american_world", "chinese_world", "balance_power", "islamic_world", "nuclear_order",
-        "eurasian_balkans", "democratic_bridgehead", "far_eastern_anchor"
+        "russia_geography",
+        "china_geography",
+        "usa_geography",
+        "europe_geography",
+        "middle_east_geography",
+        "american_world",
+        "chinese_world",
+        "balance_power",
+        "islamic_world",
+        "nuclear_order",
+        "eurasian_balkans",
+        "democratic_bridgehead",
+        "far_eastern_anchor",
     ];
 
-    for agent_type in trader_types.iter()
+    for agent_type in trader_types
+        .iter()
         .chain(hedge_fund_types.iter())
         .chain(economic_types.iter())
-        .chain(geopolitics_types.iter()) {
+        .chain(geopolitics_types.iter())
+    {
         if let Some(metadata) = get_agent_metadata_internal(agent_type) {
             agents.push(metadata);
         }
@@ -1009,13 +1079,12 @@ pub async fn execute_python_agent(
             current_dir.join("src-tauri")
         };
 
-        base_dir
-            .join("resources")
-            .join("scripts")
-            .join(script_path)
+        base_dir.join("resources").join("scripts").join(script_path)
     } else {
         // Production mode: use Tauri's resource directory
-        let resource_dir = app.path().resource_dir()
+        let resource_dir = app
+            .path()
+            .resource_dir()
             .map_err(|e| format!("Failed to get resource directory: {}", e))?;
 
         resource_dir
@@ -1032,17 +1101,18 @@ pub async fn execute_python_agent(
     // Build command
     let mut cmd = std::process::Command::new(&python_path);
     cmd.arg(&full_script_path)
-       .arg("--parameters")
-       .arg(serde_json::to_string(&parameters).unwrap_or_default())
-       .arg("--inputs")
-       .arg(serde_json::to_string(&inputs).unwrap_or_default());
+        .arg("--parameters")
+        .arg(serde_json::to_string(&parameters).unwrap_or_default())
+        .arg("--inputs")
+        .arg(serde_json::to_string(&inputs).unwrap_or_default());
 
     // Hide console on Windows
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
     // Execute
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python: {}", e))?;
 
     let execution_time = start_time.elapsed().as_millis() as u64;

@@ -1,10 +1,10 @@
 // YFinance data source wrapper using Python yfinance
 // Modular design: if this fails, app continues working with other data sources
 
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use anyhow::{Result, Context};
-use std::process::Command;
 use std::path::PathBuf;
+use std::process::Command;
 
 // Windows-specific imports to hide console windows
 #[cfg(target_os = "windows")]
@@ -47,8 +47,8 @@ pub struct YFinanceProvider {
 impl YFinanceProvider {
     /// Create a new YFinance provider instance with runtime paths
     pub fn new(app: &tauri::AppHandle) -> Result<Self> {
-        let python_path = crate::utils::python::get_python_path(app)
-            .map_err(|e| anyhow::anyhow!(e))?;
+        let python_path =
+            crate::utils::python::get_python_path(app).map_err(|e| anyhow::anyhow!(e))?;
         let script_path = crate::utils::python::get_script_path(app, "yfinance_data.py")
             .map_err(|e| anyhow::anyhow!(e))?;
 
@@ -92,9 +92,7 @@ impl YFinanceProvider {
         #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
+        let output = cmd.output().context("Failed to execute Python script")?;
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
@@ -111,17 +109,13 @@ impl YFinanceProvider {
     /// Internal fetch method - calls Python yfinance script
     async fn fetch_quote(&self, symbol: &str) -> Result<QuoteData> {
         let mut cmd = Command::new(&self.python_path);
-        cmd.arg(&self.script_path)
-            .arg("quote")
-            .arg(symbol);
+        cmd.arg(&self.script_path).arg("quote").arg(symbol);
 
         // Hide console window on Windows
         #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
+        let output = cmd.output().context("Failed to execute Python script")?;
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
@@ -170,9 +164,7 @@ impl YFinanceProvider {
         #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
+        let output = cmd.output().context("Failed to execute Python script")?;
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
@@ -191,11 +183,17 @@ impl YFinanceProvider {
     pub async fn get_period_returns(&self, symbol: &str) -> Option<(f64, f64)> {
         // Get current date and past dates
         let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-        let _seven_days_ago = (chrono::Utc::now() - chrono::Duration::days(10)).format("%Y-%m-%d").to_string();
-        let thirty_days_ago = (chrono::Utc::now() - chrono::Duration::days(35)).format("%Y-%m-%d").to_string();
+        let _seven_days_ago = (chrono::Utc::now() - chrono::Duration::days(10))
+            .format("%Y-%m-%d")
+            .to_string();
+        let thirty_days_ago = (chrono::Utc::now() - chrono::Duration::days(35))
+            .format("%Y-%m-%d")
+            .to_string();
 
         // Fetch historical data
-        let hist_data = self.get_historical(symbol, &thirty_days_ago, &today).await?;
+        let hist_data = self
+            .get_historical(symbol, &thirty_days_ago, &today)
+            .await?;
 
         if hist_data.len() < 2 {
             return None;
@@ -239,17 +237,13 @@ impl YFinanceProvider {
     /// Internal info fetch method - calls Python yfinance script
     async fn fetch_info(&self, symbol: &str) -> Result<serde_json::Value> {
         let mut cmd = Command::new(&self.python_path);
-        cmd.arg(&self.script_path)
-            .arg("info")
-            .arg(symbol);
+        cmd.arg(&self.script_path).arg("info").arg(symbol);
 
         // Hide console window on Windows
         #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
+        let output = cmd.output().context("Failed to execute Python script")?;
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
@@ -274,17 +268,13 @@ impl YFinanceProvider {
     /// Internal financials fetch method - calls Python yfinance script
     async fn fetch_financials(&self, symbol: &str) -> Result<serde_json::Value> {
         let mut cmd = Command::new(&self.python_path);
-        cmd.arg(&self.script_path)
-            .arg("financials")
-            .arg(symbol);
+        cmd.arg(&self.script_path).arg("financials").arg(symbol);
 
         // Hide console window on Windows
         #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let output = cmd
-            .output()
-            .context("Failed to execute Python script")?;
+        let output = cmd.output().context("Failed to execute Python script")?;
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);

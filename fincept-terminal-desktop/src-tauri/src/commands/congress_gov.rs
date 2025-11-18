@@ -18,7 +18,8 @@ pub async fn execute_congress_gov_command(
 
 /// Get Congressional bills with various filters
 #[tauri::command]
-pub async fn get_congress_bills(app: tauri::AppHandle, 
+pub async fn get_congress_bills(
+    app: tauri::AppHandle,
     congress: Option<i32>,
     bill_type: Option<String>,
     start_date: Option<String>,
@@ -76,13 +77,17 @@ pub async fn download_bill_text(app: tauri::AppHandle, text_url: String) -> Resu
 
 /// Get comprehensive data for a bill from multiple endpoints
 #[tauri::command]
-pub async fn get_comprehensive_bill_data(app: tauri::AppHandle, bill_url: String) -> Result<String, String> {
+pub async fn get_comprehensive_bill_data(
+    app: tauri::AppHandle,
+    bill_url: String,
+) -> Result<String, String> {
     execute_congress_gov_command(app, "comprehensive".to_string(), vec![bill_url]).await
 }
 
 /// Get a summary of bills by type for a given congress
 #[tauri::command]
-pub async fn get_bill_summary_by_congress(app: tauri::AppHandle, 
+pub async fn get_bill_summary_by_congress(
+    app: tauri::AppHandle,
     congress: Option<i32>,
     limit: Option<i32>,
 ) -> Result<String, String> {

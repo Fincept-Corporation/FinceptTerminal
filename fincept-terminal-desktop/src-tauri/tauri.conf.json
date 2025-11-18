@@ -47,8 +47,6 @@
     "resources": [
       "resources/scripts",
       "resources/python-windows",
-      "resources/python-macos",
-      "resources/python-linux",
       "resources/bun-windows",
       "resources/bun-macos",
       "resources/bun-linux"

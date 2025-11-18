@@ -18,19 +18,13 @@ pub async fn execute_adb_command(
 
 /// Get economic indicators for Asian countries
 #[tauri::command]
-pub async fn get_adb_indicators(
-    app: tauri::AppHandle,
-    country: String,
-) -> Result<String, String> {
+pub async fn get_adb_indicators(app: tauri::AppHandle, country: String) -> Result<String, String> {
     execute_adb_command(app, "indicators".to_string(), vec![country]).await
 }
 
 /// Search ADB datasets
 #[tauri::command]
-pub async fn search_adb_datasets(
-    app: tauri::AppHandle,
-    query: String,
-) -> Result<String, String> {
+pub async fn search_adb_datasets(app: tauri::AppHandle, query: String) -> Result<String, String> {
     execute_adb_command(app, "search".to_string(), vec![query]).await
 }
 

@@ -1,6 +1,6 @@
 // Polygon.io data commands
-use serde::{Deserialize, Serialize};
 use crate::utils::python::execute_python_command;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolygonResponse {

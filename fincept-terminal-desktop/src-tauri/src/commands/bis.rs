@@ -20,7 +20,8 @@ pub async fn execute_bis_command(
 
 /// Get statistical data for specific flow and key
 #[tauri::command]
-pub async fn get_bis_data(app: tauri::AppHandle,
+pub async fn get_bis_data(
+    app: tauri::AppHandle,
     flow: String,
     key: Option<String>,
     start_period: Option<String>,
@@ -55,7 +56,8 @@ pub async fn get_bis_data(app: tauri::AppHandle,
 
 /// Get information about data availability
 #[tauri::command]
-pub async fn get_bis_available_constraints(app: tauri::AppHandle, 
+pub async fn get_bis_available_constraints(
+    app: tauri::AppHandle,
     flow: String,
     key: String,
     component_id: String,
@@ -88,7 +90,8 @@ pub async fn get_bis_available_constraints(app: tauri::AppHandle,
 
 /// Get data structure definitions
 #[tauri::command]
-pub async fn get_bis_data_structures(app: tauri::AppHandle, 
+pub async fn get_bis_data_structures(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -126,7 +129,8 @@ pub async fn get_bis_data_structures(app: tauri::AppHandle,
 
 /// Get dataflow definitions (available datasets)
 #[tauri::command]
-pub async fn get_bis_dataflows(app: tauri::AppHandle, 
+pub async fn get_bis_dataflows(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -164,7 +168,8 @@ pub async fn get_bis_dataflows(app: tauri::AppHandle,
 
 /// Get categorisation definitions
 #[tauri::command]
-pub async fn get_bis_categorisations(app: tauri::AppHandle, 
+pub async fn get_bis_categorisations(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -202,7 +207,8 @@ pub async fn get_bis_categorisations(app: tauri::AppHandle,
 
 /// Get content constraint definitions
 #[tauri::command]
-pub async fn get_bis_content_constraints(app: tauri::AppHandle, 
+pub async fn get_bis_content_constraints(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -240,7 +246,8 @@ pub async fn get_bis_content_constraints(app: tauri::AppHandle,
 
 /// Get actual constraint definitions
 #[tauri::command]
-pub async fn get_bis_actual_constraints(app: tauri::AppHandle, 
+pub async fn get_bis_actual_constraints(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -278,7 +285,8 @@ pub async fn get_bis_actual_constraints(app: tauri::AppHandle,
 
 /// Get allowed constraint definitions
 #[tauri::command]
-pub async fn get_bis_allowed_constraints(app: tauri::AppHandle, 
+pub async fn get_bis_allowed_constraints(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -316,7 +324,8 @@ pub async fn get_bis_allowed_constraints(app: tauri::AppHandle,
 
 /// Get general structure definitions
 #[tauri::command]
-pub async fn get_bis_structures(app: tauri::AppHandle, 
+pub async fn get_bis_structures(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -354,7 +363,8 @@ pub async fn get_bis_structures(app: tauri::AppHandle,
 
 /// Get concept scheme definitions
 #[tauri::command]
-pub async fn get_bis_concept_schemes(app: tauri::AppHandle, 
+pub async fn get_bis_concept_schemes(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -392,7 +402,8 @@ pub async fn get_bis_concept_schemes(app: tauri::AppHandle,
 
 /// Get codelist definitions
 #[tauri::command]
-pub async fn get_bis_codelists(app: tauri::AppHandle, 
+pub async fn get_bis_codelists(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -430,7 +441,8 @@ pub async fn get_bis_codelists(app: tauri::AppHandle,
 
 /// Get category scheme definitions
 #[tauri::command]
-pub async fn get_bis_category_schemes(app: tauri::AppHandle, 
+pub async fn get_bis_category_schemes(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -468,7 +480,8 @@ pub async fn get_bis_category_schemes(app: tauri::AppHandle,
 
 /// Get hierarchical codelist definitions
 #[tauri::command]
-pub async fn get_bis_hierarchical_codelists(app: tauri::AppHandle, 
+pub async fn get_bis_hierarchical_codelists(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -506,7 +519,8 @@ pub async fn get_bis_hierarchical_codelists(app: tauri::AppHandle,
 
 /// Get agency scheme definitions
 #[tauri::command]
-pub async fn get_bis_agency_schemes(app: tauri::AppHandle, 
+pub async fn get_bis_agency_schemes(
+    app: tauri::AppHandle,
     agency_id: Option<String>,
     resource_id: Option<String>,
     version: Option<String>,
@@ -546,7 +560,8 @@ pub async fn get_bis_agency_schemes(app: tauri::AppHandle,
 
 /// Get specific concepts from concept schemes
 #[tauri::command]
-pub async fn get_bis_concepts(app: tauri::AppHandle, 
+pub async fn get_bis_concepts(
+    app: tauri::AppHandle,
     agency_id: String,
     resource_id: String,
     version: String,
@@ -575,7 +590,8 @@ pub async fn get_bis_concepts(app: tauri::AppHandle,
 
 /// Get specific codes from codelists
 #[tauri::command]
-pub async fn get_bis_codes(app: tauri::AppHandle, 
+pub async fn get_bis_codes(
+    app: tauri::AppHandle,
     agency_id: String,
     resource_id: String,
     version: String,
@@ -604,7 +620,8 @@ pub async fn get_bis_codes(app: tauri::AppHandle,
 
 /// Get specific categories from category schemes
 #[tauri::command]
-pub async fn get_bis_categories(app: tauri::AppHandle, 
+pub async fn get_bis_categories(
+    app: tauri::AppHandle,
     agency_id: String,
     resource_id: String,
     version: String,
@@ -633,7 +650,8 @@ pub async fn get_bis_categories(app: tauri::AppHandle,
 
 /// Get specific hierarchies from hierarchical codelists
 #[tauri::command]
-pub async fn get_bis_hierarchies(app: tauri::AppHandle, 
+pub async fn get_bis_hierarchies(
+    app: tauri::AppHandle,
     agency_id: String,
     resource_id: String,
     version: String,
@@ -664,7 +682,8 @@ pub async fn get_bis_hierarchies(app: tauri::AppHandle,
 
 /// Get effective exchange rates data (WS_EER)
 #[tauri::command]
-pub async fn get_bis_effective_exchange_rates(app: tauri::AppHandle, 
+pub async fn get_bis_effective_exchange_rates(
+    app: tauri::AppHandle,
     countries: Option<Vec<String>>,
     start_period: Option<String>,
     end_period: Option<String>,
@@ -688,7 +707,8 @@ pub async fn get_bis_effective_exchange_rates(app: tauri::AppHandle,
 
 /// Get central bank policy rates (WS_CBPOL)
 #[tauri::command]
-pub async fn get_bis_central_bank_policy_rates(app: tauri::AppHandle, 
+pub async fn get_bis_central_bank_policy_rates(
+    app: tauri::AppHandle,
     countries: Option<Vec<String>>,
     start_period: Option<String>,
     end_period: Option<String>,
@@ -712,7 +732,8 @@ pub async fn get_bis_central_bank_policy_rates(app: tauri::AppHandle,
 
 /// Get long-term interest rates (WS_LTINT)
 #[tauri::command]
-pub async fn get_bis_long_term_interest_rates(app: tauri::AppHandle, 
+pub async fn get_bis_long_term_interest_rates(
+    app: tauri::AppHandle,
     countries: Option<Vec<String>>,
     start_period: Option<String>,
     end_period: Option<String>,
@@ -736,7 +757,8 @@ pub async fn get_bis_long_term_interest_rates(app: tauri::AppHandle,
 
 /// Get short-term interest rates (WS_STINT)
 #[tauri::command]
-pub async fn get_bis_short_term_interest_rates(app: tauri::AppHandle, 
+pub async fn get_bis_short_term_interest_rates(
+    app: tauri::AppHandle,
     countries: Option<Vec<String>>,
     start_period: Option<String>,
     end_period: Option<String>,
@@ -760,7 +782,8 @@ pub async fn get_bis_short_term_interest_rates(app: tauri::AppHandle,
 
 /// Get exchange rates (WS_XRU)
 #[tauri::command]
-pub async fn get_bis_exchange_rates(app: tauri::AppHandle, 
+pub async fn get_bis_exchange_rates(
+    app: tauri::AppHandle,
     currency_pairs: Option<Vec<String>>,
     start_period: Option<String>,
     end_period: Option<String>,
@@ -784,7 +807,8 @@ pub async fn get_bis_exchange_rates(app: tauri::AppHandle,
 
 /// Get credit to non-financial sector (WS_CRD)
 #[tauri::command]
-pub async fn get_bis_credit_to_non_financial_sector(app: tauri::AppHandle, 
+pub async fn get_bis_credit_to_non_financial_sector(
+    app: tauri::AppHandle,
     countries: Option<Vec<String>>,
     sectors: Option<Vec<String>>,
     start_period: Option<String>,
@@ -812,7 +836,8 @@ pub async fn get_bis_credit_to_non_financial_sector(app: tauri::AppHandle,
 
 /// Get house price indices (WS_HP)
 #[tauri::command]
-pub async fn get_bis_house_prices(app: tauri::AppHandle, 
+pub async fn get_bis_house_prices(
+    app: tauri::AppHandle,
     countries: Option<Vec<String>>,
     start_period: Option<String>,
     end_period: Option<String>,
@@ -838,13 +863,14 @@ pub async fn get_bis_house_prices(app: tauri::AppHandle,
 
 /// Get overview of all available datasets
 #[tauri::command]
-pub async fn get_bis_available_datasets(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bis_available_datasets(app: tauri::AppHandle) -> Result<String, String> {
     execute_bis_command(app, "get_available_datasets".to_string(), vec![]).await
 }
 
 /// Search for datasets matching a query
 #[tauri::command]
-pub async fn search_bis_datasets(app: tauri::AppHandle, 
+pub async fn search_bis_datasets(
+    app: tauri::AppHandle,
     query: String,
     agency_id: Option<String>,
 ) -> Result<String, String> {
@@ -857,7 +883,8 @@ pub async fn search_bis_datasets(app: tauri::AppHandle,
 
 /// Get comprehensive economic overview for countries
 #[tauri::command]
-pub async fn get_bis_economic_overview(app: tauri::AppHandle, 
+pub async fn get_bis_economic_overview(
+    app: tauri::AppHandle,
     countries: Option<Vec<String>>,
     start_period: Option<String>,
     end_period: Option<String>,
@@ -877,7 +904,8 @@ pub async fn get_bis_economic_overview(app: tauri::AppHandle,
 
 /// Get comprehensive metadata for a specific dataset
 #[tauri::command]
-pub async fn get_bis_dataset_metadata(app: tauri::AppHandle, 
+pub async fn get_bis_dataset_metadata(
+    app: tauri::AppHandle,
     flow: String,
 ) -> Result<String, String> {
     execute_bis_command(app, "get_dataset_metadata".to_string(), vec![flow]).await
@@ -887,17 +915,24 @@ pub async fn get_bis_dataset_metadata(app: tauri::AppHandle,
 
 /// Get global monetary policy overview
 #[tauri::command]
-pub async fn get_bis_monetary_policy_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bis_monetary_policy_overview(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get central bank policy rates for major economies
     match get_bis_central_bank_policy_rates(
         app.clone(),
-        Some(vec!["US".to_string(), "GB".to_string(), "JP".to_string(), "EA".to_string()]),
+        Some(vec![
+            "US".to_string(),
+            "GB".to_string(),
+            "JP".to_string(),
+            "EA".to_string(),
+        ]),
         None,
         None,
-        Some("dataonly".to_string())
-    ).await {
+        Some("dataonly".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("policy_rates".to_string(), data)),
         Err(e) => results.push(("policy_rates".to_string(), format!("Error: {}", e))),
     }
@@ -905,11 +940,18 @@ pub async fn get_bis_monetary_policy_overview(app: tauri::AppHandle, ) -> Result
     // Get short-term interest rates
     match get_bis_short_term_interest_rates(
         app.clone(),
-        Some(vec!["US".to_string(), "GB".to_string(), "JP".to_string(), "EA".to_string()]),
+        Some(vec![
+            "US".to_string(),
+            "GB".to_string(),
+            "JP".to_string(),
+            "EA".to_string(),
+        ]),
         None,
         None,
-        Some("dataonly".to_string())
-    ).await {
+        Some("dataonly".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("short_term_rates".to_string(), data)),
         Err(e) => results.push(("short_term_rates".to_string(), format!("Error: {}", e))),
     }
@@ -917,11 +959,18 @@ pub async fn get_bis_monetary_policy_overview(app: tauri::AppHandle, ) -> Result
     // Get long-term interest rates
     match get_bis_long_term_interest_rates(
         app.clone(),
-        Some(vec!["US".to_string(), "GB".to_string(), "JP".to_string(), "EA".to_string()]),
+        Some(vec![
+            "US".to_string(),
+            "GB".to_string(),
+            "JP".to_string(),
+            "EA".to_string(),
+        ]),
         None,
         None,
-        Some("dataonly".to_string())
-    ).await {
+        Some("dataonly".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("long_term_rates".to_string(), data)),
         Err(e) => results.push(("long_term_rates".to_string(), format!("Error: {}", e))),
     }
@@ -930,22 +979,30 @@ pub async fn get_bis_monetary_policy_overview(app: tauri::AppHandle, ) -> Result
         "monetary_policy_overview": results,
         "focus_economies": ["US", "GB", "JP", "EA"],
         "description": "Central bank policy rates and interest rate trends"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get global exchange rate analysis
 #[tauri::command]
-pub async fn get_bis_exchange_rate_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bis_exchange_rate_analysis(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get effective exchange rates
     match get_bis_effective_exchange_rates(
         app.clone(),
-        Some(vec!["US".to_string(), "GB".to_string(), "JP".to_string(), "EA".to_string()]),
+        Some(vec![
+            "US".to_string(),
+            "GB".to_string(),
+            "JP".to_string(),
+            "EA".to_string(),
+        ]),
         None,
         None,
-        Some("dataonly".to_string())
-    ).await {
+        Some("dataonly".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("effective_rates".to_string(), data)),
         Err(e) => results.push(("effective_rates".to_string(), format!("Error: {}", e))),
     }
@@ -953,11 +1010,18 @@ pub async fn get_bis_exchange_rate_analysis(app: tauri::AppHandle, ) -> Result<S
     // Get major currency exchange rates
     match get_bis_exchange_rates(
         app.clone(),
-        Some(vec!["USD".to_string(), "EUR".to_string(), "GBP".to_string(), "JPY".to_string()]),
+        Some(vec![
+            "USD".to_string(),
+            "EUR".to_string(),
+            "GBP".to_string(),
+            "JPY".to_string(),
+        ]),
         None,
         None,
-        Some("dataonly".to_string())
-    ).await {
+        Some("dataonly".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("major_currencies".to_string(), data)),
         Err(e) => results.push(("major_currencies".to_string(), format!("Error: {}", e))),
     }
@@ -966,23 +1030,31 @@ pub async fn get_bis_exchange_rate_analysis(app: tauri::AppHandle, ) -> Result<S
         "exchange_rate_analysis": results,
         "focus_currencies": ["USD", "EUR", "GBP", "JPY"],
         "description": "Exchange rate movements and trends"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get global credit conditions overview
 #[tauri::command]
-pub async fn get_bis_credit_conditions_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bis_credit_conditions_overview(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get credit to non-financial sector for major economies
     match get_bis_credit_to_non_financial_sector(
         app.clone(),
-        Some(vec!["US".to_string(), "GB".to_string(), "JP".to_string(), "EA".to_string()]),
+        Some(vec![
+            "US".to_string(),
+            "GB".to_string(),
+            "JP".to_string(),
+            "EA".to_string(),
+        ]),
         None,
         None,
         None,
-        Some("dataonly".to_string())
-    ).await {
+        Some("dataonly".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("credit_growth".to_string(), data)),
         Err(e) => results.push(("credit_growth".to_string(), format!("Error: {}", e))),
     }
@@ -991,22 +1063,30 @@ pub async fn get_bis_credit_conditions_overview(app: tauri::AppHandle, ) -> Resu
         "credit_conditions_overview": results,
         "focus_economies": ["US", "GB", "JP", "EA"],
         "description": "Credit growth and conditions analysis"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get global housing market overview
 #[tauri::command]
-pub async fn get_bis_housing_market_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bis_housing_market_overview(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get house price indices for major economies
     match get_bis_house_prices(
         app.clone(),
-        Some(vec!["US".to_string(), "GB".to_string(), "JP".to_string(), "CA".to_string()]),
+        Some(vec![
+            "US".to_string(),
+            "GB".to_string(),
+            "JP".to_string(),
+            "CA".to_string(),
+        ]),
         None,
         None,
-        Some("dataonly".to_string())
-    ).await {
+        Some("dataonly".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("house_prices".to_string(), data)),
         Err(e) => results.push(("house_prices".to_string(), format!("Error: {}", e))),
     }
@@ -1015,12 +1095,13 @@ pub async fn get_bis_housing_market_overview(app: tauri::AppHandle, ) -> Result<
         "housing_market_overview": results,
         "focus_markets": ["US", "GB", "JP", "CA"],
         "description": "Housing price indices and trends"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get BIS data directory and available resources
 #[tauri::command]
-pub async fn get_bis_data_directory(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bis_data_directory(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get available datasets
@@ -1036,8 +1117,10 @@ pub async fn get_bis_data_directory(app: tauri::AppHandle, ) -> Result<String, S
         None,
         None,
         Some("none".to_string()),
-        Some("allstubs".to_string())
-    ).await {
+        Some("allstubs".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("data_structures".to_string(), data)),
         Err(e) => results.push(("data_structures".to_string(), format!("Error: {}", e))),
     }
@@ -1049,8 +1132,10 @@ pub async fn get_bis_data_directory(app: tauri::AppHandle, ) -> Result<String, S
         None,
         None,
         Some("none".to_string()),
-        Some("allstubs".to_string())
-    ).await {
+        Some("allstubs".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("concept_schemes".to_string(), data)),
         Err(e) => results.push(("concept_schemes".to_string(), format!("Error: {}", e))),
     }
@@ -1062,8 +1147,10 @@ pub async fn get_bis_data_directory(app: tauri::AppHandle, ) -> Result<String, S
         None,
         None,
         Some("none".to_string()),
-        Some("allstubs".to_string())
-    ).await {
+        Some("allstubs".to_string()),
+    )
+    .await
+    {
         Ok(data) => results.push(("codelists".to_string(), data)),
         Err(e) => results.push(("codelists".to_string(), format!("Error: {}", e))),
     }
@@ -1071,12 +1158,13 @@ pub async fn get_bis_data_directory(app: tauri::AppHandle, ) -> Result<String, S
     Ok(serde_json::json!({
         "data_directory": results,
         "description": "BIS statistical data directory and available resources"
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get comprehensive BIS statistics summary
 #[tauri::command]
-pub async fn get_bis_comprehensive_summary(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bis_comprehensive_summary(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get monetary policy overview

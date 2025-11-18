@@ -38,7 +38,10 @@ pub async fn bea_get_parameter_list(dataset_name: String) -> Result<String, Stri
 }
 
 #[command]
-pub async fn bea_get_parameter_values(dataset_name: String, parameter_name: String) -> Result<String, String> {
+pub async fn bea_get_parameter_values(
+    dataset_name: String,
+    parameter_name: String,
+) -> Result<String, String> {
     let output = crate::utils::python::python_command()
         .arg("resources/scripts/bea_data.py")
         .arg("parameter_values")
@@ -60,7 +63,7 @@ pub async fn bea_get_parameter_values(dataset_name: String, parameter_name: Stri
 pub async fn bea_get_parameter_values_filtered(
     dataset_name: String,
     parameter_name: String,
-    target_parameter: String
+    target_parameter: String,
 ) -> Result<String, String> {
     let output = crate::utils::python::python_command()
         .arg("resources/scripts/bea_data.py")
@@ -83,7 +86,11 @@ pub async fn bea_get_parameter_values_filtered(
 // ==================== DATA RETRIEVAL COMMANDS ====================
 
 #[command]
-pub async fn bea_get_nipa_data(table_name: String, frequency: Option<String>, year: Option<String>) -> Result<String, String> {
+pub async fn bea_get_nipa_data(
+    table_name: String,
+    frequency: Option<String>,
+    year: Option<String>,
+) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("nipa")
@@ -99,7 +106,8 @@ pub async fn bea_get_nipa_data(table_name: String, frequency: Option<String>, ye
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -115,7 +123,7 @@ pub async fn bea_get_nipa_data(table_name: String, frequency: Option<String>, ye
 pub async fn bea_get_ni_underlying_detail(
     table_name: String,
     frequency: Option<String>,
-    year: Option<String>
+    year: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
@@ -132,7 +140,8 @@ pub async fn bea_get_ni_underlying_detail(
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -145,7 +154,10 @@ pub async fn bea_get_ni_underlying_detail(
 }
 
 #[command]
-pub async fn bea_get_fixed_assets(table_name: String, year: Option<String>) -> Result<String, String> {
+pub async fn bea_get_fixed_assets(
+    table_name: String,
+    year: Option<String>,
+) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("fixed_assets")
@@ -155,7 +167,8 @@ pub async fn bea_get_fixed_assets(table_name: String, year: Option<String>) -> R
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -177,7 +190,7 @@ pub async fn bea_get_mne_data(
     state: Option<String>,
     ownership_level: Option<String>,
     nonbank_affiliates_only: Option<String>,
-    get_footnotes: Option<String>
+    get_footnotes: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
@@ -220,7 +233,8 @@ pub async fn bea_get_mne_data(
         cmd.arg("No"); // Default
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -237,7 +251,7 @@ pub async fn bea_get_gdp_by_industry(
     table_id: String,
     year: Option<String>,
     frequency: Option<String>,
-    industry: Option<String>
+    industry: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
@@ -260,7 +274,8 @@ pub async fn bea_get_gdp_by_industry(
         cmd.arg("ALL"); // Default
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -277,7 +292,7 @@ pub async fn bea_get_international_transactions(
     indicator: Option<String>,
     area_or_country: Option<String>,
     frequency: Option<String>,
-    year: Option<String>
+    year: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
@@ -303,7 +318,8 @@ pub async fn bea_get_international_transactions(
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -320,7 +336,7 @@ pub async fn bea_get_international_investment_position(
     type_of_investment: Option<String>,
     component: Option<String>,
     frequency: Option<String>,
-    year: Option<String>
+    year: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
@@ -344,7 +360,8 @@ pub async fn bea_get_international_investment_position(
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -357,7 +374,10 @@ pub async fn bea_get_international_investment_position(
 }
 
 #[command]
-pub async fn bea_get_input_output(table_id: String, year: Option<String>) -> Result<String, String> {
+pub async fn bea_get_input_output(
+    table_id: String,
+    year: Option<String>,
+) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
         .arg("input_output")
@@ -367,7 +387,8 @@ pub async fn bea_get_input_output(table_id: String, year: Option<String>) -> Res
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -384,7 +405,7 @@ pub async fn bea_get_underlying_gdp_by_industry(
     table_id: String,
     year: Option<String>,
     frequency: Option<String>,
-    industry: Option<String>
+    industry: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
@@ -407,7 +428,8 @@ pub async fn bea_get_underlying_gdp_by_industry(
         cmd.arg("ALL"); // Default
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -425,7 +447,7 @@ pub async fn bea_get_international_services_trade(
     trade_direction: Option<String>,
     affiliation: Option<String>,
     area_or_country: Option<String>,
-    year: Option<String>
+    year: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
@@ -453,7 +475,8 @@ pub async fn bea_get_international_services_trade(
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -470,7 +493,7 @@ pub async fn bea_get_regional_data(
     table_name: String,
     line_code: Option<String>,
     geo_fips: Option<String>,
-    year: Option<String>
+    year: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
@@ -493,7 +516,8 @@ pub async fn bea_get_regional_data(
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -517,7 +541,8 @@ pub async fn bea_get_economic_overview(year: Option<String>) -> Result<String, S
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {
@@ -532,7 +557,7 @@ pub async fn bea_get_economic_overview(year: Option<String>) -> Result<String, S
 #[command]
 pub async fn bea_get_regional_snapshot(
     geo_fips: Option<String>,
-    year: Option<String>
+    year: Option<String>,
 ) -> Result<String, String> {
     let mut cmd = crate::utils::python::python_command();
     cmd.arg("resources/scripts/bea_data.py")
@@ -548,7 +573,8 @@ pub async fn bea_get_regional_snapshot(
         cmd.arg(&yr);
     }
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to execute Python command: {}", e))?;
 
     if !output.status.success() {

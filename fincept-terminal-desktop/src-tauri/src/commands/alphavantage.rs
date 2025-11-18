@@ -18,7 +18,10 @@ pub async fn execute_alphavantage_command(
 
 /// Get quote for a single symbol
 #[tauri::command]
-pub async fn get_alphavantage_quote(app: tauri::AppHandle, symbol: String) -> Result<String, String> {
+pub async fn get_alphavantage_quote(
+    app: tauri::AppHandle,
+    symbol: String,
+) -> Result<String, String> {
     execute_alphavantage_command(app, "quote".to_string(), vec![symbol]).await
 }
 
@@ -52,19 +55,28 @@ pub async fn get_alphavantage_intraday(
 
 /// Get company overview
 #[tauri::command]
-pub async fn get_alphavantage_overview(app: tauri::AppHandle, symbol: String) -> Result<String, String> {
+pub async fn get_alphavantage_overview(
+    app: tauri::AppHandle,
+    symbol: String,
+) -> Result<String, String> {
     execute_alphavantage_command(app, "overview".to_string(), vec![symbol]).await
 }
 
 /// Search for symbols/companies
 #[tauri::command]
-pub async fn search_alphavantage_symbols(app: tauri::AppHandle, keywords: String) -> Result<String, String> {
+pub async fn search_alphavantage_symbols(
+    app: tauri::AppHandle,
+    keywords: String,
+) -> Result<String, String> {
     execute_alphavantage_command(app, "search".to_string(), vec![keywords]).await
 }
 
 /// Get comprehensive data from multiple endpoints
 #[tauri::command]
-pub async fn get_alphavantage_comprehensive(app: tauri::AppHandle, symbol: String) -> Result<String, String> {
+pub async fn get_alphavantage_comprehensive(
+    app: tauri::AppHandle,
+    symbol: String,
+) -> Result<String, String> {
     execute_alphavantage_command(app, "comprehensive".to_string(), vec![symbol]).await
 }
 

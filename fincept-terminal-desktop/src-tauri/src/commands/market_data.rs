@@ -1,7 +1,7 @@
 // Market data Tauri commands
 // Frontend can call these commands to fetch live market data
 
-use crate::data_sources::yfinance::{YFinanceProvider, QuoteData, HistoricalData};
+use crate::data_sources::yfinance::{HistoricalData, QuoteData, YFinanceProvider};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -35,8 +35,10 @@ pub struct PeriodReturnsResponse {
 
 /// Fetch a single quote
 #[tauri::command]
-pub async fn get_market_quote(app: tauri::AppHandle, symbol: String) -> Result<QuoteResponse, String> {
-
+pub async fn get_market_quote(
+    app: tauri::AppHandle,
+    symbol: String,
+) -> Result<QuoteResponse, String> {
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_quote(&symbol).await {
@@ -55,8 +57,10 @@ pub async fn get_market_quote(app: tauri::AppHandle, symbol: String) -> Result<Q
 
 /// Fetch multiple quotes (batch)
 #[tauri::command]
-pub async fn get_market_quotes(app: tauri::AppHandle, symbols: Vec<String>) -> Result<QuotesResponse, String> {
-
+pub async fn get_market_quotes(
+    app: tauri::AppHandle,
+    symbols: Vec<String>,
+) -> Result<QuotesResponse, String> {
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
     let quotes = provider.get_quotes(symbols).await;
 
@@ -69,8 +73,10 @@ pub async fn get_market_quotes(app: tauri::AppHandle, symbols: Vec<String>) -> R
 
 /// Fetch period returns (7D, 30D)
 #[tauri::command]
-pub async fn get_period_returns(app: tauri::AppHandle, symbol: String) -> Result<PeriodReturnsResponse, String> {
-
+pub async fn get_period_returns(
+    app: tauri::AppHandle,
+    symbol: String,
+) -> Result<PeriodReturnsResponse, String> {
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_period_returns(&symbol).await {
@@ -115,7 +121,10 @@ pub async fn get_historical_data(
 ) -> Result<HistoricalResponse, String> {
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
-    match provider.get_historical(&symbol, &start_date, &end_date).await {
+    match provider
+        .get_historical(&symbol, &start_date, &end_date)
+        .await
+    {
         Some(data) => Ok(HistoricalResponse {
             success: true,
             data,
@@ -138,7 +147,10 @@ pub struct StockInfoResponse {
 
 /// Fetch stock info (company data, metrics, etc.)
 #[tauri::command]
-pub async fn get_stock_info(app: tauri::AppHandle, symbol: String) -> Result<StockInfoResponse, String> {
+pub async fn get_stock_info(
+    app: tauri::AppHandle,
+    symbol: String,
+) -> Result<StockInfoResponse, String> {
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_info(&symbol).await {
@@ -164,7 +176,10 @@ pub struct FinancialsResponse {
 
 /// Fetch financial statements (income, balance sheet, cash flow)
 #[tauri::command]
-pub async fn get_financials(app: tauri::AppHandle, symbol: String) -> Result<FinancialsResponse, String> {
+pub async fn get_financials(
+    app: tauri::AppHandle,
+    symbol: String,
+) -> Result<FinancialsResponse, String> {
     let provider = YFinanceProvider::new(&app).map_err(|e| e.to_string())?;
 
     match provider.get_financials(&symbol).await {

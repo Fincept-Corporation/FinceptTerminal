@@ -18,17 +18,12 @@ pub async fn execute_spain_data_command(
 
 /// Get Spanish economic indicators
 #[tauri::command]
-pub async fn get_spain_economic_data(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_spain_economic_data(app: tauri::AppHandle) -> Result<String, String> {
     execute_spain_data_command(app, "economic".to_string(), vec![]).await
 }
 
 /// Search Spanish datasets
 #[tauri::command]
-pub async fn search_spain_datasets(
-    app: tauri::AppHandle,
-    query: String,
-) -> Result<String, String> {
+pub async fn search_spain_datasets(app: tauri::AppHandle, query: String) -> Result<String, String> {
     execute_spain_data_command(app, "search".to_string(), vec![query]).await
 }

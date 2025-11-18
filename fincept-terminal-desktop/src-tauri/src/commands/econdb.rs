@@ -45,9 +45,7 @@ pub async fn search_econdb_indicators(
 
 /// Get available datasets
 #[tauri::command]
-pub async fn get_econdb_datasets(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_econdb_datasets(app: tauri::AppHandle) -> Result<String, String> {
     execute_econdb_command(app, "datasets".to_string(), vec![]).await
 }
 

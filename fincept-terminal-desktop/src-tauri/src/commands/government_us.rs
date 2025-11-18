@@ -18,7 +18,8 @@ pub async fn execute_government_us_command(
 
 /// Get US Treasury prices for a specific date
 #[tauri::command]
-pub async fn get_treasury_prices(app: tauri::AppHandle, 
+pub async fn get_treasury_prices(
+    app: tauri::AppHandle,
     target_date: Option<String>,
     cusip: Option<String>,
     security_type: Option<String>,
@@ -38,7 +39,8 @@ pub async fn get_treasury_prices(app: tauri::AppHandle,
 
 /// Get US Treasury auction data
 #[tauri::command]
-pub async fn get_treasury_auctions(app: tauri::AppHandle, 
+pub async fn get_treasury_auctions(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
     security_type: Option<String>,
@@ -66,7 +68,8 @@ pub async fn get_treasury_auctions(app: tauri::AppHandle,
 
 /// Get comprehensive US Treasury data from multiple endpoints
 #[tauri::command]
-pub async fn get_comprehensive_treasury_data(app: tauri::AppHandle, 
+pub async fn get_comprehensive_treasury_data(
+    app: tauri::AppHandle,
     target_date: Option<String>,
     security_type: Option<String>,
 ) -> Result<String, String> {
@@ -82,7 +85,8 @@ pub async fn get_comprehensive_treasury_data(app: tauri::AppHandle,
 
 /// Get US Treasury data summary with key metrics
 #[tauri::command]
-pub async fn get_treasury_summary(app: tauri::AppHandle, 
+pub async fn get_treasury_summary(
+    app: tauri::AppHandle,
     target_date: Option<String>,
 ) -> Result<String, String> {
     let mut args = Vec::new();

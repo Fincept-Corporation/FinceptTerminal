@@ -32,9 +32,7 @@ pub async fn get_sentinelhub_imagery(
 
 /// Get available collections
 #[tauri::command]
-pub async fn get_sentinelhub_collections(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_sentinelhub_collections(app: tauri::AppHandle) -> Result<String, String> {
     execute_sentinelhub_command(app, "collections".to_string(), vec![]).await
 }
 

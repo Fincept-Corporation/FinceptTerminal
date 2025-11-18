@@ -32,9 +32,7 @@ pub async fn get_databento_market_data(
 
 /// Get available datasets
 #[tauri::command]
-pub async fn get_databento_datasets(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_databento_datasets(app: tauri::AppHandle) -> Result<String, String> {
     execute_databento_command(app, "datasets".to_string(), vec![]).await
 }
 

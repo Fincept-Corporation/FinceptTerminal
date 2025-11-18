@@ -78,22 +78,20 @@ pub async fn get_portfolio_overview(
     returns_data: String,
     weights: Option<String>,
 ) -> Result<String, String> {
-    let metrics = calculate_portfolio_metrics(
-        app.clone(),
-        returns_data.clone(),
-        weights.clone(),
-        None,
-    ).await?;
+    let metrics =
+        calculate_portfolio_metrics(app.clone(), returns_data.clone(), weights.clone(), None)
+            .await?;
 
     let optimization = optimize_portfolio(
         app.clone(),
         returns_data.clone(),
         Some("max_sharpe".to_string()),
         None,
-    ).await?;
+    )
+    .await?;
 
-    let metrics_json: Value = serde_json::from_str(&metrics)
-        .map_err(|e| format!("Failed to parse metrics: {}", e))?;
+    let metrics_json: Value =
+        serde_json::from_str(&metrics).map_err(|e| format!("Failed to parse metrics: {}", e))?;
     let optimization_json: Value = serde_json::from_str(&optimization)
         .map_err(|e| format!("Failed to parse optimization: {}", e))?;
 
@@ -102,8 +100,7 @@ pub async fn get_portfolio_overview(
         "optimized_portfolio": optimization_json
     });
 
-    serde_json::to_string(&combined)
-        .map_err(|e| format!("Failed to serialize overview: {}", e))
+    serde_json::to_string(&combined).map_err(|e| format!("Failed to serialize overview: {}", e))
 }
 
 /// Calculate risk metrics

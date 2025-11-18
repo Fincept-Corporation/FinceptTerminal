@@ -20,7 +20,8 @@ pub async fn execute_cboe_command(
 
 /// Get real-time equity quote with implied volatility data
 #[tauri::command]
-pub async fn get_cboe_equity_quote(app: tauri::AppHandle, 
+pub async fn get_cboe_equity_quote(
+    app: tauri::AppHandle,
     symbol: String,
 ) -> Result<String, String> {
     let args = vec![symbol];
@@ -29,7 +30,8 @@ pub async fn get_cboe_equity_quote(app: tauri::AppHandle,
 
 /// Get historical equity price data
 #[tauri::command]
-pub async fn get_cboe_equity_historical(app: tauri::AppHandle, 
+pub async fn get_cboe_equity_historical(
+    app: tauri::AppHandle,
     symbol: String,
     interval: Option<String>,
     start_date: Option<String>,
@@ -52,7 +54,8 @@ pub async fn get_cboe_equity_historical(app: tauri::AppHandle,
 
 /// Search for equities in CBOE directory
 #[tauri::command]
-pub async fn search_cboe_equities(app: tauri::AppHandle, 
+pub async fn search_cboe_equities(
+    app: tauri::AppHandle,
     query: String,
     is_symbol: Option<bool>,
 ) -> Result<String, String> {
@@ -67,7 +70,8 @@ pub async fn search_cboe_equities(app: tauri::AppHandle,
 
 /// Get constituents for European indices
 #[tauri::command]
-pub async fn get_cboe_index_constituents(app: tauri::AppHandle, 
+pub async fn get_cboe_index_constituents(
+    app: tauri::AppHandle,
     symbol: String,
 ) -> Result<String, String> {
     let args = vec![symbol];
@@ -76,7 +80,8 @@ pub async fn get_cboe_index_constituents(app: tauri::AppHandle,
 
 /// Get historical index data
 #[tauri::command]
-pub async fn get_cboe_index_historical(app: tauri::AppHandle, 
+pub async fn get_cboe_index_historical(
+    app: tauri::AppHandle,
     symbol: String,
     interval: Option<String>,
     start_date: Option<String>,
@@ -99,7 +104,8 @@ pub async fn get_cboe_index_historical(app: tauri::AppHandle,
 
 /// Search for indices in CBOE directory
 #[tauri::command]
-pub async fn search_cboe_indices(app: tauri::AppHandle, 
+pub async fn search_cboe_indices(
+    app: tauri::AppHandle,
     query: String,
     is_symbol: Option<bool>,
 ) -> Result<String, String> {
@@ -112,7 +118,8 @@ pub async fn search_cboe_indices(app: tauri::AppHandle,
 
 /// Get snapshots for all indices in a region
 #[tauri::command]
-pub async fn get_cboe_index_snapshots(app: tauri::AppHandle, 
+pub async fn get_cboe_index_snapshots(
+    app: tauri::AppHandle,
     region: Option<String>,
 ) -> Result<String, String> {
     let mut args = Vec::new();
@@ -126,7 +133,7 @@ pub async fn get_cboe_index_snapshots(app: tauri::AppHandle,
 
 /// Get list of all available indices
 #[tauri::command]
-pub async fn get_cboe_available_indices(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_cboe_available_indices(app: tauri::AppHandle) -> Result<String, String> {
     execute_cboe_command(app, "available_indices".to_string(), vec![]).await
 }
 
@@ -134,7 +141,8 @@ pub async fn get_cboe_available_indices(app: tauri::AppHandle, ) -> Result<Strin
 
 /// Get VIX futures curve data
 #[tauri::command]
-pub async fn get_cboe_futures_curve(app: tauri::AppHandle, 
+pub async fn get_cboe_futures_curve(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     date: Option<String>,
 ) -> Result<String, String> {
@@ -154,7 +162,8 @@ pub async fn get_cboe_futures_curve(app: tauri::AppHandle,
 
 /// Get options chains data for a symbol
 #[tauri::command]
-pub async fn get_cboe_options_chains(app: tauri::AppHandle, 
+pub async fn get_cboe_options_chains(
+    app: tauri::AppHandle,
     symbol: String,
 ) -> Result<String, String> {
     let args = vec![symbol];
@@ -165,19 +174,19 @@ pub async fn get_cboe_options_chains(app: tauri::AppHandle,
 
 /// Get comprehensive market overview for US indices
 #[tauri::command]
-pub async fn get_cboe_us_market_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_cboe_us_market_overview(app: tauri::AppHandle) -> Result<String, String> {
     get_cboe_index_snapshots(app, Some("us".to_string())).await
 }
 
 /// Get comprehensive market overview for European indices
 #[tauri::command]
-pub async fn get_cboe_european_market_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_cboe_european_market_overview(app: tauri::AppHandle) -> Result<String, String> {
     get_cboe_index_snapshots(app, Some("eu".to_string())).await
 }
 
 /// Get VIX analysis including current levels and futures curve
 #[tauri::command]
-pub async fn get_cboe_vix_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_cboe_vix_analysis(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get VIX quote
@@ -194,12 +203,14 @@ pub async fn get_cboe_vix_analysis(app: tauri::AppHandle, ) -> Result<String, St
 
     Ok(serde_json::json!({
         "vix_analysis": results
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get comprehensive equity analysis with quote and historical data
 #[tauri::command]
-pub async fn get_cboe_equity_analysis(app: tauri::AppHandle, 
+pub async fn get_cboe_equity_analysis(
+    app: tauri::AppHandle,
     symbol: String,
     days_back: Option<i32>,
 ) -> Result<String, String> {
@@ -217,7 +228,15 @@ pub async fn get_cboe_equity_analysis(app: tauri::AppHandle,
         .format("%Y-%m-%d")
         .to_string();
 
-    match get_cboe_equity_historical(app.clone(), symbol.clone(), Some("1d".to_string()), Some(start_date), None).await {
+    match get_cboe_equity_historical(
+        app.clone(),
+        symbol.clone(),
+        Some("1d".to_string()),
+        Some(start_date),
+        None,
+    )
+    .await
+    {
         Ok(historical_data) => results.push(("historical".to_string(), historical_data)),
         Err(e) => results.push(("historical".to_string(), format!("Error: {}", e))),
     }
@@ -225,18 +244,23 @@ pub async fn get_cboe_equity_analysis(app: tauri::AppHandle,
     // Try to get options chains if available
     match get_cboe_options_chains(app.clone(), symbol.clone()).await {
         Ok(options_data) => results.push(("options".to_string(), options_data)),
-        Err(_) => results.push(("options".to_string(), "Options data not available".to_string())),
+        Err(_) => results.push((
+            "options".to_string(),
+            "Options data not available".to_string(),
+        )),
     }
 
     Ok(serde_json::json!({
         "equity_analysis": results,
         "symbol": symbol
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get comprehensive index analysis with historical data and constituents
 #[tauri::command]
-pub async fn get_cboe_index_analysis(app: tauri::AppHandle, 
+pub async fn get_cboe_index_analysis(
+    app: tauri::AppHandle,
     symbol: String,
     days_back: Option<i32>,
 ) -> Result<String, String> {
@@ -248,7 +272,15 @@ pub async fn get_cboe_index_analysis(app: tauri::AppHandle,
         .format("%Y-%m-%d")
         .to_string();
 
-    match get_cboe_index_historical(app.clone(), symbol.clone(), Some("1d".to_string()), Some(start_date), None).await {
+    match get_cboe_index_historical(
+        app.clone(),
+        symbol.clone(),
+        Some("1d".to_string()),
+        Some(start_date),
+        None,
+    )
+    .await
+    {
         Ok(historical_data) => results.push(("historical".to_string(), historical_data)),
         Err(e) => results.push(("historical".to_string(), format!("Error: {}", e))),
     }
@@ -265,12 +297,13 @@ pub async fn get_cboe_index_analysis(app: tauri::AppHandle,
     Ok(serde_json::json!({
         "index_analysis": results,
         "symbol": symbol
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get CBOE market sentiment analysis using VIX and index data
 #[tauri::command]
-pub async fn get_cboe_market_sentiment(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_cboe_market_sentiment(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get VIX data for fear index
@@ -296,12 +329,14 @@ pub async fn get_cboe_market_sentiment(app: tauri::AppHandle, ) -> Result<String
 
     Ok(serde_json::json!({
         "market_sentiment": results
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Search for symbols across both equities and indices
 #[tauri::command]
-pub async fn search_cboe_symbols(app: tauri::AppHandle, 
+pub async fn search_cboe_symbols(
+    app: tauri::AppHandle,
     query: String,
     search_type: Option<String>, // "equities", "indices", or "all"
 ) -> Result<String, String> {
@@ -326,12 +361,13 @@ pub async fn search_cboe_symbols(app: tauri::AppHandle,
         "symbol_search": results,
         "query": query,
         "search_type": search_mode
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get CBOE directory information (companies and indices available)
 #[tauri::command]
-pub async fn get_cboe_directory_info(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_cboe_directory_info(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get available indices
@@ -349,10 +385,14 @@ pub async fn get_cboe_directory_info(app: tauri::AppHandle, ) -> Result<String, 
     // Get European market snapshots for overview
     match get_cboe_index_snapshots(app.clone(), Some("eu".to_string())).await {
         Ok(eu_snapshots) => results.push(("european_market_overview".to_string(), eu_snapshots)),
-        Err(e) => results.push(("european_market_overview".to_string(), format!("Error: {}", e))),
+        Err(e) => results.push((
+            "european_market_overview".to_string(),
+            format!("Error: {}", e),
+        )),
     }
 
     Ok(serde_json::json!({
         "directory_info": results
-    }).to_string())
+    })
+    .to_string())
 }

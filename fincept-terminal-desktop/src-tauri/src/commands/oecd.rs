@@ -18,7 +18,8 @@ pub async fn execute_oecd_command(
 
 /// Get real GDP data for specified countries
 #[tauri::command]
-pub async fn get_oecd_gdp_real(app: tauri::AppHandle, 
+pub async fn get_oecd_gdp_real(
+    app: tauri::AppHandle,
     countries: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -42,7 +43,8 @@ pub async fn get_oecd_gdp_real(app: tauri::AppHandle,
 
 /// Get Consumer Price Index data
 #[tauri::command]
-pub async fn get_oecd_consumer_price_index(app: tauri::AppHandle, 
+pub async fn get_oecd_consumer_price_index(
+    app: tauri::AppHandle,
     countries: Option<String>,
     expenditure: Option<String>,
     frequency: Option<String>,
@@ -78,7 +80,8 @@ pub async fn get_oecd_consumer_price_index(app: tauri::AppHandle,
 
 /// Get GDP forecast data
 #[tauri::command]
-pub async fn get_oecd_gdp_forecast(app: tauri::AppHandle, 
+pub async fn get_oecd_gdp_forecast(
+    app: tauri::AppHandle,
     countries: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -98,7 +101,8 @@ pub async fn get_oecd_gdp_forecast(app: tauri::AppHandle,
 
 /// Get unemployment rate data
 #[tauri::command]
-pub async fn get_oecd_unemployment(app: tauri::AppHandle, 
+pub async fn get_oecd_unemployment(
+    app: tauri::AppHandle,
     countries: Option<String>,
     frequency: Option<String>,
     start_date: Option<String>,
@@ -122,7 +126,8 @@ pub async fn get_oecd_unemployment(app: tauri::AppHandle,
 
 /// Get comprehensive economic summary for a country
 #[tauri::command]
-pub async fn get_oecd_economic_summary(app: tauri::AppHandle, 
+pub async fn get_oecd_economic_summary(
+    app: tauri::AppHandle,
     country: Option<String>,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -142,6 +147,6 @@ pub async fn get_oecd_economic_summary(app: tauri::AppHandle,
 
 /// Get list of available countries and data categories
 #[tauri::command]
-pub async fn get_oecd_country_list(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_oecd_country_list(app: tauri::AppHandle) -> Result<String, String> {
     execute_oecd_command(app, "country_list".to_string(), vec![]).await
 }

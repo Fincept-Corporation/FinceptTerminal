@@ -55,9 +55,7 @@ pub async fn get_worldbank_country_info(
 
 /// Get list of countries
 #[tauri::command]
-pub async fn get_worldbank_countries(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_worldbank_countries(app: tauri::AppHandle) -> Result<String, String> {
     execute_worldbank_command(app, "countries".to_string(), vec![]).await
 }
 

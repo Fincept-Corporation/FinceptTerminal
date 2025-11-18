@@ -36,8 +36,6 @@ pub async fn get_canada_gov_dataset(
 
 /// Get economic indicators
 #[tauri::command]
-pub async fn get_canada_gov_economic_data(
-    app: tauri::AppHandle,
-) -> Result<String, String> {
+pub async fn get_canada_gov_economic_data(app: tauri::AppHandle) -> Result<String, String> {
     execute_canada_gov_command(app, "economic".to_string(), vec![]).await
 }

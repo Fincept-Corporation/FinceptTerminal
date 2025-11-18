@@ -20,7 +20,8 @@ pub async fn execute_bls_command(
 
 /// Search for BLS series by category and query
 #[tauri::command]
-pub async fn search_bls_series(app: tauri::AppHandle, 
+pub async fn search_bls_series(
+    app: tauri::AppHandle,
     query: String,
     category: Option<String>,
     include_extras: Option<bool>,
@@ -43,7 +44,8 @@ pub async fn search_bls_series(app: tauri::AppHandle,
 
 /// Get time series data for specific series IDs
 #[tauri::command]
-pub async fn get_bls_series_data(app: tauri::AppHandle, 
+pub async fn get_bls_series_data(
+    app: tauri::AppHandle,
     series_ids: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -72,7 +74,7 @@ pub async fn get_bls_series_data(app: tauri::AppHandle,
 
 /// Get data for popular economic series
 #[tauri::command]
-pub async fn get_bls_popular_series(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_popular_series(app: tauri::AppHandle) -> Result<String, String> {
     execute_bls_command(app, "get_popular".to_string(), vec![]).await
 }
 
@@ -80,31 +82,31 @@ pub async fn get_bls_popular_series(app: tauri::AppHandle, ) -> Result<String, S
 
 /// Get comprehensive labor market overview
 #[tauri::command]
-pub async fn get_bls_labor_market_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_labor_market_overview(app: tauri::AppHandle) -> Result<String, String> {
     execute_bls_command(app, "get_labor_overview".to_string(), vec![]).await
 }
 
 /// Get comprehensive inflation overview
 #[tauri::command]
-pub async fn get_bls_inflation_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_inflation_overview(app: tauri::AppHandle) -> Result<String, String> {
     execute_bls_command(app, "get_inflation_overview".to_string(), vec![]).await
 }
 
 /// Get Employment Cost Index data
 #[tauri::command]
-pub async fn get_bls_employment_cost_index(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_employment_cost_index(app: tauri::AppHandle) -> Result<String, String> {
     execute_bls_command(app, "get_employment_cost_index".to_string(), vec![]).await
 }
 
 /// Get Productivity and Costs data
 #[tauri::command]
-pub async fn get_bls_productivity_costs(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_productivity_costs(app: tauri::AppHandle) -> Result<String, String> {
     execute_bls_command(app, "get_productivity_costs".to_string(), vec![]).await
 }
 
 /// Get available survey categories
 #[tauri::command]
-pub async fn get_bls_survey_categories(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_survey_categories(app: tauri::AppHandle) -> Result<String, String> {
     execute_bls_command(app, "get_categories".to_string(), vec![]).await
 }
 
@@ -112,75 +114,135 @@ pub async fn get_bls_survey_categories(app: tauri::AppHandle, ) -> Result<String
 
 /// Get Consumer Price Index data
 #[tauri::command]
-pub async fn get_bls_cpi_data(app: tauri::AppHandle, 
+pub async fn get_bls_cpi_data(
+    app: tauri::AppHandle,
     series_ids: Option<String>, // If None, use popular CPI series
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
     let cpi_series = series_ids.unwrap_or_else(|| "CPIAUCSL,CPIAUCNS,CUSR0000SA0".to_string());
-    get_bls_series_data(app, cpi_series, start_date, end_date, Some(true), Some(false), Some(false)).await
+    get_bls_series_data(
+        app,
+        cpi_series,
+        start_date,
+        end_date,
+        Some(true),
+        Some(false),
+        Some(false),
+    )
+    .await
 }
 
 /// Get unemployment rate data
 #[tauri::command]
-pub async fn get_bls_unemployment_data(app: tauri::AppHandle, 
+pub async fn get_bls_unemployment_data(
+    app: tauri::AppHandle,
     series_ids: Option<String>, // If None, use popular unemployment series
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
     let unemployment_series = series_ids.unwrap_or_else(|| "UNRATE,LNS14000000".to_string());
-    get_bls_series_data(app, unemployment_series, start_date, end_date, Some(true), Some(false), Some(false)).await
+    get_bls_series_data(
+        app,
+        unemployment_series,
+        start_date,
+        end_date,
+        Some(true),
+        Some(false),
+        Some(false),
+    )
+    .await
 }
 
 /// Get nonfarm payrolls data
 #[tauri::command]
-pub async fn get_bls_payrolls_data(app: tauri::AppHandle, 
+pub async fn get_bls_payrolls_data(
+    app: tauri::AppHandle,
     series_ids: Option<String>, // If None, use popular payrolls series
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
     let payrolls_series = series_ids.unwrap_or_else(|| "PAYEMS,CES0000000001".to_string());
-    get_bls_series_data(app, payrolls_series, start_date, end_date, Some(true), Some(false), Some(false)).await
+    get_bls_series_data(
+        app,
+        payrolls_series,
+        start_date,
+        end_date,
+        Some(true),
+        Some(false),
+        Some(false),
+    )
+    .await
 }
 
 /// Get labor force participation rate data
 #[tauri::command]
-pub async fn get_bls_participation_data(app: tauri::AppHandle, 
+pub async fn get_bls_participation_data(
+    app: tauri::AppHandle,
     series_ids: Option<String>, // If None, use popular participation series
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
     let participation_series = series_ids.unwrap_or_else(|| "CIVPART,LNS13000000".to_string());
-    get_bls_series_data(app, participation_series, start_date, end_date, Some(true), Some(false), Some(false)).await
+    get_bls_series_data(
+        app,
+        participation_series,
+        start_date,
+        end_date,
+        Some(true),
+        Some(false),
+        Some(false),
+    )
+    .await
 }
 
 /// Get Producer Price Index data
 #[tauri::command]
-pub async fn get_bls_ppi_data(app: tauri::AppHandle, 
+pub async fn get_bls_ppi_data(
+    app: tauri::AppHandle,
     series_ids: Option<String>, // If None, use popular PPI series
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
     let ppi_series = series_ids.unwrap_or_else(|| "WPSFD4,PPIACO".to_string());
-    get_bls_series_data(app, ppi_series, start_date, end_date, Some(true), Some(false), Some(false)).await
+    get_bls_series_data(
+        app,
+        ppi_series,
+        start_date,
+        end_date,
+        Some(true),
+        Some(false),
+        Some(false),
+    )
+    .await
 }
 
 /// Get JOLTS (Job Openings and Labor Turnover Survey) data
 #[tauri::command]
-pub async fn get_bls_jolts_data(app: tauri::AppHandle, 
+pub async fn get_bls_jolts_data(
+    app: tauri::AppHandle,
     series_ids: Option<String>, // If None, use popular JOLTS series
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
     let jolts_series = series_ids.unwrap_or_else(|| "JTSJOL,JTSQUR,JTSHIL,JTSJOR".to_string());
-    get_bls_series_data(app, jolts_series, start_date, end_date, Some(true), Some(false), Some(false)).await
+    get_bls_series_data(
+        app,
+        jolts_series,
+        start_date,
+        end_date,
+        Some(true),
+        Some(false),
+        Some(false),
+    )
+    .await
 }
 
 // COMPREHENSIVE ANALYSIS COMMANDS
 
 /// Get comprehensive economic dashboard with key indicators
 #[tauri::command]
-pub async fn get_bls_economic_dashboard(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_economic_dashboard(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get popular series data
@@ -215,12 +277,13 @@ pub async fn get_bls_economic_dashboard(app: tauri::AppHandle, ) -> Result<Strin
 
     Ok(serde_json::json!({
         "economic_dashboard": results
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get inflation analysis with CPI breakdown
 #[tauri::command]
-pub async fn get_bls_inflation_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_inflation_analysis(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get CPI all items
@@ -255,12 +318,13 @@ pub async fn get_bls_inflation_analysis(app: tauri::AppHandle, ) -> Result<Strin
 
     Ok(serde_json::json!({
         "inflation_analysis": results
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get labor market analysis with employment metrics
 #[tauri::command]
-pub async fn get_bls_labor_analysis(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_labor_analysis(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get unemployment data
@@ -278,7 +342,10 @@ pub async fn get_bls_labor_analysis(app: tauri::AppHandle, ) -> Result<String, S
     // Get labor force participation
     match get_bls_participation_data(app.clone(), None, None, None).await {
         Ok(data) => results.push(("labor_force_participation".to_string(), data)),
-        Err(e) => results.push(("labor_force_participation".to_string(), format!("Error: {}", e))),
+        Err(e) => results.push((
+            "labor_force_participation".to_string(),
+            format!("Error: {}", e),
+        )),
     }
 
     // Get JOLTS data
@@ -295,12 +362,14 @@ pub async fn get_bls_labor_analysis(app: tauri::AppHandle, ) -> Result<String, S
 
     Ok(serde_json::json!({
         "labor_analysis": results
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get custom series comparison
 #[tauri::command]
-pub async fn get_bls_series_comparison(app: tauri::AppHandle, 
+pub async fn get_bls_series_comparison(
+    app: tauri::AppHandle,
     series_ids: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -309,21 +378,43 @@ pub async fn get_bls_series_comparison(app: tauri::AppHandle,
     let mut results = Vec::new();
 
     // Get raw series data
-    match get_bls_series_data(app.clone(), series_ids.clone(), start_date.clone(), end_date.clone(), Some(true), Some(false), Some(false)).await {
+    match get_bls_series_data(
+        app.clone(),
+        series_ids.clone(),
+        start_date.clone(),
+        end_date.clone(),
+        Some(true),
+        Some(false),
+        Some(false),
+    )
+    .await
+    {
         Ok(data) => results.push(("raw_data".to_string(), data)),
         Err(e) => results.push(("raw_data".to_string(), format!("Error: {}", e))),
     }
 
     // If normalization is requested, note it (actual normalization would be done in frontend)
     if normalize.unwrap_or(false) {
-        results.push(("normalization_note".to_string(), "Series should be normalized to base value of 100 in frontend processing".to_string()));
+        results.push((
+            "normalization_note".to_string(),
+            "Series should be normalized to base value of 100 in frontend processing".to_string(),
+        ));
     }
 
     // Get series metadata/search info for context
     let series_list: Vec<&str> = series_ids.split(',').collect();
-    for series_id in series_list.iter().take(3) { // Limit to first 3 for performance
+    for series_id in series_list.iter().take(3) {
+        // Limit to first 3 for performance
         let trimmed_id = series_id.trim();
-        match search_bls_series(app.clone(), trimmed_id.to_string(), Some("cpi".to_string()), Some(true), Some(false)).await {
+        match search_bls_series(
+            app.clone(),
+            trimmed_id.to_string(),
+            Some("cpi".to_string()),
+            Some(true),
+            Some(false),
+        )
+        .await
+        {
             Ok(search_data) => results.push((format!("search_{}", trimmed_id), search_data)),
             Err(_) => {} // Skip search errors
         }
@@ -333,12 +424,13 @@ pub async fn get_bls_series_comparison(app: tauri::AppHandle,
         "series_comparison": results,
         "series_ids": series_ids,
         "normalization_requested": normalize.unwrap_or(false)
-    }).to_string())
+    })
+    .to_string())
 }
 
 /// Get BLS data directory and available series information
 #[tauri::command]
-pub async fn get_bls_data_directory(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_bls_data_directory(app: tauri::AppHandle) -> Result<String, String> {
     let mut results = Vec::new();
 
     // Get survey categories
@@ -352,11 +444,19 @@ pub async fn get_bls_data_directory(app: tauri::AppHandle, ) -> Result<String, S
         ("inflation", "cpi"),
         ("employment", "employment"),
         ("wages", "wages"),
-        ("productivity", "ip")
+        ("productivity", "ip"),
     ];
 
     for (search_term, category) in popular_searches {
-        match search_bls_series(app.clone(), search_term.to_string(), Some(category.to_string()), Some(false), Some(false)).await {
+        match search_bls_series(
+            app.clone(),
+            search_term.to_string(),
+            Some(category.to_string()),
+            Some(false),
+            Some(false),
+        )
+        .await
+        {
             Ok(data) => results.push((format!("sample_{}", category), data)),
             Err(e) => results.push((format!("sample_{}", category), format!("Error: {}", e))),
         }
@@ -364,5 +464,6 @@ pub async fn get_bls_data_directory(app: tauri::AppHandle, ) -> Result<String, S
 
     Ok(serde_json::json!({
         "data_directory": results
-    }).to_string())
+    })
+    .to_string())
 }

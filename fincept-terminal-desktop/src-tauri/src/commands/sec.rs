@@ -20,7 +20,8 @@ pub async fn execute_sec_command(
 
 /// Get company filings from SEC database
 #[tauri::command]
-pub async fn get_sec_company_filings(app: tauri::AppHandle, 
+pub async fn get_sec_company_filings(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     cik: Option<String>,
     form_type: Option<String>,
@@ -54,18 +55,14 @@ pub async fn get_sec_company_filings(app: tauri::AppHandle,
 
 /// Get CIK (Central Index Key) for a company symbol
 #[tauri::command]
-pub async fn get_sec_cik_map(app: tauri::AppHandle, 
-    symbol: String,
-) -> Result<String, String> {
+pub async fn get_sec_cik_map(app: tauri::AppHandle, symbol: String) -> Result<String, String> {
     let args = vec![symbol];
     execute_sec_command(app, "cik_map".to_string(), args).await
 }
 
 /// Get symbol mapping for a CIK
 #[tauri::command]
-pub async fn get_sec_symbol_map(app: tauri::AppHandle, 
-    cik: String,
-) -> Result<String, String> {
+pub async fn get_sec_symbol_map(app: tauri::AppHandle, cik: String) -> Result<String, String> {
     let args = vec![cik];
     execute_sec_command(app, "symbol_map".to_string(), args).await
 }
@@ -74,7 +71,8 @@ pub async fn get_sec_symbol_map(app: tauri::AppHandle,
 
 /// Get content of a specific SEC filing
 #[tauri::command]
-pub async fn get_sec_filing_content(app: tauri::AppHandle, 
+pub async fn get_sec_filing_content(
+    app: tauri::AppHandle,
     filing_url: String,
 ) -> Result<String, String> {
     let args = vec![filing_url];
@@ -83,7 +81,8 @@ pub async fn get_sec_filing_content(app: tauri::AppHandle,
 
 /// Parse HTML content from SEC filing
 #[tauri::command]
-pub async fn parse_sec_filing_html(app: tauri::AppHandle, 
+pub async fn parse_sec_filing_html(
+    app: tauri::AppHandle,
     html_content: String,
 ) -> Result<String, String> {
     let args = vec![html_content];
@@ -94,7 +93,8 @@ pub async fn parse_sec_filing_html(app: tauri::AppHandle,
 
 /// Get insider trading data (Form 4 filings)
 #[tauri::command]
-pub async fn get_sec_insider_trading(app: tauri::AppHandle, 
+pub async fn get_sec_insider_trading(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     cik: Option<String>,
     start_date: Option<String>,
@@ -126,7 +126,8 @@ pub async fn get_sec_insider_trading(app: tauri::AppHandle,
 
 /// Get institutional ownership data (Form 13F filings)
 #[tauri::command]
-pub async fn get_sec_institutional_ownership(app: tauri::AppHandle, 
+pub async fn get_sec_institutional_ownership(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     cik: Option<String>,
     start_date: Option<String>,
@@ -158,7 +159,8 @@ pub async fn get_sec_institutional_ownership(app: tauri::AppHandle,
 
 /// Search for companies in SEC database
 #[tauri::command]
-pub async fn search_sec_companies(app: tauri::AppHandle, 
+pub async fn search_sec_companies(
+    app: tauri::AppHandle,
     query: String,
     is_fund: Option<bool>,
 ) -> Result<String, String> {
@@ -171,7 +173,8 @@ pub async fn search_sec_companies(app: tauri::AppHandle,
 
 /// Search for ETFs and mutual funds
 #[tauri::command]
-pub async fn search_sec_etfs_mutual_funds(app: tauri::AppHandle, 
+pub async fn search_sec_etfs_mutual_funds(
+    app: tauri::AppHandle,
     query: String,
 ) -> Result<String, String> {
     let args = vec![query];
@@ -182,7 +185,7 @@ pub async fn search_sec_etfs_mutual_funds(app: tauri::AppHandle,
 
 /// Get list of available SEC form types
 #[tauri::command]
-pub async fn get_sec_available_form_types(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_sec_available_form_types(app: tauri::AppHandle) -> Result<String, String> {
     execute_sec_command(app, "available_form_types".to_string(), vec![]).await
 }
 
@@ -190,16 +193,15 @@ pub async fn get_sec_available_form_types(app: tauri::AppHandle, ) -> Result<Str
 
 /// Get company facts data from SEC API
 #[tauri::command]
-pub async fn get_sec_company_facts(app: tauri::AppHandle, 
-    cik: String,
-) -> Result<String, String> {
+pub async fn get_sec_company_facts(app: tauri::AppHandle, cik: String) -> Result<String, String> {
     let args = vec![cik];
     execute_sec_command(app, "company_facts".to_string(), args).await
 }
 
 /// Get financial statements data using company facts
 #[tauri::command]
-pub async fn get_sec_financial_statements(app: tauri::AppHandle, 
+pub async fn get_sec_financial_statements(
+    app: tauri::AppHandle,
     cik: String,
     taxonomy: Option<String>,
     fact_list: Option<String>,
@@ -220,7 +222,8 @@ pub async fn get_sec_financial_statements(app: tauri::AppHandle,
 
 /// Get comprehensive company overview including filings, facts, and insider data
 #[tauri::command]
-pub async fn get_sec_company_overview(app: tauri::AppHandle, 
+pub async fn get_sec_company_overview(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     cik: Option<String>,
 ) -> Result<String, String> {
@@ -236,7 +239,8 @@ pub async fn get_sec_company_overview(app: tauri::AppHandle,
 
 /// Get all filings of a specific form type within date range
 #[tauri::command]
-pub async fn get_sec_filings_by_form_type(app: tauri::AppHandle, 
+pub async fn get_sec_filings_by_form_type(
+    app: tauri::AppHandle,
     form_type: String,
     start_date: Option<String>,
     end_date: Option<String>,
@@ -261,7 +265,8 @@ pub async fn get_sec_filings_by_form_type(app: tauri::AppHandle,
 
 /// Search for equity securities
 #[tauri::command]
-pub async fn search_sec_equities(app: tauri::AppHandle, 
+pub async fn search_sec_equities(
+    app: tauri::AppHandle,
     query: String,
     is_fund: Option<bool>,
     use_cache: Option<bool>,
@@ -278,7 +283,8 @@ pub async fn search_sec_equities(app: tauri::AppHandle,
 
 /// Search for mutual funds and ETFs
 #[tauri::command]
-pub async fn search_sec_mutual_funds_etfs(app: tauri::AppHandle, 
+pub async fn search_sec_mutual_funds_etfs(
+    app: tauri::AppHandle,
     query: String,
     use_cache: Option<bool>,
 ) -> Result<String, String> {
@@ -293,7 +299,8 @@ pub async fn search_sec_mutual_funds_etfs(app: tauri::AppHandle,
 
 /// Get SEC filing metadata and document URLs
 #[tauri::command]
-pub async fn get_sec_filing_metadata(app: tauri::AppHandle, 
+pub async fn get_sec_filing_metadata(
+    app: tauri::AppHandle,
     filing_url: String,
     use_cache: Option<bool>,
 ) -> Result<String, String> {
@@ -306,7 +313,8 @@ pub async fn get_sec_filing_metadata(app: tauri::AppHandle,
 
 /// Get recent 8-K filings (current reports)
 #[tauri::command]
-pub async fn get_sec_recent_current_reports(app: tauri::AppHandle, 
+pub async fn get_sec_recent_current_reports(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     cik: Option<String>,
     limit: Option<i32>,
@@ -328,7 +336,8 @@ pub async fn get_sec_recent_current_reports(app: tauri::AppHandle,
 
 /// Get annual reports (10-K filings)
 #[tauri::command]
-pub async fn get_sec_annual_reports(app: tauri::AppHandle, 
+pub async fn get_sec_annual_reports(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     cik: Option<String>,
     limit: Option<i32>,
@@ -350,7 +359,8 @@ pub async fn get_sec_annual_reports(app: tauri::AppHandle,
 
 /// Get quarterly reports (10-Q filings)
 #[tauri::command]
-pub async fn get_sec_quarterly_reports(app: tauri::AppHandle, 
+pub async fn get_sec_quarterly_reports(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     cik: Option<String>,
     limit: Option<i32>,
@@ -372,7 +382,8 @@ pub async fn get_sec_quarterly_reports(app: tauri::AppHandle,
 
 /// Get registration statements (S-1, S-3 filings)
 #[tauri::command]
-pub async fn get_sec_registration_statements(app: tauri::AppHandle, 
+pub async fn get_sec_registration_statements(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     cik: Option<String>,
     form_types: Option<String>,
@@ -400,7 +411,8 @@ pub async fn get_sec_registration_statements(app: tauri::AppHandle,
 
 /// Get beneficial ownership reports (Form 3, 4, 5)
 #[tauri::command]
-pub async fn get_sec_beneficial_ownership(app: tauri::AppHandle, 
+pub async fn get_sec_beneficial_ownership(
+    app: tauri::AppHandle,
     symbol: Option<String>,
     cik: Option<String>,
     form_types: Option<String>,

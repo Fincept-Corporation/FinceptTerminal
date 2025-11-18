@@ -18,7 +18,8 @@ pub async fn execute_federal_reserve_command(
 
 /// Get Federal Funds Rate data
 #[tauri::command]
-pub async fn get_federal_funds_rate(app: tauri::AppHandle, 
+pub async fn get_federal_funds_rate(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -34,7 +35,8 @@ pub async fn get_federal_funds_rate(app: tauri::AppHandle,
 
 /// Get SOFR Rate data
 #[tauri::command]
-pub async fn get_sofr_rate(app: tauri::AppHandle, 
+pub async fn get_sofr_rate(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -50,7 +52,8 @@ pub async fn get_sofr_rate(app: tauri::AppHandle,
 
 /// Get Treasury Rates data
 #[tauri::command]
-pub async fn get_treasury_rates(app: tauri::AppHandle, 
+pub async fn get_treasury_rates(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -66,7 +69,10 @@ pub async fn get_treasury_rates(app: tauri::AppHandle,
 
 /// Get Yield Curve data
 #[tauri::command]
-pub async fn get_yield_curve(app: tauri::AppHandle, date: Option<String>) -> Result<String, String> {
+pub async fn get_yield_curve(
+    app: tauri::AppHandle,
+    date: Option<String>,
+) -> Result<String, String> {
     let mut args = Vec::new();
     if let Some(date) = date {
         args.push(date);
@@ -76,7 +82,8 @@ pub async fn get_yield_curve(app: tauri::AppHandle, date: Option<String>) -> Res
 
 /// Get Money Measures data
 #[tauri::command]
-pub async fn get_money_measures(app: tauri::AppHandle, 
+pub async fn get_money_measures(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
     adjusted: Option<bool>,
@@ -96,7 +103,8 @@ pub async fn get_money_measures(app: tauri::AppHandle,
 
 /// Get Central Bank Holdings data
 #[tauri::command]
-pub async fn get_central_bank_holdings(app: tauri::AppHandle, 
+pub async fn get_central_bank_holdings(
+    app: tauri::AppHandle,
     holding_type: Option<String>,
     summary: Option<bool>,
     date: Option<String>,
@@ -118,7 +126,8 @@ pub async fn get_central_bank_holdings(app: tauri::AppHandle,
 
 /// Get Overnight Bank Funding Rate data
 #[tauri::command]
-pub async fn get_overnight_bank_funding_rate(app: tauri::AppHandle, 
+pub async fn get_overnight_bank_funding_rate(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -134,7 +143,8 @@ pub async fn get_overnight_bank_funding_rate(app: tauri::AppHandle,
 
 /// Get comprehensive monetary data
 #[tauri::command]
-pub async fn get_comprehensive_monetary_data(app: tauri::AppHandle, 
+pub async fn get_comprehensive_monetary_data(
+    app: tauri::AppHandle,
     start_date: Option<String>,
     end_date: Option<String>,
 ) -> Result<String, String> {
@@ -150,6 +160,6 @@ pub async fn get_comprehensive_monetary_data(app: tauri::AppHandle,
 
 /// Get market overview
 #[tauri::command]
-pub async fn get_fed_market_overview(app: tauri::AppHandle, ) -> Result<String, String> {
+pub async fn get_fed_market_overview(app: tauri::AppHandle) -> Result<String, String> {
     execute_federal_reserve_command(app, "market_overview".to_string(), vec![]).await
 }

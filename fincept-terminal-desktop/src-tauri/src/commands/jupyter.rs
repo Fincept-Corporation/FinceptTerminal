@@ -27,7 +27,7 @@ pub struct CellOutput {
     pub output_type: String, // "execute_result", "display_data", "stream", "error"
     pub data: Option<HashMap<String, Vec<String>>>,
     pub text: Option<Vec<String>>,
-    pub name: Option<String>, // for stream outputs (stdout/stderr)
+    pub name: Option<String>,  // for stream outputs (stdout/stderr)
     pub ename: Option<String>, // for error outputs
     pub evalue: Option<String>,
     pub traceback: Option<Vec<String>>,
@@ -169,21 +169,18 @@ pub async fn open_notebook(file_path: String) -> Result<JupyterNotebook, String>
         return Err(format!("File not found: {}", file_path));
     }
 
-    let content = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let content =
+        std::fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))?;
 
-    let notebook: JupyterNotebook = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse notebook: {}", e))?;
+    let notebook: JupyterNotebook =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse notebook: {}", e))?;
 
     Ok(notebook)
 }
 
 /// Save notebook to .ipynb file
 #[tauri::command]
-pub async fn save_notebook(
-    file_path: String,
-    notebook: JupyterNotebook,
-) -> Result<String, String> {
+pub async fn save_notebook(file_path: String, notebook: JupyterNotebook) -> Result<String, String> {
     let path = PathBuf::from(&file_path);
 
     let json = serde_json::to_string_pretty(&notebook)
