@@ -82,6 +82,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Fetch bundled Python runtime (macOS/Linux)
+        if: matrix.platform != 'windows-latest'
+        run: ./scripts/fetch-python-runtime.sh
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        shell: bash
+
       - name: Install Python packages for bundled Python
         run: |
           if [ "${{ matrix.platform }}" == "windows-latest" ]; then

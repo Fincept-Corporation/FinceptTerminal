@@ -413,6 +413,12 @@ pub fn run() {
         .manage(MCPState {
             processes: Mutex::new(HashMap::new()),
         })
+        .setup(|app| {
+            #[cfg(not(target_os = "windows"))]
+            crate::utils::python::seed_python_path(&app.handle());
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             cleanup_running_workflows,

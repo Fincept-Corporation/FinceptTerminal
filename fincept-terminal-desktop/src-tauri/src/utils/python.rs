@@ -26,32 +26,35 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .resource_dir()
         .map_err(|e| format!("Failed to get resource directory: {}", e))?;
 
-    let python_path = resource_dir
-        .join("resources")
-        .join("python-windows")
-        .join("python")
-        .join("bin")
-        .join("python.exe");
+    let base_dir = resource_dir.join("resources").join("python-windows");
+    let candidates = [
+        base_dir.join("python").join("bin").join("python.exe"),
+        base_dir.join("python.exe"),
+        base_dir.join("pythonw.exe"),
+    ];
 
     eprintln!("[Python] Resource dir: {}", resource_dir.display());
-    eprintln!("[Python] Looking for Python at: {}", python_path.display());
-    eprintln!("[Python] Python exists: {}", python_path.exists());
-
-    if !python_path.exists() {
-        return Err(format!(
-            "Python executable not found at: {}. Resource dir: {}",
-            python_path.display(),
-            resource_dir.display()
-        ));
+    for candidate in &candidates {
+        eprintln!(
+            "[Python] Looking for bundled Windows Python at: {} (exists: {})",
+            candidate.display(),
+            candidate.exists()
+        );
+        if candidate.exists() {
+            return Ok(candidate.clone());
+        }
     }
 
-    Ok(python_path)
+    Err(format!(
+        "Python executable not found in bundled resources under {}",
+        base_dir.display()
+    ))
 }
 
 /// macOS/Linux rely on an existing Python 3 installation
 #[cfg(not(target_os = "windows"))]
-pub fn get_python_path(_app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    cached_python_path()
+pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    cached_python_path(Some(app))
 }
 
 /// Get the bundled Bun executable path at runtime
@@ -110,7 +113,7 @@ pub fn python_command() -> Command {
 
 #[cfg(not(target_os = "windows"))]
 pub fn python_command() -> Command {
-    match cached_python_path() {
+    match cached_python_path(None) {
         Ok(path) => Command::new(path),
         Err(err) => {
             eprintln!("[Python] {err} - falling back to `python3` on PATH");
@@ -192,14 +195,71 @@ fn find_system_python() -> Result<PathBuf, String> {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn cached_python_path() -> Result<PathBuf, String> {
+fn cached_python_path(app: Option<&tauri::AppHandle>) -> Result<PathBuf, String> {
     PYTHON_PATH
         .get_or_try_init(|| {
+            if let Some(app_handle) = app {
+                if let Some(path) = bundled_python_from_app(app_handle) {
+                    eprintln!("[Python] Using bundled interpreter at: {}", path.display());
+                    return Ok(path);
+                } else {
+                    eprintln!("[Python] Bundled interpreter not found, probing system...");
+                }
+            }
+
             let path = find_system_python()?;
             eprintln!("[Python] Using system interpreter at: {}", path.display());
             Ok(path)
         })
         .map(|p| p.clone())
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn seed_python_path(app: &tauri::AppHandle) {
+    if PYTHON_PATH.get().is_some() {
+        return;
+    }
+
+    if let Some(path) = bundled_python_from_app(app) {
+        let path_str = path.to_string_lossy().to_string();
+        let _ = env::set_var("FINCEPT_PYTHON_PATH", &path_str);
+        let _ = PYTHON_PATH.set(path.clone());
+        eprintln!("[Python] Using bundled interpreter at: {}", path.display());
+    } else {
+        eprintln!(
+            "[Python] Bundled interpreter not found; system Python will be used if available."
+        );
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn bundled_python_from_app(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let resource_dir = app.path().resource_dir().ok()?;
+    bundled_python_from_resource_dir(&resource_dir)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn bundled_python_from_resource_dir(resource_dir: &PathBuf) -> Option<PathBuf> {
+    let base_dir = if cfg!(target_os = "macos") {
+        resource_dir.join("resources").join("python-macos")
+    } else {
+        resource_dir.join("resources").join("python-linux")
+    };
+
+    let candidates = [
+        base_dir.join("python").join("bin").join("python3"),
+        base_dir.join("python").join("bin").join("python"),
+        base_dir.join("python3"),
+        base_dir.join("python"),
+    ];
+
+    for candidate in candidates {
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
 }
 
 #[cfg(not(target_os = "windows"))]
