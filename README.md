@@ -18,7 +18,7 @@
 
 State-of-the-art financial intelligence platform with CFA-level analytics, AI automation, and unlimited data connectivity.
 
-[📥 Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases) • [📚 Docs](docs/) • [💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+[📥 Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases) • [📚 Docs](docs/) • [💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) • [💬 Discord](https://discord.gg/ae87a8ygbN)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -30,15 +30,15 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 **Fincept Terminal** is an open-source financial platform built for those who refuse to be limited by traditional software. We compete on **analytics depth** and **data accessibility**—not on insider info or exclusive feeds.
 
-| **Feature** | **Fincept Terminal** |
-|-------------|---------------------|
-| 📊 **Analytics** | Complete CFA Level 1, 2, 3 curriculum in Python • DCF models • Portfolio optimization • Risk metrics (VaR, Sharpe) |
-| 🤖 **AI Agents** | 20+ investor personas (Buffett, Dalio, Graham) • Hedge fund strategies (Bridgewater, Citadel, Renaissance) • Local LLM support |
-| 🌐 **Data Access** | 100+ connectors (DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • Custom API mapper • Zero data restrictions |
-| 🔗 **Cross-Domain** | Integrate supply chain → portfolio • Geopolitics → equity • Maritime → macro • Your data, your way |
-| 🎨 **Workflows** | Visual node editor • Python agents • MCP tools • No-code automation |
-| 🚢 **Intelligence** | 3D maritime tracking • Satellite monitoring • Geopolitical frameworks • Trade route analysis |
-| 💰 **Pricing** | 100% Free & Open Source (MIT License) |
+| **Feature** | **Fincept Terminal** | **Source Code** |
+|-------------|---------------------|-----------------|
+| 📊 **Analytics** | Complete CFA Level 1, 2, 3 curriculum in Python • DCF models • Portfolio optimization • Risk metrics (VaR, Sharpe) | [Analytics Modules](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/Analytics) |
+| 🤖 **AI Agents** | 20+ investor personas (Buffett, Dalio, Graham) • Hedge fund strategies (Bridgewater, Citadel, Renaissance) • Local LLM support | [AI Agents](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/agents) |
+| 🌐 **Data Access** | 100+ connectors (DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • Custom API mapper • Zero data restrictions | [Data Adapters](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters) |
+| 🔗 **Cross-Domain** | Integrate supply chain → portfolio • Geopolitics → equity • Maritime → macro • Your data, your way | [Workflow System](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor) |
+| 🎨 **Workflows** | Visual node editor • Python agents • MCP tools • No-code automation | [Custom Nodes](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor) • [MCP Servers](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
+| 🚢 **Intelligence** | 3D maritime tracking • Satellite monitoring • Geopolitical frameworks • Trade route analysis | [Maritime Tab](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs) |
+| 💰 **Pricing** | 100% Free & Open Source (MIT License) | [Full Repository](https://github.com/Fincept-Corporation/FinceptTerminal) |
 
 ---
 
@@ -46,7 +46,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **📊 CFA-Level Analytics**
 
@@ -68,7 +68,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 - Advanced risk analytics
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🤖 AI-Powered Automation**
 
@@ -92,7 +92,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 </td>
 </tr>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🌐 Unlimited Data Access**
 
@@ -106,7 +106,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 - **Custom API Mapper**: Connect ANY API in minutes
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🔬 Global Intelligence**
 
@@ -189,7 +189,9 @@ We're building the future of financial analysis—together.
 
 **Contribute:** New data connectors • AI agents • Analytics modules • Documentation • Translations
 
-[Contributing Guide](docs/CONTRIBUTING.md) • [Report Bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues) • [Request Feature](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+**New to the project?** Start with our [Developer Walkthrough](docs/DEVELOPER_WALKTHROUGH.md) for a complete guide to the codebase.
+
+[Contributing Guide](docs/CONTRIBUTING.md) • [Developer Walkthrough](docs/DEVELOPER_WALKTHROUGH.md) • [Report Bug](https://github.com/Fincept-Corporation/FinceptTerminal/issues) • [Request Feature](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 ---
 
