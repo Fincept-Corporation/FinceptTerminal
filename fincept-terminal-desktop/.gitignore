@@ -26,20 +26,15 @@ dist-ssr
 src/services/node_modules
 src-tauri/target
 
-# Python embeddable package - include the executables and core files
-# But ignore large library directories to keep repo size manageable
-src-tauri/resources/python/Lib/*
-!src-tauri/resources/python/Lib/site-packages/
-src-tauri/resources/python/Scripts/*
-!src-tauri/resources/python/Scripts/*.exe
-# Always include these critical files:
-!src-tauri/resources/python/python.exe
-!src-tauri/resources/python/python312.dll
-!src-tauri/resources/python/*.pyd
-!src-tauri/resources/python/*.zip
-!src-tauri/resources/python/*.txt
-!src-tauri/resources/python/*.py
-!src-tauri/resources/python/_pth
+# Python site-packages - installed via pip during CI/CD
+src-tauri/resources/python-windows/Lib/site-packages/*
+src-tauri/resources/python-macos/lib/python3.12/site-packages/*
+src-tauri/resources/python-linux/lib/python3.12/site-packages/*
+
+# Keep site-packages directory structure but not packages
+!src-tauri/resources/python-windows/Lib/site-packages/
+!src-tauri/resources/python-macos/lib/python3.12/site-packages/
+!src-tauri/resources/python-linux/lib/python3.12/site-packages/
 
 # Bun executable - always include
 !src-tauri/resources/bun/bun.exe

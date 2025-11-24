@@ -1,3 +1,6 @@
 *.exe filter=lfs diff=lfs merge=lfs -text
 src-tauri/resources/bun-macos/bun filter=lfs diff=lfs merge=lfs -text
 src-tauri/resources/bun-linux/bun filter=lfs diff=lfs merge=lfs -text
+src-tauri/resources/python-windows/** filter=lfs diff=lfs merge=lfs -text
+src-tauri/resources/python-macos/** filter=lfs diff=lfs merge=lfs -text
+src-tauri/resources/python-linux/** filter=lfs diff=lfs merge=lfs -text
