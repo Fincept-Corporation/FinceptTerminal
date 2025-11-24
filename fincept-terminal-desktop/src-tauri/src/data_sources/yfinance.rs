@@ -63,8 +63,8 @@ impl YFinanceProvider {
     pub async fn get_quote(&self, symbol: &str) -> Option<QuoteData> {
         match self.fetch_quote(symbol).await {
             Ok(quote) => Some(quote),
-            Err(_e) => {
-                // Silent fail for production
+            Err(e) => {
+                eprintln!("[YFinance] Failed to fetch quote for {}: {}", symbol, e);
                 None
             }
         }
@@ -75,7 +75,10 @@ impl YFinanceProvider {
     pub async fn get_quotes(&self, symbols: Vec<String>) -> Vec<QuoteData> {
         match self.fetch_batch_quotes(symbols).await {
             Ok(quotes) => quotes,
-            Err(_) => Vec::new(),
+            Err(e) => {
+                eprintln!("[YFinance] Batch fetch failed: {}", e);
+                Vec::new()
+            },
         }
     }
 

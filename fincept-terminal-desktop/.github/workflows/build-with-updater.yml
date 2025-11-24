@@ -87,9 +87,9 @@ jobs:
           if [ "${{ matrix.platform }}" == "windows-latest" ]; then
             ./src-tauri/resources/python-windows/python.exe -m pip install -r ./src-tauri/resources/requirements.txt
           elif [ "${{ matrix.platform }}" == "macos-latest" ]; then
-            ./src-tauri/resources/python-macos/python/bin/python3 -m pip install -r ./src-tauri/resources/requirements.txt
+            ./src-tauri/resources/python-macos/bin/python3.12 -m pip install -r ./src-tauri/resources/requirements.txt
           elif [ "${{ matrix.platform }}" == "ubuntu-22.04" ]; then
-            ./src-tauri/resources/python-linux/python/bin/python3 -m pip install -r ./src-tauri/resources/requirements.txt
+            ./src-tauri/resources/python-linux/bin/python3.12 -m pip install -r ./src-tauri/resources/requirements.txt
           fi
         shell: bash
 

@@ -23,6 +23,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
+tauri-plugin-http = "2"
 tauri-plugin-cors-fetch = "4"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-dialog = "2"
@@ -37,3 +38,8 @@ chrono = "0.4"
 uuid = { version = "1.11", features = ["v4", "serde"] }
 reqwest = { version = "0.11", features = ["json"] }
 duckdb = { version = "1.1", features = ["bundled"] }
+which = "7.0"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+[target.'cfg(target_os = "macos")'.dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
