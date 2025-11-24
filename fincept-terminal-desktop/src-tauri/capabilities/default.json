@@ -6,6 +6,15 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "http:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "http://localhost:*" },
+        { "url": "https://*" },
+        { "url": "http://*" }
+      ]
+    },
     "cors-fetch:default",
     "sql:default",
     "sql:allow-load",
