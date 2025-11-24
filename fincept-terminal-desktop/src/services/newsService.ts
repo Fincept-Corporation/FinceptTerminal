@@ -1,6 +1,8 @@
 // FinceptTerminal Professional News RSS Feed Service
 // Fetches real-time news from 20+ financial RSS feeds
 
+import { fetch } from '@tauri-apps/plugin-http';
+
 export interface NewsArticle {
   id: string;
   time: string;

@@ -1,6 +1,8 @@
 // Ollama Service - Interact with local Ollama API
 // Provides model listing and connection testing
 
+import { fetch } from '@tauri-apps/plugin-http';
+
 export interface OllamaModel {
   name: string;
   model: string;

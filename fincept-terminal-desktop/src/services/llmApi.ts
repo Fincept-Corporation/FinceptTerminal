@@ -1,6 +1,7 @@
 // LLM API Integration Service
 // Unified interface for different LLM providers with streaming support
 
+import { fetch } from '@tauri-apps/plugin-http';
 import { sqliteService } from './sqliteService';
 
 export interface LLMConfig {

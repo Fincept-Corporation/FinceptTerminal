@@ -1,6 +1,7 @@
 // Fyers Authentication Service
 // Automated token generation flow
 
+import { fetch } from '@tauri-apps/plugin-http';
 import * as OTPAuth from 'otpauth';
 import { invoke } from '@tauri-apps/api/core';
 

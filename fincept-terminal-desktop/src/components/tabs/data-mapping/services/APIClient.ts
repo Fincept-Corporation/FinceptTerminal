@@ -1,5 +1,6 @@
 // API Client - Comprehensive HTTP request handler
 
+import { fetch } from '@tauri-apps/plugin-http';
 import { APIConfig, APIResponse } from '../types';
 import { buildURL, buildHeaders, validateURL, validateParameters } from '../utils/urlBuilder';
 
