@@ -1,6 +1,8 @@
 // File: src/services/paymentApi.ts
 // Payment API service for handling all payment-related API calls with in-app payment window support
 
+import { fetch } from '@tauri-apps/plugin-http';
+
 // API Configuration
 const PAYMENT_API_CONFIG = {
   BASE_URL: import.meta.env.DEV ? '/api' : 'https://finceptbackend.share.zrok.io',

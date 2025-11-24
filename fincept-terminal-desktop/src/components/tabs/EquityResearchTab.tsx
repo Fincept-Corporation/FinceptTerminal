@@ -247,6 +247,9 @@ const EquityResearchTab: React.FC = () => {
   // Initialize price chart with volume
   useEffect(() => {
     if (chartContainerRef.current && !chartRef.current) {
+      const containerHeight = chartContainerRef.current.clientHeight;
+      const containerWidth = chartContainerRef.current.clientWidth;
+
       const chart = createChart(chartContainerRef.current, {
         layout: {
           background: { color: COLORS.DARK_BG },
@@ -256,8 +259,8 @@ const EquityResearchTab: React.FC = () => {
           vertLines: { color: COLORS.BORDER },
           horzLines: { color: COLORS.BORDER },
         },
-        width: chartContainerRef.current.clientWidth,
-        height: 400,
+        width: containerWidth,
+        height: containerHeight > 0 ? containerHeight : 300,
         timeScale: {
           borderColor: COLORS.GRAY,
           timeVisible: true,
@@ -296,13 +299,25 @@ const EquityResearchTab: React.FC = () => {
 
       const handleResize = () => {
         if (chartContainerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({ width: chartContainerRef.current.clientWidth });
+          const newHeight = chartContainerRef.current.clientHeight;
+          const newWidth = chartContainerRef.current.clientWidth;
+          chartRef.current.applyOptions({
+            width: newWidth,
+            height: newHeight > 0 ? newHeight : 300,
+          });
         }
       };
+
+      // Use ResizeObserver for better resize detection
+      const resizeObserver = new ResizeObserver(handleResize);
+      if (chartContainerRef.current) {
+        resizeObserver.observe(chartContainerRef.current);
+      }
 
       window.addEventListener('resize', handleResize);
       return () => {
         window.removeEventListener('resize', handleResize);
+        resizeObserver.disconnect();
         chart.remove();
         chartRef.current = null;
         candlestickSeriesRef.current = null;
@@ -534,7 +549,8 @@ const EquityResearchTab: React.FC = () => {
 
   return (
     <div style={{
-      height: '100%',
+      height: '100vh',
+      width: '100%',
       backgroundColor: COLORS.DARK_BG,
       color: COLORS.WHITE,
       fontFamily: 'Consolas, monospace',
@@ -542,6 +558,7 @@ const EquityResearchTab: React.FC = () => {
       flexDirection: 'column',
       fontSize: '11px',
       overflow: 'hidden',
+      position: 'relative',
     }}>
       {/* Header */}
       <div style={{
@@ -603,6 +620,7 @@ const EquityResearchTab: React.FC = () => {
         overflow: 'auto',
         scrollbarColor: 'rgba(120, 120, 120, 0.3) transparent',
         scrollbarWidth: 'thin',
+        minHeight: 0,
       }} className="custom-scrollbar">
 
         {/* Stock Header with Price */}
@@ -687,314 +705,424 @@ const EquityResearchTab: React.FC = () => {
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '8px', padding: '0 8px 8px 8px' }}>
-            {/* Left Column - Quick Stats */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* Today's Trading */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  TODAY'S TRADING
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '6px',
+            padding: '8px',
+            height: '100%',
+            boxSizing: 'border-box',
+          }}>
+            {/* Top Data Grid - 4 Columns */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4, 1fr)',
+              gap: '6px',
+              flex: '0 0 auto',
+              minHeight: '400px',
+            }}>
+              {/* Column 1 - Trading & Valuation */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {/* Today's Trading */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '6px',
+                }}>
+                  <div style={{ color: COLORS.ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                    TODAY'S TRADING
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>OPEN:</span>
+                      <span style={{ color: COLORS.CYAN }}>${formatNumber(quoteData?.open)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>HIGH:</span>
+                      <span style={{ color: COLORS.GREEN }}>${formatNumber(quoteData?.high)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>LOW:</span>
+                      <span style={{ color: COLORS.RED }}>${formatNumber(quoteData?.low)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>PREV CLOSE:</span>
+                      <span style={{ color: COLORS.WHITE }}>${formatNumber(quoteData?.previous_close)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>VOLUME:</span>
+                      <span style={{ color: COLORS.YELLOW }}>{formatNumber(quoteData?.volume || 0, 0)}</span>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>OPEN:</span>
-                    <span style={{ color: COLORS.CYAN }}>${formatNumber(quoteData?.open)}</span>
+
+                {/* Valuation Metrics */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '6px',
+                }}>
+                  <div style={{ color: COLORS.CYAN, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                    VALUATION
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>HIGH:</span>
-                    <span style={{ color: COLORS.GREEN }}>${formatNumber(quoteData?.high)}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>MARKET CAP:</span>
+                      <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.market_cap)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>P/E RATIO:</span>
+                      <span style={{ color: COLORS.YELLOW }}>{formatNumber(stockInfo?.pe_ratio)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>FWD P/E:</span>
+                      <span style={{ color: COLORS.YELLOW }}>{formatNumber(stockInfo?.forward_pe)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>PEG RATIO:</span>
+                      <span style={{ color: COLORS.YELLOW }}>{formatNumber(stockInfo?.peg_ratio)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>P/B RATIO:</span>
+                      <span style={{ color: COLORS.CYAN }}>{formatNumber(stockInfo?.price_to_book)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>DIV YIELD:</span>
+                      <span style={{ color: COLORS.GREEN }}>
+                        {formatPercent(stockInfo?.dividend_yield)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>BETA:</span>
+                      <span style={{ color: COLORS.WHITE }}>{formatNumber(stockInfo?.beta)}</span>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>LOW:</span>
-                    <span style={{ color: COLORS.RED }}>${formatNumber(quoteData?.low)}</span>
+                </div>
+
+                {/* Share Statistics */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '6px',
+                }}>
+                  <div style={{ color: COLORS.CYAN, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                    SHARE STATS
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>PREV CLOSE:</span>
-                    <span style={{ color: COLORS.WHITE }}>${formatNumber(quoteData?.previous_close)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>VOLUME:</span>
-                    <span style={{ color: COLORS.YELLOW }}>{formatNumber(quoteData?.volume || 0, 0)}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>SHARES OUT:</span>
+                      <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.shares_outstanding)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>FLOAT:</span>
+                      <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.float_shares)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>INSIDERS:</span>
+                      <span style={{ color: COLORS.YELLOW }}>{formatPercent(stockInfo?.held_percent_insiders)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>INSTITUTIONS:</span>
+                      <span style={{ color: COLORS.YELLOW }}>{formatPercent(stockInfo?.held_percent_institutions)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>SHORT %:</span>
+                      <span style={{ color: COLORS.RED }}>{formatPercent(stockInfo?.short_percent_of_float)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Valuation Metrics */}
+              {/* Column 2 - Price Chart */}
               <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                gridColumn: 'span 2',
+                overflow: 'hidden',
+                minHeight: 0,
               }}>
-                <div style={{ color: COLORS.CYAN, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  VALUATION
+                {/* Chart Period Selector */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '4px 6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  flexShrink: 0,
+                }}>
+                  <span style={{ color: COLORS.GRAY, fontSize: '9px' }}>PERIOD:</span>
+                  {(['1M', '3M', '6M', '1Y', '5Y'] as const).map((period) => (
+                    <button
+                      key={period}
+                      onClick={() => setChartPeriod(period)}
+                      style={{
+                        backgroundColor: chartPeriod === period ? COLORS.ORANGE : COLORS.DARK_BG,
+                        border: `1px solid ${COLORS.BORDER}`,
+                        color: chartPeriod === period ? COLORS.DARK_BG : COLORS.WHITE,
+                        padding: '3px 8px',
+                        fontSize: '8px',
+                        cursor: 'pointer',
+                        fontWeight: chartPeriod === period ? 'bold' : 'normal',
+                      }}
+                    >
+                      {period}
+                    </button>
+                  ))}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>MARKET CAP:</span>
-                    <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.market_cap)}</span>
+
+                {/* Chart with Volume */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '6px',
+                  overflow: 'hidden',
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                }}>
+                  <div style={{ color: COLORS.ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', flexShrink: 0 }}>
+                    PRICE CHART & VOLUME - {chartPeriod}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>P/E RATIO:</span>
-                    <span style={{ color: COLORS.YELLOW }}>{formatNumber(stockInfo?.pe_ratio)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>FWD P/E:</span>
-                    <span style={{ color: COLORS.YELLOW }}>{formatNumber(stockInfo?.forward_pe)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>PEG RATIO:</span>
-                    <span style={{ color: COLORS.YELLOW }}>{formatNumber(stockInfo?.peg_ratio)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>P/B RATIO:</span>
-                    <span style={{ color: COLORS.CYAN }}>{formatNumber(stockInfo?.price_to_book)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>DIV YIELD:</span>
-                    <span style={{ color: COLORS.GREEN }}>
-                      {formatPercent(stockInfo?.dividend_yield)}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>BETA:</span>
-                    <span style={{ color: COLORS.WHITE }}>{formatNumber(stockInfo?.beta)}</span>
-                  </div>
+                  <div ref={chartContainerRef} style={{
+                    backgroundColor: COLORS.DARK_BG,
+                    flex: 1,
+                    width: '100%',
+                    overflow: 'hidden',
+                    minHeight: '280px',
+                  }} />
                 </div>
               </div>
 
-              {/* Analyst Targets */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.MAGENTA, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  ANALYST TARGETS
+              {/* Column 3 - Analyst & Performance */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {/* Analyst Targets */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '6px',
+                }}>
+                  <div style={{ color: COLORS.MAGENTA, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                    ANALYST TARGETS
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>HIGH:</span>
+                      <span style={{ color: COLORS.GREEN }}>${formatNumber(stockInfo?.target_high_price)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>MEAN:</span>
+                      <span style={{ color: COLORS.YELLOW }}>${formatNumber(stockInfo?.target_mean_price)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>LOW:</span>
+                      <span style={{ color: COLORS.RED }}>${formatNumber(stockInfo?.target_low_price)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>ANALYSTS:</span>
+                      <span style={{ color: COLORS.CYAN }}>{stockInfo?.number_of_analyst_opinions || 'N/A'}</span>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>HIGH:</span>
-                    <span style={{ color: COLORS.GREEN }}>${formatNumber(stockInfo?.target_high_price)}</span>
+
+                {/* 52 Week Range */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '6px',
+                }}>
+                  <div style={{ color: COLORS.YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                    52 WEEK RANGE
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>MEAN:</span>
-                    <span style={{ color: COLORS.YELLOW }}>${formatNumber(stockInfo?.target_mean_price)}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>HIGH:</span>
+                      <span style={{ color: COLORS.GREEN }}>${formatNumber(stockInfo?.fifty_two_week_high)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>LOW:</span>
+                      <span style={{ color: COLORS.RED }}>${formatNumber(stockInfo?.fifty_two_week_low)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>AVG VOL:</span>
+                      <span style={{ color: COLORS.CYAN }}>{formatNumber(stockInfo?.average_volume, 0)}</span>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>LOW:</span>
-                    <span style={{ color: COLORS.RED }}>${formatNumber(stockInfo?.target_low_price)}</span>
+                </div>
+
+                {/* Profitability */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '6px',
+                }}>
+                  <div style={{ color: COLORS.GREEN, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                    PROFITABILITY
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>ANALYSTS:</span>
-                    <span style={{ color: COLORS.CYAN }}>{stockInfo?.number_of_analyst_opinions || 'N/A'}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>GROSS MARGIN:</span>
+                      <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.gross_margins)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>OPER. MARGIN:</span>
+                      <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.operating_margins)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>PROFIT MARGIN:</span>
+                      <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.profit_margins)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>ROA:</span>
+                      <span style={{ color: COLORS.CYAN }}>{formatPercent(stockInfo?.return_on_assets)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>ROE:</span>
+                      <span style={{ color: COLORS.CYAN }}>{formatPercent(stockInfo?.return_on_equity)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Growth */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '6px',
+                }}>
+                  <div style={{ color: COLORS.BLUE, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                    GROWTH RATES
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>REVENUE:</span>
+                      <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.revenue_growth)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>EARNINGS:</span>
+                      <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.earnings_growth)}</span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Center Column - Chart */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* Chart Period Selector */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '6px 8px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}>
-                <span style={{ color: COLORS.GRAY, fontSize: '10px' }}>PERIOD:</span>
-                {(['1M', '3M', '6M', '1Y', '5Y'] as const).map((period) => (
-                  <button
-                    key={period}
-                    onClick={() => setChartPeriod(period)}
-                    style={{
-                      backgroundColor: chartPeriod === period ? COLORS.ORANGE : COLORS.DARK_BG,
-                      border: `1px solid ${COLORS.BORDER}`,
-                      color: chartPeriod === period ? COLORS.DARK_BG : COLORS.WHITE,
-                      padding: '4px 10px',
-                      fontSize: '9px',
-                      cursor: 'pointer',
-                      fontWeight: chartPeriod === period ? 'bold' : 'normal',
-                    }}
-                  >
-                    {period}
-                  </button>
-                ))}
-              </div>
-
-              {/* Chart with Volume */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-                  PRICE CHART & VOLUME - {chartPeriod}
-                </div>
-                <div ref={chartContainerRef} style={{ backgroundColor: COLORS.DARK_BG, minHeight: '400px', width: '100%' }} />
-              </div>
-
+            {/* Bottom Section - Company Overview & Key Info */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '2fr 1fr',
+              gap: '6px',
+              flex: '0 0 auto',
+              minHeight: '120px',
+            }}>
               {/* Company Description */}
               {stockInfo?.description && stockInfo.description !== 'N/A' && (
                 <div style={{
                   backgroundColor: COLORS.PANEL_BG,
                   border: `1px solid ${COLORS.BORDER}`,
-                  padding: '8px',
+                  padding: '6px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
                 }}>
-                  <div style={{ color: COLORS.CYAN, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
+                  <div style={{ color: COLORS.CYAN, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px', flexShrink: 0 }}>
                     COMPANY OVERVIEW
                   </div>
-                  <div style={{ color: COLORS.WHITE, fontSize: '11px', lineHeight: '1.6', maxHeight: '120px', overflow: 'auto' }}>
+                  <div style={{
+                    color: COLORS.WHITE,
+                    fontSize: '9px',
+                    lineHeight: '1.5',
+                    overflow: 'auto',
+                    flex: 1,
+                    minHeight: 0,
+                  }} className="custom-scrollbar">
                     {stockInfo.description}
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* Right Column - Additional Metrics */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {/* 52 Week Range */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.YELLOW, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  52 WEEK RANGE
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>HIGH:</span>
-                    <span style={{ color: COLORS.GREEN }}>${formatNumber(stockInfo?.fifty_two_week_high)}</span>
+              {/* Company Info & Financial Health */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {/* Company Info */}
+                {stockInfo && (
+                  <div style={{
+                    backgroundColor: COLORS.PANEL_BG,
+                    border: `1px solid ${COLORS.BORDER}`,
+                    padding: '6px',
+                  }}>
+                    <div style={{ color: COLORS.WHITE, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                      COMPANY INFO
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '9px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: COLORS.GRAY }}>EMPLOYEES:</span>
+                        <span style={{ color: COLORS.CYAN }}>{formatNumber(stockInfo.employees, 0)}</span>
+                      </div>
+                      {stockInfo.website && stockInfo.website !== 'N/A' && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: COLORS.GRAY }}>WEBSITE:</span>
+                          <span style={{ color: COLORS.BLUE, fontSize: '8px' }}>{stockInfo.website.substring(0, 25)}</span>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: COLORS.GRAY }}>CURRENCY:</span>
+                        <span style={{ color: COLORS.CYAN }}>{stockInfo.currency || 'N/A'}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>LOW:</span>
-                    <span style={{ color: COLORS.RED }}>${formatNumber(stockInfo?.fifty_two_week_low)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>AVG VOL:</span>
-                    <span style={{ color: COLORS.CYAN }}>{formatNumber(stockInfo?.average_volume, 0)}</span>
-                  </div>
-                </div>
-              </div>
+                )}
 
-              {/* Profitability */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.GREEN, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  PROFITABILITY
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>GROSS MARGIN:</span>
-                    <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.gross_margins)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>OPERATING MARGIN:</span>
-                    <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.operating_margins)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>PROFIT MARGIN:</span>
-                    <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.profit_margins)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>ROA:</span>
-                    <span style={{ color: COLORS.CYAN }}>{formatPercent(stockInfo?.return_on_assets)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>ROE:</span>
-                    <span style={{ color: COLORS.CYAN }}>{formatPercent(stockInfo?.return_on_equity)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Growth */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.BLUE, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  GROWTH
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>REVENUE GROWTH:</span>
-                    <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.revenue_growth)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>EARNINGS GROWTH:</span>
-                    <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.earnings_growth)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Share Statistics */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.CYAN, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  SHARE STATS
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>SHARES OUT:</span>
-                    <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.shares_outstanding)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>FLOAT:</span>
-                    <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.float_shares)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>INSIDERS:</span>
-                    <span style={{ color: COLORS.YELLOW }}>{formatPercent(stockInfo?.held_percent_insiders)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>INSTITUTIONS:</span>
-                    <span style={{ color: COLORS.YELLOW }}>{formatPercent(stockInfo?.held_percent_institutions)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: COLORS.GRAY }}>SHORT %:</span>
-                    <span style={{ color: COLORS.RED }}>{formatPercent(stockInfo?.short_percent_of_float)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Company Info */}
-              {stockInfo && (
+                {/* Key Financial Health */}
                 <div style={{
                   backgroundColor: COLORS.PANEL_BG,
                   border: `1px solid ${COLORS.BORDER}`,
-                  padding: '8px',
+                  padding: '6px',
                 }}>
-                  <div style={{ color: COLORS.WHITE, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                    COMPANY INFO
+                  <div style={{ color: COLORS.ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                    FINANCIAL HEALTH
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
-                    <div><span style={{ color: COLORS.GRAY }}>EMPLOYEES:</span> <span style={{ color: COLORS.CYAN }}>{formatNumber(stockInfo.employees, 0)}</span></div>
-                    {stockInfo.website && stockInfo.website !== 'N/A' && (
-                      <div><span style={{ color: COLORS.GRAY }}>WEBSITE:</span> <span style={{ color: COLORS.BLUE }}>{stockInfo.website.substring(0, 30)}</span></div>
-                    )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '9px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>CASH:</span>
+                      <span style={{ color: COLORS.GREEN }}>{formatLargeNumber(stockInfo?.total_cash)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>DEBT:</span>
+                      <span style={{ color: COLORS.RED }}>{formatLargeNumber(stockInfo?.total_debt)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: COLORS.GRAY }}>FREE CF:</span>
+                      <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.free_cashflow)}</span>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}
 
         {/* Financials Tab */}
-        {activeTab === 'financials' && financials && (
-          <div style={{ padding: '0 8px 8px 8px' }}>
+        {activeTab === 'financials' && (
+          <div style={{ padding: '8px' }}>
+            {!financials ? (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '400px',
+                gap: '16px',
+              }}>
+                <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
+                  {loading ? '⏳ LOADING FINANCIAL DATA...' : '⚠️ NO FINANCIAL DATA AVAILABLE'}
+                </div>
+                <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
+                  {loading ? 'Please wait while we fetch the data' : 'Financial statements are not available for this symbol'}
+                </div>
+              </div>
+            ) : (
+          <div style={{ padding: '0' }}>
             {/* Controls Panel */}
             <div style={{
               backgroundColor: COLORS.PANEL_BG,
@@ -1385,6 +1513,8 @@ const EquityResearchTab: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+            )}
           </div>
         )}
 

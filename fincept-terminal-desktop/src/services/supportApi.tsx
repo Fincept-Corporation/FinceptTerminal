@@ -1,6 +1,8 @@
 // File: src/services/supportApi.tsx
 // Support Ticket API Service
 
+import { fetch } from '@tauri-apps/plugin-http';
+
 // API Configuration
 const API_CONFIG = {
   BASE_URL: import.meta.env.DEV ? '/api' : 'https://finceptbackend.share.zrok.io',

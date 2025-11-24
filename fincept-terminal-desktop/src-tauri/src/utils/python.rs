@@ -34,12 +34,6 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .join("bin")
         .join(python_exe);
 
-    // Debug logging
-    eprintln!("[Python] Resource dir: {}", resource_dir.display());
-    eprintln!("[Python] Platform dir: {}", python_dir);
-    eprintln!("[Python] Looking for Python at: {}", python_path.display());
-    eprintln!("[Python] Python exists: {}", python_path.exists());
-
     // Verify Python exists
     if !python_path.exists() {
         return Err(format!(
@@ -73,12 +67,6 @@ pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .join(bun_dir)
         .join(bun_exe);
 
-    // Debug logging
-    eprintln!("[Bun] Resource dir: {}", resource_dir.display());
-    eprintln!("[Bun] Platform dir: {}", bun_dir);
-    eprintln!("[Bun] Looking for Bun at: {}", bun_path.display());
-    eprintln!("[Bun] Bun exists: {}", bun_path.exists());
-
     // Verify Bun exists
     if !bun_path.exists() {
         return Err(format!("Bundled Bun not found at: {}", bun_path.display()));
@@ -103,13 +91,17 @@ pub fn get_script_path(app: &tauri::AppHandle, script_name: &str) -> Result<Path
 /// Create a Command that hides console windows on Windows
 /// Use this instead of Command::new("python") to prevent terminal windows
 pub fn python_command() -> Command {
-    let mut cmd = Command::new("python");
-
-    // Hide console window on Windows
     #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
+    {
+        let mut cmd = Command::new("python");
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd
+    }
 
-    cmd
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new("python")
+    }
 }
 
 /// Execute a Python script with arguments and return the output

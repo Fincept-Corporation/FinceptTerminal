@@ -377,6 +377,10 @@ fn execute_python_script(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize DuckDB connection
+    let duckdb_state = commands::duckdb::DuckDBState::new("fincept_terminal.duckdb")
+        .expect("Failed to initialize DuckDB");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_cors_fetch::init())
@@ -387,6 +391,7 @@ pub fn run() {
         .manage(MCPState {
             processes: Mutex::new(HashMap::new()),
         })
+        .manage(duckdb_state)
         .invoke_handler(tauri::generate_handler![
             greet,
             cleanup_running_workflows,
@@ -942,7 +947,14 @@ pub fn run() {
             commands::portfolio::generate_asset_allocation,
             commands::portfolio::calculate_retirement_plan,
             commands::portfolio::analyze_behavioral_biases,
-            commands::portfolio::analyze_etf_costs
+            commands::portfolio::analyze_etf_costs,
+            // DuckDB Commands
+            commands::duckdb::duckdb_query,
+            commands::duckdb::duckdb_execute,
+            commands::duckdb::duckdb_execute_batch,
+            commands::duckdb::duckdb_get_tables,
+            commands::duckdb::duckdb_get_table_info,
+            commands::duckdb::duckdb_test_connection
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

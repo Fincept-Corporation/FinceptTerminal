@@ -60,3 +60,6 @@ pub mod agents;
 
 // Portfolio Analytics
 pub mod portfolio;
+
+// DuckDB Database
+pub mod duckdb;

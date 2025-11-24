@@ -1,6 +1,8 @@
 // File: src/services/forumApi.ts
 // Forum API service for handling all forum-related API calls
 
+import { fetch } from '@tauri-apps/plugin-http';
+
 // API Configuration - matches your existing auth setup
 const API_CONFIG = {
   BASE_URL: import.meta.env.DEV ? '/api' : 'https://finceptbackend.share.zrok.io',

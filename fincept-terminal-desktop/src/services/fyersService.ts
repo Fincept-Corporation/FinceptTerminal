@@ -1,6 +1,7 @@
 // Fyers Broker Integration Service
 // Handles all Fyers API interactions: auth, trading, market data, portfolio
 
+import { fetch } from '@tauri-apps/plugin-http';
 import { fyersModel } from 'fyers-web-sdk-v3';
 import { sqliteService } from './sqliteService';
 
