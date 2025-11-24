@@ -10,9 +10,9 @@
 
 ### **당신의 생각이 유일한 한계입니다. 데이터는 그렇지 않습니다.**
 
-CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
+CFA 수준 분석, AI 자동화, 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
 
-[📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 문서](docs/)•[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+[📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 문서](docs/)•[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 불화](https://discord.gg/ae87a8ygbN)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -24,15 +24,15 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 
 **핀셉트 터미널**전통적인 소프트웨어의 제한을 거부하는 사람들을 위해 구축된 오픈 소스 금융 플랫폼입니다. 우리는 경쟁합니다**분석 깊이**그리고**데이터 접근성**—내부자 정보나 독점 피드가 아닙니다.
 
-| **특징**        | **핀셉트 터미널**                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------------- |
-| 📊**해석학**     | Python으로 CFA 레벨 1, 2, 3 커리큘럼 완료 • DCF 모델 • 포트폴리오 최적화 • 위험 지표(VaR, Sharpe)                         |
-| 🤖**AI 에이전트** | 20명 이상의 투자자 페르소나(Buffett, Dalio, Graham) • 헤지펀드 전략(Bridgewater, Citadel, Renaissance) • 현지 LLM 지원 |
-| 🌐**데이터 액세스** | 100개 이상의 커넥터(DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • 맞춤형 API 매퍼 • 데이터 제한 없음               |
-| 🔗**교차 도메인**  | 공급망 통합 → 포트폴리오 • 지정학 → 형평성 • 해양 → 거시적 • 귀하의 데이터를 귀하의 방식으로                                         |
-| 🎨**워크플로**    | 시각적 노드 편집기 • Python 에이전트 • MCP 도구 • 코드 없는 자동화                                                     |
-| 🚢**지능**      | 3D 해상 추적 • 위성 모니터링 • 지정학적 프레임워크 • 무역 경로 분석                                                        |
-| 💰**가격**      | 100% 무료 및 오픈 소스(MIT 라이선스)                                                                         |
+| **특징**        | **핀셉트 터미널**                                                                                       | **소스 코드**                                                                                                                                                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 📊**해석학**     | Python으로 CFA 레벨 1, 2, 3 커리큘럼 완료 • DCF 모델 • 포트폴리오 최적화 • 위험 지표(VaR, Sharpe)                         | [분석 모듈](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/Analytics)                                                                                                                           |
+| 🤖**AI 에이전트** | 20명 이상의 투자자 페르소나(Buffett, Dalio, Graham) • 헤지펀드 전략(Bridgewater, Citadel, Renaissance) • 현지 LLM 지원 | [AI 에이전트](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/agents)                                                                                                                            |
+| 🌐**데이터 액세스** | 100개 이상의 커넥터(DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • 맞춤형 API 매퍼 • 데이터 제한 없음               | [데이터 어댑터](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                     |
+| 🔗**교차 도메인**  | 공급망 통합 → 포트폴리오 • 지정학 → 형평성 • 해양 → 거시적 • 귀하의 데이터를 귀하의 방식으로                                         | [워크플로우 시스템](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                             |
+| 🎨**워크플로**    | 시각적 노드 편집기 • Python 에이전트 • MCP 도구 • 코드 없는 자동화                                                     | [사용자 정의 노드](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP 서버](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
+| 🚢**지능**      | 3D 해상 추적 • 위성 모니터링 • 지정학적 프레임워크 • 무역 경로 분석                                                        | [해양 탭](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                              |
+| 💰**가격**      | 100% 무료 및 오픈 소스(MIT 라이선스)                                                                         | [전체 저장소](https://github.com/Fincept-Corporation/FinceptTerminal)                                                                                                                                                                                                   |
 
 * * *
 
@@ -40,7 +40,7 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **📊 CFA 수준 분석**
 
@@ -65,9 +65,9 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 -   고급 위험 분석
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
-### **🤖 AI 기반 자동화**
+### **🤖 AI-Powered Automation**
 
 ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png)
 
@@ -92,7 +92,7 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 </td>
 </tr>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🌐 무제한 데이터 액세스**
 
@@ -107,7 +107,7 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 -   **맞춤형 API 매퍼**: 몇 분 만에 모든 API에 연결
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🔬 글로벌 인텔리전스**
 
@@ -189,11 +189,13 @@ npm install && npm run tauri dev
 
 **기여하다:**새로운 데이터 커넥터 • AI 에이전트 • 분석 모듈 • 문서 • 번역
 
-[기여 가이드](docs/CONTRIBUTING.md)•[버그 신고](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[기능 요청](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+**프로젝트를 처음 접하시나요?**우리의 것부터 시작하세요[개발자 연습](docs/DEVELOPER_WALKTHROUGH.md)코드베이스에 대한 완전한 가이드를 보려면
+
+[기여 가이드](docs/CONTRIBUTING.md)•[개발자 연습](docs/DEVELOPER_WALKTHROUGH.md)•[버그 신고](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[기능 요청](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 * * *
 
-## 📜 라이센스
+## 📜 라이선스
 
 **내 라이센스**• 영원히 무료 • 제한 없음
 

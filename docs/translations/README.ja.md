@@ -12,7 +12,7 @@
 
 CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた最先端の金融インテリジェンス プラットフォーム。
 
-[📥 ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 ドキュメント](docs/)•[💬 ディスカッション](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+[📥 ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 ドキュメント](docs/)•[💬 ディスカッション](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬不協和音](https://discord.gg/ae87a8ygbN)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -24,15 +24,15 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 
 **フィンセプトターミナル**は、従来のソフトウェアによる制限を拒否する人々のために構築されたオープンソースの金融プラットフォームです。私たちは次の点で競争します**分析の深さ**そして**データへのアクセシビリティ**—インサイダー情報や独占フィードではありません。
 
-| **特徴**         | **フィンセプトターミナル**                                                                     |
-| -------------- | ----------------------------------------------------------------------------------- |
-| 📊**分析**       | Python で CFA レベル 1、2、3 カリキュラムを完了する • DCF モデル • ポートフォリオの最適化 • リスク指標 (VaR、Sharpe)     |
-| 🤖**AIエージェント** | 20 人以上の投資家ペルソナ (バフェット、ダリオ、グラハム) • ヘッジファンド戦略 (ブリッジウォーター、シタデル、ルネッサンス) • ローカル LLM サポート |
-| 🌐**データアクセス**  | 100 以上のコネクタ (DBnomics、Polygon、Kraken、PostgreSQL、Kafka) • カスタム API マッパー • データ制限なし    |
-| 🔗**クロスドメイン**  | サプライチェーン → ポートフォリオの統合 • 地政学 → 株式 • 海事 → マクロ • データを自分の方法で統合                          |
-| 🎨**ワークフロー**   | ビジュアルノードエディター • Pythonエージェント • MCPツール • コード不要の自動化                                   |
-| 🚢**知能**       | 3D 海洋追跡 • 衛星監視 • 地政学的枠組み • 貿易ルート分析                                                  |
-| 💰**価格設定**     | 100％無料＆オープンソース（MITライセンス）                                                            |
+| **特徴**         | **フィンセプトターミナル**                                                                     | **ソースコード**                                                                                                                                                                                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 📊**分析**       | Python で CFA レベル 1、2、3 カリキュラムを完了する • DCF モデル • ポートフォリオの最適化 • リスク指標 (VaR、Sharpe)     | [分析モジュール](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/Analytics)                                                                                                                        |
+| 🤖**AIエージェント** | 20 人以上の投資家ペルソナ (バフェット、ダリオ、グラハム) • ヘッジファンド戦略 (ブリッジウォーター、シタデル、ルネッサンス) • ローカル LLM サポート | [AIエージェント](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/agents)                                                                                                                          |
+| 🌐**データアクセス**  | 100 以上のコネクタ (DBnomics、Polygon、Kraken、PostgreSQL、Kafka) • カスタム API マッパー • データ制限なし    | [データアダプター](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                   |
+| 🔗**クロスドメイン**  | サプライチェーン → ポートフォリオの統合 • 地政学 → 株式 • 海事 → マクロ • データを自分の方法で統合                          | [ワークフローシステム](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                           |
+| 🎨**ワークフロー**   | ビジュアルノードエディター • Pythonエージェント • MCPツール • コード不要の自動化                                   | [カスタムノード](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCPサーバー](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
+| 🚢**知能**       | 3D 海洋追跡 • 衛星監視 • 地政学的枠組み • 貿易ルート分析                                                  | [海事タブ](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                             |
+| 💰**価格設定**     | 100％無料＆オープンソース（MITライセンス）                                                            | [フルリポジトリ](https://github.com/Fincept-Corporation/FinceptTerminal)                                                                                                                                                                                                 |
 
 * * *
 
@@ -40,7 +40,7 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **📊 CFA レベルの分析**
 
@@ -65,7 +65,7 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 -   高度なリスク分析
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🤖 AI を活用した自動化**
 
@@ -92,9 +92,9 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 </td>
 </tr>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
-### **🌐 無制限のデータアクセス**
+### **🌐 Unlimited Data Access**
 
 ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png)
 
@@ -107,7 +107,7 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 -   **カスタム API マッパー**: あらゆる API を数分で接続
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🔬 グローバルインテリジェンス**
 
@@ -118,7 +118,7 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 -   船舶/航空機/衛星追跡機能付き 3D 地球儀
 -   リアルタイム AIS データ • 貿易ルート • 軌道経路
 
-**Geopolitical Analysis**
+**地政学的分析**
 
 -   グランドチェスボードフレームワーク
 -   地理モデルの囚人
@@ -189,7 +189,9 @@ npm install && npm run tauri dev
 
 **貢献する：**新しいデータコネクタ • AI エージェント • 分析モジュール • ドキュメント • 翻訳
 
-[貢献ガイド](docs/CONTRIBUTING.md)•[バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+**プロジェクトは初めてですか?**まずは私たちのものから始めましょう[開発者向けウォークスルー](docs/DEVELOPER_WALKTHROUGH.md)コードベースの完全なガイドについては、こちらをご覧ください。
+
+[貢献ガイド](docs/CONTRIBUTING.md)•[開発者向けウォークスルー](docs/DEVELOPER_WALKTHROUGH.md)•[バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 * * *
 
