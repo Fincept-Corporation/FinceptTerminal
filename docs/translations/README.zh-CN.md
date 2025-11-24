@@ -12,7 +12,7 @@
 
 最先进的金融情报平台，具有 CFA 级分析、人工智能自动化和无限数据连接。
 
-[📥 下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 文档](docs/)•[💬 讨论](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+[📥 下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 文档](docs/)•[💬 讨论](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 不和谐](https://discord.gg/ae87a8ygbN)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -24,15 +24,15 @@
 
 **金融终端**是一个为那些拒绝受传统软件限制的人打造的开源金融平台。我们竞争的是**分析深度**和**数据可访问性**- 不在内部信息或独家提要中。
 
-| **特征**       | **金融终端**                                                                      |
-| ------------ | ----------------------------------------------------------------------------- |
-| 📊**分析**     | 使用 Python 完成 CFA 1、2、3 级课程 • DCF 模型 • 投资组合优化 • 风险指标（VaR、夏普）                   |
-| 🤖**人工智能代理** | 20 多个投资者角色（巴菲特、达利奥、格雷厄姆） • 对冲基金策略（Bridgewater、Citadel、Renaissance） • 本地法学硕士支持 |
-| 🌐**数据存取**   | 100 多个连接器（DBnomics、Polygon、Kraken、PostgreSQL、Kafka） • 自定义 API 映射器 • 零数据限制     |
-| 🔗**跨域**     | 整合供应链 → 产品组合 • 地缘政治 → 股权 • 海事 → 宏观 • 您的数据，您的方式                                |
-| 🎨**工作流程**   | 可视化节点编辑器 • Python 代理 • MCP 工具 • 无代码自动化                                        |
-| 🚢**智力**     | 3D 海上跟踪 • 卫星监测 • 地缘政治框架 • 贸易路线分析                                              |
-| 💰**定价**     | 100% 免费和开源（MIT 许可证）                                                           |
+| **特征**       | **金融终端**                                                                      | **源代码**                                                                                                                                                                                                                                                        |
+| ------------ | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 📊**分析**     | 使用 Python 完成 CFA 1、2、3 级课程 • DCF 模型 • 投资组合优化 • 风险指标（VaR、夏普）                   | [分析模块](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/Analytics)                                                                                                                        |
+| 🤖**人工智能代理** | 20 多个投资者角色（巴菲特、达利奥、格雷厄姆） • 对冲基金策略（Bridgewater、Citadel、Renaissance） • 本地法学硕士支持 | [人工智能代理](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/agents)                                                                                                                         |
+| 🌐**数据存取**   | 100 多个连接器（DBnomics、Polygon、Kraken、PostgreSQL、Kafka） • 自定义 API 映射器 • 零数据限制     | [数据适配器](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                   |
+| 🔗**跨域**     | 整合供应链 → 产品组合 • 地缘政治 → 股权 • 海事 → 宏观 • 您的数据，您的方式                                | [工作流程系统](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                            |
+| 🎨**工作流程**   | 可视化节点编辑器 • Python 代理 • MCP 工具 • 无代码自动化                                        | [自定义节点](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP服务器](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
+| 🚢**智力**     | 3D 海上跟踪 • 卫星监测 • 地缘政治框架 • 贸易路线分析                                              | [海事标签](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                          |
+| 💰**定价**     | 100% 免费和开源（MIT 许可证）                                                           | [完整的存储库](https://github.com/Fincept-Corporation/FinceptTerminal)                                                                                                                                                                                               |
 
 * * *
 
@@ -40,7 +40,7 @@
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **📊 CFA 级别分析**
 
@@ -65,7 +65,7 @@
 -   高级风险分析
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🤖 人工智能驱动的自动化**
 
@@ -73,7 +73,7 @@
 
 **投资者代理**
 
--   Warren Buffett, Benjamin Graham, Seth Klarman
+-   沃伦·巴菲特、本杰明·格雷厄姆、塞斯·卡拉曼
 -   雷·达里奥、乔治·索罗斯、彼得·林奇
 -   20+ 传奇投资人物
 
@@ -92,7 +92,7 @@
 </td>
 </tr>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🌐 无限制的数据访问**
 
@@ -107,7 +107,7 @@
 -   **自定义 API 映射器**：在几分钟内连接任何 API
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### **🔬 全球情报**
 
@@ -189,7 +189,9 @@ npm install && npm run tauri dev
 
 **贡献：**新数据连接器 • AI 代理 • 分析模块 • 文档 • 翻译
 
-[贡献指南](docs/CONTRIBUTING.md)•[报告错误](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[请求功能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+**刚接触该项目？**从我们的开始[开发者演练](docs/DEVELOPER_WALKTHROUGH.md)获取代码库的完整指南。
+
+[贡献指南](docs/CONTRIBUTING.md)•[开发者演练](docs/DEVELOPER_WALKTHROUGH.md)•[报告错误](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[请求功能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 * * *
 
