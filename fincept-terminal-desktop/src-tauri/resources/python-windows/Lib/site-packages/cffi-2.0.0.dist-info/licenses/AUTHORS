@@ -1,8 +1,3 @@
-This package has been mostly done by Armin Rigo with help from
-Maciej Fijałkowski. The idea is heavily based (although not directly
-copied) from LuaJIT ffi by Mike Pall.
-
-
-Other contributors:
-
-  Google Inc.
+version https://git-lfs.github.com/spec/v1
+oid sha256:2a67a60bbfb33759d67d645ff131b8e6d6bc4cafc232d751fcac3eda4d314cc8
+size 208

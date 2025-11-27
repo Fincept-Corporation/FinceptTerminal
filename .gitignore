@@ -20,6 +20,7 @@ fincept_env
 **/.claude/
 !.github/**/*.md
 # Allow embedded Python in resources WITH executables and DLLs
+# (Managed via Git LFS for CI/CD pipeline)
 !fincept-terminal-desktop/src-tauri/resources/python/
 !fincept-terminal-desktop/src-tauri/resources/python/**
 !fincept-terminal-desktop/src-tauri/resources/python/**/*.exe

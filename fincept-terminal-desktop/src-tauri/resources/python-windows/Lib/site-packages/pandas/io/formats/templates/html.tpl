@@ -1,16 +1,3 @@
-{# Update the html_style/table_structure.html documentation too #}
-{% if doctype_html %}
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="{{encoding}}">
-{% if not exclude_styles %}{% include html_style_tpl %}{% endif %}
-</head>
-<body>
-{% include html_table_tpl %}
-</body>
-</html>
-{% elif not doctype_html %}
-{% if not exclude_styles %}{% include html_style_tpl %}{% endif %}
-{% include html_table_tpl %}
-{% endif %}
+version https://git-lfs.github.com/spec/v1
+oid sha256:280fb0fe7a5f9c733fd5ce6daed26d91ddce0fd8fc86ab684006381820b95202
+size 412

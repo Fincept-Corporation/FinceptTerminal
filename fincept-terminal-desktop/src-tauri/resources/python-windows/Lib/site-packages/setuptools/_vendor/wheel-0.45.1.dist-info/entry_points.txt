@@ -1,6 +1,3 @@
-[console_scripts]
-wheel=wheel.cli:main
-
-[distutils.commands]
-bdist_wheel=wheel.bdist_wheel:bdist_wheel
-
+version https://git-lfs.github.com/spec/v1
+oid sha256:ad363505b90f1e1906326e10dc5d29233241cd6da4331a06d68ae27dfbc6740d
+size 104

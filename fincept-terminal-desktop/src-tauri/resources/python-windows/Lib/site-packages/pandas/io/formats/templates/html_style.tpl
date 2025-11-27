@@ -1,26 +1,3 @@
-{%- block before_style -%}{%- endblock before_style -%}
-{% block style %}
-<style type="text/css">
-{% block table_styles %}
-{% for s in table_styles %}
-#T_{{uuid}} {{s.selector}} {
-{% for p,val in s.props %}
-  {{p}}: {{val}};
-{% endfor %}
-}
-{% endfor %}
-{% endblock table_styles %}
-{% block before_cellstyle %}{% endblock before_cellstyle %}
-{% block cellstyle %}
-{% for cs in [cellstyle, cellstyle_index, cellstyle_columns] %}
-{% for s in cs %}
-{% for selector in s.selectors %}{% if not loop.first %}, {% endif %}#T_{{uuid}}_{{selector}}{% endfor %} {
-{% for p,val in s.props %}
-  {{p}}: {{val}};
-{% endfor %}
-}
-{% endfor %}
-{% endfor %}
-{% endblock cellstyle %}
-</style>
-{% endblock style %}
+version https://git-lfs.github.com/spec/v1
+oid sha256:fe00aa92d2f2506028e53ccbdc8f940a9d4d8e3f0ac9e2c25ae9c7cf89d81ec1
+size 694
