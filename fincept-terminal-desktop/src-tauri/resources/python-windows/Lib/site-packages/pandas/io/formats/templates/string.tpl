@@ -1,12 +1,3 @@
-{% for r in head %}
-{% for c in r %}{% if c["is_visible"] %}
-{{ c["display_value"] }}{% if not loop.last %}{{ delimiter }}{% endif %}
-{% endif %}{% endfor %}
-
-{% endfor %}
-{% for r in body %}
-{% for c in r %}{% if c["is_visible"] %}
-{{ c["display_value"] }}{% if not loop.last %}{{ delimiter }}{% endif %}
-{% endif %}{% endfor %}
-
-{% endfor %}
+version https://git-lfs.github.com/spec/v1
+oid sha256:3a9afcedfd6d63cca9fc6ec6398f28b8596547feef7df37fa24ecd75ff7c8e81
+size 344

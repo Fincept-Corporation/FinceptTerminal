@@ -1,15 +1,3 @@
-from typing import Any, Union
-
-from .core import decode, encode
-
-
-def ToASCII(label: str) -> bytes:
-    return encode(label)
-
-
-def ToUnicode(label: Union[bytes, bytearray]) -> str:
-    return decode(label)
-
-
-def nameprep(s: Any) -> None:
-    raise NotImplementedError("IDNA 2008 does not utilise nameprep protocol")
+version https://git-lfs.github.com/spec/v1
+oid sha256:4732f2e90402765f7bf3868585bd845fd10a1822638343f73e294675e5d7731f
+size 316

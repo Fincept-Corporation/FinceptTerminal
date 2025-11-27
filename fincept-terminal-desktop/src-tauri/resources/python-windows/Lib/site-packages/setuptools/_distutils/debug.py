@@ -1,5 +1,3 @@
-import os
-
-# If DISTUTILS_DEBUG is anything other than the empty string, we run in
-# debug mode.
-DEBUG = os.environ.get('DISTUTILS_DEBUG')
+version https://git-lfs.github.com/spec/v1
+oid sha256:37a32b4c0a8aea5f52564ead5b0791d74f0f33c3a5eea3657f257e9c770b86c6
+size 139
