@@ -1,0 +1,1335 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<wits:datasource datasourcecode="tradestats-trade" datasourcename="WITS TradeStats - Trade" language="en" total="266" xmlns:wits="http://wits.worldbank.org">
+  <wits:countries>
+    <wits:country countrycode="004" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>AFG</wits:iso3Code>
+      <wits:name>Afghanistan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="008" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ALB</wits:iso3Code>
+      <wits:name>Albania</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="012" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>DZA</wits:iso3Code>
+      <wits:name>Algeria</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="016" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ASM</wits:iso3Code>
+      <wits:name>American Samoa</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="020" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>AND</wits:iso3Code>
+      <wits:name>Andorra</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="024" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>AGO</wits:iso3Code>
+      <wits:name>Angola</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="660" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>AIA</wits:iso3Code>
+      <wits:name>Anguila</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="010" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ATA</wits:iso3Code>
+      <wits:name>Antarctica</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="028" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ATG</wits:iso3Code>
+      <wits:name>Antigua and Barbuda</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="032" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ARG</wits:iso3Code>
+      <wits:name>Argentina</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="051" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ARM</wits:iso3Code>
+      <wits:name>Armenia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="533" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ABW</wits:iso3Code>
+      <wits:name>Aruba</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="036" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>AUS</wits:iso3Code>
+      <wits:name>Australia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="040" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>AUT</wits:iso3Code>
+      <wits:name>Austria</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="031" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>AZE</wits:iso3Code>
+      <wits:name>Azerbaijan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="044" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BHS</wits:iso3Code>
+      <wits:name>Bahamas, The</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="048" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BHR</wits:iso3Code>
+      <wits:name>Bahrain</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="050" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BGD</wits:iso3Code>
+      <wits:name>Bangladesh</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="052" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BRB</wits:iso3Code>
+      <wits:name>Barbados</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="112" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BLR</wits:iso3Code>
+      <wits:name>Belarus</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="056" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BEL</wits:iso3Code>
+      <wits:name>Belgium</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="058" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BLX</wits:iso3Code>
+      <wits:name>Belgium-Luxembourg</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="084" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BLZ</wits:iso3Code>
+      <wits:name>Belize</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="204" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BEN</wits:iso3Code>
+      <wits:name>Benin</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="060" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BMU</wits:iso3Code>
+      <wits:name>Bermuda</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="064" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BTN</wits:iso3Code>
+      <wits:name>Bhutan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="068" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BOL</wits:iso3Code>
+      <wits:name>Bolivia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="535" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BES</wits:iso3Code>
+      <wits:name>Bonaire</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="070" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BIH</wits:iso3Code>
+      <wits:name>Bosnia and Herzegovina</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="072" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BWA</wits:iso3Code>
+      <wits:name>Botswana</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="074" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BVT</wits:iso3Code>
+      <wits:name>Bouvet Island</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="080" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BAT</wits:iso3Code>
+      <wits:name>Br. Antr. Terr</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="076" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BRA</wits:iso3Code>
+      <wits:name>Brazil</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="086" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>IOT</wits:iso3Code>
+      <wits:name>British Indian Ocean Ter.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="092" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>VGB</wits:iso3Code>
+      <wits:name>British Virgin Islands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="096" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BRN</wits:iso3Code>
+      <wits:name>Brunei</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="100" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BGR</wits:iso3Code>
+      <wits:name>Bulgaria</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="837" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BUN</wits:iso3Code>
+      <wits:name>Bunkers</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="854" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BFA</wits:iso3Code>
+      <wits:name>Burkina Faso</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="108" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BDI</wits:iso3Code>
+      <wits:name>Burundi</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="116" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>KHM</wits:iso3Code>
+      <wits:name>Cambodia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="120" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CMR</wits:iso3Code>
+      <wits:name>Cameroon</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="124" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CAN</wits:iso3Code>
+      <wits:name>Canada</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="132" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CPV</wits:iso3Code>
+      <wits:name>Cape Verde</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="136" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CYM</wits:iso3Code>
+      <wits:name>Cayman Islands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="140" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CAF</wits:iso3Code>
+      <wits:name>Central African Republic</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="148" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TCD</wits:iso3Code>
+      <wits:name>Chad</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="152" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CHL</wits:iso3Code>
+      <wits:name>Chile</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="156" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CHN</wits:iso3Code>
+      <wits:name>China</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="162" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CXR</wits:iso3Code>
+      <wits:name>Christmas Island</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="166" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CCK</wits:iso3Code>
+      <wits:name>Cocos (Keeling) Islands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="170" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>COL</wits:iso3Code>
+      <wits:name>Colombia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="174" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>COM</wits:iso3Code>
+      <wits:name>Comoros</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="180" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ZAR</wits:iso3Code>
+      <wits:name>Congo, Dem. Rep.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="178" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>COG</wits:iso3Code>
+      <wits:name>Congo, Rep.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="184" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>COK</wits:iso3Code>
+      <wits:name>Cook Islands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="188" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CRI</wits:iso3Code>
+      <wits:name>Costa Rica</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="384" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CIV</wits:iso3Code>
+      <wits:name>Cote d'Ivoire</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="191" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>HRV</wits:iso3Code>
+      <wits:name>Croatia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="192" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CUB</wits:iso3Code>
+      <wits:name>Cuba</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="531" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CUW</wits:iso3Code>
+      <wits:name>Curaçao</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="196" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CYP</wits:iso3Code>
+      <wits:name>Cyprus</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="203" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CZE</wits:iso3Code>
+      <wits:name>Czech Republic</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="200" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CSK</wits:iso3Code>
+      <wits:name>Czechoslovakia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="208" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>DNK</wits:iso3Code>
+      <wits:name>Denmark</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="262" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>DJI</wits:iso3Code>
+      <wits:name>Djibouti</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="212" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>DMA</wits:iso3Code>
+      <wits:name>Dominica</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="214" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>DOM</wits:iso3Code>
+      <wits:name>Dominican Republic</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="EAS" isreporter="1" ispartner="1" isgroup="Yes" grouptype="Region">
+      <wits:iso3Code>EAS</wits:iso3Code>
+      <wits:name>East Asia &amp; Pacific</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="626" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TMP</wits:iso3Code>
+      <wits:name>East Timor</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="218" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ECU</wits:iso3Code>
+      <wits:name>Ecuador</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="818" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>EGY</wits:iso3Code>
+      <wits:name>Egypt, Arab Rep.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="222" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SLV</wits:iso3Code>
+      <wits:name>El Salvador</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="226" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GNQ</wits:iso3Code>
+      <wits:name>Equatorial Guinea</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="232" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ERI</wits:iso3Code>
+      <wits:name>Eritrea</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="233" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>EST</wits:iso3Code>
+      <wits:name>Estonia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="748" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SWZ</wits:iso3Code>
+      <wits:name>Eswatini</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="231" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ETH</wits:iso3Code>
+      <wits:name>Ethiopia(excludes Eritrea)</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="230" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ETF</wits:iso3Code>
+      <wits:name>Ethiopia(includes Eritrea)</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="ECS" isreporter="1" ispartner="1" isgroup="Yes" grouptype="Region">
+      <wits:iso3Code>ECS</wits:iso3Code>
+      <wits:name>Europe &amp; Central Asia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="234" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>FRO</wits:iso3Code>
+      <wits:name>Faeroe Islands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="238" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>FLK</wits:iso3Code>
+      <wits:name>Falkland Island</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="242" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>FJI</wits:iso3Code>
+      <wits:name>Fiji</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="246" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>FIN</wits:iso3Code>
+      <wits:name>Finland</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="736" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SDN</wits:iso3Code>
+      <wits:name>Fm Sudan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="260" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ATF</wits:iso3Code>
+      <wits:name>Fr. So. Ant. Tr</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="250" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>FRA</wits:iso3Code>
+      <wits:name>France</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="838" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>FRE</wits:iso3Code>
+      <wits:name>Free Zones</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="254" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GUF</wits:iso3Code>
+      <wits:name>French Guiana</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="258" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PYF</wits:iso3Code>
+      <wits:name>French Polynesia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="266" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GAB</wits:iso3Code>
+      <wits:name>Gabon</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="270" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GMB</wits:iso3Code>
+      <wits:name>Gambia, The</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="268" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GEO</wits:iso3Code>
+      <wits:name>Georgia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="278" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>DDR</wits:iso3Code>
+      <wits:name>German Democratic Republic</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="276" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>DEU</wits:iso3Code>
+      <wits:name>Germany</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="288" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GHA</wits:iso3Code>
+      <wits:name>Ghana</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="292" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GIB</wits:iso3Code>
+      <wits:name>Gibraltar</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="300" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GRC</wits:iso3Code>
+      <wits:name>Greece</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="304" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GRL</wits:iso3Code>
+      <wits:name>Greenland</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="308" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GRD</wits:iso3Code>
+      <wits:name>Grenada</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="312" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GLP</wits:iso3Code>
+      <wits:name>Guadeloupe</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="316" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GUM</wits:iso3Code>
+      <wits:name>Guam</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="320" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GTM</wits:iso3Code>
+      <wits:name>Guatemala</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="324" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GIN</wits:iso3Code>
+      <wits:name>Guinea</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="624" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GNB</wits:iso3Code>
+      <wits:name>Guinea-Bissau</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="328" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GUY</wits:iso3Code>
+      <wits:name>Guyana</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="332" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>HTI</wits:iso3Code>
+      <wits:name>Haiti</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="334" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>HMD</wits:iso3Code>
+      <wits:name>Heard Island and McDonald Isla</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="336" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>VAT</wits:iso3Code>
+      <wits:name>Holy See</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="340" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>HND</wits:iso3Code>
+      <wits:name>Honduras</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="344" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>HKG</wits:iso3Code>
+      <wits:name>Hong Kong, China</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="348" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>HUN</wits:iso3Code>
+      <wits:name>Hungary</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="352" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ISL</wits:iso3Code>
+      <wits:name>Iceland</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="356" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>IND</wits:iso3Code>
+      <wits:name>India</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="360" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>IDN</wits:iso3Code>
+      <wits:name>Indonesia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="364" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>IRN</wits:iso3Code>
+      <wits:name>Iran, Islamic Rep.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="368" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>IRQ</wits:iso3Code>
+      <wits:name>Iraq</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="372" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>IRL</wits:iso3Code>
+      <wits:name>Ireland</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="376" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ISR</wits:iso3Code>
+      <wits:name>Israel</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="380" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ITA</wits:iso3Code>
+      <wits:name>Italy</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="388" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>JAM</wits:iso3Code>
+      <wits:name>Jamaica</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="392" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>JPN</wits:iso3Code>
+      <wits:name>Japan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="400" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>JOR</wits:iso3Code>
+      <wits:name>Jordan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="398" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>KAZ</wits:iso3Code>
+      <wits:name>Kazakhstan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="404" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>KEN</wits:iso3Code>
+      <wits:name>Kenya</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="296" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>KIR</wits:iso3Code>
+      <wits:name>Kiribati</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="408" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PRK</wits:iso3Code>
+      <wits:name>Korea, Dem. Rep.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="410" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>KOR</wits:iso3Code>
+      <wits:name>Korea, Rep.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="414" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>KWT</wits:iso3Code>
+      <wits:name>Kuwait</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="417" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>KGZ</wits:iso3Code>
+      <wits:name>Kyrgyz Republic</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="418" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LAO</wits:iso3Code>
+      <wits:name>Lao PDR</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="LCN" isreporter="1" ispartner="1" isgroup="Yes" grouptype="Region">
+      <wits:iso3Code>LCN</wits:iso3Code>
+      <wits:name>Latin America &amp; Caribbean</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="428" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LVA</wits:iso3Code>
+      <wits:name>Latvia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="422" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LBN</wits:iso3Code>
+      <wits:name>Lebanon</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="426" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LSO</wits:iso3Code>
+      <wits:name>Lesotho</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="430" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LBR</wits:iso3Code>
+      <wits:name>Liberia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="434" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LBY</wits:iso3Code>
+      <wits:name>Libya</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="440" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LTU</wits:iso3Code>
+      <wits:name>Lithuania</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="442" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LUX</wits:iso3Code>
+      <wits:name>Luxembourg</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="446" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MAC</wits:iso3Code>
+      <wits:name>Macao</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="450" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MDG</wits:iso3Code>
+      <wits:name>Madagascar</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="454" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MWI</wits:iso3Code>
+      <wits:name>Malawi</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="458" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MYS</wits:iso3Code>
+      <wits:name>Malaysia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="462" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MDV</wits:iso3Code>
+      <wits:name>Maldives</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="466" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MLI</wits:iso3Code>
+      <wits:name>Mali</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="470" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MLT</wits:iso3Code>
+      <wits:name>Malta</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="584" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MHL</wits:iso3Code>
+      <wits:name>Marshall Islands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="474" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MTQ</wits:iso3Code>
+      <wits:name>Martinique</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="478" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MRT</wits:iso3Code>
+      <wits:name>Mauritania</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="480" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MUS</wits:iso3Code>
+      <wits:name>Mauritius</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="175" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MYT</wits:iso3Code>
+      <wits:name>Mayotte</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="484" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MEX</wits:iso3Code>
+      <wits:name>Mexico</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="583" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>FSM</wits:iso3Code>
+      <wits:name>Micronesia, Fed. Sts.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="MEA" isreporter="1" ispartner="1" isgroup="Yes" grouptype="Region">
+      <wits:iso3Code>MEA</wits:iso3Code>
+      <wits:name>Middle East, North Africa, Afghanistan &amp; Pakistan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="498" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MDA</wits:iso3Code>
+      <wits:name>Moldova</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="492" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MCO</wits:iso3Code>
+      <wits:name>Monaco</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="496" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MNG</wits:iso3Code>
+      <wits:name>Mongolia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="499" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MNT</wits:iso3Code>
+      <wits:name>Montenegro</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="500" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MSR</wits:iso3Code>
+      <wits:name>Montserrat</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="504" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MAR</wits:iso3Code>
+      <wits:name>Morocco</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="508" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MOZ</wits:iso3Code>
+      <wits:name>Mozambique</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="104" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MMR</wits:iso3Code>
+      <wits:name>Myanmar</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="516" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NAM</wits:iso3Code>
+      <wits:name>Namibia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="520" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NRU</wits:iso3Code>
+      <wits:name>Nauru</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="524" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NPL</wits:iso3Code>
+      <wits:name>Nepal</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="528" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NLD</wits:iso3Code>
+      <wits:name>Netherlands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="530" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ANT</wits:iso3Code>
+      <wits:name>Netherlands Antilles</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="536" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NZE</wits:iso3Code>
+      <wits:name>Neutral Zone</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="540" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NCL</wits:iso3Code>
+      <wits:name>New Caledonia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="554" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NZL</wits:iso3Code>
+      <wits:name>New Zealand</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="558" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NIC</wits:iso3Code>
+      <wits:name>Nicaragua</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="562" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NER</wits:iso3Code>
+      <wits:name>Niger</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="566" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NGA</wits:iso3Code>
+      <wits:name>Nigeria</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="570" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NIU</wits:iso3Code>
+      <wits:name>Niue</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="574" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NFK</wits:iso3Code>
+      <wits:name>Norfolk Island</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="NAC" isreporter="1" ispartner="1" isgroup="Yes" grouptype="Region">
+      <wits:iso3Code>NAC</wits:iso3Code>
+      <wits:name>North America</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="807" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MKD</wits:iso3Code>
+      <wits:name>North Macedonia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="580" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>MNP</wits:iso3Code>
+      <wits:name>Northern Mariana Islands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="578" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>NOR</wits:iso3Code>
+      <wits:name>Norway</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="999" isreporter="0" ispartner="1" isgroup="N/A" grouptype="N/A">
+      <wits:iso3Code>999</wits:iso3Code>
+      <wits:name>Not Applicable</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="275" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PSE</wits:iso3Code>
+      <wits:name>Occ.Pal.Terr</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="512" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>OMN</wits:iso3Code>
+      <wits:name>Oman</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="490" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>OAS</wits:iso3Code>
+      <wits:name>Other Asia, nes</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="582" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PCE</wits:iso3Code>
+      <wits:name>Pacific Islands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="586" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PAK</wits:iso3Code>
+      <wits:name>Pakistan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="585" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PLW</wits:iso3Code>
+      <wits:name>Palau</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="591" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PAN</wits:iso3Code>
+      <wits:name>Panama</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="598" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PNG</wits:iso3Code>
+      <wits:name>Papua New Guinea</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="600" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PRY</wits:iso3Code>
+      <wits:name>Paraguay</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="604" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PER</wits:iso3Code>
+      <wits:name>Peru</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="608" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PHL</wits:iso3Code>
+      <wits:name>Philippines</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="612" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PCN</wits:iso3Code>
+      <wits:name>Pitcairn</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="616" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>POL</wits:iso3Code>
+      <wits:name>Poland</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="620" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>PRT</wits:iso3Code>
+      <wits:name>Portugal</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="634" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>QAT</wits:iso3Code>
+      <wits:name>Qatar</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="638" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>REU</wits:iso3Code>
+      <wits:name>Reunion</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="642" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ROM</wits:iso3Code>
+      <wits:name>Romania</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="643" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>RUS</wits:iso3Code>
+      <wits:name>Russian Federation</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="646" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>RWA</wits:iso3Code>
+      <wits:name>Rwanda</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="652" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>BLM</wits:iso3Code>
+      <wits:name>Saint Barthélemy</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="654" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SHN</wits:iso3Code>
+      <wits:name>Saint Helena</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="534" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SXM</wits:iso3Code>
+      <wits:name>Saint Maarten (Dutch part)</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="666" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SPM</wits:iso3Code>
+      <wits:name>Saint Pierre and Miquelon</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="882" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>WSM</wits:iso3Code>
+      <wits:name>Samoa</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="674" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SMR</wits:iso3Code>
+      <wits:name>San Marino</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="678" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>STP</wits:iso3Code>
+      <wits:name>Sao Tome and Principe</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="682" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SAU</wits:iso3Code>
+      <wits:name>Saudi Arabia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="686" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SEN</wits:iso3Code>
+      <wits:name>Senegal</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="891" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SER</wits:iso3Code>
+      <wits:name>Serbia, FR(Serbia/Montenegro)</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="690" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SYC</wits:iso3Code>
+      <wits:name>Seychelles</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="694" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SLE</wits:iso3Code>
+      <wits:name>Sierra Leone</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="702" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SGP</wits:iso3Code>
+      <wits:name>Singapore</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="703" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SVK</wits:iso3Code>
+      <wits:name>Slovak Republic</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="705" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SVN</wits:iso3Code>
+      <wits:name>Slovenia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="090" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SLB</wits:iso3Code>
+      <wits:name>Solomon Islands</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="706" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SOM</wits:iso3Code>
+      <wits:name>Somalia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="710" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ZAF</wits:iso3Code>
+      <wits:name>South Africa</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="SAS" isreporter="1" ispartner="1" isgroup="Yes" grouptype="Region">
+      <wits:iso3Code>SAS</wits:iso3Code>
+      <wits:name>South Asia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="239" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SGS</wits:iso3Code>
+      <wits:name>South Georgia and the South Sa</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="728" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SSD</wits:iso3Code>
+      <wits:name>South Sudan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="810" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SVU</wits:iso3Code>
+      <wits:name>Soviet Union</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="724" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ESP</wits:iso3Code>
+      <wits:name>Spain</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="839" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SPE</wits:iso3Code>
+      <wits:name>Special Categories</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="144" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LKA</wits:iso3Code>
+      <wits:name>Sri Lanka</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="659" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>KNA</wits:iso3Code>
+      <wits:name>St. Kitts and Nevis</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="662" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>LCA</wits:iso3Code>
+      <wits:name>St. Lucia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="670" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>VCT</wits:iso3Code>
+      <wits:name>St. Vincent and the Grenadines</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="SSF" isreporter="1" ispartner="1" isgroup="Yes" grouptype="Region">
+      <wits:iso3Code>SSF</wits:iso3Code>
+      <wits:name>Sub-Saharan Africa</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="729" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SUD</wits:iso3Code>
+      <wits:name>Sudan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="740" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SUR</wits:iso3Code>
+      <wits:name>Suriname</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="752" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SWE</wits:iso3Code>
+      <wits:name>Sweden</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="756" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>CHE</wits:iso3Code>
+      <wits:name>Switzerland</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="760" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>SYR</wits:iso3Code>
+      <wits:name>Syrian Arab Republic</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="762" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TJK</wits:iso3Code>
+      <wits:name>Tajikistan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="834" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TZA</wits:iso3Code>
+      <wits:name>Tanzania</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="764" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>THA</wits:iso3Code>
+      <wits:name>Thailand</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="768" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TGO</wits:iso3Code>
+      <wits:name>Togo</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="772" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TKL</wits:iso3Code>
+      <wits:name>Tokelau</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="776" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TON</wits:iso3Code>
+      <wits:name>Tonga</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="780" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TTO</wits:iso3Code>
+      <wits:name>Trinidad and Tobago</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="788" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TUN</wits:iso3Code>
+      <wits:name>Tunisia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="792" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TUR</wits:iso3Code>
+      <wits:name>Turkey</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="795" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TKM</wits:iso3Code>
+      <wits:name>Turkmenistan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="796" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TCA</wits:iso3Code>
+      <wits:name>Turks and Caicos Isl.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="798" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>TUV</wits:iso3Code>
+      <wits:name>Tuvalu</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="800" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>UGA</wits:iso3Code>
+      <wits:name>Uganda</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="804" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>UKR</wits:iso3Code>
+      <wits:name>Ukraine</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="784" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ARE</wits:iso3Code>
+      <wits:name>United Arab Emirates</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="826" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>GBR</wits:iso3Code>
+      <wits:name>United Kingdom</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="840" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>USA</wits:iso3Code>
+      <wits:name>United States</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="581" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>UMI</wits:iso3Code>
+      <wits:name>United States Minor Outlying I</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="898" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>UNS</wits:iso3Code>
+      <wits:name>Unspecified</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="858" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>URY</wits:iso3Code>
+      <wits:name>Uruguay</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="849" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>USP</wits:iso3Code>
+      <wits:name>Us Msc.Pac.I</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="860" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>UZB</wits:iso3Code>
+      <wits:name>Uzbekistan</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="548" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>VUT</wits:iso3Code>
+      <wits:name>Vanuatu</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="862" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>VEN</wits:iso3Code>
+      <wits:name>Venezuela</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="704" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>VNM</wits:iso3Code>
+      <wits:name>Vietnam</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="876" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>WLF</wits:iso3Code>
+      <wits:name>Wallis and Futura Isl.</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="732" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ESH</wits:iso3Code>
+      <wits:name>Western Sahara</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="000" isreporter="1" ispartner="1" isgroup="Yes" grouptype="Region">
+      <wits:iso3Code>WLD</wits:iso3Code>
+      <wits:name>World</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="887" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>YEM</wits:iso3Code>
+      <wits:name>Yemen</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="720" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>YDR</wits:iso3Code>
+      <wits:name>Yemen Democratic</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="890" isreporter="0" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>YUG</wits:iso3Code>
+      <wits:name>Yugoslavia,FR(Serbia/Montenegr</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="894" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ZMB</wits:iso3Code>
+      <wits:name>Zambia</wits:name>
+      <wits:notes />
+    </wits:country>
+    <wits:country countrycode="716" isreporter="1" ispartner="1" isgroup="No" grouptype="N/A">
+      <wits:iso3Code>ZWE</wits:iso3Code>
+      <wits:name>Zimbabwe</wits:name>
+      <wits:notes />
+    </wits:country>
+  </wits:countries>
+</wits:datasource>

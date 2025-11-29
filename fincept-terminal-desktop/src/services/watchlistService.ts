@@ -234,7 +234,7 @@ class WatchlistService {
   }
 
   /**
-   * Get watchlist stocks with live market quotes
+   * Get watchlist stocks with live market quotes (with 10-min cache)
    */
   async getWatchlistStocksWithQuotes(watchlistId: string): Promise<WatchlistStockWithQuote[]> {
     this.ensureInitialized();
@@ -245,9 +245,13 @@ class WatchlistService {
       return [];
     }
 
-    // Fetch quotes for all symbols
+    // Fetch quotes for all symbols using cached method (10-minute cache)
     const symbols = stocks.map(s => s.symbol);
-    const quotes = await marketDataService.getQuotes(symbols);
+    const quotes = await marketDataService.getEnhancedQuotesWithCache(
+      symbols,
+      `watchlist_${watchlistId}`,
+      10 // 10-minute cache
+    );
 
     // Map quotes to stocks
     const quoteMap = new Map<string, QuoteData>();
@@ -305,7 +309,7 @@ class WatchlistService {
   // ==================== MARKET DATA HELPERS ====================
 
   /**
-   * Get market movers (top gainers and losers) from all watchlists
+   * Get market movers (top gainers and losers) from all watchlists (with 10-min cache)
    */
   async getMarketMovers(limit: number = 5): Promise<{
     gainers: WatchlistStockWithQuote[];
@@ -323,7 +327,11 @@ class WatchlistService {
     }
 
     const symbols = allStocks.map(s => s.symbol);
-    const quotes = await marketDataService.getQuotes(symbols);
+    const quotes = await marketDataService.getEnhancedQuotesWithCache(
+      symbols,
+      'market_movers',
+      10 // 10-minute cache
+    );
 
     // Sort by change percent
     const sortedQuotes = quotes.sort((a, b) => b.change_percent - a.change_percent);
@@ -348,7 +356,7 @@ class WatchlistService {
   }
 
   /**
-   * Get volume leaders from all watchlists
+   * Get volume leaders from all watchlists (with 10-min cache)
    */
   async getVolumeLeaders(limit: number = 5): Promise<WatchlistStockWithQuote[]> {
     this.ensureInitialized();
@@ -362,7 +370,11 @@ class WatchlistService {
     }
 
     const symbols = allStocks.map(s => s.symbol);
-    const quotes = await marketDataService.getQuotes(symbols);
+    const quotes = await marketDataService.getEnhancedQuotesWithCache(
+      symbols,
+      'volume_leaders',
+      10 // 10-minute cache
+    );
 
     // Sort by volume
     const sortedQuotes = quotes

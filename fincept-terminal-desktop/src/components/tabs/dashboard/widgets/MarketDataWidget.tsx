@@ -28,7 +28,12 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const data = await marketDataService.getQuotes(tickers);
+      // Use cached quotes with 10 minute cache age (matches refresh interval)
+      const data = await marketDataService.getEnhancedQuotesWithCache(
+        tickers,
+        category,
+        10 // 10 minutes cache
+      );
       setQuotes(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load market data');

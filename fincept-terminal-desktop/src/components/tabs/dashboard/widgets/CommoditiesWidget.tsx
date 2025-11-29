@@ -35,7 +35,7 @@ export const CommoditiesWidget: React.FC<CommoditiesWidgetProps> = ({ id, onRemo
     setLoading(true);
     setError(null);
     try {
-      const data = await marketDataService.getQuotes(TOP_COMMODITIES);
+      const data = await marketDataService.getEnhancedQuotesWithCache(TOP_COMMODITIES, 'Commodities', 10);
       setQuotes(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load commodities data');

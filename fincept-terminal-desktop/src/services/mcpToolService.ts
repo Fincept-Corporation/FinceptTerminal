@@ -47,7 +47,6 @@ class MCPToolService {
 
       // Return cached tools if still valid
       if (this.toolCache.length > 0 && (now - this.cacheTimestamp) < this.cacheTTL) {
-        console.log('[MCPToolService] Returning cached tools:', this.toolCache.length);
         return this.toolCache;
       }
 
@@ -56,7 +55,10 @@ class MCPToolService {
       this.toolCache = tools;
       this.cacheTimestamp = now;
 
-      console.log('[MCPToolService] Fetched fresh tools:', tools.length);
+      // Only log when tools are actually available or when count changes
+      if (tools.length > 0 && tools.length !== this.toolCache.length) {
+        console.log('[MCPToolService] Tools updated:', tools.length);
+      }
       return tools;
     } catch (error) {
       console.error('[MCPToolService] Error fetching tools:', error);
@@ -77,8 +79,6 @@ class MCPToolService {
     const startTime = Date.now();
 
     try {
-      console.log(`[MCPToolService] Executing tool directly: ${serverId}.${toolName}`, params);
-
       // Validate tool exists
       const tools = await this.getAllTools();
       const tool = tools.find(t => t.serverId === serverId && t.name === toolName);
@@ -106,8 +106,6 @@ class MCPToolService {
       // Execute tool
       const result = await mcpManager.callTool(serverId, toolName, params);
       const executionTime = Date.now() - startTime;
-
-      console.log(`[MCPToolService] Tool executed successfully in ${executionTime}ms`);
 
       return {
         success: true,
@@ -293,7 +291,6 @@ class MCPToolService {
    * Clear tool cache (useful when servers are added/removed)
    */
   clearCache(): void {
-    console.log('[MCPToolService] Clearing tool cache');
     this.toolCache = [];
     this.cacheTimestamp = 0;
   }

@@ -4,7 +4,9 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { marketDataService, QuoteData } from '../../services/marketDataService';
 import { tickerStorage } from '../../services/tickerStorageService';
 import { sqliteService } from '../../services/sqliteService';
+import { contextRecorderService } from '../../services/contextRecorderService';
 import TickerEditModal from './TickerEditModal';
+import RecordingControlPanel from '../common/RecordingControlPanel';
 
 const MarketsTab: React.FC = () => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
@@ -23,9 +25,36 @@ const MarketsTab: React.FC = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<string>('');
   const [editingTickers, setEditingTickers] = useState<string[]>([]);
+  const [editingType, setEditingType] = useState<'global' | 'regional'>('global');
 
   // User preferences
   const [preferences, setPreferences] = useState(tickerStorage.loadPreferences());
+  const [isRecording, setIsRecording] = useState(false);
+
+  // Function to record current market data
+  const recordCurrentData = async () => {
+    if (Object.keys(marketData).length > 0 || Object.keys(regionalData).length > 0) {
+      try {
+        const allData = {
+          globalMarkets: marketData,
+          regionalMarkets: regionalData,
+          timestamp: new Date().toISOString(),
+          updateInterval: updateInterval
+        };
+        console.log('[MarketsTab] Recording current data:', allData);
+        await contextRecorderService.recordApiResponse(
+          'Markets',
+          'market-data',
+          allData,
+          `Market Data (Snapshot) - ${new Date().toLocaleString()}`,
+          ['markets', 'quotes', 'snapshot']
+        );
+        console.log('[MarketsTab] Current data recorded successfully');
+      } catch (error) {
+        console.error('[MarketsTab] Failed to record current data:', error);
+      }
+    }
+  };
 
   // Fetch market data progressively (display as data arrives)
   const fetchMarketData = async () => {
@@ -34,15 +63,24 @@ const MarketsTab: React.FC = () => {
     // Calculate cache age in minutes (10 minutes by default from updateInterval)
     const cacheAgeMinutes = updateInterval / 60000;
 
-    // Create an array to track completion
+    // Create an array to track completion and capture data
     const allFetches: Promise<void>[] = [];
+    const capturedGlobalData: Record<string, QuoteData[]> = {};
+    const capturedRegionalData: Record<string, QuoteData[]> = {};
 
     // Fetch global markets progressively - each updates immediately
     preferences.globalMarkets.forEach((market) => {
       const fetchPromise = (async () => {
         try {
-          // Get just quotes without period returns for faster initial load
-          const quotes = await marketDataService.getQuotes(market.tickers);
+          // Use cached quotes with enhanced data (7D/30D returns)
+          const quotes = await marketDataService.getEnhancedQuotesWithCache(
+            market.tickers,
+            market.category,
+            cacheAgeMinutes
+          );
+
+          // Capture data for recording
+          capturedGlobalData[market.category] = quotes;
 
           // Update state immediately as data arrives
           setMarketData(prev => ({
@@ -61,8 +99,15 @@ const MarketsTab: React.FC = () => {
       const fetchPromise = (async () => {
         try {
           const symbols = market.tickers.map(t => t.symbol);
-          // Get just quotes without period returns for faster initial load
-          const quotes = await marketDataService.getQuotes(symbols);
+          // Use cached quotes with enhanced data (7D/30D returns)
+          const quotes = await marketDataService.getEnhancedQuotesWithCache(
+            symbols,
+            market.region,
+            cacheAgeMinutes
+          );
+
+          // Capture data for recording
+          capturedRegionalData[market.region] = quotes;
 
           // Update state immediately as data arrives
           setRegionalData(prev => ({
@@ -80,6 +125,29 @@ const MarketsTab: React.FC = () => {
     await Promise.all(allFetches);
     setLastUpdate(new Date());
     setIsUpdating(false);
+
+    // Record data if recording is active (use captured data, not state)
+    if (isRecording) {
+      try {
+        const allData = {
+          globalMarkets: capturedGlobalData,
+          regionalMarkets: capturedRegionalData,
+          timestamp: new Date().toISOString(),
+          updateInterval: updateInterval
+        };
+        console.log('[MarketsTab] Recording data:', allData);
+        await contextRecorderService.recordApiResponse(
+          'Markets',
+          'market-data',
+          allData,
+          `Market Data - ${new Date().toLocaleString()}`,
+          ['markets', 'quotes', 'live-data']
+        );
+        console.log('[MarketsTab] Data recorded successfully');
+      } catch (error) {
+        console.error('[MarketsTab] Failed to record data:', error);
+      }
+    }
   };
 
   // Initialize database on mount
@@ -118,17 +186,37 @@ const MarketsTab: React.FC = () => {
     return () => clearInterval(timer);
   }, [autoUpdate, updateInterval, preferences]);
 
-  // Open edit modal
+  // Open edit modal for global markets
   const openEditModal = (category: string) => {
     const tickers = tickerStorage.getCategoryTickers(category);
     setEditingCategory(category);
     setEditingTickers(tickers);
+    setEditingType('global');
+    setEditModalOpen(true);
+  };
+
+  // Open edit modal for regional markets
+  const openRegionalEditModal = (region: string) => {
+    const regionalTickers = tickerStorage.getRegionalTickers(region);
+    const symbols = regionalTickers.map(t => t.symbol);
+    setEditingCategory(region);
+    setEditingTickers(symbols);
+    setEditingType('regional');
     setEditModalOpen(true);
   };
 
   // Save edited tickers
   const handleSaveTickers = (tickers: string[]) => {
-    tickerStorage.updateCategoryTickers(editingCategory, tickers);
+    if (editingType === 'global') {
+      tickerStorage.updateCategoryTickers(editingCategory, tickers);
+    } else {
+      // For regional markets, convert back to {symbol, name} format
+      const tickersWithNames = tickers.map(symbol => ({
+        symbol,
+        name: symbol // Use symbol as name for new tickers, actual names will be fetched from API
+      }));
+      tickerStorage.updateRegionalTickers(editingCategory, tickersWithNames);
+    }
     setPreferences(tickerStorage.loadPreferences());
     fetchMarketData(); // Refresh data
   };
@@ -257,7 +345,7 @@ const MarketsTab: React.FC = () => {
         display: 'flex',
         flexDirection: 'column'
       }}>
-        {/* Panel Header */}
+        {/* Panel Header with Edit Icon */}
         <div style={{
           backgroundColor: colors.background,
           color: colors.primary,
@@ -265,9 +353,18 @@ const MarketsTab: React.FC = () => {
           fontSize: fontSize.subheading,
           fontWeight: 'bold',
           textAlign: 'center',
-          borderBottom: `1px solid ${colors.textMuted}`
+          borderBottom: `1px solid ${colors.textMuted}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
         }}>
           {title.toUpperCase()} - LIVE DATA
+          <Edit2
+            size={14}
+            style={{ cursor: 'pointer', color: colors.text }}
+            onClick={() => openRegionalEditModal(title)}
+          />
         </div>
 
         {/* Table Header */}
@@ -390,6 +487,7 @@ const MarketsTab: React.FC = () => {
       <div style={{
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
         flexWrap: 'wrap',
         padding: '8px 12px',
         backgroundColor: colors.panel,
@@ -398,61 +496,68 @@ const MarketsTab: React.FC = () => {
         gap: '8px',
         flexShrink: 0
       }}>
-        <button
-          onClick={fetchMarketData}
-          style={{
-            backgroundColor: colors.primary,
-            color: 'black',
-            border: 'none',
-            padding: '4px 12px',
-            fontSize: '11px',
-            fontWeight: 'bold',
-            cursor: 'pointer'
-          }}
-        >
-          REFRESH
-        </button>
-        <button
-          onClick={() => setAutoUpdate(!autoUpdate)}
-          style={{
-            backgroundColor: autoUpdate ? colors.secondary : colors.textMuted,
-            color: 'black',
-            border: 'none',
-            padding: '4px 12px',
-            fontSize: '11px',
-            fontWeight: 'bold',
-            cursor: 'pointer'
-          }}
-        >
-          AUTO {autoUpdate ? 'ON' : 'OFF'}
-        </button>
-        <select
-          value={updateInterval}
-          onChange={(e) => setUpdateInterval(Number(e.target.value))}
-          style={{
-            backgroundColor: colors.background,
-            border: `1px solid ${colors.textMuted}`,
-            color: colors.text,
-            padding: '4px 8px',
-            fontSize: '11px',
-            cursor: 'pointer'
-          }}
-        >
-          <option value={600000}>10 min</option>
-          <option value={900000}>15 min</option>
-          <option value={1800000}>30 min</option>
-          <option value={3600000}>1 hour</option>
-        </select>
-        <span style={{ color: colors.textMuted }}>|</span>
-        <span style={{ color: colors.textMuted, fontSize: '11px' }}>LAST UPDATE:</span>
-        <span style={{ color: colors.text, fontSize: '11px' }}>
-          {lastUpdate.toTimeString().substring(0, 8)}
-        </span>
-        <span style={{ color: colors.textMuted }}>|</span>
-        <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '14px' }}>●</span>
-        <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '11px', fontWeight: 'bold' }}>
-          {isUpdating ? 'UPDATING' : 'LIVE'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            onClick={fetchMarketData}
+            style={{
+              backgroundColor: colors.primary,
+              color: 'black',
+              border: 'none',
+              padding: '4px 12px',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            REFRESH
+          </button>
+          <button
+            onClick={() => setAutoUpdate(!autoUpdate)}
+            style={{
+              backgroundColor: autoUpdate ? colors.secondary : colors.textMuted,
+              color: 'black',
+              border: 'none',
+              padding: '4px 12px',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            AUTO {autoUpdate ? 'ON' : 'OFF'}
+          </button>
+          <select
+            value={updateInterval}
+            onChange={(e) => setUpdateInterval(Number(e.target.value))}
+            style={{
+              backgroundColor: colors.background,
+              border: `1px solid ${colors.textMuted}`,
+              color: colors.text,
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer'
+            }}
+          >
+            <option value={600000}>10 min</option>
+            <option value={900000}>15 min</option>
+            <option value={1800000}>30 min</option>
+            <option value={3600000}>1 hour</option>
+          </select>
+          <span style={{ color: colors.textMuted }}>|</span>
+          <span style={{ color: colors.textMuted, fontSize: '11px' }}>LAST UPDATE:</span>
+          <span style={{ color: colors.text, fontSize: '11px' }}>
+            {lastUpdate.toTimeString().substring(0, 8)}
+          </span>
+          <span style={{ color: colors.textMuted }}>|</span>
+          <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '14px' }}>●</span>
+          <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '11px', fontWeight: 'bold' }}>
+            {isUpdating ? 'UPDATING' : 'LIVE'}
+          </span>
+        </div>
+        <RecordingControlPanel
+          tabName="Markets"
+          onRecordingChange={setIsRecording}
+          onRecordingStart={recordCurrentData}
+        />
       </div>
 
       {/* Main Content */}

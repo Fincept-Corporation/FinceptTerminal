@@ -159,7 +159,7 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
-      const result = await sqliteService.select<{ config_json: string }>(
+      const result = await sqliteService.select<{ config_json: string }[]>(
         'SELECT config_json FROM data_mappings WHERE id = ?',
         [id]
       );
@@ -230,7 +230,7 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
-      const results = await sqliteService.select<{ config_json: string }>(
+      const results = await sqliteService.select<{ config_json: string }[]>(
         'SELECT config_json FROM data_mappings ORDER BY updated_at DESC'
       );
 
@@ -279,7 +279,7 @@ export class MappingDatabase {
       const paramsHash = this.hashParams(params);
       const cacheKey = `${mappingId}_${paramsHash}`;
 
-      const result = await sqliteService.select<{ response_json: string; expires_at: string }>(
+      const result = await sqliteService.select<{ response_json: string; expires_at: string }[]>(
         `SELECT response_json, expires_at FROM mapping_cache
          WHERE cache_key = ? AND expires_at > datetime('now')`,
         [cacheKey]
@@ -369,7 +369,7 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
-      const result = await sqliteService.select<{ value: string }>(
+      const result = await sqliteService.select<{ value: string }[]>(
         'SELECT value FROM mapping_preferences WHERE key = ?',
         [key]
       );
@@ -393,6 +393,28 @@ export class MappingDatabase {
       console.error('Failed to set preference:', error);
       throw error;
     }
+  }
+
+  /**
+   * Duplicate mapping
+   */
+  async duplicateMapping(id: string): Promise<DataMappingConfig | null> {
+    const original = await this.getMapping(id);
+    if (!original) return null;
+
+    const duplicate: DataMappingConfig = {
+      ...original,
+      id: `map_${Date.now()}`,
+      name: `${original.name} (Copy)`,
+      metadata: {
+        ...original.metadata,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    };
+
+    await this.saveMapping(duplicate);
+    return duplicate;
   }
 
   /**

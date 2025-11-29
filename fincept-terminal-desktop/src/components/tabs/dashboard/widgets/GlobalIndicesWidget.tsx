@@ -53,7 +53,7 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
     setLoading(true);
     setError(null);
     try {
-      const data = await marketDataService.getQuotes(TOP_12_INDICES);
+      const data = await marketDataService.getEnhancedQuotesWithCache(TOP_12_INDICES, 'Indices', 10);
       setQuotes(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load indices data');

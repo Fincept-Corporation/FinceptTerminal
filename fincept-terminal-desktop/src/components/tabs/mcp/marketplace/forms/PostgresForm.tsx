@@ -31,8 +31,8 @@ const PostgresForm: React.FC<PostgresFormProps> = ({ onSubmit, onCancel }) => {
   const handleSubmit = () => {
     const dbUrl = buildPostgresUrl();
     onSubmit({
-      args: [dbUrl],
-      env: {}
+      args: [],  // Connection string passed via env var, not CLI arg
+      env: { DATABASE_URL: dbUrl }
     });
   };
 

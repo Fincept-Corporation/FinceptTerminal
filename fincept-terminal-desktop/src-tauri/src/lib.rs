@@ -377,10 +377,6 @@ fn execute_python_script(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize DuckDB connection
-    let duckdb_state = commands::duckdb::DuckDBState::new("fincept_terminal.duckdb")
-        .expect("Failed to initialize DuckDB");
-
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
@@ -392,7 +388,6 @@ pub fn run() {
         .manage(MCPState {
             processes: Mutex::new(HashMap::new()),
         })
-        .manage(duckdb_state)
         .invoke_handler(tauri::generate_handler![
             greet,
             cleanup_running_workflows,
@@ -752,6 +747,8 @@ pub fn run() {
             commands::bea::bea_get_regional_snapshot,
             // WTO (World Trade Organization) Commands
             commands::wto::execute_wto_command,
+            // WITS (World Integrated Trade Solution) Commands
+            commands::wits::execute_wits_command,
             commands::wto::get_wto_available_apis,
             commands::wto::get_wto_overview,
             commands::wto::get_wto_qr_members,
@@ -949,13 +946,113 @@ pub fn run() {
             commands::portfolio::calculate_retirement_plan,
             commands::portfolio::analyze_behavioral_biases,
             commands::portfolio::analyze_etf_costs,
-            // DuckDB Commands
-            commands::duckdb::duckdb_query,
-            commands::duckdb::duckdb_execute,
-            commands::duckdb::duckdb_execute_batch,
-            commands::duckdb::duckdb_get_tables,
-            commands::duckdb::duckdb_get_table_info,
-            commands::duckdb::duckdb_test_connection
+            // Technical Analysis Commands
+            commands::technical_analysis::execute_technical_analysis_command,
+            commands::technical_analysis::get_technical_analysis_help,
+            commands::technical_analysis::calculate_indicators_yfinance,
+            commands::technical_analysis::calculate_indicators_csv,
+            commands::technical_analysis::calculate_indicators_json,
+            // FiscalData Commands
+            commands::fiscaldata::execute_fiscaldata_command,
+            commands::fiscaldata::get_fiscaldata_debt_to_penny,
+            commands::fiscaldata::get_fiscaldata_avg_interest_rates,
+            commands::fiscaldata::get_fiscaldata_interest_expense,
+            commands::fiscaldata::get_fiscaldata_datasets,
+            // NASA GIBS Commands
+            commands::nasa_gibs::execute_nasa_gibs_command,
+            commands::nasa_gibs::get_nasa_gibs_layers,
+            commands::nasa_gibs::get_nasa_gibs_layer_details,
+            commands::nasa_gibs::search_nasa_gibs_layers,
+            commands::nasa_gibs::get_nasa_gibs_time_periods,
+            commands::nasa_gibs::get_nasa_gibs_tile,
+            commands::nasa_gibs::get_nasa_gibs_tile_batch,
+            commands::nasa_gibs::get_nasa_gibs_popular_layers,
+            commands::nasa_gibs::get_nasa_gibs_supported_projections,
+            commands::nasa_gibs::test_nasa_gibs_all_endpoints,
+            // Universal CKAN Commands
+            commands::ckan::execute_ckan_command,
+            commands::ckan::get_ckan_supported_countries,
+            commands::ckan::test_ckan_portal_connection,
+            commands::ckan::list_ckan_organizations,
+            commands::ckan::get_ckan_organization_details,
+            commands::ckan::list_ckan_datasets,
+            commands::ckan::search_ckan_datasets,
+            commands::ckan::get_ckan_dataset_details,
+            commands::ckan::get_ckan_datasets_by_organization,
+            commands::ckan::get_ckan_dataset_resources,
+            commands::ckan::get_ckan_resource_details,
+            // Analytics Commands
+            commands::analytics::execute_technical_indicators,
+            commands::analytics::execute_pyportfolioopt,
+            commands::analytics::execute_riskfolio,
+            commands::analytics::execute_skfolio,
+            commands::analytics::analyze_digital_assets,
+            commands::analytics::analyze_hedge_funds,
+            commands::analytics::analyze_real_estate,
+            commands::analytics::analyze_private_capital,
+            commands::analytics::analyze_natural_resources,
+            commands::analytics::price_options,
+            commands::analytics::analyze_arbitrage,
+            commands::analytics::analyze_forward_commitments,
+            commands::analytics::analyze_currency,
+            commands::analytics::analyze_growth,
+            commands::analytics::analyze_policy,
+            commands::analytics::analyze_market_cycles,
+            commands::analytics::analyze_trade_geopolitics,
+            commands::analytics::analyze_capital_flows,
+            commands::analytics::calculate_dcf_valuation,
+            commands::analytics::calculate_dividend_valuation,
+            commands::analytics::calculate_multiples_valuation,
+            commands::analytics::analyze_fundamental,
+            commands::analytics::analyze_industry,
+            commands::analytics::forecast_financials,
+            commands::analytics::analyze_market_efficiency,
+            commands::analytics::analyze_index,
+            commands::analytics::analyze_portfolio_risk,
+            commands::analytics::analyze_portfolio_performance,
+            commands::analytics::optimize_portfolio_management,
+            commands::analytics::plan_portfolio,
+            commands::analytics::analyze_active_management,
+            commands::analytics::analyze_behavioral_finance,
+            commands::analytics::analyze_etf,
+            commands::analytics::calculate_quant_metrics,
+            commands::analytics::calculate_rates,
+            // AI Agent Commands
+            commands::ai_agents::execute_economic_agent,
+            commands::ai_agents::run_capitalism_agent,
+            commands::ai_agents::run_keynesian_agent,
+            commands::ai_agents::run_neoliberal_agent,
+            commands::ai_agents::run_socialism_agent,
+            commands::ai_agents::run_mercantilist_agent,
+            commands::ai_agents::run_mixed_economy_agent,
+            commands::ai_agents::execute_geopolitics_agent,
+            commands::ai_agents::run_eurasian_chessboard_agent,
+            commands::ai_agents::run_geostrategic_players_agent,
+            commands::ai_agents::run_eurasian_balkans_agent,
+            commands::ai_agents::run_geography_agent,
+            commands::ai_agents::run_world_order_agent,
+            commands::ai_agents::run_westphalian_europe_agent,
+            commands::ai_agents::run_balance_power_agent,
+            commands::ai_agents::execute_hedge_fund_agent,
+            commands::ai_agents::run_bridgewater_agent,
+            commands::ai_agents::run_citadel_agent,
+            commands::ai_agents::run_renaissance_agent,
+            commands::ai_agents::run_de_shaw_agent,
+            commands::ai_agents::run_two_sigma_agent,
+            commands::ai_agents::run_elliott_management_agent,
+            commands::ai_agents::run_fincept_hedge_fund_orchestrator,
+            commands::ai_agents::run_warren_buffett_agent,
+            commands::ai_agents::run_benjamin_graham_agent,
+            commands::ai_agents::run_charlie_munger_agent,
+            commands::ai_agents::run_seth_klarman_agent,
+            commands::ai_agents::run_howard_marks_agent,
+            commands::ai_agents::run_joel_greenblatt_agent,
+            commands::ai_agents::run_david_einhorn_agent,
+            commands::ai_agents::run_bill_miller_agent,
+            // Report Generator Commands
+            commands::report_generator::generate_report_html,
+            commands::report_generator::generate_report_pdf,
+            commands::report_generator::create_default_report_template
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

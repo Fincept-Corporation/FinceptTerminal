@@ -5,11 +5,13 @@ import {
   Watchlist,
   WatchlistStockWithQuote
 } from '../../services/watchlistService';
+import { contextRecorderService } from '../../services/contextRecorderService';
 import WatchlistSidebar from './watchlist/WatchlistSidebar';
 import StockListView from './watchlist/StockListView';
 import StockDetailPanel from './watchlist/StockDetailPanel';
 import CreateWatchlistModal from './watchlist/CreateWatchlistModal';
 import AddStockModal from './watchlist/AddStockModal';
+import RecordingControlPanel from '../common/RecordingControlPanel';
 import { getBloombergColors, SortCriteria, sortStocks, getNextWatchlistColor } from './watchlist/utils';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 
@@ -30,6 +32,38 @@ const WatchlistTab: React.FC = () => {
   // Modal states
   const [showCreateWatchlist, setShowCreateWatchlist] = useState(false);
   const [showAddStock, setShowAddStock] = useState(false);
+
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+
+  // Function to record current watchlist data
+  const recordCurrentData = async () => {
+    if (selectedWatchlist && stocks.length > 0) {
+      try {
+        const recordData = {
+          watchlistId: selectedWatchlist.id,
+          watchlistName: selectedWatchlist.name,
+          stocks: stocks.map(s => ({
+            symbol: s.symbol,
+            quote: s.quote,
+            notes: s.notes
+          })),
+          timestamp: new Date().toISOString()
+        };
+        console.log('[WatchlistTab] Recording current data:', recordData);
+        await contextRecorderService.recordApiResponse(
+          'Watchlist',
+          'watchlist-stocks',
+          recordData,
+          `Watchlist (Snapshot): ${selectedWatchlist.name} - ${new Date().toLocaleString()}`,
+          ['watchlist', 'stocks', 'snapshot']
+        );
+        console.log('[WatchlistTab] Current data recorded successfully');
+      } catch (error) {
+        console.error('[WatchlistTab] Failed to record current data:', error);
+      }
+    }
+  };
 
   // Market data
   const [marketMovers, setMarketMovers] = useState<{
@@ -64,12 +98,12 @@ const WatchlistTab: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-refresh data
+  // Auto-refresh data every 10 minutes (matches cache expiry)
   useEffect(() => {
     if (selectedWatchlist) {
       const refreshTimer = setInterval(() => {
         refreshWatchlistData();
-      }, 60000); // Refresh every minute
+      }, 600000); // Refresh every 10 minutes (600000ms)
       return () => clearInterval(refreshTimer);
     }
   }, [selectedWatchlist]);
@@ -101,6 +135,31 @@ const WatchlistTab: React.FC = () => {
         const updated = stocksData.find(s => s.symbol === selectedStock.symbol);
         if (updated) {
           setSelectedStock(updated);
+        }
+      }
+
+      // Record data if recording is active
+      if (isRecording && selectedWatchlist) {
+        try {
+          const recordData = {
+            watchlistId: watchlistId,
+            watchlistName: selectedWatchlist.name,
+            stocks: stocksData.map(s => ({
+              symbol: s.symbol,
+              quote: s.quote,
+              notes: s.notes
+            })),
+            timestamp: new Date().toISOString()
+          };
+          await contextRecorderService.recordApiResponse(
+            'Watchlist',
+            'watchlist-stocks',
+            recordData,
+            `Watchlist: ${selectedWatchlist.name} - ${new Date().toLocaleString()}`,
+            ['watchlist', 'stocks', 'quotes']
+          );
+        } catch (error) {
+          console.error('[WatchlistTab] Failed to record data:', error);
         }
       }
     } catch (error) {
@@ -274,7 +333,12 @@ const WatchlistTab: React.FC = () => {
             </span>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <RecordingControlPanel
+              tabName="Watchlist"
+              onRecordingChange={setIsRecording}
+              onRecordingStart={recordCurrentData}
+            />
             <button
               onClick={refreshWatchlistData}
               disabled={!selectedWatchlist || refreshing}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import GridLayout, { Layout } from 'react-grid-layout';
 import { Plus, RotateCcw, Save } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { sqliteService } from '../../services/sqliteService';
 import {
   NewsWidget,
   MarketDataWidget,
@@ -113,7 +114,27 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [nextId, setNextId] = useState(1);
   const [containerWidth, setContainerWidth] = useState(1200);
+  const [dbInitialized, setDbInitialized] = useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
+
+  // Initialize database for caching
+  useEffect(() => {
+    const initDatabase = async () => {
+      try {
+        await sqliteService.initialize();
+        const healthCheck = await sqliteService.healthCheck();
+        if (healthCheck.healthy) {
+          setDbInitialized(true);
+          console.log('[Dashboard] SQLite database initialized for caching');
+        } else {
+          console.warn('[Dashboard] Database not healthy:', healthCheck.message);
+        }
+      } catch (error) {
+        console.error('[Dashboard] Database initialization error:', error);
+      }
+    };
+    initDatabase();
+  }, []);
 
   // Load widgets from localStorage on mount
   useEffect(() => {
@@ -565,6 +586,11 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
           <span>
             Widgets: {widgets.length} | Layout: {widgets.length > 0 ? 'Custom' : 'Empty'} |
             Status: <span style={{ color: colors.secondary }}>ACTIVE</span>
+            {dbInitialized && (
+              <span style={{ marginLeft: '8px', color: colors.secondary }}>
+                | Cache: ENABLED
+              </span>
+            )}
           </span>
         </div>
       </div>

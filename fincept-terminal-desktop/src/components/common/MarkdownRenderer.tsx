@@ -24,9 +24,19 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
     ...style
   };
 
-  return (
-    <div style={markdownStyles}>
-      <ReactMarkdown
+  // Safety check for content
+  if (!content || typeof content !== 'string') {
+    return (
+      <div style={{ ...markdownStyles, color: BLOOMBERG_GRAY }}>
+        (No content to display)
+      </div>
+    );
+  }
+
+  try {
+    return (
+      <div style={markdownStyles}>
+        <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           // Headings
@@ -306,8 +316,26 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
       >
         {content}
       </ReactMarkdown>
-    </div>
-  );
+      </div>
+    );
+  } catch (error) {
+    console.error('Error rendering markdown:', error);
+    return (
+      <div style={{ ...markdownStyles, color: BLOOMBERG_GRAY }}>
+        <div style={{ color: '#ff6b6b', marginBottom: '8px' }}>
+          Error rendering markdown content
+        </div>
+        <pre style={{
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+          fontSize: '12px',
+          color: BLOOMBERG_WHITE
+        }}>
+          {content}
+        </pre>
+      </div>
+    );
+  }
 };
 
 export default MarkdownRenderer;

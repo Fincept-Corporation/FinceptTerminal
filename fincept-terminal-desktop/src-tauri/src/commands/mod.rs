@@ -20,6 +20,7 @@ pub mod eia;
 pub mod bea;
 pub mod ecb;
 pub mod wto;
+pub mod wits;
 pub mod unesco;
 pub mod oscar;
 
@@ -61,5 +62,19 @@ pub mod agents;
 // Portfolio Analytics
 pub mod portfolio;
 
-// DuckDB Database
-pub mod duckdb;
+// Technical Analysis
+pub mod technical_analysis;
+
+// Additional data sources
+pub mod fiscaldata;
+pub mod nasa_gibs;
+pub mod ckan;
+
+// Analytics modules
+pub mod analytics;
+
+// AI Agents
+pub mod ai_agents;
+
+// Report Generator
+pub mod report_generator;

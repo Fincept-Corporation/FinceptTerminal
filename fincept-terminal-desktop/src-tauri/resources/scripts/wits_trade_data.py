@@ -27,30 +27,77 @@ import re
 BASE_URL = "https://wits.worldbank.org/API/V1"
 TIMEOUT = 30
 
-# Common codes and mappings
+# Common codes and mappings (ISO3 codes for SDMX API)
 PARTNER_CODES = {
-    "000": "World",
-    "840": "United States",
-    "156": "China",
-    "826": "United Kingdom",
-    "276": "Germany",
-    "124": "Canada",
-    "392": "Japan",
-    "380": "Italy",
-    "250": "France"
+    "wld": "World",
+    "usa": "United States",
+    "chn": "China",
+    "gbr": "United Kingdom",
+    "deu": "Germany",
+    "can": "Canada",
+    "jpn": "Japan",
+    "ita": "Italy",
+    "fra": "France",
+    "ind": "India",
+    "rus": "Russia",
+    "bra": "Brazil"
 }
 
 REPORTER_CODES = {
-    "000": "World",
-    "840": "United States",
-    "156": "China",
-    "826": "United Kingdom",
-    "276": "Germany",
-    "124": "Canada",
-    "392": "Japan",
-    "380": "Italy",
-    "250": "France"
+    "wld": "World",
+    "usa": "United States",
+    "chn": "China",
+    "gbr": "United Kingdom",
+    "deu": "Germany",
+    "can": "Canada",
+    "jpn": "Japan",
+    "ita": "Italy",
+    "fra": "France",
+    "ind": "India",
+    "rus": "Russia",
+    "bra": "Brazil"
 }
+
+# ISO3 to Numeric Code Mapping (for Tariff API) - Complete 266 countries
+ISO3_TO_NUMERIC = {
+    "999": "999", "abw": "533", "afg": "004", "ago": "024", "aia": "660", "alb": "008", "and": "020", "ant": "530",
+    "are": "784", "arg": "032", "arm": "051", "asm": "016", "ata": "010", "atf": "260", "atg": "028", "aus": "036",
+    "aut": "040", "aze": "031", "bat": "080", "bdi": "108", "bel": "056", "ben": "204", "bes": "535", "bfa": "854",
+    "bgd": "050", "bgr": "100", "bhr": "048", "bhs": "044", "bih": "070", "blm": "652", "blr": "112", "blx": "058",
+    "blz": "084", "bmu": "060", "bol": "068", "bra": "076", "brb": "052", "brn": "096", "btn": "064", "bun": "837",
+    "bvt": "074", "bwa": "072", "caf": "140", "can": "124", "cck": "166", "che": "756", "chl": "152", "chn": "156",
+    "civ": "384", "cmr": "120", "cog": "178", "cok": "184", "col": "170", "com": "174", "cpv": "132", "cri": "188",
+    "csk": "200", "cub": "192", "cuw": "531", "cxr": "162", "cym": "136", "cyp": "196", "cze": "203", "ddr": "278",
+    "deu": "276", "dji": "262", "dma": "212", "dnk": "208", "dom": "214", "dza": "012", "eas": "EAS", "ecs": "ECS",
+    "ecu": "218", "egy": "818", "eri": "232", "esh": "732", "esp": "724", "est": "233", "etf": "230", "eth": "231",
+    "fin": "246", "fji": "242", "flk": "238", "fra": "250", "fre": "838", "fro": "234", "fsm": "583", "gab": "266",
+    "gbr": "826", "geo": "268", "gha": "288", "gib": "292", "gin": "324", "glp": "312", "gmb": "270", "gnb": "624",
+    "gnq": "226", "grc": "300", "grd": "308", "grl": "304", "gtm": "320", "guf": "254", "gum": "316", "guy": "328",
+    "hkg": "344", "hmd": "334", "hnd": "340", "hrv": "191", "hti": "332", "hun": "348", "idn": "360", "ind": "356",
+    "iot": "086", "irl": "372", "irn": "364", "irq": "368", "isl": "352", "isr": "376", "ita": "380", "jam": "388",
+    "jor": "400", "jpn": "392", "kaz": "398", "ken": "404", "kgz": "417", "khm": "116", "kir": "296", "kna": "659",
+    "kor": "410", "kwt": "414", "lao": "418", "lbn": "422", "lbr": "430", "lby": "434", "lca": "662", "lcn": "LCN",
+    "lka": "144", "lso": "426", "ltu": "440", "lux": "442", "lva": "428", "mac": "446", "mar": "504", "mco": "492",
+    "mda": "498", "mdg": "450", "mdv": "462", "mea": "MEA", "mex": "484", "mhl": "584", "mkd": "807", "mli": "466",
+    "mlt": "470", "mmr": "104", "mng": "496", "mnp": "580", "mnt": "499", "moz": "508", "mrt": "478", "msr": "500",
+    "mtq": "474", "mus": "480", "mwi": "454", "mys": "458", "myt": "175", "nac": "NAC", "nam": "516", "ncl": "540",
+    "ner": "562", "nfk": "574", "nga": "566", "nic": "558", "niu": "570", "nld": "528", "nor": "578", "npl": "524",
+    "nru": "520", "nze": "536", "nzl": "554", "oas": "490", "omn": "512", "pak": "586", "pan": "591", "pce": "582",
+    "pcn": "612", "per": "604", "phl": "608", "plw": "585", "png": "598", "pol": "616", "prk": "408", "prt": "620",
+    "pry": "600", "pse": "275", "pyf": "258", "qat": "634", "reu": "638", "rom": "642", "rus": "643", "rwa": "646",
+    "sas": "SAS", "sau": "682", "sdn": "736", "sen": "686", "ser": "891", "sgp": "702", "sgs": "239", "shn": "654",
+    "slb": "090", "sle": "694", "slv": "222", "smr": "674", "som": "706", "spe": "839", "spm": "666", "ssd": "728",
+    "ssf": "SSF", "stp": "678", "sud": "729", "sur": "740", "svk": "703", "svn": "705", "svu": "810", "swe": "752",
+    "swz": "748", "sxm": "534", "syc": "690", "syr": "760", "tca": "796", "tcd": "148", "tgo": "768", "tha": "764",
+    "tjk": "762", "tkl": "772", "tkm": "795", "tmp": "626", "ton": "776", "tto": "780", "tun": "788", "tur": "792",
+    "tuv": "798", "tza": "834", "uga": "800", "ukr": "804", "umi": "581", "uns": "898", "ury": "858", "usa": "840",
+    "usp": "849", "uzb": "860", "vat": "336", "vct": "670", "ven": "862", "vgb": "092", "vnm": "704", "vut": "548",
+    "wld": "000", "wlf": "876", "wsm": "882", "ydr": "720", "yem": "887", "yug": "890", "zaf": "710", "zar": "180",
+    "zmb": "894", "zwe": "716"
+}
+
+# Numeric to ISO3 Code Mapping
+NUMERIC_TO_ISO3 = {v: k for k, v in ISO3_TO_NUMERIC.items()}
 
 DATASOURCES = {
     "tradestats-development": "Trade Statistics - Development",
@@ -59,12 +106,12 @@ DATASOURCES = {
 }
 
 PRODUCT_CATEGORIES = {
-    "ALL": "All Products",
-    "TOTAL": "Total Trade",
-    "AG": "Agricultural Products",
-    "FU": "Fuels",
-    "MN": "Ores and Metals",
-    "MF": "Manufactures"
+    "total": "Total Trade",
+    "all": "All Products",
+    "ag": "Agricultural Products",
+    "fuels": "Fuels",
+    "mn": "Ores and Metals",
+    "mf": "Manufactures"
 }
 
 
@@ -213,7 +260,10 @@ def _parse_xml_response(root: ET.Element) -> Union[List[Dict[str, Any]], Dict[st
     # Check for different response types
     root_tag = root.tag.split('}')[-1] if '}' in root.tag else root.tag
 
-    if root_tag == 'witsdata':
+    if root_tag == 'StructureSpecificData':
+        # SDMX V2.1 format
+        return _parse_sdmx_v21(root)
+    elif root_tag == 'witsdata':
         # Trade statistics response
         return _parse_trade_statistics(root)
     elif root_tag == 'tariffdata':
@@ -237,6 +287,38 @@ def _parse_xml_response(root: ET.Element) -> Union[List[Dict[str, Any]], Dict[st
     else:
         # Try generic parsing
         return _parse_generic_xml(root)
+
+
+def _parse_sdmx_v21(root: ET.Element) -> List[Dict[str, Any]]:
+    """Parse SDMX V2.1 StructureSpecificData response"""
+    data = []
+
+    # Find all Series elements
+    for series in root.findall('.//{*}Series'):
+        series_attrs = dict(series.attrib)
+
+        # Find all Obs (observations) within this series
+        for obs in series.findall('.//{*}Obs'):
+            item = {}
+
+            # Add series attributes
+            for key, value in series_attrs.items():
+                item[key.lower()] = value
+
+            # Add observation attributes
+            for key, value in obs.attrib.items():
+                item[key.lower()] = value
+
+            # Try to convert numeric values
+            if 'obs_value' in item:
+                try:
+                    item['obs_value'] = float(item['obs_value'])
+                except ValueError:
+                    pass
+
+            data.append(item)
+
+    return data
 
 
 def _parse_trade_statistics(root: ET.Element) -> List[Dict[str, Any]]:
@@ -406,17 +488,17 @@ def get_indicators(datasource: str = "tradestats-development") -> Dict[str, Any]
     return _make_request(url)
 
 
-def get_trade_data(reporter: str, partner: str, product: str = "ALL", year: str = None,
-                  datasource: str = "tradestats-development") -> Dict[str, Any]:
+def get_trade_data(reporter: str, partner: str, product: str = "Total", year: str = None,
+                  indicator: str = "XPRT-TRD-VL") -> Dict[str, Any]:
     """
-    Get trade statistics data between countries
+    Get trade statistics data between countries using SDMX format
 
     Args:
-        reporter: Reporter country code (e.g., "840" for USA)
-        partner: Partner country code (e.g., "000" for World)
-        product: Product code (e.g., "ALL" for all products)
+        reporter: Reporter country ISO3 code (e.g., "usa" for USA)
+        partner: Partner country ISO3 code (e.g., "wld" for World)
+        product: Product code (e.g., "total" for all products, "fuels", etc.)
         year: Year for data (e.g., "2020")
-        datasource: Data source to query
+        indicator: Trade indicator code (e.g., "XPRT-TRD-VL" for export value)
 
     Returns:
         Dict containing trade data, metadata, and error information
@@ -425,7 +507,15 @@ def get_trade_data(reporter: str, partner: str, product: str = "ALL", year: str 
     if year is None:
         year = str(datetime.now().year - 1)  # Last full year
 
-    url = f"{BASE_URL}/wits/datasource/{datasource}/country/{reporter}/partner/{partner}/product/{product}/year/{year}"
+    # Convert codes for API (country lowercase, product capitalized)
+    reporter = reporter.lower()
+    partner = partner.lower()
+    # Product code should be capitalized (Total, not total)
+    if product.lower() in ["total", "all", "ag", "fuels", "mn", "mf"]:
+        product = product.capitalize()
+
+    # Use SDMX format for tradestats-trade
+    url = f"{BASE_URL}/SDMX/V21/datasource/tradestats-trade/reporter/{reporter}/year/{year}/partner/{partner}/product/{product}/indicator/{indicator}"
 
     # Add context to metadata
     result = _make_request(url)
@@ -437,22 +527,25 @@ def get_trade_data(reporter: str, partner: str, product: str = "ALL", year: str 
             'partner_name': PARTNER_CODES.get(partner, f"Code {partner}"),
             'product_code': product,
             'year': year,
-            'datasource': datasource,
-            'datasource_name': DATASOURCES.get(datasource, datasource)
+            'indicator': indicator,
+            'datasource': 'tradestats-trade',
+            'datasource_name': 'Trade Statistics - Trade'
         }
 
     return result
 
 
-def get_tariff_data(reporter: str, partner: str = "000", product: str = "ALL", year: str = None) -> Dict[str, Any]:
+def get_tariff_data(reporter: str, partner: str = "wld", product: str = "total", year: str = None,
+                   datatype: str = "reported") -> Dict[str, Any]:
     """
-    Get tariff data for imports
+    Get tariff data for imports using SDMX format
 
     Args:
-        reporter: Reporter country code (e.g., "840" for USA)
-        partner: Partner country code (default: "000" for World)
-        product: Product code (default: "ALL" for all products)
+        reporter: Reporter country code - ISO3 (e.g., "usa") or numeric (e.g., "840")
+        partner: Partner country code - ISO3 (e.g., "wld") or numeric (default: "wld" for World)
+        product: Product HS code (e.g., "020110") or "total" for aggregated
         year: Year for data (e.g., "2020")
+        datatype: Data type (default: "reported")
 
     Returns:
         Dict containing tariff data, metadata, and error information
@@ -461,20 +554,35 @@ def get_tariff_data(reporter: str, partner: str = "000", product: str = "ALL", y
     if year is None:
         year = str(datetime.now().year - 1)  # Last full year
 
-    url = f"{BASE_URL}/wits/datasource/trn/reporter/{reporter}/partner/{partner}/product/{product}/year/{year}"
+    # Convert ISO3 to numeric codes for tariff API
+    reporter_original = reporter
+    partner_original = partner
+
+    reporter = reporter.lower()
+    partner = partner.lower()
+
+    # Convert to numeric if ISO3 code
+    if reporter in ISO3_TO_NUMERIC:
+        reporter = ISO3_TO_NUMERIC[reporter]
+    if partner in ISO3_TO_NUMERIC:
+        partner = ISO3_TO_NUMERIC[partner]
+
+    # Use SDMX format for tariff data
+    url = f"{BASE_URL}/SDMX/V21/datasource/TRN/reporter/{reporter}/partner/{partner}/product/{product}/year/{year}/datatype/{datatype}"
 
     # Add context to metadata
     result = _make_request(url)
     if result['metadata']:
         result['metadata']['context'] = {
             'reporter_code': reporter,
-            'reporter_name': REPORTER_CODES.get(reporter, f"Code {reporter}"),
+            'reporter_name': REPORTER_CODES.get(reporter_original.lower(), REPORTER_CODES.get(NUMERIC_TO_ISO3.get(reporter, ""), f"Code {reporter}")),
             'partner_code': partner,
-            'partner_name': PARTNER_CODES.get(partner, f"Code {partner}"),
+            'partner_name': PARTNER_CODES.get(partner_original.lower(), PARTNER_CODES.get(NUMERIC_TO_ISO3.get(partner, ""), f"Code {partner}")),
             'product_code': product,
             'year': year,
-            'datasource': 'trn',
-            'datasource_name': 'Tariff Data'
+            'datatype': datatype,
+            'datasource': 'TRN',
+            'datasource_name': 'Tariff Data (SDMX)'
         }
 
     return result
@@ -486,15 +594,28 @@ def get_product_tariff(reporter: str, partner: str, product: str, year: str,
     Get specific product tariff data using SDMX format
 
     Args:
-        reporter: Reporter country code (e.g., "840" for USA)
-        partner: Partner country code (e.g., "000" for World)
+        reporter: Reporter country code - ISO3 (e.g., "usa") or numeric (e.g., "840")
+        partner: Partner country code - ISO3 (e.g., "wld") or numeric (e.g., "000")
         product: Product HS code (e.g., "020110")
-        year: Year for data (e.g., "2000")
+        year: Year for data (e.g., "2020")
         datatype: Data type (default: "reported")
 
     Returns:
         Dict containing product tariff data, metadata, and error information
     """
+    # Convert ISO3 to numeric codes for tariff API
+    reporter_original = reporter
+    partner_original = partner
+
+    reporter = reporter.lower()
+    partner = partner.lower()
+
+    # Convert to numeric if ISO3 code
+    if reporter in ISO3_TO_NUMERIC:
+        reporter = ISO3_TO_NUMERIC[reporter]
+    if partner in ISO3_TO_NUMERIC:
+        partner = ISO3_TO_NUMERIC[partner]
+
     url = f"{BASE_URL}/SDMX/V21/datasource/TRN/reporter/{reporter}/partner/{partner}/product/{product}/year/{year}/datatype/{datatype}"
 
     # Add context to metadata
@@ -502,9 +623,9 @@ def get_product_tariff(reporter: str, partner: str, product: str, year: str,
     if result['metadata']:
         result['metadata']['context'] = {
             'reporter_code': reporter,
-            'reporter_name': REPORTER_CODES.get(reporter, f"Code {reporter}"),
+            'reporter_name': REPORTER_CODES.get(reporter_original.lower(), REPORTER_CODES.get(NUMERIC_TO_ISO3.get(reporter, ""), f"Code {reporter}")),
             'partner_code': partner,
-            'partner_name': PARTNER_CODES.get(partner, f"Code {partner}"),
+            'partner_name': PARTNER_CODES.get(partner_original.lower(), PARTNER_CODES.get(NUMERIC_TO_ISO3.get(partner, ""), f"Code {partner}")),
             'product_code': product,
             'year': year,
             'datatype': datatype,
@@ -604,7 +725,7 @@ def test_all_endpoints() -> Dict[str, Any]:
     # Test 3: Get trade data (US to World, 2020)
     print("Testing: get_trade_data(US to World, 2020)...")
     try:
-        result = get_trade_data("840", "000", "ALL", "2020")
+        result = get_trade_data("usa", "wld", "Total", "2020")
         test_results["tests"]["trade_data"] = {
             "status": "passed" if not result.get("error") else "failed",
             "error": result.get("error"),
@@ -620,10 +741,10 @@ def test_all_endpoints() -> Dict[str, Any]:
         test_results["summary"]["total"] += 1
         test_results["summary"]["failed"] += 1
 
-    # Test 4: Get tariff data (US, 2020)
+    # Test 4: Get tariff data (US, 2020) - using specific product code
     print("Testing: get_tariff_data(US, 2020)...")
     try:
-        result = get_tariff_data("840", "000", "ALL", "2020")
+        result = get_tariff_data("usa", "wld", "020110", "2020")
         test_results["tests"]["tariff_data"] = {
             "status": "passed" if not result.get("error") else "failed",
             "error": result.get("error"),
@@ -642,7 +763,7 @@ def test_all_endpoints() -> Dict[str, Any]:
     # Test 5: Get product tariff (Beef from US to World, 2020)
     print("Testing: get_product_tariff(Beef from US to World, 2020)...")
     try:
-        result = get_product_tariff("840", "000", "020110", "2020")
+        result = get_product_tariff("usa", "wld", "020110", "2020")
         test_results["tests"]["product_tariff"] = {
             "status": "passed" if not result.get("error") else "failed",
             "error": result.get("error"),
@@ -695,7 +816,7 @@ def main():
         partner = None
         product = "ALL"
         year = None
-        datasource = "tradestats-development"
+        indicator = "XPRT-TRD-VL"
 
         # Parse arguments
         for arg in sys.argv[2:]:
@@ -707,8 +828,8 @@ def main():
                 product = arg.split("=", 1)[1]
             elif arg.startswith("--year="):
                 year = arg.split("=", 1)[1]
-            elif arg.startswith("--datasource="):
-                datasource = arg.split("=", 1)[1]
+            elif arg.startswith("--indicator="):
+                indicator = arg.split("=", 1)[1]
 
         if not reporter or not partner:
             print(json.dumps({
@@ -717,12 +838,12 @@ def main():
             }))
             sys.exit(1)
 
-        result = get_trade_data(reporter, partner, product, year, datasource)
+        result = get_trade_data(reporter, partner, product, year, indicator)
 
     elif command == "tariff-data":
         reporter = None
-        partner = "000"
-        product = "ALL"
+        partner = "wld"
+        product = "total"
         year = None
 
         # Parse arguments
@@ -739,7 +860,7 @@ def main():
         if not reporter:
             print(json.dumps({
                 "error": "Missing required parameter: --reporter is required",
-                "example": "python wits_trade_data.py tariff-data --reporter=840 --year=2020"
+                "example": "python wits_trade_data.py tariff-data --reporter=usa --year=2020"
             }))
             sys.exit(1)
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { fetchNewsWithCache, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData } from '../../services/newsService';
+import { contextRecorderService } from '../../services/contextRecorderService';
+import RecordingControlPanel from '../common/RecordingControlPanel';
 
 // Extend Window interface for Tauri
 declare global {
@@ -22,6 +24,34 @@ const NewsTab: React.FC = () => {
   const [showWebView, setShowWebView] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(10); // minutes
   const [showIntervalSettings, setShowIntervalSettings] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+
+  // Function to record current news data
+  const recordCurrentData = async () => {
+    if (newsArticles.length > 0) {
+      try {
+        const recordData = {
+          articles: newsArticles,
+          totalCount: newsArticles.length,
+          alertCount: newsArticles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length,
+          sources: getActiveSources(),
+          timestamp: new Date().toISOString(),
+          filter: activeFilter
+        };
+        console.log('[NewsTab] Recording current data:', recordData);
+        await contextRecorderService.recordApiResponse(
+          'News',
+          'news-feed',
+          recordData,
+          `News Feed (Snapshot) - ${new Date().toLocaleString()}`,
+          ['news', 'rss', 'snapshot', activeFilter.toLowerCase()]
+        );
+        console.log('[NewsTab] Current data recorded successfully');
+      } catch (error) {
+        console.error('[NewsTab] Failed to record current data:', error);
+      }
+    }
+  };
 
   // Manual refresh function with force refresh
   const handleRefresh = async () => {
@@ -33,6 +63,31 @@ const NewsTab: React.FC = () => {
       setAlertCount(articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length);
       setActiveSources(getActiveSources());
       setNewsUpdateCount(prev => prev + 1);
+
+      // Record data if recording is active
+      if (isRecording && articles.length > 0) {
+        try {
+          const recordData = {
+            articles: articles,
+            totalCount: articles.length,
+            alertCount: articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length,
+            sources: getActiveSources(),
+            timestamp: new Date().toISOString(),
+            filter: activeFilter
+          };
+          console.log('[NewsTab] Recording data:', recordData);
+          await contextRecorderService.recordApiResponse(
+            'News',
+            'news-feed',
+            recordData,
+            `News Feed - ${new Date().toLocaleString()}`,
+            ['news', 'rss', 'live-feed', activeFilter.toLowerCase()]
+          );
+          console.log('[NewsTab] Data recorded successfully');
+        } catch (error) {
+          console.error('[NewsTab] Failed to record data:', error);
+        }
+      }
     } catch (error) {
       console.error('Error fetching news:', error);
     } finally {
@@ -50,6 +105,29 @@ const NewsTab: React.FC = () => {
         setAlertCount(articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length);
         setActiveSources(getActiveSources());
         setNewsUpdateCount(prev => prev + 1);
+
+        // Record data if recording is active
+        if (isRecording && articles.length > 0) {
+          try {
+            const recordData = {
+              articles: articles,
+              totalCount: articles.length,
+              alertCount: articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length,
+              sources: getActiveSources(),
+              timestamp: new Date().toISOString(),
+              filter: activeFilter
+            };
+            await contextRecorderService.recordApiResponse(
+              'News',
+              'news-feed',
+              recordData,
+              `News Feed - ${new Date().toLocaleString()}`,
+              ['news', 'rss', 'live-feed', activeFilter.toLowerCase()]
+            );
+          } catch (error) {
+            console.error('[NewsTab] Failed to record data:', error);
+          }
+        }
       } catch (error) {
         console.error('Error fetching news:', error);
       } finally {
@@ -63,7 +141,7 @@ const NewsTab: React.FC = () => {
     const newsRefreshInterval = setInterval(loadNews, refreshInterval * 60 * 1000);
 
     return () => clearInterval(newsRefreshInterval);
-  }, [refreshInterval]);
+  }, [refreshInterval, isRecording, activeFilter]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -203,6 +281,12 @@ const NewsTab: React.FC = () => {
           >
             ⏱ {refreshInterval}min
           </button>
+          <span style={{ color: colors.text }}>|</span>
+          <RecordingControlPanel
+            tabName="News"
+            onRecordingChange={setIsRecording}
+            onRecordingStart={recordCurrentData}
+          />
         </div>
 
         {/* Interval Settings Dropdown */}

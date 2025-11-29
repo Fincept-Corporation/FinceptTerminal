@@ -345,7 +345,6 @@ if (result.success) {
 ### Phase 4: Templates & Storage
 - [ ] Indian broker templates (Upstox, Fyers, Dhan)
 - [ ] Global provider templates
-- [ ] DuckDB integration
 - [ ] Import/export mappings
 
 ### Phase 5: Advanced Features

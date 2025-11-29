@@ -60,6 +60,8 @@ export interface Dataset {
   downloads_count: number;
   rating: number;
   tags: string[];
+  status?: string; // pending, approved, rejected
+  rejection_reason?: string;
   uploaded_at: string;
   updated_at: string;
 }
@@ -343,7 +345,63 @@ export class MarketplaceApiService {
   }
 
   /**
-   * 8. Get dataset analytics (for uploader)
+   * 8. Get my uploaded datasets
+   * GET /marketplace/my-datasets
+   */
+  static async getMyDatasets(
+    apiKey: string,
+    page: number = 1,
+    limit: number = 20,
+    status?: string
+  ): Promise<ApiResponse<{ datasets: Dataset[]; total: number; page: number; total_pages: number }>> {
+    const queryParams = new URLSearchParams();
+    queryParams.append('page', page.toString());
+    queryParams.append('limit', limit.toString());
+    if (status) queryParams.append('status', status);
+
+    return makeApiRequest(
+      'GET',
+      `/marketplace/my-datasets?${queryParams.toString()}`,
+      undefined,
+      { 'X-API-Key': apiKey }
+    );
+  }
+
+  /**
+   * 9. Update dataset metadata
+   * PATCH /marketplace/datasets/{dataset_id}
+   */
+  static async updateDataset(
+    apiKey: string,
+    datasetId: number,
+    updateData: Partial<DatasetMetadata>
+  ): Promise<ApiResponse<Dataset>> {
+    return makeApiRequest<Dataset>(
+      'PATCH',
+      `/marketplace/datasets/${datasetId}`,
+      updateData,
+      { 'X-API-Key': apiKey }
+    );
+  }
+
+  /**
+   * 10. Delete dataset
+   * DELETE /marketplace/datasets/{dataset_id}
+   */
+  static async deleteDataset(
+    apiKey: string,
+    datasetId: number
+  ): Promise<ApiResponse<{ message: string }>> {
+    return makeApiRequest(
+      'DELETE',
+      `/marketplace/datasets/${datasetId}`,
+      undefined,
+      { 'X-API-Key': apiKey }
+    );
+  }
+
+  /**
+   * 11. Get dataset analytics (for uploader)
    * GET /marketplace/my-datasets/analytics
    */
   static async getDatasetAnalytics(apiKey: string): Promise<ApiResponse<DatasetAnalytics>> {
@@ -356,7 +414,7 @@ export class MarketplaceApiService {
   }
 
   /**
-   * 9. Get admin revenue analytics
+   * 12. Get admin revenue analytics
    * GET /marketplace/admin/revenue-analytics
    */
   static async getAdminRevenueAnalytics(apiKey: string): Promise<ApiResponse<RevenueAnalytics>> {
@@ -369,7 +427,7 @@ export class MarketplaceApiService {
   }
 
   /**
-   * 10. Get marketplace statistics
+   * 13. Get marketplace statistics
    * GET /marketplace/admin/stats
    */
   static async getMarketplaceStats(apiKey: string): Promise<ApiResponse<MarketplaceStats>> {
@@ -377,6 +435,52 @@ export class MarketplaceApiService {
       'GET',
       '/marketplace/admin/stats',
       undefined,
+      { 'X-API-Key': apiKey }
+    );
+  }
+
+  /**
+   * 14. Get pending datasets (admin)
+   * GET /marketplace/admin/pending-datasets
+   */
+  static async getPendingDatasets(apiKey: string): Promise<ApiResponse<{ datasets: Dataset[] }>> {
+    return makeApiRequest(
+      'GET',
+      '/marketplace/admin/pending-datasets',
+      undefined,
+      { 'X-API-Key': apiKey }
+    );
+  }
+
+  /**
+   * 15. Approve dataset (admin)
+   * POST /marketplace/admin/datasets/{dataset_id}/approve
+   */
+  static async approveDataset(
+    apiKey: string,
+    datasetId: number
+  ): Promise<ApiResponse<{ message: string; dataset: Dataset }>> {
+    return makeApiRequest(
+      'POST',
+      `/marketplace/admin/datasets/${datasetId}/approve`,
+      undefined,
+      { 'X-API-Key': apiKey }
+    );
+  }
+
+  /**
+   * 16. Reject dataset (admin)
+   * POST /marketplace/admin/datasets/{dataset_id}/reject
+   */
+  static async rejectDataset(
+    apiKey: string,
+    datasetId: number,
+    reason: string
+  ): Promise<ApiResponse<{ message: string; dataset: Dataset }>> {
+    return makeApiRequest(
+      'POST',
+      `/marketplace/admin/datasets/${datasetId}/reject`,
+      { reason },
       { 'X-API-Key': apiKey }
     );
   }

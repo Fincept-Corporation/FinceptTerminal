@@ -57,10 +57,23 @@ class WTODataWrapper:
                 if response.status == 200:
                     content_type = response.headers.get('content-type', '')
                     if 'application/json' in content_type:
-                        return await response.json()
+                        data = await response.json()
+                        # Timeseries API returns JSON string in 'data', parse it
+                        if isinstance(data, str):
+                            try:
+                                import json
+                                return json.loads(data)
+                            except:
+                                return data
+                        return data
                     else:
                         text = await response.text()
-                        return text
+                        # Try to parse as JSON anyway (some endpoints return JSON without correct content-type)
+                        try:
+                            import json
+                            return json.loads(text)
+                        except:
+                            return text
                 else:
                     error_text = await response.text()
                     raise WTOError(f"HTTP {response.status}: Failed to fetch data from {url}. Error: {error_text}")
@@ -666,7 +679,16 @@ class WTODataWrapper:
 
 def main():
     """Main function for CLI interface"""
-    wrapper = WTODataWrapper()
+    # Check if API key is provided as last argument
+    api_key = None
+    if len(sys.argv) > 2 and not sys.argv[-1].startswith('--'):
+        # Last argument is likely the API key if it's not a flag
+        potential_key = sys.argv[-1]
+        if len(potential_key) == 32 and not potential_key.startswith('--'):  # API key format check
+            api_key = potential_key
+            sys.argv = sys.argv[:-1]  # Remove API key from args
+
+    wrapper = WTODataWrapper(subscription_key=api_key)
 
     if len(sys.argv) < 2:
         print(json.dumps({

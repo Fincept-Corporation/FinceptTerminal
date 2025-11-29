@@ -35,7 +35,7 @@ export const ForexWidget: React.FC<ForexWidgetProps> = ({ id, onRemove }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await marketDataService.getQuotes(MAJOR_FOREX_PAIRS);
+      const data = await marketDataService.getEnhancedQuotesWithCache(MAJOR_FOREX_PAIRS, 'Forex', 10);
       setQuotes(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load forex data');

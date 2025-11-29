@@ -8,16 +8,23 @@ class PolygonService {
 
   async loadApiKey(): Promise<string> {
     try {
+      console.log('[PolygonService] Loading API key from database...');
       const credentials = await sqliteService.getCredentials();
+      console.log('[PolygonService] Found credentials:', credentials.map(c => c.service_name));
+
       const polygonCred = credentials.find(c => c.service_name.toLowerCase() === 'polygon.io');
+      console.log('[PolygonService] Polygon credential found:', !!polygonCred);
+
       if (polygonCred?.api_key) {
         this.apiKey = polygonCred.api_key;
         // Set environment variable for Python script
         localStorage.setItem('POLYGON_API_KEY', polygonCred.api_key);
+        console.log('[PolygonService] API key loaded successfully, length:', polygonCred.api_key.length);
         return polygonCred.api_key;
       }
+      console.warn('[PolygonService] No Polygon.io API key found in credentials');
     } catch (error) {
-      console.error('Failed to load Polygon API key from database:', error);
+      console.error('[PolygonService] Failed to load Polygon API key from database:', error);
     }
     return '';
   }
@@ -30,17 +37,26 @@ class PolygonService {
     try {
       // Ensure API key is loaded
       if (!this.apiKey) {
+        console.log('[PolygonService] API key not set, loading...');
         await this.loadApiKey();
       }
+
+      console.log('[PolygonService] Executing command:', command, 'with args:', args);
+      console.log('[PolygonService] API key present:', !!this.apiKey);
 
       const result = await invoke<string>('execute_polygon_command', {
         command,
         args,
         apiKey: this.apiKey || null
       });
-      return JSON.parse(result);
+
+      console.log('[PolygonService] Command result received, length:', result.length);
+      const parsed = JSON.parse(result);
+      console.log('[PolygonService] Parsed result success:', parsed.success);
+
+      return parsed;
     } catch (error) {
-      console.error('Polygon API error:', error);
+      console.error('[PolygonService] Polygon API error:', error);
       throw error;
     }
   }

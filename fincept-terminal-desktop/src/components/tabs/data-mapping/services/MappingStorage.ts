@@ -1,71 +1,42 @@
-// Mapping Storage Service - DuckDB integration
+// Mapping Storage Service - SQLite integration via MappingDatabase
 
 import { DataMappingConfig } from '../types';
+import { mappingDatabase } from './MappingDatabase';
 
 export class MappingStorage {
   /**
-   * Save mapping to DuckDB
+   * Save mapping to SQLite
    */
   async saveMapping(mapping: DataMappingConfig): Promise<void> {
-    // TODO: Implement DuckDB integration
-    // For now, just store in localStorage as fallback
-    try {
-      const stored = this.getAllMappings();
-      const index = stored.findIndex((m) => m.id === mapping.id);
-
-      if (index >= 0) {
-        stored[index] = mapping;
-      } else {
-        stored.push(mapping);
-      }
-
-      localStorage.setItem('data_mappings', JSON.stringify(stored));
-    } catch (error) {
-      console.error('Failed to save mapping:', error);
-      throw error;
-    }
+    await mappingDatabase.saveMapping(mapping);
   }
 
   /**
    * Get all saved mappings
    */
-  getAllMappings(): DataMappingConfig[] {
-    try {
-      const stored = localStorage.getItem('data_mappings');
-      return stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error('Failed to load mappings:', error);
-      return [];
-    }
+  async getAllMappings(): Promise<DataMappingConfig[]> {
+    return await mappingDatabase.getAllMappings();
   }
 
   /**
    * Get mapping by ID
    */
   async getMapping(id: string): Promise<DataMappingConfig | null> {
-    const mappings = this.getAllMappings();
-    return mappings.find((m) => m.id === id) || null;
+    return await mappingDatabase.getMapping(id);
   }
 
   /**
    * Delete mapping
    */
   async deleteMapping(id: string): Promise<void> {
-    try {
-      const stored = this.getAllMappings();
-      const filtered = stored.filter((m) => m.id !== id);
-      localStorage.setItem('data_mappings', JSON.stringify(filtered));
-    } catch (error) {
-      console.error('Failed to delete mapping:', error);
-      throw error;
-    }
+    await mappingDatabase.deleteMapping(id);
   }
 
   /**
    * Search mappings
    */
   async searchMappings(query: string): Promise<DataMappingConfig[]> {
-    const all = this.getAllMappings();
+    const all = await this.getAllMappings();
     const lowerQuery = query.toLowerCase();
 
     return all.filter(
@@ -80,7 +51,7 @@ export class MappingStorage {
    * Get mappings by connection ID (OBSOLETE - kept for backward compatibility)
    */
   async getMappingsByConnection(connectionId: string): Promise<DataMappingConfig[]> {
-    const all = this.getAllMappings();
+    const all = await this.getAllMappings();
     // Note: source.connectionId no longer exists in new architecture
     return all.filter((m) => m.source.type === 'api' && m.source.apiConfig?.id === connectionId);
   }
@@ -89,7 +60,7 @@ export class MappingStorage {
    * Get mappings by schema
    */
   async getMappingsBySchema(schema: string): Promise<DataMappingConfig[]> {
-    const all = this.getAllMappings();
+    const all = await this.getAllMappings();
     return all.filter((m) => m.target.schema === schema);
   }
 
@@ -124,22 +95,7 @@ export class MappingStorage {
    * Duplicate mapping
    */
   async duplicateMapping(id: string): Promise<DataMappingConfig | null> {
-    const original = await this.getMapping(id);
-    if (!original) return null;
-
-    const duplicate: DataMappingConfig = {
-      ...original,
-      id: `map_${Date.now()}`,
-      name: `${original.name} (Copy)`,
-      metadata: {
-        ...original.metadata,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-    };
-
-    await this.saveMapping(duplicate);
-    return duplicate;
+    return await mappingDatabase.duplicateMapping(id);
   }
 }
 
