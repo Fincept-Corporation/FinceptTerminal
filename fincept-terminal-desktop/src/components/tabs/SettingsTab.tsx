@@ -34,7 +34,8 @@ export default function SettingsTab() {
     enabled: true,
     api_key: '',
     api_secret: '',
-    endpoint: ''
+    endpoint: '',
+    config_data: ''
   });
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const [programmaticProviders, setProgrammaticProviders] = useState<Set<string>>(new Set());
@@ -184,7 +185,8 @@ export default function SettingsTab() {
           enabled: true,
           api_key: '',
           api_secret: '',
-          endpoint: ''
+          endpoint: '',
+          config_data: ''
         });
         setSelectedProvider(null);
         await loadWSProviders();

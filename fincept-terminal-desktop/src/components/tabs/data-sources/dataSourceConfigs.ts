@@ -127,22 +127,6 @@ export const DATA_SOURCE_CONFIGS: DataSourceConfig[] = [
     ],
   },
   {
-    id: 'duckdb',
-    name: 'DuckDB',
-    type: 'duckdb',
-    category: 'database',
-    icon: '🦆',
-    color: '#FFF000',
-    description: 'In-process analytical SQL database',
-    testable: true,
-    requiresAuth: false,
-    fields: [
-      { name: 'filepath', label: 'Database File Path', type: 'text', placeholder: '/path/to/database.duckdb', required: false },
-      { name: 'memory', label: 'In-Memory Mode', type: 'checkbox', required: false, defaultValue: false },
-      { name: 'readonly', label: 'Read Only', type: 'checkbox', required: false, defaultValue: false },
-    ],
-  },
-  {
     id: 'snowflake',
     name: 'Snowflake',
     type: 'snowflake',

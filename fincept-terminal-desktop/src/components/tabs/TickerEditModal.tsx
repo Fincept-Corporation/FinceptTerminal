@@ -1,6 +1,6 @@
 // Ticker Edit Modal - UI for managing tickers in a category/region
-import React, { useState } from 'react';
-import { X, Plus, Trash2, GripVertical } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Plus, Trash2, GripVertical, ChevronUp, ChevronDown } from 'lucide-react';
 
 interface TickerEditModalProps {
   isOpen: boolean;
@@ -19,6 +19,11 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
 }) => {
   const [editedTickers, setEditedTickers] = useState<string[]>([...tickers]);
   const [newTicker, setNewTicker] = useState('');
+
+  // Update editedTickers when tickers prop changes
+  useEffect(() => {
+    setEditedTickers([...tickers]);
+  }, [tickers]);
 
   if (!isOpen) return null;
 
@@ -171,40 +176,90 @@ const TickerEditModal: React.FC<TickerEditModalProps> = ({
                   marginBottom: '4px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
+                  gap: '12px',
                   fontSize: '12px'
                 }}
               >
+                {/* Position number */}
+                <div style={{
+                  color: BLOOMBERG_GRAY,
+                  fontSize: '10px',
+                  minWidth: '20px',
+                  textAlign: 'center'
+                }}>
+                  #{index + 1}
+                </div>
+
+                {/* Reorder buttons */}
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '2px'
                 }}>
-                  <GripVertical
-                    size={12}
-                    style={{
-                      color: BLOOMBERG_GRAY,
-                      cursor: index > 0 ? 'pointer' : 'default',
-                      opacity: index > 0 ? 1 : 0.3
-                    }}
+                  <button
                     onClick={() => handleMoveUp(index)}
-                  />
-                  <GripVertical
-                    size={12}
+                    disabled={index === 0}
                     style={{
-                      color: BLOOMBERG_GRAY,
-                      cursor: index < editedTickers.length - 1 ? 'pointer' : 'default',
-                      opacity: index < editedTickers.length - 1 ? 1 : 0.3
+                      backgroundColor: index === 0 ? 'transparent' : BLOOMBERG_DARK_BG,
+                      border: `1px solid ${BLOOMBERG_GRAY}`,
+                      color: index === 0 ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
+                      cursor: index === 0 ? 'not-allowed' : 'pointer',
+                      padding: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: index === 0 ? 0.3 : 1
                     }}
+                    title="Move up"
+                  >
+                    <ChevronUp size={12} />
+                  </button>
+                  <button
                     onClick={() => handleMoveDown(index)}
-                  />
+                    disabled={index === editedTickers.length - 1}
+                    style={{
+                      backgroundColor: index === editedTickers.length - 1 ? 'transparent' : BLOOMBERG_DARK_BG,
+                      border: `1px solid ${BLOOMBERG_GRAY}`,
+                      color: index === editedTickers.length - 1 ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
+                      cursor: index === editedTickers.length - 1 ? 'not-allowed' : 'pointer',
+                      padding: '2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: index === editedTickers.length - 1 ? 0.3 : 1
+                    }}
+                    title="Move down"
+                  >
+                    <ChevronDown size={12} />
+                  </button>
                 </div>
-                <span style={{ color: BLOOMBERG_WHITE, flex: 1 }}>{ticker}</span>
-                <Trash2
-                  size={16}
-                  style={{ color: '#FF0000', cursor: 'pointer' }}
+
+                {/* Ticker symbol */}
+                <span style={{
+                  color: BLOOMBERG_WHITE,
+                  flex: 1,
+                  fontWeight: 'bold'
+                }}>{ticker}</span>
+
+                {/* Delete button */}
+                <button
                   onClick={() => handleRemove(index)}
-                />
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${BLOOMBERG_GRAY}`,
+                    color: '#FF0000',
+                    cursor: 'pointer',
+                    padding: '4px 8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '10px'
+                  }}
+                  title="Remove ticker"
+                >
+                  <Trash2 size={12} />
+                  REMOVE
+                </button>
               </div>
             ))
           )}

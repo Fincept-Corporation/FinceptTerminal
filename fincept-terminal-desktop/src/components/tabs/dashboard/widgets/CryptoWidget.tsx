@@ -24,7 +24,12 @@ export const CryptoWidget: React.FC<CryptoWidgetProps> = ({ id, onRemove }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await marketDataService.getQuotes(TOP_CRYPTOS);
+      // Use cached quotes with 10 minute cache age
+      const data = await marketDataService.getEnhancedQuotesWithCache(
+        TOP_CRYPTOS,
+        'Crypto',
+        10 // 10 minutes cache
+      );
       setQuotes(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load crypto data');

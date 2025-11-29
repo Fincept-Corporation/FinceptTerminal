@@ -103,138 +103,233 @@ const PolygonEqTab: React.FC = () => {
   };
 
   const fetchAllData = async () => {
-    await polygonService.loadApiKey();
-    if (!apiKeyConfigured) return;
+    const apiKey = await polygonService.loadApiKey();
+    if (!apiKey) {
+      console.log('[PolygonEqTab] No API key found, skipping data fetch');
+      return;
+    }
 
     console.log('=== FETCHING DATA FOR:', symbol, '===');
     setLoading(true);
     setError(null);
 
     try {
-      // Fetch chart data in parallel with other data
+      // Fetch chart data (uses yfinance, not Polygon)
       fetchChartData(symbol);
-      const [
-        detailsResp, snapResp, newsResp, relatedResp, marketStatusResp,
-        dividendsResp, splitsResp, lastTradeResp, lastQuoteResp, smaResp,
-        emaResp, macdResp, rsiResp, incomeResp, balanceResp,
-        allTickersResp, tickerTypesResp, tickerEventsResp, exchangesResp, conditionCodesResp,
-        marketHolidaysResp, marketStatusFullResp, smaFullResp, emaFullResp, macdFullResp,
-        cashFlowResp, financialRatiosResp, shortInterestResp, shortVolumeResp, tradesResp, quotesResp,
-      ] = await Promise.all([
-        polygonService.getTickerDetails(symbol).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getSingleTickerSnapshot(symbol).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getNews({ ticker: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getRelatedTickers(symbol).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getMarketStatus().catch((e) => ({ success: false, error: e.message })),
-        polygonService.getDividends({ ticker: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getSplits({ ticker: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getLastTrade(symbol).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getLastQuote(symbol).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getSMA(symbol, { window: 20, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getEMA(symbol, { window: 20, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getMACD(symbol, { shortWindow: 12, longWindow: 26, signalWindow: 9, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getRSI(symbol, { window: 14, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getIncomeStatements(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getBalanceSheets(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getAllTickers({ search: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getTickerTypes().catch((e) => ({ success: false, error: e.message })),
-        polygonService.getTickerEvents(symbol).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getExchanges().catch((e) => ({ success: false, error: e.message })),
-        polygonService.getConditionCodes({ limit: 20 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getMarketHolidays().catch((e) => ({ success: false, error: e.message })),
-        polygonService.getMarketStatus().catch((e) => ({ success: false, error: e.message })),
-        polygonService.getSMA(symbol, { window: 50, timespan: 'day', limit: 100 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getEMA(symbol, { window: 50, timespan: 'day', limit: 100 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getMACD(symbol, { shortWindow: 12, longWindow: 26, signalWindow: 9, timespan: 'day', limit: 100 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getCashFlowStatements(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getFinancialRatios(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getShortInterest(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getShortVolume(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getTrades(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
-        polygonService.getQuotes(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message })),
-      ]);
 
-      // Parse all responses
-      if (detailsResp?.success && detailsResp?.ticker_details) setTickerDetails(detailsResp.ticker_details);
-      if (snapResp?.success && snapResp?.snapshot) setSnapshot(snapResp.snapshot);
-      if (newsResp?.success && newsResp?.news_articles) setNews(newsResp.news_articles);
+      // Helper function to add delay between API calls
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+      const DELAY_MS = 200; // 200ms between requests = 5 requests per second (free tier limit)
+
+      // Fetch data sequentially with delays to respect rate limits
+      console.log('[PolygonEqTab] Fetching ticker details...');
+      const detailsResp = await polygonService.getTickerDetails(symbol).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching snapshot...');
+      const snapResp = await polygonService.getSingleTickerSnapshot(symbol).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching news...');
+      const newsResp = await polygonService.getNews({ ticker: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching related tickers...');
+      const relatedResp = await polygonService.getRelatedTickers(symbol).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching market status...');
+      const marketStatusResp = await polygonService.getMarketStatus().catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching dividends...');
+      const dividendsResp = await polygonService.getDividends({ ticker: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching splits...');
+      const splitsResp = await polygonService.getSplits({ ticker: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching last trade...');
+      const lastTradeResp = await polygonService.getLastTrade(symbol).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching last quote...');
+      const lastQuoteResp = await polygonService.getLastQuote(symbol).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching SMA(20)...');
+      const smaResp = await polygonService.getSMA(symbol, { window: 20, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching EMA(20)...');
+      const emaResp = await polygonService.getEMA(symbol, { window: 20, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching MACD...');
+      const macdResp = await polygonService.getMACD(symbol, { shortWindow: 12, longWindow: 26, signalWindow: 9, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching RSI...');
+      const rsiResp = await polygonService.getRSI(symbol, { window: 14, timespan: 'day', limit: 50 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching income statements...');
+      const incomeResp = await polygonService.getIncomeStatements(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching balance sheets...');
+      const balanceResp = await polygonService.getBalanceSheets(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching all tickers...');
+      const allTickersResp = await polygonService.getAllTickers({ search: symbol, limit: 10 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching ticker types...');
+      const tickerTypesResp = await polygonService.getTickerTypes().catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching ticker events...');
+      const tickerEventsResp = await polygonService.getTickerEvents(symbol).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching exchanges...');
+      const exchangesResp = await polygonService.getExchanges().catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching condition codes...');
+      const conditionCodesResp = await polygonService.getConditionCodes({ limit: 20 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching market holidays...');
+      const marketHolidaysResp = await polygonService.getMarketHolidays().catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      const marketStatusFullResp = marketStatusResp; // Reuse market status
+
+      console.log('[PolygonEqTab] Fetching SMA(50)...');
+      const smaFullResp = await polygonService.getSMA(symbol, { window: 50, timespan: 'day', limit: 100 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching EMA(50)...');
+      const emaFullResp = await polygonService.getEMA(symbol, { window: 50, timespan: 'day', limit: 100 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching MACD (full)...');
+      const macdFullResp = await polygonService.getMACD(symbol, { shortWindow: 12, longWindow: 26, signalWindow: 9, timespan: 'day', limit: 100 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching cash flow statements...');
+      const cashFlowResp = await polygonService.getCashFlowStatements(symbol, { timeframe: 'annual', limit: 5 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching financial ratios...');
+      const financialRatiosResp = await polygonService.getFinancialRatios(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching short interest...');
+      const shortInterestResp = await polygonService.getShortInterest(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching short volume...');
+      const shortVolumeResp = await polygonService.getShortVolume(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching trades...');
+      const tradesResp = await polygonService.getTrades(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message }));
+      await delay(DELAY_MS);
+
+      console.log('[PolygonEqTab] Fetching quotes...');
+      const quotesResp = await polygonService.getQuotes(symbol, { limit: 10 }).catch((e) => ({ success: false, error: e.message }));
+
+      // Parse all responses - check for both explicit success=true or presence of data (success undefined means data exists)
+      console.log('[PolygonEqTab] detailsResp:', detailsResp);
+      console.log('[PolygonEqTab] snapResp:', snapResp);
+      console.log('[PolygonEqTab] newsResp:', newsResp);
+      console.log('[PolygonEqTab] lastTradeResp:', lastTradeResp);
+      console.log('[PolygonEqTab] lastQuoteResp:', lastQuoteResp);
+
+      if ((detailsResp?.success !== false) && detailsResp?.ticker_details) setTickerDetails(detailsResp.ticker_details);
+      if ((snapResp?.success !== false) && snapResp?.snapshot) setSnapshot(snapResp.snapshot);
+      if ((newsResp?.success !== false) && newsResp?.news_articles) setNews(newsResp.news_articles);
       else setNews([]);
 
-      if (relatedResp?.success && relatedResp?.related_tickers) {
+      if ((relatedResp?.success !== false) && relatedResp?.related_tickers) {
         const tickersArray = relatedResp.related_tickers.map((ticker: any) =>
           typeof ticker === 'string' ? { ticker: ticker, name: null } : ticker
         );
         setRelatedTickers(tickersArray);
       } else setRelatedTickers([]);
 
-      if (marketStatusResp?.success && marketStatusResp?.market_status) setMarketStatus(marketStatusResp.market_status);
-      if (dividendsResp?.success && dividendsResp?.dividends) setDividends(dividendsResp.dividends);
+      if ((marketStatusResp?.success !== false) && marketStatusResp?.market_status) setMarketStatus(marketStatusResp.market_status);
+      if ((dividendsResp?.success !== false) && dividendsResp?.dividends) setDividends(dividendsResp.dividends);
       else setDividends([]);
 
-      if (splitsResp?.success && splitsResp?.splits) setSplits(splitsResp.splits);
+      if ((splitsResp?.success !== false) && splitsResp?.splits) setSplits(splitsResp.splits);
       else setSplits([]);
 
-      if (lastTradeResp?.success && lastTradeResp?.last_trade) setLastTrade(lastTradeResp.last_trade);
-      if (lastQuoteResp?.success && lastQuoteResp?.last_quote) setLastQuote(lastQuoteResp.last_quote);
-      if (smaResp?.success && smaResp?.sma_data) setSmaData(smaResp.sma_data);
-      if (emaResp?.success && emaResp?.ema_data) setEmaData(emaResp.ema_data);
-      if (macdResp?.success && macdResp?.macd_data) setMacdData(macdResp.macd_data);
-      if (rsiResp?.success && rsiResp?.rsi_data) setRsiData(rsiResp.rsi_data);
+      if ((lastTradeResp?.success !== false) && lastTradeResp?.last_trade) setLastTrade(lastTradeResp.last_trade);
+      if ((lastQuoteResp?.success !== false) && lastQuoteResp?.last_quote) setLastQuote(lastQuoteResp.last_quote);
+      if ((smaResp?.success !== false) && smaResp?.sma_data) setSmaData(smaResp.sma_data);
+      if ((emaResp?.success !== false) && emaResp?.ema_data) setEmaData(emaResp.ema_data);
+      if ((macdResp?.success !== false) && macdResp?.macd_data) setMacdData(macdResp.macd_data);
+      if ((rsiResp?.success !== false) && rsiResp?.rsi_data) setRsiData(rsiResp.rsi_data);
 
-      if (incomeResp?.success && incomeResp?.income_statement_data) {
+      if ((incomeResp?.success !== false) && incomeResp?.income_statement_data) {
         setIncomeStmt(incomeResp.income_statement_data);
       }
 
-      if (balanceResp?.success && balanceResp?.balance_sheet_data) {
+      if ((balanceResp?.success !== false) && balanceResp?.balance_sheet_data) {
         setBalanceSheet(balanceResp.balance_sheet_data);
       }
 
-      if (allTickersResp?.success && allTickersResp?.tickers) setAllTickers(allTickersResp.tickers);
+      if ((allTickersResp?.success !== false) && allTickersResp?.tickers) setAllTickers(allTickersResp.tickers);
       else setAllTickers([]);
 
-      if (tickerTypesResp?.success && tickerTypesResp?.ticker_types) setTickerTypes(tickerTypesResp.ticker_types);
+      if ((tickerTypesResp?.success !== false) && tickerTypesResp?.ticker_types) setTickerTypes(tickerTypesResp.ticker_types);
       else setTickerTypes([]);
 
-      if (tickerEventsResp?.success && tickerEventsResp?.ticker_events) setTickerEvents(tickerEventsResp.ticker_events);
+      if ((tickerEventsResp?.success !== false) && tickerEventsResp?.ticker_events) setTickerEvents(tickerEventsResp.ticker_events);
       else setTickerEvents(null);
 
-      if (exchangesResp?.success && exchangesResp?.exchanges) setExchanges(exchangesResp.exchanges);
+      if ((exchangesResp?.success !== false) && exchangesResp?.exchanges) setExchanges(exchangesResp.exchanges);
       else setExchanges([]);
 
-      if (conditionCodesResp?.success && conditionCodesResp?.condition_codes) setConditionCodes(conditionCodesResp.condition_codes);
+      if ((conditionCodesResp?.success !== false) && conditionCodesResp?.condition_codes) setConditionCodes(conditionCodesResp.condition_codes);
       else setConditionCodes([]);
 
-      if (marketHolidaysResp?.success && marketHolidaysResp?.market_holidays) setMarketHolidays(marketHolidaysResp.market_holidays);
+      if ((marketHolidaysResp?.success !== false) && marketHolidaysResp?.market_holidays) setMarketHolidays(marketHolidaysResp.market_holidays);
       else setMarketHolidays([]);
 
-      if (marketStatusFullResp?.success && marketStatusFullResp?.market_status) setMarketStatusFull(marketStatusFullResp.market_status);
+      if ((marketStatusFullResp?.success !== false) && marketStatusFullResp?.market_status) setMarketStatusFull(marketStatusFullResp.market_status);
       else setMarketStatusFull(null);
 
-      if (smaFullResp?.success && smaFullResp?.sma_data) setSmaFull(smaFullResp.sma_data);
+      if ((smaFullResp?.success !== false) && smaFullResp?.sma_data) setSmaFull(smaFullResp.sma_data);
       else setSmaFull(null);
 
-      if (emaFullResp?.success && emaFullResp?.ema_data) setEmaFull(emaFullResp.ema_data);
+      if ((emaFullResp?.success !== false) && emaFullResp?.ema_data) setEmaFull(emaFullResp.ema_data);
       else setEmaFull(null);
 
-      if (macdFullResp?.success && macdFullResp?.macd_data) setMacdFull(macdFullResp.macd_data);
+      if ((macdFullResp?.success !== false) && macdFullResp?.macd_data) setMacdFull(macdFullResp.macd_data);
       else setMacdFull(null);
 
-      if (cashFlowResp?.success) setCashFlowStatements(cashFlowResp);
+      if (cashFlowResp?.success !== false && cashFlowResp?.cash_flow_data) setCashFlowStatements(cashFlowResp);
       else setCashFlowStatements(null);
 
-      if (financialRatiosResp?.success) setFinancialRatios(financialRatiosResp);
+      if (financialRatiosResp?.success !== false && financialRatiosResp?.ratios_data) setFinancialRatios(financialRatiosResp);
       else setFinancialRatios(null);
 
-      if (shortInterestResp?.success) setShortInterest(shortInterestResp);
+      if (shortInterestResp?.success !== false && shortInterestResp?.short_interest_data) setShortInterest(shortInterestResp);
       else setShortInterest(null);
 
-      if (shortVolumeResp?.success) setShortVolume(shortVolumeResp);
+      if (shortVolumeResp?.success !== false && shortVolumeResp?.short_volume_data) setShortVolume(shortVolumeResp);
       else setShortVolume(null);
 
-      if (tradesResp?.success) setTrades(tradesResp);
+      if (tradesResp?.success !== false && tradesResp?.trades) setTrades(tradesResp);
       else setTrades(null);
 
-      if (quotesResp?.success) setQuotes(quotesResp);
+      if (quotesResp?.success !== false && quotesResp?.quotes) setQuotes(quotesResp);
       else setQuotes(null);
 
       console.log('=== DATA FETCH COMPLETE (31/31 ENDPOINTS) ===');

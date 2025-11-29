@@ -58,7 +58,7 @@ class MCPManager {
 
         // Update existing server config
         await sqliteService.updateMCPServerConfig(config.id, {
-          env: config.env
+          env: config.env ? JSON.stringify(config.env) : null
         });
 
         // Restart if running
@@ -88,7 +88,9 @@ class MCPManager {
         env: config.env ? JSON.stringify(config.env) : null,
         category: config.category,
         icon: config.icon,
-        enabled: true
+        enabled: true,
+        auto_start: false,
+        status: 'stopped'
       });
 
       // Try to start the server (don't fail install if start fails)
@@ -315,7 +317,13 @@ class MCPManager {
       auto_start?: boolean;
     }
   ): Promise<void> {
-    await sqliteService.updateMCPServerConfig(serverId, updates);
+    // Convert env to string if provided
+    const dbUpdates: Partial<{ env: string | null; enabled: boolean; auto_start: boolean }> = {
+      ...updates,
+      env: updates.env ? JSON.stringify(updates.env) : undefined
+    };
+
+    await sqliteService.updateMCPServerConfig(serverId, dbUpdates as any);
 
     // If server is running and env changed, restart it
     if (updates.env && this.clients.has(serverId)) {

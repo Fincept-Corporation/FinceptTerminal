@@ -46,6 +46,10 @@ class SECDataWrapper:
             'Accept': 'application/json'
         })
 
+        # Cache for company tickers
+        self._company_tickers_cache = None
+        self._cache_timestamp = None
+
         # Form types list (simplified from full SEC list)
         self.common_form_types = [
             "10-K", "10-Q", "8-K", "10-D", "20-F", "40-F", "6-K", "8-A",
@@ -140,6 +144,41 @@ class SECDataWrapper:
 
         except:
             return date_str
+
+    def _get_company_tickers(self) -> Dict[str, Any]:
+        """Fetch company tickers from SEC API with caching (1 hour cache)"""
+        try:
+            # Check cache validity (1 hour = 3600 seconds)
+            if self._company_tickers_cache is not None and self._cache_timestamp is not None:
+                cache_age = time.time() - self._cache_timestamp
+                if cache_age < 3600:
+                    return self._company_tickers_cache
+
+            # Fetch fresh data from SEC
+            url = "https://www.sec.gov/files/company_tickers.json"
+            data = self._make_request(url)
+
+            # Transform data structure for easier lookup
+            transformed = {}
+            cik_to_ticker = {}
+
+            for entry in data.values():
+                ticker = entry.get('ticker', '').upper()
+                cik = str(entry.get('cik_str', '')).zfill(10)
+                title = entry.get('title', '')
+
+                if ticker and cik:
+                    transformed[ticker] = {'cik': cik, 'name': title, 'ticker': ticker}
+                    cik_to_ticker[cik] = ticker
+
+            # Cache the result
+            self._company_tickers_cache = {'by_ticker': transformed, 'by_cik': cik_to_ticker, 'raw': data}
+            self._cache_timestamp = time.time()
+
+            return self._company_tickers_cache
+
+        except Exception as e:
+            return {'by_ticker': {}, 'by_cik': {}, 'raw': {}, 'error': str(e)}
 
     # COMPANY FILINGS ENDPOINTS
 
@@ -246,114 +285,22 @@ class SECDataWrapper:
             if not symbol:
                 return {"error": SECError("cik_map", "Symbol parameter is required").to_dict()}
 
-            # Try to get CIK from company data
             symbol_upper = symbol.upper().strip()
 
-            # Comprehensive company CIK mappings (production-ready implementation)
-            # Based on official SEC company_tickers.json and major market data
-            common_cik_mappings = {
-                # Technology Giants
-                "AAPL": "0000320193", "MSFT": "0000789019", "GOOGL": "0001652044", "GOOG": "0001652044",
-                "AMZN": "0001018724", "META": "0001326801", "FB": "0001326801", "NVDA": "0001045810",
-                "TSLA": "0001318605", "ADBE": "0000796343", "CRM": "0001108703", "NFLX": "0001065280",
-                "INTC": "0000050863", "AMD": "0000002488", "PYPL": "0001633917", "EBAY": "0001065088",
-                "ORCL": "0001341439", "SAP": "0001003010", "IBM": "0000051143", "CSCO": "0000858877",
+            # Fetch company tickers from SEC API
+            company_data = self._get_company_tickers()
 
-                # Financial Services
-                "JPM": "0000019617", "BAC": "0000070858", "WFC": "0000072971", "GS": "0000885620",
-                "MS": "0000895421", "C": "0000083107", "AXP": "0000004962", "BLK": "0000007339",
-                "V": "0001492633", "MA": "0001141391", "COF": "0000091974", "AIG": "0000005114",
-                "SPGI": "0000025348", "MCO": "0000072969", "ICE": "0001623622", "CME": "0001158449",
+            if 'error' in company_data:
+                return {"success": False, "error": SECError("cik_map", f"Failed to fetch company data: {company_data['error']}").to_dict()}
 
-                # Healthcare
-                "JNJ": "0000200406", "UNH": "0000731766", "PFE": "0000078003", "ABBV": "0001551152",
-                "TMO": "0001135217", "ABT": "0000001800", "DHR": "0000038777", "MDT": "0000008229",
-                "LLY": "0000059478", "BMY": "0000014272", "AMGN": "0000006951", "GILD": "0000320193",
-                "CVS": "0000070205", "WBA": "0000109212", "MRK": "0000066404", "BSX": "0000014099",
+            # Look up the CIK in SEC data
+            by_ticker = company_data.get('by_ticker', {})
+            company_info = by_ticker.get(symbol_upper)
 
-                # Consumer Discretionary
-                "AMZN": "0001018724", "TSLA": "0001318605", "HD": "0000023545", "MCD": "0000063908",
-                "NKE": "0000320187", "LOW": "0000055133", "TGT": "0000021344", "COST": "0000711579",
-                "BKNG": "0000108800", "TJX": "0000109130", "ROST": "0000071471", "AZO": "0000872470",
-                "EBAY": "0001065088", "ETSY": "0001564408", "PTON": "0001767421", "ZM": "0001813756",
+            if not company_info:
+                return {"success": False, "error": SECError("cik_map", f"CIK not found for symbol: {symbol_upper}").to_dict(), "note": f"Symbol '{symbol_upper}' not found in SEC database. Total companies available: {len(by_ticker)}"}
 
-                # Consumer Staples
-                "WMT": "0000104169", "PG": "0000080424", "KO": "0000021344", "PEP": "0000077476",
-                "COST": "0000711579", "CL": "0000206724", "KMB": "0000058039", "GIS": "0000041049",
-                "K": "0000056701", "HSY": "0000047565", "KDP": "0001768217", "STZ": "0000946744",
-                "MNST": "0001326801", "SYY": "0000096021", "ADM": "0000005867", "BGS": "0000007212",
-
-                # Energy
-                "XOM": "0000047457", "CVX": "0000093410", "COP": "0000077476", "EOG": "0001121788",
-                "SLB": "0000788198", "KMI": "0000047539", "PSX": "0000104169", "VLO": "0000094126",
-                "MPC": "0000060833", "OXY": "0000788881", "HAL": "0000047228", "BKR": "0001778682",
-
-                # Industrials
-                "BA": "0000012927", "CAT": "0000018230", "GE": "0000040533", "MMM": "0000066740",
-                "HON": "0000077336", "UPS": "0000109130", "RTX": "0000950210", "LMT": "0000051143",
-                "DE": "0000031520", "EMR": "0000032604", "GD": "0000405334", "NOC": "0000069232",
-
-                # Materials
-                "LIN": "0000946744", "APD": "0000006093", "DOW": "0000025236", "DD": "0000025530",
-                "ECL": "0000032604", "NEM": "0000047228", "FCX": "0000080729", "BHP": "0000638343",
-                "RIO": "0000896708", "VALE": "0000106248", "SHW": "0000105808", "PPG": "0000077476",
-
-                # Real Estate
-                "AMT": "0001063761", "PLD": "0001063761", "CCI": "0001063761", "EQIX": "0001063761",
-                "PSA": "0001063761", "WELL": "0001063761", "VTR": "0001063761", "O": "0001063761",
-                "DLR": "0001063761", "SPG": "0001063761",
-
-                # Utilities
-                "NEE": "0000759975", "DUK": "0000065734", "SO": "0000064176", "AEP": "0000004904",
-                "XEL": "0000072113", "SRE": "0000073266", "PEG": "0000073124", "ED": "0000104169",
-
-                # Communication Services
-                "DIS": "0001001039", "NFLX": "0001065280", "CMCSA": "0001166691", "T": "0000732717",
-                "VZ": "0000732717", "TMUS": "0001293996", "CHTR": "0001633917", "FOX": "0001773323",
-
-                # Special Purpose & Other
-                "BRK-A": "0001067983", "BRK-B": "0001067983", "SPY": "0000097602", "QQQ": "0000759975",
-                "GLD": "0000932471", "SLV": "0001564408", "BTC": "N/A", "ETH": "N/A",
-
-                # ETFs
-                "SPY": "0000097602", "IVV": "0000738124", "VOO": "0000738124", "VTI": "0000738124",
-                "QQQ": "0000759975", "IWM": "0000077476", "EFA": "0000932471", "EEM": "0000932471",
-                "VNQ": "0000738124", "XLF": "0000932471", "XLK": "0000932471", "XLE": "0000932471",
-
-                # Additional Tech Stocks
-                "NOW": "0001762926", "SNOW": "0001813756", "PLTR": "0001823094", "CRWD": "0001813756",
-                "ZS": "0001813756", "DOCU": "0001813756", "TWLO": "0001813756", "SQ": "0001813756",
-                "ROKU": "0001813756", "ZM": "0001813756", "PTON": "0001767421", "ABNB": "0001559720",
-
-                # Additional Financial Stocks
-                "SCHW": "0000733385", "IBKR": "0001492904", "MCO": "0000072969", "SPGI": "0000025348",
-                "ICE": "0001623622", "CME": "0001158449", "CBOE": "0001158449", "NDAQ": "0000073297",
-
-                # Additional Healthcare
-                "REGN": "0000314618", "GILD": "0000320193", "BIIB": "0000875321", "MRNA": "0001813756",
-                "BNTX": "0001813756", "CVS": "0000070205", "WBA": "0000109212", "CI": "0000716659",
-
-                # Additional Consumer
-                "LULU": "0001065088", "SBUX": "0000899233", "DKS": "0000872470", "BBY": "0000109212",
-                "BB": "0000932471", "NWSA": "0000932471", "FOX-A": "0001773323"
-            }
-
-            # Look up the CIK in our mapping
-            cik = common_cik_mappings.get(symbol_upper)
-
-            if not cik:
-                # Return a helpful error if symbol not found
-                return {
-                    "success": False,
-                    "error": SECError("cik_map", f"CIK not found for symbol: {symbol_upper}").to_dict(),
-                    "note": f"Symbol '{symbol_upper}' not found in common company database. Available symbols: {list(common_cik_mappings.keys())[:10]}..."
-                }
-
-            return {
-                "success": True,
-                "data": {"cik": cik, "symbol": symbol_upper},
-                "parameters": {"symbol": symbol}
-            }
+            return {"success": True, "data": {"cik": company_info['cik'], "symbol": symbol_upper, "name": company_info['name']}, "parameters": {"symbol": symbol}}
 
         except Exception as e:
             return {"error": SECError("cik_map", str(e)).to_dict()}
@@ -364,114 +311,26 @@ class SECDataWrapper:
             if not cik:
                 return {"error": SECError("symbol_map", "CIK parameter is required").to_dict()}
 
-            # Comprehensive company CIK mappings (production-ready implementation)
-            # Based on official SEC company_tickers.json and major market data
-            common_cik_mappings = {
-                # Technology Giants
-                "AAPL": "0000320193", "MSFT": "0000789019", "GOOGL": "0001652044", "GOOG": "0001652044",
-                "AMZN": "0001018724", "META": "0001326801", "FB": "0001326801", "NVDA": "0001045810",
-                "TSLA": "0001318605", "ADBE": "0000796343", "CRM": "0001108703", "NFLX": "0001065280",
-                "INTC": "0000050863", "AMD": "0000002488", "PYPL": "0001633917", "EBAY": "0001065088",
-                "ORCL": "0001341439", "SAP": "0001003010", "IBM": "0000051143", "CSCO": "0000858877",
-
-                # Financial Services
-                "JPM": "0000019617", "BAC": "0000070858", "WFC": "0000072971", "GS": "0000885620",
-                "MS": "0000895421", "C": "0000083107", "AXP": "0000004962", "BLK": "0000007339",
-                "V": "0001492633", "MA": "0001141391", "COF": "0000091974", "AIG": "0000005114",
-                "SPGI": "0000025348", "MCO": "0000072969", "ICE": "0001623622", "CME": "0001158449",
-
-                # Healthcare
-                "JNJ": "0000200406", "UNH": "0000731766", "PFE": "0000078003", "ABBV": "0001551152",
-                "TMO": "0001135217", "ABT": "0000001800", "DHR": "0000038777", "MDT": "0000008229",
-                "LLY": "0000059478", "BMY": "0000014272", "AMGN": "0000006951", "GILD": "0000320193",
-                "CVS": "0000070205", "WBA": "0000109212", "MRK": "0000066404", "BSX": "0000014099",
-
-                # Consumer Discretionary
-                "AMZN": "0001018724", "TSLA": "0001318605", "HD": "0000023545", "MCD": "0000063908",
-                "NKE": "0000320187", "LOW": "0000055133", "TGT": "0000021344", "COST": "0000711579",
-                "BKNG": "0000108800", "TJX": "0000109130", "ROST": "0000071471", "AZO": "0000872470",
-                "EBAY": "0001065088", "ETSY": "0001564408", "PTON": "0001767421", "ZM": "0001813756",
-
-                # Consumer Staples
-                "WMT": "0000104169", "PG": "0000080424", "KO": "0000021344", "PEP": "0000077476",
-                "COST": "0000711579", "CL": "0000206724", "KMB": "0000058039", "GIS": "0000041049",
-                "K": "0000056701", "HSY": "0000047565", "KDP": "0001768217", "STZ": "0000946744",
-                "MNST": "0001326801", "SYY": "0000096021", "ADM": "0000005867", "BGS": "0000007212",
-
-                # Energy
-                "XOM": "0000047457", "CVX": "0000093410", "COP": "0000077476", "EOG": "0001121788",
-                "SLB": "0000788198", "KMI": "0000047539", "PSX": "0000104169", "VLO": "0000094126",
-                "MPC": "0000060833", "OXY": "0000788881", "HAL": "0000047228", "BKR": "0001778682",
-
-                # Industrials
-                "BA": "0000012927", "CAT": "0000018230", "GE": "0000040533", "MMM": "0000066740",
-                "HON": "0000077336", "UPS": "0000109130", "RTX": "0000950210", "LMT": "0000051143",
-                "DE": "0000031520", "EMR": "0000032604", "GD": "0000405334", "NOC": "0000069232",
-
-                # Materials
-                "LIN": "0000946744", "APD": "0000006093", "DOW": "0000025236", "DD": "0000025530",
-                "ECL": "0000032604", "NEM": "0000047228", "FCX": "0000080729", "BHP": "0000638343",
-                "RIO": "0000896708", "VALE": "0000106248", "SHW": "0000105808", "PPG": "0000077476",
-
-                # Real Estate
-                "AMT": "0001063761", "PLD": "0001063761", "CCI": "0001063761", "EQIX": "0001063761",
-                "PSA": "0001063761", "WPL": "0001063761", "VTR": "0001063761", "O": "0001063761",
-                "DLR": "0001063761", "SPG": "0001063761",
-
-                # Utilities
-                "NEE": "0000759975", "DUK": "0000065734", "SO": "0000064176", "AEP": "0000004904",
-                "XEL": "0000072113", "SRE": "0000073266", "PEG": "0000073124", "ED": "0000104169",
-
-                # Communication Services
-                "DIS": "0001001039", "NFLX": "0001065280", "CMCSA": "0001166691", "T": "0000732717",
-                "VZ": "0000732717", "TMUS": "0001293996", "CHTR": "0001633917", "FOX": "0001773323",
-
-                # Special Purpose & Other
-                "BRK-A": "0001067983", "BRK-B": "0001067983", "SPY": "0000097602", "QQQ": "0000759975",
-                "GLD": "0000932471", "SLV": "0001564408", "BTC": "N/A", "ETH": "N/A",
-
-                # ETFs
-                "SPY": "0000097602", "IVV": "0000738124", "VOO": "0000738124", "VTI": "0000738124",
-                "QQQ": "0000759975", "IWM": "0000077476", "EFA": "0000932471", "EEM": "0000932471",
-                "VNQ": "0000738124", "XLF": "0000932471", "XLK": "0000932471", "XLE": "0000932471",
-
-                # Additional Tech Stocks
-                "NOW": "0001762926", "SNOW": "0001813756", "PLTR": "0001823094", "CRWD": "0001813756",
-                "ZS": "0001813756", "DOCU": "0001813756", "TWLO": "0001813756", "SQ": "0001813756",
-                "ROKU": "0001813756", "ZM": "0001813756", "PTON": "0001767421", "ABNB": "0001559720",
-
-                # Additional Financial Stocks
-                "SCHW": "0000733385", "IBKR": "0001492904", "MCO": "0000072969", "SPGI": "0000025348",
-                "ICE": "0001623622", "CME": "0001158449", "CBOE": "0001158449", "NDAQ": "0000073297",
-
-                # Additional Healthcare
-                "REGN": "0000314618", "GILD": "0000320193", "BIIB": "0000875321", "MRNA": "0001813756",
-                "BNTX": "0001813756", "CVS": "0000070205", "WBA": "0000109212", "CI": "0000716659",
-
-                # Additional Consumer
-                "LULU": "0001065088", "SBUX": "0000899233", "DKS": "0000872470", "BBY": "0000109212",
-                "BB": "0000932471", "NWSA": "0000932471", "FOX-A": "0001773323"
-            }
-
-            # Create reverse mapping (CIK to symbol)
-            cik_to_symbol = {v: k for k, v in common_cik_mappings.items()}
-
             normalized_cik = self._normalize_cik(cik)
-            symbol = cik_to_symbol.get(normalized_cik)
+
+            # Fetch company tickers from SEC API
+            company_data = self._get_company_tickers()
+
+            if 'error' in company_data:
+                return {"success": False, "error": SECError("symbol_map", f"Failed to fetch company data: {company_data['error']}").to_dict()}
+
+            # Look up the symbol in SEC data
+            by_cik = company_data.get('by_cik', {})
+            symbol = by_cik.get(normalized_cik)
 
             if not symbol:
-                # Return a helpful error if CIK not found
-                return {
-                    "success": False,
-                    "error": SECError("symbol_map", f"Symbol not found for CIK: {normalized_cik}").to_dict(),
-                    "note": f"CIK '{normalized_cik}' not found in common company database."
-                }
+                return {"success": False, "error": SECError("symbol_map", f"Symbol not found for CIK: {normalized_cik}").to_dict(), "note": f"CIK '{normalized_cik}' not found in SEC database. Total companies available: {len(by_cik)}"}
 
-            return {
-                "success": True,
-                "data": {"cik": normalized_cik, "symbol": symbol},
-                "parameters": {"cik": str(cik)}
-            }
+            # Get company info
+            by_ticker = company_data.get('by_ticker', {})
+            company_info = by_ticker.get(symbol, {})
+
+            return {"success": True, "data": {"cik": normalized_cik, "symbol": symbol, "name": company_info.get('name', '')}, "parameters": {"cik": str(cik)}}
 
         except Exception as e:
             return {"error": SECError("symbol_map", str(e)).to_dict()}
@@ -798,100 +657,45 @@ class SECDataWrapper:
 
             query_upper = query.upper().strip()
 
-            # Use our comprehensive company database for real-time search
-            common_cik_mappings = {
-                # Technology Giants
-                "AAPL": {"cik": "0000320193", "name": "Apple Inc.", "exchange": "NASDAQ", "sic": "3571", "state": "CA"},
-                "MSFT": {"cik": "0000789019", "name": "Microsoft Corporation", "exchange": "NASDAQ", "sic": "7372", "state": "WA"},
-                "GOOGL": {"cik": "0001652044", "name": "Alphabet Inc.", "exchange": "NASDAQ", "sic": "7370", "state": "DE"},
-                "GOOG": {"cik": "0001652044", "name": "Alphabet Inc.", "exchange": "NASDAQ", "sic": "7370", "state": "DE"},
-                "AMZN": {"cik": "0001018724", "name": "Amazon.com, Inc.", "exchange": "NASDAQ", "sic": "5961", "state": "DE"},
-                "META": {"cik": "0001326801", "name": "Meta Platforms, Inc.", "exchange": "NASDAQ", "sic": "7370", "state": "DE"},
-                "NVDA": {"cik": "0001045810", "name": "NVIDIA Corporation", "exchange": "NASDAQ", "sic": "3674", "state": "DE"},
-                "TSLA": {"cik": "0001318605", "name": "Tesla, Inc.", "exchange": "NASDAQ", "sic": "3711", "state": "DE"},
+            # Fetch company tickers from SEC API
+            company_data = self._get_company_tickers()
 
-                # Financial Services
-                "JPM": {"cik": "0000019617", "name": "JPMorgan Chase & Co.", "exchange": "NYSE", "sic": "6021", "state": "DE"},
-                "BAC": {"cik": "0000070858", "name": "Bank of America Corporation", "exchange": "NYSE", "sic": "6021", "state": "DE"},
-                "WFC": {"cik": "0000072971", "name": "Wells Fargo & Company", "exchange": "NYSE", "sic": "6021", "state": "DE"},
-                "GS": {"cik": "0000885620", "name": "The Goldman Sachs Group, Inc.", "exchange": "NYSE", "sic": "6211", "state": "DE"},
-                "V": {"cik": "0001492633", "name": "Visa Inc.", "exchange": "NYSE", "sic": "6021", "state": "DE"},
-                "MA": {"cik": "0001141391", "name": "Mastercard Incorporated", "exchange": "NYSE", "sic": "6021", "state": "DE"},
+            if 'error' in company_data:
+                return {"success": False, "error": SECError("search_companies", f"Failed to fetch company data: {company_data['error']}").to_dict()}
 
-                # Healthcare
-                "JNJ": {"cik": "0000200406", "name": "Johnson & Johnson", "exchange": "NYSE", "sic": "2834", "state": "DE"},
-                "UNH": {"cik": "0000731766", "name": "UnitedHealth Group Incorporated", "exchange": "NYSE", "sic": "8099", "state": "DE"},
-                "PFE": {"cik": "0000078003", "name": "Pfizer Inc.", "exchange": "NYSE", "sic": "2834", "state": "DE"},
-                "TMO": {"cik": "0001135217", "name": "Thermo Fisher Scientific Inc.", "exchange": "NYSE", "sic": "3821", "state": "DE"},
-                "ABT": {"cik": "0000001800", "name": "Abbott Laboratories", "exchange": "NYSE", "sic": "3841", "state": "DE"},
-
-                # Consumer Staples
-                "WMT": {"cik": "0000104169", "name": "Walmart Inc.", "exchange": "NYSE", "sic": "5331", "state": "DE"},
-                "PG": {"cik": "0000080424", "name": "The Procter & Gamble Company", "exchange": "NYSE", "sic": "2844", "state": "DE"},
-                "KO": {"cik": "0000021344", "name": "The Coca-Cola Company", "exchange": "NYSE", "sic": "2086", "state": "DE"},
-                "PEP": {"cik": "0000077476", "name": "PepsiCo, Inc.", "exchange": "NASDAQ", "sic": "2086", "state": "DE"},
-                "COST": {"cik": "0000711579", "name": "Costco Wholesale Corporation", "exchange": "NASDAQ", "sic": "5331", "state": "DE"},
-
-                # Energy
-                "XOM": {"cik": "0000047457", "name": "Exxon Mobil Corporation", "exchange": "NYSE", "sic": "2911", "state": "DE"},
-                "CVX": {"cik": "0000093410", "name": "Chevron Corporation", "exchange": "NYSE", "sic": "2911", "state": "DE"},
-                "COP": {"cik": "0000077476", "name": "ConocoPhillips", "exchange": "NYSE", "sic": "2911", "state": "DE"},
-
-                # Industrials
-                "BA": {"cik": "0000012927", "name": "The Boeing Company", "exchange": "NYSE", "sic": "3721", "state": "DE"},
-                "CAT": {"cik": "0000018230", "name": "Caterpillar Inc.", "exchange": "NYSE", "sic": "3531", "state": "DE"},
-                "GE": {"cik": "0000040533", "name": "General Electric Company", "exchange": "NYSE", "sic": "3621", "state": "DE"},
-                "MMM": {"cik": "0000066740", "name": "3M Company", "exchange": "NYSE", "sic": "2670", "state": "DE"},
-
-                # ETFs and Funds
-                "SPY": {"cik": "0000097602", "name": "SPDR S&P 500 ETF Trust", "exchange": "AMEX", "sic": "6726", "state": "MA"},
-                "QQQ": {"cik": "0000759975", "name": "Invesco QQQ Trust", "exchange": "NASDAQ", "sic": "6726", "state": "MA"},
-                "VTI": {"cik": "0000738124", "name": "Vanguard Total Stock Market ETF", "exchange": "AMEX", "sic": "6726", "state": "PA"},
-                "IVV": {"cik": "0000738124", "name": "iShares Core S&P 500 ETF", "exchange": "AMEX", "sic": "6726", "state": "PA"}
-            }
+            by_ticker = company_data.get('by_ticker', {})
+            raw_data = company_data.get('raw', {})
 
             # Search for exact matches first
             results = []
 
             # Exact symbol match
-            if query_upper in common_cik_mappings:
-                company_data = common_cik_mappings[query_upper]
+            if query_upper in by_ticker:
+                company_info = by_ticker[query_upper]
                 results.append({
-                    "cik": company_data["cik"],
-                    "name": company_data["name"],
+                    "cik": company_info['cik'],
+                    "name": company_info['name'],
                     "symbol": query_upper,
-                    "exchange": company_data["exchange"],
-                    "sic": company_data["sic"],
-                    "state_location": company_data["state"],
-                    "state_of_incorporation": "DE",  # Most companies incorporated in DE
                     "match_type": "exact_symbol"
                 })
 
             # Partial symbol matches
-            for symbol, data in common_cik_mappings.items():
+            for symbol, data in by_ticker.items():
                 if query_upper in symbol and symbol != query_upper:
                     results.append({
-                        "cik": data["cik"],
-                        "name": data["name"],
+                        "cik": data['cik'],
+                        "name": data['name'],
                         "symbol": symbol,
-                        "exchange": data["exchange"],
-                        "sic": data["sic"],
-                        "state_location": data["state"],
-                        "state_of_incorporation": "DE",
                         "match_type": "partial_symbol"
                     })
 
             # Name matches (case-insensitive)
-            for symbol, data in common_cik_mappings.items():
-                if query_upper in data["name"].upper() and symbol != query_upper:
+            for symbol, data in by_ticker.items():
+                if query_upper in data['name'].upper() and not any(r['cik'] == data['cik'] for r in results):
                     results.append({
-                        "cik": data["cik"],
-                        "name": data["name"],
+                        "cik": data['cik'],
+                        "name": data['name'],
                         "symbol": symbol,
-                        "exchange": data["exchange"],
-                        "sic": data["sic"],
-                        "state_location": data["state"],
-                        "state_of_incorporation": "DE",
                         "match_type": "name_match"
                     })
 
@@ -907,12 +711,11 @@ class SECDataWrapper:
                 if result["cik"] not in seen_ciks:
                     unique_results.append(result)
                     seen_ciks.add(result["cik"])
-                    if len(unique_results) >= 10:  # Limit to 10 results
+                    if len(unique_results) >= 20:  # Limit to 20 results
                         break
 
             # If no results found, provide helpful message
             if not unique_results:
-                available_symbols = list(common_cik_mappings.keys())[:20]
                 return {
                     "success": True,
                     "data": [],
@@ -920,7 +723,7 @@ class SECDataWrapper:
                         "query": query,
                         "is_fund": is_fund
                     },
-                    "note": f"No companies found matching '{query}'. Available symbols include: {', '.join(available_symbols)}"
+                    "note": f"No companies found matching '{query}' in SEC database of {len(by_ticker)} companies."
                 }
 
             return {
@@ -931,7 +734,7 @@ class SECDataWrapper:
                     "is_fund": is_fund
                 },
                 "total_results": len(unique_results),
-                "database_coverage": len(common_cik_mappings)
+                "database_coverage": len(by_ticker)
             }
 
         except Exception as e:

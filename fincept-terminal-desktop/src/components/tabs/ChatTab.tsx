@@ -3,10 +3,12 @@ import { flushSync } from 'react-dom';
 import { Settings, Trash2, Bot, User, Clock, Send, Plus, Search, Edit2, Check, X } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { llmApiService, ChatMessage as APIMessage } from '../../services/llmApi';
-import { sqliteService, ChatSession, ChatMessage } from '../../services/sqliteService';
+import { sqliteService, ChatSession, ChatMessage, RecordedContext } from '../../services/sqliteService';
 import { llmConfigService } from '../../services/llmConfig';
+import { contextRecorderService } from '../../services/contextRecorderService';
 import LLMSettingsModal from './LLMSettingsModal';
 import MarkdownRenderer from '../common/MarkdownRenderer';
+import ContextSelector from '../common/ContextSelector';
 
 interface ChatTabProps {
   onNavigateToSettings?: () => void;
@@ -27,6 +29,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
   const [streamingContent, setStreamingContent] = useState('');
   const [statistics, setStatistics] = useState({ totalSessions: 0, totalMessages: 0, totalTokens: 0 });
   const [mcpToolsCount, setMcpToolsCount] = useState(0);
+  const [linkedContexts, setLinkedContexts] = useState<RecordedContext[]>([]);
+
+  const handleContextsChange = (contexts: RecordedContext[]) => {
+    setLinkedContexts(contexts);
+  };
 
   // Rename and search functionality
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
@@ -35,6 +42,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionsListRef = useRef<HTMLDivElement>(null);
+
+  // Check if current provider supports MCP tools
+  const providerSupportsMCP = () => {
+    const supportedProviders = ['openai', 'openrouter', 'gemini', 'deepseek', 'ollama'];
+    return supportedProviders.includes(currentProvider.toLowerCase());
+  };
 
   // Initialize database on mount
   useEffect(() => {
@@ -54,6 +67,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         if (!healthCheck.healthy) {
           throw new Error(healthCheck.message);
         }
+
+        // Ensure default LLM configs exist
+        await sqliteService.ensureDefaultLLMConfigs();
 
         // Load initial data
         await loadSessions();
@@ -145,16 +161,13 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
       const { mcpToolService } = await import('../../services/mcpToolService');
       const tools = await mcpToolService.getAllTools();
       setMcpToolsCount(tools.length);
-      console.log(`[Chat] MCP Tools available: ${tools.length}`);
 
       // If we got 0 tools and haven't exceeded max retries, try again after a delay
       if (tools.length === 0 && retryCount < maxRetries) {
         const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff, max 10s
-        console.log(`[Chat] No tools found, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})...`);
         setTimeout(() => loadMCPToolsCount(retryCount + 1, maxRetries), delay);
       }
     } catch (error) {
-      console.log('[Chat] MCP not available:', error);
       setMcpToolsCount(0);
     }
   };
@@ -340,14 +353,23 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         content: msg.content
       }));
 
+      // Prepend linked contexts to the conversation
+      if (linkedContexts.length > 0) {
+        const contextIds = linkedContexts.map(ctx => ctx.id);
+        const contextData = await contextRecorderService.formatMultipleContexts(contextIds, 'markdown');
+        conversationHistory.unshift({
+          role: 'system',
+          content: `The following recorded data contexts are provided for your reference:\n\n${contextData}\n\n---\n\nPlease use this information to help answer the user's questions.`
+        });
+      }
+
       // Get MCP tools if available using the unified service
       let mcpTools: any[] = [];
       try {
         const { mcpToolService } = await import('../../services/mcpToolService');
         mcpTools = await mcpToolService.getAllTools();
-        console.log(`[Chat] Found ${mcpTools.length} MCP tools`);
       } catch (error) {
-        console.log('[Chat] No MCP tools available:', error);
+        // MCP tools not available
       }
 
       // Call LLM API with tools if available
@@ -409,16 +431,22 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         setStreamingContent('');
         setSystemStatus(`ERROR: ${response.error}`);
       } else {
+        // Make sure we have content to save
+        const contentToSave = response.content || streamingContent || '(No response generated)';
+        console.log('[Chat] Saving AI response, length:', contentToSave.length);
+
         const aiMessage = await sqliteService.addChatMessage({
           session_uuid: currentSessionUuid,
           role: 'assistant',
-          content: response.content,
+          content: contentToSave,
           provider: activeConfig.provider,
           model: activeConfig.model,
           tokens_used: response.usage?.totalTokens
         });
 
         setMessages(prev => [...prev, aiMessage]);
+        setIsTyping(false);
+        setStreamingContent('');
       }
 
       // Reload sessions and statistics
@@ -446,27 +474,42 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
       )
     : sessions;
 
-  const formatTime = (date: Date | string) => {
-    const d = typeof date === 'string' ? new Date(date) : date;
-    return d.toLocaleTimeString('en-US', {
-      hour12: false,
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+  const formatTime = (date: Date | string | undefined) => {
+    if (!date) return '00:00:00';
+    try {
+      const d = typeof date === 'string' ? new Date(date) : date;
+      if (isNaN(d.getTime())) return '00:00:00';
+      return d.toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting time:', error, date);
+      return '00:00:00';
+    }
   };
 
-  const formatSessionTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+  const formatSessionTime = (dateString: string | undefined) => {
+    if (!dateString) return '00:00';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '00:00';
 
-    if (diffHours < 24) {
-      return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
-    } else if (diffHours < 168) { // Less than a week
-      return date.toLocaleDateString('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-    } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const now = new Date();
+      const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+
+      if (diffHours < 24) {
+        return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+      } else if (diffHours < 168) { // Less than a week
+        return date.toLocaleDateString('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+      } else {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+    } catch (error) {
+      console.error('Error formatting session time:', error, dateString);
+      return '00:00';
     }
   };
 
@@ -508,55 +551,66 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
     </div>
   );
 
-  const renderMessage = (message: ChatMessage) => (
-    <div key={message.id} style={{ marginBottom: '12px' }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
-        marginBottom: '4px'
-      }}>
-        <div style={{
-          maxWidth: '85%',
-          minWidth: '120px',
-          backgroundColor: colors.panel,
-          border: `1px solid ${message.role === 'user' ? colors.warning : colors.primary}`,
-          borderRadius: '4px',
-          padding: '10px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-            {message.role === 'user' ? (
-              <User size={12} color={colors.warning} />
-            ) : (
-              <Bot size={12} color={colors.primary} />
-            )}
-            <span style={{
-              color: message.role === 'user' ? colors.warning : colors.primary,
-              fontSize: '11px',
-              fontWeight: 'bold'
+  const renderMessage = (message: ChatMessage) => {
+    try {
+      return (
+        <div key={message.id} style={{ marginBottom: '12px' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
+            marginBottom: '4px'
+          }}>
+            <div style={{
+              maxWidth: '85%',
+              minWidth: '120px',
+              backgroundColor: colors.panel,
+              border: `1px solid ${message.role === 'user' ? colors.warning : colors.primary}`,
+              borderRadius: '4px',
+              padding: '10px'
             }}>
-              {message.role === 'user' ? 'YOU' : 'AI'}
-            </span>
-            <Clock size={10} color={colors.textMuted} />
-            <span style={{ color: colors.textMuted, fontSize: '10px' }}>
-              {formatTime(message.timestamp)}
-            </span>
-            {message.provider && (
-              <span style={{ color: colors.textMuted, fontSize: '10px' }}>
-                | {message.provider}
-              </span>
-            )}
-          </div>
-          {message.role === 'assistant' ? (
-            <MarkdownRenderer content={message.content} />
-          ) : (
-            <div style={{ color: colors.text, fontSize: '13px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
-              {message.content}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                {message.role === 'user' ? (
+                  <User size={12} color={colors.warning} />
+                ) : (
+                  <Bot size={12} color={colors.primary} />
+                )}
+                <span style={{
+                  color: message.role === 'user' ? colors.warning : colors.primary,
+                  fontSize: '11px',
+                  fontWeight: 'bold'
+                }}>
+                  {message.role === 'user' ? 'YOU' : 'AI'}
+                </span>
+                <Clock size={10} color={colors.textMuted} />
+                <span style={{ color: colors.textMuted, fontSize: '10px' }}>
+                  {formatTime(message.timestamp)}
+                </span>
+                {message.provider && (
+                  <span style={{ color: colors.textMuted, fontSize: '10px' }}>
+                    | {message.provider}
+                  </span>
+                )}
+              </div>
+              {message.role === 'assistant' && message.content ? (
+                <MarkdownRenderer content={message.content} />
+              ) : (
+                <div style={{ color: colors.text, fontSize: '13px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>
+                  {message.content || '(Empty message)'}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
-      </div>
-    </div>
-  );
+      );
+    } catch (error) {
+      console.error('Error rendering message:', error, message);
+      return (
+        <div key={message.id} style={{ marginBottom: '12px', color: colors.alert }}>
+          Error rendering message
+        </div>
+      );
+    }
+  };
 
   const renderStreamingMessage = () => {
     if (!streamingContent) return null;
@@ -985,65 +1039,102 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
           </div>
         </div>
 
-        {/* Right Panel - Quick Actions */}
+        {/* Right Panel - Quick Actions & Context Selector */}
         <div style={{
-          width: '200px',
+          width: '250px',
           backgroundColor: colors.panel,
           borderLeft: `1px solid ${colors.textMuted}`,
           padding: '8px',
-          overflow: 'auto'
+          overflow: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
         }}>
-          <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-            QUICK PROMPTS
+          {/* Context Selector */}
+          <div>
+            <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              DATA CONTEXTS
+            </div>
+            <ContextSelector
+              chatSessionUuid={currentSessionUuid}
+              onContextsChange={handleContextsChange}
+            />
           </div>
-          {[
-            { cmd: 'MARKET TRENDS', prompt: 'Analyze current market trends and key insights' },
-            { cmd: 'PORTFOLIO', prompt: 'Portfolio diversification recommendations' },
-            { cmd: 'RISK', prompt: 'Investment risk assessment strategies' },
-            { cmd: 'TECHNICAL', prompt: 'Key technical analysis indicators' }
-          ].map(item => (
-            <button
-              key={item.cmd}
-              onClick={() => setMessageInput(item.prompt)}
-              style={{
-                width: '100%',
-                backgroundColor: colors.background,
-                color: colors.text,
-                border: `1px solid ${colors.textMuted}`,
-                padding: '5px',
-                fontSize: '9px',
-                textAlign: 'left',
-                cursor: 'pointer',
-                marginBottom: '4px'
-              }}
-            >
-              {item.cmd}
-            </button>
-          ))}
 
-          <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginTop: '12px', marginBottom: '6px' }}>
-            SYSTEM INFO
+          {/* Quick Prompts */}
+          <div>
+            <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              QUICK PROMPTS
+            </div>
+            {[
+              { cmd: 'MARKET TRENDS', prompt: 'Analyze current market trends and key insights' },
+              { cmd: 'PORTFOLIO', prompt: 'Portfolio diversification recommendations' },
+              { cmd: 'RISK', prompt: 'Investment risk assessment strategies' },
+              { cmd: 'TECHNICAL', prompt: 'Key technical analysis indicators' }
+            ].map(item => (
+              <button
+                key={item.cmd}
+                onClick={() => setMessageInput(item.prompt)}
+                style={{
+                  width: '100%',
+                  backgroundColor: colors.background,
+                  color: colors.text,
+                  border: `1px solid ${colors.textMuted}`,
+                  padding: '5px',
+                  fontSize: '9px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  marginBottom: '4px'
+                }}
+              >
+                {item.cmd}
+              </button>
+            ))}
           </div>
-          <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
-            Provider: {currentProvider.toUpperCase()}
-          </div>
-          <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
-            Model: {llmConfigService.getActiveConfig().model}
-          </div>
-          <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
-            Temp: {llmConfigService.getActiveConfig().temperature}
-          </div>
-          <div style={{ color: colors.secondary, fontSize: '9px', marginBottom: '2px' }}>
-            Streaming: Enabled
-          </div>
-          <div style={{
-            color: mcpToolsCount > 0 ? colors.secondary : colors.textMuted,
-            fontSize: '9px',
-            marginTop: '6px',
-            paddingTop: '6px',
-            borderTop: `1px solid ${colors.textMuted}`
-          }}>
-            MCP Tools: {mcpToolsCount > 0 ? `${mcpToolsCount} Available ✓` : 'None'}
+
+          {/* System Info */}
+          <div>
+            <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
+              SYSTEM INFO
+            </div>
+            <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
+              Provider: {currentProvider.toUpperCase()}
+            </div>
+            <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
+              Model: {llmConfigService.getActiveConfig().model}
+            </div>
+            <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
+              Temp: {llmConfigService.getActiveConfig().temperature}
+            </div>
+            <div style={{ color: colors.secondary, fontSize: '9px', marginBottom: '2px' }}>
+              Streaming: Enabled
+            </div>
+            <div style={{
+              marginTop: '6px',
+              paddingTop: '6px',
+              borderTop: `1px solid ${colors.textMuted}`
+            }}>
+              <div style={{
+                color: mcpToolsCount > 0 ? colors.secondary : colors.textMuted,
+                fontSize: '9px',
+                marginBottom: '2px'
+              }}>
+                MCP Tools: {mcpToolsCount > 0 ? `${mcpToolsCount} Available ✓` : 'None'}
+              </div>
+              {mcpToolsCount > 0 && !providerSupportsMCP() && (
+                <div style={{
+                  color: colors.alert,
+                  fontSize: '8px',
+                  marginTop: '4px',
+                  padding: '4px',
+                  backgroundColor: colors.background,
+                  border: `1px solid ${colors.alert}`,
+                  borderRadius: '2px'
+                }}>
+                  ⚠️ {currentProvider.toUpperCase()} doesn't support MCP tools
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

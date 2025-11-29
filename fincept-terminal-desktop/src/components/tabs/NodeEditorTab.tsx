@@ -40,6 +40,7 @@ import PythonAgentNode from './node-editor/PythonAgentNode';
 import ResultsDisplayNode from './node-editor/ResultsDisplayNode';
 import AgentMediatorNode from './node-editor/AgentMediatorNode';
 import DataSourceNode from './node-editor/DataSourceNode';
+import TechnicalIndicatorNode from './node-editor/TechnicalIndicatorNode';
 import WorkflowManager from './node-editor/WorkflowManager';
 import ResultsModal from './node-editor/ResultsModal';
 import { pythonAgentService, AgentMetadata } from '@/services/pythonAgentService';
@@ -222,6 +223,14 @@ const NODE_CONFIGS = [
     hasOutput: true,
   },
   {
+    type: 'technical-indicator',
+    label: 'Technical Indicators',
+    color: '#10b981',
+    category: 'Processing',
+    hasInput: true,
+    hasOutput: true,
+  },
+  {
     type: 'agent-mediator',
     label: 'Agent Mediator',
     color: '#3b82f6',
@@ -325,7 +334,8 @@ export default function NodeEditorTab() {
     'python-agent': PythonAgentNode,
     'results-display': ResultsDisplayNode,
     'agent-mediator': AgentMediatorNode,
-    'data-source': DataSourceNode
+    'data-source': DataSourceNode,
+    'technical-indicator': TechnicalIndicatorNode
   }), []);
 
   // Handle label change
@@ -360,17 +370,18 @@ export default function NodeEditorTab() {
     [setEdges]
   );
 
-  // Add new node (handles regular nodes, MCP tool nodes, Python agent nodes, data source, and agent mediator)
+  // Add new node (handles regular nodes, MCP tool nodes, Python agent nodes, data source, technical indicators, and agent mediator)
   const addNode = (config: any) => {
     const isMCPNode = config.type === 'mcp-tool';
     const isPythonAgent = config.type === 'python-agent';
     const isResultsDisplay = config.type === 'results-display';
     const isAgentMediator = config.type === 'agent-mediator';
     const isDataSource = config.type === 'data-source';
+    const isTechnicalIndicator = config.type === 'technical-indicator';
 
     const newNode: Node = {
       id: `node_${Date.now()}`,
-      type: isPythonAgent ? 'python-agent' : (isMCPNode ? 'mcp-tool' : (isResultsDisplay ? 'results-display' : (isAgentMediator ? 'agent-mediator' : (isDataSource ? 'data-source' : 'custom')))),
+      type: isPythonAgent ? 'python-agent' : (isMCPNode ? 'mcp-tool' : (isResultsDisplay ? 'results-display' : (isAgentMediator ? 'agent-mediator' : (isDataSource ? 'data-source' : (isTechnicalIndicator ? 'technical-indicator' : 'custom'))))),
       position: { x: Math.random() * 400 + 100, y: Math.random() * 300 + 100 },
       data: isPythonAgent ? {
         agentType: config.id,  // Use 'id' field which contains agent_type like 'warren_buffett'
@@ -530,6 +541,36 @@ export default function NodeEditorTab() {
           console.log('[NodeEditor] Data source node execute clicked');
           // Will be handled by workflow execution
         },
+      } : (isTechnicalIndicator ? {
+        label: config.label,
+        dataSource: 'yfinance',
+        symbol: 'AAPL',
+        period: '1y',
+        csvPath: '',
+        jsonData: '',
+        categories: ['momentum', 'volume', 'volatility', 'trend', 'others'],
+        status: 'idle',
+        result: undefined,
+        error: undefined,
+        onExecute: (nodeId: string) => {
+          console.log('[NodeEditor] Technical indicator node execute clicked:', nodeId);
+          // Workflow execution will handle this
+        },
+        onParameterChange: (params: Record<string, any>) => {
+          setNodes((nds) =>
+            nds.map((n) =>
+              n.id === newNode.id
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      ...params,
+                    },
+                  }
+                : n
+            )
+          );
+        },
       } : {
         label: config.label,
         nodeType: config.type,
@@ -537,7 +578,7 @@ export default function NodeEditorTab() {
         hasInput: config.hasInput,
         hasOutput: config.hasOutput,
         onLabelChange: handleLabelChange,
-      })))),
+      }))))),
     };
     setNodes((nds) => [...nds, newNode]);
     setShowNodeMenu(false);

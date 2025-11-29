@@ -50,8 +50,8 @@ export const DEFAULT_MODELS = {
   openai: 'gpt-4o-mini',
   gemini: 'gemini-2.0-flash-exp',
   deepseek: 'deepseek-chat',
-  ollama: 'llama3.2:latest',
-  openrouter: 'meta-llama/llama-3.1-8b-instruct:free'
+  ollama: 'llama3.2:3b', // Changed from llama3.2:latest to a specific version that's commonly available
+  openrouter: 'google/gemini-2.0-flash-exp:free' // Free model with function calling support
 };
 
 // Default base URLs

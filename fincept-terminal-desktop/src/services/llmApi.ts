@@ -136,10 +136,33 @@ class LLMApiService {
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
     const conversationMessages = messages.filter(m => m.role !== 'system');
 
-    const contents = conversationMessages.map(msg => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
-    }));
+    // Gemini requires alternating roles - merge consecutive messages from same role
+    const contents: any[] = [];
+    let lastRole: string | null = null;
+
+    for (const msg of conversationMessages) {
+      const geminiRole = msg.role === 'assistant' ? 'model' : 'user';
+
+      if (geminiRole === lastRole && contents.length > 0) {
+        // Merge with previous message
+        contents[contents.length - 1].parts.push({ text: '\n\n' + msg.content });
+      } else {
+        // New message
+        contents.push({
+          role: geminiRole,
+          parts: [{ text: msg.content }]
+        });
+        lastRole = geminiRole;
+      }
+    }
+
+    // Ensure we have at least one message
+    if (contents.length === 0) {
+      return {
+        content: '',
+        error: 'No messages to send to Gemini'
+      };
+    }
 
     const requestBody = {
       contents,
@@ -149,6 +172,8 @@ class LLMApiService {
         maxOutputTokens: config.maxTokens
       }
     };
+
+    console.log('[Gemini] Request body:', JSON.stringify(requestBody, null, 2));
 
     try {
       const response = await fetch(url, {
@@ -160,16 +185,42 @@ class LLMApiService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error?.message || `Gemini API error: ${response.status}`);
+        const errorText = await response.text();
+        let errorMessage = `Gemini API error: ${response.status}`;
+        try {
+          const error = JSON.parse(errorText);
+          errorMessage = error.error?.message || errorMessage;
+          console.error('[Gemini] API Error Response:', error);
+        } catch {
+          console.error('[Gemini] API Error Text:', errorText);
+        }
+        throw new Error(errorMessage);
       }
 
       if (onStream) {
         return await this.handleGeminiStream(response, onStream);
       } else {
         const data = await response.json();
+        console.log('[Gemini] Response data:', JSON.stringify(data, null, 2));
+
+        // Extract text content safely
+        const candidate = data.candidates?.[0];
+        if (!candidate) {
+          throw new Error('No candidates in Gemini response');
+        }
+
+        const parts = candidate.content?.parts;
+        if (!parts || parts.length === 0) {
+          throw new Error('No content parts in Gemini response');
+        }
+
+        const text = parts[0].text;
+        if (!text) {
+          throw new Error('No text in Gemini response parts');
+        }
+
         return {
-          content: data.candidates[0].content.parts[0].text,
+          content: text,
           usage: {
             promptTokens: data.usageMetadata?.promptTokenCount || 0,
             completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
@@ -449,7 +500,7 @@ class LLMApiService {
     config: LLMConfig,
     onStream?: StreamCallback
   ): Promise<LLMResponse> {
-    const url = `${config.baseUrl}/api/chat`;
+    const url = `${config.baseUrl || 'http://localhost:11434'}/api/chat`;
 
     try {
       const response = await fetch(url, {
@@ -469,6 +520,20 @@ class LLMApiService {
       });
 
       if (!response.ok) {
+        if (response.status === 404) {
+          let errorMsg = '';
+          try {
+            const errorData = await response.json();
+            if (errorData.error && errorData.error.includes('model')) {
+              errorMsg = `Ollama model '${config.model}' not found. Please pull the model first using: ollama pull ${config.model}`;
+            } else {
+              errorMsg = errorData.error || 'Ollama server not found. Please ensure Ollama is running at http://localhost:11434';
+            }
+          } catch {
+            errorMsg = 'Ollama server not found. Please ensure Ollama is running at http://localhost:11434';
+          }
+          throw new Error(errorMsg);
+        }
         throw new Error(`Ollama API error: ${response.status}`);
       }
 
@@ -532,6 +597,206 @@ class LLMApiService {
       return { content: fullContent };
     } finally {
       reader.releaseLock();
+    }
+  }
+
+  // Ollama with function calling
+  private async callOllamaWithTools(
+    userMessage: string,
+    conversationHistory: ChatMessage[],
+    tools: Array<any>,
+    config: LLMConfig,
+    onStream?: StreamCallback,
+    onToolCall?: (toolName: string, args: any, result?: any) => void
+  ): Promise<LLMResponse> {
+    const url = `${config.baseUrl || 'http://localhost:11434'}/api/chat`;
+
+    // Convert MCP tools to Ollama function format
+    const ollamaTools = tools.map(tool => {
+      // Clean schema for Ollama - remove $schema and additionalProperties
+      const cleanSchema = tool.inputSchema ? { ...tool.inputSchema } : { type: 'object', properties: {} };
+      delete cleanSchema.$schema;
+      delete cleanSchema.additionalProperties;
+
+      return {
+        type: 'function',
+        function: {
+          name: `${tool.serverId}__${tool.name}`,
+          description: tool.description || '',
+          parameters: cleanSchema
+        }
+      };
+    });
+
+    console.log('[MCP] Sending tools to Ollama:', ollamaTools.length, 'tools');
+
+    // Build messages
+    const systemPrompt = conversationHistory.find(m => m.role === 'system')?.content || config.systemPrompt || '';
+    const conversationMessages = conversationHistory.filter(m => m.role !== 'system');
+
+    let messages: any[] = [
+      { role: 'system', content: systemPrompt + '\n\nYou have access to tools. Use them when the user asks for specific data or actions.' },
+      ...conversationMessages.map(msg => ({ role: msg.role, content: msg.content })),
+      { role: 'user', content: userMessage }
+    ];
+
+    try {
+      // First call - with tools
+      let response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages: messages,
+          tools: ollamaTools,
+          stream: false,
+          options: {
+            temperature: config.temperature,
+            num_predict: config.maxTokens
+          }
+        })
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`Ollama model '${config.model}' not found. Please pull the model first using: ollama pull ${config.model}`);
+        }
+        throw new Error(`Ollama API error: ${response.status}`);
+      }
+
+      let data = await response.json();
+      let assistantMessage = data.message;
+
+      // Track tool result content for fallback
+      let resultContent = '';
+
+      // Check if Ollama wants to call tools
+      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+        console.log('[MCP] Ollama requested tool calls:', assistantMessage.tool_calls.length);
+
+        // Add assistant's tool call message to conversation
+        messages.push(assistantMessage);
+
+        // Execute each tool call
+        for (const toolCall of assistantMessage.tool_calls) {
+          const toolName = toolCall.function.name;
+          const toolArgs = toolCall.function.arguments;
+
+          console.log(`[MCP] Calling tool: ${toolName}`, toolArgs);
+
+          // Notify UI that tool is being called
+          if (onToolCall) {
+            onToolCall(toolName, toolArgs);
+          }
+
+          // Import mcpManager dynamically to avoid circular dependency
+          const { mcpManager } = await import('./mcpManager');
+
+          // Execute the tool
+          try {
+            // Parse server ID from tool name (format: serverId__toolName)
+            const [serverId, actualToolName] = toolName.includes('__')
+              ? toolName.split('__')
+              : [toolName, toolName];
+
+            const toolResult = await mcpManager.callTool(serverId, actualToolName, toolArgs);
+
+            // Format result for Ollama
+            if (toolResult.content && Array.isArray(toolResult.content)) {
+              resultContent = toolResult.content
+                .map((c: any) => {
+                  if (c.text) return c.text;
+                  if (c.data) return typeof c.data === 'string' ? c.data : JSON.stringify(c.data, null, 2);
+                  return JSON.stringify(c, null, 2);
+                })
+                .join('\n\n');
+            } else if (toolResult.content) {
+              resultContent = typeof toolResult.content === 'string'
+                ? toolResult.content
+                : JSON.stringify(toolResult.content, null, 2);
+            } else {
+              resultContent = JSON.stringify(toolResult, null, 2);
+            }
+
+            // Add tool result to conversation
+            messages.push({
+              role: 'tool',
+              content: resultContent
+            });
+
+            // Notify UI of result
+            if (onToolCall) {
+              onToolCall(toolName, toolArgs, toolResult);
+            }
+
+            console.log(`[MCP] Tool result:`, resultContent);
+          } catch (error) {
+            console.error(`[MCP] Tool execution error:`, error);
+            messages.push({
+              role: 'tool',
+              content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+            });
+          }
+        }
+
+        // Second call - get final response with tool results
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: config.model,
+            messages: messages,
+            stream: false,
+            options: {
+              temperature: config.temperature,
+              num_predict: config.maxTokens
+            }
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Ollama API error: ${response.status}`);
+        }
+
+        data = await response.json();
+        assistantMessage = data.message;
+      }
+
+      // Extract final content
+      let finalContent = assistantMessage.content || '';
+
+      // If Ollama didn't generate text after tool call, return the tool result
+      if (!finalContent && resultContent) {
+        finalContent = resultContent;
+      }
+
+      console.log('[MCP] Ollama final response length:', finalContent.length);
+
+      // Signal completion to UI
+      if (onStream && finalContent) {
+        onStream(finalContent, false);
+        onStream('', true);
+      }
+
+      return {
+        content: finalContent,
+        usage: {
+          promptTokens: data.prompt_eval_count || 0,
+          completionTokens: data.eval_count || 0,
+          totalTokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
+        }
+      };
+
+    } catch (error) {
+      console.error('Ollama function calling error:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
     }
   }
 
@@ -680,12 +945,24 @@ class LLMApiService {
         };
       }
 
-      // OpenAI, OpenRouter, Gemini, and DeepSeek support function calling
-      const supportsTools = ['openai', 'openrouter', 'gemini', 'deepseek'].includes(activeConfig.provider);
+      // OpenAI, OpenRouter, Gemini, DeepSeek, and Ollama support function calling
+      const supportsTools = ['openai', 'openrouter', 'gemini', 'deepseek', 'ollama'].includes(activeConfig.provider);
 
-      if (!supportsTools) {
-        // Fall back to regular chat for other providers (Ollama, etc.)
-        return this.chat(userMessage, conversationHistory, onStream);
+      if (!supportsTools && tools.length > 0) {
+        // Provider doesn't support tools - show warning message
+        console.warn(`[MCP] Provider '${activeConfig.provider}' does not support function calling. Available tools: ${tools.length}`);
+
+        const warningMessage = `⚠️ MCP Tools Not Supported\n\n` +
+          `Your current LLM provider (${activeConfig.provider.toUpperCase()}) does not support function calling with MCP tools.\n\n` +
+          `**Available MCP Tools:** ${tools.length} tools detected\n` +
+          `**Supported Providers:** OpenAI, Gemini, DeepSeek, OpenRouter, Ollama\n\n` +
+          `To use MCP tools, please switch to a supported provider in Settings (CONFIG button).`;
+
+        // Return warning as response
+        return {
+          content: warningMessage,
+          error: undefined
+        };
       }
 
       // If no tools provided, fall back to regular chat
@@ -708,6 +985,11 @@ class LLMApiService {
       // Handle Gemini separately since it has different API format
       if (activeConfig.provider === 'gemini') {
         return this.callGeminiWithTools(userMessage, conversationHistory, tools, config, onStream, onToolCall);
+      }
+
+      // Handle Ollama separately since it has different API format
+      if (activeConfig.provider === 'ollama') {
+        return this.callOllamaWithTools(userMessage, conversationHistory, tools, config, onStream, onToolCall);
       }
 
       // Build messages for OpenAI/OpenRouter/DeepSeek (all use OpenAI format)

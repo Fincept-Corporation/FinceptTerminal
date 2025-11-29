@@ -8,7 +8,6 @@ import { MariaDBAdapter } from './MariaDBAdapter';
 import { MongoDBAdapter } from './MongoDBAdapter';
 import { RedisAdapter } from './RedisAdapter';
 import { SQLiteAdapter } from './SQLiteAdapter';
-import { DuckDBAdapter } from './DuckDBAdapter';
 import { CSVAdapter } from './CSVAdapter';
 import { YahooFinanceAdapter } from './YahooFinanceAdapter';
 import { InfluxDBAdapter } from './InfluxDBAdapter';
@@ -128,7 +127,6 @@ const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   etcd: EtcdAdapter,
 
   // Analytical/Columnar Databases
-  duckdb: DuckDBAdapter,
   clickhouse: ClickHouseAdapter,
 
   // Data Warehouses
@@ -284,7 +282,6 @@ export {
   MongoDBAdapter,
   RedisAdapter,
   SQLiteAdapter,
-  DuckDBAdapter,
   CSVAdapter,
   YahooFinanceAdapter,
   InfluxDBAdapter,

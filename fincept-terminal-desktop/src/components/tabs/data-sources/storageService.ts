@@ -1,10 +1,8 @@
-// DuckDB Storage Service for Data Source Connections
-// This service will handle saving/loading data source configurations
+// SQLite Storage Service for Data Source Connections
+// Uses SQLiteService for persistent storage
 
 import { DataSourceConnection } from './types';
-
-// Local storage key for connections (temporary until DuckDB integration)
-const STORAGE_KEY = 'fincept_data_source_connections';
+import { sqliteService } from '@/services/sqliteService';
 
 export class DataSourceStorageService {
   /**
@@ -12,16 +10,16 @@ export class DataSourceStorageService {
    */
   static async saveConnection(connection: DataSourceConnection): Promise<void> {
     try {
-      const connections = await this.getAllConnections();
-      connections.push(connection);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(connections));
-
-      // TODO: Implement DuckDB storage
-      // await duckdb.query(`
-      //   INSERT INTO data_source_connections
-      //   (id, name, type, category, config, status, created_at, updated_at)
-      //   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      // `, [connection.id, connection.name, ...]);
+      await sqliteService.saveDataSourceConnection({
+        id: connection.id,
+        name: connection.name,
+        type: connection.type,
+        category: connection.category,
+        config: JSON.stringify(connection.config),
+        status: connection.status,
+        lastTested: connection.lastTested,
+        errorMessage: connection.errorMessage,
+      });
     } catch (error) {
       console.error('Error saving connection:', error);
       throw error;
@@ -33,24 +31,15 @@ export class DataSourceStorageService {
    */
   static async updateConnection(id: string, updates: Partial<DataSourceConnection>): Promise<void> {
     try {
-      const connections = await this.getAllConnections();
-      const index = connections.findIndex((c) => c.id === id);
+      const updateData: any = {};
 
-      if (index !== -1) {
-        connections[index] = {
-          ...connections[index],
-          ...updates,
-          updatedAt: new Date().toISOString(),
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(connections));
-      }
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.config !== undefined) updateData.config = JSON.stringify(updates.config);
+      if (updates.status !== undefined) updateData.status = updates.status;
+      if (updates.lastTested !== undefined) updateData.lastTested = updates.lastTested;
+      if (updates.errorMessage !== undefined) updateData.errorMessage = updates.errorMessage;
 
-      // TODO: Implement DuckDB update
-      // await duckdb.query(`
-      //   UPDATE data_source_connections
-      //   SET name = ?, config = ?, status = ?, updated_at = ?
-      //   WHERE id = ?
-      // `, [...]);
+      await sqliteService.updateDataSourceConnection(id, updateData);
     } catch (error) {
       console.error('Error updating connection:', error);
       throw error;
@@ -62,12 +51,7 @@ export class DataSourceStorageService {
    */
   static async deleteConnection(id: string): Promise<void> {
     try {
-      const connections = await this.getAllConnections();
-      const filtered = connections.filter((c) => c.id !== id);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-
-      // TODO: Implement DuckDB deletion
-      // await duckdb.query(`DELETE FROM data_source_connections WHERE id = ?`, [id]);
+      await sqliteService.deleteDataSourceConnection(id);
     } catch (error) {
       console.error('Error deleting connection:', error);
       throw error;
@@ -79,14 +63,13 @@ export class DataSourceStorageService {
    */
   static async getConnection(id: string): Promise<DataSourceConnection | null> {
     try {
-      const connections = await this.getAllConnections();
-      return connections.find((c) => c.id === id) || null;
+      const result = await sqliteService.getDataSourceConnection(id);
+      if (!result) return null;
 
-      // TODO: Implement DuckDB query
-      // const result = await duckdb.query(`
-      //   SELECT * FROM data_source_connections WHERE id = ?
-      // `, [id]);
-      // return result[0] || null;
+      return {
+        ...result,
+        config: JSON.parse(result.config),
+      };
     } catch (error) {
       console.error('Error getting connection:', error);
       return null;
@@ -98,14 +81,11 @@ export class DataSourceStorageService {
    */
   static async getAllConnections(): Promise<DataSourceConnection[]> {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? JSON.parse(stored) : [];
-
-      // TODO: Implement DuckDB query
-      // const result = await duckdb.query(`
-      //   SELECT * FROM data_source_connections ORDER BY created_at DESC
-      // `);
-      // return result;
+      const results = await sqliteService.getAllDataSourceConnections();
+      return results.map((r: any) => ({
+        ...r,
+        config: JSON.parse(r.config),
+      }));
     } catch (error) {
       console.error('Error getting connections:', error);
       return [];
@@ -117,16 +97,11 @@ export class DataSourceStorageService {
    */
   static async getConnectionsByCategory(category: string): Promise<DataSourceConnection[]> {
     try {
-      const connections = await this.getAllConnections();
-      return connections.filter((c) => c.category === category);
-
-      // TODO: Implement DuckDB query
-      // const result = await duckdb.query(`
-      //   SELECT * FROM data_source_connections
-      //   WHERE category = ?
-      //   ORDER BY created_at DESC
-      // `, [category]);
-      // return result;
+      const results = await sqliteService.getDataSourceConnectionsByCategory(category);
+      return results.map((r: any) => ({
+        ...r,
+        config: JSON.parse(r.config),
+      }));
     } catch (error) {
       console.error('Error getting connections by category:', error);
       return [];
@@ -138,8 +113,11 @@ export class DataSourceStorageService {
    */
   static async getConnectionsByType(type: string): Promise<DataSourceConnection[]> {
     try {
-      const connections = await this.getAllConnections();
-      return connections.filter((c) => c.type === type);
+      const results = await sqliteService.getDataSourceConnectionsByType(type);
+      return results.map((r: any) => ({
+        ...r,
+        config: JSON.parse(r.config),
+      }));
     } catch (error) {
       console.error('Error getting connections by type:', error);
       return [];
@@ -147,26 +125,12 @@ export class DataSourceStorageService {
   }
 
   /**
-   * Initialize the database schema (for DuckDB)
+   * Initialize the database schema
    */
   static async initializeSchema(): Promise<void> {
     try {
-      // TODO: Implement DuckDB schema creation
-      // await duckdb.query(`
-      //   CREATE TABLE IF NOT EXISTS data_source_connections (
-      //     id VARCHAR PRIMARY KEY,
-      //     name VARCHAR NOT NULL,
-      //     type VARCHAR NOT NULL,
-      //     category VARCHAR NOT NULL,
-      //     config JSON NOT NULL,
-      //     status VARCHAR NOT NULL,
-      //     created_at TIMESTAMP NOT NULL,
-      //     updated_at TIMESTAMP NOT NULL,
-      //     last_tested TIMESTAMP,
-      //     error_message VARCHAR
-      //   )
-      // `);
-      console.log('Storage service initialized (using localStorage)');
+      // Schema is created automatically by sqliteService
+      console.log('Storage service initialized (using SQLite)');
     } catch (error) {
       console.error('Error initializing schema:', error);
       throw error;
@@ -226,18 +190,16 @@ export class DataSourceStorageService {
       const existing = await this.getAllConnections();
 
       // Merge and deduplicate by ID
-      const merged = [...existing];
       let imported = 0;
 
       for (const conn of connections) {
-        const index = merged.findIndex((c) => c.id === conn.id);
-        if (index === -1) {
-          merged.push(conn);
+        const exists = existing.find((c) => c.id === conn.id);
+        if (!exists) {
+          await this.saveConnection(conn);
           imported++;
         }
       }
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
       return imported;
     } catch (error) {
       console.error('Error importing connections:', error);

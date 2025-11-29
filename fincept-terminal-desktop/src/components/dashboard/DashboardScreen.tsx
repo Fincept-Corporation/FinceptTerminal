@@ -36,6 +36,8 @@ import FyersTab from '@/components/tabs/fyers';
 import SupportTicketTab from '@/components/tabs/SupportTicketTab';
 import PolygonEqTab from '@/components/tabs/PolygonEqTab';
 import KrakenTab from '@/components/tabs/KrakenTab';
+import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
+import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -705,6 +707,12 @@ export default function FinxeptTerminal() {
             >
               Support
             </TabsTrigger>
+            <TabsTrigger
+              value="contexts"
+              style={activeTab === 'contexts' ? tabStyles.active : tabStyles.default}
+            >
+              Recorded Contexts
+            </TabsTrigger>
           </TabsList>
         </Tabs>
         </div>
@@ -845,6 +853,12 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="datamapping" className="h-full m-0 p-0">
             <DataMappingTab />
+          </TabsContent>
+          <TabsContent value="contexts" className="h-full m-0 p-0">
+            <RecordedContextsManager />
+          </TabsContent>
+          <TabsContent value="reportbuilder" className="h-full m-0 p-0">
+            <ReportBuilderTab />
           </TabsContent>
         </Tabs>
       </div>

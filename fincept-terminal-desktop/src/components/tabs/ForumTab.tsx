@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ForumApiService, ForumPost as APIForumPost, ForumCategory, ForumStats, ForumComment as APIForumComment } from '../../services/forumApi';
+import { sqliteService } from '../../services/sqliteService';
 
 interface ForumPost {
   id: string;
@@ -46,6 +47,11 @@ const ForumTab: React.FC = () => {
   const [sortBy, setSortBy] = useState('latest');
   const [onlineUsers, setOnlineUsers] = useState(1247);
   const [isLoading, setIsLoading] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Auto-refresh interval ref
+  const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Modal states
   const [showCreatePost, setShowCreatePost] = useState(false);
@@ -152,9 +158,20 @@ const ForumTab: React.FC = () => {
     };
   };
 
-  // ENDPOINT 1: Fetch forum categories
-  const fetchCategories = async () => {
+  // ENDPOINT 1: Fetch forum categories (with caching)
+  const fetchCategories = async (forceRefresh: boolean = false) => {
     try {
+      // Try to load from cache first (unless forcing refresh)
+      if (!forceRefresh) {
+        const cachedCategories = await sqliteService.getCachedForumCategories(5);
+        if (cachedCategories) {
+          console.log('[Forum] Loaded categories from cache');
+          setCategories(cachedCategories);
+          return;
+        }
+      }
+
+      // Fetch from API
       const { apiKey, deviceId } = getApiCredentials();
       const response = await ForumApiService.getCategories(apiKey, deviceId);
 
@@ -176,6 +193,10 @@ const ForumTab: React.FC = () => {
         ];
 
         setCategories(formattedCategories);
+
+        // Cache the formatted categories
+        await sqliteService.cacheForumCategories(formattedCategories);
+        console.log('[Forum] Cached categories');
       }
     } catch (error) {
       // Silently fail - backend may not be available
@@ -183,10 +204,24 @@ const ForumTab: React.FC = () => {
     }
   };
 
-  // ENDPOINT 2 & 6: Fetch forum posts (by category or trending)
-  const fetchPosts = async () => {
+  // ENDPOINT 2 & 6: Fetch forum posts (by category or trending) with caching
+  const fetchPosts = async (forceRefresh: boolean = false) => {
     setIsLoading(true);
     try {
+      const categoryId = activeCategory === 'ALL' ? null : categories.find(c => c.name === activeCategory)?.id || null;
+
+      // Try to load from cache first (unless forcing refresh)
+      if (!forceRefresh) {
+        const cachedPosts = await sqliteService.getCachedForumPosts(categoryId, sortBy, 5);
+        if (cachedPosts) {
+          console.log('[Forum] Loaded posts from cache');
+          setForumPosts(cachedPosts);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Fetch from API
       const { apiKey, deviceId } = getApiCredentials();
       let response;
 
@@ -194,11 +229,10 @@ const ForumTab: React.FC = () => {
         if (sortBy === 'popular') {
           response = await ForumApiService.getTrendingPosts(20, 'week', apiKey, deviceId);
         } else {
-          const categoryId = categories.find(c => c.name !== 'ALL')?.id || 1;
-          response = await ForumApiService.getPostsByCategory(categoryId, sortBy, 20, apiKey, deviceId);
+          const firstCategoryId = categories.find(c => c.name !== 'ALL')?.id || 1;
+          response = await ForumApiService.getPostsByCategory(firstCategoryId, sortBy, 20, apiKey, deviceId);
         }
       } else {
-        const categoryId = categories.find(c => c.name === activeCategory)?.id;
         if (categoryId) {
           response = await ForumApiService.getPostsByCategory(categoryId, sortBy, 20, apiKey, deviceId);
         }
@@ -208,6 +242,10 @@ const ForumTab: React.FC = () => {
         const posts = response.data.data.posts || [];
         const formattedPosts = posts.map(convertApiPostToUIFormat);
         setForumPosts(formattedPosts);
+
+        // Cache the formatted posts
+        await sqliteService.cacheForumPosts(categoryId, sortBy, formattedPosts);
+        console.log('[Forum] Cached posts');
       }
     } catch (error) {
       // Silently fail - backend may not be available
@@ -217,9 +255,23 @@ const ForumTab: React.FC = () => {
     }
   };
 
-  // ENDPOINT 5: Fetch forum statistics
-  const fetchForumStats = async () => {
+  // ENDPOINT 5: Fetch forum statistics (with caching)
+  const fetchForumStats = async (forceRefresh: boolean = false) => {
     try {
+      // Try to load from cache first (unless forcing refresh)
+      if (!forceRefresh) {
+        const cachedStats = await sqliteService.getCachedForumStats(5);
+        if (cachedStats) {
+          console.log('[Forum] Loaded stats from cache');
+          setForumStats(cachedStats);
+          if (cachedStats.active_users) {
+            setOnlineUsers(cachedStats.active_users);
+          }
+          return;
+        }
+      }
+
+      // Fetch from API
       const { apiKey, deviceId } = getApiCredentials();
       const response = await ForumApiService.getForumStats(apiKey, deviceId);
 
@@ -228,6 +280,10 @@ const ForumTab: React.FC = () => {
         if (response.data.data.active_users) {
           setOnlineUsers(response.data.data.active_users);
         }
+
+        // Cache the stats
+        await sqliteService.cacheForumStats(response.data.data);
+        console.log('[Forum] Cached stats');
       }
     } catch (error) {
       // Silently fail - backend may not be available
@@ -280,7 +336,7 @@ const ForumTab: React.FC = () => {
         setShowCreatePost(false);
         setNewPostTitle('');
         setNewPostContent('');
-        fetchPosts(); // Refresh posts
+        fetchPosts(true); // Refresh posts (force refresh to bypass cache)
       } else {
         alert(`Failed to create post: ${response.error || response.data?.message || 'Unknown error'}`);
       }
@@ -353,7 +409,7 @@ const ForumTab: React.FC = () => {
       const response = await ForumApiService.voteOnPost(postId, voteType, apiKey, deviceId);
 
       if (response.success) {
-        fetchPosts(); // Refresh posts to show updated vote counts
+        fetchPosts(true); // Refresh posts to show updated vote counts (force refresh)
         if (selectedPost && selectedPost.id === postId) {
           handleViewPost(selectedPost); // Refresh post detail if viewing
         }
@@ -518,6 +574,30 @@ const ForumTab: React.FC = () => {
     setRecentActivity(activities);
   };
 
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    if (isRefreshing) return; // Prevent multiple simultaneous refreshes
+
+    setIsRefreshing(true);
+    console.log('[Forum] Manual refresh triggered');
+
+    try {
+      // Force refresh all data (bypass cache)
+      await Promise.all([
+        fetchCategories(true),
+        fetchForumStats(true),
+        fetchPosts(true)
+      ]);
+
+      setLastRefreshTime(new Date());
+      console.log('[Forum] Manual refresh completed');
+    } catch (error) {
+      console.error('[Forum] Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   // Initial load
   useEffect(() => {
     fetchCategories();
@@ -547,6 +627,23 @@ const ForumTab: React.FC = () => {
     }, 5000);
     return () => clearInterval(timer);
   }, []);
+
+  // Auto-refresh every 5 minutes
+  useEffect(() => {
+    const autoRefreshInterval = setInterval(() => {
+      console.log('[Forum] Auto-refresh triggered (5 min interval)');
+      handleRefresh();
+    }, 5 * 60 * 1000); // 5 minutes in milliseconds
+
+    autoRefreshIntervalRef.current = autoRefreshInterval;
+
+    // Cleanup on unmount
+    return () => {
+      if (autoRefreshIntervalRef.current) {
+        clearInterval(autoRefreshIntervalRef.current);
+      }
+    };
+  }, []); // Empty deps - set up once on mount
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
@@ -1247,16 +1344,35 @@ const ForumTab: React.FC = () => {
         padding: '4px 8px',
         flexShrink: 0
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
-          <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>FINCEPT GLOBAL FORUM</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_GREEN }}>● LIVE</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_YELLOW }}>USERS ONLINE: {onlineUsers.toLocaleString()}</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_CYAN }}>POSTS TODAY: {postsToday.toLocaleString()}</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>|</span>
-          <span style={{ color: BLOOMBERG_WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>FINCEPT GLOBAL FORUM</span>
+            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+            <span style={{ color: BLOOMBERG_GREEN }}>● LIVE</span>
+            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+            <span style={{ color: BLOOMBERG_YELLOW }}>USERS ONLINE: {onlineUsers.toLocaleString()}</span>
+            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+            <span style={{ color: BLOOMBERG_CYAN }}>POSTS TODAY: {postsToday.toLocaleString()}</span>
+            <span style={{ color: BLOOMBERG_WHITE }}>|</span>
+            <span style={{ color: BLOOMBERG_WHITE }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            style={{
+              backgroundColor: isRefreshing ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
+              color: BLOOMBERG_DARK_BG,
+              border: 'none',
+              padding: '2px 8px',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              cursor: isRefreshing ? 'not-allowed' : 'pointer',
+              opacity: isRefreshing ? 0.6 : 1
+            }}
+            title={lastRefreshTime ? `Last refreshed: ${lastRefreshTime.toLocaleTimeString()}` : 'Refresh forum data'}
+          >
+            {isRefreshing ? '⟳ REFRESHING...' : '⟳ REFRESH'}
+          </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>

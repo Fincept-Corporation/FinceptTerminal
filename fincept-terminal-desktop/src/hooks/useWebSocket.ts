@@ -310,8 +310,11 @@ export function useWebSocket(
 
     const manager = getWebSocketManager();
     const provider = topic.split('.')[0];
+    let isMounted = true;
 
     const checkInterval = setInterval(() => {
+      if (!isMounted) return; // Guard against unmounted component
+
       const providerStatus = manager.getStatus(provider);
 
       // If connected but no active subscription, resubscribe
@@ -321,7 +324,10 @@ export function useWebSocket(
       }
     }, 2000);
 
-    return () => clearInterval(checkInterval);
+    return () => {
+      isMounted = false;
+      clearInterval(checkInterval);
+    };
   }, [topic, autoSubscribe, params, subscribe]);
 
   return {
@@ -348,14 +354,21 @@ export function useWebSocketManager() {
   const [metrics, setMetrics] = useState(manager.getAllMetrics());
 
   useEffect(() => {
+    let isMounted = true;
+
     // Update stats, statuses, and metrics periodically
     const interval = setInterval(() => {
+      if (!isMounted) return; // Guard against unmounted component
+
       setStats(manager.getStats());
       setStatuses(manager.getAllStatuses());
       setMetrics(manager.getAllMetrics());
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [manager]);
 
   return {
@@ -377,13 +390,20 @@ export function useWebSocketConnection(provider: string) {
   const [metrics, setMetrics] = useState(manager.getMetrics(provider));
 
   useEffect(() => {
+    let isMounted = true;
+
     // Update status and metrics periodically
     const interval = setInterval(() => {
+      if (!isMounted) return; // Guard against unmounted component
+
       setStatus(manager.getStatus(provider));
       setMetrics(manager.getMetrics(provider));
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [manager, provider]);
 
   const connect = useCallback(async () => {

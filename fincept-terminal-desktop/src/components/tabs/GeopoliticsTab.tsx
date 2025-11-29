@@ -1,494 +1,431 @@
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, ScatterChart, Scatter, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, BarChart, Bar } from 'recharts';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { geopoliticsService } from '@/services/geopoliticsService';
 
 const GeopoliticsTab: React.FC = () => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [activePanel, setActivePanel] = useState('overview');
-  const [alertCount, setAlertCount] = useState(127);
-  const [dataUpdateCount, setDataUpdateCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [qrNotifications, setQrNotifications] = useState<any[]>([]);
+  const [epingNotifications, setEpingNotifications] = useState<any[]>([]);
+  const [tariffData, setTariffData] = useState<any[]>([]);
+  const [qrRestrictions, setQrRestrictions] = useState<any[]>([]);
+  const [qrProducts, setQrProducts] = useState<any[]>([]);
+  const [tradeFlow, setTradeFlow] = useState<any[]>([]);
+  const [tfadData, setTfadData] = useState<any>(null);
+  const [selectedCountry, setSelectedCountry] = useState('840');
+  const [expandedQR, setExpandedQR] = useState<number | null>(null);
+  const [expandedEPing, setExpandedEPing] = useState<number | null>(null);
+  const [expandedRestriction, setExpandedRestriction] = useState<number | null>(null);
 
-  // Risk colors
-  const RISK_CRITICAL = '#FF0000';
-  const RISK_HIGH = '#FF6400';
-  const RISK_MEDIUM = '#FFC800';
-  const RISK_LOW = '#64FF64';
+  const countries = [
+    { code: '840', name: 'United States' },
+    { code: '156', name: 'China' },
+    { code: '276', name: 'Germany' },
+    { code: '392', name: 'Japan' },
+    { code: '826', name: 'United Kingdom' },
+    { code: '356', name: 'India' },
+    { code: '124', name: 'Canada' },
+    { code: '076', name: 'Brazil' },
+    { code: '036', name: 'Australia' }
+  ];
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-      setDataUpdateCount(prev => prev + 1);
-      if (Math.random() > 0.7) setAlertCount(prev => prev + 1);
-    }, 2000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 2000);
     return () => clearInterval(timer);
   }, []);
 
-  // Complex chart data
-  const riskForecastData = Array.from({ length: 90 }, (_, i) => ({
-    day: i + 1,
-    baseRisk: 7.2 + Math.sin(i * 0.1) * 0.8 + Math.random() * 0.4,
-    militaryRisk: 8.1 + Math.cos(i * 0.08) * 0.6 + Math.random() * 0.3,
-    economicRisk: 6.8 + Math.sin(i * 0.12) * 0.9 + Math.random() * 0.5,
-    cyberRisk: 7.5 + Math.cos(i * 0.15) * 0.7 + Math.random() * 0.4,
-    nuclearRisk: 7.0 + Math.sin(i * 0.05) * 0.5 + Math.random() * 0.2,
-    volatility: 2.1 + Math.random() * 1.8
-  }));
+  useEffect(() => {
+    loadGeopoliticsData();
+  }, [selectedCountry]);
 
-  const correlationMatrix = [
-    { asset: 'Energy', military: 0.89, economic: 0.76, cyber: 0.45, nuclear: 0.67, volatility: 3.2 },
-    { asset: 'Tech', military: 0.23, economic: 0.84, cyber: 0.91, nuclear: 0.34, volatility: 2.8 },
-    { asset: 'Defense', military: 0.94, economic: 0.56, cyber: 0.67, nuclear: 0.78, volatility: 2.1 },
-    { asset: 'Finance', military: 0.45, economic: 0.91, cyber: 0.72, nuclear: 0.43, volatility: 2.4 },
-    { asset: 'Materials', military: 0.78, economic: 0.69, cyber: 0.34, nuclear: 0.56, volatility: 3.1 },
-    { asset: 'Crypto', military: 0.12, economic: 0.67, cyber: 0.89, nuclear: 0.23, volatility: 4.8 },
-    { asset: 'Commodities', military: 0.82, economic: 0.74, cyber: 0.28, nuclear: 0.61, volatility: 3.6 }
-  ];
-
-  const threatRadarData = [
-    { threat: 'Military', current: 8.1, max: 10, trend: 'up' },
-    { threat: 'Economic', current: 7.4, max: 10, trend: 'up' },
-    { threat: 'Cyber', current: 7.8, max: 10, trend: 'up' },
-    { threat: 'Nuclear', current: 7.2, max: 10, trend: 'stable' },
-    { threat: 'Climate', current: 6.4, max: 10, trend: 'up' },
-    { threat: 'Terror', current: 5.8, max: 10, trend: 'down' }
-  ];
-
-  const countryRiskData = [
-    { country: 'Russia', military: 9.2, economic: 8.1, political: 4.0, total: 7.1, trend: 'up', sanctions: 1247 },
-    { country: 'China', military: 8.5, economic: 7.8, political: 6.5, total: 7.6, trend: 'up', sanctions: 89 },
-    { country: 'Iran', military: 7.9, economic: 8.3, political: 3.2, total: 6.5, trend: 'stable', sanctions: 891 },
-    { country: 'N. Korea', military: 8.7, economic: 6.2, political: 2.1, total: 5.7, trend: 'up', sanctions: 456 },
-    { country: 'Pakistan', military: 6.8, economic: 8.1, political: 3.8, total: 6.2, trend: 'up', sanctions: 34 },
-    { country: 'India', military: 5.2, economic: 4.1, political: 6.8, total: 5.4, trend: 'stable', sanctions: 0 },
-    { country: 'USA', military: 4.1, economic: 5.2, political: 7.0, total: 5.4, trend: 'stable', sanctions: 0 },
-    { country: 'EU', military: 4.8, economic: 6.1, political: 7.3, total: 6.1, trend: 'down', sanctions: 12 }
-  ];
-
-  const marketImpactData = [
-    { sector: 'Energy', correlation: 0.89, impact: 3.8, volume: '2.3B', change: '+2.4%' },
-    { sector: 'Defense', correlation: 0.94, impact: 4.2, volume: '890M', change: '+3.1%' },
-    { sector: 'Tech', correlation: 0.84, impact: -2.1, volume: '4.7B', change: '-1.8%' },
-    { sector: 'Finance', correlation: 0.71, impact: -1.6, volume: '3.2B', change: '-0.9%' },
-    { sector: 'Materials', correlation: 0.80, impact: 2.8, volume: '1.8B', change: '+2.2%' },
-    { sector: 'Healthcare', correlation: 0.34, impact: 0.2, volume: '1.4B', change: '+0.1%' },
-    { sector: 'Utilities', correlation: 0.45, impact: 1.1, volume: '780M', change: '+0.8%' },
-    { sector: 'Crypto', correlation: 0.67, impact: -4.2, volume: '890M', change: '-3.7%' }
-  ];
-
-  const intelligenceStream = [
-    { time: "16:47:23", priority: "FLASH", source: "SIGINT", classification: "TS/SCI", region: "LAC", event: "PLA forces movement detected near Galwan Valley - 3 battalions repositioning", confidence: 95 },
-    { time: "16:45:12", priority: "URGENT", source: "HUMINT", classification: "SECRET", region: "PAK", event: "ISI-China joint operation planning meeting confirmed in Islamabad", confidence: 88 },
-    { time: "16:43:56", priority: "FLASH", source: "CYBINT", classification: "TS", region: "IND", event: "State-sponsored APT targeting Indian critical infrastructure - Power grid vulnerabilities", confidence: 92 },
-    { time: "16:42:31", priority: "IMMEDIATE", source: "ECONINT", classification: "SECRET", region: "CHN", event: "Major capital outflows from China $2.8B in 24hrs - Real estate sector collapse", confidence: 97 },
-    { time: "16:41:08", priority: "URGENT", source: "OSINT", classification: "CONFIDENTIAL", region: "RUS", event: "Wagner Group remnants regrouping in Belarus - 2000+ personnel", confidence: 78 },
-    { time: "16:39:45", priority: "FLASH", source: "GEOINT", classification: "TS", region: "NK", event: "Satellite imagery confirms new ICBM facility construction - 78% complete", confidence: 94 },
-    { time: "16:38:22", priority: "ROUTINE", source: "HUMINT", classification: "SECRET", region: "IRN", event: "IRGC naval exercises in Strait of Hormuz - 12 vessels deployed", confidence: 85 },
-    { time: "16:37:01", priority: "URGENT", source: "SIGINT", classification: "TS/SCI", region: "UKR", event: "Russian communications indicate winter offensive preparations", confidence: 91 }
-  ];
-
-  const economicIndicators = [
-    { name: "VIX Fear Index", current: 18.45, change: -1.2, trend: "down", impact: "Medium", alert: false },
-    { name: "DXY Dollar Index", current: 104.78, change: 0.3, trend: "up", impact: "High", alert: false },
-    { name: "Gold Spot", current: 2047.80, change: 18.3, trend: "up", impact: "Medium", alert: true },
-    { name: "Oil Brent", current: 82.45, change: 2.1, trend: "up", impact: "Critical", alert: true },
-    { name: "Bitcoin", current: 67234, change: -1234, trend: "down", impact: "Low", alert: false },
-    { name: "India Nifty 50", current: 24867, change: 234, trend: "up", impact: "High", alert: false },
-    { name: "INR/USD", current: 83.14, change: -0.08, trend: "stable", impact: "Medium", alert: false },
-    { name: "Yuan/USD", current: 7.234, change: 0.045, trend: "up", impact: "High", alert: true },
-    { name: "Ruble/USD", current: 92.45, change: -2.34, trend: "down", impact: "Critical", alert: true },
-    { name: "Baltic Dry Index", current: 1567, change: -89, trend: "down", impact: "Medium", alert: false }
-  ];
-
-  const tradeRouteRisk = [
-    { route: "Strait of Hormuz", risk: 8.7, throughput: "21.0mbpd", threat: "Military", status: "Critical", india: "40% oil imports" },
-    { route: "Strait of Malacca", risk: 6.8, throughput: "$3.8B/day", threat: "Piracy", status: "Medium", india: "Major trade route" },
-    { route: "Suez Canal", risk: 7.2, throughput: "$10.2B/day", threat: "Regional", status: "High", india: "Europe trade 25%" },
-    { route: "South China Sea", risk: 8.1, throughput: "$5.8B/day", threat: "Military", status: "Critical", india: "ASEAN trade 18%" },
-    { route: "Bab el-Mandeb", risk: 7.8, throughput: "$2.4B/day", threat: "Terrorism", status: "High", india: "Energy route 15%" },
-    { route: "IMEC Corridor", risk: 4.5, throughput: "$1.2B/day", threat: "Development", status: "Opportunity", india: "Alternative route" }
-  ];
-
-  const getRiskColor = (level: number) => {
-    if (level >= 8.5) return RISK_CRITICAL;
-    if (level >= 7.0) return RISK_HIGH;
-    if (level >= 5.5) return RISK_MEDIUM;
-    return RISK_LOW;
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "FLASH": return '#FF0000';
-      case "URGENT": return '#FF6400';
-      case "IMMEDIATE": return '#FFC800';
-      case "ROUTINE": return '#00C800';
-      default: return colors.textMuted;
+  const loadGeopoliticsData = async () => {
+    try {
+      setLoading(true);
+      const data = await geopoliticsService.getComprehensiveGeopoliticsData(selectedCountry);
+      setQrNotifications(data.qrNotifications);
+      setEpingNotifications(data.epingNotifications);
+      setTariffData(data.tariffData);
+      setQrRestrictions(data.qrRestrictions);
+      setQrProducts(data.qrProducts);
+      setTradeFlow(data.tradeFlowData);
+      setTfadData(data.tfadData);
+    } catch (error) {
+      console.error('Failed to load geopolitics data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const createMatrixDisplay = () => (
-    <div style={{
-      backgroundColor: colors.panel,
-      border: `1px solid ${colors.textMuted}`,
-      padding: '6px',
-      height: '220px',
-      overflow: 'auto'
-    }}>
-      <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
-        CORRELATION MATRIX - GEOPOLITICAL RISK vs MARKETS
-      </div>
+  // Calculate threat levels with improved methodology
+  const calculateThreatLevel = () => {
+    // Trade Restrictions Threat
+    // Based on: QR notification count (recent restrictions indicate protectionism)
+    // Scale: 0 notifications = 0, 50+ = 10 (critical)
+    const qrCount = qrNotifications.length;
+    let tradeLevel = 0;
+    if (qrCount > 0) {
+      tradeLevel = Math.min(2 + (qrCount / 50) * 8, 10); // Base 2 if any exist
+    }
+
+    // Tariff Threat
+    // Based on: Tariff rate level + trend
+    // Scale: 0% = 0, 20%+ = 10, plus trend multiplier
+    let tariffLevel = 0;
+    if (tariffData.length > 0) {
+      const values = tariffData.map(d => d.Value || 0);
+      const latest = values[values.length - 1] || 0;
+      const previous = values[values.length - 2] || latest;
+      const trend = latest - previous;
+
+      // Base level from tariff rate (0-20% range)
+      const baseLevel = Math.min((latest / 20) * 7, 7);
+
+      // Trend adjustment (+/- 3 points based on direction)
+      let trendAdjustment = 0;
+      if (trend > 0.5) trendAdjustment = 3; // Rising tariffs
+      else if (trend > 0.1) trendAdjustment = 1.5;
+      else if (trend < -0.5) trendAdjustment = -2; // Falling tariffs
+      else if (trend < -0.1) trendAdjustment = -1;
+
+      tariffLevel = Math.max(0, Math.min(baseLevel + trendAdjustment, 10));
+    }
+
+    // Regulatory Threat
+    // Based on: Recent notifications + pending deadlines + affected sectors
+    let regulatoryLevel = 0;
+    if (epingNotifications.length > 0) {
+      // Recent activity (0-4 points)
+      const activityScore = Math.min((epingNotifications.length / 100) * 4, 4);
+
+      // Pending deadlines urgency (0-3 points)
+      const now = new Date();
+      const urgentDeadlines = epingNotifications.filter(n => {
+        if (!n.commentDeadlineDate) return false;
+        const deadline = new Date(n.commentDeadlineDate);
+        const daysUntil = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+        return daysUntil > 0 && daysUntil <= 60; // Within 60 days
+      }).length;
+      const urgencyScore = Math.min((urgentDeadlines / 20) * 3, 3);
+
+      // Critical regulations (SPS/TBT human health/safety) (0-3 points)
+      const criticalCount = epingNotifications.filter(n =>
+        n.objectives?.some((o: any) =>
+          o.name?.toLowerCase().includes('health') ||
+          o.name?.toLowerCase().includes('safety')
+        )
+      ).length;
+      const criticalScore = Math.min((criticalCount / 10) * 3, 3);
+
+      regulatoryLevel = Math.min(activityScore + urgencyScore + criticalScore, 10);
+    }
+
+    // Market Access Threat (NEW)
+    // Based on: Countries affected + notification types
+    let marketAccessLevel = 0;
+    const affectedCountriesCount = new Set(
+      epingNotifications.flatMap(n =>
+        (n.countriesAffected || []).map((c: any) => c.id || c.name)
+      )
+    ).size;
+
+    if (affectedCountriesCount > 0) {
+      // More countries affected = higher threat
+      marketAccessLevel = Math.min((affectedCountriesCount / 50) * 6, 6);
+
+      // Add points if many SPS measures (stricter than TBT)
+      const spsCount = epingNotifications.filter(n => n.area === 'SPS').length;
+      const spsRatio = epingNotifications.length > 0 ? spsCount / epingNotifications.length : 0;
+      marketAccessLevel += spsRatio * 4;
+
+      marketAccessLevel = Math.min(marketAccessLevel, 10);
+    }
+
+    // Supply Chain Disruption (NEW)
+    // Based on: Recent QR notifications + tariff volatility
+    let supplyChainLevel = 0;
+    if (qrNotifications.length > 0 || tariffData.length > 0) {
+      // Recent QR activity
+      const recentQR = qrNotifications.filter(n => {
+        if (!n.notification_dt) return false;
+        const notifDate = new Date(n.notification_dt);
+        const monthsAgo = (new Date().getTime() - notifDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+        return monthsAgo <= 12; // Within last year
+      }).length;
+
+      const qrScore = Math.min((recentQR / 20) * 5, 5);
+
+      // Tariff volatility
+      let volatilityScore = 0;
+      if (tariffData.length >= 3) {
+        const recentValues = tariffData.slice(-3).map(d => d.Value || 0);
+        const volatility = Math.max(...recentValues) - Math.min(...recentValues);
+        volatilityScore = Math.min((volatility / 5) * 5, 5);
+      }
+
+      supplyChainLevel = Math.min(qrScore + volatilityScore, 10);
+    }
+
+    return [
+      { threat: 'Trade Restrictions', current: Number(tradeLevel.toFixed(1)), max: 10 },
+      { threat: 'Tariff Pressure', current: Number(tariffLevel.toFixed(1)), max: 10 },
+      { threat: 'Regulatory Burden', current: Number(regulatoryLevel.toFixed(1)), max: 10 },
+      { threat: 'Market Access', current: Number(marketAccessLevel.toFixed(1)), max: 10 },
+      { threat: 'Supply Chain', current: Number(supplyChainLevel.toFixed(1)), max: 10 }
+    ];
+  };
+
+  // Calculate tariff statistics
+  const getTariffStats = () => {
+    if (tariffData.length === 0) return { min: 0, max: 0, avg: 0, latest: 0, change: 0 };
+
+    const values = tariffData.map(d => d.Value || 0);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const avg = values.reduce((a, b) => a + b, 0) / values.length;
+    const latest = values[values.length - 1];
+    const previous = values[values.length - 2] || latest;
+    const change = latest - previous;
+
+    return { min, max, avg, latest, change };
+  };
+
+  // Get upcoming deadlines
+  const getUpcomingDeadlines = () => {
+    return epingNotifications
+      .filter(n => n.commentDeadlineDate || n.proposedEntryIntoForceDate)
+      .map(n => ({
+        title: n.documentSymbol || 'N/A',
+        member: n.notifyingMember || 'N/A',
+        commentDeadline: n.commentDeadlineDate,
+        entryIntoForce: n.proposedEntryIntoForceDate,
+        area: n.area
+      }))
+      .slice(0, 10);
+  };
+
+  // Get affected countries
+  const getAffectedCountries = () => {
+    const countryMap: { [key: string]: number } = {};
+
+    epingNotifications.forEach(n => {
+      if (n.countriesAffected && Array.isArray(n.countriesAffected)) {
+        n.countriesAffected.forEach((c: any) => {
+          const name = c.name || c.id || 'Unknown';
+          countryMap[name] = (countryMap[name] || 0) + 1;
+        });
+      }
+    });
+
+    return Object.entries(countryMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  };
+
+  // Get notification types breakdown
+  const getNotificationTypes = () => {
+    const types: { [key: string]: number } = {};
+
+    epingNotifications.forEach(n => {
+      const type = n.area || 'Unknown';
+      types[type] = (types[type] || 0) + 1;
+    });
+
+    return Object.entries(types).map(([name, value]) => ({ name, value }));
+  };
+
+  const threatRadarData = calculateThreatLevel();
+  const tariffStats = getTariffStats();
+  const upcomingDeadlines = getUpcomingDeadlines();
+  const affectedCountries = getAffectedCountries();
+  const notificationTypes = getNotificationTypes();
+
+  if (loading) {
+    return (
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: '80px repeat(5, 1fr)',
-        gap: '2px',
-        fontSize: '10px',
-        marginBottom: '4px'
+        height: '100%',
+        backgroundColor: colors.background,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: colors.text,
+        fontFamily
       }}>
-        <div style={{ color: colors.text, fontWeight: 'bold' }}>Asset</div>
-        <div style={{ color: colors.alert, fontWeight: 'bold' }}>MIL</div>
-        <div style={{ color: colors.warning, fontWeight: 'bold' }}>ECO</div>
-        <div style={{ color: colors.info, fontWeight: 'bold' }}>CYB</div>
-        <div style={{ color: colors.purple, fontWeight: 'bold' }}>NUC</div>
-        <div style={{ color: colors.accent, fontWeight: 'bold' }}>VOL</div>
+        Loading geopolitical intelligence data...
       </div>
-      {correlationMatrix.map((item, index) => (
-        <div key={index} style={{
-          display: 'grid',
-          gridTemplateColumns: '80px repeat(5, 1fr)',
-          gap: '2px',
-          fontSize: '10px',
-          marginBottom: '2px',
-          backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'transparent'
-        }}>
-          <div style={{ color: colors.text }}>{item.asset}</div>
-          <div style={{ color: item.military > 0.8 ? RISK_CRITICAL : item.military > 0.6 ? RISK_HIGH : RISK_MEDIUM }}>
-            {item.military.toFixed(2)}
-          </div>
-          <div style={{ color: item.economic > 0.8 ? RISK_CRITICAL : item.economic > 0.6 ? RISK_HIGH : RISK_MEDIUM }}>
-            {item.economic.toFixed(2)}
-          </div>
-          <div style={{ color: item.cyber > 0.8 ? RISK_CRITICAL : item.cyber > 0.6 ? RISK_HIGH : RISK_MEDIUM }}>
-            {item.cyber.toFixed(2)}
-          </div>
-          <div style={{ color: item.nuclear > 0.8 ? RISK_CRITICAL : item.nuclear > 0.6 ? RISK_HIGH : RISK_MEDIUM }}>
-            {item.nuclear.toFixed(2)}
-          </div>
-          <div style={{ color: getRiskColor(item.volatility) }}>
-            {item.volatility.toFixed(1)}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+    );
+  }
 
   return (
     <div style={{
       height: '100%',
       backgroundColor: colors.background,
       color: colors.text,
-      fontFamily: fontFamily,
-      fontWeight: fontWeight,
-      fontStyle: fontStyle,
+      fontFamily,
+      fontWeight,
+      fontStyle,
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column',
       fontSize: fontSize.body
     }}>
-      <style>{`
-        /* Custom scrollbar styles for Geopolitics Tab */
-        *::-webkit-scrollbar {
-          width: 6px;
-          height: 6px;
-        }
-        *::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        *::-webkit-scrollbar-thumb {
-          background: rgba(120, 120, 120, 0.3);
-          border-radius: 3px;
-        }
-        *::-webkit-scrollbar-thumb:hover {
-          background: rgba(120, 120, 120, 0.5);
-        }
-      `}</style>
-      {/* Complex Header with Multiple Status Lines */}
+      {/* Header */}
       <div style={{
         backgroundColor: colors.panel,
         borderBottom: `1px solid ${colors.textMuted}`,
-        padding: '4px 8px',
+        padding: '8px',
         flexShrink: 0
       }}>
-        {/* Main Status Line */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
-          <span style={{ color: colors.primary, fontWeight: 'bold' }}>GEOPOLITICAL INTELLIGENCE SYSTEM</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: RISK_HIGH, fontWeight: 'bold' }}>GLOBAL RISK: 7.34/10</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.alert }}>ACTIVE CONFLICTS: 15</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.warning }}>SANCTIONS: 3,127 (+3)</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: alertCount > 125 ? colors.alert : colors.warning }}>ALERTS: {alertCount}</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.secondary, animation: 'blink 1s infinite' }}>● INTEL: LIVE</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
-        </div>
-
-        {/* Secondary Status Line */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', marginBottom: '2px' }}>
-          <span style={{ color: colors.textMuted }}>FEEDS:</span>
-          <span style={{ color: colors.secondary }}>SIGINT●</span>
-          <span style={{ color: colors.secondary }}>HUMINT●</span>
-          <span style={{ color: colors.secondary }}>CYBINT●</span>
-          <span style={{ color: colors.secondary }}>ECONINT●</span>
-          <span style={{ color: colors.warning }}>GEOINT◐</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.textMuted }}>LATENCY:</span>
-          <span style={{ color: colors.secondary }}>89ms</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.textMuted }}>UPDATES:</span>
-          <span style={{ color: colors.info }}>{dataUpdateCount}</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.textMuted }}>CLASSIFICATION:</span>
-          <span style={{ color: colors.alert }}>TOP SECRET//SCI</span>
-        </div>
-
-        {/* Market Ticker */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px' }}>
-          <span style={{ color: colors.textMuted }}>MARKETS:</span>
-          <span style={{ color: colors.secondary }}>NIFTY: 24,867 (+234)</span>
-          <span style={{ color: colors.info }}>INR: 83.14 (-0.08)</span>
-          <span style={{ color: colors.secondary }}>BRENT: $82.45 (+2.1)</span>
-          <span style={{ color: colors.warning }}>GOLD: $2,047 (+18.3)</span>
-          <span style={{ color: colors.alert }}>VIX: 18.45 (-1.2)</span>
-          <span style={{ color: colors.secondary }}>DXY: 104.78 (+0.3)</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.textMuted }}>ENERGY:</span>
-          <span style={{ color: colors.secondary }}>+3.8%</span>
-          <span style={{ color: colors.textMuted }}>DEFENSE:</span>
-          <span style={{ color: colors.secondary }}>+4.2%</span>
-          <span style={{ color: colors.textMuted }}>TECH:</span>
-          <span style={{ color: colors.alert }}>-2.1%</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold' }}>GEOPOLITICAL INTELLIGENCE</span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.secondary }}>● LIVE</span>
+            <span style={{ color: colors.text }}>|</span>
+            <select
+              value={selectedCountry}
+              onChange={(e) => setSelectedCountry(e.target.value)}
+              style={{
+                backgroundColor: colors.background,
+                color: colors.text,
+                border: `1px solid ${colors.textMuted}`,
+                padding: '2px 8px',
+                fontSize: '12px',
+                borderRadius: '2px',
+                cursor: 'pointer'
+              }}
+            >
+              {countries.map(c => (
+                <option key={c.code} value={c.code}>{c.name}</option>
+              ))}
+            </select>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.info }}>QR: {qrNotifications.length}</span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.warning }}>ePing: {epingNotifications.length}</span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.text }}>{currentTime.toISOString().substring(0, 19)} UTC</span>
+          </div>
+          <button
+            onClick={loadGeopoliticsData}
+            disabled={loading}
+            style={{
+              backgroundColor: loading ? colors.textMuted : colors.primary,
+              color: colors.background,
+              border: 'none',
+              padding: '4px 12px',
+              fontSize: '12px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              borderRadius: '2px',
+              fontWeight: 'bold'
+            }}
+          >
+            {loading ? 'LOADING...' : '↻ REFRESH'}
+          </button>
         </div>
       </div>
 
-      {/* Function Keys with Sub-categories */}
-      <div style={{
-        backgroundColor: colors.panel,
-        borderBottom: `1px solid ${colors.textMuted}`,
-        padding: '3px 6px',
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2px' }}>
-          {[
-            { key: "F1", label: "INDIA", status: "●" },
-            { key: "F2", label: "CHINA", status: "●" },
-            { key: "F3", label: "PAKISTAN", status: "◐" },
-            { key: "F4", label: "USA", status: "●" },
-            { key: "F5", label: "RUSSIA", status: "●" },
-            { key: "F6", label: "LAC", status: "◐" },
-            { key: "F7", label: "QUAD", status: "○" },
-            { key: "F8", label: "BRICS", status: "○" },
-            { key: "F9", label: "TRADE", status: "●" },
-            { key: "F10", label: "DEFENSE", status: "●" },
-            { key: "F11", label: "ENERGY", status: "●" },
-            { key: "F12", label: "CYBER", status: "●" }
-          ].map(item => (
-            <button key={item.key} style={{
-              backgroundColor: colors.background,
-              border: `1px solid ${colors.textMuted}`,
-              color: colors.text,
-              padding: '2px 4px',
-              fontSize: '12px',
-              height: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <span style={{ color: colors.warning }}>{item.key}:</span>
-              <span style={{ marginLeft: '2px' }}>{item.label}</span>
-              <span style={{
-                marginLeft: '2px',
-                color: item.status === '●' ? colors.secondary :
-                       item.status === '◐' ? colors.warning : colors.textMuted
-              }}>
-                {item.status}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* Main Content */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '8px', backgroundColor: '#050505' }}>
 
-      {/* Dense Main Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '4px', backgroundColor: '#050505' }}>
-        {/* Top Row - Intelligence Stream & Risk Assessment */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px', marginBottom: '4px', height: '180px' }}>
-          {/* Real-time Intelligence Stream */}
+        {/* Row 1: Statistics Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '8px' }}>
+
+          {/* Tariff Stats Card */}
           <div style={{
             backgroundColor: colors.panel,
             border: `1px solid ${colors.textMuted}`,
-            padding: '4px',
-            overflow: 'auto'
+            padding: '8px'
           }}>
-            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-              REAL-TIME INTELLIGENCE STREAM [CLASSIFICATION: TS//SCI]
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              TARIFF STATISTICS
             </div>
-            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-
-            {intelligenceStream.map((intel, index) => (
-              <div key={index} style={{
-                marginBottom: '4px',
-                fontSize: '12px',
-                borderLeft: `2px solid ${getPriorityColor(intel.priority)}`,
-                paddingLeft: '4px'
-              }}>
-                <div style={{ display: 'flex', gap: '4px', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted, minWidth: '50px' }}>{intel.time}</span>
-                  <span style={{ color: getPriorityColor(intel.priority), fontWeight: 'bold', minWidth: '60px' }}>
-                    [{intel.priority}]
-                  </span>
-                  <span style={{ color: colors.info, minWidth: '50px' }}>[{intel.source}]</span>
-                  <span style={{ color: colors.purple, minWidth: '30px' }}>{intel.region}</span>
-                  <span style={{ color: colors.warning, minWidth: '30px' }}>{intel.confidence}%</span>
-                </div>
-                <div style={{ color: colors.text, lineHeight: '1.1', marginBottom: '1px' }}>
-                  {intel.event}
-                </div>
-                <div style={{ color: colors.textMuted, fontSize: '7px' }}>
-                  Classification: {intel.classification}
-                </div>
-              </div>
-            ))}
+            <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
+              <div>Latest: <span style={{ color: colors.secondary, fontWeight: 'bold' }}>{tariffStats.latest.toFixed(2)}%</span></div>
+              <div>Avg: <span style={{ color: colors.text }}>{tariffStats.avg.toFixed(2)}%</span></div>
+              <div>Min: <span style={{ color: colors.success }}>{tariffStats.min.toFixed(2)}%</span></div>
+              <div>Max: <span style={{ color: colors.alert }}>{tariffStats.max.toFixed(2)}%</span></div>
+              <div>Change: <span style={{ color: tariffStats.change >= 0 ? colors.alert : colors.success }}>
+                {tariffStats.change >= 0 ? '+' : ''}{tariffStats.change.toFixed(2)}%
+              </span></div>
+            </div>
           </div>
 
-          {/* Country Risk Matrix */}
+          {/* QR Summary */}
           <div style={{
             backgroundColor: colors.panel,
             border: `1px solid ${colors.textMuted}`,
-            padding: '4px',
-            overflow: 'auto'
+            padding: '8px'
           }}>
-            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-              COUNTRY RISK ASSESSMENT MATRIX
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              QR RESTRICTIONS
             </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '50px repeat(6, 1fr)',
-              gap: '2px',
-              fontSize: '12px',
-              marginBottom: '4px'
-            }}>
-              <div style={{ color: colors.text, fontWeight: 'bold' }}>CTRY</div>
-              <div style={{ color: colors.alert, fontWeight: 'bold' }}>MIL</div>
-              <div style={{ color: colors.warning, fontWeight: 'bold' }}>ECO</div>
-              <div style={{ color: colors.info, fontWeight: 'bold' }}>POL</div>
-              <div style={{ color: colors.purple, fontWeight: 'bold' }}>TOT</div>
-              <div style={{ color: colors.accent, fontWeight: 'bold' }}>TRD</div>
-              <div style={{ color: colors.textMuted, fontWeight: 'bold' }}>SAN</div>
+            <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
+              <div>Total: <span style={{ color: colors.warning, fontWeight: 'bold' }}>{qrNotifications.length}</span></div>
+              <div>Type: Complete Notifications</div>
+              <div>Coverage: Global</div>
+              <div>Updated: Live</div>
             </div>
-            {countryRiskData.map((country, index) => (
-              <div key={index} style={{
-                display: 'grid',
-                gridTemplateColumns: '50px repeat(6, 1fr)',
-                gap: '2px',
-                fontSize: '11px',
-                marginBottom: '1px',
-                backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent'
-              }}>
-                <div style={{ color: colors.text, fontWeight: 'bold' }}>{country.country}</div>
-                <div style={{ color: getRiskColor(country.military) }}>{country.military.toFixed(1)}</div>
-                <div style={{ color: getRiskColor(country.economic) }}>{country.economic.toFixed(1)}</div>
-                <div style={{ color: getRiskColor(country.political) }}>{country.political.toFixed(1)}</div>
-                <div style={{ color: getRiskColor(country.total) }}>{country.total.toFixed(1)}</div>
-                <div style={{
-                  color: country.trend === 'up' ? colors.alert :
-                         country.trend === 'down' ? colors.secondary : colors.warning
-                }}>
-                  {country.trend === 'up' ? '↑' : country.trend === 'down' ? '↓' : '→'}
-                </div>
-                <div style={{ color: country.sanctions > 500 ? colors.alert : country.sanctions > 50 ? colors.warning : colors.secondary }}>
-                  {country.sanctions}
-                </div>
-              </div>
-            ))}
           </div>
 
-          {/* Economic Indicators Dashboard */}
+          {/* ePing Summary */}
           <div style={{
             backgroundColor: colors.panel,
             border: `1px solid ${colors.textMuted}`,
-            padding: '4px',
-            overflow: 'auto'
+            padding: '8px'
           }}>
-            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-              ECONOMIC THREAT INDICATORS
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              REGULATORY ALERTS
             </div>
-            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+            <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
+              <div>Total: <span style={{ color: colors.info, fontWeight: 'bold' }}>{epingNotifications.length}</span></div>
+              <div>SPS: {epingNotifications.filter(n => n.area === 'SPS').length}</div>
+              <div>TBT: {epingNotifications.filter(n => n.area === 'TBT').length}</div>
+              <div>Pending Comments: {epingNotifications.filter(n => n.commentDeadlineDate).length}</div>
+            </div>
+          </div>
 
-            {economicIndicators.map((indicator, index) => (
-              <div key={index} style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '2px',
-                fontSize: '12px',
-                backgroundColor: indicator.alert ? 'rgba(255,0,0,0.1)' : 'transparent',
-                padding: '1px 2px'
-              }}>
-                <div style={{ flex: 1 }}>
-                  <span style={{ color: colors.text, fontWeight: indicator.alert ? 'bold' : 'normal' }}>
-                    {indicator.name}
-                  </span>
-                  {indicator.alert && <span style={{ color: colors.alert, marginLeft: '2px' }}>⚠</span>}
+          {/* Threat Level */}
+          <div style={{
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
+            padding: '8px'
+          }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              THREAT LEVEL
+            </div>
+            <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
+              {threatRadarData.map(t => (
+                <div key={t.threat}>
+                  {t.threat}: <span style={{
+                    color: t.current > 7 ? colors.alert : t.current > 5 ? colors.warning : colors.success,
+                    fontWeight: 'bold'
+                  }}>{t.current.toFixed(1)}/10</span>
                 </div>
-                <div style={{
-                  color: indicator.change > 0 ? colors.secondary :
-                         indicator.change < 0 ? colors.alert : colors.textMuted,
-                  minWidth: '60px',
-                  textAlign: 'right'
-                }}>
-                  {indicator.current.toLocaleString()}
-                </div>
-                <div style={{
-                  color: indicator.change > 0 ? colors.secondary :
-                         indicator.change < 0 ? colors.alert : colors.textMuted,
-                  minWidth: '40px',
-                  textAlign: 'right'
-                }}>
-                  {indicator.change > 0 ? '+' : ''}{indicator.change}
-                </div>
-                <div style={{
-                  color: indicator.impact === 'Critical' ? colors.alert :
-                         indicator.impact === 'High' ? colors.primary :
-                         indicator.impact === 'Medium' ? colors.warning : colors.secondary,
-                  minWidth: '20px',
-                  textAlign: 'center',
-                  fontSize: '11px'
-                }}>
-                  {indicator.impact.charAt(0)}
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Middle Row - Charts Section */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '4px', marginBottom: '4px', height: '240px' }}>
-          {/* Complex Risk Forecast Chart */}
+        {/* Row 2: Charts */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '8px', marginBottom: '8px', height: '280px' }}>
+
+          {/* Tariff Time Series */}
           <div style={{
             backgroundColor: colors.panel,
             border: `1px solid ${colors.textMuted}`,
-            padding: '4px'
+            padding: '8px'
           }}>
-            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-              MULTI-VECTOR RISK FORECAST - 90 DAY PREDICTIVE MODEL
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              MFN TARIFF RATES - {countries.find(c => c.code === selectedCountry)?.name.toUpperCase()}
             </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={riskForecastData.slice(0, 30)}>
-                <CartesianGrid strokeDasharray="1 1" stroke={colors.textMuted} opacity={0.3} />
-                <XAxis dataKey="day" stroke={colors.text} fontSize={10} />
-                <YAxis stroke={colors.text} fontSize={10} domain={[5, 10]} />
+            <ResponsiveContainer width="100%" height={230}>
+              <LineChart data={tariffData}>
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="Year" stroke={colors.text} fontSize={9} />
+                <YAxis stroke={colors.text} fontSize={9} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: colors.background,
@@ -497,32 +434,26 @@ const GeopoliticsTab: React.FC = () => {
                     fontSize: '10px'
                   }}
                 />
-                <Legend wrapperStyle={{ fontSize: '10px' }} />
-                <Line type="monotone" dataKey="baseRisk" stroke={colors.secondary} strokeWidth={1} name="Base Risk" dot={false} />
-                <Line type="monotone" dataKey="militaryRisk" stroke={colors.alert} strokeWidth={1} name="Military" dot={false} />
-                <Line type="monotone" dataKey="economicRisk" stroke={colors.warning} strokeWidth={1} name="Economic" dot={false} />
-                <Line type="monotone" dataKey="cyberRisk" stroke={colors.info} strokeWidth={1} name="Cyber" dot={false} />
-                <Line type="monotone" dataKey="nuclearRisk" stroke={colors.purple} strokeWidth={1} name="Nuclear" dot={false} />
+                <Line type="monotone" dataKey="Value" stroke={colors.secondary} strokeWidth={2} name="Tariff %" />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Threat Radar Chart */}
+          {/* Threat Radar */}
           <div style={{
             backgroundColor: colors.panel,
             border: `1px solid ${colors.textMuted}`,
-            padding: '4px'
+            padding: '8px'
           }}>
-            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
               THREAT RADAR
             </div>
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={230}>
               <RadarChart data={threatRadarData}>
                 <PolarGrid stroke={colors.textMuted} />
-                <PolarAngleAxis dataKey="threat" tick={{ fontSize: 10, fill: colors.text }} />
-                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 9, fill: colors.textMuted }} />
+                <PolarAngleAxis dataKey="threat" tick={{ fontSize: 9, fill: colors.text }} />
+                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fontSize: 8, fill: colors.textMuted }} />
                 <Radar
-                  name="Current Threat"
                   dataKey="current"
                   stroke={colors.alert}
                   fill={colors.alert}
@@ -533,187 +464,373 @@ const GeopoliticsTab: React.FC = () => {
             </ResponsiveContainer>
           </div>
 
-          {/* Correlation Matrix Display */}
-          {createMatrixDisplay()}
-        </div>
-
-        {/* Bottom Row - Market Impact & Trade Routes */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px', height: '200px' }}>
-          {/* Market Impact Analysis */}
+          {/* Notification Types */}
           <div style={{
             backgroundColor: colors.panel,
             border: `1px solid ${colors.textMuted}`,
-            padding: '4px',
+            padding: '8px'
+          }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              NOTIFICATION TYPES
+            </div>
+            <ResponsiveContainer width="100%" height={230}>
+              <BarChart data={notificationTypes}>
+                <CartesianGrid strokeDasharray="3 3" stroke={colors.textMuted} opacity={0.3} />
+                <XAxis dataKey="name" stroke={colors.text} fontSize={9} />
+                <YAxis stroke={colors.text} fontSize={9} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: colors.background,
+                    border: `1px solid ${colors.textMuted}`,
+                    color: colors.text,
+                    fontSize: '10px'
+                  }}
+                />
+                <Bar dataKey="value" fill={colors.info} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Row 3: Detailed Lists */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px', height: '320px' }}>
+
+          {/* QR Notifications Detailed */}
+          <div style={{
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
+            padding: '8px',
             overflow: 'auto'
           }}>
-            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-              MARKET IMPACT ANALYSIS
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              QR NOTIFICATIONS DETAILS
             </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '60px 40px 40px 50px 40px',
-              gap: '2px',
-              fontSize: '12px',
-              marginBottom: '4px'
-            }}>
-              <div style={{ color: colors.text, fontWeight: 'bold' }}>SECTOR</div>
-              <div style={{ color: colors.info, fontWeight: 'bold' }}>CORR</div>
-              <div style={{ color: colors.secondary, fontWeight: 'bold' }}>IMPL</div>
-              <div style={{ color: colors.warning, fontWeight: 'bold' }}>VOLUME</div>
-              <div style={{ color: colors.purple, fontWeight: 'bold' }}>CHG</div>
-            </div>
-            {marketImpactData.map((market, index) => (
+            {qrNotifications.slice(0, 20).map((notif, index) => (
               <div key={index} style={{
-                display: 'grid',
-                gridTemplateColumns: '60px 40px 40px 50px 40px',
-                gap: '2px',
-                fontSize: '11px',
-                marginBottom: '1px',
-                backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent'
-              }}>
-                <div style={{ color: colors.text }}>{market.sector}</div>
-                <div style={{ color: market.correlation > 0.8 ? colors.alert : market.correlation > 0.6 ? colors.warning : colors.secondary }}>
-                  {market.correlation.toFixed(2)}
+                marginBottom: '8px',
+                fontSize: '10px',
+                borderLeft: `2px solid ${colors.warning}`,
+                paddingLeft: '6px',
+                backgroundColor: expandedQR === index ? 'rgba(255,255,255,0.05)' : index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                cursor: 'pointer'
+              }}
+              onClick={() => setExpandedQR(expandedQR === index ? null : index)}
+              >
+                <div style={{ color: colors.text, fontWeight: 'bold' }}>
+                  {notif.reporter_member?.name?.en || notif.reporter_member?.code || 'N/A'}
                 </div>
-                <div style={{ color: market.impact > 0 ? colors.secondary : colors.alert }}>
-                  {market.impact > 0 ? '+' : ''}{market.impact.toFixed(1)}
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>
+                  {notif.document_symbol || 'N/A'} | {notif.notification_dt || 'N/A'}
                 </div>
-                <div style={{ color: colors.textMuted }}>{market.volume}</div>
-                <div style={{ color: market.change.startsWith('+') ? colors.secondary : colors.alert }}>
-                  {market.change}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Critical Trade Routes */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '4px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-              CRITICAL TRADE ROUTE RISK
-            </div>
-            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-
-            {tradeRouteRisk.map((route, index) => (
-              <div key={index} style={{ marginBottom: '6px', fontSize: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.text, fontWeight: 'bold', fontSize: '9px' }}>
-                    {route.route}
-                  </span>
-                  <span style={{ color: getRiskColor(route.risk) }}>
-                    {route.risk.toFixed(1)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>Throughput:</span>
-                  <span style={{ color: colors.info }}>{route.throughput}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>Threat:</span>
-                  <span style={{ color: colors.warning }}>{route.threat}</span>
-                </div>
-                <div style={{ color: colors.accent, fontSize: '7px', lineHeight: '1.1' }}>
-                  India: {route.india}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* India Strategic Dashboard */}
-          <div style={{
-            backgroundColor: colors.panel,
-            border: `1px solid ${colors.textMuted}`,
-            padding: '4px',
-            overflow: 'auto'
-          }}>
-            <div style={{ color: colors.primary, fontSize: '10px', fontWeight: 'bold', marginBottom: '4px' }}>
-              INDIA STRATEGIC POSITION ANALYSIS
-            </div>
-            <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-
-            <div style={{ marginBottom: '6px' }}>
-              <div style={{ color: colors.warning, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
-                KEY METRICS
-              </div>
-              <div style={{ fontSize: '8px', lineHeight: '1.2' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: colors.textMuted }}>GDP Growth:</span>
-                  <span style={{ color: colors.secondary }}>6.7% YoY</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: colors.textMuted }}>FDI Inflows:</span>
-                  <span style={{ color: colors.secondary }}>$83.6B</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: colors.textMuted }}>Defense Budget:</span>
-                  <span style={{ color: colors.info }}>$75.6B</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: colors.textMuted }}>Border Infra:</span>
-                  <span style={{ color: colors.warning }}>67% Complete</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '6px' }}>
-              <div style={{ color: colors.warning, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
-                THREAT MATRIX
-              </div>
-              <div style={{ fontSize: '7px' }}>
-                {[
-                  { threat: "LAC Tensions", level: 7.8, status: "ACTIVE" },
-                  { threat: "Pakistan Terror", level: 6.9, status: "MEDIUM" },
-                  { threat: "Cyber Warfare", level: 6.5, status: "HIGH" },
-                  { threat: "Energy Security", level: 5.8, status: "WATCH" },
-                  { threat: "Trade Disruption", level: 5.2, status: "LOW" }
-                ].map((item, index) => (
-                  <div key={index} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                    <span style={{ color: colors.text }}>{item.threat}:</span>
-                    <span style={{ color: getRiskColor(item.level) }}>{item.level} [{item.status}]</span>
+                {expandedQR === index && (
+                  <div style={{ marginTop: '4px', fontSize: '9px', color: colors.textMuted }}>
+                    <div>Type: {notif.type || 'N/A'}</div>
+                    <div>Language: {notif.original_language || 'N/A'}</div>
+                    <div>Periods: {notif.covered_periods?.join(', ') || 'N/A'}</div>
+                    {notif.document_url && (
+                      <a href={notif.document_url} target="_blank" rel="noopener noreferrer"
+                         style={{ color: colors.info, textDecoration: 'underline' }}>
+                        View Document
+                      </a>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
-            </div>
+            ))}
+          </div>
 
-            <div>
-              <div style={{ color: colors.warning, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
-                STRATEGIC INITIATIVES
+          {/* ePing Notifications Detailed */}
+          <div style={{
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
+            padding: '8px',
+            overflow: 'auto'
+          }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              EPING NOTIFICATIONS DETAILS
+            </div>
+            {epingNotifications.slice(0, 20).map((notif, index) => (
+              <div key={index} style={{
+                marginBottom: '8px',
+                fontSize: '10px',
+                borderLeft: `2px solid ${notif.area === 'SPS' ? colors.success : colors.info}`,
+                paddingLeft: '6px',
+                backgroundColor: expandedEPing === index ? 'rgba(255,255,255,0.05)' : index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                cursor: 'pointer'
+              }}
+              onClick={() => setExpandedEPing(expandedEPing === index ? null : index)}
+              >
+                <div style={{ color: colors.text, fontWeight: 'bold' }}>
+                  {notif.documentSymbol?.trim() || 'N/A'}
+                </div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>
+                  {notif.notifyingMember} | {notif.area} | {notif.distributionDate?.substring(0, 10)}
+                </div>
+                {expandedEPing === index && (
+                  <div style={{ marginTop: '4px', fontSize: '9px', color: colors.textMuted }}>
+                    <div style={{ marginBottom: '2px', fontWeight: 'bold' }}>
+                      {notif.titlePlain?.substring(0, 100)}...
+                    </div>
+                    <div>Type: {notif.notificationType || 'N/A'}</div>
+                    {notif.commentDeadlineDate && (
+                      <div>Comment Deadline: {notif.commentDeadlineDate.substring(0, 10)}</div>
+                    )}
+                    {notif.proposedEntryIntoForceDate && (
+                      <div>Entry into Force: {notif.proposedEntryIntoForceDate.substring(0, 10)}</div>
+                    )}
+                    {notif.keywords && notif.keywords.length > 0 && (
+                      <div>Keywords: {notif.keywords.map((k: any) => k.name).join(', ')}</div>
+                    )}
+                    {notif.objectives && notif.objectives.length > 0 && (
+                      <div>Objectives: {notif.objectives.map((o: any) => o.name).join(', ')}</div>
+                    )}
+                    {notif.linkToNotification && (
+                      <a href={notif.linkToNotification} target="_blank" rel="noopener noreferrer"
+                         style={{ color: colors.info, textDecoration: 'underline' }}>
+                        View Document
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
-              <div style={{ fontSize: '7px', color: colors.secondary }}>
-                <div>✓ Quad Alliance Operationalization</div>
-                <div>✓ IMEC Corridor Development</div>
-                <div>✓ Semiconductor Self-Reliance</div>
-                <div>✓ Digital India 2.0 Rollout</div>
-                <div>✓ Defense Export Push</div>
+            ))}
+          </div>
+
+          {/* Upcoming Deadlines */}
+          <div style={{
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
+            padding: '8px',
+            overflow: 'auto'
+          }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              UPCOMING DEADLINES
+            </div>
+            {upcomingDeadlines.length > 0 ? upcomingDeadlines.map((item, index) => (
+              <div key={index} style={{
+                marginBottom: '8px',
+                fontSize: '10px',
+                borderLeft: `2px solid ${item.area === 'SPS' ? colors.success : colors.info}`,
+                paddingLeft: '6px',
+                backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent'
+              }}>
+                <div style={{ color: colors.text, fontWeight: 'bold' }}>
+                  {item.title}
+                </div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>
+                  {item.member} | {item.area}
+                </div>
+                {item.commentDeadline && (
+                  <div style={{ color: colors.warning, fontSize: '9px' }}>
+                    Comment by: {item.commentDeadline.substring(0, 10)}
+                  </div>
+                )}
+                {item.entryIntoForce && (
+                  <div style={{ color: colors.alert, fontSize: '9px' }}>
+                    Effective: {item.entryIntoForce.substring(0, 10)}
+                  </div>
+                )}
               </div>
+            )) : (
+              <div style={{ color: colors.textMuted, fontSize: '10px' }}>No upcoming deadlines</div>
+            )}
+          </div>
+        </div>
+
+        {/* Row 4: Affected Countries */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', height: '200px', marginBottom: '8px' }}>
+          <div style={{
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
+            padding: '8px',
+            overflow: 'auto'
+          }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              AFFECTED COUNTRIES & REGIONS
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+              {affectedCountries.length > 0 ? affectedCountries.map((country, index) => (
+                <div key={index} style={{
+                  padding: '6px',
+                  backgroundColor: 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${colors.textMuted}`,
+                  fontSize: '10px'
+                }}>
+                  <div style={{ color: colors.text, fontWeight: 'bold' }}>{country.name}</div>
+                  <div style={{ color: colors.warning, fontSize: '9px' }}>
+                    {country.count} notification{country.count > 1 ? 's' : ''}
+                  </div>
+                </div>
+              )) : (
+                <div style={{ color: colors.textMuted, fontSize: '10px', gridColumn: '1 / -1' }}>
+                  No specific country restrictions identified
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Row 5: QR Restrictions & Trade Flow */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px', height: '320px' }}>
+
+          {/* Active QR Restrictions */}
+          <div style={{
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
+            padding: '8px',
+            overflow: 'auto'
+          }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              ACTIVE QR RESTRICTIONS - {countries.find(c => c.code === selectedCountry)?.name.toUpperCase()}
+            </div>
+            {qrRestrictions.length > 0 ? qrRestrictions.slice(0, 20).map((item, index) => (
+              <div key={index} style={{
+                marginBottom: '8px',
+                fontSize: '10px',
+                borderLeft: `2px solid ${colors.alert}`,
+                paddingLeft: '6px',
+                backgroundColor: expandedRestriction === index ? 'rgba(255,255,255,0.05)' : index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                cursor: 'pointer'
+              }}
+              onClick={() => setExpandedRestriction(expandedRestriction === index ? null : index)}
+              >
+                <div style={{ color: colors.text, fontWeight: 'bold' }}>
+                  {item.measure_description || 'Restriction'}
+                </div>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>
+                  HS Code: {item.product_code || 'N/A'} | {item.in_force ? 'In Force' : 'Not Active'}
+                </div>
+                {expandedRestriction === index && (
+                  <div style={{ marginTop: '4px', fontSize: '9px', color: colors.textMuted }}>
+                    <div>Entry: {item.date_of_entry_into_force || 'N/A'}</div>
+                    <div>Legal Basis: {item.legal_basis || 'N/A'}</div>
+                    <div>Measure Type: {item.measure_type || 'N/A'}</div>
+                  </div>
+                )}
+              </div>
+            )) : (
+              <div style={{ color: colors.textMuted, fontSize: '10px' }}>No active restrictions for this country</div>
+            )}
+          </div>
+
+          {/* Trade Flow Data */}
+          <div style={{
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
+            padding: '8px',
+            overflow: 'auto'
+          }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              TRADE FLOW (MERCHANDISE)
+            </div>
+            {tradeFlow.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <LineChart data={tradeFlow}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={colors.textMuted} opacity={0.3} />
+                  <XAxis dataKey="Year" stroke={colors.text} fontSize={9} />
+                  <YAxis stroke={colors.text} fontSize={9} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: colors.background,
+                      border: `1px solid ${colors.textMuted}`,
+                      color: colors.text,
+                      fontSize: '10px'
+                    }}
+                  />
+                  <Line type="monotone" dataKey="Value" stroke={colors.info} strokeWidth={2} name="Trade Value" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ color: colors.textMuted, fontSize: '10px' }}>No trade flow data available</div>
+            )}
+          </div>
+
+          {/* TFAD Trade Facilitation */}
+          <div style={{
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
+            padding: '8px',
+            overflow: 'auto'
+          }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              TRADE FACILITATION (TFAD)
+            </div>
+            {tfadData ? (
+              <div style={{ fontSize: '10px', lineHeight: '1.6' }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold', marginBottom: '4px' }}>Single Window</div>
+                  <div style={{ color: colors.text }}>{tfadData.single_window_available ? 'Available' : 'Not Available'}</div>
+                  {tfadData.single_window_url && (
+                    <a href={tfadData.single_window_url} target="_blank" rel="noopener noreferrer"
+                       style={{ color: colors.info, textDecoration: 'underline', fontSize: '9px' }}>
+                      Visit Single Window
+                    </a>
+                  )}
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold', marginBottom: '4px' }}>Enquiry Points</div>
+                  <div style={{ color: colors.text }}>
+                    {tfadData.enquiry_points?.length || 0} contact(s) available
+                  </div>
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold', marginBottom: '4px' }}>Procedures</div>
+                  <div style={{ color: colors.text }}>
+                    {tfadData.procedures?.length || 0} procedure(s) documented
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ color: colors.textMuted, fontSize: '10px' }}>No TFAD data available for this country</div>
+            )}
+          </div>
+        </div>
+
+        {/* Row 6: QR Products Affected */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', height: '250px' }}>
+          <div style={{
+            backgroundColor: colors.panel,
+            border: `1px solid ${colors.textMuted}`,
+            padding: '8px',
+            overflow: 'auto'
+          }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+              PRODUCTS AFFECTED BY QR (HS CODES)
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+              {qrProducts.length > 0 ? qrProducts.slice(0, 40).map((product, index) => (
+                <div key={index} style={{
+                  padding: '6px',
+                  backgroundColor: 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${colors.textMuted}`,
+                  fontSize: '9px'
+                }}>
+                  <div style={{ color: colors.secondary, fontWeight: 'bold' }}>{product.code || 'N/A'}</div>
+                  <div style={{ color: colors.textMuted }}>{product.description?.substring(0, 40) || 'No description'}...</div>
+                </div>
+              )) : (
+                <div style={{ color: colors.textMuted, fontSize: '10px', gridColumn: '1 / -1' }}>
+                  No product data available
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      {/* Enhanced Status Bar */}
+      {/* Status Bar */}
       <div style={{
         borderTop: `1px solid ${colors.textMuted}`,
         backgroundColor: colors.panel,
-        padding: '2px 8px',
+        padding: '4px 8px',
         fontSize: '10px',
         color: colors.textMuted,
         flexShrink: 0
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <span>Geopolitical Intelligence System v3.2.1 | Real-time threat analysis</span>
-            <span>Sources: 47 Active | Confidence: 94.2% | Processing: 2.1M events/min</span>
-          </div>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <span>Classification: TOP SECRET//SCI//NOFORN</span>
-            <span>Session: {currentTime.toTimeString().substring(0, 8)}</span>
-            <span style={{ color: colors.secondary }}>SCIF: AUTHORIZED</span>
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span>Geopolitical Intelligence System v5.0 | WTO Real-time Data | {qrNotifications.length + epingNotifications.length} Total Notifications</span>
+          <span>Last Updated: {currentTime.toTimeString().substring(0, 8)}</span>
         </div>
       </div>
     </div>

@@ -20,7 +20,7 @@ export interface NewsArticle {
   pubDate?: Date;
 }
 
-// Verified working RSS feeds (2025)
+// Verified working RSS feeds (2025) - Only reliable feeds that consistently return results
 const RSS_FEEDS = [
   // Major Financial News - Tested & Working
   {
@@ -36,27 +36,6 @@ const RSS_FEEDS = [
     category: 'MARKETS',
     region: 'GLOBAL',
     source: 'INVESTING.COM'
-  },
-  {
-    name: 'MarketWatch',
-    url: 'https://www.marketwatch.com/rss/topstories',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'MARKETWATCH'
-  },
-  {
-    name: 'CNBC Markets',
-    url: 'https://www.cnbc.com/id/10000664/device/rss/rss.html',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'CNBC'
-  },
-  {
-    name: 'Benzinga',
-    url: 'https://www.benzinga.com/feed',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'BENZINGA'
   },
 
   // Cryptocurrency - Working feeds
@@ -103,22 +82,6 @@ const RSS_FEEDS = [
     category: 'TECH',
     region: 'US',
     source: 'ARS TECHNICA'
-  },
-
-  // Business & Economics - Working feeds
-  {
-    name: 'Forbes Business',
-    url: 'https://www.forbes.com/business/feed/',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'FORBES'
-  },
-  {
-    name: 'Business Insider',
-    url: 'https://www.businessinsider.com/rss',
-    category: 'MARKETS',
-    region: 'US',
-    source: 'BUSINESS INSIDER'
   },
 
   // Energy & Commodities - Working feeds
