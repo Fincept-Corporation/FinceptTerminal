@@ -13,6 +13,21 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@mapbox/node-pre-gyp', 'mock-aws-s3', 'aws-sdk', 'nock']
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split vendor chunks
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'chart-vendor': ['recharts', 'lightweight-charts'],
+          'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-popover', '@radix-ui/react-tabs'],
+          'flow-vendor': ['reactflow'],
+          'tauri-vendor': ['@tauri-apps/api', '@tauri-apps/plugin-dialog', '@tauri-apps/plugin-sql'],
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000, // Increase limit to 1000kb to reduce warnings
+  },
   clearScreen: false,
   server: {
     port: 1420,

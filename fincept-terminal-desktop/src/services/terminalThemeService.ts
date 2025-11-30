@@ -12,6 +12,7 @@ export interface ColorTheme {
   name: string;
   primary: string;      // Replaces BLOOMBERG_ORANGE
   secondary: string;    // Replaces BLOOMBERG_GREEN
+  success: string;      // Success/positive states (same as secondary)
   alert: string;        // Replaces BLOOMBERG_RED
   warning: string;      // BLOOMBERG_YELLOW
   info: string;         // BLOOMBERG_BLUE
@@ -42,6 +43,7 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     name: 'Bloomberg Classic',
     primary: '#FFA500',
     secondary: '#00C800',
+    success: '#00C800',
     alert: '#FF0000',
     warning: '#FFFF00',
     info: '#6496FA',
@@ -56,6 +58,7 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     name: 'Matrix Green',
     primary: '#00FF41',
     secondary: '#008F11',
+    success: '#00FF41',
     alert: '#FF0000',
     warning: '#FFD700',
     info: '#00D4AA',
@@ -70,6 +73,7 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     name: 'Blue Terminal',
     primary: '#00D4FF',
     secondary: '#00FF88',
+    success: '#6BCF7F',
     alert: '#FF6B6B',
     warning: '#FFD93D',
     info: '#6BCF7F',
@@ -84,6 +88,7 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     name: 'Amber Retro',
     primary: '#FFAA00',
     secondary: '#00FF00',
+    success: '#00FF00',
     alert: '#FF0000',
     warning: '#FFCC00',
     info: '#88CCFF',
@@ -98,6 +103,7 @@ export const COLOR_THEMES: Record<string, ColorTheme> = {
     name: 'Purple Neon',
     primary: '#C864FF',
     secondary: '#00FFA3',
+    success: '#00FFA3',
     alert: '#FF4D6D',
     warning: '#FFD23F',
     info: '#64D2FF',

@@ -7,10 +7,11 @@ import { terminalThemeService, FONT_FAMILIES, COLOR_THEMES, FontSettings } from 
 import { getWebSocketManager, ConnectionStatus, getAvailableProviders } from '@/services/websocket';
 import { useWebSocketManager } from '@/hooks/useWebSocket';
 import { DataSourcesPanel } from '@/components/settings/DataSourcesPanel';
+import { BacktestingProvidersPanel } from '@/components/settings/BacktestingProvidersPanel';
 
 export default function SettingsTab() {
   const { theme, updateTheme, resetTheme, colors, fontSize: themeFontSize, fontFamily: themeFontFamily, fontWeight: themeFontWeight, fontStyle } = useTerminalTheme();
-  const [activeSection, setActiveSection] = useState<'credentials' | 'profile' | 'terminal' | 'notifications' | 'llm' | 'dataConnections'>('credentials');
+  const [activeSection, setActiveSection] = useState<'credentials' | 'profile' | 'terminal' | 'notifications' | 'llm' | 'dataConnections' | 'backtesting'>('credentials');
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(false);
@@ -613,6 +614,7 @@ export default function SettingsTab() {
               { id: 'credentials', icon: Lock, label: 'Credentials' },
               { id: 'llm', icon: Bot, label: 'LLM Configuration' },
               { id: 'dataConnections', icon: Database, label: 'Data Sources' },
+              { id: 'backtesting', icon: Activity, label: 'Backtesting Providers' },
               { id: 'profile', icon: User, label: 'User Profile' },
               { id: 'terminal', icon: Terminal, label: 'Terminal Config' },
               { id: 'notifications', icon: Bell, label: 'Notifications' }
@@ -1320,6 +1322,20 @@ export default function SettingsTab() {
             {/* Data Sources Section (Unified WebSocket + REST API) */}
             {activeSection === 'dataConnections' && (
               <DataSourcesPanel colors={colors} />
+            )}
+
+            {/* Backtesting Providers Section */}
+            {activeSection === 'backtesting' && (
+              <BacktestingProvidersPanel colors={{
+                background: colors.background,
+                surface: colors.panel,
+                text: colors.text,
+                textSecondary: colors.textMuted,
+                border: colors.textMuted,
+                accent: colors.accent,
+                success: colors.success,
+                error: colors.alert
+              }} />
             )}
 
             {/* Other sections */}

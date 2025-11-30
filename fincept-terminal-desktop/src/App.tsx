@@ -6,6 +6,7 @@ import { useAuth } from './contexts/AuthContext';
 import { NavigationProvider } from './contexts/NavigationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { DataSourceProvider } from './contexts/DataSourceContext';
+import { ProviderProvider } from './contexts/ProviderContext';
 import { setPaymentWindowManager } from './services/paymentApi';
 import { workflowService } from './services/workflowService';
 
@@ -213,13 +214,15 @@ const App: React.FC = () => {
   if (session?.authenticated && currentScreen === 'dashboard') {
     return (
       <>
-        <DataSourceProvider>
-          <ThemeProvider>
-            <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab}>
-              <DashboardScreen />
-            </NavigationProvider>
-          </ThemeProvider>
-        </DataSourceProvider>
+        <ProviderProvider>
+          <DataSourceProvider>
+            <ThemeProvider>
+              <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab}>
+                <DashboardScreen />
+              </NavigationProvider>
+            </ThemeProvider>
+          </DataSourceProvider>
+        </ProviderProvider>
         {/* In-App Payment Window Overlay */}
         <PaymentOverlay paymentWindow={paymentWindow} />
       </>

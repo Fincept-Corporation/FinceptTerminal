@@ -115,7 +115,7 @@ const EquityResearchTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<'1M' | '3M' | '6M' | '1Y' | '5Y'>('6M');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'analysis'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'analysis' | 'technicals' | 'news'>('overview');
   const [fontSize, setFontSize] = useState(12);
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['Total Revenue', 'Gross Profit', 'Operating Income', 'Net Income', 'EBITDA', 'Basic EPS', 'Diluted EPS']);
   const [showYearsCount, setShowYearsCount] = useState(4);
@@ -124,6 +124,14 @@ const EquityResearchTab: React.FC = () => {
   const [chart1Metrics, setChart1Metrics] = useState<string[]>(['Total Revenue', 'Gross Profit']);
   const [chart2Metrics, setChart2Metrics] = useState<string[]>(['Net Income', 'Operating Income']);
   const [chart3Metrics, setChart3Metrics] = useState<string[]>(['EBITDA']);
+
+  // Technicals state
+  const [technicalsData, setTechnicalsData] = useState<any>(null);
+  const [technicalsLoading, setTechnicalsLoading] = useState(false);
+
+  // News state
+  const [newsData, setNewsData] = useState<any>(null);
+  const [newsLoading, setNewsLoading] = useState(false);
 
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
@@ -481,10 +489,54 @@ const EquityResearchTab: React.FC = () => {
     }
   }, [financials, activeTab, chart1Metrics, chart2Metrics, chart3Metrics]);
 
+  // Compute technicals from historical data
+  const computeTechnicals = async (historical: HistoricalData[]) => {
+    setTechnicalsLoading(true);
+    try {
+      // Convert historical data to format expected by Python script
+      const historicalJson = JSON.stringify(historical.map(d => ({
+        timestamp: d.timestamp,
+        open: d.open,
+        high: d.high,
+        low: d.low,
+        close: d.close,
+        volume: d.volume
+      })));
+
+      const response: any = await invoke('compute_all_technicals', {
+        historicalData: historicalJson
+      });
+
+      console.log('Technicals response:', response);
+
+      if (typeof response === 'string') {
+        const parsed = JSON.parse(response);
+        if (parsed.success && parsed.data) {
+          setTechnicalsData(parsed);
+        } else {
+          console.error('Error computing technicals:', parsed.error);
+        }
+      } else if (response.success && response.data) {
+        setTechnicalsData(response);
+      }
+    } catch (error) {
+      console.error('Error computing technicals:', error);
+    } finally {
+      setTechnicalsLoading(false);
+    }
+  };
+
   // Load initial data
   useEffect(() => {
     fetchStockData(currentSymbol);
   }, [currentSymbol, chartPeriod]);
+
+  // Compute technicals when historical data changes
+  useEffect(() => {
+    if (historicalData.length > 0) {
+      computeTechnicals(historicalData);
+    }
+  }, [historicalData]);
 
   const handleSearch = () => {
     if (searchSymbol.trim()) {
@@ -549,7 +601,7 @@ const EquityResearchTab: React.FC = () => {
 
   return (
     <div style={{
-      height: '100vh',
+      height: '100%',
       width: '100%',
       backgroundColor: COLORS.DARK_BG,
       color: COLORS.WHITE,
@@ -558,7 +610,6 @@ const EquityResearchTab: React.FC = () => {
       flexDirection: 'column',
       fontSize: '11px',
       overflow: 'hidden',
-      position: 'relative',
     }}>
       {/* Header */}
       <div style={{
@@ -621,6 +672,7 @@ const EquityResearchTab: React.FC = () => {
         scrollbarColor: 'rgba(120, 120, 120, 0.3) transparent',
         scrollbarWidth: 'thin',
         minHeight: 0,
+        backgroundColor: COLORS.DARK_BG,
       }} className="custom-scrollbar">
 
         {/* Stock Header with Price */}
@@ -682,7 +734,7 @@ const EquityResearchTab: React.FC = () => {
           display: 'flex',
           gap: '1px',
         }}>
-          {(['overview', 'financials', 'analysis'] as const).map((tab) => (
+          {(['overview', 'financials', 'analysis', 'technicals', 'news'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -1648,20 +1700,219 @@ const EquityResearchTab: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Technicals Tab */}
+        {activeTab === 'technicals' && (
+          <div style={{ padding: '8px' }}>
+            {technicalsLoading ? (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '400px',
+                gap: '16px',
+              }}>
+                <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
+                  ⏳ COMPUTING TECHNICAL INDICATORS...
+                </div>
+                <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
+                  Analyzing {historicalData.length} data points
+                </div>
+              </div>
+            ) : !technicalsData ? (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '400px',
+                gap: '16px',
+              }}>
+                <div style={{ color: COLORS.RED, fontSize: '14px', fontWeight: 'bold' }}>
+                  ⚠️ NO TECHNICAL DATA AVAILABLE
+                </div>
+                <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
+                  Please wait for historical data to load
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', height: 'calc(100vh - 280px)' }}>
+                {/* Left Side - Charts */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflow: 'auto' }} className="custom-scrollbar">
+                  <div style={{
+                    backgroundColor: COLORS.PANEL_BG,
+                    border: `1px solid ${COLORS.BORDER}`,
+                    padding: '12px',
+                  }}>
+                    <div style={{ color: COLORS.ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
+                      TECHNICAL INDICATORS - CHARTS (Coming Soon)
+                    </div>
+                    <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
+                      Interactive charts for RSI, MACD, Bollinger Bands, and other indicators will be displayed here.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Side - Values */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflow: 'auto' }} className="custom-scrollbar">
+                  {/* Trend Indicators */}
+                  {technicalsData.indicator_columns?.trend && (
+                    <div style={{
+                      backgroundColor: COLORS.PANEL_BG,
+                      border: `1px solid ${COLORS.BORDER}`,
+                      padding: '8px',
+                    }}>
+                      <div style={{ color: COLORS.CYAN, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                        TREND INDICATORS
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                        {technicalsData.indicator_columns.trend.slice(0, 10).map((indicator: string) => {
+                          const latestValue = technicalsData.data[technicalsData.data.length - 1]?.[indicator];
+                          return (
+                            <div key={indicator} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                              <span style={{ color: COLORS.GRAY }}>{indicator.toUpperCase()}:</span>
+                              <span style={{ color: COLORS.WHITE }}>{latestValue != null ? formatNumber(latestValue, 4) : 'N/A'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Momentum Indicators */}
+                  {technicalsData.indicator_columns?.momentum && (
+                    <div style={{
+                      backgroundColor: COLORS.PANEL_BG,
+                      border: `1px solid ${COLORS.BORDER}`,
+                      padding: '8px',
+                    }}>
+                      <div style={{ color: COLORS.GREEN, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                        MOMENTUM INDICATORS
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                        {technicalsData.indicator_columns.momentum.slice(0, 10).map((indicator: string) => {
+                          const latestValue = technicalsData.data[technicalsData.data.length - 1]?.[indicator];
+                          return (
+                            <div key={indicator} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                              <span style={{ color: COLORS.GRAY }}>{indicator.toUpperCase()}:</span>
+                              <span style={{ color: COLORS.WHITE }}>{latestValue != null ? formatNumber(latestValue, 4) : 'N/A'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Volatility Indicators */}
+                  {technicalsData.indicator_columns?.volatility && (
+                    <div style={{
+                      backgroundColor: COLORS.PANEL_BG,
+                      border: `1px solid ${COLORS.BORDER}`,
+                      padding: '8px',
+                    }}>
+                      <div style={{ color: COLORS.YELLOW, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                        VOLATILITY INDICATORS
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                        {technicalsData.indicator_columns.volatility.slice(0, 10).map((indicator: string) => {
+                          const latestValue = technicalsData.data[technicalsData.data.length - 1]?.[indicator];
+                          return (
+                            <div key={indicator} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                              <span style={{ color: COLORS.GRAY }}>{indicator.toUpperCase()}:</span>
+                              <span style={{ color: COLORS.WHITE }}>{latestValue != null ? formatNumber(latestValue, 4) : 'N/A'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Volume Indicators */}
+                  {technicalsData.indicator_columns?.volume && (
+                    <div style={{
+                      backgroundColor: COLORS.PANEL_BG,
+                      border: `1px solid ${COLORS.BORDER}`,
+                      padding: '8px',
+                    }}>
+                      <div style={{ color: COLORS.BLUE, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                        VOLUME INDICATORS
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                        {technicalsData.indicator_columns.volume.map((indicator: string) => {
+                          const latestValue = technicalsData.data[technicalsData.data.length - 1]?.[indicator];
+                          return (
+                            <div key={indicator} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                              <span style={{ color: COLORS.GRAY }}>{indicator.toUpperCase()}:</span>
+                              <span style={{ color: COLORS.WHITE }}>{latestValue != null ? formatNumber(latestValue, 4) : 'N/A'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Others Indicators */}
+                  {technicalsData.indicator_columns?.others && (
+                    <div style={{
+                      backgroundColor: COLORS.PANEL_BG,
+                      border: `1px solid ${COLORS.BORDER}`,
+                      padding: '8px',
+                    }}>
+                      <div style={{ color: COLORS.MAGENTA, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                        RETURN METRICS
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                        {technicalsData.indicator_columns.others.map((indicator: string) => {
+                          const latestValue = technicalsData.data[technicalsData.data.length - 1]?.[indicator];
+                          return (
+                            <div key={indicator} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0' }}>
+                              <span style={{ color: COLORS.GRAY }}>{indicator.toUpperCase()}:</span>
+                              <span style={{ color: COLORS.WHITE }}>{latestValue != null ? formatNumber(latestValue, 6) : 'N/A'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Status Bar */}
+      {/* Footer / Status Bar */}
       <div style={{
         borderTop: `1px solid ${COLORS.BORDER}`,
         backgroundColor: COLORS.PANEL_BG,
-        padding: '3px 12px',
-        fontSize: '9px',
+        padding: '4px 12px',
+        fontSize: '10px',
         color: COLORS.GRAY,
         flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Fincept Equity Research Terminal | Real-time Data via YFinance | Powered by Rust + React</span>
-          <span>{currentSymbol} | {stockInfo?.exchange || 'N/A'} | {currentTime.toLocaleString()}</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <span>Equity Research Terminal v1.0 | Real-time data analysis and company fundamentals</span>
+            <span>Data Source: YFinance</span>
+          </div>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <span style={{ color: COLORS.CYAN, fontWeight: 'bold' }}>{currentSymbol}</span>
+            {stockInfo?.exchange && <span>{stockInfo.exchange}</span>}
+            {currentPrice > 0 && (
+              <>
+                <span>Price: ${currentPrice.toFixed(2)}</span>
+                {priceChange !== 0 && (
+                  <span style={{ color: priceChange >= 0 ? COLORS.GREEN : COLORS.RED }}>
+                    {priceChange >= 0 ? '▲' : '▼'} {Math.abs(priceChangePercent).toFixed(2)}%
+                  </span>
+                )}
+              </>
+            )}
+            <span style={{ color: loading ? COLORS.YELLOW : COLORS.GREEN }}>
+              {loading ? 'LOADING...' : 'READY'}
+            </span>
+          </div>
         </div>
       </div>
 

@@ -17,9 +17,27 @@ from io import BytesIO
 try:
     from weasyprint import HTML, CSS
     WEASYPRINT_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError) as e:
     WEASYPRINT_AVAILABLE = False
-    print("Warning: WeasyPrint not available. Install with: pip install weasyprint", file=sys.stderr)
+    print(f"Warning: WeasyPrint not available: {e}", file=sys.stderr)
+
+# Alternative: Try pdfkit (wkhtmltopdf wrapper)
+try:
+    import pdfkit
+    PDFKIT_AVAILABLE = True
+except ImportError:
+    PDFKIT_AVAILABLE = False
+
+# Alternative: Try reportlab
+try:
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Table, TableStyle, Image as RLImage
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors as rl_colors
+    REPORTLAB_AVAILABLE = True
+except ImportError:
+    REPORTLAB_AVAILABLE = False
 
 try:
     import matplotlib
@@ -378,31 +396,144 @@ class FinancialReportGenerator:
 
         return html
 
-    def generate_pdf(self, template_data: Dict[str, Any], output_path: str, template_name: str = 'default.html') -> Dict[str, Any]:
+    def generate_pdf_reportlab(self, template_data: Dict[str, Any], output_path: str) -> Dict[str, Any]:
         """
-        Generate PDF from template data
+        Generate PDF using ReportLab (pure Python, cross-platform)
 
         Args:
             template_data: Report template data
             output_path: Path to save PDF
-            template_name: Name of Jinja2 template file
 
         Returns:
             Result dict with success status
         """
-        if not WEASYPRINT_AVAILABLE:
+        if not REPORTLAB_AVAILABLE:
             return {
                 "success": False,
-                "error": "WeasyPrint not available. Install with: pip install weasyprint",
+                "error": "ReportLab not available. Install with: pip install reportlab",
                 "output_path": None
             }
 
         try:
-            # Generate HTML
-            html_content = self.generate_html(template_data, template_name)
+            # Determine page size
+            page_size_map = {
+                'A4': A4,
+                'Letter': letter,
+                'Legal': (8.5*inch, 14*inch)
+            }
+            page_size = page_size_map.get(template_data.get('styles', {}).get('pageSize', 'A4'), A4)
 
-            # Generate PDF
-            HTML(string=html_content).write_pdf(output_path)
+            # Create PDF
+            doc = SimpleDocTemplate(
+                output_path,
+                pagesize=page_size,
+                rightMargin=72,
+                leftMargin=72,
+                topMargin=72,
+                bottomMargin=18,
+            )
+
+            # Styles
+            styles = getSampleStyleSheet()
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                textColor=rl_colors.HexColor('#0066cc'),
+                spaceAfter=30,
+            )
+            heading_style = ParagraphStyle(
+                'CustomHeading',
+                parent=styles['Heading2'],
+                fontSize=18,
+                textColor=rl_colors.HexColor('#0066cc'),
+                spaceAfter=12,
+            )
+            normal_style = styles['BodyText']
+
+            # Build story
+            story = []
+
+            # Header
+            metadata = template_data.get('metadata', {})
+            if metadata.get('title'):
+                story.append(Paragraph(metadata['title'], title_style))
+
+            if metadata.get('company'):
+                company_style = ParagraphStyle(
+                    'Company',
+                    parent=styles['Normal'],
+                    fontSize=14,
+                    textColor=rl_colors.HexColor('#0066cc'),
+                    spaceAfter=12,
+                )
+                story.append(Paragraph(metadata['company'], company_style))
+
+            # Metadata line
+            meta_text = []
+            if metadata.get('author'):
+                meta_text.append(f"Author: {metadata['author']}")
+            if metadata.get('date'):
+                meta_text.append(f"Date: {metadata['date']}")
+            if meta_text:
+                meta_style = ParagraphStyle('Meta', parent=styles['Normal'], fontSize=10, textColor=rl_colors.grey)
+                story.append(Paragraph(' | '.join(meta_text), meta_style))
+
+            story.append(Spacer(1, 0.3*inch))
+
+            # Components
+            for component in template_data.get('components', []):
+                comp_type = component.get('type')
+                content = component.get('content', '')
+
+                if comp_type == 'heading':
+                    if content:
+                        story.append(Paragraph(content, heading_style))
+
+                elif comp_type == 'text':
+                    if content:
+                        story.append(Paragraph(content, normal_style))
+                        story.append(Spacer(1, 0.1*inch))
+
+                elif comp_type == 'divider':
+                    story.append(Spacer(1, 0.2*inch))
+
+                elif comp_type == 'code':
+                    if content:
+                        code_style = ParagraphStyle(
+                            'Code',
+                            parent=styles['Code'],
+                            fontSize=9,
+                            leftIndent=20,
+                            rightIndent=20,
+                            backColor=rl_colors.HexColor('#f5f5f5'),
+                        )
+                        story.append(Paragraph(f'<pre>{content}</pre>', code_style))
+                        story.append(Spacer(1, 0.1*inch))
+
+                elif comp_type == 'table':
+                    config = component.get('config', {})
+                    columns = config.get('columns', [])
+                    rows_data = component.get('content', {}).get('rows', [])
+
+                    if columns and rows_data:
+                        table_data = [columns] + rows_data
+                        t = Table(table_data)
+                        t.setStyle(TableStyle([
+                            ('BACKGROUND', (0, 0), (-1, 0), rl_colors.HexColor('#0066cc')),
+                            ('TEXTCOLOR', (0, 0), (-1, 0), rl_colors.white),
+                            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                            ('FONTSIZE', (0, 0), (-1, 0), 12),
+                            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                            ('BACKGROUND', (0, 1), (-1, -1), rl_colors.white),
+                            ('GRID', (0, 0), (-1, -1), 1, rl_colors.grey),
+                        ]))
+                        story.append(t)
+                        story.append(Spacer(1, 0.2*inch))
+
+            # Build PDF
+            doc.build(story)
 
             return {
                 "success": True,
@@ -417,6 +548,43 @@ class FinancialReportGenerator:
                 "error": str(e),
                 "output_path": None
             }
+
+    def generate_pdf(self, template_data: Dict[str, Any], output_path: str, template_name: str = 'default.html') -> Dict[str, Any]:
+        """
+        Generate PDF from template data (tries multiple backends)
+
+        Args:
+            template_data: Report template data
+            output_path: Path to save PDF
+            template_name: Name of Jinja2 template file
+
+        Returns:
+            Result dict with success status
+        """
+        # Try WeasyPrint first (best HTML/CSS support)
+        if WEASYPRINT_AVAILABLE:
+            try:
+                html_content = self.generate_html(template_data, template_name)
+                HTML(string=html_content).write_pdf(output_path)
+                return {
+                    "success": True,
+                    "output_path": output_path,
+                    "file_size": os.path.getsize(output_path),
+                    "error": None
+                }
+            except Exception as e:
+                print(f"WeasyPrint failed: {e}", file=sys.stderr)
+
+        # Fallback to ReportLab (pure Python, always works)
+        if REPORTLAB_AVAILABLE:
+            return self.generate_pdf_reportlab(template_data, output_path)
+
+        # No PDF library available
+        return {
+            "success": False,
+            "error": "No PDF generation library available. Install reportlab: pip install reportlab",
+            "output_path": None
+        }
 
 
 def main():

@@ -3,6 +3,25 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MarketplaceApiService, Dataset } from '@/services/marketplaceApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 
+interface PricingTier {
+  tier: string;
+  price_credits: number;
+  description: string;
+  features?: string[];
+}
+
+interface RevenueAnalytics {
+  total_revenue: number;
+  total_transactions: number;
+  revenue_by_tier?: Record<string, number>;
+  top_datasets?: Array<{
+    id: number;
+    title: string;
+    downloads: number;
+    revenue: number;
+  }>;
+}
+
 interface MarketProduct {
   id: string;
   type: 'DATA' | 'ALGO' | 'API' | 'MODEL' | 'SIGNAL' | 'PLUGIN';
