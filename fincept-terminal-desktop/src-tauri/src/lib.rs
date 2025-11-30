@@ -388,6 +388,7 @@ pub fn run() {
         .manage(MCPState {
             processes: Mutex::new(HashMap::new()),
         })
+        .manage(commands::backtesting::BacktestingState::default())
         .invoke_handler(tauri::generate_handler![
             greet,
             cleanup_running_workflows,
@@ -952,6 +953,7 @@ pub fn run() {
             commands::technical_analysis::calculate_indicators_yfinance,
             commands::technical_analysis::calculate_indicators_csv,
             commands::technical_analysis::calculate_indicators_json,
+            commands::technical_analysis::compute_all_technicals,
             // FiscalData Commands
             commands::fiscaldata::execute_fiscaldata_command,
             commands::fiscaldata::get_fiscaldata_debt_to_penny,
@@ -1052,7 +1054,21 @@ pub fn run() {
             // Report Generator Commands
             commands::report_generator::generate_report_html,
             commands::report_generator::generate_report_pdf,
-            commands::report_generator::create_default_report_template
+            commands::report_generator::create_default_report_template,
+            commands::report_generator::open_folder,
+            commands::backtesting::execute_lean_cli,
+            commands::backtesting::execute_command,
+            commands::backtesting::kill_lean_process,
+            commands::backtesting::execute_python_backtest,
+            commands::backtesting::check_file_exists,
+            commands::backtesting::create_directory,
+            commands::backtesting::write_file,
+            commands::backtesting::read_file,
+            // Company News Commands
+            commands::company_news::fetch_company_news,
+            commands::company_news::fetch_news_by_topic,
+            commands::company_news::get_full_article,
+            commands::company_news::get_company_news_help
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

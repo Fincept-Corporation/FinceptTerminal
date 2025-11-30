@@ -108,3 +108,37 @@ pub async fn calculate_indicators_json(
     }
     execute_technical_analysis_command(app, "json".to_string(), args).await
 }
+
+/// Compute all technical indicators from historical OHLCV data
+/// This command receives historical data and returns all computed technicals
+#[tauri::command]
+pub async fn compute_all_technicals(
+    app: AppHandle,
+    historical_data: String,
+) -> Result<String, String> {
+    // Get script path for compute_technicals.py
+    let script_name = "compute_technicals.py";
+    let script_path = get_script_path(&app, script_name)
+        .map_err(|e| format!("Failed to locate script: {}", e))?;
+
+    // Verify script exists
+    if !script_path.exists() {
+        return Err(format!(
+            "Compute technicals script not found at: {}",
+            script_path.display()
+        ));
+    }
+
+    // Execute Python command with historical data as argument
+    let args = vec![historical_data];
+    match execute_python_command(&app, script_name, &args) {
+        Ok(output) => {
+            // Check if output contains error JSON
+            if output.contains("\"success\":false") || output.contains("\"error\"") {
+                return Err(output);
+            }
+            Ok(output)
+        }
+        Err(e) => Err(format!("Technical computation failed: {}", e)),
+    }
+}

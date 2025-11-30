@@ -78,3 +78,9 @@ pub mod ai_agents;
 
 // Report Generator
 pub mod report_generator;
+
+// Backtesting
+pub mod backtesting;
+
+// Company News
+pub mod company_news;

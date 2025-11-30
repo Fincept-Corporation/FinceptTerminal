@@ -134,7 +134,12 @@ class LLMApiService {
 
     // Convert messages to Gemini format
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
-    const conversationMessages = messages.filter(m => m.role !== 'system');
+    // Filter out system messages AND any placeholder/empty responses
+    const conversationMessages = messages.filter(m =>
+      m.role !== 'system' &&
+      m.content.trim() !== '' &&
+      m.content !== '(No response generated)'
+    );
 
     // Gemini requires alternating roles - merge consecutive messages from same role
     const contents: any[] = [];
@@ -173,7 +178,11 @@ class LLMApiService {
       }
     };
 
-    console.log('[Gemini] Request body:', JSON.stringify(requestBody, null, 2));
+    console.log('[Gemini] 📨 Request details:');
+    console.log('[Gemini] - Contents count:', contents.length);
+    console.log('[Gemini] - System instruction length:', systemPrompt?.length || 0, 'characters');
+    console.log('[Gemini] - First content role:', contents[0]?.role);
+    console.log('[Gemini] - First content preview:', JSON.stringify(contents[0]).substring(0, 200));
 
     try {
       const response = await fetch(url, {
@@ -201,7 +210,6 @@ class LLMApiService {
         return await this.handleGeminiStream(response, onStream);
       } else {
         const data = await response.json();
-        console.log('[Gemini] Response data:', JSON.stringify(data, null, 2));
 
         // Extract text content safely
         const candidate = data.candidates?.[0];
@@ -241,31 +249,47 @@ class LLMApiService {
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
     let fullContent = '';
+    let accumulatedJson = '';
 
     if (!reader) {
       throw new Error('No response body');
     }
 
     try {
+      // Accumulate all chunks into complete JSON string
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim());
+        accumulatedJson += chunk;
+      }
 
-        for (const line of lines) {
-          try {
-            const parsed = JSON.parse(line);
-            const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      // Parse the complete JSON response (Gemini returns an array)
+      try {
+        const parsed = JSON.parse(accumulatedJson);
+
+        // Gemini returns an array of response objects
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            const content = item.candidates?.[0]?.content?.parts?.[0]?.text || '';
             if (content) {
               fullContent += content;
               onStream(content, false);
             }
-          } catch (e) {
-            // Skip invalid JSON
+          }
+        } else {
+          // Single object response
+          const content = parsed.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (content) {
+            fullContent = content;
+            onStream(content, false);
           }
         }
+      } catch (e) {
+        console.error('[Gemini Stream] Failed to parse JSON:', e);
+        console.error('[Gemini Stream] Accumulated JSON:', accumulatedJson);
+        throw new Error('Failed to parse Gemini response');
       }
 
       onStream('', true);

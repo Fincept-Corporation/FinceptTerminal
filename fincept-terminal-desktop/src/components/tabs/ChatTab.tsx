@@ -42,6 +42,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionsListRef = useRef<HTMLDivElement>(null);
+  const streamedContentRef = useRef<string>(''); // Track accumulated streaming content
 
   // Check if current provider supports MCP tools
   const providerSupportsMCP = () => {
@@ -355,12 +356,24 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
 
       // Prepend linked contexts to the conversation
       if (linkedContexts.length > 0) {
+        console.log('[ChatTab] 🔗 Active contexts linked:', linkedContexts.length);
         const contextIds = linkedContexts.map(ctx => ctx.id);
+        console.log('[ChatTab] 📋 Context IDs:', contextIds);
+
         const contextData = await contextRecorderService.formatMultipleContexts(contextIds, 'markdown');
-        conversationHistory.unshift({
-          role: 'system',
+        console.log('[ChatTab] 📊 Formatted context data length:', contextData.length, 'characters');
+        console.log('[ChatTab] 📝 Context data preview (first 500 chars):\n', contextData.substring(0, 500));
+
+        const systemMessage: APIMessage = {
+          role: 'system' as const,
           content: `The following recorded data contexts are provided for your reference:\n\n${contextData}\n\n---\n\nPlease use this information to help answer the user's questions.`
-        });
+        };
+
+        conversationHistory.unshift(systemMessage);
+        console.log('[ChatTab] ✅ System message with context added to conversation');
+        console.log('[ChatTab] 📤 Total conversation history length:', conversationHistory.length);
+      } else {
+        console.log('[ChatTab] ℹ️ No active contexts linked');
       }
 
       // Get MCP tools if available using the unified service
@@ -372,6 +385,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         // MCP tools not available
       }
 
+      // Reset the ref before starting new stream
+      streamedContentRef.current = '';
+
       // Call LLM API with tools if available
       const response = mcpTools.length > 0
         ? await llmApiService.chatWithTools(
@@ -380,6 +396,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
             mcpTools,
             (chunk: string, done: boolean) => {
               if (!done) {
+                streamedContentRef.current += chunk;
                 flushSync(() => {
                   setStreamingContent(prev => prev + chunk);
                 });
@@ -407,6 +424,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
             conversationHistory,
             (chunk: string, done: boolean) => {
               if (!done) {
+                streamedContentRef.current += chunk;
                 flushSync(() => {
                   setStreamingContent(prev => prev + chunk);
                 });
@@ -431,9 +449,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         setStreamingContent('');
         setSystemStatus(`ERROR: ${response.error}`);
       } else {
-        // Make sure we have content to save
-        const contentToSave = response.content || streamingContent || '(No response generated)';
-        console.log('[Chat] Saving AI response, length:', contentToSave.length);
+        // Use the ref which contains all streamed content, fallback to response.content
+        const contentToSave = response.content || streamedContentRef.current || '(No response generated)';
 
         const aiMessage = await sqliteService.addChatMessage({
           session_uuid: currentSessionUuid,
@@ -447,6 +464,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
         setMessages(prev => [...prev, aiMessage]);
         setIsTyping(false);
         setStreamingContent('');
+        // Clear the ref for next message
+        streamedContentRef.current = '';
       }
 
       // Reload sessions and statistics

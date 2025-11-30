@@ -4,6 +4,7 @@
 import { AdapterRegistry, IWebSocketAdapter } from '../types';
 import { BaseAdapter } from './BaseAdapter';
 import { KrakenAdapter } from './KrakenAdapter';
+import { HyperLiquidAdapter } from './HyperLiquidAdapter';
 
 /**
  * Global registry of available WebSocket adapters
@@ -11,6 +12,7 @@ import { KrakenAdapter } from './KrakenAdapter';
  */
 export const adapters: AdapterRegistry = {
   kraken: KrakenAdapter,
+  hyperliquid: HyperLiquidAdapter,
   // Add more adapters here:
   // fyers: FyersAdapter,
   // polygon: PolygonAdapter,
@@ -48,3 +50,4 @@ export function createAdapter(provider: string): IWebSocketAdapter {
 // Export adapter classes
 export { BaseAdapter } from './BaseAdapter';
 export { KrakenAdapter } from './KrakenAdapter';
+export { HyperLiquidAdapter } from './HyperLiquidAdapter';

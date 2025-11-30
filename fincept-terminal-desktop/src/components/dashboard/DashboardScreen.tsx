@@ -36,7 +36,9 @@ import FyersTab from '@/components/tabs/fyers';
 import SupportTicketTab from '@/components/tabs/SupportTicketTab';
 import PolygonEqTab from '@/components/tabs/PolygonEqTab';
 import KrakenTab from '@/components/tabs/KrakenTab';
+import { TradingTab } from '@/components/tabs/TradingTab';
 import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
+import BacktestingTab from '@/components/tabs/BacktestingTab';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 
 // Dropdown Menu Component
@@ -624,6 +626,12 @@ export default function FinxeptTerminal() {
               Analytics
             </TabsTrigger>
             <TabsTrigger
+              value="backtesting"
+              style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
+            >
+              Backtesting
+            </TabsTrigger>
+            <TabsTrigger
               value="research"
               style={activeTab === 'research' ? tabStyles.active : tabStyles.default}
             >
@@ -678,6 +686,12 @@ export default function FinxeptTerminal() {
               Kraken
             </TabsTrigger>
             <TabsTrigger
+              value="trading"
+              style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
+            >
+              Trading
+            </TabsTrigger>
+            <TabsTrigger
               value="settings"
               style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
             >
@@ -712,6 +726,12 @@ export default function FinxeptTerminal() {
               style={activeTab === 'contexts' ? tabStyles.active : tabStyles.default}
             >
               Recorded Contexts
+            </TabsTrigger>
+            <TabsTrigger
+              value="reportbuilder"
+              style={activeTab === 'reportbuilder' ? tabStyles.active : tabStyles.default}
+            >
+              Report Builder
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -812,6 +832,9 @@ export default function FinxeptTerminal() {
           <TabsContent value="analytics" className="h-full m-0 p-0">
             <AnalyticsTab />
           </TabsContent>
+          <TabsContent value="backtesting" className="h-full m-0 p-0">
+            <BacktestingTab />
+          </TabsContent>
           <TabsContent value="research" className="h-full m-0 p-0">
             <EquityResearchTab />
           </TabsContent>
@@ -838,6 +861,9 @@ export default function FinxeptTerminal() {
           </TabsContent>
           <TabsContent value="kraken" className="h-full m-0 p-0">
             <KrakenTab />
+          </TabsContent>
+          <TabsContent value="trading" className="h-full m-0 p-0">
+            <TradingTab />
           </TabsContent>
           <TabsContent value="settings" className="h-full m-0 p-0">
             <SettingsTab />
