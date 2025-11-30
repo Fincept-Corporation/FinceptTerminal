@@ -81,6 +81,10 @@ export class UserApiService {
     return makeApiRequest('/user/usage', 'GET', apiKey);
   }
 
+  static async getUserCredits(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/credits', 'GET', apiKey);
+  }
+
   static async deleteUserAccount(apiKey: string, confirmationData: any): Promise<ApiResponse> {
     return makeApiRequest('/user/account', 'DELETE', apiKey, confirmationData);
   }

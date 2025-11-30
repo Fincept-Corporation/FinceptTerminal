@@ -7,20 +7,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 type ProfileScreen = 'overview' | 'usage' | 'payments' | 'subscriptions' | 'support' | 'settings';
 
 const ProfileTab: React.FC = () => {
-  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
-  const C = {
-    ORANGE: colors.primary,
-    WHITE: colors.text,
-    RED: colors.alert,
-    GREEN: colors.secondary,
-    YELLOW: colors.warning,
-    GRAY: colors.textMuted,
-    BLUE: colors.info,
-    PURPLE: colors.purple,
-    CYAN: colors.accent,
-    DARK_BG: colors.background,
-    PANEL_BG: colors.panel
-  };
+  const { colors } = useTerminalTheme();
   const { session, logout } = useAuth();
   const navigation = useNavigation();
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -39,6 +26,17 @@ const ProfileTab: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // F11 fullscreen toggle
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen();
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
   // Fetch data based on current screen
   useEffect(() => {
     if (!session?.api_key) return;
@@ -54,7 +52,6 @@ const ProfileTab: React.FC = () => {
             const result = await UserApiService.getUserUsage(session.api_key || '');
             if (result.success) setUsageData(result.data);
 
-            // Also fetch detailed usage
             const detailedResult = await UserApiService.getUsageDetails(session.api_key || '');
             if (detailedResult.success) setDetailedUsage(detailedResult.data);
           }
@@ -125,18 +122,6 @@ const ProfileTab: React.FC = () => {
     }
   };
 
-  const reactivateSubscription = async () => {
-    if (!session?.api_key) return;
-    setLoading(true);
-    const result = await UserApiService.reactivateSubscription(session.api_key || '');
-    setLoading(false);
-    if (result.success) {
-      alert('Subscription reactivated successfully!');
-    } else {
-      alert(`Failed to reactivate subscription: ${result.error}`);
-    }
-  };
-
   const deleteAccount = async () => {
     if (!session?.api_key) return;
     const confirmation = prompt('This action cannot be undone. Type "DELETE MY ACCOUNT" to confirm:');
@@ -166,42 +151,7 @@ const ProfileTab: React.FC = () => {
     return `$${(amount / 100).toFixed(2)}`;
   };
 
-  // Navigation buttons
-  const renderNavigationButtons = () => {
-    const buttons: { id: ProfileScreen; label: string; color: string }[] = [
-      { id: 'overview', label: 'OVERVIEW', color: C.ORANGE },
-      { id: 'usage', label: 'USAGE STATS', color: C.CYAN },
-      { id: 'payments', label: 'PAYMENTS', color: C.GREEN },
-      { id: 'subscriptions', label: 'SUBSCRIPTIONS', color: C.PURPLE },
-      { id: 'support', label: 'SUPPORT', color: C.BLUE },
-      { id: 'settings', label: 'SETTINGS', color: C.RED },
-    ];
-
-    return (
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        {buttons.map((btn) => (
-          <button
-            key={btn.id}
-            onClick={() => setCurrentScreen(btn.id)}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: currentScreen === btn.id ? btn.color : C.DARK_BG,
-              border: `2px solid ${btn.color}`,
-              color: currentScreen === btn.id ? C.DARK_BG : btn.color,
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              fontFamily: 'Consolas, monospace',
-              transition: 'all 0.2s'
-            }}
-          >
-            {btn.label}
-          </button>
-        ))}
-      </div>
-    );
-  };
-
+  // Guest Profile View
   const renderGuestProfile = () => {
     const displayDeviceId = session?.device_id?.substring(0, 30) + "..." || 'Unknown';
     const requestsToday = session?.requests_today || usageData?.requests_today || 0;
@@ -210,465 +160,478 @@ const ProfileTab: React.FC = () => {
     const usagePercent = (requestsToday / dailyLimit) * 100;
 
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: C.DARK_BG }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: colors.background, overflow: 'hidden' }}>
         {/* Header */}
-        <div style={{ backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}`, padding: '12px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ color: C.ORANGE, fontWeight: 'bold', fontSize: '16px', fontFamily: 'Consolas, monospace' }}>
-                👤 GUEST PROFILE
-              </span>
-              <span style={{ color: C.GRAY }}>|</span>
-              <span style={{ color: C.CYAN, fontSize: '12px', fontFamily: 'Consolas, monospace' }}>
-                {currentTime.toLocaleTimeString()}
-              </span>
-            </div>
-            <button
-              onClick={logoutUser}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: C.DARK_BG,
-                border: `2px solid ${C.RED}`,
-                color: C.RED,
-                fontSize: '11px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                fontFamily: 'Consolas, monospace'
-              }}
-            >
-              🚪 LOGOUT
-            </button>
+        <div style={{ backgroundColor: colors.panel, borderBottom: `1px solid ${colors.textMuted}`, padding: '4px 8px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT TERMINAL GUEST PROFILE</span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.textMuted }}>REQUESTS:</span>
+            <span style={{ color: colors.accent }}>{requestsToday}/{dailyLimit}</span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.textMuted }}>REMAINING:</span>
+            <span style={{ color: remaining > 10 ? colors.secondary : colors.alert }}>{remaining}</span>
           </div>
         </div>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-          {renderNavigationButtons()}
+        {/* Function Keys Bar */}
+        <div style={{ backgroundColor: colors.panel, borderBottom: `1px solid ${colors.textMuted}`, padding: '2px 4px', flexShrink: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '2px' }}>
+            {[
+              { key: "F1", label: "OVERVIEW", screen: "overview" },
+              { key: "F2", label: "USAGE", screen: "usage" },
+              { key: "F3", label: "SETTINGS", screen: "settings" },
+              { key: "F4", label: "EXTEND", action: 'extend' },
+              { key: "F5", label: "PRICING", action: 'pricing' },
+              { key: "F6", label: "LOGOUT", action: 'logout' }
+            ].map(item => (
+              <button key={item.key}
+                onClick={() => {
+                  if (item.action === 'extend') extendSession();
+                  else if (item.action === 'pricing') navigation.navigateToPricing();
+                  else if (item.action === 'logout') logoutUser();
+                  else if (item.screen) setCurrentScreen(item.screen as ProfileScreen);
+                }}
+                disabled={loading && (item.action === 'extend')}
+                style={{
+                  backgroundColor: currentScreen === item.screen ? colors.primary : colors.background,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: currentScreen === item.screen ? colors.background : colors.text,
+                  padding: '2px 4px',
+                  fontSize: '12px',
+                  height: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: currentScreen === item.screen ? 'bold' : 'normal',
+                  cursor: 'pointer'
+                }}>
+                <span style={{ color: colors.warning }}>{item.key}:</span>
+                <span style={{ marginLeft: '2px' }}>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
+        {/* Main Content */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '4px', backgroundColor: '#050505' }}>
           {currentScreen === 'overview' && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '16px' }}>
-                {/* Session Info */}
-                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.BLUE}`, padding: '16px' }}>
-                  <div style={{ color: C.BLUE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-                    SESSION INFORMATION
+            <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
+              {/* Left Column */}
+              <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', overflow: 'auto' }}>
+                <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+                  SESSION INFORMATION
+                </div>
+                <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+
+                <div style={{ marginBottom: '8px', fontSize: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: colors.textMuted }}>Account Type:</span>
+                    <span style={{ color: colors.warning, fontWeight: 'bold' }}>GUEST</span>
                   </div>
-                  <div style={{ color: C.WHITE, fontSize: '12px', fontFamily: 'Consolas, monospace', lineHeight: '1.8' }}>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>Account Type:</span>
-                      <span style={{ color: C.YELLOW, marginLeft: '8px', fontWeight: 'bold' }}>GUEST USER</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: colors.textMuted }}>Session Expires:</span>
+                    <span style={{ color: colors.alert }}>{session?.expires_at ? formatDate(session.expires_at) : 'N/A'}</span>
+                  </div>
+                  <div style={{ marginBottom: '2px', paddingTop: '4px', borderTop: `1px solid ${colors.textMuted}` }}>
+                    <span style={{ color: colors.textMuted }}>Device ID:</span>
+                    <div style={{ color: colors.text, fontSize: '11px', marginTop: '2px', wordBreak: 'break-all' }}>
+                      {displayDeviceId}
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>Device ID:</span>
-                      <div style={{ color: C.WHITE, marginTop: '4px', fontSize: '10px' }}>{displayDeviceId}</div>
+                  </div>
+                  <div style={{ marginBottom: '2px', paddingTop: '4px', borderTop: `1px solid ${colors.textMuted}` }}>
+                    <span style={{ color: colors.textMuted }}>API Key:</span>
+                    <div style={{ color: colors.text, fontSize: '11px', marginTop: '2px', wordBreak: 'break-all' }}>
+                      {session?.api_key ? `${session.api_key.substring(0, 40)}...` : 'N/A'}
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>API Key:</span>
-                      <div style={{ color: C.WHITE, marginTop: '4px', fontSize: '10px' }}>
-                        {session?.api_key ? `${session.api_key.substring(0, 20)}...` : 'N/A'}
-                      </div>
-                    </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>Session Expires:</span>
-                      <span style={{ color: C.ORANGE, marginLeft: '8px' }}>
-                        {session?.expires_at ? formatDate(session.expires_at) : 'N/A'}
-                      </span>
-                    </div>
-                    <button
-                      onClick={extendSession}
-                      disabled={loading}
-                      style={{
-                        marginTop: '12px',
-                        padding: '8px 16px',
-                        backgroundColor: C.DARK_BG,
-                        border: `2px solid ${C.CYAN}`,
-                        color: C.CYAN,
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        fontFamily: 'Consolas, monospace',
-                        width: '100%'
-                      }}
-                    >
-                      ⏰ EXTEND SESSION
-                    </button>
                   </div>
                 </div>
 
-                {/* Usage Stats */}
-                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.ORANGE}`, padding: '16px' }}>
-                  <div style={{ color: C.ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-                    DAILY USAGE
+                <div style={{ marginTop: '12px' }}>
+                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    DAILY USAGE STATS
                   </div>
-                  <div style={{ color: C.WHITE, fontSize: '12px', fontFamily: 'Consolas, monospace', lineHeight: '1.8' }}>
-                    <div style={{ marginBottom: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: C.GRAY }}>Today's Requests:</span>
-                        <span style={{ color: C.WHITE, fontWeight: 'bold' }}>{requestsToday} / {dailyLimit}</span>
-                      </div>
-                      <div style={{ backgroundColor: C.DARK_BG, height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-                        <div
-                          style={{
-                            width: `${usagePercent}%`,
-                            height: '100%',
-                            backgroundColor: remaining > 10 ? C.GREEN : C.RED,
-                            transition: 'width 0.3s'
-                          }}
-                        />
-                      </div>
+                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+
+                  <div style={{ fontSize: '12px', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span style={{ color: colors.textMuted }}>Today's Requests:</span>
+                      <span style={{ color: colors.text, fontWeight: 'bold' }}>{requestsToday}/{dailyLimit}</span>
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>Remaining:</span>
-                      <span style={{ color: remaining > 10 ? C.GREEN : C.RED, marginLeft: '8px', fontWeight: 'bold' }}>
-                        {remaining} requests
-                      </span>
+                    <div style={{ backgroundColor: colors.background, height: '6px', marginBottom: '4px', border: `1px solid ${colors.textMuted}` }}>
+                      <div style={{
+                        width: `${usagePercent}%`,
+                        height: '100%',
+                        backgroundColor: remaining > 10 ? colors.secondary : colors.alert,
+                        transition: 'width 0.3s'
+                      }} />
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>Status:</span>
-                      <span style={{ color: C.GREEN, marginLeft: '8px', fontWeight: 'bold' }}>● ACTIVE</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span style={{ color: colors.textMuted }}>Remaining:</span>
+                      <span style={{ color: remaining > 10 ? colors.secondary : colors.alert, fontWeight: 'bold' }}>{remaining}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: colors.textMuted }}>Status:</span>
+                      <span style={{ color: colors.secondary }}>ACTIVE</span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Features */}
-              <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.GREEN}`, padding: '16px', marginBottom: '16px' }}>
-                <div style={{ color: C.GREEN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-                  ✓ GUEST ACCESS FEATURES
+              {/* Right Column */}
+              <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', overflow: 'auto' }}>
+                <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+                  UPGRADE TO FULL ACCESS
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', color: C.WHITE, fontSize: '11px', fontFamily: 'Consolas, monospace' }}>
-                  <div>✓ Basic market data</div>
-                  <div>✓ Real-time quotes</div>
-                  <div>✓ Public databases</div>
-                  <div>✓ Forum access</div>
-                  <div>✓ News feeds</div>
-                  <div>✓ Basic charts</div>
-                </div>
-              </div>
+                <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
-              {/* Upgrade Section */}
-              <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.ORANGE}`, borderLeft: `6px solid ${C.ORANGE}`, padding: '16px' }}>
-                <div style={{ color: C.ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-                  🔑 UPGRADE TO FULL ACCESS
+                <div style={{ fontSize: '12px', color: colors.text, lineHeight: '1.4', marginBottom: '8px' }}>
+                  <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '4px' }}>
+                    Create a free account to unlock:
+                  </div>
+                  <div style={{ marginLeft: '8px' }}>
+                    <div>- Unlimited API requests</div>
+                    <div>- Permanent API key</div>
+                    <div>- All database access</div>
+                    <div>- Premium features & tools</div>
+                    <div>- Data marketplace</div>
+                    <div>- Advanced analytics</div>
+                  </div>
                 </div>
-                <div style={{ color: C.WHITE, fontSize: '12px', fontFamily: 'Consolas, monospace', marginBottom: '16px', lineHeight: '1.8' }}>
-                  <div style={{ color: C.YELLOW, marginBottom: '8px' }}>Create a free account to unlock:</div>
-                  <div>• Unlimited API requests</div>
-                  <div>• Permanent API key</div>
-                  <div>• All database access</div>
-                  <div>• Premium features & tools</div>
-                  <div>• Data marketplace</div>
-                  <div>• Advanced analytics</div>
-                </div>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <button
-                    onClick={() => navigation.navigateToPricing()}
-                    style={{
-                      padding: '10px 20px',
-                      backgroundColor: C.ORANGE,
-                      border: 'none',
-                      color: C.DARK_BG,
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      fontFamily: 'Consolas, monospace',
-                      flex: 1
-                    }}
-                  >
-                    📦 VIEW PLANS
-                  </button>
-                </div>
+
+                <button
+                  onClick={() => navigation.navigateToPricing()}
+                  style={{
+                    width: '100%',
+                    padding: '6px',
+                    backgroundColor: colors.primary,
+                    border: 'none',
+                    color: colors.background,
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  VIEW PRICING PLANS
+                </button>
               </div>
-            </>
+            </div>
           )}
 
           {currentScreen === 'usage' && renderUsageScreen()}
           {currentScreen === 'settings' && renderGuestSettingsScreen()}
         </div>
+
+        {/* Status Bar */}
+        <div style={{ borderTop: `1px solid ${colors.textMuted}`, backgroundColor: colors.panel, padding: '2px 8px', fontSize: '11px', color: colors.textMuted, flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>FinceptTerminal v3.0.11 | Guest Session</span>
+            <span>Device: {session?.device_id?.substring(0, 20) || 'UNKNOWN'} | Status: {loading ? 'UPDATING' : 'READY'}</span>
+          </div>
+        </div>
       </div>
     );
   };
 
+  // Registered User Profile View
   const renderUserProfile = () => {
     const userInfo = session?.user_info;
     const accountType = userInfo?.account_type || 'free';
     const hasSubscription = (session?.subscription as any)?.data?.has_subscription || session?.subscription?.has_subscription;
     const subscriptionPlan = (session?.subscription as any)?.data?.subscription?.plan || session?.subscription?.subscription?.plan;
     const subscriptionStatus = (session?.subscription as any)?.data?.subscription?.status || session?.subscription?.subscription?.status;
+    const creditBalance = userInfo?.credit_balance ?? 0;
 
     const accountTypeColor = {
-      free: C.GRAY,
-      starter: C.BLUE,
-      professional: C.PURPLE,
-      enterprise: C.ORANGE,
-      unlimited: C.YELLOW
-    }[accountType] || C.WHITE;
+      free: colors.textMuted,
+      starter: colors.info,
+      professional: colors.purple,
+      enterprise: colors.primary,
+      unlimited: colors.warning
+    }[accountType] || colors.text;
+
+    const totalRequests = usageData?.total_requests || 0;
+    const todayRequests = usageData?.requests_today || usageData?.today_requests || 0;
 
     return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: C.DARK_BG }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: colors.background, overflow: 'hidden' }}>
         {/* Header */}
-        <div style={{ backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}`, padding: '12px 16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span style={{ color: C.ORANGE, fontWeight: 'bold', fontSize: '16px', fontFamily: 'Consolas, monospace' }}>
-                🔑 {userInfo?.username?.toUpperCase() || 'USER'} PROFILE
-              </span>
-              <span style={{ color: C.GRAY }}>|</span>
-              <span style={{ color: C.CYAN, fontSize: '12px', fontFamily: 'Consolas, monospace' }}>
-                {currentTime.toLocaleTimeString()}
-              </span>
-            </div>
-            <button
-              onClick={logoutUser}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: C.DARK_BG,
-                border: `2px solid ${C.RED}`,
-                color: C.RED,
-                fontSize: '11px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                fontFamily: 'Consolas, monospace'
-              }}
-            >
-              🚪 LOGOUT
-            </button>
+        <div style={{ backgroundColor: colors.panel, borderBottom: `1px solid ${colors.textMuted}`, padding: '4px 8px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
+            <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT TERMINAL PROFILE</span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.accent, fontWeight: 'bold' }}>
+              {userInfo?.username?.toUpperCase() || userInfo?.email?.split('@')[0]?.toUpperCase() || 'USER'}
+            </span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.textMuted }}>CREDITS:</span>
+            <span style={{ color: creditBalance > 0 ? colors.secondary : colors.alert, fontWeight: 'bold' }}>
+              {creditBalance.toFixed(2)}
+            </span>
+            <span style={{ color: colors.text }}>|</span>
+            <span style={{ color: colors.textMuted }}>PLAN:</span>
+            <span style={{ color: accountTypeColor, fontWeight: 'bold' }}>{accountType.toUpperCase()}</span>
           </div>
         </div>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-          {renderNavigationButtons()}
+        {/* Function Keys Bar */}
+        <div style={{ backgroundColor: colors.panel, borderBottom: `1px solid ${colors.textMuted}`, padding: '2px 4px', flexShrink: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2px' }}>
+            {[
+              { key: "F1", label: "OVERVIEW", screen: "overview" },
+              { key: "F2", label: "USAGE", screen: "usage" },
+              { key: "F3", label: "PAYMENTS", screen: "payments" },
+              { key: "F4", label: "SUBS", screen: "subscriptions" },
+              { key: "F5", label: "SUPPORT", screen: "support" },
+              { key: "F6", label: "SETTINGS", screen: "settings" },
+              { key: "F7", label: "CREDITS", action: 'pricing' },
+              { key: "F8", label: "REGEN", action: 'regen' },
+              { key: "F9", label: "", screen: "" },
+              { key: "F10", label: "", screen: "" },
+              { key: "F11", label: "FULL", action: 'fullscreen' },
+              { key: "F12", label: "LOGOUT", action: 'logout' }
+            ].map(item => (
+              <button key={item.key}
+                onClick={() => {
+                  if (item.action === 'logout') logoutUser();
+                  else if (item.action === 'pricing') navigation.navigateToPricing();
+                  else if (item.action === 'regen') regenerateApiKey();
+                  else if (item.action === 'fullscreen') toggleFullscreen();
+                  else if (item.screen) setCurrentScreen(item.screen as ProfileScreen);
+                }}
+                disabled={!item.label || (loading && item.action === 'regen')}
+                style={{
+                  backgroundColor: currentScreen === item.screen ? colors.primary : colors.background,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: currentScreen === item.screen ? colors.background : colors.text,
+                  padding: '2px 4px',
+                  fontSize: '12px',
+                  height: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: currentScreen === item.screen ? 'bold' : 'normal',
+                  cursor: item.label ? 'pointer' : 'default',
+                  opacity: item.label ? 1 : 0.3
+                }}>
+                <span style={{ color: colors.warning }}>{item.key}:</span>
+                {item.label && <span style={{ marginLeft: '2px' }}>{item.label}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
 
+        {/* Main Content */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '4px', backgroundColor: '#050505' }}>
           {currentScreen === 'overview' && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
+              {/* Left Column */}
+              <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', overflow: 'auto' }}>
+                {/* Credits Section */}
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    CREDIT BALANCE
+                  </div>
+                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <div style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold' }}>
+                      {creditBalance.toFixed(2)}
+                    </div>
+                    <button
+                      onClick={() => navigation.navigateToPricing()}
+                      style={{
+                        padding: '4px 8px',
+                        backgroundColor: colors.secondary,
+                        border: 'none',
+                        color: colors.background,
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ADD CREDITS
+                    </button>
+                  </div>
+                  <div style={{ color: colors.textMuted, fontSize: '11px' }}>
+                    Available for API calls and premium features
+                  </div>
+                </div>
+
                 {/* Account Details */}
-                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.BLUE}`, padding: '16px' }}>
-                  <div style={{ color: C.BLUE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
                     ACCOUNT DETAILS
                   </div>
-                  <div style={{ color: C.WHITE, fontSize: '12px', fontFamily: 'Consolas, monospace', lineHeight: '1.8' }}>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>Username:</span>
-                      <span style={{ color: C.WHITE, marginLeft: '8px', fontWeight: 'bold' }}>{userInfo?.username || 'N/A'}</span>
+                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+                  <div style={{ fontSize: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span style={{ color: colors.textMuted }}>Username:</span>
+                      <span style={{ color: colors.text, fontWeight: 'bold' }}>{userInfo?.username || 'N/A'}</span>
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>Email:</span>
-                      <span style={{ color: C.WHITE, marginLeft: '8px' }}>{userInfo?.email || 'N/A'}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span style={{ color: colors.textMuted }}>Email:</span>
+                      <span style={{ color: colors.text }}>{userInfo?.email || 'N/A'}</span>
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>Account Type:</span>
-                      <span style={{ color: accountTypeColor, marginLeft: '8px', fontWeight: 'bold' }}>
-                        {accountType.toUpperCase()}
-                      </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span style={{ color: colors.textMuted }}>Account Type:</span>
+                      <span style={{ color: accountTypeColor, fontWeight: 'bold' }}>{accountType.toUpperCase()}</span>
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>Member Since:</span>
-                      <span style={{ color: C.WHITE, marginLeft: '8px' }}>
-                        {formatDate((userInfo as any)?.created_at)}
-                      </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span style={{ color: colors.textMuted }}>Member Since:</span>
+                      <span style={{ color: colors.text }}>{formatDate((userInfo as any)?.created_at)}</span>
                     </div>
-                    <div style={{ marginBottom: '8px' }}>
-                      <span style={{ color: C.GRAY }}>User ID:</span>
-                      <span style={{ color: C.GRAY, marginLeft: '8px', fontSize: '10px' }}>#{(userInfo as any)?.id || 'N/A'}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: colors.textMuted }}>User ID:</span>
+                      <span style={{ color: colors.textMuted, fontSize: '11px' }}>#{(userInfo as any)?.id || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Subscription Info */}
-                <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${hasSubscription ? C.GREEN : C.ORANGE}`, padding: '16px' }}>
-                  <div style={{ color: hasSubscription ? C.GREEN : C.ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-                    {hasSubscription ? '✓ SUBSCRIPTION ACTIVE' : '📦 NO SUBSCRIPTION'}
+                {/* API Key */}
+                <div>
+                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    API AUTHENTICATION
                   </div>
-                  <div style={{ color: C.WHITE, fontSize: '12px', fontFamily: 'Consolas, monospace', lineHeight: '1.8' }}>
-                    {hasSubscription && subscriptionPlan ? (
-                      <>
-                        <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: C.GRAY }}>Plan:</span>
-                          <span style={{ color: C.GREEN, marginLeft: '8px', fontWeight: 'bold' }}>{subscriptionPlan.name}</span>
-                        </div>
-                        <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: C.GRAY }}>Price:</span>
-                          <span style={{ color: C.WHITE, marginLeft: '8px' }}>${subscriptionPlan.price_usd / 100}/month</span>
-                        </div>
-                        <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: C.GRAY }}>API Calls:</span>
-                          <span style={{ color: C.CYAN, marginLeft: '8px', fontWeight: 'bold' }}>
-                            {subscriptionPlan.api_calls_limit === -1 ? 'UNLIMITED' :
-                             subscriptionPlan.api_calls_limit != null ? subscriptionPlan.api_calls_limit.toLocaleString() : 'N/A'}
-                          </span>
-                        </div>
-                        <div style={{ marginBottom: '8px' }}>
-                          <span style={{ color: C.GRAY }}>Status:</span>
-                          <span style={{ color: C.GREEN, marginLeft: '8px', fontWeight: 'bold' }}>● {subscriptionStatus?.toUpperCase()}</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                          <button
-                            onClick={cancelSubscription}
-                            disabled={loading}
-                            style={{
-                              flex: 1,
-                              padding: '8px',
-                              backgroundColor: C.DARK_BG,
-                              border: `2px solid ${C.RED}`,
-                              color: C.RED,
-                              fontSize: '10px',
-                              fontWeight: 'bold',
-                              cursor: 'pointer',
-                              fontFamily: 'Consolas, monospace'
-                            }}
-                          >
-                            CANCEL
-                          </button>
-                          <button
-                            onClick={() => navigation.navigateToPricing()}
-                            style={{
-                              flex: 1,
-                              padding: '8px',
-                              backgroundColor: C.DARK_BG,
-                              border: `2px solid ${C.BLUE}`,
-                              color: C.BLUE,
-                              fontSize: '10px',
-                              fontWeight: 'bold',
-                              cursor: 'pointer',
-                              fontFamily: 'Consolas, monospace'
-                            }}
-                          >
-                            CHANGE
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ color: C.YELLOW, marginBottom: '8px' }}>Upgrade to unlock:</div>
-                        <div>• Unlimited API requests</div>
-                        <div>• Priority support</div>
-                        <div>• Advanced features</div>
-                        <div>• Data marketplace access</div>
+                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+                  <div style={{ fontSize: '12px' }}>
+                    <div style={{ color: colors.textMuted, marginBottom: '2px' }}>API Key:</div>
+                    <div style={{ backgroundColor: colors.background, padding: '4px', marginBottom: '4px', border: `1px solid ${colors.textMuted}`, fontSize: '11px', wordBreak: 'break-all', color: colors.text }}>
+                      {session?.api_key || 'No API key available'}
+                    </div>
+                    <button
+                      onClick={regenerateApiKey}
+                      disabled={loading}
+                      style={{
+                        padding: '4px 8px',
+                        backgroundColor: colors.background,
+                        border: `1px solid ${colors.purple}`,
+                        color: colors.purple,
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        width: '100%'
+                      }}
+                    >
+                      REGENERATE API KEY
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column */}
+              <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', overflow: 'auto' }}>
+                {/* Subscription Info */}
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    SUBSCRIPTION STATUS
+                  </div>
+                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+                  {hasSubscription && subscriptionPlan ? (
+                    <div style={{ fontSize: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                        <span style={{ color: colors.textMuted }}>Plan:</span>
+                        <span style={{ color: colors.secondary, fontWeight: 'bold' }}>{subscriptionPlan.name}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                        <span style={{ color: colors.textMuted }}>Price:</span>
+                        <span style={{ color: colors.text }}>${subscriptionPlan.price_usd / 100}/mo</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                        <span style={{ color: colors.textMuted }}>API Calls:</span>
+                        <span style={{ color: colors.accent, fontWeight: 'bold' }}>
+                          {subscriptionPlan.api_calls_limit === -1 ? 'UNLIMITED' :
+                           subscriptionPlan.api_calls_limit != null ? subscriptionPlan.api_calls_limit.toLocaleString() : 'N/A'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <span style={{ color: colors.textMuted }}>Status:</span>
+                        <span style={{ color: colors.secondary, fontWeight: 'bold' }}>{subscriptionStatus?.toUpperCase()}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          onClick={cancelSubscription}
+                          disabled={loading}
+                          style={{
+                            flex: 1,
+                            padding: '4px',
+                            backgroundColor: colors.background,
+                            border: `1px solid ${colors.alert}`,
+                            color: colors.alert,
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          CANCEL
+                        </button>
                         <button
                           onClick={() => navigation.navigateToPricing()}
                           style={{
-                            marginTop: '12px',
-                            padding: '10px',
-                            backgroundColor: C.ORANGE,
-                            border: 'none',
-                            color: C.DARK_BG,
+                            flex: 1,
+                            padding: '4px',
+                            backgroundColor: colors.background,
+                            border: `1px solid ${colors.info}`,
+                            color: colors.info,
                             fontSize: '11px',
                             fontWeight: 'bold',
-                            cursor: 'pointer',
-                            fontFamily: 'Consolas, monospace',
-                            width: '100%'
+                            cursor: 'pointer'
                           }}
                         >
-                          📦 VIEW PLANS
+                          CHANGE
                         </button>
-                      </>
-                    )}
-                  </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px' }}>
+                      <div style={{ color: colors.warning, marginBottom: '4px', fontWeight: 'bold' }}>No active subscription</div>
+                      <div style={{ color: colors.text, marginBottom: '6px', lineHeight: '1.4' }}>
+                        <div>- Unlimited API requests</div>
+                        <div>- Priority support</div>
+                        <div>- Advanced features</div>
+                        <div>- Data marketplace access</div>
+                      </div>
+                      <button
+                        onClick={() => navigation.navigateToPricing()}
+                        style={{
+                          width: '100%',
+                          padding: '6px',
+                          backgroundColor: colors.primary,
+                          border: 'none',
+                          color: colors.background,
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        VIEW PLANS
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
 
-              {/* API Key */}
-              <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.PURPLE}`, padding: '16px', marginBottom: '16px' }}>
-                <div style={{ color: C.PURPLE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-                  🔐 API AUTHENTICATION
-                </div>
-                <div style={{ color: C.WHITE, fontSize: '12px', fontFamily: 'Consolas, monospace' }}>
-                  <div style={{ marginBottom: '8px' }}>
-                    <span style={{ color: C.GRAY }}>API Key:</span>
+                {/* Usage Stats Quick View */}
+                <div>
+                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    API USAGE SUMMARY
                   </div>
-                  <div style={{ backgroundColor: C.DARK_BG, padding: '8px', marginBottom: '12px', border: `1px solid ${C.GRAY}`, fontSize: '10px', wordBreak: 'break-all' }}>
-                    {session?.api_key || 'No API key available'}
+                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+                  <div style={{ fontSize: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                      <span style={{ color: colors.textMuted }}>Total Requests:</span>
+                      <span style={{ color: colors.text }}>{totalRequests.toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: colors.textMuted }}>Today's Requests:</span>
+                      <span style={{ color: colors.accent }}>{todayRequests}</span>
+                    </div>
                   </div>
-                  <button
-                    onClick={regenerateApiKey}
-                    disabled={loading}
-                    style={{
-                      padding: '8px 16px',
-                      backgroundColor: C.DARK_BG,
-                      border: `2px solid ${C.PURPLE}`,
-                      color: C.PURPLE,
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      fontFamily: 'Consolas, monospace'
-                    }}
-                  >
-                    🔄 REGENERATE API KEY
-                  </button>
                 </div>
               </div>
-
-              {/* Quick Actions */}
-              <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.ORANGE}`, padding: '16px' }}>
-                <div style={{ color: C.ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-                  ⚡ QUICK ACTIONS
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                  <button
-                    onClick={() => setCurrentScreen('usage')}
-                    style={{
-                      padding: '12px',
-                      backgroundColor: C.DARK_BG,
-                      border: `2px solid ${C.CYAN}`,
-                      color: C.CYAN,
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      fontFamily: 'Consolas, monospace'
-                    }}
-                  >
-                    📊 USAGE STATS
-                  </button>
-                  <button
-                    onClick={() => setCurrentScreen('payments')}
-                    style={{
-                      padding: '12px',
-                      backgroundColor: C.DARK_BG,
-                      border: `2px solid ${C.GREEN}`,
-                      color: C.GREEN,
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      fontFamily: 'Consolas, monospace'
-                    }}
-                  >
-                    💳 PAYMENT HISTORY
-                  </button>
-                  <button
-                    onClick={() => setCurrentScreen('subscriptions')}
-                    style={{
-                      padding: '12px',
-                      backgroundColor: C.DARK_BG,
-                      border: `2px solid ${C.PURPLE}`,
-                      color: C.PURPLE,
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      fontFamily: 'Consolas, monospace'
-                    }}
-                  >
-                    💾 SUBSCRIPTIONS
-                  </button>
-                  <button
-                    onClick={() => setCurrentScreen('support')}
-                    style={{
-                      padding: '12px',
-                      backgroundColor: C.DARK_BG,
-                      border: `2px solid ${C.BLUE}`,
-                      color: C.BLUE,
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                      fontFamily: 'Consolas, monospace'
-                    }}
-                  >
-                    🎫 SUPPORT
-                  </button>
-                </div>
-              </div>
-            </>
+            </div>
           )}
 
           {currentScreen === 'usage' && renderUsageScreen()}
@@ -677,52 +640,55 @@ const ProfileTab: React.FC = () => {
           {currentScreen === 'support' && renderSupportScreen()}
           {currentScreen === 'settings' && renderSettingsScreen()}
         </div>
+
+        {/* Status Bar */}
+        <div style={{ borderTop: `1px solid ${colors.textMuted}`, backgroundColor: colors.panel, padding: '2px 8px', fontSize: '11px', color: colors.textMuted, flexShrink: 0 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span>FinceptTerminal v3.0.11 | User: {userInfo?.username || 'N/A'}</span>
+            <span>Account: {accountType.toUpperCase()} | Requests: {todayRequests.toLocaleString()} | Status: {loading ? 'UPDATING' : 'READY'}</span>
+          </div>
+        </div>
       </div>
     );
   };
 
   const renderUsageScreen = () => {
     return (
-      <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.CYAN}`, padding: '16px' }}>
-        <div style={{ color: C.CYAN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-          📊 API USAGE STATISTICS
+      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
+        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+          API USAGE STATISTICS
         </div>
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
         {loading ? (
-          <div style={{ color: C.GRAY, fontFamily: 'Consolas, monospace', fontSize: '12px' }}>Loading usage data...</div>
+          <div style={{ color: colors.textMuted, fontSize: '12px' }}>Loading usage data...</div>
         ) : usageData ? (
-          <div style={{ color: C.WHITE, fontSize: '12px', fontFamily: 'Consolas, monospace', lineHeight: '1.8' }}>
-            <div style={{ marginBottom: '8px' }}>
-              <span style={{ color: C.GRAY }}>Total Requests:</span>
-              <span style={{ color: C.WHITE, marginLeft: '8px', fontWeight: 'bold' }}>
-                {usageData.total_requests?.toLocaleString() || 'N/A'}
-              </span>
+          <div style={{ fontSize: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+              <span style={{ color: colors.textMuted }}>Total Requests:</span>
+              <span style={{ color: colors.text, fontWeight: 'bold' }}>{usageData.total_requests?.toLocaleString() || 'N/A'}</span>
             </div>
-            <div style={{ marginBottom: '8px' }}>
-              <span style={{ color: C.GRAY }}>Today's Requests:</span>
-              <span style={{ color: C.CYAN, marginLeft: '8px', fontWeight: 'bold' }}>
-                {usageData.requests_today || usageData.today_requests || 0}
-              </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+              <span style={{ color: colors.textMuted }}>Today's Requests:</span>
+              <span style={{ color: colors.accent, fontWeight: 'bold' }}>{usageData.requests_today || usageData.today_requests || 0}</span>
             </div>
             {detailedUsage && (
               <>
-                <div style={{ marginTop: '16px', color: C.ORANGE, fontWeight: 'bold' }}>Detailed Usage:</div>
-                <div style={{ marginTop: '8px' }}>
-                  <span style={{ color: C.GRAY }}>This Month:</span>
-                  <span style={{ color: C.WHITE, marginLeft: '8px' }}>
-                    {detailedUsage.this_month?.toLocaleString() || 'N/A'}
-                  </span>
-                </div>
-                <div style={{ marginTop: '8px' }}>
-                  <span style={{ color: C.GRAY }}>Last 30 Days:</span>
-                  <span style={{ color: C.WHITE, marginLeft: '8px' }}>
-                    {detailedUsage.last_30_days?.toLocaleString() || 'N/A'}
-                  </span>
+                <div style={{ borderTop: `1px solid ${colors.textMuted}`, marginTop: '6px', paddingTop: '6px' }}>
+                  <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '4px' }}>Detailed Usage</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                    <span style={{ color: colors.textMuted }}>This Month:</span>
+                    <span style={{ color: colors.text }}>{detailedUsage.this_month?.toLocaleString() || 'N/A'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: colors.textMuted }}>Last 30 Days:</span>
+                    <span style={{ color: colors.text }}>{detailedUsage.last_30_days?.toLocaleString() || 'N/A'}</span>
+                  </div>
                 </div>
               </>
             )}
           </div>
         ) : (
-          <div style={{ color: C.GRAY, fontFamily: 'Consolas, monospace', fontSize: '12px' }}>No usage data available</div>
+          <div style={{ color: colors.textMuted, fontSize: '12px' }}>No usage data available</div>
         )}
       </div>
     );
@@ -730,47 +696,42 @@ const ProfileTab: React.FC = () => {
 
   const renderPaymentsScreen = () => {
     return (
-      <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.GREEN}`, padding: '16px' }}>
-        <div style={{ color: C.GREEN, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-          💳 PAYMENT HISTORY
+      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
+        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+          PAYMENT HISTORY
         </div>
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
         {loading ? (
-          <div style={{ color: C.GRAY, fontFamily: 'Consolas, monospace', fontSize: '12px' }}>Loading payment history...</div>
+          <div style={{ color: colors.textMuted, fontSize: '12px' }}>Loading payment history...</div>
         ) : paymentHistory.length > 0 ? (
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {paymentHistory.map((payment: any, idx: number) => (
-              <div
-                key={idx}
-                style={{
-                  backgroundColor: C.DARK_BG,
-                  border: `1px solid ${C.GRAY}`,
-                  padding: '12px',
-                  marginBottom: '8px',
-                  fontFamily: 'Consolas, monospace',
-                  fontSize: '11px'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ color: C.GRAY }}>Amount:</span>
-                  <span style={{ color: C.GREEN, fontWeight: 'bold' }}>
-                    {formatCurrency(payment.amount || payment.amount_paid || 0)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span style={{ color: C.GRAY }}>Date:</span>
-                  <span style={{ color: C.WHITE }}>{formatDate(payment.created_at || payment.payment_date)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: C.GRAY }}>Status:</span>
-                  <span style={{ color: payment.status === 'completed' ? C.GREEN : C.YELLOW }}>
-                    {payment.status?.toUpperCase() || 'N/A'}
-                  </span>
-                </div>
+          paymentHistory.map((payment: any, idx: number) => (
+            <div key={idx} style={{
+              backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+              borderLeft: `2px solid ${colors.secondary}`,
+              paddingLeft: '4px',
+              marginBottom: '4px',
+              fontSize: '12px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                <span style={{ color: colors.textMuted }}>Amount:</span>
+                <span style={{ color: colors.secondary, fontWeight: 'bold' }}>
+                  {formatCurrency(payment.amount || payment.amount_paid || 0)}
+                </span>
               </div>
-            ))}
-          </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
+                <span style={{ color: colors.textMuted }}>Date:</span>
+                <span style={{ color: colors.text }}>{formatDate(payment.created_at || payment.payment_date)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: colors.textMuted }}>Status:</span>
+                <span style={{ color: payment.status === 'completed' ? colors.secondary : colors.warning, fontWeight: 'bold' }}>
+                  {payment.status?.toUpperCase() || 'N/A'}
+                </span>
+              </div>
+            </div>
+          ))
         ) : (
-          <div style={{ color: C.GRAY, fontFamily: 'Consolas, monospace', fontSize: '12px' }}>No payment history found</div>
+          <div style={{ color: colors.textMuted, fontSize: '12px' }}>No payment history found</div>
         )}
       </div>
     );
@@ -778,37 +739,32 @@ const ProfileTab: React.FC = () => {
 
   const renderSubscriptionsScreen = () => {
     return (
-      <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.PURPLE}`, padding: '16px' }}>
-        <div style={{ color: C.PURPLE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-          💾 DATABASE SUBSCRIPTIONS
+      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
+        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+          DATABASE SUBSCRIPTIONS
         </div>
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
         {loading ? (
-          <div style={{ color: C.GRAY, fontFamily: 'Consolas, monospace', fontSize: '12px' }}>Loading subscriptions...</div>
+          <div style={{ color: colors.textMuted, fontSize: '12px' }}>Loading subscriptions...</div>
         ) : subscriptions.length > 0 ? (
-          <div>
-            {subscriptions.map((sub: any, idx: number) => (
-              <div
-                key={idx}
-                style={{
-                  backgroundColor: C.DARK_BG,
-                  border: `1px solid ${C.GRAY}`,
-                  padding: '12px',
-                  marginBottom: '8px',
-                  fontFamily: 'Consolas, monospace',
-                  fontSize: '11px'
-                }}
-              >
-                <div style={{ color: C.PURPLE, fontWeight: 'bold', marginBottom: '4px' }}>
-                  {sub.database_name || sub.name || 'Unknown Database'}
-                </div>
-                <div style={{ color: C.GRAY }}>
-                  Subscribed: {formatDate(sub.subscribed_at || sub.created_at)}
-                </div>
+          subscriptions.map((sub: any, idx: number) => (
+            <div key={idx} style={{
+              backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+              borderLeft: `2px solid ${colors.purple}`,
+              paddingLeft: '4px',
+              marginBottom: '4px',
+              fontSize: '12px'
+            }}>
+              <div style={{ color: colors.purple, fontWeight: 'bold', marginBottom: '1px' }}>
+                {sub.database_name || sub.name || 'Unknown Database'}
               </div>
-            ))}
-          </div>
+              <div style={{ color: colors.textMuted }}>
+                Subscribed: {formatDate(sub.subscribed_at || sub.created_at)}
+              </div>
+            </div>
+          ))
         ) : (
-          <div style={{ color: C.GRAY, fontFamily: 'Consolas, monospace', fontSize: '12px' }}>No database subscriptions found</div>
+          <div style={{ color: colors.textMuted, fontSize: '12px' }}>No database subscriptions found</div>
         )}
       </div>
     );
@@ -816,58 +772,52 @@ const ProfileTab: React.FC = () => {
 
   const renderSupportScreen = () => {
     return (
-      <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.BLUE}`, padding: '16px' }}>
-        <div style={{ color: C.BLUE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-          🎫 SUPPORT TICKETS
+      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
+        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+          SUPPORT TICKETS
         </div>
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
         {loading ? (
-          <div style={{ color: C.GRAY, fontFamily: 'Consolas, monospace', fontSize: '12px' }}>Loading tickets...</div>
+          <div style={{ color: colors.textMuted, fontSize: '12px' }}>Loading tickets...</div>
         ) : supportTickets.length > 0 ? (
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {supportTickets.map((ticket: any, idx: number) => (
-              <div
-                key={idx}
-                style={{
-                  backgroundColor: C.DARK_BG,
-                  border: `1px solid ${C.GRAY}`,
-                  padding: '12px',
-                  marginBottom: '8px',
-                  fontFamily: 'Consolas, monospace',
-                  fontSize: '11px'
-                }}
-              >
-                <div style={{ color: C.BLUE, fontWeight: 'bold', marginBottom: '4px' }}>
-                  #{ticket.id} - {ticket.subject}
-                </div>
-                <div style={{ color: C.GRAY, marginBottom: '4px' }}>{ticket.description?.substring(0, 100)}...</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: C.GRAY }}>Status:</span>
-                  <span style={{ color: ticket.status === 'closed' ? C.GREEN : C.YELLOW }}>
-                    {ticket.status?.toUpperCase()}
-                  </span>
-                </div>
+          supportTickets.map((ticket: any, idx: number) => (
+            <div key={idx} style={{
+              backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+              borderLeft: `2px solid ${colors.info}`,
+              paddingLeft: '4px',
+              marginBottom: '4px',
+              fontSize: '12px'
+            }}>
+              <div style={{ color: colors.info, fontWeight: 'bold', marginBottom: '1px' }}>
+                #{ticket.id} - {ticket.subject}
               </div>
-            ))}
-          </div>
+              <div style={{ color: colors.textMuted, marginBottom: '2px', fontSize: '11px' }}>
+                {ticket.description?.substring(0, 100)}...
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: colors.textMuted }}>Status:</span>
+                <span style={{ color: ticket.status === 'closed' ? colors.secondary : colors.warning, fontWeight: 'bold' }}>
+                  {ticket.status?.toUpperCase()}
+                </span>
+              </div>
+            </div>
+          ))
         ) : (
           <div>
-            <div style={{ color: C.GRAY, fontFamily: 'Consolas, monospace', fontSize: '12px', marginBottom: '16px' }}>
-              No support tickets found
-            </div>
+            <div style={{ color: colors.textMuted, fontSize: '12px', marginBottom: '6px' }}>No support tickets found</div>
             <button
               onClick={() => alert('Create ticket feature coming soon')}
               style={{
-                padding: '10px 20px',
-                backgroundColor: C.BLUE,
+                padding: '6px',
+                backgroundColor: colors.info,
                 border: 'none',
-                color: C.DARK_BG,
-                fontSize: '11px',
+                color: colors.background,
+                fontSize: '12px',
                 fontWeight: 'bold',
-                cursor: 'pointer',
-                fontFamily: 'Consolas, monospace'
+                cursor: 'pointer'
               }}
             >
-              + CREATE NEW TICKET
+              CREATE NEW TICKET
             </button>
           </div>
         )}
@@ -877,33 +827,31 @@ const ProfileTab: React.FC = () => {
 
   const renderSettingsScreen = () => {
     return (
-      <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.RED}`, padding: '16px' }}>
-        <div style={{ color: C.RED, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-          ⚙️ ACCOUNT SETTINGS
+      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
+        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+          ACCOUNT SETTINGS - DANGER ZONE
         </div>
-        <div style={{ color: C.WHITE, fontSize: '12px', fontFamily: 'Consolas, monospace' }}>
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ color: C.YELLOW, fontWeight: 'bold', marginBottom: '8px' }}>⚠️ DANGER ZONE</div>
-            <div style={{ color: C.GRAY, marginBottom: '12px' }}>
-              Deleting your account is permanent and cannot be undone. All your data will be lost.
-            </div>
-            <button
-              onClick={deleteAccount}
-              disabled={loading}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: C.RED,
-                border: 'none',
-                color: C.WHITE,
-                fontSize: '11px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                fontFamily: 'Consolas, monospace'
-              }}
-            >
-              🗑️ DELETE ACCOUNT
-            </button>
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+        <div style={{ fontSize: '12px' }}>
+          <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '4px' }}>WARNING</div>
+          <div style={{ color: colors.textMuted, marginBottom: '8px', lineHeight: '1.4' }}>
+            Deleting your account is permanent and cannot be undone. All your data, subscriptions, payment history, and API access will be permanently removed.
           </div>
+          <button
+            onClick={deleteAccount}
+            disabled={loading}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: colors.alert,
+              border: 'none',
+              color: colors.text,
+              fontSize: '12px',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            DELETE ACCOUNT PERMANENTLY
+          </button>
         </div>
       </div>
     );
@@ -911,47 +859,45 @@ const ProfileTab: React.FC = () => {
 
   const renderGuestSettingsScreen = () => {
     return (
-      <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${C.RED}`, padding: '16px' }}>
-        <div style={{ color: C.RED, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', fontFamily: 'Consolas, monospace' }}>
-          ⚙️ SESSION SETTINGS
+      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
+        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
+          SESSION SETTINGS - DANGER ZONE
         </div>
-        <div style={{ color: C.WHITE, fontSize: '12px', fontFamily: 'Consolas, monospace' }}>
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ color: C.YELLOW, fontWeight: 'bold', marginBottom: '8px' }}>⚠️ DANGER ZONE</div>
-            <div style={{ color: C.GRAY, marginBottom: '12px' }}>
-              Deleting your guest session will remove all your data. This action cannot be undone.
-            </div>
-            <button
-              onClick={async () => {
-                if (confirm('Are you sure you want to delete your guest session?')) {
-                  if (session?.api_key) {
-                    setLoading(true);
-                    const result = await UserApiService.deleteGuestSession(session.api_key || '');
-                    setLoading(false);
-                    if (result.success) {
-                      alert('Guest session deleted successfully.');
-                      await logout();
-                    } else {
-                      alert(`Failed to delete session: ${result.error}`);
-                    }
+        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
+        <div style={{ fontSize: '12px' }}>
+          <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '4px' }}>WARNING</div>
+          <div style={{ color: colors.textMuted, marginBottom: '8px', lineHeight: '1.4' }}>
+            Deleting your guest session will remove all your data. This action cannot be undone.
+          </div>
+          <button
+            onClick={async () => {
+              if (confirm('Are you sure you want to delete your guest session?')) {
+                if (session?.api_key) {
+                  setLoading(true);
+                  const result = await UserApiService.deleteGuestSession(session.api_key || '');
+                  setLoading(false);
+                  if (result.success) {
+                    alert('Guest session deleted successfully.');
+                    await logout();
+                  } else {
+                    alert(`Failed to delete session: ${result.error}`);
                   }
                 }
-              }}
-              disabled={loading}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: C.RED,
-                border: 'none',
-                color: C.WHITE,
-                fontSize: '11px',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                fontFamily: 'Consolas, monospace'
-              }}
-            >
-              🗑️ DELETE SESSION
-            </button>
-          </div>
+              }
+            }}
+            disabled={loading}
+            style={{
+              padding: '6px 12px',
+              backgroundColor: colors.alert,
+              border: 'none',
+              color: colors.text,
+              fontSize: '12px',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            DELETE SESSION PERMANENTLY
+          </button>
         </div>
       </div>
     );
@@ -960,10 +906,10 @@ const ProfileTab: React.FC = () => {
   // Main render
   if (!session) {
     return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: C.DARK_BG, color: C.WHITE, fontFamily: 'Consolas, monospace' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '16px', color: C.ORANGE, marginBottom: '12px' }}>❌ NO SESSION</div>
-          <div style={{ fontSize: '12px', color: C.GRAY }}>Unable to load profile</div>
+      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, color: colors.text }}>
+        <div style={{ textAlign: 'center', fontSize: '12px' }}>
+          <div style={{ color: colors.alert, marginBottom: '8px', fontWeight: 'bold' }}>NO SESSION</div>
+          <div style={{ color: colors.textMuted }}>Unable to load profile</div>
         </div>
       </div>
     );
