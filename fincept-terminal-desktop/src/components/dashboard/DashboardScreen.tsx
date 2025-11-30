@@ -217,6 +217,7 @@ export default function FinxeptTerminal() {
     } else if (session.user_type === 'registered') {
       const username = session.user_info?.username || session.user_info?.email || 'User';
       const accountType = session.user_info?.account_type || 'free';
+      const creditBalance = session.user_info?.credit_balance ?? 0;
       const hasSubscription = (session.subscription as any)?.data?.has_subscription || session.subscription?.has_subscription;
       const planName = hasSubscription
         ? ((session.subscription as any)?.data?.subscription?.plan?.name || session.subscription?.subscription?.plan?.name || accountType)
@@ -230,6 +231,14 @@ export default function FinxeptTerminal() {
             title="Go to Profile"
           >
             👤 {username}
+          </span>
+          <span style={{ color: '#787878' }}>|</span>
+          <span
+            onClick={() => setActiveTab('profile')}
+            style={{ cursor: 'pointer', textDecoration: 'underline', color: creditBalance > 0 ? '#10b981' : '#ef4444' }}
+            title="View Credits"
+          >
+            💳 {creditBalance.toFixed(2)} Credits
           </span>
           <span style={{ color: '#787878' }}>|</span>
           <span
@@ -272,95 +281,248 @@ export default function FinxeptTerminal() {
   };
 
   const handleMenuAction = async (item: any) => {
+    // If action is a function (tab navigation), execute it directly
+    if (typeof item.action === 'function') {
+      item.action();
+      setStatusMessage(`Navigated to ${item.label}`);
+      setTimeout(() => setStatusMessage(''), 2000);
+      return;
+    }
+
     setStatusMessage(`${item.label} clicked`);
 
-    // Handle specific actions
+    // Handle specific string actions
     switch(item.action) {
       case 'fullscreen':
         toggleFullscreen();
         break;
       case 'refresh':
+      case 'refresh_all':
+        setStatusMessage("Refreshing all data...");
         window.location.reload();
         break;
       case 'export':
-        setStatusMessage("Export functionality not implemented");
+      case 'export_portfolio':
+        setStatusMessage("Export Portfolio - Feature coming soon");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'import_data':
+        setStatusMessage("Import Data - Feature coming soon");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'new_workspace':
+        setStatusMessage("New Workspace - Feature coming soon");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'open_workspace':
+        setStatusMessage("Open Workspace - Feature coming soon");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'save_workspace':
+        setStatusMessage("Save Workspace - Feature coming soon");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'zoom_in':
+        setStatusMessage("Zoom In - Use Ctrl++ in browser");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'zoom_out':
+        setStatusMessage("Zoom Out - Use Ctrl+- in browser");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'zoom_reset':
+        setStatusMessage("Reset Zoom - Use Ctrl+0 in browser");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'toggle_theme':
+        setStatusMessage("Toggle Theme - Feature coming soon");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'show_shortcuts':
+        setStatusMessage("Keyboard Shortcuts - Press F1-F12 to navigate tabs");
+        setTimeout(() => setStatusMessage(''), 5000);
+        break;
+      case 'show_about':
+        setStatusMessage(`Fincept Terminal v${APP_VERSION} - Professional Financial Platform`);
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
+      case 'check_updates':
+        setStatusMessage("Checking for updates...");
+        setTimeout(() => setStatusMessage("You are running the latest version"), 3000);
         break;
       case 'logout':
         setStatusMessage("Logging out...");
         await logout();
-        // Redirect to login will be handled by App.tsx
         window.location.href = '/';
         break;
+      case 'exit':
+        setStatusMessage("Use Alt+F4 to close the application");
+        setTimeout(() => setStatusMessage(''), 3000);
+        break;
       default:
-        setTimeout(() => setStatusMessage(""), 3000);
+        setTimeout(() => setStatusMessage(''), 3000);
     }
   };
 
-  // Menu configurations
+  // Keyboard shortcuts handler
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input field
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return;
+      }
+
+      // Only trigger function keys without modifiers (except F11 which browser handles)
+      if (event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) {
+        return;
+      }
+
+      switch (event.key) {
+        case 'F1':
+          event.preventDefault();
+          setActiveTab('dashboard');
+          setStatusMessage('Navigated to Dashboard (F1)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F2':
+          event.preventDefault();
+          setActiveTab('markets');
+          setStatusMessage('Navigated to Markets (F2)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F3':
+          event.preventDefault();
+          setActiveTab('news');
+          setStatusMessage('Navigated to News (F3)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F4':
+          event.preventDefault();
+          setActiveTab('portfolio');
+          setStatusMessage('Navigated to Portfolio (F4)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F5':
+          event.preventDefault();
+          setActiveTab('analytics');
+          setStatusMessage('Navigated to Analytics (F5)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F6':
+          event.preventDefault();
+          setActiveTab('watchlist');
+          setStatusMessage('Navigated to Watchlist (F6)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F7':
+          event.preventDefault();
+          setActiveTab('research');
+          setStatusMessage('Navigated to Equity Research (F7)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F8':
+          event.preventDefault();
+          setActiveTab('screener');
+          setStatusMessage('Navigated to Screener (F8)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F9':
+          event.preventDefault();
+          setActiveTab('trading');
+          setStatusMessage('Navigated to Trading (F9)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F10':
+          event.preventDefault();
+          setActiveTab('chat');
+          setStatusMessage('Navigated to AI Chat (F10)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+        case 'F11':
+          // Let browser handle F11 for fullscreen
+          break;
+        case 'F12':
+          event.preventDefault();
+          setActiveTab('profile');
+          setStatusMessage('Navigated to Profile (F12)');
+          setTimeout(() => setStatusMessage(''), 2000);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, []);
+
+  // Menu configurations with tab navigation
   const fileMenuItems = [
-    { label: 'New Workspace', shortcut: 'Ctrl+N', icon: null },
-    { label: 'Open Workspace', shortcut: 'Ctrl+O', icon: null },
-    { label: 'Save Workspace', shortcut: 'Ctrl+S', icon: null },
-    { label: 'Export Data', shortcut: 'Ctrl+E', icon: <Download size={12} />, action: 'export', separator: true },
-    { label: 'Import Settings', icon: null },
-    { label: 'Exit', shortcut: 'Alt+F4', icon: null, separator: true }
+    { label: 'New Workspace', shortcut: 'Ctrl+N', icon: null, action: 'new_workspace' },
+    { label: 'Open Workspace', shortcut: 'Ctrl+O', icon: null, action: 'open_workspace' },
+    { label: 'Save Workspace', shortcut: 'Ctrl+S', icon: null, action: 'save_workspace' },
+    { label: 'Export Portfolio', shortcut: 'Ctrl+E', icon: <Download size={12} />, action: 'export', separator: true },
+    { label: 'Import Data', icon: null, action: 'import_data' },
+    { label: 'Exit', shortcut: 'Alt+F4', icon: null, action: 'exit', separator: true }
   ];
 
-  const tabsMenuItems = [
-    { label: 'New Tab', shortcut: 'Ctrl+T', icon: null },
-    { label: 'Close Tab', shortcut: 'Ctrl+W', icon: null },
-    { label: 'Close Other Tabs', icon: null },
-    { label: 'Duplicate Tab', icon: null, separator: true },
-    { label: 'Tab Settings', icon: <Settings size={12} /> }
+  const marketsMenuItems = [
+    { label: 'Live Markets', shortcut: 'F2', action: () => setActiveTab('markets') },
+    { label: 'Stock Screener', shortcut: 'F8', action: () => setActiveTab('screener') },
+    { label: 'Polygon Data', action: () => setActiveTab('polygon'), separator: true },
+    { label: 'Kraken Crypto', action: () => setActiveTab('kraken') },
+    { label: 'Economics', action: () => setActiveTab('economics') },
+    { label: 'DBnomics', action: () => setActiveTab('dbnomics') }
   ];
 
-  const sessionMenuItems = [
-    { label: 'Session Info', icon: <User size={12} /> },
-    { label: 'Switch User', icon: null },
-    { label: 'Extend Session', icon: null, separator: true },
-    { label: 'Logout', icon: <LogOut size={12} />, action: 'logout' }
+  const researchMenuItems = [
+    { label: 'Equity Research', shortcut: 'F7', action: () => setActiveTab('research') },
+    { label: 'Geopolitics', action: () => setActiveTab('geopolitics') },
+    { label: 'Maritime Intelligence', action: () => setActiveTab('maritime') },
+    { label: 'News Feed', shortcut: 'F3', action: () => setActiveTab('news') }
   ];
 
-  const apiMenuItems = [
-    { label: 'API Status', icon: null },
-    { label: 'Rate Limits', icon: null },
-    { label: 'API Keys', icon: null, separator: true },
-    { label: 'Documentation', icon: null },
-    { label: 'Test Connection', icon: <RefreshCw size={12} />, action: 'refresh' }
+  const tradingMenuItems = [
+    { label: 'Trading Desk', shortcut: 'F9', action: () => setActiveTab('trading') },
+    { label: 'Fyers Broker', action: () => setActiveTab('fyers') },
+    { label: 'Backtesting', action: () => setActiveTab('backtesting'), separator: true },
+    { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
+    { label: 'Analytics', shortcut: 'F5', action: () => setActiveTab('analytics') },
+    { label: 'Watchlist', shortcut: 'F6', action: () => setActiveTab('watchlist') }
   ];
 
-  const databaseMenuItems = [
-    { label: 'Connect Database', icon: <Database size={12} /> },
-    { label: 'Query Builder', icon: null },
-    { label: 'Schema Browser', icon: null, separator: true },
-    { label: 'Backup Data', icon: null },
-    { label: 'Import Data', icon: null }
+  const toolsMenuItems = [
+    { label: 'AI Assistant', shortcut: 'F10', action: () => setActiveTab('chat') },
+    { label: 'MCP Servers', action: () => setActiveTab('mcp'), separator: true },
+    { label: 'Node Editor', action: () => setActiveTab('nodes') },
+    { label: 'Code Editor', action: () => setActiveTab('code') },
+    { label: 'Data Sources', action: () => setActiveTab('datasources'), separator: true },
+    { label: 'Data Mapping', action: () => setActiveTab('datamapping') },
+    { label: 'Report Builder', action: () => setActiveTab('reportbuilder') },
+    { label: 'Recorded Contexts', action: () => setActiveTab('contexts') },
+    { label: 'Settings', action: () => setActiveTab('settings'), separator: true }
+  ];
+
+  const communityMenuItems = [
+    { label: 'Forum', action: () => setActiveTab('forum') },
+    { label: 'Marketplace', action: () => setActiveTab('marketplace') },
+    { label: 'Documentation', action: () => setActiveTab('docs') }
   ];
 
   const viewMenuItems = [
     { label: 'Fullscreen', shortcut: 'F11', icon: isFullscreen ? <Minimize size={12} /> : <Maximize size={12} />, action: 'fullscreen' },
-    { label: 'Zoom In', shortcut: 'Ctrl++', icon: null },
-    { label: 'Zoom Out', shortcut: 'Ctrl+-', icon: null },
-    { label: 'Reset Zoom', shortcut: 'Ctrl+0', icon: null, separator: true },
-    { label: 'Show Toolbar', icon: <Eye size={12} /> },
-    { label: 'Show Sidebar', icon: null }
-  ];
-
-  const toolsMenuItems = [
-    { label: 'Calculator', icon: null },
-    { label: 'Screen Capture', icon: null },
-    { label: 'Color Picker', icon: null, separator: true },
-    { label: 'Settings', icon: <Settings size={12} /> },
-    { label: 'Preferences', shortcut: 'Ctrl+,', icon: null }
+    { label: 'Zoom In', shortcut: 'Ctrl++', icon: null, action: 'zoom_in' },
+    { label: 'Zoom Out', shortcut: 'Ctrl+-', icon: null, action: 'zoom_out' },
+    { label: 'Reset Zoom', shortcut: 'Ctrl+0', icon: null, action: 'zoom_reset', separator: true },
+    { label: 'Toggle Theme', icon: <Eye size={12} />, action: 'toggle_theme' }
   ];
 
   const helpMenuItems = [
-    { label: 'User Manual', icon: <HelpCircle size={12} /> },
-    { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+?', icon: null },
-    { label: 'Video Tutorials', icon: null, separator: true },
-    { label: 'Contact Support', icon: null },
-    { label: 'Report Bug', icon: null, separator: true },
-    { label: `About Finxept v${APP_VERSION}`, icon: null }
+    { label: 'Documentation', action: () => setActiveTab('docs') },
+    { label: 'Support Tickets', action: () => setActiveTab('support') },
+    { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+/', action: 'show_shortcuts', separator: true },
+    { label: 'About Fincept', action: 'show_about' },
+    { label: 'Check for Updates', action: 'check_updates' },
+    { label: 'Logout', icon: <LogOut size={12} />, action: 'logout', separator: true }
   ];
 
   const tabStyles = {
@@ -420,12 +582,12 @@ export default function FinxeptTerminal() {
       }}>
         <div style={{ display: 'flex', gap: '16px' }}>
           <DropdownMenu label="File" items={fileMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="Tabs" items={tabsMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="Session" items={sessionMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="API" items={apiMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="Database" items={databaseMenuItems} onItemClick={handleMenuAction} />
-          <DropdownMenu label="View" items={viewMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Markets" items={marketsMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Research" items={researchMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Trading" items={tradingMenuItems} onItemClick={handleMenuAction} />
           <DropdownMenu label="Tools" items={toolsMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="Community" items={communityMenuItems} onItemClick={handleMenuAction} />
+          <DropdownMenu label="View" items={viewMenuItems} onItemClick={handleMenuAction} />
           <DropdownMenu label="Help" items={helpMenuItems} onItemClick={handleMenuAction} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -547,191 +709,90 @@ export default function FinxeptTerminal() {
               width: 'max-content',
               minWidth: '100%'
             }}>
-            <TabsTrigger 
-              value="dashboard" 
+            {/* PRIMARY TABS - F1 to F12 */}
+            <TabsTrigger
+              value="dashboard"
               style={activeTab === 'dashboard' ? tabStyles.active : tabStyles.default}
+              title="Dashboard (F1)"
             >
               Dashboard
             </TabsTrigger>
-            <TabsTrigger 
-              value="markets" 
+            <TabsTrigger
+              value="markets"
               style={activeTab === 'markets' ? tabStyles.active : tabStyles.default}
+              title="Markets (F2)"
             >
               Markets
             </TabsTrigger>
-            <TabsTrigger 
-              value="news" 
+            <TabsTrigger
+              value="news"
               style={activeTab === 'news' ? tabStyles.active : tabStyles.default}
+              title="News (F3)"
             >
               News
             </TabsTrigger>
             <TabsTrigger
-              value="forum"
-              style={activeTab === 'forum' ? tabStyles.active : tabStyles.default}
-            >
-              Forum
-            </TabsTrigger>
-            <TabsTrigger
-              value="watchlist"
-              style={activeTab === 'watchlist' ? tabStyles.active : tabStyles.default}
-            >
-              Watchlist
-            </TabsTrigger>
-            <TabsTrigger
-              value="geopolitics"
-              style={activeTab === 'geopolitics' ? tabStyles.active : tabStyles.default}
-            >
-              Geopolitics
-            </TabsTrigger>
-            <TabsTrigger
-              value="chat"
-              style={activeTab === 'chat' ? tabStyles.active : tabStyles.default}
-            >
-              AI Chat
-            </TabsTrigger>
-            <TabsTrigger
-              value="fyers"
-              style={activeTab === 'fyers' ? tabStyles.active : tabStyles.default}
-            >
-              Fyers
-            </TabsTrigger>
-            <TabsTrigger
-              value="mcp"
-              style={activeTab === 'mcp' ? tabStyles.active : tabStyles.default}
-            >
-              MCP
-            </TabsTrigger>
-            <TabsTrigger
-              value="profile"
-              style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
-            >
-              Profile
-            </TabsTrigger>
-            <TabsTrigger
-              value="marketplace"
-              style={activeTab === 'marketplace' ? tabStyles.active : tabStyles.default}
-            >
-              Marketplace
-            </TabsTrigger>
-            <TabsTrigger
               value="portfolio"
               style={activeTab === 'portfolio' ? tabStyles.active : tabStyles.default}
+              title="Portfolio (F4)"
             >
               Portfolio
             </TabsTrigger>
             <TabsTrigger
               value="analytics"
               style={activeTab === 'analytics' ? tabStyles.active : tabStyles.default}
+              title="Analytics (F5)"
             >
               Analytics
             </TabsTrigger>
             <TabsTrigger
-              value="backtesting"
-              style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
+              value="watchlist"
+              style={activeTab === 'watchlist' ? tabStyles.active : tabStyles.default}
+              title="Watchlist (F6)"
             >
-              Backtesting
+              Watchlist
             </TabsTrigger>
             <TabsTrigger
               value="research"
               style={activeTab === 'research' ? tabStyles.active : tabStyles.default}
+              title="Equity Research (F7)"
             >
-              Equity Research
-            </TabsTrigger>
-            <TabsTrigger
-              value="polygon"
-              style={activeTab === 'polygon' ? tabStyles.active : tabStyles.default}
-            >
-              Polygon EQ
+              Research
             </TabsTrigger>
             <TabsTrigger
               value="screener"
               style={activeTab === 'screener' ? tabStyles.active : tabStyles.default}
+              title="Screener (F8)"
             >
               Screener
             </TabsTrigger>
             <TabsTrigger
-              value="dbnomics"
-              style={activeTab === 'dbnomics' ? tabStyles.active : tabStyles.default}
-            >
-              DBnomics
-            </TabsTrigger>
-            <TabsTrigger
-              value="economics"
-              style={activeTab === 'economics' ? tabStyles.active : tabStyles.default}
-            >
-              Economics
-            </TabsTrigger>
-            <TabsTrigger
-              value="code"
-              style={activeTab === 'code' ? tabStyles.active : tabStyles.default}
-            >
-              Code Editor
-            </TabsTrigger>
-            <TabsTrigger
-              value="docs"
-              style={activeTab === 'docs' ? tabStyles.active : tabStyles.default}
-            >
-              Docs
-            </TabsTrigger>
-            <TabsTrigger
-              value="maritime"
-              style={activeTab === 'maritime' ? tabStyles.active : tabStyles.default}
-            >
-              Maritime
-            </TabsTrigger>
-            <TabsTrigger
-              value="kraken"
-              style={activeTab === 'kraken' ? tabStyles.active : tabStyles.default}
-            >
-              Kraken
-            </TabsTrigger>
-            <TabsTrigger
               value="trading"
               style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
+              title="Trading (F9)"
             >
               Trading
             </TabsTrigger>
             <TabsTrigger
+              value="chat"
+              style={activeTab === 'chat' ? tabStyles.active : tabStyles.default}
+              title="AI Chat (F10)"
+            >
+              AI Chat
+            </TabsTrigger>
+            <TabsTrigger
               value="settings"
               style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
+              title="Settings"
             >
               Settings
             </TabsTrigger>
             <TabsTrigger
-              value="nodes"
-              style={activeTab === 'nodes' ? tabStyles.active : tabStyles.default}
+              value="profile"
+              style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
+              title="Profile (F12)"
             >
-              Node Editor
-            </TabsTrigger>
-            <TabsTrigger
-              value="datasources"
-              style={activeTab === 'datasources' ? tabStyles.active : tabStyles.default}
-            >
-              Data Sources
-            </TabsTrigger>
-            <TabsTrigger
-              value="datamapping"
-              style={activeTab === 'datamapping' ? tabStyles.active : tabStyles.default}
-            >
-              Data Mapping
-            </TabsTrigger>
-            <TabsTrigger
-              value="support"
-              style={activeTab === 'support' ? tabStyles.active : tabStyles.default}
-            >
-              Support
-            </TabsTrigger>
-            <TabsTrigger
-              value="contexts"
-              style={activeTab === 'contexts' ? tabStyles.active : tabStyles.default}
-            >
-              Recorded Contexts
-            </TabsTrigger>
-            <TabsTrigger
-              value="reportbuilder"
-              style={activeTab === 'reportbuilder' ? tabStyles.active : tabStyles.default}
-            >
-              Report Builder
+              Profile
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -773,16 +834,24 @@ export default function FinxeptTerminal() {
         height: '20px',
         display: 'flex',
         alignItems: 'center',
-        gap: '16px',
-        flexShrink: 0
+        gap: '12px',
+        flexShrink: 0,
+        fontSize: '10px'
       }}>
-        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F1:HELP</span>
-        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F2:MARKETS</span>
-        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F3:NEWS</span>
-        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F4:PORT</span>
-        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F5:MOVERS</span>
-        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F6:ECON</span>
-        <span style={{ color: '#fbbf24', fontSize: '10px' }}>F11:FULLSCREEN</span>
+        <span style={{ color: '#fbbf24' }}>F1:DASH</span>
+        <span style={{ color: '#fbbf24' }}>F2:MKTS</span>
+        <span style={{ color: '#fbbf24' }}>F3:NEWS</span>
+        <span style={{ color: '#fbbf24' }}>F4:PORT</span>
+        <span style={{ color: '#fbbf24' }}>F5:ANLY</span>
+        <span style={{ color: '#fbbf24' }}>F6:WATCH</span>
+        <span style={{ color: '#fbbf24' }}>F7:RSRCH</span>
+        <span style={{ color: '#fbbf24' }}>F8:SCRN</span>
+        <span style={{ color: '#fbbf24' }}>F9:TRADE</span>
+        <span style={{ color: '#fbbf24' }}>F10:AI</span>
+        <span style={{ color: '#fbbf24' }}>F11:FULL</span>
+        <span style={{ color: '#fbbf24' }}>F12:PROF</span>
+        <span style={{ color: '#666', marginLeft: '8px' }}>|</span>
+        <span style={{ color: '#10b981' }}>More tabs in toolbar menus</span>
       </div>
 
       {/* Main Content Area with Tab Content */}

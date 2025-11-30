@@ -7,7 +7,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::process::{Command, Stdio};
-use std::io::{BufRead, BufReader};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use tauri::State;
@@ -77,7 +76,7 @@ pub async fn execute_lean_cli(
     let args = &parts[1..];
 
     // Execute command
-    let mut child = Command::new(program)
+    let child = Command::new(program)
         .args(args)
         .current_dir(&working_dir)
         .stdout(Stdio::piped())
@@ -299,23 +298,4 @@ fn get_python_path() -> String {
         }
         "python3".to_string()
     }
-}
-
-/**
- * Parse command string into program and arguments
- */
-fn parse_command(command: &str) -> (String, Vec<String>) {
-    let parts: Vec<String> = command
-        .split_whitespace()
-        .map(|s| s.to_string())
-        .collect();
-
-    if parts.is_empty() {
-        return (String::new(), Vec::new());
-    }
-
-    let program = parts[0].clone();
-    let args = parts[1..].to_vec();
-
-    (program, args)
 }
