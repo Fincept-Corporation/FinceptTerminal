@@ -11,122 +11,46 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-/// Get the Python executable path at runtime
+/// Get the Python executable path at runtime using Tauri sidecar
 pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    use std::process::Command;
+    // Get sidecar binary path - Tauri places sidecars next to the executable
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource directory: {}", e))?;
 
-    // Strategy for all platforms:
-    // 1. Try bundled Python first (ensures consistency)
-    // 2. Fall back to system Python (for compatibility)
-    // This ensures users don't need to install Python separately
-
-    #[cfg(target_os = "windows")]
-    {
-        // Try bundled Python first on Windows
-        let resource_dir = app
-            .path()
-            .resource_dir()
-            .map_err(|e| format!("Failed to get resource directory: {}", e))?;
-
-        let bundled_python = resource_dir
-            .join("python-windows")
-            .join("python.exe");
-
-        if bundled_python.exists() {
-            return Ok(bundled_python);
+    // Determine the platform-specific binary name
+    let binary_name = if cfg!(target_os = "windows") {
+        if cfg!(target_arch = "x86_64") {
+            "python-interpreter-x86_64-pc-windows-msvc.exe"
+        } else {
+            "python-interpreter.exe"  // fallback
         }
-
-        // Fallback to system Python
-        if let Ok(output) = Command::new("python").arg("--version").output() {
-            if output.status.success() {
-                if let Ok(python_path) = which::which("python") {
-                    return Ok(python_path);
-                }
-            }
+    } else if cfg!(target_os = "linux") {
+        if cfg!(target_arch = "aarch64") {
+            "python-interpreter-aarch64-unknown-linux-gnu"
+        } else {
+            "python-interpreter-x86_64-unknown-linux-gnu"
         }
-
-        return Err("Python not found. Please install Python 3.x from python.org".to_string());
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        // Try bundled Python first on macOS
-        let resource_dir = app
-            .path()
-            .resource_dir()
-            .map_err(|e| format!("Failed to get resource directory: {}", e))?;
-
-        let bundled_python = resource_dir
-            .join("python-macos")
-            .join("bin")
-            .join("python3");
-
-        if bundled_python.exists() {
-            return Ok(bundled_python);
+    } else if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") {
+            "python-interpreter-aarch64-apple-darwin"
+        } else {
+            "python-interpreter-x86_64-apple-darwin"
         }
+    } else {
+        return Err("Unsupported platform".to_string());
+    };
 
-        // Fallback to system python3
-        if let Ok(output) = Command::new("python3").arg("--version").output() {
-            if output.status.success() {
-                if let Ok(python_path) = which::which("python3") {
-                    return Ok(python_path);
-                }
-            }
-        }
+    // Sidecar binaries are placed in parent directory of resources
+    let python_path = resource_dir.parent()
+        .ok_or("Failed to get parent directory")?
+        .join(binary_name);
 
-        // Try python as last resort
-        if let Ok(output) = Command::new("python").arg("--version").output() {
-            if output.status.success() {
-                if let Ok(python_path) = which::which("python") {
-                    return Ok(python_path);
-                }
-            }
-        }
-
-        return Err("Python not found. Please install Python 3.x:\n  brew install python3".to_string());
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        // Try bundled Python first on Linux
-        let resource_dir = app
-            .path()
-            .resource_dir()
-            .map_err(|e| format!("Failed to get resource directory: {}", e))?;
-
-        let bundled_python = resource_dir
-            .join("python-linux")
-            .join("bin")
-            .join("python3");
-
-        if bundled_python.exists() {
-            return Ok(bundled_python);
-        }
-
-        // Fallback to system python3
-        if let Ok(output) = Command::new("python3").arg("--version").output() {
-            if output.status.success() {
-                if let Ok(python_path) = which::which("python3") {
-                    return Ok(python_path);
-                }
-            }
-        }
-
-        // Try python as last resort
-        if let Ok(output) = Command::new("python").arg("--version").output() {
-            if output.status.success() {
-                if let Ok(python_path) = which::which("python") {
-                    return Ok(python_path);
-                }
-            }
-        }
-
-        return Err("Python not found. Please install Python 3.x:\n  sudo apt install python3 python3-pip\n  OR\n  sudo yum install python3 python3-pip".to_string());
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
-    {
-        Err("Unsupported operating system".to_string())
+    if python_path.exists() {
+        Ok(python_path)
+    } else {
+        Err(format!("Python interpreter not found at: {}. Please ensure the binary is bundled correctly.", python_path.display()))
     }
 }
 
@@ -137,20 +61,18 @@ pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .resource_dir()
         .map_err(|e| format!("Failed to get resource directory: {}", e))?;
 
-    // Determine platform-specific directory and executable name
-    let (bun_dir, bun_exe) = if cfg!(target_os = "windows") {
-        ("bun-windows", "bun.exe")
+    // Platform-specific Bun directory (only current platform is bundled)
+    let bun_dir = if cfg!(target_os = "windows") {
+        "bun-windows"
     } else if cfg!(target_os = "macos") {
-        ("bun-macos", "bun")
+        "bun-macos"
     } else {
-        ("bun-linux", "bun")
+        "bun-linux"
     };
 
-    let bun_path = resource_dir
-        .join(bun_dir)
-        .join(bun_exe);
+    let bun_exe = if cfg!(target_os = "windows") { "bun.exe" } else { "bun" };
+    let bun_path = resource_dir.join(bun_dir).join(bun_exe);
 
-    // Verify Bun exists
     if !bun_path.exists() {
         return Err(format!("Bundled Bun not found at: {}", bun_path.display()));
     }

@@ -26,18 +26,15 @@ dist-ssr
 src/services/node_modules
 src-tauri/target
 
-# Python site-packages - installed via pip during CI/CD
-src-tauri/resources/python-windows/Lib/site-packages/*
-src-tauri/resources/python-macos/lib/python3.12/site-packages/*
-src-tauri/resources/python-linux/lib/python3.12/site-packages/*
+# PyOxidizer executables - platform specific, only bundle matching platform
+src-tauri/binaries/python-interpreter-*
+!src-tauri/binaries/.gitkeep
 
-# Keep site-packages directory structure but not packages
-!src-tauri/resources/python-windows/Lib/site-packages/
-!src-tauri/resources/python-macos/lib/python3.12/site-packages/
-!src-tauri/resources/python-linux/lib/python3.12/site-packages/
+# PyOxidizer tar files
+src-tauri/python-interpreter-*.tar.gz
 
-# Bun executable - always include
-!src-tauri/resources/bun/bun.exe
+# Bun and Python are kept in repo for PyOxidizer builds
+# Only exclude generated binaries
 
 # Scripts should always be included
 !src-tauri/resources/scripts/

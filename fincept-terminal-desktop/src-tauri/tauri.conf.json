@@ -47,7 +47,9 @@
     "resources": [
       "resources/scripts"
     ],
-    "externalBin": [],
+    "externalBin": [
+      "binaries/python-interpreter"
+    ],
     "windows": {
       "digestAlgorithm": "sha256",
       "timestampUrl": "http://timestamp.digicert.com",
