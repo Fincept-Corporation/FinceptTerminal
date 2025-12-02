@@ -17,7 +17,7 @@ gnews==0.4.2
 idna==3.11
 multidict==6.7.0
 multitasking==0.0.12
-numpy==2.3.5
+numpy==1.26.4
 pandas==2.3.3
 peewee==3.18.3
 pip_system_certs==5.3
