@@ -13,9 +13,9 @@ def make_exe():
         config=python_config,
     )
 
-    # Add all packages from requirements.txt (relative to src-tauri/)
+    # Add all packages from requirements.txt
     exe.add_python_resources(exe.pip_install([
-        "-r", "../resources/requirements.txt"
+        "-r", "resources/requirements.txt"
     ]))
 
     return exe
