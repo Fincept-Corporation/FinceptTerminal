@@ -70,7 +70,7 @@
       "endpoints": [
         "https://github.com/Fincept-Corporation/FinceptTerminal/releases/latest/download/latest.json"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCRURCNzE2RUI4OTFDREUKUldUZUhJbnJGcmZ0MjFSQVhvYVR3eUFNYWZBK0t3cWtUTnUvc0hTM1BOVTgveENtMzBHZ3BRUFgr",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCRURCNzE2RUI4OTFDREUKUldUZUhJbnJGcmZ0MjFSQVhvYVR3eUFNYWZBK0t3cWtUTnUvc0hTM1BOVTgveENtMzBHZ3BRUFgK",
       "windows": {
         "installMode": "passive"
       }
