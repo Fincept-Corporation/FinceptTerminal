@@ -58,6 +58,10 @@ python
 !fincept-terminal-desktop/src-tauri/resources/bun/
 !fincept-terminal-desktop/src-tauri/resources/bun/**
 
+# Exclude PyOxidizer generated binaries (built in CI)
+fincept-terminal-desktop/src-tauri/binaries/python-interpreter-*
+fincept-terminal-desktop/src-tauri/python-interpreter-*.tar.gz
+
 # Exclude large executables and binaries EXCEPT for resources
 *.exe
 !fincept-terminal-desktop/src-tauri/resources/**/*.exe

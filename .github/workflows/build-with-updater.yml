@@ -84,6 +84,27 @@ jobs:
         run: npm install
         working-directory: ./fincept-terminal-desktop
 
+      - name: Setup Python for dependency scanning
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Scan and update Python dependencies
+        run: python3 src-tauri/scan_dependencies.py
+        working-directory: ./fincept-terminal-desktop
+
+      - name: Install PyOxidizer
+        run: cargo install pyoxidizer --locked
+
+      - name: Build Python interpreter with PyOxidizer
+        run: |
+          cd fincept-terminal-desktop/src-tauri
+          pyoxidizer build --release --target-triple ${{ matrix.target }}
+          mkdir -p binaries
+          find build -name "python-interpreter*" -type f -executable -exec cp {} binaries/ \;
+          ls -lh binaries/
+        shell: bash
+
       - name: Build the app with updater
         uses: tauri-apps/tauri-action@v0
         env:
