@@ -94,7 +94,15 @@ jobs:
         working-directory: ./fincept-terminal-desktop
 
       - name: Install PyOxidizer
-        run: cargo install pyoxidizer --locked
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            curl -L https://github.com/indygreg/PyOxidizer/releases/download/pyoxidizer%2F0.24.0/pyoxidizer-0.24.0-x86_64-pc-windows-msvc.zip -o pyoxidizer.zip
+            unzip pyoxidizer.zip
+            echo "$PWD" >> $GITHUB_PATH
+          else
+            cargo install pyoxidizer --locked
+          fi
 
       - name: Build Python interpreter with PyOxidizer
         run: |
