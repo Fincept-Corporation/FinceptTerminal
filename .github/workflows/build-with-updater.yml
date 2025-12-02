@@ -97,13 +97,21 @@ jobs:
         run: pip install pyoxidizer
 
       - name: Build Python interpreter with PyOxidizer
+        shell: bash
         run: |
           cd fincept-terminal-desktop/src-tauri
           pyoxidizer build --release --target-triple ${{ matrix.target }}
           mkdir -p binaries
-          find build -name "python-interpreter*" -type f -executable -exec cp {} binaries/ \;
+
+          # Copy binary with proper naming
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            cp build/${{ matrix.target }}/release/install/python-interpreter.exe binaries/python-interpreter-${{ matrix.target }}.exe
+          else
+            cp build/${{ matrix.target }}/release/install/python-interpreter binaries/python-interpreter-${{ matrix.target }}
+            chmod +x binaries/python-interpreter-${{ matrix.target }}
+          fi
+
           ls -lh binaries/
-        shell: bash
 
       - name: Build the app with updater
         uses: tauri-apps/tauri-action@v0

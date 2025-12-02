@@ -1,8 +1,6 @@
 fn main() {
     // Build platform-specific PyOxidizer executable during CI
-    // This runs pyoxidizer against the local python-{platform} directory
     use std::path::Path;
-    use std::process::Command;
 
     let binaries_dir = Path::new("binaries");
     std::fs::create_dir_all(binaries_dir).ok();
