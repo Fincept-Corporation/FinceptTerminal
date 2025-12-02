@@ -84,25 +84,17 @@ jobs:
         run: npm install
         working-directory: ./fincept-terminal-desktop
 
-      - name: Setup Python for dependency scanning
+      - name: Setup Python for PyOxidizer
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.10'
 
       - name: Scan and update Python dependencies
         run: python3 src-tauri/scan_dependencies.py
         working-directory: ./fincept-terminal-desktop
 
       - name: Install PyOxidizer
-        shell: bash
-        run: |
-          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
-            curl -L https://github.com/indygreg/PyOxidizer/releases/download/pyoxidizer%2F0.24.0/pyoxidizer-0.24.0-x86_64-pc-windows-msvc.zip -o pyoxidizer.zip
-            unzip pyoxidizer.zip
-            echo "$PWD" >> $GITHUB_PATH
-          else
-            cargo install pyoxidizer --locked
-          fi
+        run: pip install pyoxidizer
 
       - name: Build Python interpreter with PyOxidizer
         run: |
