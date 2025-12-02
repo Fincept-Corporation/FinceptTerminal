@@ -5,7 +5,6 @@ def make_exe():
     policy.resources_location_fallback = "filesystem-relative:lib"
 
     python_config = dist.make_python_interpreter_config()
-    python_config.run_mode = "repl"
     python_config.module_search_paths = ["$ORIGIN/lib"]
 
     exe = dist.to_python_executable(
