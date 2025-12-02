@@ -43,4 +43,6 @@ printpdf = "0.7"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 [target.'cfg(target_os = "macos")'.dependencies]
+nix = { version = "0.29", features = ["signal", "process"] }
 [target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.29", features = ["signal", "process"] }
