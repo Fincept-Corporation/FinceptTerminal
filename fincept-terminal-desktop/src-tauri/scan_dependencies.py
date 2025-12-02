@@ -100,7 +100,7 @@ def update_requirements(new_packages):
             for pkg in to_add:
                 f.write(f"{pkg}\n")
     else:
-        print("✓ All packages already in requirements.txt")
+        print("All packages already in requirements.txt")
 
 if __name__ == "__main__":
     print("Scanning Python scripts for dependencies...")
