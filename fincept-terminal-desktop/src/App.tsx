@@ -27,6 +27,7 @@ import BackgroundPattern from './components/common/BackgroundPattern';
 import Header from './components/common/Header';
 import Footer from './components/common/Footer';
 import PaymentOverlay from './components/payment/PaymentOverlay';
+import SetupScreen from './components/setup/SetupScreen';
 
 export type Screen =
   | 'login'
@@ -58,12 +59,33 @@ const App: React.FC = () => {
   const [hasChosenFreePlan, setHasChosenFreePlan] = useState(false);
   const [cameFromLogin, setCameFromLogin] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [setupComplete, setSetupComplete] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
   const [paymentWindow, setPaymentWindow] = useState<PaymentWindowState>({
     isOpen: false,
     checkoutUrl: '',
     planName: '',
     planPrice: 0
   });
+
+  // Check setup status on app initialization
+  useEffect(() => {
+    const checkSetup = async () => {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const status: any = await invoke('check_setup_status');
+        setSetupComplete(!status.needs_setup);
+      } catch (err) {
+        console.error('Failed to check setup status:', err);
+        // If check fails, assume setup is needed
+        setSetupComplete(false);
+      } finally {
+        setCheckingSetup(false);
+      }
+    };
+
+    checkSetup();
+  }, []);
 
   // Set up payment window manager on app initialization
   useEffect(() => {
@@ -196,6 +218,23 @@ const App: React.FC = () => {
       }
     }
   }, [session, isLoading, currentScreen, cameFromLogin, hasChosenFreePlan]);
+
+  // Show setup screen if setup not complete
+  if (checkingSetup) {
+    return (
+      <div className="min-h-screen bg-black relative overflow-hidden flex items-center justify-center" style={{ minHeight: '100vh', height: '100%' }}>
+        <BackgroundPattern />
+        <div className="relative z-10 text-center">
+          <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-zinc-400 text-sm">Initializing Fincept Terminal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!setupComplete) {
+    return <SetupScreen onSetupComplete={() => setSetupComplete(true)} />;
+  }
 
   // Show loading screen while checking authentication
   if (isLoading) {

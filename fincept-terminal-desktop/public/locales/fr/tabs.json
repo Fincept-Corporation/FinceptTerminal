@@ -1,0 +1,24 @@
+{
+  "markets": {
+    "title": "Marchés",
+    "subtitle": "Données et analyses de marché en temps réel"
+  },
+  "news": {
+    "title": "Actualités financières",
+    "subtitle": "Dernières nouvelles et mises à jour du marché"
+  },
+  "portfolio": {
+    "title": "Portefeuille",
+    "subtitle": "Suivez et analysez vos investissements"
+  },
+  "analytics": {
+    "title": "Analytique",
+    "subtitle": "Outils d'analyse financière avancés"
+  },
+  "chat": {
+    "title": "Assistant IA",
+    "subtitle": "Discutez avec votre assistant financier IA",
+    "placeholder": "Posez-moi des questions sur les marchés, le trading ou la finance...",
+    "send": "Envoyer"
+  }
+}

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 interface LoginScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -15,6 +16,7 @@ interface LoginScreenProps {
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
   const { login, setupGuestAccess } = useAuth();
+  const { t } = useTranslation('auth');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -26,7 +28,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
     e.preventDefault();
 
     if (!email || !password) {
-      setError("Please enter both email and password");
+      setError(t('login.errors.emailPassword'));
       return;
     }
 
@@ -50,16 +52,16 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
         if (errorMessage.toLowerCase().includes('user not found') ||
             errorMessage.toLowerCase().includes('invalid credentials') ||
             errorMessage.toLowerCase().includes('user does not exist')) {
-          setError("Account not found. Please sign up first to create an account.");
+          setError(t('login.errors.accountNotFound'));
         } else if (errorMessage.toLowerCase().includes('password')) {
-          setError("Incorrect password. Please try again or reset your password.");
+          setError(t('login.errors.incorrectPassword'));
         } else {
           setError(errorMessage);
         }
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError("An unexpected error occurred. Please try again.");
+      setError(t('login.errors.unexpectedError'));
     } finally {
       setIsLoading(false);
     }
@@ -79,11 +81,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
         // App.tsx useEffect will handle navigation to dashboard
       } else {
         console.log('Guest access setup failed:', result.error);
-        setError(result.error || 'Failed to setup guest access. Please try again.');
+        setError(result.error || t('login.errors.guestSetupFailed'));
       }
     } catch (err) {
       console.error('Guest access error:', err);
-      setError("Failed to setup guest access. Please try again.");
+      setError(t('login.errors.guestSetupFailed'));
     } finally {
       setIsGuestLoading(false);
     }
@@ -92,23 +94,23 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
   return (
     <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
       <div className="mb-6">
-        <h2 className="text-white text-2xl font-light mb-3">Welcome to Fincept</h2>
+        <h2 className="text-white text-2xl font-light mb-3">{t('login.title')}</h2>
         <p className="text-zinc-400 text-xs leading-5">
-          Sign in to access your financial terminal and analytics platform.
+          {t('login.subtitle')}
         </p>
       </div>
 
       <form onSubmit={handleLogin} className="space-y-4">
         <div className="space-y-1">
           <Label htmlFor="email" className="text-white text-xs">
-            Email Address
+            {t('login.emailLabel')}
           </Label>
           <div className="relative">
             <Mail className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
             <Input
               id="email"
               type="email"
-              placeholder="Enter your email"
+              placeholder={t('login.emailPlaceholder')}
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
@@ -123,14 +125,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
 
         <div className="space-y-1">
           <Label htmlFor="password" className="text-white text-xs">
-            Password
+            {t('login.passwordLabel')}
           </Label>
           <div className="relative">
             <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
-              placeholder="Enter your password"
+              placeholder={t('login.passwordPlaceholder')}
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
@@ -164,7 +166,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
             className="text-blue-400 hover:text-blue-300 transition-colors"
             disabled={isLoading || isGuestLoading}
           >
-            Forgot Password?
+            {t('login.forgotPassword')}
           </button>
           <Button
             type="submit"
@@ -174,9 +176,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
             {isLoading ? (
               <div className="flex items-center">
                 <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin mr-1.5"></div>
-                Signing In...
+                {t('login.signingIn')}
               </div>
-            ) : "Sign In"}
+            ) : t('login.loginButton')}
           </Button>
         </div>
       </form>
@@ -190,34 +192,34 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
           {isGuestLoading ? (
             <div className="flex items-center justify-center">
               <div className="w-3 h-3 border border-blue-400/30 border-t-blue-400 rounded-full animate-spin mr-1.5"></div>
-              Setting up...
+              {t('login.guestSettingUp')}
             </div>
           ) : (
             <>
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
-              Continue as Guest
+              {t('login.guestButton')}
             </>
           )}
         </Button>
 
         <div className="text-center">
           <p className="text-zinc-400 text-xs">
-            Don't have an account?{" "}
+            {t('login.noAccount')}{" "}
             <button
               type="button"
               onClick={() => onNavigate('register')}
               className="text-blue-400 hover:text-blue-300 transition-colors"
               disabled={isLoading || isGuestLoading}
             >
-              Sign Up
+              {t('login.signUp')}
             </button>
           </p>
         </div>
 
         <div className="text-center text-zinc-500 text-xs">
-          <p>Guest Access: 50 API requests • 24-hour session</p>
+          <p>{t('login.guestInfo')}</p>
         </div>
       </div>
     </div>

@@ -1,0 +1,30 @@
+{
+  "welcome": "欢迎使用 Fincept Terminal",
+  "tabs": {
+    "dashboard": "仪表板",
+    "markets": "市场",
+    "news": "新闻",
+    "watchlist": "监视列表",
+    "portfolio": "投资组合",
+    "analytics": "分析",
+    "economics": "经济学",
+    "dbnomics": "DBnomics",
+    "economicCalendar": "经济日历",
+    "geopolitics": "地缘政治",
+    "maritime": "海事",
+    "options": "期权",
+    "equityResearch": "股票研究",
+    "screener": "筛选器",
+    "kraken": "Kraken",
+    "polygon": "Polygon.io",
+    "chat": "聊天",
+    "docs": "文档",
+    "nodeEditor": "节点编辑器",
+    "codeEditor": "代码编辑器",
+    "forum": "论坛",
+    "marketplace": "市场",
+    "profile": "个人资料",
+    "support": "支持",
+    "settings": "设置"
+  }
+}

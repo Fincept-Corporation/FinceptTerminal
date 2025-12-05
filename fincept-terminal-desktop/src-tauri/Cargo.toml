@@ -1,6 +1,6 @@
 [package]
 name = "fincept-terminal-desktop"
-version = "3.0.11"
+version = "3.0.12"
 description = "Professional-grade financial analysis platform with AI-powered insights and real-time market data"
 authors = ["Fincept Corporation <support@fincept.in>"]
 edition = "2021"
@@ -27,7 +27,7 @@ tauri-plugin-http = "2"
 tauri-plugin-cors-fetch = "4"
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-dialog = "2"
-tauri-plugin-updater = "2"
+tauri-plugin-updater = "2.8"
 tauri-plugin-process = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
@@ -37,7 +37,9 @@ tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
 chrono = "0.4"
 uuid = { version = "1.11", features = ["v4", "serde"] }
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "stream"] }
+futures-util = "0.3"
+zip = "2.2"
 which = "7.0"
 printpdf = "0.7"
 

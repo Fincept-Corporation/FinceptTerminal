@@ -18,6 +18,30 @@ export interface Credential {
   updated_at?: string;
 }
 
+// Predefined API Keys structure
+export interface ApiKeys {
+  FRED_API_KEY?: string;
+  POLYGON_API_KEY?: string;
+  ALPHA_VANTAGE_API_KEY?: string;
+  OPENAI_API_KEY?: string;
+  ANTHROPIC_API_KEY?: string;
+  COINGECKO_API_KEY?: string;
+  NASDAQ_API_KEY?: string;
+  FINANCIAL_MODELING_PREP_API_KEY?: string;
+  [key: string]: string | undefined;
+}
+
+export const PREDEFINED_API_KEYS = [
+  { key: 'FRED_API_KEY', label: 'FRED API Key', description: 'Federal Reserve Economic Data' },
+  { key: 'POLYGON_API_KEY', label: 'Polygon.io API Key', description: 'Stock market data' },
+  { key: 'ALPHA_VANTAGE_API_KEY', label: 'Alpha Vantage API Key', description: 'Stock & crypto data' },
+  { key: 'OPENAI_API_KEY', label: 'OpenAI API Key', description: 'GPT models' },
+  { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key', description: 'Claude models' },
+  { key: 'COINGECKO_API_KEY', label: 'CoinGecko API Key', description: 'Cryptocurrency data' },
+  { key: 'NASDAQ_API_KEY', label: 'NASDAQ API Key', description: 'NASDAQ market data' },
+  { key: 'FINANCIAL_MODELING_PREP_API_KEY', label: 'Financial Modeling Prep', description: 'Financial statements & ratios' },
+] as const;
+
 export interface Setting {
   setting_key: string;
   setting_value: string;
@@ -648,8 +672,26 @@ class SQLiteService {
   }
 
   async getApiKey(serviceName: string): Promise<string | null> {
-    const cred = await this.getCredentialByService(serviceName);
-    return cred?.api_key || null;
+    // Use settings table for predefined API keys
+    const keyName = serviceName.toUpperCase().replace(/[^A-Z0-9]/g, '_') + '_API_KEY';
+    return await this.getSetting(keyName);
+  }
+
+  async setApiKey(keyName: string, value: string): Promise<void> {
+    await this.saveSetting(keyName, value, 'api_keys');
+  }
+
+  async getAllApiKeys(): Promise<ApiKeys> {
+    await this.ensureInitialized();
+    const results = await this.db!.select<Setting[]>(
+      "SELECT * FROM settings WHERE category = 'api_keys'"
+    );
+
+    const keys: ApiKeys = {};
+    results.forEach(row => {
+      keys[row.setting_key] = row.setting_value;
+    });
+    return keys;
   }
 
   async deleteCredential(id: number): Promise<{ success: boolean; message: string }> {

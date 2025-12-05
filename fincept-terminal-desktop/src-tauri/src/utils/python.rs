@@ -11,73 +11,124 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-/// Get the Python executable path at runtime using Tauri sidecar
+/// Get the Python executable path from app installation directory
+/// In production: Uses installed Python from setup.rs
+/// In development: Falls back to system Python if installed Python not found
 pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // Get sidecar binary path - Tauri places sidecars next to the executable
+    // Get the resource directory where Python was installed by setup.rs
     let resource_dir = app
         .path()
         .resource_dir()
         .map_err(|e| format!("Failed to get resource directory: {}", e))?;
 
-    // Determine the platform-specific binary name
-    let binary_name = if cfg!(target_os = "windows") {
-        if cfg!(target_arch = "x86_64") {
-            "python-interpreter-x86_64-pc-windows-msvc.exe"
-        } else {
-            "python-interpreter.exe"  // fallback
-        }
+    // Platform-specific Python executable location
+    let python_exe = if cfg!(target_os = "windows") {
+        // Windows: resources/python/python.exe
+        resource_dir.join("python").join("python.exe")
     } else if cfg!(target_os = "linux") {
-        if cfg!(target_arch = "aarch64") {
-            "python-interpreter-aarch64-unknown-linux-gnu"
-        } else {
-            "python-interpreter-x86_64-unknown-linux-gnu"
-        }
+        // Linux: resources/python/bin/python3
+        resource_dir.join("python").join("bin").join("python3")
     } else if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") {
-            "python-interpreter-aarch64-apple-darwin"
-        } else {
-            "python-interpreter-x86_64-apple-darwin"
-        }
+        // macOS: resources/python/bin/python3
+        resource_dir.join("python").join("bin").join("python3")
     } else {
         return Err("Unsupported platform".to_string());
     };
 
-    // Sidecar binaries are placed in parent directory of resources
-    let python_path = resource_dir.parent()
-        .ok_or("Failed to get parent directory")?
-        .join(binary_name);
-
-    if python_path.exists() {
-        Ok(python_path)
-    } else {
-        Err(format!("Python interpreter not found at: {}. Please ensure the binary is bundled correctly.", python_path.display()))
+    // Check if installed Python exists
+    if python_exe.exists() {
+        // Strip the \\?\ prefix that can cause issues on Windows
+        let path_str = python_exe.to_string_lossy().to_string();
+        let clean_path = if path_str.starts_with(r"\\?\") {
+            PathBuf::from(&path_str[4..])
+        } else {
+            python_exe
+        };
+        return Ok(clean_path);
     }
+
+    // DEVELOPMENT MODE FALLBACK: Try system Python
+    // This allows development without running setup first
+    #[cfg(debug_assertions)]
+    {
+        use std::process::Command;
+
+        let system_python = if cfg!(target_os = "windows") {
+            "python"
+        } else {
+            "python3"
+        };
+
+        // Check if system Python is available
+        if let Ok(output) = Command::new(system_python).arg("--version").output() {
+            if output.status.success() {
+                println!("[DEV MODE] Using system Python: {}", system_python);
+                return Ok(PathBuf::from(system_python));
+            }
+        }
+    }
+
+    // If we get here, Python is not available
+    Err(format!(
+        "Python interpreter not found at: {}\n\nPlease run the setup process to install Python.",
+        python_exe.display()
+    ))
 }
 
-/// Get the bundled Bun executable path at runtime
+/// Get the Bun executable path from app installation directory
+/// In production: Uses installed Bun from setup.rs
+/// In development: Falls back to system Bun if installed Bun not found
 pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let resource_dir = app
         .path()
         .resource_dir()
         .map_err(|e| format!("Failed to get resource directory: {}", e))?;
 
-    // Platform-specific Bun directory (only current platform is bundled)
-    let bun_dir = if cfg!(target_os = "windows") {
-        "bun-windows"
+    // Platform-specific Bun executable location
+    let bun_exe = if cfg!(target_os = "windows") {
+        // Windows: resources/bun/bun.exe
+        resource_dir.join("bun").join("bun.exe")
+    } else if cfg!(target_os = "linux") {
+        // Linux: resources/bun/bin/bun
+        resource_dir.join("bun").join("bin").join("bun")
     } else if cfg!(target_os = "macos") {
-        "bun-macos"
+        // macOS: resources/bun/bin/bun
+        resource_dir.join("bun").join("bin").join("bun")
     } else {
-        "bun-linux"
+        return Err("Unsupported platform".to_string());
     };
 
-    let bun_exe = if cfg!(target_os = "windows") { "bun.exe" } else { "bun" };
-    let bun_path = resource_dir.join(bun_dir).join(bun_exe);
-
-    if !bun_path.exists() {
-        return Err(format!("Bundled Bun not found at: {}", bun_path.display()));
+    // Check if installed Bun exists
+    if bun_exe.exists() {
+        return Ok(bun_exe);
     }
 
-    Ok(bun_path)
+    // DEVELOPMENT MODE FALLBACK: Try system Bun
+    // This allows development without running setup first
+    #[cfg(debug_assertions)]
+    {
+        use std::process::Command;
+
+        let system_bun = if cfg!(target_os = "windows") {
+            "bun.exe"
+        } else {
+            "bun"
+        };
+
+        // Check if system Bun is available
+        if let Ok(output) = Command::new(system_bun).arg("--version").output() {
+            if output.status.success() {
+                println!("[DEV MODE] Using system Bun: {}", system_bun);
+                return Ok(PathBuf::from(system_bun));
+            }
+        }
+    }
+
+    // If we get here, Bun is not available
+    Err(format!(
+        "Bun not found at: {}\n\nPlease run the setup process to install Bun.",
+        bun_exe.display()
+    ))
 }
 
 /// Get a Python script path at runtime

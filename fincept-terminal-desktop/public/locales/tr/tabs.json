@@ -1,0 +1,24 @@
+{
+  "markets": {
+    "title": "Markets",
+    "subtitle": "Real-time market data and analysis"
+  },
+  "news": {
+    "title": "Financial News",
+    "subtitle": "Latest market news and updates"
+  },
+  "portfolio": {
+    "title": "Portfolio",
+    "subtitle": "Track and analyze your investments"
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Advanced financial analytics tools"
+  },
+  "chat": {
+    "title": "AI Assistant",
+    "subtitle": "Chat with your AI financial assistant",
+    "placeholder": "Ask me anything about markets, trading, or finance...",
+    "send": "Send"
+  }
+}
