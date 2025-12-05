@@ -14,6 +14,7 @@ use sha2::{Sha256, Digest};
 mod data_sources;
 mod commands;
 mod utils;
+mod setup;
 // mod finscript; // TODO: Implement FinScript module
 
 // MCP Server Process with communication channels
@@ -329,18 +330,19 @@ fn execute_python_script(
     app: tauri::AppHandle,
     script_name: String,
     args: Vec<String>,
-    env: Option<HashMap<String, String>>,
+    env: std::collections::HashMap<String, String>,
 ) -> Result<String, String> {
-    println!("[Tauri] Executing Python script: {} with args: {:?}", script_name, args);
-
     let python_path = utils::python::get_python_path(&app)?;
     let script_path = utils::python::get_script_path(&app, &script_name)?;
 
-    println!("[Tauri] Python path: {:?}", python_path);
-    println!("[Tauri] Script path: {:?}", script_path);
-
     // Verify paths exist
-    if !python_path.exists() {
+    // Skip existence check for system Python commands (like "python" or "python3")
+    // which are found in PATH but not as file paths
+    let is_system_command = python_path.to_string_lossy() == "python"
+        || python_path.to_string_lossy() == "python3"
+        || python_path.to_string_lossy() == "python.exe";
+
+    if !is_system_command && !python_path.exists() {
         return Err(format!("Python executable not found at: {:?}", python_path));
     }
     if !script_path.exists() {
@@ -350,11 +352,9 @@ fn execute_python_script(
     let mut cmd = Command::new(&python_path);
     cmd.arg(&script_path).args(&args);
 
-    // Add environment variables if provided
-    if let Some(env_vars) = env {
-        for (key, value) in env_vars {
-            cmd.env(key, value);
-        }
+    // Add environment variables
+    for (key, value) in env {
+        cmd.env(key, value);
     }
 
     // Hide console window on Windows
@@ -392,6 +392,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             cleanup_running_workflows,
+            setup::check_setup_status,
+            setup::run_setup,
             spawn_mcp_server,
             send_mcp_request,
             send_mcp_notification,

@@ -1,0 +1,24 @@
+{
+  "markets": {
+    "title": "Mercados",
+    "subtitle": "Datos y análisis de mercado en tiempo real"
+  },
+  "news": {
+    "title": "Noticias financieras",
+    "subtitle": "Últimas noticias y actualizaciones del mercado"
+  },
+  "portfolio": {
+    "title": "Cartera",
+    "subtitle": "Rastree y analice sus inversiones"
+  },
+  "analytics": {
+    "title": "Análisis",
+    "subtitle": "Herramientas avanzadas de análisis financiero"
+  },
+  "chat": {
+    "title": "Asistente AI",
+    "subtitle": "Chatea con tu asistente financiero AI",
+    "placeholder": "Pregúntame sobre mercados, trading o finanzas...",
+    "send": "Enviar"
+  }
+}

@@ -1,66 +1,108 @@
-# .gitignore
+# .gitignore - Root level for entire finceptTerminal project
+# ============================================================
+
+# Python artifacts
 *.egg-info/
-.idea/
-legacy-python-depreciated
 __pycache__/
-dist
-build/cli/cli.pkg
-finscript/target
-build
-build.txt
 .pdm-python
-cmder
-reqgen.py
-fincept_env
-*.md
-*.db
-# Allow specific markdown files
-!README.md
-!docs/**/*.md
-**/.claude/
-!.github/**/*.md
-# Allow embedded Python in resources WITH executables and DLLs
-# (Managed via Git LFS for CI/CD pipeline)
-!fincept-terminal-desktop/src-tauri/resources/python/
-!fincept-terminal-desktop/src-tauri/resources/python/**
-!fincept-terminal-desktop/src-tauri/resources/python/**/*.exe
-!fincept-terminal-desktop/src-tauri/resources/python/**/*.dll
-!fincept-terminal-desktop/src-tauri/resources/python/**/*.pyd
-!fincept-terminal-desktop/src-tauri/resources/python/**/*.so
-!fincept-terminal-desktop/src-tauri/resources/python/**/*.dylib
-treeview.py
-testing
-fincept-terminal-desktop/.vscode
-fincept-terminal-desktop/.claude
-fincept-terminal-desktop/CLAUDE.md
-fincept_terminal/fyers_session_config.json
-fincept_terminal/backup_20250730_072611
 .pdm-build
 fincept_terminal.egg-info
-FinceptTerminal.spec
-fincept_terminal_structure.txt
-Output
-launcher.cpp
-te
+fincept_env
 .venv
-fincept.bat
-pdm.lock
+*.pyc
+get-pip.py
+
+# Build artifacts
+dist
+build
+build/cli/cli.pkg
+finscript/target
+build.txt
+Output
+FinceptTerminal.spec
 FinceptTerminal.exe
+
+# IDE and Editor
+.idea/
+.vscode/
+fincept-terminal-desktop/.vscode
+fincept-terminal-desktop/.claude
+**/.claude/
+
+# Documentation (except specific files)
+*.md
+!README.md
+!docs/**/*.md
+!.github/**/*.md
+fincept-terminal-desktop/CLAUDE.md
+
+# Database files
+*.db
+
+# Environment and Config files with secrets
+.env
+.env.local
+.env.*.local
+settings.json
+watchlist_settings.json
 fincept_terminal/settings.json
 fincept_terminal/watchlist_settings.json
-upx.exe
-fincept_icon.ico
-legacy-python-depreciated/python
-python
-!fincept-terminal-desktop/src-tauri/resources/python/**
+fincept_terminal/fyers_session_config.json
 
-# Allow Bun in resources WITH executables
-!fincept-terminal-desktop/src-tauri/resources/bun/
-!fincept-terminal-desktop/src-tauri/resources/bun/**
+# Tauri signing keys - NEVER commit these!
+*.key
+*.pub
+fincept-terminal-desktop/tauri-signing.key
+fincept-terminal-desktop/tauri-signing.key.pub
 
-# Exclude PyOxidizer generated binaries (built in CI)
-fincept-terminal-desktop/src-tauri/binaries/python-interpreter-*
+# ============================================================
+# fincept-terminal-desktop specific ignores
+# ============================================================
+
+# Node.js
+fincept-terminal-desktop/node_modules
+node_modules
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs
+dist-ssr
+*.local
+
+# Editor directories and files
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tauri specific
+fincept-terminal-desktop/src/services/node_modules
+fincept-terminal-desktop/src-tauri/target
+fincept-terminal-desktop/src-tauri/build/
+
+# Old PyOxidizer files (removed - using first-run setup now)
+fincept-terminal-desktop/src-tauri/binaries/
 fincept-terminal-desktop/src-tauri/python-interpreter-*.tar.gz
+
+# Python and Bun installed during setup (not bundled)
+fincept-terminal-desktop/src-tauri/resources/python/
+fincept-terminal-desktop/src-tauri/resources/bun/
+
+# Scripts should always be included (negation)
+!fincept-terminal-desktop/src-tauri/resources/scripts/
+
+# Python/Bun now installed on first run (not in git)
+
+# Bun now installed on first run (not in git)
 
 # Exclude large executables and binaries EXCEPT for resources
 *.exe
@@ -72,15 +114,26 @@ fincept-terminal-desktop/src-tauri/python-interpreter-*.tar.gz
 !fincept-terminal-desktop/src-tauri/resources/**/*.so
 *.dylib
 !fincept-terminal-desktop/src-tauri/resources/**/*.dylib
-fincept-terminal-desktop/node_modules
+
+# ============================================================
+# Legacy and deprecated
+# ============================================================
+legacy-python-depreciated
+legacy-python-depreciated/python
+python
+cmder
+reqgen.py
+treeview.py
+testing
+fincept_terminal/backup_20250730_072611
+fincept_terminal_structure.txt
+launcher.cpp
+te
+fincept.bat
+pdm.lock
+upx.exe
+fincept_icon.ico
 setup.iss
-upx.exe"build/"
-.env
-get-pip.py
 temp
 tempdist
-settings.json
-watchlist_settings.json
-.DS_Storenul 
-**/.claude/"fincept-terminal-desktop/src-tauri/resources/bun/" 
 nul

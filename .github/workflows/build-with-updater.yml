@@ -12,17 +12,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS builds disabled - PyOxidizer SDK compatibility issue
-          # - platform: 'macos-latest'
-          #   args: '--target aarch64-apple-darwin'
-          #   os_name: 'macOS'
-          #   arch: 'arm64'
-          #   target: 'aarch64-apple-darwin'
-          # - platform: 'macos-latest'
-          #   args: '--target x86_64-apple-darwin'
-          #   os_name: 'macOS'
-          #   arch: 'x64'
-          #   target: 'x86_64-apple-darwin'
+          # macOS builds now enabled - Python installed on first run
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+            os_name: 'macOS'
+            arch: 'arm64'
+            target: 'aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+            os_name: 'macOS'
+            arch: 'x64'
+            target: 'x86_64-apple-darwin'
           - platform: 'ubuntu-22.04'
             args: '--target x86_64-unknown-linux-gnu'
             os_name: 'Linux'
@@ -81,38 +81,17 @@ jobs:
           cache: 'npm'
           cache-dependency-path: './fincept-terminal-desktop/package-lock.json'
 
+      - name: Verify project structure
+        run: |
+          ls -la fincept-terminal-desktop/
+          ls -la fincept-terminal-desktop/src-tauri/
+          ls -la fincept-terminal-desktop/src-tauri/resources/
+
       - name: Install frontend dependencies
         run: npm install
         working-directory: ./fincept-terminal-desktop
 
-      - name: Setup Python for PyOxidizer
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Scan and update Python dependencies
-        run: python3 src-tauri/scan_dependencies.py
-        working-directory: ./fincept-terminal-desktop
-
-      - name: Install PyOxidizer
-        run: pip install pyoxidizer
-
-      - name: Build Python interpreter with PyOxidizer
-        shell: bash
-        run: |
-          cd fincept-terminal-desktop/src-tauri
-          pyoxidizer build --release --target-triple ${{ matrix.target }}
-          mkdir -p binaries
-
-          # Copy binary with proper naming
-          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
-            cp build/${{ matrix.target }}/release/install/python-interpreter.exe binaries/python-interpreter-${{ matrix.target }}.exe
-          else
-            cp build/${{ matrix.target }}/release/install/python-interpreter binaries/python-interpreter-${{ matrix.target }}
-            chmod +x binaries/python-interpreter-${{ matrix.target }}
-          fi
-
-          ls -lh binaries/
+      # Python/Bun now installed on first run - no bundling needed!
 
       - name: Build the app with updater
         uses: tauri-apps/tauri-action@v0
@@ -125,7 +104,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'FinceptTerminal ${{ github.ref_name }}'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
           includeUpdaterJson: true

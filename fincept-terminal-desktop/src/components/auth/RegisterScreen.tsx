@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, User, Mail, Phone, Building, Lock, Key, ChevronDown, Check, X } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 
 interface RegisterScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -24,6 +25,7 @@ interface Country {
 
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
   const { signup, verifyOtp, session } = useAuth();
+  const { t } = useTranslation('auth');
   const [step, setStep] = useState<RegisterStep>('form');
   const [formData, setFormData] = useState({
     firstName: "",
@@ -138,17 +140,17 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     e.preventDefault();
 
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword) {
-      setError("Please fill in all required fields");
+      setError(t('register.errors.requiredFields'));
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match");
+      setError(t('register.errors.passwordMismatch'));
       return;
     }
 
     if (formData.password.length < 8) {
-      setError("Password must be at least 8 characters long");
+      setError(t('register.errors.passwordLength'));
       return;
     }
 
@@ -177,14 +179,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
         // If the error indicates an already verified account, show helpful message
         if (errorMessage.toLowerCase().includes('already exists') ||
             errorMessage.toLowerCase().includes('already registered')) {
-          setError("This email is already registered and verified. Please use the login page instead.");
+          setError(t('register.errors.alreadyExists'));
         } else {
           setError(errorMessage);
         }
       }
     } catch (err) {
       console.error('Registration error:', err);
-      setError("An unexpected error occurred. Please try again.");
+      setError(t('register.errors.unexpectedError'));
     } finally {
       setIsLoading(false);
     }
@@ -194,7 +196,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     e.preventDefault();
 
     if (!otp) {
-      setError("Please enter the verification code");
+      setError(t('register.errors.verificationCode'));
       return;
     }
 
@@ -217,11 +219,11 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
         // Navigation will be handled by useEffect
       } else {
         console.log('OTP verification failed:', result.error);
-        setError(result.error || 'Verification failed. Please check your code and try again.');
+        setError(result.error || t('register.errors.verificationFailed'));
       }
     } catch (err) {
       console.error('OTP verification error:', err);
-      setError("An unexpected error occurred. Please try again.");
+      setError(t('register.errors.unexpectedError'));
     } finally {
       setIsLoading(false);
     }
@@ -239,10 +241,10 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
         setError(""); // Clear any previous errors
         console.log('OTP resent successfully');
       } else {
-        setError(result.error || 'Failed to resend code. Please try again.');
+        setError(result.error || t('register.errors.resendFailed'));
       }
     } catch (err) {
-      setError("Failed to resend code. Please try again.");
+      setError(t('register.errors.resendFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -254,8 +256,8 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
       <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
         <div className="text-center">
           <div className="w-8 h-8 border border-white/30 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
-          <h2 className="text-white text-xl font-semibold mb-2">Verification Complete</h2>
-          <p className="text-zinc-400 text-sm">Setting up your account...</p>
+          <h2 className="text-white text-xl font-semibold mb-2">{t('register.verification.complete')}</h2>
+          <p className="text-zinc-400 text-sm">{t('register.verification.settingUp')}</p>
         </div>
       </div>
     );
@@ -273,10 +275,10 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <h2 className="text-white text-2xl font-light">Create Account</h2>
+            <h2 className="text-white text-2xl font-light">{t('register.title')}</h2>
           </div>
           <p className="text-zinc-400 text-sm leading-5">
-            Join Fincept to access professional financial terminal and analytics platform.
+            {t('register.subtitle')}
           </p>
         </div>
 
@@ -284,14 +286,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="firstName" className="text-white text-xs">
-                First Name *
+                {t('register.firstNameLabel')}
               </Label>
               <div className="relative">
                 <User className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
                 <Input
                   id="firstName"
                   type="text"
-                  placeholder="First name"
+                  placeholder={t('register.firstNamePlaceholder')}
                   value={formData.firstName}
                   onChange={(e) => handleChange("firstName", e.target.value)}
                   className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
@@ -303,12 +305,12 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
             <div className="space-y-1">
               <Label htmlFor="lastName" className="text-white text-xs">
-                Last Name *
+                {t('register.lastNameLabel')}
               </Label>
               <Input
                 id="lastName"
                 type="text"
-                placeholder="Last name"
+                placeholder={t('register.lastNamePlaceholder')}
                 value={formData.lastName}
                 onChange={(e) => handleChange("lastName", e.target.value)}
                 className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
@@ -320,14 +322,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
           <div className="space-y-1">
             <Label htmlFor="email" className="text-white text-xs">
-              Email Address *
+              {t('register.emailLabel')}
             </Label>
             <div className="relative">
               <Mail className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
               <Input
                 id="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder={t('register.emailPlaceholder')}
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
                 className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
@@ -339,7 +341,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
           <div className="space-y-1">
             <Label htmlFor="phone" className="text-white text-xs">
-              Phone Number
+              {t('register.phoneLabel')}
             </Label>
             <div className="flex gap-2">
               {/* Country Code Dropdown */}
@@ -360,7 +362,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                     <div className="p-2">
                       <Input
                         type="text"
-                        placeholder="Search countries..."
+                        placeholder={t('register.searchCountries')}
                         value={countrySearchTerm}
                         onChange={(e) => setCountrySearchTerm(e.target.value)}
                         className="bg-zinc-700 border-zinc-600 text-white placeholder-zinc-500 h-8 text-sm"
@@ -390,7 +392,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                 <Input
                   id="phone"
                   type="tel"
-                  placeholder="Phone number (optional)"
+                  placeholder={t('register.phonePlaceholder')}
                   value={formData.phone}
                   onChange={(e) => handleChange("phone", e.target.value)}
                   className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
@@ -402,14 +404,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
           <div className="space-y-1">
             <Label htmlFor="company" className="text-white text-xs">
-              Company
+              {t('register.companyLabel')}
             </Label>
             <div className="relative">
               <Building className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
               <Input
                 id="company"
                 type="text"
-                placeholder="Company name (optional)"
+                placeholder={t('register.companyPlaceholder')}
                 value={formData.company}
                 onChange={(e) => handleChange("company", e.target.value)}
                 className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
@@ -420,14 +422,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
           <div className="space-y-1">
             <Label htmlFor="password" className="text-white text-xs">
-              Password *
+              {t('register.passwordLabel')}
             </Label>
             <div className="relative">
               <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
               <Input
                 id="password"
                 type="password"
-                placeholder="Create password"
+                placeholder={t('register.passwordPlaceholder')}
                 value={formData.password}
                 onChange={(e) => handleChange("password", e.target.value)}
                 className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
@@ -442,23 +444,23 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
               <div className="mt-2 space-y-1 text-xs">
                 <div className={`flex items-center gap-1.5 ${passwordValidation.minLength ? 'text-green-400' : 'text-zinc-500'}`}>
                   {passwordValidation.minLength ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                  <span>At least 8 characters</span>
+                  <span>{t('register.passwordRequirements.minLength')}</span>
                 </div>
                 <div className={`flex items-center gap-1.5 ${passwordValidation.hasUpperCase ? 'text-green-400' : 'text-zinc-500'}`}>
                   {passwordValidation.hasUpperCase ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                  <span>One uppercase letter</span>
+                  <span>{t('register.passwordRequirements.uppercase')}</span>
                 </div>
                 <div className={`flex items-center gap-1.5 ${passwordValidation.hasLowerCase ? 'text-green-400' : 'text-zinc-500'}`}>
                   {passwordValidation.hasLowerCase ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                  <span>One lowercase letter</span>
+                  <span>{t('register.passwordRequirements.lowercase')}</span>
                 </div>
                 <div className={`flex items-center gap-1.5 ${passwordValidation.hasNumber ? 'text-green-400' : 'text-zinc-500'}`}>
                   {passwordValidation.hasNumber ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                  <span>One number</span>
+                  <span>{t('register.passwordRequirements.number')}</span>
                 </div>
                 <div className={`flex items-center gap-1.5 ${passwordValidation.hasSpecialChar ? 'text-green-400' : 'text-zinc-500'}`}>
                   {passwordValidation.hasSpecialChar ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                  <span>One special character</span>
+                  <span>{t('register.passwordRequirements.special')}</span>
                 </div>
               </div>
             )}
@@ -466,14 +468,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
           <div className="space-y-1">
             <Label htmlFor="confirmPassword" className="text-white text-xs">
-              Confirm Password *
+              {t('register.confirmPasswordLabel')}
             </Label>
             <div className="relative">
               <Lock className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="Confirm password"
+                placeholder={t('register.confirmPasswordPlaceholder')}
                 value={formData.confirmPassword}
                 onChange={(e) => handleChange("confirmPassword", e.target.value)}
                 className={`bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 ${
@@ -486,7 +488,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
             {formData.confirmPassword && formData.password !== formData.confirmPassword && (
               <div className="flex items-center gap-1.5 text-red-400 text-xs mt-1">
                 <X className="h-3 w-3" />
-                <span>Passwords do not match</span>
+                <span>{t('register.errors.passwordMismatch')}</span>
               </div>
             )}
           </div>
@@ -506,23 +508,23 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
               {isLoading ? (
                 <div className="flex items-center">
                   <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin mr-1.5"></div>
-                  Creating...
+                  {t('register.creating')}
                 </div>
-              ) : "Create Account"}
+              ) : t('register.registerButton')}
             </Button>
           </div>
         </form>
 
         <div className="mt-4 pt-4 border-t border-zinc-700 text-center">
           <p className="text-zinc-400 text-xs">
-            Already have an account?{" "}
+            {t('register.haveAccount')}{" "}
             <button
               type="button"
               onClick={() => onNavigate('login')}
               className="text-blue-400 hover:text-blue-300 transition-colors"
               disabled={isLoading}
             >
-              Sign In
+              {t('register.signIn')}
             </button>
           </p>
         </div>
@@ -551,28 +553,28 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            <h2 className="text-white text-2xl font-light">Verify Email</h2>
+            <h2 className="text-white text-2xl font-light">{t('register.verification.title')}</h2>
           </div>
           <p className="text-zinc-400 text-xs leading-5">
-            We've sent a verification code to <span className="text-white">{formData.email}</span>.
-            Please enter the code below to complete your registration.
+            {t('register.verification.subtitle')} <span className="text-white">{formData.email}</span>.
+            {t('register.verification.description')}
           </p>
           <p className="text-zinc-500 text-xs leading-5 mt-2">
-            Note: If you've registered before but didn't verify, a fresh code has been sent to your email.
+            {t('register.verification.note')}
           </p>
         </div>
 
         <form onSubmit={handleVerifyOtp} className="space-y-4">
           <div className="space-y-1">
             <Label htmlFor="otp" className="text-white text-xs">
-              Verification Code
+              {t('register.verification.codeLabel')}
             </Label>
             <div className="relative">
               <Key className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
               <Input
                 id="otp"
                 type="text"
-                placeholder="Enter verification code"
+                placeholder={t('register.verification.codePlaceholder')}
                 value={otp}
                 onChange={(e) => {
                   setOtp(e.target.value);
@@ -600,9 +602,9 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
               {isLoading ? (
                 <div className="flex items-center">
                   <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin mr-1.5"></div>
-                  Verifying...
+                  {t('register.verification.verifying')}
                 </div>
-              ) : "Verify & Complete"}
+              ) : t('register.verification.verifyButton')}
             </Button>
           </div>
         </form>
@@ -613,7 +615,7 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
             className="text-blue-400 hover:text-blue-300 text-xs transition-colors"
             disabled={isLoading}
           >
-            {isLoading ? "Sending..." : "Didn't receive the code? Resend"}
+            {isLoading ? t('register.verification.resending') : t('register.verification.resend')}
           </button>
         </div>
       </div>

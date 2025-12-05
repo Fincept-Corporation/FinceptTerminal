@@ -1,0 +1,30 @@
+{
+  "welcome": "Fincept Terminalへようこそ",
+  "tabs": {
+    "dashboard": "ダッシュボード",
+    "markets": "マーケット",
+    "news": "ニュース",
+    "watchlist": "ウォッチリスト",
+    "portfolio": "ポートフォリオ",
+    "analytics": "分析",
+    "economics": "経済学",
+    "dbnomics": "DBnomics",
+    "economicCalendar": "経済カレンダー",
+    "geopolitics": "地政学",
+    "maritime": "海事",
+    "options": "オプション",
+    "equityResearch": "株式調査",
+    "screener": "スクリーナー",
+    "kraken": "Kraken",
+    "polygon": "Polygon.io",
+    "chat": "チャット",
+    "docs": "ドキュメント",
+    "nodeEditor": "ノードエディター",
+    "codeEditor": "コードエディター",
+    "forum": "フォーラム",
+    "marketplace": "マーケットプレイス",
+    "profile": "プロフィール",
+    "support": "サポート",
+    "settings": "設定"
+  }
+}

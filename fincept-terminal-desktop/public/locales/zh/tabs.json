@@ -1,0 +1,24 @@
+{
+  "markets": {
+    "title": "市场",
+    "subtitle": "实时市场数据和分析"
+  },
+  "news": {
+    "title": "金融新闻",
+    "subtitle": "最新市场新闻和更新"
+  },
+  "portfolio": {
+    "title": "投资组合",
+    "subtitle": "跟踪和分析您的投资"
+  },
+  "analytics": {
+    "title": "分析",
+    "subtitle": "高级金融分析工具"
+  },
+  "chat": {
+    "title": "AI 助手",
+    "subtitle": "与您的AI金融助手聊天",
+    "placeholder": "询问我有关市场、交易或金融的任何问题...",
+    "send": "发送"
+  }
+}

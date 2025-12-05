@@ -37,41 +37,48 @@ const ProfileTab: React.FC = () => {
     }
   };
 
-  // Fetch data based on current screen
-  useEffect(() => {
+  const fetchData = async (showNotification = false) => {
     if (!session?.api_key) return;
 
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        if (currentScreen === 'usage') {
-          if (session.user_type === 'guest') {
-            const result = await UserApiService.getGuestUsage(session.api_key || '');
-            if (result.success) setUsageData(result.data);
-          } else {
-            const result = await UserApiService.getUserUsage(session.api_key || '');
-            if (result.success) setUsageData(result.data);
+    setLoading(true);
+    try {
+      if (currentScreen === 'usage') {
+        if (session.user_type === 'guest') {
+          const result = await UserApiService.getGuestUsage(session.api_key || '');
+          if (result.success) setUsageData(result.data);
+        } else {
+          const result = await UserApiService.getUserUsage(session.api_key || '');
+          if (result.success) setUsageData(result.data);
 
-            const detailedResult = await UserApiService.getUsageDetails(session.api_key || '');
-            if (detailedResult.success) setDetailedUsage(detailedResult.data);
-          }
-        } else if (currentScreen === 'payments') {
-          const result = await UserApiService.getPaymentHistory(session.api_key || '', 1, 20);
-          if (result.success) setPaymentHistory(result.data?.payments || result.data || []);
-        } else if (currentScreen === 'subscriptions') {
-          const result = await UserApiService.getUserSubscriptions(session.api_key || '');
-          if (result.success) setSubscriptions(result.data?.subscriptions || result.data || []);
-        } else if (currentScreen === 'support') {
-          const result = await UserApiService.getUserTickets(session.api_key || '');
-          if (result.success) setSupportTickets(result.data?.tickets || result.data || []);
+          const detailedResult = await UserApiService.getUsageDetails(session.api_key || '');
+          if (detailedResult.success) setDetailedUsage(detailedResult.data);
         }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
+      } else if (currentScreen === 'payments') {
+        const result = await UserApiService.getPaymentHistory(session.api_key || '', 1, 20);
+        if (result.success) setPaymentHistory(result.data?.payments || result.data || []);
+      } else if (currentScreen === 'subscriptions') {
+        const result = await UserApiService.getUserSubscriptions(session.api_key || '');
+        if (result.success) setSubscriptions(result.data?.subscriptions || result.data || []);
+      } else if (currentScreen === 'support') {
+        const result = await UserApiService.getUserTickets(session.api_key || '');
+        if (result.success) setSupportTickets(result.data?.tickets || result.data || []);
       }
-    };
 
+      if (showNotification) {
+        alert('✓ Profile data refreshed successfully!');
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      if (showNotification) {
+        alert('✗ Failed to refresh data. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch data based on current screen
+  useEffect(() => {
     fetchData();
   }, [currentScreen, session]);
 
@@ -173,6 +180,24 @@ const ProfileTab: React.FC = () => {
             <span style={{ color: colors.text }}>|</span>
             <span style={{ color: colors.textMuted }}>REMAINING:</span>
             <span style={{ color: remaining > 10 ? colors.secondary : colors.alert }}>{remaining}</span>
+            <button
+              onClick={() => fetchData(true)}
+              disabled={loading}
+              style={{
+                marginLeft: 'auto',
+                padding: '2px 8px',
+                backgroundColor: colors.primary,
+                color: colors.background,
+                border: 'none',
+                borderRadius: '2px',
+                fontSize: '11px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                opacity: loading ? 0.5 : 1
+              }}
+            >
+              {loading ? 'LOADING...' : '↻ REFRESH'}
+            </button>
           </div>
         </div>
 
@@ -183,18 +208,19 @@ const ProfileTab: React.FC = () => {
               { key: "F1", label: "OVERVIEW", screen: "overview" },
               { key: "F2", label: "USAGE", screen: "usage" },
               { key: "F3", label: "SETTINGS", screen: "settings" },
-              { key: "F4", label: "EXTEND", action: 'extend' },
+              { key: "F4", label: "REFRESH", action: 'refresh' },
               { key: "F5", label: "PRICING", action: 'pricing' },
               { key: "F6", label: "LOGOUT", action: 'logout' }
             ].map(item => (
               <button key={item.key}
                 onClick={() => {
-                  if (item.action === 'extend') extendSession();
+                  if (item.action === 'refresh') window.location.reload();
+                  else if (item.action === 'extend') extendSession();
                   else if (item.action === 'pricing') navigation.navigateToPricing();
                   else if (item.action === 'logout') logoutUser();
                   else if (item.screen) setCurrentScreen(item.screen as ProfileScreen);
                 }}
-                disabled={loading && (item.action === 'extend')}
+                disabled={loading && (item.action === 'extend' || item.action === 'refresh')}
                 style={{
                   backgroundColor: currentScreen === item.screen ? colors.primary : colors.background,
                   border: `1px solid ${colors.textMuted}`,
@@ -375,6 +401,24 @@ const ProfileTab: React.FC = () => {
             <span style={{ color: colors.text }}>|</span>
             <span style={{ color: colors.textMuted }}>PLAN:</span>
             <span style={{ color: accountTypeColor, fontWeight: 'bold' }}>{accountType.toUpperCase()}</span>
+            <button
+              onClick={() => fetchData(true)}
+              disabled={loading}
+              style={{
+                marginLeft: 'auto',
+                padding: '3px 12px',
+                backgroundColor: colors.primary,
+                color: colors.background,
+                border: 'none',
+                borderRadius: '3px',
+                fontSize: '11px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                opacity: loading ? 0.5 : 1
+              }}
+            >
+              {loading ? 'LOADING...' : '↻ REFRESH'}
+            </button>
           </div>
         </div>
 

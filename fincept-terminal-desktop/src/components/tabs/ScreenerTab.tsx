@@ -64,6 +64,7 @@ export default function ScreenerTab() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [data, setData] = useState<FREDSeries[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [chartType, setChartType] = useState<'line' | 'area'>('line');
   const [apiKeyConfigured, setApiKeyConfigured] = useState<boolean>(false);
@@ -78,6 +79,8 @@ export default function ScreenerTab() {
   const [categoryPath, setCategoryPath] = useState<{id: number, name: string}[]>([{id: 0, name: 'All Categories'}]);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [categorySeriesResults, setCategorySeriesResults] = useState<SearchResult[]>([]);
+  const [categorySeriesLoading, setCategorySeriesLoading] = useState(false);
+  const [normalizeData, setNormalizeData] = useState(false);
 
   useEffect(() => {
     checkApiKey();
@@ -94,9 +97,14 @@ export default function ScreenerTab() {
   const checkApiKey = async () => {
     try {
       const apiKey = await sqliteService.getApiKey('FRED');
+      console.log('[ScreenerTab] FRED API key check:', apiKey ? `Found (length: ${apiKey.length})` : 'Not found');
       setApiKeyConfigured(!!apiKey);
+
+      // Also check all API keys for debugging
+      const allKeys = await sqliteService.getAllApiKeys();
+      console.log('[ScreenerTab] All configured API keys:', Object.keys(allKeys));
     } catch (error) {
-      console.error('Failed to check FRED API key:', error);
+      console.error('[ScreenerTab] Failed to check FRED API key:', error);
       setApiKeyConfigured(false);
     }
   };
@@ -160,9 +168,13 @@ export default function ScreenerTab() {
 
   // Load series in a category
   const loadCategorySeries = async (categoryId: number) => {
+    setCategorySeriesLoading(true);
     try {
       const apiKey = await sqliteService.getApiKey('FRED');
-      if (!apiKey) return;
+      if (!apiKey) {
+        setCategorySeriesLoading(false);
+        return;
+      }
 
       const result = await invoke<string>('execute_python_script', {
         scriptName: 'fred_data.py',
@@ -178,6 +190,8 @@ export default function ScreenerTab() {
       }
     } catch (err) {
       setCategorySeriesResults([]);
+    } finally {
+      setCategorySeriesLoading(false);
     }
   };
 
@@ -216,56 +230,129 @@ export default function ScreenerTab() {
   };
 
   // Add series from browser
-  const addSeriesFromBrowser = (id: string) => {
+  const addSeriesFromBrowser = async (id: string) => {
     if (!getCurrentSeriesIds().includes(id)) {
-      setSeriesIds(prev => prev ? `${prev},${id}` : id);
+      const newIds = seriesIds ? `${seriesIds},${id}` : id;
+      setSeriesIds(newIds);
+
+      // Auto-fetch data after adding series
+      setTimeout(async () => {
+        try {
+          setLoading(true);
+          setError(null);
+          setLoadingMessage('Initializing...');
+
+          const apiKey = await sqliteService.getApiKey('FRED');
+          if (!apiKey) {
+            setError('FRED API key not configured. Please add it in Settings.');
+            setLoading(false);
+            setLoadingMessage('');
+            return;
+          }
+
+          const ids = [...new Set(newIds.split(',').map(s => s.trim()).filter(Boolean))];
+
+          if (ids.length === 0) {
+            setError('Please enter at least one series ID');
+            setLoading(false);
+            setLoadingMessage('');
+            return;
+          }
+
+          setLoadingMessage(`Fetching ${ids.length} series from FRED API...`);
+          const args = ['multiple', ...ids, startDate, endDate];
+
+          const result = await invoke<string>('execute_python_script', {
+            scriptName: 'fred_data.py',
+            args,
+            env: { FRED_API_KEY: apiKey }
+          });
+
+          setLoadingMessage('Processing data...');
+          const parsed = JSON.parse(result);
+
+          if (parsed.error) {
+            setError(`API Error: ${parsed.error}`);
+          } else if (Array.isArray(parsed)) {
+            const errorSeries = parsed.find(s => s.error);
+            if (errorSeries) {
+              setError(`Failed to fetch ${errorSeries.series_id}: ${errorSeries.error}`);
+            } else {
+              setData(parsed);
+              setError(null);
+              setLoadingMessage(`Successfully loaded ${parsed.length} series!`);
+              setTimeout(() => setLoadingMessage(''), 2000);
+            }
+          } else {
+            setData(parsed);
+          }
+        } catch (err: any) {
+          setError(err.message || 'Failed to fetch data');
+        } finally {
+          setLoading(false);
+        }
+      }, 100);
     }
   };
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
+    setLoadingMessage('Initializing...');
 
-    // Use setTimeout to make it non-blocking
-    setTimeout(async () => {
-      try {
-        const apiKey = await sqliteService.getApiKey('FRED');
-        if (!apiKey) {
-          setError('FRED API key not configured. Please add it in Settings > Credentials.');
-          setApiKeyConfigured(false);
-          setLoading(false);
-          return;
-        }
+    try {
+      const apiKey = await sqliteService.getApiKey('FRED');
+      if (!apiKey) {
+        setError('FRED API key not configured. Please add it in Settings > Credentials.');
+        setApiKeyConfigured(false);
+        setLoading(false);
+        setLoadingMessage('');
+        return;
+      }
 
-        // Remove duplicates and trim
-        const ids = [...new Set(seriesIds.split(',').map(s => s.trim()).filter(Boolean))];
+      // Remove duplicates and trim
+      const ids = [...new Set(seriesIds.split(',').map(s => s.trim()).filter(Boolean))];
 
-        if (ids.length === 0) {
-          setError('Please enter at least one series ID');
-          setLoading(false);
-          return;
-        }
+      if (ids.length === 0) {
+        setError('Please enter at least one series ID');
+        setLoading(false);
+        setLoadingMessage('');
+        return;
+      }
 
-        const args = ['multiple', ...ids, startDate, endDate];
+      setLoadingMessage(`Fetching ${ids.length} series from FRED API...`);
+      const args = ['multiple', ...ids, startDate, endDate];
 
-        const result = await invoke<string>('execute_python_script', {
-          scriptName: 'fred_data.py',
-          args,
-          env: { FRED_API_KEY: apiKey }
-        });
+      const result = await invoke<string>('execute_python_script', {
+        scriptName: 'fred_data.py',
+        args,
+        env: { FRED_API_KEY: apiKey }
+      });
 
-        const parsed = JSON.parse(result);
-        if (parsed.error) {
-          setError(parsed.error);
+      setLoadingMessage('Processing data...');
+      const parsed = JSON.parse(result);
+
+      if (parsed.error) {
+        setError(`API Error: ${parsed.error}`);
+      } else if (Array.isArray(parsed)) {
+        // Check if any series has an error
+        const errorSeries = parsed.find(s => s.error);
+        if (errorSeries) {
+          setError(`Failed to fetch ${errorSeries.series_id}: ${errorSeries.error}`);
         } else {
           setData(parsed);
+          setError(null);
+          setLoadingMessage(`Successfully loaded ${parsed.length} series!`);
+          setTimeout(() => setLoadingMessage(''), 2000);
         }
-      } catch (err: any) {
-        setError(err.message || 'Failed to fetch data');
-      } finally {
-        setLoading(false);
+      } else {
+        setData(parsed);
       }
-    }, 0);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch data');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Helper to get current series IDs as array
@@ -274,7 +361,13 @@ export default function ScreenerTab() {
   };
 
   const addPopularSeries = (id: string) => {
-    if (!getCurrentSeriesIds().includes(id)) {
+    const currentIds = getCurrentSeriesIds();
+    if (currentIds.includes(id)) {
+      // Remove if already added
+      const newIds = currentIds.filter(sid => sid !== id);
+      setSeriesIds(newIds.join(','));
+    } else {
+      // Add if not present
       setSeriesIds(prev => prev ? `${prev},${id}` : id);
     }
   };
@@ -289,7 +382,8 @@ export default function ScreenerTab() {
 
     const sortedDates = Array.from(allDates).sort();
 
-    return sortedDates.map(date => {
+    // First pass: collect all values
+    const rawData = sortedDates.map(date => {
       const point: any = { date };
       data.forEach(series => {
         const obs = series.observations.find(o => o.date === date);
@@ -297,6 +391,40 @@ export default function ScreenerTab() {
       });
       return point;
     });
+
+    // If normalization is enabled, normalize each series to 0-100 scale
+    if (normalizeData && data.length > 1) {
+      // Find min/max for each series
+      const seriesStats: Record<string, { min: number, max: number }> = {};
+
+      data.forEach(series => {
+        const values = series.observations.map(obs => parseFloat(obs.value)).filter(v => !isNaN(v) && v !== null);
+        if (values.length > 0) {
+          seriesStats[series.series_id] = {
+            min: Math.min(...values),
+            max: Math.max(...values)
+          };
+        }
+      });
+
+      // Normalize the data
+      return rawData.map(point => {
+        const normalizedPoint: any = { date: point.date };
+        data.forEach(series => {
+          const value = point[series.series_id];
+          if (value !== null && value !== undefined && seriesStats[series.series_id]) {
+            const { min, max } = seriesStats[series.series_id];
+            const range = max - min;
+            normalizedPoint[series.series_id] = range > 0 ? ((value - min) / range) * 100 : 50;
+          } else {
+            normalizedPoint[series.series_id] = null;
+          }
+        });
+        return normalizedPoint;
+      });
+    }
+
+    return rawData;
   };
 
   const exportToCSV = () => {
@@ -331,12 +459,24 @@ export default function ScreenerTab() {
   }, [searchQuery, showBrowser]);
 
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'colors.background', overflow: 'hidden' }}>
+    <div style={{
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: colors.background,
+      color: colors.text,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      fontStyle: fontStyle,
+      overflow: 'hidden',
+      fontSize: fontSize.body
+    }}>
       <style>{`
-        *::-webkit-scrollbar { width: 8px; height: 8px; }
-        *::-webkit-scrollbar-track { background: colors.panel; }
-        *::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
-        *::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+        *::-webkit-scrollbar { width: 6px; height: 6px; }
+        *::-webkit-scrollbar-track { background: ${colors.background}; }
+        *::-webkit-scrollbar-thumb { background: ${colors.panel}; border-radius: 3px; }
+        *::-webkit-scrollbar-thumb:hover { background: ${colors.textMuted}; }
       `}</style>
 
       {/* Series Browser Modal */}
@@ -347,36 +487,38 @@ export default function ScreenerTab() {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0,0,0,0.9)',
+          background: 'rgba(0,0,0,0.95)',
           zIndex: 1000,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '20px'
+          padding: '20px',
+          backdropFilter: 'blur(4px)'
         }}>
           <div style={{
-            background: 'colors.panel',
-            border: '2px solid #ea580c',
-            borderRadius: '8px',
+            background: colors.background,
+            border: `1px solid ${colors.primary}`,
+            borderRadius: '4px',
             width: '90%',
             maxWidth: '1200px',
             height: '85vh',
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            boxShadow: `0 8px 32px ${colors.primary}33`
           }}>
             {/* Modal Header */}
             <div style={{
-              borderBottom: '2px solid #ea580c',
-              padding: '16px 20px',
+              borderBottom: `1px solid ${colors.primary}`,
+              padding: '12px 20px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              background: 'linear-gradient(180deg, #1a1a1a 0%, colors.panel 100%)'
+              background: colors.panel
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <FolderTree size={20} color="#ea580c" />
-                <span style={{ color: '#ea580c', fontSize: '16px', fontWeight: 'bold', letterSpacing: '1px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <FolderTree size={16} color={colors.primary} />
+                <span style={{ color: colors.primary, fontSize: fontSize.heading, fontWeight: 'bold', letterSpacing: '0.5px' }}>
                   FRED SERIES BROWSER
                 </span>
               </div>
@@ -385,19 +527,21 @@ export default function ScreenerTab() {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#888',
+                  color: colors.textMuted,
                   cursor: 'pointer',
-                  padding: '4px'
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center'
                 }}
               >
-                <X size={24} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Search Bar */}
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid #1a1a1a' }}>
+            <div style={{ padding: '12px 20px', borderBottom: `1px solid ${colors.panel}` }}>
               <div style={{ position: 'relative' }}>
-                <Search size={16} color="#666" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                <Search size={14} color={colors.textMuted} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="text"
                   placeholder="Search FRED series by keyword (e.g., 'unemployment', 'inflation', 'GDP')..."
@@ -405,16 +549,20 @@ export default function ScreenerTab() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   style={{
                     width: '100%',
-                    background: 'colors.background',
-                    border: '1px solid #2a2a2a',
-                    color: 'colors.text',
-                    padding: '12px 12px 12px 40px',
-                    fontSize: '11px',
-                    borderRadius: '4px'
+                    background: colors.panel,
+                    border: `1px solid ${colors.textMuted}33`,
+                    color: colors.text,
+                    padding: '10px 40px 10px 40px',
+                    fontSize: fontSize.small,
+                    borderRadius: '3px',
+                    outline: 'none',
+                    transition: 'border-color 0.2s'
                   }}
+                  onFocus={(e) => e.target.style.borderColor = colors.primary}
+                  onBlur={(e) => e.target.style.borderColor = `${colors.textMuted}33`}
                 />
                 {searchLoading && (
-                  <Loader2 size={16} className="animate-spin" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#ea580c' }} />
+                  <Loader2 size={14} className="animate-spin" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: colors.primary }} />
                 )}
               </div>
             </div>
@@ -541,7 +689,15 @@ export default function ScreenerTab() {
 
               {/* Right Panel - Search Results or Series in Category */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-                {searchQuery ? (
+                {categorySeriesLoading && !searchQuery ? (
+                  // Loading Category Series
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '16px' }}>
+                    <Loader2 size={32} color={colors.primary} className="animate-spin" />
+                    <p style={{ color: colors.textMuted, fontSize: fontSize.small }}>
+                      Loading series in category...
+                    </p>
+                  </div>
+                ) : searchQuery ? (
                   // Search Results
                   <>
                     <h3 style={{ color: '#ea580c', fontSize: '11px', marginBottom: '12px', fontWeight: 'bold' }}>
@@ -726,51 +882,102 @@ export default function ScreenerTab() {
 
       {/* Header */}
       <div style={{
-        borderBottom: '2px solid #ea580c',
-        padding: '12px 16px',
-        background: 'linear-gradient(180deg, #1a1a1a 0%, colors.panel 100%)',
+        borderBottom: `1px solid ${colors.primary}`,
+        padding: '10px 16px',
+        background: colors.panel,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexShrink: 0
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <BarChart3 size={20} color="#ea580c" />
-          <span style={{ color: '#ea580c', fontSize: '16px', fontWeight: 'bold', letterSpacing: '1px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <BarChart3 size={16} color={colors.primary} />
+          <span style={{ color: colors.primary, fontSize: fontSize.heading, fontWeight: 'bold', letterSpacing: '0.5px' }}>
             FRED DATA EXPLORER
           </span>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '6px' }}>
           <button
             onClick={() => setChartType(chartType === 'line' ? 'area' : 'line')}
             style={{
-              background: 'colors.panel',
-              border: '1px solid #2a2a2a',
-              color: '#ea580c',
+              background: colors.background,
+              border: `1px solid ${colors.primary}33`,
+              color: colors.primary,
               padding: '6px 12px',
-              fontSize: '10px',
+              fontSize: fontSize.small,
               cursor: 'pointer',
               borderRadius: '3px',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = colors.primary;
+              e.currentTarget.style.color = colors.background;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = colors.background;
+              e.currentTarget.style.color = colors.primary;
             }}
           >
             {chartType === 'line' ? 'AREA' : 'LINE'}
           </button>
           <button
+            onClick={() => setNormalizeData(!normalizeData)}
+            disabled={data.length <= 1}
+            style={{
+              background: normalizeData ? colors.primary : colors.background,
+              border: `1px solid ${colors.primary}33`,
+              color: normalizeData ? colors.background : colors.primary,
+              padding: '6px 12px',
+              fontSize: fontSize.small,
+              cursor: data.length > 1 ? 'pointer' : 'not-allowed',
+              borderRadius: '3px',
+              fontWeight: 'bold',
+              opacity: data.length > 1 ? 1 : 0.5,
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (data.length > 1 && !normalizeData) {
+                e.currentTarget.style.background = colors.primary;
+                e.currentTarget.style.color = colors.background;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (data.length > 1 && !normalizeData) {
+                e.currentTarget.style.background = colors.background;
+                e.currentTarget.style.color = colors.primary;
+              }
+            }}
+          >
+            NORMALIZE
+          </button>
+          <button
             onClick={exportToCSV}
             disabled={data.length === 0}
             style={{
-              background: 'colors.panel',
-              border: '1px solid #2a2a2a',
-              color: data.length > 0 ? '#00ff00' : '#666',
+              background: data.length > 0 ? colors.background : colors.panel,
+              border: `1px solid ${data.length > 0 ? colors.success : colors.textMuted}33`,
+              color: data.length > 0 ? colors.success : colors.textMuted,
               padding: '6px 12px',
-              fontSize: '10px',
+              fontSize: fontSize.small,
               cursor: data.length > 0 ? 'pointer' : 'not-allowed',
               borderRadius: '3px',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
+              opacity: data.length > 0 ? 1 : 0.5,
+              transition: 'opacity 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (data.length > 0) {
+                e.currentTarget.style.opacity = '0.7';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (data.length > 0) {
+                e.currentTarget.style.opacity = '1';
+              }
             }}
           >
             <Download size={12} />
@@ -782,37 +989,56 @@ export default function ScreenerTab() {
       {/* API Key Warning */}
       {!apiKeyConfigured && (
         <div style={{
-          background: '#3a1a0a',
-          border: '1px solid #ea580c',
+          background: `${colors.warning}11`,
+          border: `1px solid ${colors.warning}`,
           padding: '12px 16px',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           gap: '12px',
           flexShrink: 0
         }}>
-          <AlertCircle size={20} color="#ea580c" />
+          <AlertCircle size={20} color={colors.warning} style={{ flexShrink: 0, marginTop: '2px' }} />
           <div style={{ flex: 1 }}>
-            <p style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-              FRED API Key Required
+            <p style={{ color: colors.warning, fontSize: fontSize.body, fontWeight: 'bold', marginBottom: '6px' }}>
+              API KEY REQUIRED
             </p>
-            <p style={{ color: '#888', fontSize: '10px' }}>
-              Please add your FRED API key in Settings → Credentials to use this feature. Get your free key at <span style={{ color: '#ea580c' }}>research.stlouisfed.org/useraccount/apikey</span>
+            <p style={{ color: colors.text, fontSize: fontSize.small, lineHeight: '1.5', marginBottom: '8px' }}>
+              Configure your FRED API key in <strong>Settings → Credentials</strong> to access economic data.
             </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <p style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>
+                <strong style={{ color: colors.warning }}>1.</strong> Get free API key at{' '}
+                <a
+                  href="https://research.stlouisfed.org/useraccount/apikey"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: colors.info, textDecoration: 'underline' }}
+                >
+                  research.stlouisfed.org
+                </a>
+              </p>
+              <p style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>
+                <strong style={{ color: colors.warning }}>2.</strong> Add to <strong>Settings → Credentials → FRED_API_KEY</strong>
+              </p>
+              <p style={{ color: colors.textMuted, fontSize: fontSize.tiny }}>
+                <strong style={{ color: colors.warning }}>3.</strong> Save and reload this tab
+              </p>
+            </div>
           </div>
         </div>
       )}
 
       {/* Query Panel */}
       <div style={{
-        borderBottom: '1px solid #1a1a1a',
-        padding: '16px',
-        background: 'colors.panel',
+        borderBottom: `1px solid ${colors.panel}`,
+        padding: '12px 16px',
+        background: colors.panel,
         flexShrink: 0
       }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '12px', marginBottom: '12px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '10px', marginBottom: '10px' }}>
           <div>
-            <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-              FRED SERIES IDs (comma-separated)
+            <label style={{ color: colors.textMuted, fontSize: fontSize.tiny, display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
+              SERIES IDs
             </label>
             <input
               type="text"
@@ -821,17 +1047,20 @@ export default function ScreenerTab() {
               placeholder="GDP,UNRATE,CPIAUCSL"
               style={{
                 width: '100%',
-                background: 'colors.background',
-                border: '1px solid #2a2a2a',
-                color: 'colors.text',
-                padding: '8px',
-                fontSize: '10px',
-                borderRadius: '3px'
+                background: colors.background,
+                border: `1px solid ${colors.textMuted}33`,
+                color: colors.text,
+                padding: '8px 10px',
+                fontSize: fontSize.small,
+                borderRadius: '3px',
+                outline: 'none'
               }}
+              onFocus={(e) => e.target.style.borderColor = colors.primary}
+              onBlur={(e) => e.target.style.borderColor = `${colors.textMuted}33`}
             />
           </div>
           <div>
-            <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+            <label style={{ color: colors.textMuted, fontSize: fontSize.tiny, display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
               START DATE
             </label>
             <input
@@ -840,17 +1069,20 @@ export default function ScreenerTab() {
               onChange={(e) => setStartDate(e.target.value)}
               style={{
                 width: '100%',
-                background: 'colors.background',
-                border: '1px solid #2a2a2a',
-                color: 'colors.text',
-                padding: '8px',
-                fontSize: '10px',
-                borderRadius: '3px'
+                background: colors.background,
+                border: `1px solid ${colors.textMuted}33`,
+                color: colors.text,
+                padding: '8px 10px',
+                fontSize: fontSize.small,
+                borderRadius: '3px',
+                outline: 'none'
               }}
+              onFocus={(e) => e.target.style.borderColor = colors.primary}
+              onBlur={(e) => e.target.style.borderColor = `${colors.textMuted}33`}
             />
           </div>
           <div>
-            <label style={{ color: '#888', fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+            <label style={{ color: colors.textMuted, fontSize: fontSize.tiny, display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
               END DATE
             </label>
             <input
@@ -859,24 +1091,27 @@ export default function ScreenerTab() {
               onChange={(e) => setEndDate(e.target.value)}
               style={{
                 width: '100%',
-                background: 'colors.background',
-                border: '1px solid #2a2a2a',
-                color: 'colors.text',
-                padding: '8px',
-                fontSize: '10px',
-                borderRadius: '3px'
+                background: colors.background,
+                border: `1px solid ${colors.textMuted}33`,
+                color: colors.text,
+                padding: '8px 10px',
+                fontSize: fontSize.small,
+                borderRadius: '3px',
+                outline: 'none'
               }}
+              onFocus={(e) => e.target.style.borderColor = colors.primary}
+              onBlur={(e) => e.target.style.borderColor = `${colors.textMuted}33`}
             />
           </div>
           <button
             onClick={fetchData}
             disabled={loading}
             style={{
-              background: '#ea580c',
+              background: loading ? colors.panel : colors.primary,
               border: 'none',
-              color: 'colors.text',
-              padding: '0 20px',
-              fontSize: '10px',
+              color: colors.background,
+              padding: '0 18px',
+              fontSize: fontSize.small,
               cursor: loading ? 'not-allowed' : 'pointer',
               borderRadius: '3px',
               fontWeight: 'bold',
@@ -884,33 +1119,50 @@ export default function ScreenerTab() {
               alignItems: 'center',
               gap: '6px',
               alignSelf: 'end',
-              opacity: loading ? 0.5 : 1
+              opacity: loading ? 0.6 : 1,
+              transition: 'all 0.2s'
             }}
+            onMouseEnter={(e) => !loading && (e.currentTarget.style.opacity = '0.8')}
+            onMouseLeave={(e) => !loading && (e.currentTarget.style.opacity = '1')}
           >
-            {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
             {loading ? 'LOADING' : 'FETCH'}
           </button>
         </div>
 
         {/* Popular Series Quick Add & Browse Button */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px' }}>
           <div style={{ flex: 1 }}>
-            <label style={{ color: '#888', fontSize: '9px', marginBottom: '6px', display: 'block' }}>
-              QUICK ADD:
+            <label style={{ color: colors.textMuted, fontSize: fontSize.tiny, marginBottom: '6px', display: 'block', fontWeight: 'bold' }}>
+              QUICK ADD
             </label>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
               {POPULAR_SERIES.map(series => (
                 <button
                   key={series.id}
                   onClick={() => addPopularSeries(series.id)}
                   style={{
-                    background: currentSeriesIdsSet.has(series.id) ? '#1a3a1a' : 'colors.panel',
-                    border: `1px solid ${currentSeriesIdsSet.has(series.id) ? '#00ff00' : '#2a2a2a'}`,
-                    color: currentSeriesIdsSet.has(series.id) ? '#00ff00' : '#666',
-                    padding: '4px 8px',
-                    fontSize: '9px',
+                    background: currentSeriesIdsSet.has(series.id) ? `${colors.success}22` : colors.background,
+                    border: `1px solid ${currentSeriesIdsSet.has(series.id) ? colors.success : colors.textMuted}44`,
+                    color: currentSeriesIdsSet.has(series.id) ? colors.success : colors.textMuted,
+                    padding: '4px 10px',
+                    fontSize: fontSize.tiny,
                     cursor: 'pointer',
-                    borderRadius: '3px'
+                    borderRadius: '3px',
+                    fontWeight: currentSeriesIdsSet.has(series.id) ? 'bold' : 'normal',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!currentSeriesIdsSet.has(series.id)) {
+                      e.currentTarget.style.borderColor = colors.primary;
+                      e.currentTarget.style.color = colors.primary;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!currentSeriesIdsSet.has(series.id)) {
+                      e.currentTarget.style.borderColor = `${colors.textMuted}44`;
+                      e.currentTarget.style.color = colors.textMuted;
+                    }
                   }}
                 >
                   {series.id}
@@ -922,11 +1174,11 @@ export default function ScreenerTab() {
             onClick={openBrowser}
             disabled={!apiKeyConfigured}
             style={{
-              background: 'linear-gradient(135deg, #ea580c 0%, #c2410c 100%)',
-              border: '1px solid #ea580c',
-              color: 'colors.text',
-              padding: '8px 16px',
-              fontSize: '10px',
+              background: apiKeyConfigured ? colors.primary : colors.panel,
+              border: `1px solid ${apiKeyConfigured ? colors.primary : colors.textMuted}44`,
+              color: apiKeyConfigured ? colors.background : colors.textMuted,
+              padding: '8px 14px',
+              fontSize: fontSize.small,
               cursor: apiKeyConfigured ? 'pointer' : 'not-allowed',
               borderRadius: '3px',
               fontWeight: 'bold',
@@ -935,44 +1187,80 @@ export default function ScreenerTab() {
               gap: '6px',
               whiteSpace: 'nowrap',
               opacity: apiKeyConfigured ? 1 : 0.5,
-              boxShadow: apiKeyConfigured ? '0 2px 8px rgba(234, 88, 12, 0.3)' : 'none'
+              transition: 'opacity 0.2s'
             }}
+            onMouseEnter={(e) => apiKeyConfigured && (e.currentTarget.style.opacity = '0.8')}
+            onMouseLeave={(e) => apiKeyConfigured && (e.currentTarget.style.opacity = '1')}
           >
-            <FolderTree size={14} />
-            BROWSE ALL SERIES
+            <FolderTree size={12} />
+            BROWSE SERIES
           </button>
         </div>
       </div>
 
       {/* Main Content */}
-      <div style={{ flex: 1, display: 'flex', gap: '16px', padding: '16px', overflow: 'hidden', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'flex', gap: '12px', padding: '12px 16px', overflow: 'hidden', minHeight: 0 }}>
 
         {/* Chart Section */}
         <div style={{ flex: 2, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <div style={{
-            background: 'colors.panel',
-            border: '1px solid #1a1a1a',
+            background: colors.panel,
+            border: `1px solid ${colors.primary}33`,
             borderRadius: '4px',
-            padding: '16px',
+            padding: '14px',
             height: '100%',
             display: 'flex',
             flexDirection: 'column'
           }}>
-            <h3 style={{ color: 'colors.text', fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>
+            <h3 style={{ color: colors.primary, fontSize: fontSize.body, fontWeight: 'bold', marginBottom: '10px', letterSpacing: '0.5px' }}>
               TIME SERIES CHART
             </h3>
 
-            {error && (
+            {loading && (
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column',
+                gap: '16px'
+              }}>
+                <Loader2 size={48} color={colors.primary} className="animate-spin" />
+                <div style={{ textAlign: 'center' }}>
+                  <p style={{ color: colors.primary, fontSize: fontSize.body, fontWeight: 'bold', marginBottom: '6px' }}>
+                    {loadingMessage}
+                  </p>
+                  <p style={{ color: colors.textMuted, fontSize: fontSize.small }}>
+                    Please wait while we fetch data from FRED...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {!loading && error && (
               <div style={{
                 background: '#3a0a0a',
-                border: '1px solid #ff0000',
+                border: '2px solid #ff0000',
                 color: '#ff0000',
-                padding: '12px',
-                borderRadius: '3px',
-                fontSize: '10px',
-                marginBottom: '12px'
+                padding: '16px',
+                borderRadius: '4px',
+                fontSize: '11px',
+                marginBottom: '12px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                boxShadow: '0 2px 8px rgba(255, 0, 0, 0.2)'
               }}>
-                {error}
+                <AlertCircle size={20} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontWeight: 'bold', marginBottom: '4px' }}>Error Fetching Data</p>
+                  <p style={{ color: '#ffaaaa', fontSize: '10px' }}>{error}</p>
+                  {!apiKeyConfigured && (
+                    <p style={{ color: '#ffaaaa', fontSize: '10px', marginTop: '8px' }}>
+                      💡 Tip: Make sure you've configured your FRED API key in Settings → Credentials
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
@@ -982,13 +1270,14 @@ export default function ScreenerTab() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: '#666',
-                fontSize: '11px',
+                color: colors.textMuted,
+                fontSize: fontSize.body,
                 flexDirection: 'column',
-                gap: '8px'
+                gap: '10px'
               }}>
-                <TrendingUp size={40} color="#333" />
-                <p>Enter series IDs and click FETCH to visualize data</p>
+                <TrendingUp size={48} color={colors.textMuted} opacity={0.3} />
+                <p style={{ color: colors.text }}>Enter series IDs and click FETCH to visualize data</p>
+                <p style={{ fontSize: fontSize.small, color: colors.textMuted }}>Try searching for GDP, UNRATE, or CPIAUCSL</p>
               </div>
             )}
 
@@ -996,43 +1285,53 @@ export default function ScreenerTab() {
               <div style={{ flex: 1, minHeight: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   {chartType === 'line' ? (
-                    <LineChart data={prepareChartData()} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
-                      <XAxis dataKey="date" stroke="#666" style={{ fontSize: '10px' }} />
-                      <YAxis stroke="#666" style={{ fontSize: '10px' }} />
-                      <Tooltip
-                        contentStyle={{ background: 'colors.panel', border: '1px solid #2a2a2a', borderRadius: '3px', fontSize: '10px' }}
-                        labelStyle={{ color: '#ea580c' }}
+                    <LineChart data={prepareChartData()} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={`${colors.textMuted}22`} />
+                      <XAxis dataKey="date" stroke={colors.textMuted} style={{ fontSize: fontSize.tiny, fill: colors.textMuted }} />
+                      <YAxis
+                        stroke={colors.textMuted}
+                        style={{ fontSize: fontSize.tiny, fill: colors.textMuted }}
+                        label={normalizeData ? { value: 'Normalized (0-100)', angle: -90, position: 'insideLeft', style: { fontSize: fontSize.tiny, fill: colors.textMuted } } : undefined}
                       />
-                      <Legend wrapperStyle={{ fontSize: '10px' }} />
+                      <Tooltip
+                        contentStyle={{ background: colors.background, border: `1px solid ${colors.primary}`, borderRadius: '3px', fontSize: fontSize.small }}
+                        labelStyle={{ color: colors.primary, fontSize: fontSize.tiny }}
+                        itemStyle={{ color: colors.text, fontSize: fontSize.tiny }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: fontSize.tiny }} />
                       {data.map((series, idx) => (
                         <Line
                           key={series.series_id}
                           type="monotone"
                           dataKey={series.series_id}
-                          stroke={['#ea580c', '#00ff00', '#00ffff', '#ff00ff', 'colors.textf00'][idx % 5]}
+                          stroke={[colors.primary, colors.success, colors.info, colors.warning, colors.alert][idx % 5]}
                           strokeWidth={2}
                           dot={false}
                         />
                       ))}
                     </LineChart>
                   ) : (
-                    <AreaChart data={prepareChartData()} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" />
-                      <XAxis dataKey="date" stroke="#666" style={{ fontSize: '10px' }} />
-                      <YAxis stroke="#666" style={{ fontSize: '10px' }} />
-                      <Tooltip
-                        contentStyle={{ background: 'colors.panel', border: '1px solid #2a2a2a', borderRadius: '3px', fontSize: '10px' }}
-                        labelStyle={{ color: '#ea580c' }}
+                    <AreaChart data={prepareChartData()} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={`${colors.textMuted}22`} />
+                      <XAxis dataKey="date" stroke={colors.textMuted} style={{ fontSize: fontSize.tiny, fill: colors.textMuted }} />
+                      <YAxis
+                        stroke={colors.textMuted}
+                        style={{ fontSize: fontSize.tiny, fill: colors.textMuted }}
+                        label={normalizeData ? { value: 'Normalized (0-100)', angle: -90, position: 'insideLeft', style: { fontSize: fontSize.tiny, fill: colors.textMuted } } : undefined}
                       />
-                      <Legend wrapperStyle={{ fontSize: '10px' }} />
+                      <Tooltip
+                        contentStyle={{ background: colors.background, border: `1px solid ${colors.primary}`, borderRadius: '3px', fontSize: fontSize.small }}
+                        labelStyle={{ color: colors.primary, fontSize: fontSize.tiny }}
+                        itemStyle={{ color: colors.text, fontSize: fontSize.tiny }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: fontSize.tiny }} />
                       {data.map((series, idx) => (
                         <Area
                           key={series.series_id}
                           type="monotone"
                           dataKey={series.series_id}
-                          stroke={['#ea580c', '#00ff00', '#00ffff', '#ff00ff', 'colors.textf00'][idx % 5]}
-                          fill={['#ea580c33', '#00ff0033', '#00ffff33', '#ff00ff33', 'colors.textf0033'][idx % 5]}
+                          stroke={[colors.primary, colors.success, colors.info, colors.warning, colors.alert][idx % 5]}
+                          fill={`${[colors.primary, colors.success, colors.info, colors.warning, colors.alert][idx % 5]}33`}
                         />
                       ))}
                     </AreaChart>
@@ -1044,45 +1343,44 @@ export default function ScreenerTab() {
         </div>
 
         {/* Data Table */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto', gap: '10px' }}>
           {data.map(series => (
             <div
               key={series.series_id}
               style={{
-                background: 'colors.panel',
-                border: '1px solid #1a1a1a',
+                background: colors.panel,
+                border: `1px solid ${colors.primary}33`,
                 borderRadius: '4px',
                 padding: '12px',
-                marginBottom: '12px',
                 flexShrink: 0
               }}
             >
-              <div style={{ borderBottom: '1px solid #1a1a1a', paddingBottom: '8px', marginBottom: '8px' }}>
-                <h4 style={{ color: '#ea580c', fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+              <div style={{ borderBottom: `1px solid ${colors.textMuted}33`, paddingBottom: '8px', marginBottom: '8px' }}>
+                <h4 style={{ color: colors.primary, fontSize: fontSize.body, fontWeight: 'bold', marginBottom: '4px' }}>
                   {series.series_id}
                 </h4>
-                <p style={{ color: '#888', fontSize: '9px', marginBottom: '4px' }}>{series.title}</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: '9px', color: '#666' }}>
+                <p style={{ color: colors.text, fontSize: fontSize.tiny, marginBottom: '6px' }}>{series.title}</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: fontSize.tiny, color: colors.textMuted }}>
                   <span>Units: {series.units}</span>
                   <span>Freq: {series.frequency}</span>
-                  <span>Observations: {series.observation_count}</span>
+                  <span>Obs: {series.observation_count}</span>
                   <span>Updated: {series.last_updated.split('T')[0]}</span>
                 </div>
               </div>
 
               <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                <table style={{ width: '100%', fontSize: '9px', borderCollapse: 'collapse' }}>
-                  <thead style={{ position: 'sticky', top: 0, background: 'colors.panel' }}>
-                    <tr style={{ borderBottom: '1px solid #1a1a1a' }}>
-                      <th style={{ color: '#888', textAlign: 'left', padding: '4px' }}>Date</th>
-                      <th style={{ color: '#888', textAlign: 'right', padding: '4px' }}>Value</th>
+                <table style={{ width: '100%', fontSize: fontSize.tiny, borderCollapse: 'collapse' }}>
+                  <thead style={{ position: 'sticky', top: 0, background: colors.panel }}>
+                    <tr style={{ borderBottom: `1px solid ${colors.textMuted}33` }}>
+                      <th style={{ color: colors.textMuted, textAlign: 'left', padding: '6px 4px', fontWeight: 'bold' }}>Date</th>
+                      <th style={{ color: colors.textMuted, textAlign: 'right', padding: '6px 4px', fontWeight: 'bold' }}>Value</th>
                     </tr>
                   </thead>
                   <tbody>
                     {series.observations.slice(-20).reverse().map((obs, idx) => (
-                      <tr key={idx} style={{ borderBottom: '1px solid colors.panel' }}>
-                        <td style={{ color: '#666', padding: '4px' }}>{obs.date}</td>
-                        <td style={{ color: 'colors.text', textAlign: 'right', padding: '4px', fontFamily: 'monospace' }}>
+                      <tr key={idx} style={{ borderBottom: `1px solid ${colors.background}` }}>
+                        <td style={{ color: colors.textMuted, padding: '4px' }}>{obs.date}</td>
+                        <td style={{ color: colors.text, textAlign: 'right', padding: '4px', fontFamily: 'monospace', fontSize: fontSize.tiny }}>
                           {obs.value.toFixed(2)}
                         </td>
                       </tr>
@@ -1097,17 +1395,22 @@ export default function ScreenerTab() {
 
       {/* Footer */}
       <div style={{
-        borderTop: '1px solid #1a1a1a',
+        borderTop: `1px solid ${colors.primary}`,
         padding: '8px 16px',
-        background: 'colors.panel',
-        fontSize: '9px',
-        color: '#666',
+        background: colors.panel,
+        fontSize: fontSize.tiny,
+        color: colors.textMuted,
         display: 'flex',
         justifyContent: 'space-between',
+        alignItems: 'center',
         flexShrink: 0
       }}>
         <span>FRED Economic Data | Federal Reserve Bank of St. Louis</span>
-        <span>{data.length} series loaded | {data.reduce((acc, s) => acc + s.observation_count, 0)} total observations</span>
+        {data.length > 0 && (
+          <span style={{ color: colors.primary, fontWeight: 'bold' }}>
+            {data.length} series | {data.reduce((acc, s) => acc + s.observation_count, 0)} observations
+          </span>
+        )}
       </div>
     </div>
   );

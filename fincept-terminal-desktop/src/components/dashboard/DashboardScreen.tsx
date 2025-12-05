@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle } from 'lucide-react';
+import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle, MessageSquare, Terminal } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
+import { InterfaceModeProvider, useInterfaceMode } from '@/contexts/InterfaceModeContext';
+import { ChatModeInterface } from '@/components/chat-mode';
 import { APP_VERSION } from '@/constants/version';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -121,9 +123,11 @@ const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any
   );
 };
 
-export default function FinxeptTerminal() {
+// Internal component that uses the InterfaceMode context
+function FinxeptTerminalContent() {
   const { session, logout } = useAuth();
   const navigation = useNavigation();
+  const { mode, toggleMode } = useInterfaceMode();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
@@ -615,6 +619,49 @@ export default function FinxeptTerminal() {
           >
             {isFullscreen ? <Minimize size={14} /> : <Maximize size={14} />}
           </button>
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+          <button
+            onClick={toggleMode}
+            style={{
+              background: mode === 'chat' ? '#ea580c' : 'none',
+              border: mode === 'chat' ? '1px solid #ea580c' : 'none',
+              color: mode === 'chat' ? '#fff' : '#a3a3a3',
+              cursor: 'pointer',
+              padding: '3px 8px',
+              borderRadius: '3px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (mode === 'terminal') {
+                (e.target as HTMLButtonElement).style.backgroundColor = '#404040';
+                (e.target as HTMLButtonElement).style.color = '#fff';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (mode === 'terminal') {
+                (e.target as HTMLButtonElement).style.backgroundColor = 'transparent';
+                (e.target as HTMLButtonElement).style.color = '#a3a3a3';
+              }
+            }}
+            title={mode === 'terminal' ? 'Switch to Chat Mode' : 'Switch to Terminal Mode'}
+          >
+            {mode === 'chat' ? (
+              <>
+                <Terminal size={14} />
+                <span>TERMINAL</span>
+              </>
+            ) : (
+              <>
+                <MessageSquare size={14} />
+                <span>CHAT MODE</span>
+              </>
+            )}
+          </button>
           {getClickableSessionDisplay()}
           <button
             onClick={async () => {
@@ -669,7 +716,8 @@ export default function FinxeptTerminal() {
         </div>
       )}
 
-      {/* Main Navigation Bar with Tabs */}
+      {/* Main Navigation Bar with Tabs - Hidden in Chat Mode */}
+      {mode !== 'chat' && (
       <div style={{
         backgroundColor: '#3f3f3f',
         borderBottom: '1px solid #404040',
@@ -798,8 +846,10 @@ export default function FinxeptTerminal() {
         </Tabs>
         </div>
       </div>
+      )}
 
-      {/* Command Bar */}
+      {/* Command Bar - Hidden in Chat Mode */}
+      {mode !== 'chat' && (
       <div style={{
         backgroundColor: '#2d2d2d',
         borderBottom: '1px solid #404040',
@@ -825,8 +875,10 @@ export default function FinxeptTerminal() {
           </>
         )}
       </div>
+      )}
 
-      {/* Function Keys Bar */}
+      {/* Function Keys Bar - Hidden in Chat Mode */}
+      {mode !== 'chat' && (
       <div style={{
         backgroundColor: '#1a1a1a',
         borderBottom: '1px solid #404040',
@@ -853,6 +905,7 @@ export default function FinxeptTerminal() {
         <span style={{ color: '#666', marginLeft: '8px' }}>|</span>
         <span style={{ color: '#10b981' }}>More tabs in toolbar menus</span>
       </div>
+      )}
 
       {/* Main Content Area with Tab Content */}
       <div style={{
@@ -861,10 +914,13 @@ export default function FinxeptTerminal() {
         minHeight: 0,
         overflow: 'hidden'
       }}>
-        <Tabs value={activeTab} className="h-full">
-          <TabsContent value="dashboard" className="h-full m-0 p-0">
-            <DashboardTab onNavigateToTab={setActiveTab} />
-          </TabsContent>
+        {mode === 'chat' ? (
+          <ChatModeInterface />
+        ) : (
+          <Tabs value={activeTab} className="h-full">
+            <TabsContent value="dashboard" className="h-full m-0 p-0">
+              <DashboardTab onNavigateToTab={setActiveTab} />
+            </TabsContent>
           <TabsContent value="markets" className="h-full m-0 p-0">
             <MarketsTab />
           </TabsContent>
@@ -956,6 +1012,7 @@ export default function FinxeptTerminal() {
             <ReportBuilderTab />
           </TabsContent>
         </Tabs>
+        )}
       </div>
 
       {/* Update Available Dialog */}
@@ -1057,5 +1114,14 @@ export default function FinxeptTerminal() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Wrapper component that provides InterfaceMode context
+export default function FinxeptTerminal() {
+  return (
+    <InterfaceModeProvider>
+      <FinxeptTerminalContent />
+    </InterfaceModeProvider>
   );
 }

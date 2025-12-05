@@ -1,0 +1,30 @@
+{
+  "welcome": "Bienvenido a Fincept Terminal",
+  "tabs": {
+    "dashboard": "Panel",
+    "markets": "Mercados",
+    "news": "Noticias",
+    "watchlist": "Lista de seguimiento",
+    "portfolio": "Cartera",
+    "analytics": "Análisis",
+    "economics": "Economía",
+    "dbnomics": "DBnomics",
+    "economicCalendar": "Calendario económico",
+    "geopolitics": "Geopolítica",
+    "maritime": "Marítimo",
+    "options": "Opciones",
+    "equityResearch": "Investigación de acciones",
+    "screener": "Filtrador",
+    "kraken": "Kraken",
+    "polygon": "Polygon.io",
+    "chat": "Chat",
+    "docs": "Documentos",
+    "nodeEditor": "Editor de nodos",
+    "codeEditor": "Editor de código",
+    "forum": "Foro",
+    "marketplace": "Mercado",
+    "profile": "Perfil",
+    "support": "Soporte",
+    "settings": "Configuración"
+  }
+}

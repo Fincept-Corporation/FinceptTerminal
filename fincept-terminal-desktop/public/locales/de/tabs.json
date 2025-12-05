@@ -1,0 +1,24 @@
+{
+  "markets": {
+    "title": "Märkte",
+    "subtitle": "Echtzeit-Marktdaten und Analysen"
+  },
+  "news": {
+    "title": "Finanznachrichten",
+    "subtitle": "Neueste Marktnachrichten und Updates"
+  },
+  "portfolio": {
+    "title": "Portfolio",
+    "subtitle": "Verfolgen und analysieren Sie Ihre Investitionen"
+  },
+  "analytics": {
+    "title": "Analytik",
+    "subtitle": "Fortgeschrittene Finanzanalyse-Tools"
+  },
+  "chat": {
+    "title": "KI-Assistent",
+    "subtitle": "Chatten Sie mit Ihrem KI-Finanzassistenten",
+    "placeholder": "Fragen Sie mich zu Märkten, Trading oder Finanzen...",
+    "send": "Senden"
+  }
+}

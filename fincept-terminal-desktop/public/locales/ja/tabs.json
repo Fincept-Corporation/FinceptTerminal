@@ -1,0 +1,24 @@
+{
+  "markets": {
+    "title": "マーケット",
+    "subtitle": "リアルタイム市場データと分析"
+  },
+  "news": {
+    "title": "金融ニュース",
+    "subtitle": "最新の市場ニュースとアップデート"
+  },
+  "portfolio": {
+    "title": "ポートフォリオ",
+    "subtitle": "投資を追跡・分析"
+  },
+  "analytics": {
+    "title": "分析",
+    "subtitle": "高度な金融分析ツール"
+  },
+  "chat": {
+    "title": "AI アシスタント",
+    "subtitle": "AI 金融アシスタントとチャット",
+    "placeholder": "市場、トレード、金融について質問してください...",
+    "send": "送信"
+  }
+}
