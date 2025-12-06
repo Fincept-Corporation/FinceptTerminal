@@ -1,9 +1,9 @@
 // File: src/components/tabs/trading/PaperTradingPanel.tsx
 // Paper trading control panel with toggle and portfolio display
 
-import React, { useState, useEffect } from 'react';
-import { useCreatePaperPortfolio } from '../../../hooks/usePaperTrading';
+import React, { useState } from 'react';
 import { useProviderContext } from '../../../contexts/ProviderContext';
+import { paperTradingDatabase } from '../../../paper-trading';
 
 interface PaperTradingPanelProps {
   portfolioId: string | null;
@@ -23,21 +23,30 @@ export function PaperTradingPanel({
   isResetting
 }: PaperTradingPanelProps) {
   const [enabled, setEnabled] = useState(!!portfolioId);
-  const { createPortfolio, isCreating } = useCreatePaperPortfolio();
+  const [isCreating, setIsCreating] = useState(false);
   const { activeProvider } = useProviderContext();
 
   const handleToggle = async () => {
     if (!enabled) {
       // Enable paper trading - create new portfolio
-      const newPortfolioId = await createPortfolio(
-        `${activeProvider.toUpperCase()} Paper Trading`,
-        activeProvider,
-        100000
-      );
+      setIsCreating(true);
+      try {
+        const newPortfolioId = crypto.randomUUID();
 
-      if (newPortfolioId) {
+        await paperTradingDatabase.createPortfolio({
+          id: newPortfolioId,
+          name: `${activeProvider.toUpperCase()} Paper Trading`,
+          provider: activeProvider,
+          initialBalance: 100000,
+          currency: 'USD',
+        });
+
         setEnabled(true);
         onPortfolioChange(newPortfolioId);
+      } catch (error) {
+        console.error('[PaperTradingPanel] Failed to create portfolio:', error);
+      } finally {
+        setIsCreating(false);
       }
     } else {
       // Disable paper trading

@@ -12,7 +12,7 @@ export { KrakenAdapter } from './kraken/KrakenAdapter';
 export { HyperLiquidAdapter } from './hyperliquid/HyperLiquidAdapter';
 
 // Paper Trading exports
-export * from './paper-trading';
+export * ;
 
 // Exchange registry
 import { KrakenAdapter } from './kraken/KrakenAdapter';
