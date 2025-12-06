@@ -8,13 +8,42 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Polyfills for Node.js modules used by CCXT
+      'http': 'stream-http',
+      'https': 'https-browserify',
+      'stream': 'stream-browserify',
+      'crypto': 'crypto-browserify',
+      'buffer': 'buffer',
+      'util': 'util',
+      'url': 'url',
+      'zlib': 'browserify-zlib',
     },
   },
   optimizeDeps: {
-    exclude: ['@mapbox/node-pre-gyp', 'mock-aws-s3', 'aws-sdk', 'nock']
+    exclude: ['@mapbox/node-pre-gyp', 'mock-aws-s3', 'aws-sdk', 'nock', 'ccxt'],
+    esbuildOptions: {
+      define: {
+        global: 'globalThis'
+      }
+    }
+  },
+  define: {
+    'process.env': {},
+    'global': 'globalThis',
   },
   build: {
     rollupOptions: {
+      external: [
+        'ccxt',
+        'http-proxy-agent',
+        'https-proxy-agent',
+        'socks-proxy-agent',
+        'net',
+        'tls',
+        'fs',
+        'path',
+        'os'
+      ],
       output: {
         manualChunks: {
           // Split vendor chunks
