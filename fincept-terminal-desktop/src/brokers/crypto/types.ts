@@ -54,6 +54,11 @@ export interface IExchangeAdapter {
   watchTrades?(symbol: string): AsyncGenerator<Trade[]>;
   watchBalance?(): AsyncGenerator<Balance>;
   watchOrders?(symbol?: string): AsyncGenerator<Order[]>;
+
+  // Event System
+  on(event: ExchangeEvent, callback: (data: ExchangeEventData) => void): void;
+  off(event: ExchangeEvent, callback: (data: ExchangeEventData) => void): void;
+  emit(event: ExchangeEvent, data: ExchangeEventData): void;
 }
 
 // ============================================================================
