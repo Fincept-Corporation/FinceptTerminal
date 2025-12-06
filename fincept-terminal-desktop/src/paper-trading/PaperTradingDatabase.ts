@@ -93,7 +93,7 @@ export class PaperTradingDatabase {
     `;
 
     const result = await sqliteService.select<DBPortfolio[]>(sql, []);
-    return result.map(row => this.mapDBPortfolio(row));
+    return result.map((row: any) => this.mapDBPortfolio(row));
   }
 
   // ============================================================================
@@ -185,7 +185,7 @@ export class PaperTradingDatabase {
     sql += ` ORDER BY opened_at DESC`;
 
     const result = await sqliteService.select<DBPosition[]>(sql, params);
-    return result.map(row => this.mapDBPosition(row));
+    return result.map((row: any) => this.mapDBPosition(row));
   }
 
   async updatePosition(positionId: string, updates: {

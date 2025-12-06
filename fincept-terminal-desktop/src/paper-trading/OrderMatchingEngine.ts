@@ -353,7 +353,7 @@ export class OrderMatchingEngine {
       const priceSnapshot = await this.fetchPriceSnapshot(order.symbol);
       const executionPrice = order.side === 'buy' ? priceSnapshot.ask : priceSnapshot.bid;
 
-      await this.executeTrade(order.id, order.symbol, order.side, executionPrice, order.amount, false);
+      await this.executeTrade(order.id, order.symbol, order.side as OrderSide, executionPrice, order.amount, false);
 
       await paperTradingDatabase.updateOrder(order.id, {
         filledQuantity: order.amount,
@@ -370,7 +370,7 @@ export class OrderMatchingEngine {
         : currentPrice >= order.price;
 
       if (canFill) {
-        await this.executeTrade(order.id, order.symbol, order.side, order.price, order.amount, true);
+        await this.executeTrade(order.id, order.symbol, order.side as OrderSide, order.price, order.amount, true);
 
         await paperTradingDatabase.updateOrder(order.id, {
           filledQuantity: order.amount,
@@ -507,7 +507,7 @@ export class OrderMatchingEngine {
       order: this.createOrderObject(orderId, symbol, 'market', side, quantity, price, params, 'filled'),
       trades: [trade],
       position,
-      balance: balance.free[currency] || 0,
+      balance: (balance.free as any)?.[currency] || 0,
     };
   }
 
@@ -559,7 +559,7 @@ export class OrderMatchingEngine {
               : priceSnapshot.bid >= (order.price || 0);
 
             if (canFill) {
-              await this.executeLimitOrder(order.id, order.symbol, order.side, order.amount, order.price!, {
+              await this.executeLimitOrder(order.id, order.symbol, order.side as OrderSide, order.amount, order.price!, {
                 leverage: order.leverage,
                 marginMode: order.marginMode as any,
               });

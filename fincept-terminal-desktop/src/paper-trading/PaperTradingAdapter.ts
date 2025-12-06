@@ -35,8 +35,12 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
     this.balanceManager = new PaperTradingBalance(this.paperConfig);
     this.matchingEngine = new OrderMatchingEngine(this.paperConfig, this.realAdapter);
 
-    // Override name
-    this.name = `${this.realAdapter.name} (Paper Trading)`;
+    // Set name (using Object.defineProperty to override readonly)
+    Object.defineProperty(this, 'name', {
+      value: `${this.realAdapter.name} (Paper Trading)`,
+      writable: false,
+      configurable: true
+    });
   }
 
   // ============================================================================
@@ -92,7 +96,7 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       await paperTradingDatabase.createPortfolio({
         id: this.paperConfig.portfolioId,
         name: this.paperConfig.portfolioName,
-        provider: this.paperConfig.realExchange,
+        provider: this.paperConfig.provider,
         initialBalance: this.paperConfig.initialBalance,
         currency: this.paperConfig.currency,
         marginMode: this.paperConfig.marginMode,
@@ -134,15 +138,24 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
   }
 
   async fetchStatus(): Promise<any> {
-    return await this.realAdapter.fetchStatus?.();
+    if ('fetchStatus' in this.realAdapter && typeof this.realAdapter.fetchStatus === 'function') {
+      return await this.realAdapter.fetchStatus();
+    }
+    return { status: 'ok', updated: Date.now() };
   }
 
   async fetchCurrencies(): Promise<any> {
-    return await this.realAdapter.fetchCurrencies?.();
+    if ('fetchCurrencies' in this.realAdapter && typeof this.realAdapter.fetchCurrencies === 'function') {
+      return await this.realAdapter.fetchCurrencies();
+    }
+    return {};
   }
 
   async fetchTime(): Promise<number> {
-    return await this.realAdapter.fetchTime?.() || Date.now();
+    if ('fetchTime' in this.realAdapter && typeof this.realAdapter.fetchTime === 'function') {
+      return await this.realAdapter.fetchTime();
+    }
+    return Date.now();
   }
 
   // ============================================================================
@@ -185,7 +198,7 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
         unrealizedPnl: p.unrealizedPnl || 0,
         contracts: p.quantity,
         contractSize: 1,
-        marginRatio: null,
+        marginRatio: undefined,
         liquidationPrice: p.liquidationPrice || 0,
         markPrice: p.currentPrice || p.entryPrice,
         collateral: (p.quantity * p.entryPrice) / p.leverage,
@@ -355,7 +368,7 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       cost: t.price * t.quantity,
       fee: {
         cost: t.fee,
-        currency: this.paperConfig.currency || 'USD',
+        currency: (this.paperConfig.currency || 'USD') as string,
         rate: t.feeRate,
       },
     } as Trade));
@@ -417,7 +430,7 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       cost: t.price * t.quantity,
       fee: {
         cost: t.fee,
-        currency: this.paperConfig.currency || 'USD',
+        currency: (this.paperConfig.currency || 'USD') as string,
         rate: t.feeRate,
       },
     } as Trade));
@@ -577,7 +590,9 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
   // ============================================================================
 
   getCapabilities(): ExchangeCapabilities {
-    const realCapabilities = this.realAdapter.getCapabilities?.() || {} as ExchangeCapabilities;
+    const realCapabilities = ('getCapabilities' in this.realAdapter && typeof this.realAdapter.getCapabilities === 'function')
+      ? this.realAdapter.getCapabilities()
+      : {} as ExchangeCapabilities;
 
     return {
       ...realCapabilities,

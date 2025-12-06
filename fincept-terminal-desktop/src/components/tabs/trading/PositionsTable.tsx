@@ -2,7 +2,7 @@
 // Display open and closed positions
 
 import React from 'react';
-import type { Position } from '../../../types/trading';
+import type { Position } from 'ccxt';
 
 interface PositionsTableProps {
   positions: Position[];
@@ -11,8 +11,8 @@ interface PositionsTableProps {
 }
 
 export function PositionsTable({ positions, onClosePosition, isLoading }: PositionsTableProps) {
-  const openPositions = positions.filter(p => p.status === 'open');
-  const closedPositions = positions.filter(p => p.status === 'closed');
+  const openPositions = positions.filter((p: any) => p.side);  // CCXT positions don't have status
+  const closedPositions: Position[] = [];  // Closed positions not tracked in CCXT format
 
   return (
     <div className="bg-[#0d0d0d] border-t border-gray-800">
@@ -91,7 +91,7 @@ interface PositionRowProps {
 }
 
 function PositionRow({ position, onClose, isLoading }: PositionRowProps) {
-  const pnl = position.unrealizedPnL || 0;
+  const pnl = position.unrealizedPnl || 0;
   const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
 
   return (
@@ -101,13 +101,13 @@ function PositionRow({ position, onClose, isLoading }: PositionRowProps) {
         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
           position.side === 'long' ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'
         }`}>
-          {position.side.toUpperCase()}
+          {(position.side || 'unknown').toUpperCase()}
         </span>
       </td>
-      <td className="px-3 py-2 text-right text-gray-300">{position.quantity.toFixed(4)}</td>
-      <td className="px-3 py-2 text-right text-gray-300">${position.entryPrice.toFixed(2)}</td>
+      <td className="px-3 py-2 text-right text-gray-300">{(position.contracts || 0).toFixed(4)}</td>
+      <td className="px-3 py-2 text-right text-gray-300">${(position.entryPrice || 0).toFixed(2)}</td>
       <td className="px-3 py-2 text-right text-white">
-        ${position.currentPrice?.toFixed(2) || '-'}
+        ${(position.markPrice || position.entryPrice || 0).toFixed(2)}
       </td>
       <td className={`px-3 py-2 text-right font-semibold ${pnlColor}`}>
         {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
@@ -115,7 +115,7 @@ function PositionRow({ position, onClose, isLoading }: PositionRowProps) {
       <td className="px-3 py-2 text-center">
         {onClose && (
           <button
-            onClick={() => onClose(position.id)}
+            onClick={() => onClose(position.id || '')}
             disabled={isLoading}
             className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[10px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -128,10 +128,10 @@ function PositionRow({ position, onClose, isLoading }: PositionRowProps) {
 }
 
 function ClosedPositionRow({ position }: { position: Position }) {
-  const pnl = position.realizedPnL;
+  const pnl = position.realizedPnl || 0;
   const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
-  const closedDate = position.closedAt
-    ? new Date(position.closedAt).toLocaleDateString()
+  const closedDate = position.datetime
+    ? new Date(position.datetime).toLocaleDateString()
     : '-';
 
   return (
@@ -141,11 +141,11 @@ function ClosedPositionRow({ position }: { position: Position }) {
         <span className={`px-2 py-0.5 rounded text-[10px] ${
           position.side === 'long' ? 'bg-green-900/20 text-green-600' : 'bg-red-900/20 text-red-600'
         }`}>
-          {position.side.toUpperCase()}
+          {(position.side || 'unknown').toUpperCase()}
         </span>
       </td>
-      <td className="px-3 py-2 text-right">{position.quantity.toFixed(4)}</td>
-      <td className="px-3 py-2 text-right">${position.entryPrice.toFixed(2)}</td>
+      <td className="px-3 py-2 text-right">{(position.contracts || 0).toFixed(4)}</td>
+      <td className="px-3 py-2 text-right">${(position.entryPrice || 0).toFixed(2)}</td>
       <td className={`px-3 py-2 text-right font-semibold ${pnlColor}`}>
         {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
       </td>

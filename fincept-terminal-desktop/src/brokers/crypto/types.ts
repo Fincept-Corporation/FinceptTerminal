@@ -7,6 +7,9 @@
 
 import type { Exchange, Market, Ticker, OrderBook, Trade, OHLCV, Balance, Order, Position } from 'ccxt';
 
+// Re-export CCXT types for convenience
+export type { Order, Position, Balance, Market, Ticker, OrderBook, Trade, OHLCV };
+
 // ============================================================================
 // CORE EXCHANGE INTERFACE
 // ============================================================================
