@@ -4,32 +4,19 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
-
-// Import translation files
-import enCommon from '../../public/locales/en/common.json';
-import enAuth from '../../public/locales/en/auth.json';
-import enDashboard from '../../public/locales/en/dashboard.json';
-import enSettings from '../../public/locales/en/settings.json';
-import enTabs from '../../public/locales/en/tabs.json';
-
-const resources = {
-  en: {
-    common: enCommon,
-    auth: enAuth,
-    dashboard: enDashboard,
-    settings: enSettings,
-    tabs: enTabs,
-  },
-  // Other languages will be added here
-};
+import Backend from 'i18next-http-backend';
 
 i18next
+  .use(Backend) // Load translations from public folder
   .use(LanguageDetector) // Auto-detect user language
   .use(initReactI18next) // Pass i18n to react-i18next
   .init({
-    resources,
     fallbackLng: 'en',
     supportedLngs: ['en', 'es', 'fr', 'de', 'zh', 'ja', 'hi', 'ar', 'pt', 'ru', 'bn', 'ko', 'tr', 'it', 'id', 'vi', 'th', 'pl', 'uk', 'ro'],
+
+    backend: {
+      loadPath: '/locales/{{lng}}/{{ns}}.json',
+    },
 
     detection: {
       order: ['localStorage', 'navigator'],
