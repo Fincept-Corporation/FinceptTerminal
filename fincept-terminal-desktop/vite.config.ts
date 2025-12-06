@@ -17,6 +17,8 @@ export default defineConfig({
       'util': 'util',
       'url': 'url',
       'zlib': 'browserify-zlib',
+      // Replace ws with empty module (browser has native WebSocket)
+      'ws': path.resolve(__dirname, './src/polyfills/ws-shim.ts'),
     },
   },
   optimizeDeps: {
