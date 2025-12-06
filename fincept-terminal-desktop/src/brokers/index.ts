@@ -8,12 +8,27 @@
 // ============================================================================
 // CRYPTO EXCHANGES (CCXT-based)
 // ============================================================================
-export * from './crypto';
+export {
+  BaseExchangeAdapter,
+  KrakenAdapter,
+  HyperLiquidAdapter,
+  createExchangeAdapter,
+  SUPPORTED_EXCHANGES,
+  isExchangeSupported,
+  type IExchangeAdapter,
+  type ExchangeConfig,
+  type ExchangeCredentials,
+  type ExchangeCapabilities,
+  type OrderType,
+  type OrderSide,
+  type OrderParams,
+  type SupportedExchangeId,
+} from './crypto';
 
 // ============================================================================
 // STOCK BROKERS
 // ============================================================================
-export * from './stocks';
+export { KiteConnectAdapter, createKiteAdapter } from './stocks';
 
 // ============================================================================
 // UNIFIED BROKER REGISTRY

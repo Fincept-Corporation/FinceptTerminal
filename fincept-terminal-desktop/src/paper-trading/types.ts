@@ -118,9 +118,29 @@ export interface PaperTradingPosition {
   status: 'open' | 'closed';
 }
 
-export interface PaperTradingOrder extends Order {
+// Paper trading order (compatible with CCXT Order)
+export interface PaperTradingOrder {
+  id: string;
   portfolioId: string;
-  stopPrice?: number | null;
+  clientOrderId?: string;
+  timestamp: number;
+  datetime: string;
+  lastTradeTimestamp?: number;
+  symbol: string;
+  type: string;
+  side: string;
+  price?: number;
+  amount: number;
+  cost?: number;
+  average?: number;
+  filled: number;
+  remaining: number;
+  status: string;
+  fee?: any;
+  trades?: any[];
+  info: any;
+  // Paper trading specific
+  stopPrice?: number;
   trailingAmount?: number | null;
   trailingPercent?: number | null;
   icebergQty?: number | null;

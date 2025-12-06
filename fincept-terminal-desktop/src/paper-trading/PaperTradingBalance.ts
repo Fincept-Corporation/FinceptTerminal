@@ -40,7 +40,7 @@ export class PaperTradingBalance {
     const used = marginUsed;
     const total = portfolio.currentBalance;
 
-    return {
+    const balanceObj: any = {
       free: { [currency]: free },
       used: { [currency]: used },
       total: { [currency]: total },
@@ -49,7 +49,9 @@ export class PaperTradingBalance {
         margin_mode: portfolio.marginMode,
         leverage: portfolio.leverage,
       },
-    } as Balance;
+    };
+
+    return balanceObj as Balance;
   }
 
   /**
@@ -79,7 +81,7 @@ export class PaperTradingBalance {
 
     const balance = await this.getBalance(portfolioId);
     const currency = portfolio.currency || 'USD';
-    const available = balance.free[currency] || 0;
+    const available = (balance.free as any)?.[currency] || 0;
 
     const sufficient = available >= totalRequired;
 

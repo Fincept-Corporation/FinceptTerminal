@@ -17,7 +17,7 @@ import { getWebSocketManager } from '../../services/websocket';
 import { createExchangeAdapter } from '../../brokers/crypto';
 import { createPaperTradingAdapter } from '../../paper-trading';
 import type { IExchangeAdapter } from '../../brokers/crypto/types';
-import type { Position } from 'ccxt';
+import type { Position as CCXTPosition } from 'ccxt';
 
 // Symbol configurations per provider
 const KRAKEN_PAIRS = ['BTC/USD', 'ETH/USD', 'SOL/USD', 'AVAX/USD', 'MATIC/USD'];
@@ -42,7 +42,7 @@ export function TradingTab() {
   const [isResetting, setIsResetting] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isConnected, setIsConnected] = useState(false);
-  const [positions, setPositions] = useState<Position[]>([]);
+  const [positions, setPositions] = useState<CCXTPosition[]>([]);
   const [balance, setBalance] = useState<number>(0);
   const [totalPnL, setTotalPnL] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -114,8 +114,8 @@ export function TradingTab() {
         }
 
         // Create new adapter
-        realAdapterRef.current = createExchangeAdapter(activeProvider);
-        await realAdapterRef.current.connect();
+        realAdapterRef.current = createExchangeAdapter(activeProvider as 'kraken' | 'hyperliquid') as IExchangeAdapter;
+        await realAdapterRef.current?.connect();
         console.log(`[TradingTab] ${activeProvider} adapter connected`);
       } catch (error) {
         console.error(`[TradingTab] Failed to initialize ${activeProvider} adapter:`, error);
@@ -204,7 +204,7 @@ export function TradingTab() {
       ]);
 
       // Calculate balance and P&L
-      const usdBalance = balanceData.free?.['USD'] || balanceData.free?.['USDC'] || 100000;
+      const usdBalance = (balanceData.free as any)?.['USD'] || (balanceData.free as any)?.['USDC'] || 100000;
       const unrealizedPnL = positionsData.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0);
 
       setBalance(usdBalance);

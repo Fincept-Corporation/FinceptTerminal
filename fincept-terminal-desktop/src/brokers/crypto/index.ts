@@ -11,8 +11,7 @@ export { BaseExchangeAdapter } from './BaseExchangeAdapter';
 export { KrakenAdapter } from './kraken/KrakenAdapter';
 export { HyperLiquidAdapter } from './hyperliquid/HyperLiquidAdapter';
 
-// Paper Trading exports
-export * ;
+// Note: Paper Trading now in standalone src/paper-trading/ module
 
 // Exchange registry
 import { KrakenAdapter } from './kraken/KrakenAdapter';
