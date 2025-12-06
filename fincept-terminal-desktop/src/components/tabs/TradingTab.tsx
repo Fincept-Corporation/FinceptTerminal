@@ -1,7 +1,8 @@
 // File: src/components/tabs/TradingTab.tsx
 // Unified trading tab with multi-provider support and paper trading
+// Uses new broker adapter architecture
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Activity, TrendingUp } from 'lucide-react';
 import { ProviderSwitcher } from './trading/ProviderSwitcher';
 import { PaperTradingPanel } from './trading/PaperTradingPanel';
@@ -11,14 +12,16 @@ import { TradesFeed } from './trading/TradesFeed';
 import { OrderForm } from './trading/OrderForm';
 import { PositionsTable } from './trading/PositionsTable';
 import { useProviderContext } from '../../contexts/ProviderContext';
-import { usePaperTrading } from '../../hooks/usePaperTrading';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { getWebSocketManager } from '../../services/websocket';
-import type { OrderRequest } from '../../types/trading';
+import { createExchangeAdapter } from '../../brokers/crypto';
+import { createPaperTradingAdapter } from '../../paper-trading';
+import type { IExchangeAdapter } from '../../brokers/crypto/types';
+import type { Position } from 'ccxt';
 
 // Symbol configurations per provider
 const KRAKEN_PAIRS = ['BTC/USD', 'ETH/USD', 'SOL/USD', 'AVAX/USD', 'MATIC/USD'];
-const HYPERLIQUID_SYMBOLS = ['BTC', 'ETH', 'SOL', 'AVAX', 'MATIC'];
+const HYPERLIQUID_SYMBOLS = ['BTC/USDC:USDC', 'ETH/USDC:USDC', 'SOL/USDC:USDC', 'AVAX/USDC:USDC', 'MATIC/USDC:USDC'];
 
 // Bloomberg color scheme
 const BLOOMBERG_COLORS = {
@@ -39,10 +42,18 @@ export function TradingTab() {
   const [isResetting, setIsResetting] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isConnected, setIsConnected] = useState(false);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [balance, setBalance] = useState<number>(0);
+  const [totalPnL, setTotalPnL] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Get symbols based on active provider
   const popularSymbols = activeProvider === 'kraken' ? KRAKEN_PAIRS : HYPERLIQUID_SYMBOLS;
   const [selectedSymbol, setSelectedSymbol] = useState(popularSymbols[0]);
+
+  // Adapter refs
+  const realAdapterRef = useRef<IExchangeAdapter | null>(null);
+  const paperAdapterRef = useRef<IExchangeAdapter | null>(null);
 
   // Initialize WebSocket connection for active provider
   useEffect(() => {
@@ -93,16 +104,127 @@ export function TradingTab() {
     return () => clearInterval(timer);
   }, []);
 
-  // Paper trading hook
-  const {
-    portfolio,
-    positions,
-    orders,
-    isLoading: isPaperTradingLoading,
-    placeOrder,
-    closePosition,
-    resetPortfolio
-  } = usePaperTrading({ portfolioId: portfolioId || undefined });
+  // Initialize real adapter when provider changes
+  useEffect(() => {
+    const initAdapter = async () => {
+      try {
+        // Cleanup old adapter
+        if (realAdapterRef.current) {
+          await realAdapterRef.current.disconnect();
+        }
+
+        // Create new adapter
+        realAdapterRef.current = createExchangeAdapter(activeProvider);
+        await realAdapterRef.current.connect();
+        console.log(`[TradingTab] ${activeProvider} adapter connected`);
+      } catch (error) {
+        console.error(`[TradingTab] Failed to initialize ${activeProvider} adapter:`, error);
+      }
+    };
+
+    initAdapter();
+
+    return () => {
+      if (realAdapterRef.current) {
+        realAdapterRef.current.disconnect();
+      }
+    };
+  }, [activeProvider]);
+
+  // Initialize paper trading adapter when portfolio is created
+  useEffect(() => {
+    const initPaperTrading = async () => {
+      if (!portfolioId || !realAdapterRef.current) {
+        if (paperAdapterRef.current) {
+          await paperAdapterRef.current.disconnect();
+          paperAdapterRef.current = null;
+        }
+        setPositions([]);
+        setBalance(0);
+        setTotalPnL(0);
+        return;
+      }
+
+      try {
+        setIsLoading(true);
+
+        // Create paper trading adapter
+        paperAdapterRef.current = createPaperTradingAdapter(
+          {
+            portfolioId,
+            portfolioName: `${activeProvider.toUpperCase()} Paper Trading`,
+            provider: activeProvider,
+            assetClass: 'crypto',
+            initialBalance: 100000,
+            currency: 'USD',
+            fees: {
+              maker: activeProvider === 'kraken' ? 0.0002 : 0.0002,
+              taker: activeProvider === 'kraken' ? 0.0005 : 0.0005,
+            },
+            slippage: {
+              market: 0.001,
+              limit: 0,
+            },
+            enableMarginTrading: true,
+            defaultLeverage: 1,
+            maxLeverage: activeProvider === 'hyperliquid' ? 50 : 5,
+          },
+          realAdapterRef.current
+        );
+
+        await paperAdapterRef.current.connect();
+        console.log('[TradingTab] Paper trading adapter connected');
+
+        // Load initial data
+        await refreshPaperTradingData();
+      } catch (error) {
+        console.error('[TradingTab] Failed to initialize paper trading:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initPaperTrading();
+
+    return () => {
+      if (paperAdapterRef.current) {
+        paperAdapterRef.current.disconnect();
+      }
+    };
+  }, [portfolioId, activeProvider]);
+
+  // Refresh paper trading data
+  const refreshPaperTradingData = useCallback(async () => {
+    if (!paperAdapterRef.current) return;
+
+    try {
+      const [balanceData, positionsData] = await Promise.all([
+        paperAdapterRef.current.fetchBalance(),
+        paperAdapterRef.current.fetchPositions(),
+      ]);
+
+      // Calculate balance and P&L
+      const usdBalance = balanceData.free?.['USD'] || balanceData.free?.['USDC'] || 100000;
+      const unrealizedPnL = positionsData.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0);
+
+      setBalance(usdBalance);
+      setPositions(positionsData);
+      setTotalPnL(unrealizedPnL);
+    } catch (error) {
+      console.error('[TradingTab] Failed to refresh paper trading data:', error);
+    }
+  }, []);
+
+  // Auto-refresh positions every 5 seconds
+  useEffect(() => {
+    if (!portfolioId) return;
+
+    const interval = setInterval(() => {
+      refreshPaperTradingData();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [portfolioId, refreshPaperTradingData]);
 
   // Get current price from ticker
   const { message: tickerMessage } = useWebSocket(
@@ -113,22 +235,77 @@ export function TradingTab() {
 
   const currentPrice = tickerMessage?.data?.last || tickerMessage?.data?.close || tickerMessage?.data?.mid;
 
+  // Handle portfolio creation
+  const handlePortfolioChange = useCallback((newPortfolioId: string | null) => {
+    setPortfolioId(newPortfolioId);
+  }, []);
+
   // Handle order placement
-  const handlePlaceOrder = async (order: OrderRequest) => {
-    if (!portfolioId) {
+  const handlePlaceOrder = async (order: {
+    symbol: string;
+    side: 'buy' | 'sell';
+    type: string;
+    quantity: number;
+    price?: number;
+    stopPrice?: number;
+  }) => {
+    if (!portfolioId || !paperAdapterRef.current) {
       throw new Error('Paper trading not enabled');
     }
 
-    const result = await placeOrder(order);
+    try {
+      setIsLoading(true);
 
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to place order');
+      await paperAdapterRef.current.createOrder(
+        order.symbol,
+        order.type as any,
+        order.side,
+        order.quantity,
+        order.price,
+        order.stopPrice ? { stopPrice: order.stopPrice } : undefined
+      );
+
+      // Refresh data
+      await refreshPaperTradingData();
+    } catch (error) {
+      console.error('[TradingTab] Failed to place order:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
   // Handle position close
   const handleClosePosition = async (positionId: string) => {
-    await closePosition(positionId);
+    if (!portfolioId || !paperAdapterRef.current) return;
+
+    try {
+      setIsLoading(true);
+
+      // Find position to close
+      const position = positions.find((p) => p.id === positionId);
+      if (!position) {
+        throw new Error('Position not found');
+      }
+
+      // Close position by placing opposite order
+      const closeSide = position.side === 'long' ? 'sell' : 'buy';
+      await paperAdapterRef.current.createOrder(
+        position.symbol,
+        'market',
+        closeSide,
+        Math.abs(position.contracts || 0),
+        undefined,
+        { reduceOnly: true }
+      );
+
+      // Refresh data
+      await refreshPaperTradingData();
+    } catch (error) {
+      console.error('[TradingTab] Failed to close position:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Handle portfolio reset
@@ -137,7 +314,16 @@ export function TradingTab() {
 
     setIsResetting(true);
     try {
-      await resetPortfolio();
+      // For now, just recreate the adapter
+      // TODO: Implement proper reset in PaperTradingDatabase
+      if (paperAdapterRef.current) {
+        await paperAdapterRef.current.disconnect();
+      }
+
+      // Trigger re-initialization
+      const currentId = portfolioId;
+      setPortfolioId(null);
+      setTimeout(() => setPortfolioId(currentId), 100);
     } finally {
       setIsResetting(false);
     }
@@ -200,9 +386,9 @@ export function TradingTab() {
       {/* Paper Trading Panel */}
       <PaperTradingPanel
         portfolioId={portfolioId}
-        balance={portfolio?.balance}
-        totalPnL={portfolio?.totalPnL}
-        onPortfolioChange={setPortfolioId}
+        balance={balance}
+        totalPnL={totalPnL}
+        onPortfolioChange={handlePortfolioChange}
         onReset={handleReset}
         isResetting={isResetting}
       />
@@ -255,7 +441,7 @@ export function TradingTab() {
         </div>
         <input
           type="text"
-          placeholder={activeProvider === 'kraken' ? 'BTC/USD' : 'BTC'}
+          placeholder={activeProvider === 'kraken' ? 'BTC/USD' : 'BTC/USDC:USDC'}
           value={selectedSymbol}
           onChange={(e) => setSelectedSymbol(e.target.value.toUpperCase())}
           style={{
@@ -323,7 +509,7 @@ export function TradingTab() {
             <PositionsTable
               positions={positions}
               onClosePosition={handleClosePosition}
-              isLoading={isPaperTradingLoading}
+              isLoading={isLoading}
             />
           )}
         </div>
@@ -344,7 +530,7 @@ export function TradingTab() {
               symbol={selectedSymbol}
               currentPrice={currentPrice}
               onPlaceOrder={handlePlaceOrder}
-              isLoading={isPaperTradingLoading}
+              isLoading={isLoading}
             />
           )}
 
@@ -392,11 +578,7 @@ export function TradingTab() {
                 <span style={{ color: GREEN }}>● PAPER TRADING ACTIVE</span>
                 <span style={{ marginLeft: '8px' }}>|</span>
                 <span style={{ marginLeft: '8px' }}>
-                  {positions.filter(p => p.status === 'open').length} Open Position{positions.filter(p => p.status === 'open').length !== 1 ? 's' : ''}
-                </span>
-                <span style={{ marginLeft: '8px' }}>|</span>
-                <span style={{ marginLeft: '8px' }}>
-                  {orders.filter(o => o.status === 'pending').length} Pending Order{orders.filter(o => o.status === 'pending').length !== 1 ? 's' : ''}
+                  {positions.length} Open Position{positions.length !== 1 ? 's' : ''}
                 </span>
               </>
             ) : (

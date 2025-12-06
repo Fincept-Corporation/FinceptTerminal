@@ -12,8 +12,8 @@ import type {
   MarginRequirement,
   LiquidationCheck,
 } from './types';
-import type { OrderSide } from '../types';
-import { InsufficientFunds } from '../types';
+import type { OrderSide } from '../brokers/crypto/types';
+import { InsufficientFunds } from '../brokers/crypto/types';
 import { paperTradingDatabase } from './PaperTradingDatabase';
 
 export class PaperTradingBalance {

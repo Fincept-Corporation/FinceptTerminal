@@ -6,14 +6,14 @@
  * Note: Simulates market orders with 5% max slippage limit orders
  */
 
-import { BaseExchangeAdapter } from './BaseExchangeAdapter';
-import {
+import { BaseExchangeAdapter } from '../BaseExchangeAdapter';
+import type {
   ExchangeConfig,
   OrderType,
   OrderSide,
   OrderParams,
   ExchangeCapabilities,
-} from './types';
+} from '../types';
 
 export class HyperLiquidAdapter extends BaseExchangeAdapter {
   constructor(config?: Partial<ExchangeConfig>) {

@@ -6,7 +6,7 @@
  */
 
 import type { Ticker, OrderBook } from 'ccxt';
-import type { IExchangeAdapter, OrderType, OrderSide, OrderParams, Order } from '../types';
+import type { IExchangeAdapter, OrderType, OrderSide, OrderParams, Order } from '../brokers/crypto/types';
 import type {
   PaperTradingConfig,
   PaperTradingOrder,
@@ -16,7 +16,7 @@ import type {
 } from './types';
 import { paperTradingDatabase } from './PaperTradingDatabase';
 import { PaperTradingBalance } from './PaperTradingBalance';
-import { InsufficientFunds } from '../types';
+import { InsufficientFunds } from '../brokers/crypto/types';
 
 export class OrderMatchingEngine {
   private balanceManager: PaperTradingBalance;

@@ -5,7 +5,7 @@
  * Uses existing paper_trading_* tables from sqliteService
  */
 
-import { sqliteService } from '../../../services/sqliteService';
+import { sqliteService } from '../services/sqliteService';
 import type {
   PaperTradingPortfolio,
   PaperTradingPosition,
@@ -16,7 +16,7 @@ import type {
   DBOrder,
   DBTrade,
 } from './types';
-import type { Order, OrderSide } from '../types';
+import type { Order, OrderSide } from '../brokers/crypto/types';
 
 export class PaperTradingDatabase {
   // ============================================================================
