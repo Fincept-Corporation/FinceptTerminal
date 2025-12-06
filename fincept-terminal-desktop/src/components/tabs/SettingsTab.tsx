@@ -62,6 +62,7 @@ export default function SettingsTab() {
   const [ollamaLoading, setOllamaLoading] = useState(false);
   const [ollamaError, setOllamaError] = useState<string | null>(null);
   const [useManualEntry, setUseManualEntry] = useState(false);
+  const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({});
 
 
 

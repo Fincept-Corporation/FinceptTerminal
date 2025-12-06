@@ -398,7 +398,7 @@ export default function ScreenerTab() {
       const seriesStats: Record<string, { min: number, max: number }> = {};
 
       data.forEach(series => {
-        const values = series.observations.map(obs => parseFloat(obs.value)).filter(v => !isNaN(v) && v !== null);
+        const values = series.observations.map(obs => parseFloat(obs.value.toString())).filter(v => !isNaN(v) && v !== null);
         if (values.length > 0) {
           seriesStats[series.series_id] = {
             min: Math.min(...values),
