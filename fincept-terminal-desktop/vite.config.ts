@@ -20,7 +20,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['@mapbox/node-pre-gyp', 'mock-aws-s3', 'aws-sdk', 'nock', 'ccxt'],
+    exclude: ['@mapbox/node-pre-gyp', 'mock-aws-s3', 'aws-sdk', 'nock', 'ccxt', 'ws'],
     esbuildOptions: {
       define: {
         global: 'globalThis'
@@ -35,6 +35,7 @@ export default defineConfig({
     rollupOptions: {
       external: [
         'ccxt',
+        'ws',
         'http-proxy-agent',
         'https-proxy-agent',
         'socks-proxy-agent',
