@@ -11,7 +11,11 @@ import { OrderBook } from './trading/OrderBook';
 import { TradesFeed } from './trading/TradesFeed';
 import { OrderForm } from './trading/OrderForm';
 import { PositionsTable } from './trading/PositionsTable';
+import { OrdersTable } from './trading/OrdersTable';
+import { TradeHistory } from './trading/TradeHistory';
+import { PaperTradingStats } from './trading/PaperTradingStats';
 import { useProviderContext } from '../../contexts/ProviderContext';
+import { paperTradingDatabase } from '../../paper-trading';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { getWebSocketManager } from '../../services/websocket';
 import { createExchangeAdapter } from '../../brokers/crypto';
@@ -46,14 +50,17 @@ export function TradingTab() {
   const [balance, setBalance] = useState<number>(0);
   const [totalPnL, setTotalPnL] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [trades, setTrades] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
 
   // Get symbols based on active provider
   const popularSymbols = activeProvider === 'kraken' ? KRAKEN_PAIRS : HYPERLIQUID_SYMBOLS;
   const [selectedSymbol, setSelectedSymbol] = useState(popularSymbols[0]);
 
   // Adapter refs
-  const realAdapterRef = useRef<IExchangeAdapter | null>(null);
-  const paperAdapterRef = useRef<IExchangeAdapter | null>(null);
+  const realAdapterRef = useRef<any>(null);
+  const paperAdapterRef = useRef<any>(null);
 
   // Initialize WebSocket connection for active provider
   useEffect(() => {
@@ -114,7 +121,7 @@ export function TradingTab() {
         }
 
         // Create new adapter
-        realAdapterRef.current = createExchangeAdapter(activeProvider as 'kraken' | 'hyperliquid') as IExchangeAdapter;
+        realAdapterRef.current = createExchangeAdapter(activeProvider as 'kraken' | 'hyperliquid');
         await realAdapterRef.current?.connect();
         console.log(`[TradingTab] ${activeProvider} adapter connected`);
       } catch (error) {
@@ -136,12 +143,19 @@ export function TradingTab() {
     const initPaperTrading = async () => {
       if (!portfolioId || !realAdapterRef.current) {
         if (paperAdapterRef.current) {
+          // Remove event listeners
+          paperAdapterRef.current.off('order', () => {});
+          paperAdapterRef.current.off('position', () => {});
+          paperAdapterRef.current.off('balance', () => {});
           await paperAdapterRef.current.disconnect();
           paperAdapterRef.current = null;
         }
         setPositions([]);
         setBalance(0);
         setTotalPnL(0);
+        setOrders([]);
+        setTrades([]);
+        setStats(null);
         return;
       }
 
@@ -173,6 +187,26 @@ export function TradingTab() {
         );
 
         await paperAdapterRef.current.connect();
+
+        // Set up event listeners for real-time updates
+        const orderHandler = (event: any) => {
+          console.log('[TradingTab] Order event:', event.data);
+          refreshPaperTradingData();
+        };
+
+        const positionHandler = (event: any) => {
+          console.log('[TradingTab] Position event:', event.data);
+          refreshPaperTradingData();
+        };
+
+        const balanceHandler = (event: any) => {
+          console.log('[TradingTab] Balance event:', event.data);
+          refreshPaperTradingData();
+        };
+
+        paperAdapterRef.current.on('order', orderHandler);
+        paperAdapterRef.current.on('position', positionHandler);
+        paperAdapterRef.current.on('balance', balanceHandler);
         console.log('[TradingTab] Paper trading adapter connected');
 
         // Load initial data
@@ -188,6 +222,9 @@ export function TradingTab() {
 
     return () => {
       if (paperAdapterRef.current) {
+        paperAdapterRef.current.off('order', () => {});
+        paperAdapterRef.current.off('position', () => {});
+        paperAdapterRef.current.off('balance', () => {});
         paperAdapterRef.current.disconnect();
       }
     };
@@ -195,25 +232,61 @@ export function TradingTab() {
 
   // Refresh paper trading data
   const refreshPaperTradingData = useCallback(async () => {
-    if (!paperAdapterRef.current) return;
+    if (!paperAdapterRef.current || !portfolioId) return;
 
     try {
-      const [balanceData, positionsData] = await Promise.all([
+      const [balanceData, positionsData, ordersData, tradesData] = await Promise.all([
         paperAdapterRef.current.fetchBalance(),
         paperAdapterRef.current.fetchPositions(),
+        paperTradingDatabase.getPortfolioOrders(portfolioId),
+        paperTradingDatabase.getPortfolioTrades(portfolioId, 100),
       ]);
 
       // Calculate balance and P&L
       const usdBalance = (balanceData.free as any)?.['USD'] || (balanceData.free as any)?.['USDC'] || 100000;
-      const unrealizedPnL = positionsData.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0);
+      const unrealizedPnL = positionsData.reduce((sum: number, p: any) => sum + (p.unrealizedPnl || 0), 0);
+
+      // Calculate stats
+      const closedTrades = tradesData.filter((t: any) => t.side === 'sell');
+      const totalPnL = unrealizedPnL + closedTrades.reduce((sum: number, t: any) => sum + (t.price * t.quantity), 0);
+      const winningTrades = closedTrades.filter((t: any) => t.price * t.quantity > 0).length;
+      const losingTrades = closedTrades.filter((t: any) => t.price * t.quantity < 0).length;
+      const winRate = closedTrades.length > 0 ? (winningTrades / closedTrades.length) * 100 : 0;
+      const totalFees = tradesData.reduce((sum: number, t: any) => sum + t.fee, 0);
+      const wins = closedTrades.filter((t: any) => t.price * t.quantity > 0).map((t: any) => t.price * t.quantity);
+      const losses = closedTrades.filter((t: any) => t.price * t.quantity < 0).map((t: any) => Math.abs(t.price * t.quantity));
+      const averageWin = wins.length > 0 ? wins.reduce((a: number, b: number) => a + b, 0) / wins.length : 0;
+      const averageLoss = losses.length > 0 ? losses.reduce((a: number, b: number) => a + b, 0) / losses.length : 0;
+      const largestWin = wins.length > 0 ? Math.max(...wins) : 0;
+      const largestLoss = losses.length > 0 ? Math.max(...losses) : 0;
+      const totalWins = wins.reduce((a: number, b: number) => a + b, 0);
+      const totalLosses = losses.reduce((a: number, b: number) => a + b, 0);
+      const profitFactor = totalLosses > 0 ? totalWins / totalLosses : 0;
 
       setBalance(usdBalance);
       setPositions(positionsData);
       setTotalPnL(unrealizedPnL);
+      setOrders(ordersData);
+      setTrades(tradesData);
+      setStats({
+        totalTrades: closedTrades.length,
+        winningTrades,
+        losingTrades,
+        winRate,
+        totalPnL,
+        realizedPnL: totalPnL - unrealizedPnL,
+        unrealizedPnL,
+        totalFees,
+        averageWin,
+        averageLoss,
+        largestWin,
+        largestLoss,
+        profitFactor,
+      });
     } catch (error) {
       console.error('[TradingTab] Failed to refresh paper trading data:', error);
     }
-  }, []);
+  }, [portfolioId]);
 
   // Auto-refresh positions every 5 seconds
   useEffect(() => {
@@ -303,6 +376,26 @@ export function TradingTab() {
       await refreshPaperTradingData();
     } catch (error) {
       console.error('[TradingTab] Failed to close position:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle order cancellation
+  const handleCancelOrder = async (orderId: string) => {
+    if (!portfolioId || !paperAdapterRef.current) return;
+
+    try {
+      setIsLoading(true);
+      // Find the order's symbol first
+      const order = orders.find((o) => o.id === orderId);
+      if (!order) {
+        throw new Error('Order not found');
+      }
+      await paperAdapterRef.current.cancelOrder(orderId, order.symbol);
+      await refreshPaperTradingData();
+    } catch (error) {
+      console.error('[TradingTab] Failed to cancel order:', error);
     } finally {
       setIsLoading(false);
     }
@@ -504,23 +597,32 @@ export function TradingTab() {
             </div>
           </div>
 
-          {/* Positions Table (if paper trading enabled) */}
+          {/* Bottom Panel - Positions/Orders/Trades */}
           {portfolioId && (
-            <PositionsTable
-              positions={positions}
-              onClosePosition={handleClosePosition}
-              isLoading={isLoading}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', maxHeight: '400px' }}>
+              <PositionsTable
+                positions={positions}
+                onClosePosition={handleClosePosition}
+                isLoading={isLoading}
+              />
+              <OrdersTable
+                orders={orders}
+                onCancelOrder={handleCancelOrder}
+                isLoading={isLoading}
+              />
+              <TradeHistory trades={trades} />
+            </div>
           )}
         </div>
 
-        {/* Right Panel - Order Book & Order Form */}
+        {/* Right Panel - Order Book & Order Form & Stats */}
         <div style={{
           width: '320px',
           display: 'flex',
           flexDirection: 'column',
           borderLeft: `1px solid ${GRAY}`,
-          backgroundColor: PANEL_BG
+          backgroundColor: PANEL_BG,
+          overflow: 'hidden'
         }}>
           <OrderBook symbol={selectedSymbol} provider={activeProvider} depth={25} />
 
@@ -532,6 +634,17 @@ export function TradingTab() {
               onPlaceOrder={handlePlaceOrder}
               isLoading={isLoading}
             />
+          )}
+
+          {/* Paper Trading Stats (only if paper trading enabled) */}
+          {portfolioId && stats && (
+            <div style={{ overflowY: 'auto' }}>
+              <PaperTradingStats
+                stats={stats}
+                balance={balance}
+                initialBalance={100000}
+              />
+            </div>
           )}
 
           {/* Paper Trading Disabled Message */}

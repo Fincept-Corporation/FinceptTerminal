@@ -651,7 +651,7 @@ export abstract class BaseExchangeAdapter implements IExchangeAdapter {
     this.eventListeners.get(event)?.delete(callback);
   }
 
-  protected emit(event: ExchangeEvent, data: any): void {
+  public emit(event: ExchangeEvent, data: any): void {
     const eventData: ExchangeEventData = {
       event,
       exchange: this.id,

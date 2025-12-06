@@ -94,6 +94,13 @@ function PositionRow({ position, onClose, isLoading }: PositionRowProps) {
   const pnl = position.unrealizedPnl || 0;
   const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
 
+  // Calculate P&L percentage
+  const entryPrice = position.entryPrice || 0;
+  const currentPrice = position.markPrice || position.entryPrice || 0;
+  const pnlPercent = entryPrice > 0
+    ? ((currentPrice - entryPrice) / entryPrice) * 100 * (position.side === 'long' ? 1 : -1)
+    : 0;
+
   return (
     <tr className="border-b border-gray-800 hover:bg-gray-800/50">
       <td className="px-3 py-2 text-white font-semibold">{position.symbol}</td>
@@ -110,7 +117,12 @@ function PositionRow({ position, onClose, isLoading }: PositionRowProps) {
         ${(position.markPrice || position.entryPrice || 0).toFixed(2)}
       </td>
       <td className={`px-3 py-2 text-right font-semibold ${pnlColor}`}>
-        {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)}
+        <div className="flex flex-col items-end">
+          <span>{pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span>
+          <span className="text-[9px] opacity-75">
+            {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
+          </span>
+        </div>
       </td>
       <td className="px-3 py-2 text-center">
         {onClose && (
