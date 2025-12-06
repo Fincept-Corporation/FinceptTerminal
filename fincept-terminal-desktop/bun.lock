@@ -46,6 +46,7 @@
         "@tauri-apps/plugin-updater": "~2.9.0",
         "@types/react-grid-layout": "^1.3.5",
         "axios": "^1.12.2",
+        "ccxt": "^4.5.24",
         "cheerio": "^1.1.2",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
@@ -695,6 +696,8 @@
     "caniuse-lite": ["caniuse-lite@1.0.30001759", "", {}, "sha512-Pzfx9fOKoKvevQf8oCXoyNRQ5QyxJj+3O0Rqx2V5oxT61KGx8+n6hV/IUyJeifUci2clnmmKVpvtiqRzgiWjSw=="],
 
     "ccount": ["ccount@2.0.1", "", {}, "sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg=="],
+
+    "ccxt": ["ccxt@4.5.24", "", { "dependencies": { "ws": "^8.8.1" } }, "sha512-0ym0t8A4EFpxKpge12yowIkSnimtLF5PYOaANycAT8i+FqSO3KoD5qLfSK0rP69g3nnx7Q38X+9c0Rs0r74a4Q=="],
 
     "chalk": ["chalk@4.1.2", "", { "dependencies": { "ansi-styles": "^4.1.0", "supports-color": "^7.1.0" } }, "sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA=="],
 

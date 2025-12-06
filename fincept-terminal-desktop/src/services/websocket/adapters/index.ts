@@ -4,15 +4,15 @@
 import { AdapterRegistry, IWebSocketAdapter } from '../types';
 import { BaseAdapter } from './BaseAdapter';
 import { KrakenAdapter } from './KrakenAdapter';
-import { HyperLiquidAdapter } from './HyperLiquidAdapter';
 
 /**
  * Global registry of available WebSocket adapters
  * Add new adapters here as they are implemented
+ *
+ * Note: HyperLiquid now uses CCXT adapter in src/brokers/exchanges/HyperLiquidAdapter.ts
  */
 export const adapters: AdapterRegistry = {
   kraken: KrakenAdapter,
-  hyperliquid: HyperLiquidAdapter,
   // Add more adapters here:
   // fyers: FyersAdapter,
   // polygon: PolygonAdapter,
@@ -50,4 +50,3 @@ export function createAdapter(provider: string): IWebSocketAdapter {
 // Export adapter classes
 export { BaseAdapter } from './BaseAdapter';
 export { KrakenAdapter } from './KrakenAdapter';
-export { HyperLiquidAdapter } from './HyperLiquidAdapter';
