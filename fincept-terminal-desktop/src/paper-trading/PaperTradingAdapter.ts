@@ -27,8 +27,8 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
   private initialized: boolean = false;
 
   constructor(config: ExchangeConfig & { paperTradingConfig: PaperTradingConfig; realAdapter: IExchangeAdapter }) {
-    // Initialize base with paper trading exchange ID
-    super({ ...config, exchange: `${config.paperTradingConfig.provider}_paper` });
+    // Initialize base with real exchange name (CCXT doesn't support "_paper" suffix)
+    super({ ...config, exchange: config.paperTradingConfig.provider });
 
     this.paperConfig = config.paperTradingConfig;
     this.realAdapter = config.realAdapter;
@@ -49,16 +49,26 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
 
   async connect(): Promise<void> {
     try {
+      console.log('[PaperTradingAdapter] Starting connection...');
+      console.log('[PaperTradingAdapter] Real adapter connected:', this.realAdapter.isConnected());
+
       // Connect to real exchange for market data
       if (!this.realAdapter.isConnected()) {
+        console.log('[PaperTradingAdapter] Connecting real adapter...');
         await this.realAdapter.connect();
+        console.log('[PaperTradingAdapter] Real adapter connected successfully');
+      } else {
+        console.log('[PaperTradingAdapter] Real adapter already connected, skipping');
       }
 
       // Initialize or load portfolio
+      console.log('[PaperTradingAdapter] Initializing portfolio...');
       await this.initializePortfolio();
+      console.log('[PaperTradingAdapter] Portfolio initialized');
 
       // Start order monitoring
       if (this.paperConfig.enableRealtimeUpdates !== false) {
+        console.log('[PaperTradingAdapter] Starting order monitoring...');
         this.matchingEngine.startMonitoring(this.paperConfig.priceUpdateInterval || 1000);
       }
 
@@ -66,10 +76,12 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       this._isAuthenticated = true; // Paper trading doesn't require real auth
       this.initialized = true;
 
+      console.log('[PaperTradingAdapter] ✓ Connection complete!');
       this.emit('connected', { exchange: this.id });
       this.emit('authenticated', { exchange: this.id });
     } catch (error) {
       this._isConnected = false;
+      console.error('[PaperTradingAdapter] ✗ Connection failed:', error);
       throw this.handleError(error);
     }
   }
@@ -79,6 +91,72 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
     this._isConnected = false;
     this._isAuthenticated = false;
     this.emit('disconnected', { exchange: this.id });
+  }
+
+  /**
+   * Reset paper trading account to initial state
+   * - Closes all positions
+   * - Cancels all orders
+   * - Resets balance to initial capital
+   * - Clears trade history
+   */
+  async resetAccount(): Promise<void> {
+    console.log('[PaperTradingAdapter] Resetting account...');
+    const portfolioId = this.paperConfig.portfolioId;
+
+    try {
+      // 1. Close all open positions
+      const openPositions = await paperTradingDatabase.getPortfolioPositions(portfolioId, 'open');
+      console.log(`[PaperTradingAdapter] Closing ${openPositions.length} open positions...`);
+      for (const position of openPositions) {
+        await paperTradingDatabase.updatePosition(position.id, {
+          status: 'closed',
+          closedAt: new Date().toISOString(),
+        });
+      }
+
+      // 2. Cancel all pending orders
+      const pendingOrders = await paperTradingDatabase.getPendingOrders(portfolioId);
+      console.log(`[PaperTradingAdapter] Cancelling ${pendingOrders.length} pending orders...`);
+      for (const order of pendingOrders) {
+        await paperTradingDatabase.updateOrder(order.id, { status: 'canceled' });
+      }
+
+      // 3. Delete all positions (to clean up)
+      console.log('[PaperTradingAdapter] Deleting all positions...');
+      const allPositions = await paperTradingDatabase.getPortfolioPositions(portfolioId);
+      for (const position of allPositions) {
+        await paperTradingDatabase.deletePosition(position.id);
+      }
+
+      // 4. Delete all orders (to clean up)
+      console.log('[PaperTradingAdapter] Deleting all orders...');
+      const allOrders = await paperTradingDatabase.getPortfolioOrders(portfolioId);
+      for (const order of allOrders) {
+        await paperTradingDatabase.deleteOrder(order.id);
+      }
+
+      // 5. Delete all trades (to clean up)
+      console.log('[PaperTradingAdapter] Deleting all trades...');
+      const allTrades = await paperTradingDatabase.getPortfolioTrades(portfolioId);
+      for (const trade of allTrades) {
+        await paperTradingDatabase.deleteTrade(trade.id);
+      }
+
+      // 6. Reset balance to initial capital
+      const initialBalance = this.paperConfig.initialBalance;
+      console.log(`[PaperTradingAdapter] Resetting balance to ${initialBalance}...`);
+      await paperTradingDatabase.updatePortfolioBalance(portfolioId, initialBalance);
+
+      // 7. Reinitialize balance manager
+      this.balanceManager = new PaperTradingBalance(this.paperConfig);
+
+      console.log('[PaperTradingAdapter] ✓ Account reset complete!');
+      this.emit('reset', { exchange: this.id, portfolioId });
+    } catch (error) {
+      console.error('[PaperTradingAdapter] ✗ Reset failed:', error);
+      throw error;
+    }
   }
 
   async authenticate(credentials: ExchangeCredentials): Promise<void> {
@@ -177,7 +255,40 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       throw new Error('Paper trading adapter not initialized. Call connect() first.');
     }
 
+    console.log('[PaperTradingAdapter] fetchPositions called');
+    console.log('[PaperTradingAdapter] Portfolio ID:', this.paperConfig.portfolioId);
+
     const positions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId, 'open');
+    console.log('[PaperTradingAdapter] Raw open positions from DB:', positions.length);
+
+    // Also check ALL positions to see if there are closed ones
+    const allPositions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId);
+    console.log('[PaperTradingAdapter] Total positions (open + closed):', allPositions.length);
+    allPositions.forEach(p => {
+      console.log(`  Position: ${p.symbol} ${p.side} ${p.quantity} @ ${p.entryPrice} - Status: ${p.status}`);
+    });
+
+    // Update positions with current prices
+    for (const p of positions) {
+      try {
+        const ticker = await this.realAdapter.fetchTicker(p.symbol);
+        const currentPrice = ticker.last || ticker.close || p.currentPrice || p.entryPrice;
+
+        const unrealizedPnl = p.side === 'long'
+          ? (currentPrice - p.entryPrice) * p.quantity
+          : (p.entryPrice - currentPrice) * p.quantity;
+
+        await paperTradingDatabase.updatePosition(p.id, {
+          currentPrice,
+          unrealizedPnl,
+        });
+
+        p.currentPrice = currentPrice;
+        p.unrealizedPnl = unrealizedPnl;
+      } catch (err) {
+        console.warn(`[PaperTradingAdapter] Failed to update price for ${p.symbol}`);
+      }
+    }
 
     // Convert to CCXT Position format
     const ccxtPositions: Position[] = positions

@@ -49,6 +49,9 @@ export class WebSocketManager {
   // Track subscriptions for cleanup
   private activeSubscriptions: Map<string, Subscription> = new Map();
 
+  // Track ongoing connections to prevent duplicates
+  private connectingProviders: Set<string> = new Set();
+
   constructor(config?: Partial<WebSocketManagerConfig>) {
     this.config = { ...DEFAULT_MANAGER_CONFIG, ...config };
     this.eventBus = globalEventBus;
@@ -116,7 +119,13 @@ export class WebSocketManager {
 
       return subscription;
     } catch (error) {
-      console.error(`[WebSocketManager] Subscribe failed for ${topic}:`, error);
+      // Only log non-connection errors (connection errors are expected during reconnects)
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (!errorMsg.includes('not connected') && !errorMsg.includes('not open')) {
+        console.error(`[WebSocketManager] Subscribe failed for ${topic}:`, error);
+      } else {
+        console.debug(`[WebSocketManager] Subscribe pending connection for ${topic}`);
+      }
       throw error;
     }
   }
@@ -178,41 +187,59 @@ export class WebSocketManager {
       return;
     }
 
-    // Get provider config
-    const config = this.providerConfigs.get(provider);
-    if (!config) {
-      throw new Error(`No configuration found for provider: ${provider}. Use setProviderConfig() first.`);
+    // Check if already connecting - PREVENT DUPLICATE CONNECTIONS
+    if (this.connectingProviders.has(provider)) {
+      this.log(`Already connecting to ${provider}, waiting...`);
+      // Wait for existing connection to complete
+      while (this.connectingProviders.has(provider)) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
     }
 
-    // Create adapter if doesn't exist
-    if (!this.registry.has(provider)) {
-      const adapter = createAdapter(provider);
+    // Mark as connecting
+    this.connectingProviders.add(provider);
 
-      // Setup message handler
-      adapter.onMessage((message: NormalizedMessage) => {
-        // Publish to event bus with full topic path
-        const fullTopic = this.buildFullTopic(message);
-        this.eventBus.publish(fullTopic, message);
-      });
+    try {
+      // Get provider config
+      const config = this.providerConfigs.get(provider);
+      if (!config) {
+        throw new Error(`No configuration found for provider: ${provider}. Use setProviderConfig() first.`);
+      }
 
-      // Setup error handler
-      adapter.onError((error) => {
-        this.log(`Error from ${provider}:`, error);
-      });
+      // Create adapter if doesn't exist
+      if (!this.registry.has(provider)) {
+        const adapter = createAdapter(provider);
 
-      // Setup status change handler
-      adapter.onStatusChange((status) => {
-        this.log(`${provider} status changed to: ${status}`);
-      });
+        // Setup message handler
+        adapter.onMessage((message: NormalizedMessage) => {
+          // Publish to event bus with full topic path
+          const fullTopic = this.buildFullTopic(message);
+          this.eventBus.publish(fullTopic, message);
+        });
 
-      // Register adapter
-      this.registry.register(provider, adapter, config);
-    }
+        // Setup error handler
+        adapter.onError((error) => {
+          this.log(`Error from ${provider}:`, error);
+        });
 
-    // Connect
-    const adapter = this.registry.get(provider);
-    if (adapter && adapter.status !== ConnectionStatus.CONNECTED) {
-      await adapter.connect(config);
+        // Setup status change handler
+        adapter.onStatusChange((status) => {
+          this.log(`${provider} status changed to: ${status}`);
+        });
+
+        // Register adapter
+        this.registry.register(provider, adapter, config);
+      }
+
+      // Connect
+      const adapter = this.registry.get(provider);
+      if (adapter && adapter.status !== ConnectionStatus.CONNECTED) {
+        await adapter.connect(config);
+      }
+    } finally {
+      // Always remove from connecting set
+      this.connectingProviders.delete(provider);
     }
   }
 
@@ -463,7 +490,7 @@ let globalManagerInstance: WebSocketManager | null = null;
 export function getWebSocketManager(): WebSocketManager {
   if (!globalManagerInstance) {
     globalManagerInstance = new WebSocketManager({
-      enableLogging: false,
+      enableLogging: true, // ENABLED FOR DEBUGGING
       enableMetrics: true
     });
   }

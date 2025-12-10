@@ -94,12 +94,18 @@ function PositionRow({ position, onClose, isLoading }: PositionRowProps) {
   const pnl = position.unrealizedPnl || 0;
   const pnlColor = pnl >= 0 ? 'text-green-400' : 'text-red-400';
 
-  // Calculate P&L percentage
+  // Calculate P&L percentage based on initial margin
   const entryPrice = position.entryPrice || 0;
   const currentPrice = position.markPrice || position.entryPrice || 0;
-  const pnlPercent = entryPrice > 0
-    ? ((currentPrice - entryPrice) / entryPrice) * 100 * (position.side === 'long' ? 1 : -1)
+  const quantity = position.contracts || 0;
+  const initialValue = entryPrice * quantity;
+  const pnlPercent = initialValue > 0
+    ? (pnl / initialValue) * 100
     : 0;
+
+  // Calculate price movement
+  const priceChange = currentPrice - entryPrice;
+  const priceChangePercent = entryPrice > 0 ? (priceChange / entryPrice) * 100 : 0;
 
   return (
     <tr className="border-b border-gray-800 hover:bg-gray-800/50">
@@ -111,14 +117,19 @@ function PositionRow({ position, onClose, isLoading }: PositionRowProps) {
           {(position.side || 'unknown').toUpperCase()}
         </span>
       </td>
-      <td className="px-3 py-2 text-right text-gray-300">{(position.contracts || 0).toFixed(4)}</td>
-      <td className="px-3 py-2 text-right text-gray-300">${(position.entryPrice || 0).toFixed(2)}</td>
-      <td className="px-3 py-2 text-right text-white">
-        ${(position.markPrice || position.entryPrice || 0).toFixed(2)}
+      <td className="px-3 py-2 text-right text-gray-300">{quantity.toFixed(4)}</td>
+      <td className="px-3 py-2 text-right text-gray-300">${entryPrice.toFixed(2)}</td>
+      <td className="px-3 py-2 text-right">
+        <div className="flex flex-col items-end">
+          <span className="text-white">${currentPrice.toFixed(2)}</span>
+          <span className={`text-[9px] ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)} ({priceChangePercent >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%)
+          </span>
+        </div>
       </td>
       <td className={`px-3 py-2 text-right font-semibold ${pnlColor}`}>
         <div className="flex flex-col items-end">
-          <span>{pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span>
+          <span className="text-sm">{pnl >= 0 ? '+' : ''}${Math.abs(pnl).toFixed(2)}</span>
           <span className="text-[9px] opacity-75">
             {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
           </span>

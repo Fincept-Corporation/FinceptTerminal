@@ -38,7 +38,6 @@ const NewsTab: React.FC = () => {
           timestamp: new Date().toISOString(),
           filter: activeFilter
         };
-        console.log('[NewsTab] Recording current data:', recordData);
         await contextRecorderService.recordApiResponse(
           'News',
           'news-feed',
@@ -46,9 +45,8 @@ const NewsTab: React.FC = () => {
           `News Feed (Snapshot) - ${new Date().toLocaleString()}`,
           ['news', 'rss', 'snapshot', activeFilter.toLowerCase()]
         );
-        console.log('[NewsTab] Current data recorded successfully');
       } catch (error) {
-        console.error('[NewsTab] Failed to record current data:', error);
+        // Silently handle recording errors
       }
     }
   };
@@ -75,7 +73,6 @@ const NewsTab: React.FC = () => {
             timestamp: new Date().toISOString(),
             filter: activeFilter
           };
-          console.log('[NewsTab] Recording data:', recordData);
           await contextRecorderService.recordApiResponse(
             'News',
             'news-feed',
@@ -83,13 +80,12 @@ const NewsTab: React.FC = () => {
             `News Feed - ${new Date().toLocaleString()}`,
             ['news', 'rss', 'live-feed', activeFilter.toLowerCase()]
           );
-          console.log('[NewsTab] Data recorded successfully');
         } catch (error) {
-          console.error('[NewsTab] Failed to record data:', error);
+          // Silently handle recording errors
         }
       }
     } catch (error) {
-      console.error('Error fetching news:', error);
+      // Silently handle fetch errors
     } finally {
       setLoading(false);
     }
@@ -125,11 +121,11 @@ const NewsTab: React.FC = () => {
               ['news', 'rss', 'live-feed', activeFilter.toLowerCase()]
             );
           } catch (error) {
-            console.error('[NewsTab] Failed to record data:', error);
+            // Silently handle recording errors
           }
         }
       } catch (error) {
-        console.error('Error fetching news:', error);
+        // Silently handle fetch errors
       } finally {
         setLoading(false);
       }
@@ -1015,10 +1011,8 @@ const NewsTab: React.FC = () => {
                         onClick={async (e) => {
                           e.stopPropagation();
                           const link = selectedArticle.link;
-                          console.log('📰 Opening link in external browser:', link);
 
                           if (!link) {
-                            console.error('❌ No link available');
                             return;
                           }
 
@@ -1026,7 +1020,6 @@ const NewsTab: React.FC = () => {
                             if (window.__TAURI__) {
                               const { openUrl } = await import('@tauri-apps/plugin-opener');
                               await openUrl(link);
-                              console.log('✅ Link opened via Tauri opener');
                             } else {
                               const a = document.createElement('a');
                               a.href = link;
@@ -1035,12 +1028,9 @@ const NewsTab: React.FC = () => {
                               document.body.appendChild(a);
                               a.click();
                               document.body.removeChild(a);
-                              console.log('✅ Link opened via anchor element');
                             }
                           } catch (error) {
-                            console.error('❌ Failed to open link:', error);
                             await navigator.clipboard.writeText(link);
-                            console.log('📋 Link copied to clipboard');
                           }
                         }}
                         style={{
@@ -1063,7 +1053,6 @@ const NewsTab: React.FC = () => {
                           const link = selectedArticle.link;
                           if (link) {
                             navigator.clipboard.writeText(link);
-                            console.log('Link copied to clipboard:', link);
                             e.currentTarget.textContent = '✓ COPIED!';
                             setTimeout(() => {
                               e.currentTarget.textContent = '📋 COPY';

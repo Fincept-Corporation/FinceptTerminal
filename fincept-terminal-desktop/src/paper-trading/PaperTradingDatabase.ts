@@ -110,10 +110,12 @@ export class PaperTradingDatabase {
     leverage?: number;
     marginMode?: 'cross' | 'isolated';
   }): Promise<void> {
+    const positionValue = position.entryPrice * position.quantity;
+
     const sql = `
       INSERT INTO paper_trading_positions
-      (id, portfolio_id, symbol, side, entry_price, quantity, leverage, margin_mode, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'open')
+      (id, portfolio_id, symbol, side, entry_price, quantity, position_value, leverage, margin_mode, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open')
     `;
 
     await sqliteService.execute(sql, [
@@ -123,6 +125,7 @@ export class PaperTradingDatabase {
       position.side,
       position.entryPrice,
       position.quantity,
+      positionValue,
       position.leverage || 1,
       position.marginMode || 'cross',
     ]);
@@ -130,7 +133,7 @@ export class PaperTradingDatabase {
 
   async getPosition(positionId: string): Promise<PaperTradingPosition | null> {
     const sql = `
-      SELECT id, portfolio_id, symbol, side, entry_price, quantity,
+      SELECT id, portfolio_id, symbol, side, entry_price, quantity, position_value,
              current_price, unrealized_pnl, realized_pnl, leverage, margin_mode,
              liquidation_price, opened_at, closed_at, status
       FROM paper_trading_positions
@@ -148,7 +151,7 @@ export class PaperTradingDatabase {
 
   async getPositionBySymbol(portfolioId: string, symbol: string, status: 'open' | 'closed' = 'open'): Promise<PaperTradingPosition | null> {
     const sql = `
-      SELECT id, portfolio_id, symbol, side, entry_price, quantity,
+      SELECT id, portfolio_id, symbol, side, entry_price, quantity, position_value,
              current_price, unrealized_pnl, realized_pnl, leverage, margin_mode,
              liquidation_price, opened_at, closed_at, status
       FROM paper_trading_positions
@@ -166,9 +169,34 @@ export class PaperTradingDatabase {
     return this.mapDBPosition(result[0]);
   }
 
+  async getPositionBySymbolAndSide(
+    portfolioId: string,
+    symbol: string,
+    side: 'long' | 'short',
+    status: 'open' | 'closed' = 'open'
+  ): Promise<PaperTradingPosition | null> {
+    const sql = `
+      SELECT id, portfolio_id, symbol, side, entry_price, quantity, position_value,
+             current_price, unrealized_pnl, realized_pnl, leverage, margin_mode,
+             liquidation_price, opened_at, closed_at, status
+      FROM paper_trading_positions
+      WHERE portfolio_id = $1 AND symbol = $2 AND side = $3 AND status = $4
+      ORDER BY opened_at DESC
+      LIMIT 1
+    `;
+
+    const result = await sqliteService.select<DBPosition[]>(sql, [portfolioId, symbol, side, status]);
+
+    if (!result || result.length === 0) {
+      return null;
+    }
+
+    return this.mapDBPosition(result[0]);
+  }
+
   async getPortfolioPositions(portfolioId: string, status?: 'open' | 'closed'): Promise<PaperTradingPosition[]> {
     let sql = `
-      SELECT id, portfolio_id, symbol, side, entry_price, quantity,
+      SELECT id, portfolio_id, symbol, side, entry_price, quantity, position_value,
              current_price, unrealized_pnl, realized_pnl, leverage, margin_mode,
              liquidation_price, opened_at, closed_at, status
       FROM paper_trading_positions
@@ -487,6 +515,11 @@ export class PaperTradingDatabase {
     return result.map(row => this.mapDBTrade(row));
   }
 
+  async deleteTrade(tradeId: string): Promise<void> {
+    const sql = `DELETE FROM paper_trading_trades WHERE id = $1`;
+    await sqliteService.execute(sql, [tradeId]);
+  }
+
   // ============================================================================
   // MAPPING FUNCTIONS
   // ============================================================================
@@ -514,6 +547,7 @@ export class PaperTradingDatabase {
       side: row.side,
       entryPrice: row.entry_price,
       quantity: row.quantity,
+      positionValue: row.position_value,
       currentPrice: row.current_price,
       unrealizedPnl: row.unrealized_pnl,
       realizedPnl: row.realized_pnl,

@@ -154,6 +154,17 @@ export function useWebSocket(
    * Internal message handler
    */
   const handleMessage = useCallback((msg: NormalizedMessage) => {
+    // Only log chart/candle messages
+    if (msg.channel === 'ohlc' || msg.type === 'candle') {
+      console.log(`[useWebSocket] 📊 Chart message:`, {
+        provider: msg.provider,
+        channel: msg.channel,
+        type: msg.type,
+        symbol: msg.symbol,
+        dataKeys: Object.keys(msg.data || {})
+      });
+    }
+
     setMessage(msg);
     setMessages(prev => {
       const updated = [...prev, msg];
@@ -173,6 +184,9 @@ export function useWebSocket(
     subscribeTopic: string,
     subscribeParams?: Record<string, any>
   ) => {
+    console.log(`[useWebSocket] 📡 Attempting to subscribe to: ${subscribeTopic}`);
+    console.log(`[useWebSocket] Params:`, subscribeParams || params);
+
     try {
       setIsLoading(true);
       setError(null);
@@ -181,12 +195,18 @@ export function useWebSocket(
 
       // Parse provider from topic
       const provider = subscribeTopic.split('.')[0];
+      console.log(`[useWebSocket] Provider: ${provider}`);
+
+      // Check WebSocket status BEFORE subscribing
+      const wsStatus = manager.getStatus(provider);
+      console.log(`[useWebSocket] WebSocket status for ${provider}: ${wsStatus}`);
 
       // Get or create provider config if needed
       // Note: Config should be set via setProviderConfig before subscribing
       // This is handled in SettingsTab
 
       // Subscribe
+      console.log(`[useWebSocket] Calling manager.subscribe()...`);
       const sub = await manager.subscribe(
         subscribeTopic,
         handleMessage,
@@ -194,10 +214,12 @@ export function useWebSocket(
       );
 
       subscriptionRef.current = sub;
+      console.log(`[useWebSocket] ✓ Subscription created: ${sub.id}`);
 
       // Update status
       const providerStatus = manager.getStatus(provider);
       setStatus(providerStatus);
+      console.log(`[useWebSocket] Final status: ${providerStatus}`);
 
       if (onStatusChange && providerStatus) {
         onStatusChange(providerStatus);
@@ -206,11 +228,16 @@ export function useWebSocket(
       const error = err instanceof Error ? err : new Error(String(err));
       setError(error);
 
+      console.error(`[useWebSocket] ✗ Subscribe FAILED for ${subscribeTopic}:`, error.message);
+
       if (onError) {
         onError(error);
       }
 
-      console.error('[useWebSocket] Subscribe error:', error);
+      // Only log errors that aren't connection-related (those are logged elsewhere)
+      if (!error.message.includes('not connected') && !error.message.includes('not open')) {
+        console.error('[useWebSocket] Subscribe error:', error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -292,12 +319,15 @@ export function useWebSocket(
    * Auto-subscribe on mount if enabled
    */
   useEffect(() => {
-    if (topic && autoSubscribe && autoConnect) {
+    let isMounted = true;
+
+    if (topic && autoSubscribe && autoConnect && isMounted) {
       subscribe(topic, params);
     }
 
     // Cleanup on unmount
     return () => {
+      isMounted = false;
       unsubscribe();
     };
   }, [topic, autoSubscribe, autoConnect]); // Intentionally limited dependencies
@@ -311,18 +341,42 @@ export function useWebSocket(
     const manager = getWebSocketManager();
     const provider = topic.split('.')[0];
     let isMounted = true;
+    let isResubscribing = false;
+    let consecutiveFailures = 0;
 
-    const checkInterval = setInterval(() => {
-      if (!isMounted) return; // Guard against unmounted component
+    const checkInterval = setInterval(async () => {
+      if (!isMounted || isResubscribing) return; // Guard against unmounted component or concurrent resubscribes
 
       const providerStatus = manager.getStatus(provider);
 
       // If connected but no active subscription, resubscribe
       if (providerStatus === ConnectionStatus.CONNECTED && !subscriptionRef.current) {
-        console.log(`[useWebSocket] Auto-resubscribing to ${topic} after reconnection`);
-        subscribe(topic, params);
+        // Exponential backoff if we're having repeated failures
+        if (consecutiveFailures > 3) {
+          console.debug(`[useWebSocket] Too many consecutive failures for ${topic}, pausing auto-resubscribe`);
+          return;
+        }
+
+        isResubscribing = true;
+        try {
+          console.log(`[useWebSocket] Auto-resubscribing to ${topic} after reconnection`);
+          await subscribe(topic, params);
+          consecutiveFailures = 0; // Reset on success
+        } catch (error) {
+          consecutiveFailures++;
+          // Silently fail - subscription will retry on next interval
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          if (!errorMsg.includes('not connected') && !errorMsg.includes('not open')) {
+            console.debug(`[useWebSocket] Auto-resubscribe failed (attempt ${consecutiveFailures}):`, error);
+          }
+        } finally {
+          isResubscribing = false;
+        }
+      } else if (subscriptionRef.current) {
+        // Reset failure counter when subscription is active
+        consecutiveFailures = 0;
       }
-    }, 2000);
+    }, 5000); // Increased to 5 seconds to reduce noise
 
     return () => {
       isMounted = false;

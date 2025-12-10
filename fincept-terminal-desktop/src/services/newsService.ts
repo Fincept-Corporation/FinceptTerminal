@@ -203,11 +203,11 @@ function parseRSSFeed(xmlText: string, feedConfig: typeof RSS_FEEDS[0]): NewsArt
           pubDate
         });
       } catch (err) {
-        console.error('Error parsing item:', err);
+        // Silently skip problematic items
       }
     });
   } catch (error) {
-    console.error('Error parsing RSS feed:', error);
+    // Silently skip feed parsing errors
   }
 
   return articles;
@@ -235,7 +235,6 @@ async function fetchRSSFeed(feedConfig: typeof RSS_FEEDS[0]): Promise<NewsArticl
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        console.log(`✗ ${feedConfig.name} via proxy ${i+1}: HTTP ${response.status}`);
         continue; // Try next proxy
       }
 
@@ -253,25 +252,19 @@ async function fetchRSSFeed(feedConfig: typeof RSS_FEEDS[0]): Promise<NewsArticl
 
       // Validate response is XML before parsing
       if (!xmlText || !xmlText.trim().startsWith('<')) {
-        console.log(`✗ ${feedConfig.name} via proxy ${i+1}: Not XML`);
         continue; // Try next proxy
       }
 
       const articles = parseRSSFeed(xmlText, feedConfig);
 
       if (articles.length > 0) {
-        console.log(`✓ Fetched ${articles.length} articles from ${feedConfig.name} via proxy ${i+1}`);
         return articles;
-      } else {
-        console.log(`✗ ${feedConfig.name} via proxy ${i+1}: Parsed 0 articles`);
       }
     } catch (error: any) {
-      console.log(`✗ ${feedConfig.name} via proxy ${i+1}: ${error.message}`);
       continue;
     }
   }
 
-  console.log(`✗ ${feedConfig.name}: All ${CORS_PROXIES.length} proxies failed`);
   return [];
 }
 
@@ -302,7 +295,6 @@ export async function fetchAllNews(): Promise<NewsArticle[]> {
     return dateB.getTime() - dateA.getTime();
   });
 
-  console.log(`✓ Loaded ${allArticles.length} articles from ${successfulFeeds}/${RSS_FEEDS.length} feeds`);
   return allArticles;
 }
 
@@ -317,11 +309,8 @@ export async function fetchNewsWithCache(forceRefresh: boolean = false): Promise
 
   // Return cached news if still valid and not forcing refresh
   if (!forceRefresh && cachedNews.length > 0 && (now - lastFetchTime) < CACHE_DURATION) {
-    console.log(`📋 Using cached news (${cachedNews.length} articles)`);
     return cachedNews;
   }
-
-  console.log(`🔄 Fetching fresh news from ${RSS_FEEDS.length} feeds...`);
 
   // On first load or force refresh, fetch real news immediately
   try {
@@ -331,25 +320,19 @@ export async function fetchNewsWithCache(forceRefresh: boolean = false): Promise
       cachedNews = fetchedNews;
       useMockData = false;
       lastFetchTime = Date.now();
-      console.log(`✅ Cache updated with ${cachedNews.length} articles`);
       return cachedNews;
     } else {
       // Only use mock data if real fetch completely fails and we have no cache
       if (cachedNews.length === 0) {
-        console.log('⚠ Using demo data - no live feeds available');
         cachedNews = generateMockNews();
         useMockData = true;
         lastFetchTime = Date.now();
-      } else {
-        console.log('⚠ Fetch returned 0 articles, keeping cache');
       }
       return cachedNews;
     }
   } catch (err) {
-    console.error('❌ Fetch error:', err);
     // Only use mock data if real fetch completely fails and we have no cache
     if (cachedNews.length === 0) {
-      console.log('⚠ Using demo data - fetch failed');
       cachedNews = generateMockNews();
       useMockData = true;
       lastFetchTime = Date.now();

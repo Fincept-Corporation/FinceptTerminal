@@ -63,9 +63,6 @@ pub async fn execute_lean_cli(
     backtest_id: String,
     state: State<'_, BacktestingState>,
 ) -> Result<ProcessInfo, String> {
-    println!("[Lean CLI] Executing: {}", command);
-    println!("[Lean CLI] Working directory: {}", working_dir);
-
     // Parse command into parts
     let parts: Vec<&str> = command.split_whitespace().collect();
     if parts.is_empty() {
@@ -98,8 +95,6 @@ pub async fn execute_lean_cli(
     // In production, would spawn a thread to monitor output
     // For now, we'll wait for completion in the background
 
-    println!("[Lean CLI] Started process with PID: {}", pid);
-
     Ok(ProcessInfo { process_id: pid })
 }
 
@@ -110,8 +105,6 @@ pub async fn execute_lean_cli(
  */
 #[tauri::command]
 pub async fn execute_command(command: String) -> Result<CommandResult, String> {
-    println!("[Command] Executing: {}", command);
-
     // Parse command
     let parts: Vec<&str> = command.split_whitespace().collect();
     if parts.is_empty() {
@@ -145,8 +138,6 @@ pub async fn kill_lean_process(
     process_id: u32,
     state: State<'_, BacktestingState>,
 ) -> Result<(), String> {
-    println!("[Lean CLI] Killing process: {}", process_id);
-
     #[cfg(unix)]
     {
         use nix::sys::signal::{kill, Signal};
@@ -171,8 +162,6 @@ pub async fn kill_lean_process(
         processes.retain(|_, p| p.pid != process_id);
     }
 
-    println!("[Lean CLI] Process {} terminated", process_id);
-
     Ok(())
 }
 
@@ -187,9 +176,6 @@ pub async fn execute_python_backtest(
     command: String,
     args: String,
 ) -> Result<String, String> {
-    println!("[Python Backtest] Provider: {}", provider);
-    println!("[Python Backtest] Command: {}", command);
-
     // Determine Python path (bundled or system)
     let python_path = get_python_path();
 

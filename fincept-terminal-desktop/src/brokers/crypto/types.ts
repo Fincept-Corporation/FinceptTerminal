@@ -59,6 +59,9 @@ export interface IExchangeAdapter {
   on(event: ExchangeEvent, callback: (data: ExchangeEventData) => void): void;
   off(event: ExchangeEvent, callback: (data: ExchangeEventData) => void): void;
   emit(event: ExchangeEvent, data: ExchangeEventData): void;
+
+  // Capabilities
+  getCapabilities(): ExchangeCapabilities;
 }
 
 // ============================================================================
@@ -93,6 +96,7 @@ export type OrderType =
   | 'market'
   | 'limit'
   | 'stop'
+  | 'stop_market'
   | 'stop_limit'
   | 'trailing_stop'
   | 'iceberg'
@@ -296,7 +300,8 @@ export type ExchangeEvent =
   | 'trade'
   | 'order'
   | 'balance'
-  | 'position';
+  | 'position'
+  | 'reset';
 
 export interface ExchangeEventData {
   event: ExchangeEvent;

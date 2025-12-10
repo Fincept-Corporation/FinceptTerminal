@@ -31,7 +31,39 @@ export {
 export { KiteConnectAdapter, createKiteAdapter } from './stocks';
 
 // ============================================================================
-// UNIFIED BROKER REGISTRY
+// UNIFIED BROKER REGISTRY (NEW SYSTEM)
+// ============================================================================
+export {
+  BROKER_REGISTRY,
+  getAllBrokers,
+  getBrokersByType,
+  getBrokerMetadata,
+  isBrokerRegistered,
+  getBrokerDisplayName,
+  getDefaultSymbols,
+  supportsBrokerFeature,
+  supportsTradingFeature,
+  supportsAdvancedFeature,
+  getMaxLeverage,
+  createBrokerAdapter,
+  createBrokerAdapters,
+  type BrokerMetadata,
+} from './registry';
+
+export {
+  detectBrokerFeatures,
+  supportsFeature,
+  getSupportedFeatures,
+  getFeatureCount,
+  supportsCategory,
+  getCompleteBrokerInfo,
+  createFeatureChecker,
+  type BrokerFeatures,
+  type CompleteBrokerInfo,
+} from './features';
+
+// ============================================================================
+// LEGACY BROKER REGISTRY (Kept for backward compatibility)
 // ============================================================================
 import { SUPPORTED_EXCHANGES } from './crypto';
 

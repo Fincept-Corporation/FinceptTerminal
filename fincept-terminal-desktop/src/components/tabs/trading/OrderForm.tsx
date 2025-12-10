@@ -1,7 +1,8 @@
 // File: src/components/tabs/trading/OrderForm.tsx
-// Order placement form with all order types
+// Feature-aware order placement form - adapts to broker capabilities
 
 import React, { useState } from 'react';
+import { useBrokerContext } from '../../../contexts/BrokerContext';
 import type { OrderRequest, OrderType, OrderSide } from '../../../types/trading';
 
 interface OrderFormProps {
@@ -12,12 +13,23 @@ interface OrderFormProps {
 }
 
 export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: OrderFormProps) {
+  const { activeBrokerMetadata, tradingMode } = useBrokerContext();
+
   const [side, setSide] = useState<OrderSide>('buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [quantity, setQuantity] = useState<string>('');
   const [price, setPrice] = useState<string>('');
   const [stopPrice, setStopPrice] = useState<string>('');
+  const [takeProfitPrice, setTakeProfitPrice] = useState<string>('');
+  const [stopLossPrice, setStopLossPrice] = useState<string>('');
+  const [enableAdvanced, setEnableAdvanced] = useState(false);
   const [error, setError] = useState<string>('');
+
+  // Get supported order types from broker
+  const supportsMarket = activeBrokerMetadata?.tradingFeatures.marketOrders ?? true;
+  const supportsLimit = activeBrokerMetadata?.tradingFeatures.limitOrders ?? true;
+  const supportsStop = activeBrokerMetadata?.tradingFeatures.stopOrders ?? false;
+  const supportsStopLimit = activeBrokerMetadata?.tradingFeatures.stopLimitOrders ?? false;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,7 +107,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           </button>
         </div>
 
-        {/* Order Type */}
+        {/* Order Type - Only show supported types */}
         <div>
           <label className="block text-xs text-gray-500 mb-1">Order Type</label>
           <select
@@ -103,10 +115,10 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             onChange={(e) => setOrderType(e.target.value as OrderType)}
             className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
-            <option value="market">Market</option>
-            <option value="limit">Limit</option>
-            <option value="stop_market">Stop Market</option>
-            <option value="stop_limit">Stop Limit</option>
+            {supportsMarket && <option value="market">Market</option>}
+            {supportsLimit && <option value="limit">Limit</option>}
+            {supportsStop && <option value="stop_market">Stop Market</option>}
+            {supportsStopLimit && <option value="stop_limit">Stop Limit</option>}
           </select>
         </div>
 
@@ -153,6 +165,65 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           </div>
         )}
 
+        {/* Advanced Settings Toggle */}
+        <button
+          type="button"
+          onClick={() => setEnableAdvanced(!enableAdvanced)}
+          className="text-xs text-orange-500 hover:text-orange-400 transition-colors"
+        >
+          {enableAdvanced ? '− ' : '+ '}Advanced (SL/TP)
+        </button>
+
+        {/* Advanced Settings: Stop Loss & Take Profit */}
+        {enableAdvanced && (
+          <div className="space-y-3 border border-gray-700 rounded p-3 bg-gray-900/50">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Take Profit Price</label>
+              <input
+                type="number"
+                step="0.01"
+                value={takeProfitPrice}
+                onChange={(e) => setTakeProfitPrice(e.target.value)}
+                placeholder="Optional"
+                className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Stop Loss Price</label>
+              <input
+                type="number"
+                step="0.01"
+                value={stopLossPrice}
+                onChange={(e) => setStopLossPrice(e.target.value)}
+                placeholder="Optional"
+                className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+
+            {currentPrice && (takeProfitPrice || stopLossPrice) && (
+              <div className="text-xs space-y-1">
+                {takeProfitPrice && (
+                  <div className="flex justify-between text-green-400">
+                    <span>TP R/R:</span>
+                    <span>
+                      {((Math.abs(parseFloat(takeProfitPrice) - currentPrice) / currentPrice) * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                )}
+                {stopLossPrice && (
+                  <div className="flex justify-between text-red-400">
+                    <span>SL Risk:</span>
+                    <span>
+                      {((Math.abs(currentPrice - parseFloat(stopLossPrice)) / currentPrice) * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Estimated Cost */}
         {currentPrice && (
           <div className="flex justify-between text-xs">
@@ -168,18 +239,38 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
           </div>
         )}
 
+        {/* Trading Mode Warning */}
+        {tradingMode === 'live' && (
+          <div className="bg-red-900/20 border border-red-600 rounded p-2 text-xs text-red-400 font-bold">
+            ⚠️ LIVE TRADING MODE - Real money will be used!
+          </div>
+        )}
+
         {/* Submit Button */}
         <button
           type="submit"
           disabled={isLoading}
           className={`w-full py-2 rounded font-semibold text-sm transition-colors ${
-            side === 'buy'
+            tradingMode === 'live'
+              ? 'bg-red-600 hover:bg-red-700 text-white border-2 border-red-400'
+              : side === 'buy'
               ? 'bg-green-600 hover:bg-green-700 text-white'
               : 'bg-red-600 hover:bg-red-700 text-white'
           } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          {isLoading ? 'Placing Order...' : `${side.toUpperCase()} ${symbol}`}
+          {isLoading
+            ? 'Placing Order...'
+            : tradingMode === 'live'
+            ? `🔴 LIVE ${side.toUpperCase()} ${symbol}`
+            : `${side.toUpperCase()} ${symbol}`}
         </button>
+
+        {/* Paper Trading Info */}
+        {tradingMode === 'paper' && (
+          <div className="text-xs text-gray-500 text-center italic">
+            Paper trading - No real money used
+          </div>
+        )}
       </form>
     </div>
   );

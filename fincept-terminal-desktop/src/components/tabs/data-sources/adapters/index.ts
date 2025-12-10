@@ -42,7 +42,6 @@ import { DatabricksAdapter } from './DatabricksAdapter';
 import { GCPStorageAdapter } from './GCPStorageAdapter';
 import { AzureBlobAdapter } from './AzureBlobAdapter';
 import { IEXCloudAdapter } from './IEXCloudAdapter';
-import { KrakenAdapter } from './KrakenAdapter';
 import { CoinMarketCapAdapter } from './CoinMarketCapAdapter';
 import { TwelveDataAdapter } from './TwelveDataAdapter';
 import { QuandlAdapter } from './QuandlAdapter';
@@ -194,7 +193,6 @@ const ADAPTER_MAP: Record<string, new (connection: any) => BaseAdapter> = {
   binance: BinanceAdapter,
   coinbase: CoinbaseAdapter,
   'iex-cloud': IEXCloudAdapter,
-  kraken: KrakenAdapter,
   coinmarketcap: CoinMarketCapAdapter,
   'twelve-data': TwelveDataAdapter,
   quandl: QuandlAdapter,
@@ -316,7 +314,6 @@ export {
   GCPStorageAdapter,
   AzureBlobAdapter,
   IEXCloudAdapter,
-  KrakenAdapter,
   CoinMarketCapAdapter,
   TwelveDataAdapter,
   QuandlAdapter,

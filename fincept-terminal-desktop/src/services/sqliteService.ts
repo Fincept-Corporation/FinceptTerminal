@@ -347,6 +347,9 @@ class SQLiteService {
         provider TEXT NOT NULL,
         initial_balance REAL NOT NULL DEFAULT 100000,
         current_balance REAL NOT NULL,
+        currency TEXT DEFAULT 'USD',
+        margin_mode TEXT DEFAULT 'cross',
+        leverage REAL DEFAULT 1,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`,
@@ -359,9 +362,13 @@ class SQLiteService {
         side TEXT NOT NULL CHECK (side IN ('long', 'short')),
         entry_price REAL NOT NULL,
         quantity REAL NOT NULL,
+        position_value REAL,
         current_price REAL,
         unrealized_pnl REAL,
         realized_pnl REAL DEFAULT 0,
+        leverage REAL DEFAULT 1,
+        margin_mode TEXT DEFAULT 'cross',
+        liquidation_price REAL,
         opened_at TEXT DEFAULT CURRENT_TIMESTAMP,
         closed_at TEXT,
         status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
@@ -381,8 +388,17 @@ class SQLiteService {
         filled_quantity REAL DEFAULT 0,
         avg_fill_price REAL,
         status TEXT NOT NULL CHECK (status IN ('pending', 'filled', 'partial', 'cancelled', 'rejected', 'triggered')),
+        time_in_force TEXT DEFAULT 'GTC',
+        post_only INTEGER DEFAULT 0,
+        reduce_only INTEGER DEFAULT 0,
+        trailing_percent REAL,
+        trailing_amount REAL,
+        iceberg_qty REAL,
+        leverage REAL,
+        margin_mode TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         filled_at TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (portfolio_id) REFERENCES paper_trading_portfolios(id) ON DELETE CASCADE
       )`,
 
@@ -396,6 +412,8 @@ class SQLiteService {
         price REAL NOT NULL,
         quantity REAL NOT NULL,
         fee REAL DEFAULT 0,
+        fee_rate REAL DEFAULT 0,
+        is_maker INTEGER DEFAULT 0,
         timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (portfolio_id) REFERENCES paper_trading_portfolios(id) ON DELETE CASCADE,
         FOREIGN KEY (order_id) REFERENCES paper_trading_orders(id) ON DELETE CASCADE
@@ -457,6 +475,9 @@ class SQLiteService {
         cached_at TEXT DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (symbol, category)
       )`,
+
+      // Migration: Add position_value column if it doesn't exist
+      `ALTER TABLE paper_trading_positions ADD COLUMN position_value REAL`,
 
       // Data source connections table
       `CREATE TABLE IF NOT EXISTS data_source_connections (
@@ -626,7 +647,25 @@ class SQLiteService {
     ];
 
     for (const sql of statements) {
-      await this.db.execute(sql);
+      try {
+        await this.db.execute(sql);
+      } catch (error: any) {
+        // Ignore "duplicate column" errors from ALTER TABLE
+        if (!error.message?.includes('duplicate column')) {
+          throw error;
+        }
+      }
+    }
+
+    // Update existing positions to populate position_value
+    try {
+      await this.db.execute(`
+        UPDATE paper_trading_positions
+        SET position_value = entry_price * quantity
+        WHERE position_value IS NULL
+      `);
+    } catch (error) {
+      console.error('[SQLite] Failed to populate position_value:', error);
     }
   }
 

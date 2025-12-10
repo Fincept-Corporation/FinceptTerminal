@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useWebSocket } from '../../../hooks/useWebSocket';
+import { isProviderAvailable } from '../../../services/websocket';
 
 interface Trade {
   price: number;
@@ -20,10 +21,13 @@ interface TradesFeedProps {
 export function TradesFeed({ symbol, provider, maxTrades = 50 }: TradesFeedProps) {
   const [trades, setTrades] = useState<Trade[]>([]);
 
-  const { message } = useWebSocket(
-    `${provider}.trades.${symbol}`,
+  // Only subscribe if WebSocket adapter exists for this provider
+  const hasWebSocket = isProviderAvailable(provider);
+
+  const { message, isLoading, error } = useWebSocket(
+    hasWebSocket ? `${provider}.trades.${symbol}` : null,
     null,
-    { autoSubscribe: true }
+    { autoSubscribe: hasWebSocket }
   );
 
   useEffect(() => {
@@ -59,23 +63,36 @@ export function TradesFeed({ symbol, provider, maxTrades = 50 }: TradesFeedProps
   }, [message, maxTrades]);
 
   return (
-    <div className="flex flex-col h-full bg-[#0d0d0d] text-white font-mono text-xs">
+    <div className="flex flex-col h-full bg-[#0d0d0d] text-white font-mono text-[11px]">
       {/* Header */}
-      <div className="px-3 py-2 border-b border-gray-800">
-        <h3 className="text-sm font-bold text-gray-400">RECENT TRADES</h3>
+      <div className="flex items-center justify-between px-2 py-1.5 border-b border-gray-800">
+        <h3 className="text-[10px] font-bold text-gray-400 tracking-wider">RECENT TRADES</h3>
+        <div className="flex items-center gap-1.5">
+          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+          <span className="text-[10px] text-gray-500">Live</span>
+        </div>
       </div>
 
       {/* Column Headers */}
-      <div className="flex justify-between px-3 py-1 bg-[#1a1a1a] text-gray-500 text-[10px] font-semibold">
-        <div className="w-1/3">TIME</div>
-        <div className="w-1/3 text-right">PRICE</div>
-        <div className="w-1/3 text-right">SIZE</div>
+      <div className="flex justify-between px-2 py-0.5 bg-[#1a1a1a] text-gray-500 text-[9px] font-bold uppercase tracking-wide">
+        <div className="w-1/3">Time</div>
+        <div className="w-1/3 text-right">Price</div>
+        <div className="w-1/3 text-right">Size</div>
       </div>
 
       {/* Trades List */}
       <div className="flex-1 overflow-y-auto">
-        {trades.length === 0 ? (
-          <div className="p-4 text-center text-gray-500">No trades yet...</div>
+        {isLoading && trades.length === 0 ? (
+          <div className="p-4 text-center text-gray-500">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mx-auto mb-2"></div>
+            Connecting...
+          </div>
+        ) : error && trades.length === 0 ? (
+          <div className="p-4 text-center text-red-500 text-xs">
+            Connection error
+          </div>
+        ) : trades.length === 0 ? (
+          <div className="p-4 text-center text-gray-500">Waiting for trades...</div>
         ) : (
           trades.map((trade, idx) => (
             <TradeRow key={`${trade.time}-${idx}`} trade={trade} />
@@ -99,12 +116,14 @@ function TradeRow({ trade }: TradeRowProps) {
   });
 
   return (
-    <div className="flex justify-between px-3 py-1 hover:bg-gray-800/50">
-      <div className="w-1/3 text-gray-400">{timeStr}</div>
-      <div className={`w-1/3 text-right font-semibold ${trade.side === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
-        {trade.price.toFixed(2)}
+    <div className="flex justify-between px-2 py-[2px] hover:bg-gray-800/70 cursor-pointer transition-colors">
+      <div className="w-1/3 text-gray-500 tabular-nums">{timeStr}</div>
+      <div className={`w-1/3 text-right font-bold tabular-nums ${trade.side === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
+        {trade.price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </div>
-      <div className="w-1/3 text-right text-gray-300">{trade.size.toFixed(4)}</div>
+      <div className="w-1/3 text-right text-gray-200 tabular-nums">
+        {trade.size.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+      </div>
     </div>
   );
 }

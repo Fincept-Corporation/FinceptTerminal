@@ -12,6 +12,7 @@ export type OrderType =
   | 'market'
   | 'limit'
   | 'stop'
+  | 'stop_market'
   | 'stop_limit'
   | 'trailing_stop'
   | 'iceberg'
@@ -107,6 +108,7 @@ export interface PaperTradingPosition {
   side: 'long' | 'short';
   entryPrice: number;
   quantity: number;
+  positionValue: number;
   currentPrice: number | null;
   unrealizedPnl: number | null;
   realizedPnl: number;
@@ -260,6 +262,7 @@ export interface DBPosition {
   side: 'long' | 'short';
   entry_price: number;
   quantity: number;
+  position_value: number;
   current_price: number | null;
   unrealized_pnl: number | null;
   realized_pnl: number;
