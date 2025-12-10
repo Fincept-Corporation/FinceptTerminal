@@ -44,7 +44,6 @@ fn greet(name: &str) -> String {
 // Cleanup workflow on app close (called from frontend)
 #[tauri::command]
 async fn cleanup_running_workflows() -> Result<(), String> {
-    println!("[Tauri] Cleaning up running workflows...");
     // This is just a marker command - the actual cleanup happens in the frontend
     // via workflowService.cleanupRunningWorkflows()
     Ok(())
@@ -60,21 +59,17 @@ fn spawn_mcp_server(
     args: Vec<String>,
     env: HashMap<String, String>,
 ) -> Result<SpawnResult, String> {
-    println!("[Tauri] Spawning MCP server: {} with command: {} {:?}", server_id, command, args);
-
     // Determine if we should use bundled Bun (for npx/bunx commands)
     let (fixed_command, fixed_args) = if command == "npx" || command == "bunx" {
         // Try to get bundled Bun path
         match utils::python::get_bundled_bun_path(&app) {
             Ok(bun_path) => {
-                println!("[Tauri] Using bundled Bun: {:?}", bun_path);
                 // Use 'bun x' which is equivalent to 'bunx' or 'npx'
                 let mut new_args = vec!["x".to_string()];
                 new_args.extend(args.clone());
                 (bun_path.to_string_lossy().to_string(), new_args)
             }
-            Err(e) => {
-                println!("[Tauri] Bundled Bun not found, falling back to system npx: {}", e);
+            Err(_) => {
                 // Fall back to system npx
                 #[cfg(target_os = "windows")]
                 let cmd = "npx.cmd".to_string();
@@ -120,7 +115,6 @@ fn spawn_mcp_server(
     match cmd.spawn() {
         Ok(mut child) => {
             let pid = child.id();
-            println!("[Tauri] MCP server spawned successfully with PID: {}", pid);
 
             // Extract stdin and stdout
             let stdin = child.stdin.take().ok_or("Failed to get stdin")?;
@@ -134,37 +128,32 @@ fn spawn_mcp_server(
             let server_id_clone = server_id.clone();
             thread::spawn(move || {
                 let reader = BufReader::new(stdout);
-                println!("[Tauri] Started stdout reader thread for {}", server_id_clone);
 
                 for line in reader.lines() {
                     match line {
                         Ok(content) => {
                             if !content.trim().is_empty() {
-                                println!("[Tauri] Received from {}: {}", server_id_clone, content);
                                 if response_tx.send(content).is_err() {
-                                    eprintln!("[Tauri] Response channel closed for {}", server_id_clone);
                                     break;
                                 }
                             }
                         }
-                        Err(e) => {
-                            eprintln!("[Tauri] Error reading stdout for {}: {}", server_id_clone, e);
+                        Err(_) => {
                             break;
                         }
                     }
                 }
-                println!("[Tauri] Stdout reader thread exiting for {}", server_id_clone);
             });
 
             // Spawn background thread to read stderr (for debugging)
             if let Some(stderr) = stderr {
-                let server_id_clone = server_id.clone();
+                let _server_id_clone = server_id.clone();
                 thread::spawn(move || {
                     let reader = BufReader::new(stderr);
                     for line in reader.lines() {
                         if let Ok(content) = line {
                             if !content.trim().is_empty() {
-                                eprintln!("[Tauri] STDERR from {}: {}", server_id_clone, content);
+                                eprintln!("[MCP] {}", content);
                             }
                         }
                     }
@@ -219,20 +208,15 @@ fn send_mcp_request(
                 .map_err(|e| format!("Failed to flush stdin: {}", e))?;
         }
 
-        println!("[Tauri] Request sent, waiting for response...");
-
         // Wait for response with timeout (30 seconds for initial package download)
         match mcp_process.response_rx.recv_timeout(Duration::from_secs(30)) {
             Ok(response) => {
-                println!("[Tauri] Received response: {}", response);
                 Ok(response)
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                eprintln!("[Tauri] Timeout waiting for response from {}", server_id);
                 Err("Timeout: No response from server within 30 seconds".to_string())
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                eprintln!("[Tauri] Response channel disconnected for {}", server_id);
                 Err("Server process has terminated unexpectedly".to_string())
             }
         }
@@ -248,8 +232,6 @@ fn send_mcp_notification(
     server_id: String,
     notification: String,
 ) -> Result<(), String> {
-    println!("[Tauri] Sending notification to server {}: {}", server_id, notification);
-
     let mut processes = state.processes.lock().unwrap();
 
     if let Some(mcp_process) = processes.get_mut(&server_id) {
@@ -290,14 +272,11 @@ fn kill_mcp_server(
     state: tauri::State<MCPState>,
     server_id: String,
 ) -> Result<(), String> {
-    println!("[Tauri] Killing MCP server: {}", server_id);
-
     let mut processes = state.processes.lock().unwrap();
 
     if let Some(mut mcp_process) = processes.remove(&server_id) {
         match mcp_process.child.kill() {
             Ok(_) => {
-                println!("[Tauri] Server {} killed successfully", server_id);
                 Ok(())
             }
             Err(e) => Err(format!("Failed to kill server: {}", e)),

@@ -124,11 +124,15 @@ export class PaperTradingBalance {
     leverage: number,
     marginMode: 'cross' | 'isolated'
   ): Promise<PaperTradingPosition> {
-    const existingPosition = await paperTradingDatabase.getPositionBySymbol(portfolioId, symbol, 'open');
+    // Determine position side from order side
+    const positionSide = side === 'buy' ? 'long' : 'short';
+
+    // Check for existing position WITH THE SAME SIDE (hedging mode)
+    const existingPosition = await paperTradingDatabase.getPositionBySymbolAndSide(portfolioId, symbol, positionSide, 'open');
 
     if (!existingPosition) {
       // Create new position
-      const positionSide = side === 'buy' ? 'long' : 'short';
+      console.log(`[PaperTradingBalance] Creating new ${positionSide} position for ${symbol}`);
       const positionId = `pos_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
       const liquidationPrice = this.calculateLiquidationPrice(
@@ -157,101 +161,35 @@ export class PaperTradingBalance {
 
       return position;
     } else {
-      // Update existing position
-      const positionSide = existingPosition.side;
-      const orderDirection = side === 'buy' ? 'long' : 'short';
+      // Position exists with same side - ADD to position (VWAP averaging)
+      console.log(`[PaperTradingBalance] Adding to existing ${positionSide} position for ${symbol}`);
+      console.log(`  Existing: ${existingPosition.quantity} @ ${existingPosition.entryPrice}`);
+      console.log(`  Adding: ${fillQuantity} @ ${fillPrice}`);
 
-      if (positionSide === orderDirection) {
-        // Adding to position - calculate new average entry price (VWAP)
-        const totalValue = existingPosition.entryPrice * existingPosition.quantity + fillPrice * fillQuantity;
-        const totalQuantity = existingPosition.quantity + fillQuantity;
-        const newEntryPrice = totalValue / totalQuantity;
+      // Calculate new average entry price (VWAP - Volume Weighted Average Price)
+      const totalValue = existingPosition.entryPrice * existingPosition.quantity + fillPrice * fillQuantity;
+      const totalQuantity = existingPosition.quantity + fillQuantity;
+      const newEntryPrice = totalValue / totalQuantity;
 
-        const liquidationPrice = this.calculateLiquidationPrice(
-          positionSide,
-          newEntryPrice,
-          leverage,
-          totalQuantity
-        );
+      console.log(`  New position: ${totalQuantity} @ ${newEntryPrice}`);
 
-        await paperTradingDatabase.updatePosition(existingPosition.id, {
-          quantity: totalQuantity,
-          entryPrice: newEntryPrice,
-          liquidationPrice,
-        });
-      } else {
-        // Reducing or closing position
-        const remainingQuantity = existingPosition.quantity - fillQuantity;
+      const liquidationPrice = this.calculateLiquidationPrice(
+        positionSide,
+        newEntryPrice,
+        leverage,
+        totalQuantity
+      );
 
-        if (remainingQuantity <= 0) {
-          // Position fully closed - calculate realized P&L
-          const realizedPnl = this.calculateRealizedPnL(
-            existingPosition.side,
-            existingPosition.entryPrice,
-            fillPrice,
-            existingPosition.quantity
-          );
+      await paperTradingDatabase.updatePosition(existingPosition.id, {
+        quantity: totalQuantity,
+        entryPrice: newEntryPrice,
+        liquidationPrice,
+      });
 
-          await paperTradingDatabase.updatePosition(existingPosition.id, {
-            quantity: 0,
-            realizedPnl: existingPosition.realizedPnl + realizedPnl,
-            status: 'closed',
-            closedAt: new Date().toISOString(),
-          });
+      const updatedPosition = await paperTradingDatabase.getPosition(existingPosition.id);
+      if (!updatedPosition) throw new Error('Failed to retrieve updated position');
 
-          // If overfilled, create new position in opposite direction
-          if (remainingQuantity < 0) {
-            const reversalQuantity = Math.abs(remainingQuantity);
-            const newPositionSide = positionSide === 'long' ? 'short' : 'long';
-            const newPositionId = `pos_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-            const liquidationPrice = this.calculateLiquidationPrice(
-              newPositionSide,
-              fillPrice,
-              leverage,
-              reversalQuantity
-            );
-
-            await paperTradingDatabase.createPosition({
-              id: newPositionId,
-              portfolioId,
-              symbol,
-              side: newPositionSide,
-              entryPrice: fillPrice,
-              quantity: reversalQuantity,
-              leverage,
-              marginMode,
-            });
-
-            await paperTradingDatabase.updatePosition(newPositionId, { liquidationPrice });
-          }
-        } else {
-          // Position partially closed
-          const closedQuantity = fillQuantity;
-          const realizedPnl = this.calculateRealizedPnL(
-            existingPosition.side,
-            existingPosition.entryPrice,
-            fillPrice,
-            closedQuantity
-          );
-
-          const liquidationPrice = this.calculateLiquidationPrice(
-            existingPosition.side,
-            existingPosition.entryPrice,
-            leverage,
-            remainingQuantity
-          );
-
-          await paperTradingDatabase.updatePosition(existingPosition.id, {
-            quantity: remainingQuantity,
-            realizedPnl: existingPosition.realizedPnl + realizedPnl,
-            liquidationPrice,
-          });
-        }
-      }
-
-      const updatedPosition = await paperTradingDatabase.getPositionBySymbol(portfolioId, symbol, 'open');
-      return updatedPosition!;
+      return updatedPosition;
     }
   }
 

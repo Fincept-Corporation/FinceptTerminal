@@ -22,12 +22,27 @@ export class OrderMatchingEngine {
   private balanceManager: PaperTradingBalance;
   private monitoringInterval: NodeJS.Timeout | null = null;
   private priceCache: Map<string, PriceSnapshot> = new Map();
+  private websocketPriceUpdates: Map<string, PriceSnapshot> = new Map();
 
   constructor(
     private config: PaperTradingConfig,
     private realExchangeAdapter: IExchangeAdapter
   ) {
     this.balanceManager = new PaperTradingBalance(config);
+  }
+
+  /**
+   * Update price from WebSocket feed (for monitoring orders)
+   */
+  updatePriceFromWebSocket(symbol: string, ticker: { bid?: number; ask?: number; last?: number }): void {
+    const snapshot: PriceSnapshot = {
+      symbol,
+      bid: ticker.bid || ticker.last || 0,
+      ask: ticker.ask || ticker.last || 0,
+      last: ticker.last || 0,
+      timestamp: Date.now(),
+    };
+    this.websocketPriceUpdates.set(symbol, snapshot);
   }
 
   // ============================================================================
@@ -649,6 +664,12 @@ export class OrderMatchingEngine {
    * Fetch price snapshot from real exchange
    */
   private async fetchPriceSnapshot(symbol: string): Promise<PriceSnapshot> {
+    // Prioritize WebSocket price updates for monitoring
+    const wsPrice = this.websocketPriceUpdates.get(symbol);
+    if (wsPrice && Date.now() - wsPrice.timestamp < 2000) {
+      return wsPrice;
+    }
+
     const cached = this.priceCache.get(symbol);
     const now = Date.now();
 

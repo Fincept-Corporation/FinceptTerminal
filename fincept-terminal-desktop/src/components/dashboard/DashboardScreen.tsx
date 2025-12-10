@@ -37,7 +37,6 @@ import MCPTab from '@/components/tabs/mcp';
 import FyersTab from '@/components/tabs/fyers';
 import SupportTicketTab from '@/components/tabs/SupportTicketTab';
 import PolygonEqTab from '@/components/tabs/PolygonEqTab';
-import KrakenTab from '@/components/tabs/KrakenTab';
 import { TradingTab } from '@/components/tabs/TradingTab';
 import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
 import BacktestingTab from '@/components/tabs/BacktestingTab';
@@ -473,7 +472,6 @@ function FinxeptTerminalContent() {
     { label: 'Live Markets', shortcut: 'F2', action: () => setActiveTab('markets') },
     { label: 'Stock Screener', shortcut: 'F8', action: () => setActiveTab('screener') },
     { label: 'Polygon Data', action: () => setActiveTab('polygon'), separator: true },
-    { label: 'Kraken Crypto', action: () => setActiveTab('kraken') },
     { label: 'Economics', action: () => setActiveTab('economics') },
     { label: 'DBnomics', action: () => setActiveTab('dbnomics') }
   ];
@@ -983,9 +981,6 @@ function FinxeptTerminalContent() {
           </TabsContent>
           <TabsContent value="maritime" className="h-full m-0 p-0">
             <MaritimeTab />
-          </TabsContent>
-          <TabsContent value="kraken" className="h-full m-0 p-0">
-            <KrakenTab />
           </TabsContent>
           <TabsContent value="trading" className="h-full m-0 p-0">
             <TradingTab />

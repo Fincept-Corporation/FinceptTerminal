@@ -91,13 +91,26 @@ export class KrakenAdapter extends BaseAdapter {
 
     // Add symbol array if provided
     if (symbol) {
-      subscribeMessage.params.symbol = [symbol];
+      // Normalize symbol for Kraken (BTC/USD -> XBT/USD, ensure uppercase)
+      const normalizedSymbol = this.normalizeSymbolForKraken(symbol);
+      subscribeMessage.params.symbol = [normalizedSymbol];
     }
 
     // Channel-specific parameters
     if (channel === 'book' || channel === 'level3') {
       // Depth: 10, 25, 100, 500, 1000 (default: 10)
-      subscribeMessage.params.depth = params?.depth ?? 10;
+      // Validate and round to nearest valid depth
+      let depth = params?.depth ?? 10;
+      const validDepths = [10, 25, 100, 500, 1000];
+
+      // Find the closest valid depth
+      if (!validDepths.includes(depth)) {
+        depth = validDepths.reduce((prev, curr) =>
+          Math.abs(curr - depth) < Math.abs(prev - depth) ? curr : prev
+        );
+      }
+
+      subscribeMessage.params.depth = depth;
     }
 
     if (channel === 'ohlc') {
@@ -212,7 +225,18 @@ export class KrakenAdapter extends BaseAdapter {
         case 'book':
         case 'level3':
           type = 'orderbook';
-          break;
+          // Transform Kraken order book format to standardized format
+          const normalizedData = this.normalizeOrderBookData(dataItem);
+          normalized.push({
+            provider: this.provider,
+            channel,
+            type,
+            symbol,
+            timestamp: message.timestamp ? new Date(message.timestamp).getTime() : Date.now(),
+            data: normalizedData,
+            raw: message
+          });
+          return; // Skip the default push below
         case 'instrument':
           type = 'status';
           break;
@@ -238,17 +262,62 @@ export class KrakenAdapter extends BaseAdapter {
   }
 
   /**
+   * Normalize Kraken order book data to standardized format
+   */
+  private normalizeOrderBookData(data: any): any {
+    const normalized: any = {
+      messageType: data.type || 'update'
+    };
+
+    // Transform bids array to standardized format
+    if (data.bids && Array.isArray(data.bids)) {
+      normalized.bids = data.bids.map((bid: any) => ({
+        price: parseFloat(bid.price || bid[0] || 0),
+        size: parseFloat(bid.qty || bid[1] || 0)
+      }));
+    }
+
+    // Transform asks array to standardized format
+    if (data.asks && Array.isArray(data.asks)) {
+      normalized.asks = data.asks.map((ask: any) => ({
+        price: parseFloat(ask.price || ask[0] || 0),
+        size: parseFloat(ask.qty || ask[1] || 0)
+      }));
+    }
+
+    // Copy over other fields
+    if (data.symbol) normalized.symbol = data.symbol;
+    if (data.checksum) normalized.checksum = data.checksum;
+
+    return normalized;
+  }
+
+  /**
    * Handle subscription response
    */
   private handleSubscriptionResponse(message: KrakenMessage): void {
     if (message.success) {
       this.log('Subscription successful:', message);
     } else if (message.error) {
-      console.error('[KrakenAdapter] Subscription error:', message.error);
-      this.addError({
-        timestamp: Date.now(),
-        error: message.error
-      });
+      // Log error but don't add to error queue for common subscription issues
+      const errorStr = String(message.error);
+
+      // Categorize errors
+      const isCommonError =
+        errorStr.includes('not Found') ||
+        errorStr.includes('invalid') ||
+        errorStr.includes('not supported');
+
+      // Only log verbose errors in development
+      if (isCommonError) {
+        console.debug('[KrakenAdapter] Subscription info:', message.error);
+      } else {
+        console.error('[KrakenAdapter] Subscription error:', message.error);
+        this.addError({
+          timestamp: Date.now(),
+          error: message.error
+        });
+      }
     }
   }
 
@@ -296,6 +365,22 @@ export class KrakenAdapter extends BaseAdapter {
    */
   private getNextReqId(): number {
     return this.reqIdCounter++;
+  }
+
+  /**
+   * Normalize symbol for Kraken WebSocket API
+   * Kraken WebSocket v2 uses different formats than v1
+   * Examples: BTC/USD, ETH/USD (not XBT/USD)
+   */
+  private normalizeSymbolForKraken(symbol: string): string {
+    // Ensure uppercase
+    let normalized = symbol.toUpperCase();
+
+    // Kraken WebSocket v2 actually uses BTC/USD format, not XBT/USD
+    // The v1 API used XBT, but v2 standardized on BTC
+    // No conversion needed for v2 API
+
+    return normalized;
   }
 }
 

@@ -134,8 +134,9 @@ export class EventBus {
     // Find all matching subscriptions
     const matchingSubscriptions = this.findMatchingSubscriptions(topic);
 
-    if (this.enableLogging && matchingSubscriptions.length > 0) {
-      console.log(`[EventBus] Publishing to ${matchingSubscriptions.length} subscribers: ${topic}`);
+    // Only log chart/candle related messages
+    if (this.enableLogging && matchingSubscriptions.length > 0 && (topic.includes('ohlc') || topic.includes('candle'))) {
+      console.log(`[EventBus] 📊 Publishing chart data to ${matchingSubscriptions.length} subscribers: ${topic}`);
     }
 
     // Deliver message to all matching subscribers

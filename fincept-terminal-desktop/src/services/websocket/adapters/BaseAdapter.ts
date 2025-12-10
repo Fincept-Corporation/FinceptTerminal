@@ -105,6 +105,8 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
    * Connect to WebSocket
    */
   async connect(config: ProviderConfig): Promise<void> {
+    console.log(`[${this.provider}] 🔌 Connecting to WebSocket...`);
+
     if (!this.circuitBreaker.isAllowed()) {
       throw new Error(`Circuit breaker is open for ${this.provider}`);
     }
@@ -114,12 +116,17 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
 
     try {
       const url = this.getWebSocketUrl(config);
+      console.log(`[${this.provider}] WebSocket URL: ${url}`);
+
       this.ws = new WebSocket(url);
+      console.log(`[${this.provider}] WebSocket object created, readyState: ${this.ws.readyState}`);
 
       this.setupWebSocketHandlers();
 
       // Wait for connection
+      console.log(`[${this.provider}] Waiting for WebSocket to open...`);
       await this.waitForConnection();
+      console.log(`[${this.provider}] ✓ WebSocket opened! readyState: ${this.ws?.readyState}`);
 
       this.reconnectionManager.recordSuccess();
       this.circuitBreaker.recordSuccess();
@@ -128,12 +135,16 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
 
       // Start heartbeat monitoring
       this.heartbeatMonitor.start(() => this.handleStaleConnection());
+      console.log(`[${this.provider}] Heartbeat monitoring started`);
 
       // Perform provider-specific initialization
       await this.onConnected();
 
+      console.log(`[${this.provider}] ✓ Connection complete!`);
       this.log('Connected successfully');
     } catch (error) {
+      console.error(`[${this.provider}] ✗ Connection failed:`, error);
+
       this.circuitBreaker.recordFailure();
       this.reconnectionManager.recordAttempt();
 
@@ -148,6 +159,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
 
       // Attempt reconnection if policy allows
       if (this.reconnectionManager.shouldAttempt()) {
+        console.log(`[${this.provider}] Will retry connection...`);
         await this.scheduleReconnection();
       } else {
         throw error;
@@ -185,6 +197,17 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
    * Subscribe to a topic
    */
   async subscribe(topic: string, params?: Record<string, any>): Promise<void> {
+    console.log(`[${this.provider}] Subscribe requested: ${topic}`);
+    console.log(`[${this.provider}] - WebSocket exists: ${!!this.ws}`);
+    console.log(`[${this.provider}] - readyState: ${this.ws?.readyState} (OPEN=${WebSocket.OPEN})`);
+    console.log(`[${this.provider}] - Status: ${this._status}`);
+
+    // Check WebSocket is actually open FIRST (most accurate check)
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error(`Cannot subscribe: WebSocket is not open (readyState: ${this.ws?.readyState || 'null'})`);
+    }
+
+    // Then check connection status
     if (this._status !== ConnectionStatus.CONNECTED) {
       throw new Error(`Cannot subscribe: connection status is ${this._status}`);
     }
@@ -458,12 +481,18 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
    * Handle stale connection (heartbeat timeout)
    */
   protected async handleStaleConnection(): Promise<void> {
+    // Prevent simultaneous reconnection attempts
+    if (this._status === ConnectionStatus.RECONNECTING || this._status === ConnectionStatus.CONNECTING) {
+      this.log('Already reconnecting, skipping stale connection handler');
+      return;
+    }
+
     this.log('Connection appears stale, forcing reconnect');
 
     await this.disconnect();
 
     if (this.config && this.reconnectionManager.shouldAttempt()) {
-      await this.connect(this.config);
+      await this.scheduleReconnection();
     }
   }
 
