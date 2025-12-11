@@ -1,5 +1,5 @@
 // File: src/components/tabs/trading/OrderForm.tsx
-// Feature-aware order placement form - adapts to broker capabilities
+// Bloomberg Terminal-styled order placement form
 
 import React, { useState } from 'react';
 import { useBrokerContext } from '../../../contexts/BrokerContext';
@@ -11,6 +11,23 @@ interface OrderFormProps {
   onPlaceOrder: (order: OrderRequest) => Promise<void>;
   isLoading?: boolean;
 }
+
+// Bloomberg Professional Color Palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
+};
 
 export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: OrderFormProps) {
   const { activeBrokerMetadata, tradingMode } = useBrokerContext();
@@ -77,90 +94,207 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
     : '0.00';
 
   return (
-    <div className="bg-[#0d0d0d] border-t border-gray-800 p-4">
-      <h3 className="text-sm font-bold text-gray-400 mb-3">PLACE ORDER</h3>
-
-      <form onSubmit={handleSubmit} className="space-y-3">
+    <div style={{
+      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
+      fontSize: '11px'
+    }}>
+      <form onSubmit={handleSubmit}>
         {/* Buy/Sell Toggle */}
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
           <button
             type="button"
             onClick={() => setSide('buy')}
-            className={`flex-1 py-2 rounded font-semibold text-sm transition-colors ${
-              side === 'buy'
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
+            style={{
+              flex: 1,
+              padding: '8px',
+              backgroundColor: side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.HEADER_BG,
+              border: `1px solid ${side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.BORDER}`,
+              color: side === 'buy' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: '10px',
+              letterSpacing: '0.5px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (side !== 'buy') {
+                e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (side !== 'buy') {
+                e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+              }
+            }}
           >
             BUY
           </button>
           <button
             type="button"
             onClick={() => setSide('sell')}
-            className={`flex-1 py-2 rounded font-semibold text-sm transition-colors ${
-              side === 'sell'
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            }`}
+            style={{
+              flex: 1,
+              padding: '8px',
+              backgroundColor: side === 'sell' ? BLOOMBERG.RED : BLOOMBERG.HEADER_BG,
+              border: `1px solid ${side === 'sell' ? BLOOMBERG.RED : BLOOMBERG.BORDER}`,
+              color: side === 'sell' ? BLOOMBERG.WHITE : BLOOMBERG.GRAY,
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: '10px',
+              letterSpacing: '0.5px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (side !== 'sell') {
+                e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (side !== 'sell') {
+                e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+              }
+            }}
           >
             SELL
           </button>
         </div>
 
-        {/* Order Type - Only show supported types */}
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Order Type</label>
+        {/* Order Type */}
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{
+            display: 'block',
+            color: BLOOMBERG.GRAY,
+            fontSize: '9px',
+            marginBottom: '4px',
+            fontWeight: 600,
+            letterSpacing: '0.5px'
+          }}>
+            ORDER TYPE
+          </label>
           <select
             value={orderType}
             onChange={(e) => setOrderType(e.target.value as OrderType)}
-            className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              backgroundColor: BLOOMBERG.HEADER_BG,
+              color: BLOOMBERG.WHITE,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              fontSize: '10px',
+              fontWeight: 600,
+              outline: 'none',
+              cursor: 'pointer'
+            }}
           >
-            {supportsMarket && <option value="market">Market</option>}
-            {supportsLimit && <option value="limit">Limit</option>}
-            {supportsStop && <option value="stop_market">Stop Market</option>}
-            {supportsStopLimit && <option value="stop_limit">Stop Limit</option>}
+            {supportsMarket && <option value="market">MARKET</option>}
+            {supportsLimit && <option value="limit">LIMIT</option>}
+            {supportsStop && <option value="stop_market">STOP MARKET</option>}
+            {supportsStopLimit && <option value="stop_limit">STOP LIMIT</option>}
           </select>
         </div>
 
         {/* Quantity */}
-        <div>
-          <label className="block text-xs text-gray-500 mb-1">Quantity</label>
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{
+            display: 'block',
+            color: BLOOMBERG.GRAY,
+            fontSize: '9px',
+            marginBottom: '4px',
+            fontWeight: 600,
+            letterSpacing: '0.5px'
+          }}>
+            QUANTITY
+          </label>
           <input
             type="number"
             step="0.0001"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            placeholder="0.00"
-            className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            placeholder="0.0000"
+            style={{
+              width: '100%',
+              padding: '6px 8px',
+              backgroundColor: BLOOMBERG.HEADER_BG,
+              color: BLOOMBERG.YELLOW,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              fontSize: '11px',
+              fontWeight: 600,
+              outline: 'none',
+              fontFamily: 'monospace'
+            }}
+            onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
+            onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
           />
         </div>
 
         {/* Limit Price (for limit and stop_limit) */}
         {(orderType === 'limit' || orderType === 'stop_limit') && (
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Limit Price</label>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{
+              display: 'block',
+              color: BLOOMBERG.GRAY,
+              fontSize: '9px',
+              marginBottom: '4px',
+              fontWeight: 600,
+              letterSpacing: '0.5px'
+            }}>
+              LIMIT PRICE
+            </label>
             <input
               type="number"
               step="0.01"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               placeholder={currentPrice?.toFixed(2) || '0.00'}
-              className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                backgroundColor: BLOOMBERG.HEADER_BG,
+                color: BLOOMBERG.CYAN,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                fontSize: '11px',
+                fontWeight: 600,
+                outline: 'none',
+                fontFamily: 'monospace'
+              }}
+              onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
+              onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
             />
           </div>
         )}
 
         {/* Stop Price (for stop_market and stop_limit) */}
         {(orderType === 'stop_market' || orderType === 'stop_limit') && (
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">Stop Price</label>
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{
+              display: 'block',
+              color: BLOOMBERG.GRAY,
+              fontSize: '9px',
+              marginBottom: '4px',
+              fontWeight: 600,
+              letterSpacing: '0.5px'
+            }}>
+              STOP PRICE
+            </label>
             <input
               type="number"
               step="0.01"
               value={stopPrice}
               onChange={(e) => setStopPrice(e.target.value)}
               placeholder={currentPrice?.toFixed(2) || '0.00'}
-              className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              style={{
+                width: '100%',
+                padding: '6px 8px',
+                backgroundColor: BLOOMBERG.HEADER_BG,
+                color: BLOOMBERG.CYAN,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                fontSize: '11px',
+                fontWeight: 600,
+                outline: 'none',
+                fontFamily: 'monospace'
+              }}
+              onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
+              onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
             />
           </div>
         )}
@@ -169,52 +303,125 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
         <button
           type="button"
           onClick={() => setEnableAdvanced(!enableAdvanced)}
-          className="text-xs text-orange-500 hover:text-orange-400 transition-colors"
+          style={{
+            marginBottom: '12px',
+            color: BLOOMBERG.ORANGE,
+            backgroundColor: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '9px',
+            fontWeight: 600,
+            letterSpacing: '0.5px',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.color = BLOOMBERG.YELLOW}
+          onMouseLeave={(e) => e.currentTarget.style.color = BLOOMBERG.ORANGE}
         >
-          {enableAdvanced ? '− ' : '+ '}Advanced (SL/TP)
+          {enableAdvanced ? '▼' : '▶'} ADVANCED (SL/TP)
         </button>
 
         {/* Advanced Settings: Stop Loss & Take Profit */}
         {enableAdvanced && (
-          <div className="space-y-3 border border-gray-700 rounded p-3 bg-gray-900/50">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Take Profit Price</label>
+          <div style={{
+            marginBottom: '12px',
+            padding: '10px',
+            backgroundColor: BLOOMBERG.PANEL_BG,
+            border: `1px solid ${BLOOMBERG.BORDER}`
+          }}>
+            <div style={{ marginBottom: '10px' }}>
+              <label style={{
+                display: 'block',
+                color: BLOOMBERG.GREEN,
+                fontSize: '9px',
+                marginBottom: '4px',
+                fontWeight: 600,
+                letterSpacing: '0.5px'
+              }}>
+                TAKE PROFIT
+              </label>
               <input
                 type="number"
                 step="0.01"
                 value={takeProfitPrice}
                 onChange={(e) => setTakeProfitPrice(e.target.value)}
                 placeholder="Optional"
-                className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: BLOOMBERG.HEADER_BG,
+                  color: BLOOMBERG.GREEN,
+                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  outline: 'none',
+                  fontFamily: 'monospace'
+                }}
+                onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.GREEN}
+                onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
               />
             </div>
 
             <div>
-              <label className="block text-xs text-gray-500 mb-1">Stop Loss Price</label>
+              <label style={{
+                display: 'block',
+                color: BLOOMBERG.RED,
+                fontSize: '9px',
+                marginBottom: '4px',
+                fontWeight: 600,
+                letterSpacing: '0.5px'
+              }}>
+                STOP LOSS
+              </label>
               <input
                 type="number"
                 step="0.01"
                 value={stopLossPrice}
                 onChange={(e) => setStopLossPrice(e.target.value)}
                 placeholder="Optional"
-                className="w-full bg-gray-800 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  backgroundColor: BLOOMBERG.HEADER_BG,
+                  color: BLOOMBERG.RED,
+                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  outline: 'none',
+                  fontFamily: 'monospace'
+                }}
+                onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.RED}
+                onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
               />
             </div>
 
             {currentPrice && (takeProfitPrice || stopLossPrice) && (
-              <div className="text-xs space-y-1">
+              <div style={{
+                marginTop: '8px',
+                paddingTop: '8px',
+                borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+                fontSize: '9px'
+              }}>
                 {takeProfitPrice && (
-                  <div className="flex justify-between text-green-400">
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    color: BLOOMBERG.GREEN,
+                    marginBottom: '4px'
+                  }}>
                     <span>TP R/R:</span>
-                    <span>
+                    <span style={{ fontWeight: 700 }}>
                       {((Math.abs(parseFloat(takeProfitPrice) - currentPrice) / currentPrice) * 100).toFixed(2)}%
                     </span>
                   </div>
                 )}
                 {stopLossPrice && (
-                  <div className="flex justify-between text-red-400">
-                    <span>SL Risk:</span>
-                    <span>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    color: BLOOMBERG.RED
+                  }}>
+                    <span>SL RISK:</span>
+                    <span style={{ fontWeight: 700 }}>
                       {((Math.abs(currentPrice - parseFloat(stopLossPrice)) / currentPrice) * 100).toFixed(2)}%
                     </span>
                   </div>
@@ -226,23 +433,58 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
 
         {/* Estimated Cost */}
         {currentPrice && (
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">Estimated {side === 'buy' ? 'Cost' : 'Proceeds'}:</span>
-            <span className="text-white font-mono">${estimatedCost}</span>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginBottom: '12px',
+            padding: '8px',
+            backgroundColor: BLOOMBERG.HEADER_BG,
+            border: `1px solid ${BLOOMBERG.BORDER}`,
+            fontSize: '9px'
+          }}>
+            <span style={{ color: BLOOMBERG.GRAY, fontWeight: 600 }}>
+              EST. {side === 'buy' ? 'COST' : 'PROCEEDS'}:
+            </span>
+            <span style={{
+              color: BLOOMBERG.YELLOW,
+              fontWeight: 700,
+              fontFamily: 'monospace',
+              fontSize: '10px'
+            }}>
+              ${estimatedCost}
+            </span>
           </div>
         )}
 
         {/* Error Message */}
         {error && (
-          <div className="bg-red-900/20 border border-red-600 rounded p-2 text-xs text-red-400">
-            {error}
+          <div style={{
+            marginBottom: '12px',
+            padding: '8px',
+            backgroundColor: `${BLOOMBERG.RED}20`,
+            border: `1px solid ${BLOOMBERG.RED}`,
+            color: BLOOMBERG.RED,
+            fontSize: '9px',
+            fontWeight: 600
+          }}>
+            ⚠ {error}
           </div>
         )}
 
         {/* Trading Mode Warning */}
         {tradingMode === 'live' && (
-          <div className="bg-red-900/20 border border-red-600 rounded p-2 text-xs text-red-400 font-bold">
-            ⚠️ LIVE TRADING MODE - Real money will be used!
+          <div style={{
+            marginBottom: '12px',
+            padding: '8px',
+            backgroundColor: `${BLOOMBERG.RED}20`,
+            border: `2px solid ${BLOOMBERG.RED}`,
+            color: BLOOMBERG.RED,
+            fontSize: '9px',
+            fontWeight: 700,
+            textAlign: 'center',
+            letterSpacing: '0.5px'
+          }}>
+            ⚠️ LIVE TRADING MODE - REAL MONEY!
           </div>
         )}
 
@@ -250,16 +492,51 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
         <button
           type="submit"
           disabled={isLoading}
-          className={`w-full py-2 rounded font-semibold text-sm transition-colors ${
-            tradingMode === 'live'
-              ? 'bg-red-600 hover:bg-red-700 text-white border-2 border-red-400'
+          style={{
+            width: '100%',
+            padding: '10px',
+            backgroundColor: tradingMode === 'live'
+              ? BLOOMBERG.RED
               : side === 'buy'
-              ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-red-600 hover:bg-red-700 text-white'
-          } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              ? BLOOMBERG.GREEN
+              : BLOOMBERG.RED,
+            border: tradingMode === 'live'
+              ? `2px solid ${BLOOMBERG.YELLOW}`
+              : `1px solid ${side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+            color: tradingMode === 'live' || side === 'sell' ? BLOOMBERG.WHITE : BLOOMBERG.DARK_BG,
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            fontWeight: 700,
+            fontSize: '11px',
+            letterSpacing: '1px',
+            transition: 'all 0.2s',
+            opacity: isLoading ? 0.6 : 1,
+            boxShadow: tradingMode === 'live' ? `0 0 10px ${BLOOMBERG.RED}40` : 'none'
+          }}
+          onMouseEnter={(e) => {
+            if (!isLoading) {
+              if (tradingMode === 'live') {
+                e.currentTarget.style.backgroundColor = '#FF1111';
+              } else if (side === 'buy') {
+                e.currentTarget.style.backgroundColor = '#00FF88';
+              } else {
+                e.currentTarget.style.backgroundColor = '#FF5555';
+              }
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isLoading) {
+              if (tradingMode === 'live') {
+                e.currentTarget.style.backgroundColor = BLOOMBERG.RED;
+              } else if (side === 'buy') {
+                e.currentTarget.style.backgroundColor = BLOOMBERG.GREEN;
+              } else {
+                e.currentTarget.style.backgroundColor = BLOOMBERG.RED;
+              }
+            }
+          }}
         >
           {isLoading
-            ? 'Placing Order...'
+            ? 'PLACING ORDER...'
             : tradingMode === 'live'
             ? `🔴 LIVE ${side.toUpperCase()} ${symbol}`
             : `${side.toUpperCase()} ${symbol}`}
@@ -267,7 +544,13 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
 
         {/* Paper Trading Info */}
         {tradingMode === 'paper' && (
-          <div className="text-xs text-gray-500 text-center italic">
+          <div style={{
+            marginTop: '8px',
+            textAlign: 'center',
+            color: BLOOMBERG.GRAY,
+            fontSize: '8px',
+            fontStyle: 'italic'
+          }}>
             Paper trading - No real money used
           </div>
         )}

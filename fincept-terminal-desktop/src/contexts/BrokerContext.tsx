@@ -34,6 +34,10 @@ interface BrokerContextType {
   tradingMode: 'live' | 'paper';
   setTradingMode: (mode: 'live' | 'paper') => void;
 
+  // Paper portfolio mode
+  paperPortfolioMode: 'separate' | 'unified';
+  setPaperPortfolioMode: (mode: 'separate' | 'unified') => void;
+
   // Broker adapters
   realAdapter: IExchangeAdapter | null;
   paperAdapter: PaperTradingAdapter | null;
@@ -64,6 +68,9 @@ interface BrokerProviderProps {
 export function BrokerProvider({ children }: BrokerProviderProps) {
   const [activeBroker, setActiveBrokerState] = useState<string>('kraken');
   const [tradingMode, setTradingModeState] = useState<'live' | 'paper'>('paper');
+  const [paperPortfolioMode, setPaperPortfolioModeState] = useState<'separate' | 'unified'>(() => {
+    return (localStorage.getItem('paper_portfolio_mode') as 'separate' | 'unified') || 'separate';
+  });
   const [providerConfigs, setProviderConfigs] = useState<Map<string, ProviderConfig>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -198,10 +205,12 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         setRealAdapter(newRealAdapter);
 
         // Create paper adapter (wrapping real adapter)
-        // Use a stable portfolio ID based on broker name (reuse existing portfolio instead of creating new ones)
+        // Portfolio ID depends on mode: separate per broker or unified global
         console.log(`[BrokerContext] Creating ${activeBroker} paper adapter...`);
-        const portfolioId = `paper_${activeBroker}`; // Stable ID - no timestamp
-        console.log(`[BrokerContext] Portfolio ID: ${portfolioId}`);
+        const portfolioId = paperPortfolioMode === 'unified'
+          ? 'paper_global'
+          : `paper_${activeBroker}`;
+        console.log(`[BrokerContext] Portfolio ID: ${portfolioId} (mode: ${paperPortfolioMode})`);
 
         let newPaperAdapter: PaperTradingAdapter;
 
@@ -209,7 +218,9 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
           newPaperAdapter = createPaperTradingAdapter(
             {
               portfolioId,
-              portfolioName: `${activeBroker.toUpperCase()} Paper Trading`,
+              portfolioName: paperPortfolioMode === 'unified'
+                ? 'Global Paper Trading Portfolio'
+                : `${activeBroker.toUpperCase()} Paper Trading`,
               provider: activeBroker,
               assetClass: 'crypto',
               initialBalance: 100000,
@@ -306,7 +317,7 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         }
       }
     };
-  }, [isLoading, activeBroker]); // Depend on activeBroker to handle broker switching
+  }, [isLoading, activeBroker, paperPortfolioMode]); // Depend on activeBroker and portfolio mode
 
   // Set active broker
   const setActiveBroker = useCallback(async (brokerId: string) => {
@@ -330,6 +341,15 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
     console.log(`[BrokerContext] Switching to ${mode} mode`);
     setTradingModeState(mode);
     localStorage.setItem('trading_mode', mode);
+  }, []);
+
+  // Set paper portfolio mode
+  const setPaperPortfolioMode = useCallback((mode: 'separate' | 'unified') => {
+    console.log(`[BrokerContext] Switching paper portfolio mode to: ${mode}`);
+    setPaperPortfolioModeState(mode);
+    localStorage.setItem('paper_portfolio_mode', mode);
+    // Reset initialization to recreate adapters with new portfolio ID
+    isInitializedRef.current = false;
   }, []);
 
   // Update provider config
@@ -366,6 +386,8 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         availableBrokers,
         tradingMode,
         setTradingMode,
+        paperPortfolioMode,
+        setPaperPortfolioMode,
         realAdapter,
         paperAdapter,
         activeAdapter,
