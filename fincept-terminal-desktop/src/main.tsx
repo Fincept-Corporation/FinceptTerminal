@@ -11,6 +11,24 @@ import './i18n/config' // Initialize i18n
 import './App.css' // Make sure this line exists
 import './tauri-cors-config' // Initialize Tauri CORS plugin
 
+// Initialize backtesting providers
+import { backtestingRegistry } from './services/backtesting/BacktestingProviderRegistry'
+import { LeanAdapter } from './services/backtesting/adapters/lean'
+import { VectorBTAdapter } from './services/backtesting/adapters/vectorbt/VectorBTAdapter'
+
+// Register default backtesting providers
+try {
+  const leanAdapter = new LeanAdapter();
+  backtestingRegistry.registerProvider(leanAdapter);
+
+  const vectorbtAdapter = new VectorBTAdapter();
+  backtestingRegistry.registerProvider(vectorbtAdapter);
+
+  console.log('[App] Registered backtesting providers:', backtestingRegistry.listProviders());
+} catch (error) {
+  console.error('[App] Failed to register backtesting providers:', error);
+}
+
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

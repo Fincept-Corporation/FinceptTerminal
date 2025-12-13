@@ -164,11 +164,17 @@ export class LeanAdapter extends BaseBacktestingAdapter {
     const backtestId = this.generateId();
 
     try {
+      console.log('[LeanAdapter] Starting backtest:', backtestId);
+
       // 1. Translate strategy to Lean Python code
+      console.log('[LeanAdapter] Translating strategy...');
       const pythonCode = this.strategyTranslator.translate(request.strategy);
+      console.log('[LeanAdapter] Strategy code length:', pythonCode.length);
 
       // 2. Create Lean project
+      console.log('[LeanAdapter] Creating Lean project...');
       const projectPath = await this.createLeanProject(backtestId, pythonCode, request);
+      console.log('[LeanAdapter] Project created at:', projectPath);
 
       // 3. Build CLI arguments
       const cliArgs = {
@@ -181,8 +187,12 @@ export class LeanAdapter extends BaseBacktestingAdapter {
         resultsFolder: this.joinPath(this.leanConfig!.resultsPath, backtestId),
       };
 
+      console.log('[LeanAdapter] CLI args:', cliArgs);
+
       // 4. Execute backtest via CLI
+      console.log('[LeanAdapter] Executing Lean CLI...');
       const execution = await this.cliExecutor!.runBacktest(projectPath, cliArgs);
+      console.log('[LeanAdapter] Execution started, process ID:', execution.processId);
 
       // Track as active
       this.activeBacktests.set(backtestId, {
@@ -193,19 +203,47 @@ export class LeanAdapter extends BaseBacktestingAdapter {
       });
 
       // 5. Wait for completion (or poll in production)
+      console.log('[LeanAdapter] Waiting for completion...');
       const resultJson = await this.waitForBacktestCompletion(backtestId, execution.processId);
+      console.log('[LeanAdapter] Backtest completed');
 
       // 6. Parse results
       const logs = this.cliExecutor!.getProcessStatus(backtestId)?.logs || [];
       const result = this.resultsParser.parseBacktestResult(backtestId, resultJson, logs);
+
+      console.log('[LeanAdapter] Results parsed successfully');
 
       // Mark as completed
       this.activeBacktests.delete(backtestId);
 
       return result;
     } catch (error) {
+      console.error('[LeanAdapter] Backtest error:', error);
       this.activeBacktests.delete(backtestId);
-      throw new Error(`Backtest failed: ${error}`);
+
+      // Return failed result instead of throwing
+      return {
+        id: backtestId,
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+        performance: {
+          totalReturn: 0,
+          annualizedReturn: 0,
+          sharpeRatio: 0,
+          maxDrawdown: 0,
+          winRate: 0,
+          totalTrades: 0,
+        },
+        statistics: {
+          initialCapital: request.initialCapital,
+          finalCapital: request.initialCapital,
+          totalFees: 0,
+          totalTrades: 0,
+        },
+        trades: [],
+        equity: [],
+        logs: [`Error: ${error instanceof Error ? error.message : String(error)}`],
+      };
     }
   }
 
@@ -432,9 +470,20 @@ export class LeanAdapter extends BaseBacktestingAdapter {
 
   private async checkLeanCliExists(cliPath: string): Promise<boolean> {
     try {
-      const result = await invoke<boolean>('check_file_exists', { path: cliPath });
-      return result;
-    } catch {
+      // Try to execute 'lean --version' to check if it's available
+      const result = await invoke<{
+        success: boolean;
+        stdout: string;
+        stderr: string;
+      }>('execute_command', {
+        command: `${cliPath} --version`,
+      });
+
+      console.log('[Lean] CLI check result:', result);
+
+      return result.success;
+    } catch (error) {
+      console.error('[Lean] CLI check failed:', error);
       return false;
     }
   }
@@ -468,8 +517,22 @@ export class LeanAdapter extends BaseBacktestingAdapter {
       content: pythonCode,
     });
 
-    // Write config.json if needed
-    // (Lean config would go here)
+    // Write lean.json config file (required by Lean CLI)
+    const leanConfigPath = this.joinPath(projectPath, 'lean.json');
+    const leanConfigContent = {
+      "algorithm-language": "Python",
+      "parameters": {},
+      "description": projectId,
+      "cloud-id": 0,
+      "local-id": 0
+    };
+
+    await invoke('write_file', {
+      path: leanConfigPath,
+      content: JSON.stringify(leanConfigContent, null, 2),
+    });
+
+    console.log('[LeanAdapter] Created lean.json config file');
 
     return projectPath;
   }
