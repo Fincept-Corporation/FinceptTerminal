@@ -190,23 +190,17 @@ class VectorBTProvider(BacktestingProviderBase):
                 consecutive_losses=0,
             )
 
-            # Equity curve
-            equity_curve = portfolio.value()
-            equity = [
-                EquityPoint(
-                    date=str(date),
-                    equity=float(value),
-                    returns=0,
-                    drawdown=0,
-                )
-                for date, value in equity_curve.items()
-            ]
+            # Parse trades from portfolio
+            trades = self._parse_trades(portfolio)
+
+            # Equity curve with proper returns and drawdown
+            equity = self._build_equity_curve(portfolio, initial_capital)
 
             result = BacktestResult(
                 id=backtest_id,
                 status='completed',
                 performance=performance,
-                trades=[],  # Would parse from portfolio.trades
+                trades=trades,
                 equity=equity,
                 statistics=statistics,
                 logs=logs,
@@ -235,14 +229,42 @@ class VectorBTProvider(BacktestingProviderBase):
         """Get historical data using yfinance"""
         try:
             import yfinance as yf
+            import pandas as pd
 
             symbols = request.get('symbols', [])
             start_date = request.get('startDate')
             end_date = request.get('endDate')
+            timeframe = request.get('timeframe', 'daily')
 
+            # Download data
             data = yf.download(symbols, start=start_date, end=end_date)
 
-            return []  # Would convert to HistoricalData format
+            if data.empty:
+                return []
+
+            # Convert to HistoricalData format
+            result = []
+            for symbol in symbols:
+                symbol_data = data if len(symbols) == 1 else data[symbol]
+
+                bars = []
+                for date, row in symbol_data.iterrows():
+                    bars.append({
+                        'date': date.isoformat(),
+                        'open': float(row['Open']) if 'Open' in row else 0,
+                        'high': float(row['High']) if 'High' in row else 0,
+                        'low': float(row['Low']) if 'Low' in row else 0,
+                        'close': float(row['Close']) if 'Close' in row else 0,
+                        'volume': int(row['Volume']) if 'Volume' in row else 0,
+                    })
+
+                result.append({
+                    'symbol': symbol,
+                    'timeframe': timeframe,
+                    'data': bars
+                })
+
+            return result
 
         except Exception as e:
             self._error('Data fetch failed', e)
@@ -281,6 +303,65 @@ class VectorBTProvider(BacktestingProviderBase):
             losing_days=0, average_daily_return=0, best_day=0, worst_day=0,
             consecutive_wins=0, consecutive_losses=0
         )
+
+    def _parse_trades(self, portfolio) -> list:
+        """Parse trades from VectorBT portfolio"""
+        trades = []
+        try:
+            if hasattr(portfolio, 'trades') and hasattr(portfolio.trades, 'records'):
+                trade_records = portfolio.trades.records
+
+                for idx, trade in enumerate(trade_records):
+                    entry_idx = trade['entry_idx'] if hasattr(trade, '__getitem__') else getattr(trade, 'entry_idx', 0)
+                    exit_idx = trade['exit_idx'] if hasattr(trade, '__getitem__') else getattr(trade, 'exit_idx', 0)
+                    pnl = trade['pnl'] if hasattr(trade, '__getitem__') else getattr(trade, 'pnl', 0)
+
+                    trades.append(Trade(
+                        id=f'trade_{idx}',
+                        symbol=str(getattr(trade, 'col', 'UNKNOWN')),
+                        entry_date=str(entry_idx),
+                        side='long' if pnl >= 0 else 'short',
+                        quantity=float(getattr(trade, 'size', 0)),
+                        entry_price=float(getattr(trade, 'entry_price', 0)),
+                        commission=float(getattr(trade, 'fees', 0)),
+                        slippage=0,
+                        exit_date=str(exit_idx),
+                        exit_price=float(getattr(trade, 'exit_price', 0)),
+                        pnl=float(pnl),
+                        pnl_percent=float(getattr(trade, 'return', 0)),
+                        holding_period=int(exit_idx - entry_idx) if exit_idx > entry_idx else 0,
+                        exit_reason='signal'
+                    ))
+        except Exception as e:
+            self._error('Failed to parse trades', e)
+
+        return trades
+
+    def _build_equity_curve(self, portfolio, initial_capital: float) -> list:
+        """Build equity curve with returns and drawdown"""
+        equity = []
+        try:
+            value_series = portfolio.value()
+            peak = initial_capital
+
+            for date, value in value_series.items():
+                # Calculate returns
+                returns = (value - initial_capital) / initial_capital if initial_capital > 0 else 0
+
+                # Calculate drawdown
+                peak = max(peak, value)
+                drawdown = (value - peak) / peak if peak > 0 else 0
+
+                equity.append(EquityPoint(
+                    date=str(date),
+                    equity=float(value),
+                    returns=float(returns),
+                    drawdown=float(drawdown),
+                ))
+        except Exception as e:
+            self._error('Failed to build equity curve', e)
+
+        return equity
 
 
 # CLI Entry Point

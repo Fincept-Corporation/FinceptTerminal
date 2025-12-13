@@ -54,14 +54,14 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
 
   // New provider form
   const [newProviderForm, setNewProviderForm] = useState({
-    name: 'lean',
+    name: 'QuantConnect Lean',
     adapter_type: 'LeanAdapter',
     config: JSON.stringify(
       {
-        leanCliPath: 'lean',
-        projectsPath: './lean_projects',
-        dataPath: './lean_data',
-        resultsPath: './lean_results',
+        leanCliPath: 'C:/Users/Tilak/AppData/Roaming/Python/Python313/Scripts/lean.exe',
+        projectsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_projects',
+        dataPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_data',
+        resultsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_results',
         environment: 'backtesting',
       },
       null,
@@ -79,11 +79,14 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
    */
   const registerDefaultProviders = () => {
     try {
-      // Register Lean adapter
-      const leanAdapter = new LeanAdapter();
-      backtestingRegistry.registerProvider(leanAdapter);
+      // Check if already registered to avoid duplicates
+      if (!backtestingRegistry.getProvider('QuantConnect Lean')) {
+        // Register Lean adapter
+        const leanAdapter = new LeanAdapter();
+        backtestingRegistry.registerProvider(leanAdapter);
 
-      console.log('[Backtesting] Registered providers:', backtestingRegistry.listProviders());
+        console.log('[Backtesting] Registered providers:', backtestingRegistry.listProviders());
+      }
     } catch (error) {
       console.error('[Backtesting] Failed to register providers:', error);
     }
@@ -133,7 +136,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
 
       // Initialize with config
       const config = JSON.parse(provider.config);
-      const initResult = await registeredProvider.initialize(config);
+      const initResult = await registeredProvider.initialize({ settings: config });
 
       if (!initResult.success) {
         throw new Error(initResult.error || 'Initialization failed');
@@ -175,6 +178,26 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
    */
   const activateProvider = async (providerName: string) => {
     try {
+      // Get provider from registry
+      const registeredProvider = backtestingRegistry.getProvider(providerName);
+      if (!registeredProvider) {
+        throw new Error(`Provider "${providerName}" not registered`);
+      }
+
+      // Get provider config from database
+      const dbProvider = providers.find(p => p.name === providerName);
+      if (!dbProvider) {
+        throw new Error(`Provider "${providerName}" not found in database`);
+      }
+
+      // Initialize with config
+      const config = JSON.parse(dbProvider.config);
+      const initResult = await registeredProvider.initialize({ settings: config });
+
+      if (!initResult.success) {
+        throw new Error(initResult.error || 'Initialization failed');
+      }
+
       // Set active in database
       await sqliteService.setActiveBacktestingProvider(providerName);
 
@@ -214,14 +237,14 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
 
       // Reset form
       setNewProviderForm({
-        name: 'lean',
+        name: 'QuantConnect Lean',
         adapter_type: 'LeanAdapter',
         config: JSON.stringify(
           {
-            leanCliPath: 'lean',
-            projectsPath: './lean_projects',
-            dataPath: './lean_data',
-            resultsPath: './lean_results',
+            leanCliPath: 'C:/Users/Tilak/AppData/Roaming/Python/Python313/Scripts/lean.exe',
+            projectsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_projects',
+            dataPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_data',
+            resultsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_results',
             environment: 'backtesting',
           },
           null,
@@ -358,11 +381,11 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                   borderRadius: '4px',
                 }}
               >
-                <option value="lean">QuantConnect Lean</option>
-                <option value="backtrader">Backtrader</option>
-                <option value="vectorbt">VectorBT</option>
-                <option value="quantlib">QuantLib</option>
-                <option value="custom">Custom</option>
+                <option value="QuantConnect Lean">QuantConnect Lean</option>
+                <option value="Backtrader">Backtrader</option>
+                <option value="VectorBT">VectorBT</option>
+                <option value="QuantLib">QuantLib</option>
+                <option value="Custom">Custom</option>
               </select>
             </div>
 

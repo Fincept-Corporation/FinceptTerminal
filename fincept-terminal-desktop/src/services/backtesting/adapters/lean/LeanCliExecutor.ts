@@ -57,18 +57,32 @@ export class LeanCliExecutor {
     });
 
     try {
-      // Execute via Tauri command (Rust backend)
-      const result = await invoke<{ process_id: number }>('execute_lean_cli', {
+      console.log('[LeanCliExecutor] Executing command:', command);
+      console.log('[LeanCliExecutor] Working directory:', projectPath);
+
+      // Execute via Tauri command and wait for completion
+      const result = await invoke<{ success: boolean; stdout: string; stderr: string; exit_code: number }>('execute_command', {
         command,
-        workingDir: projectPath,
-        backtestId,
       });
 
-      this.runningProcesses.get(backtestId)!.pid = result.process_id;
+      console.log('[LeanCliExecutor] Command completed:', result);
+
+      if (!result.success) {
+        this.runningProcesses.get(backtestId)!.status = 'failed';
+        this.runningProcesses.get(backtestId)!.error = result.stderr || 'Command failed';
+        this.runningProcesses.get(backtestId)!.logs.push(result.stdout);
+        this.runningProcesses.get(backtestId)!.logs.push(result.stderr);
+        throw new Error(result.stderr || 'Lean CLI execution failed');
+      }
+
+      // Mark as completed
+      this.runningProcesses.get(backtestId)!.status = 'completed';
+      this.runningProcesses.get(backtestId)!.progress = 100;
+      this.runningProcesses.get(backtestId)!.logs.push(result.stdout);
 
       return {
         id: backtestId,
-        processId: result.process_id,
+        processId: 0, // Not tracking PID since we wait for completion
       };
     } catch (error) {
       this.runningProcesses.get(backtestId)!.status = 'failed';
@@ -235,46 +249,19 @@ export class LeanCliExecutor {
     // Mode
     commandParts.push(mode);
 
-    // Project
-    commandParts.push('--project', projectPath);
+    // Project path (positional argument, not a flag)
+    commandParts.push(projectPath);
 
-    // Algorithm
-    if (args.algorithm) {
-      commandParts.push('--algorithm-file', args.algorithm);
-    }
-
-    // Dates
-    if (args.startDate) {
-      commandParts.push('--start', args.startDate);
-    }
-    if (args.endDate) {
-      commandParts.push('--end', args.endDate);
-    }
-
-    // Capital
-    if (args.cash) {
-      commandParts.push('--cash', args.cash.toString());
-    }
-
-    // Data folder
-    if (args.dataFolder || this.config.dataPath) {
-      commandParts.push('--data-folder', args.dataFolder || this.config.dataPath);
-    }
-
-    // Results folder
+    // Output directory for results
     if (args.resultsFolder || this.config.resultsPath) {
-      commandParts.push('--results', args.resultsFolder || this.config.resultsPath);
+      commandParts.push('--output', args.resultsFolder || this.config.resultsPath);
     }
 
-    // Parameters (as JSON)
-    if (args.parameters && Object.keys(args.parameters).length > 0) {
-      commandParts.push('--parameters', JSON.stringify(args.parameters));
-    }
+    // Data provider (use local data)
+    commandParts.push('--data-provider-historical', 'Local');
 
-    // Environment
-    if (args.environment) {
-      commandParts.push('--environment', args.environment);
-    }
+    // Don't pull updates
+    commandParts.push('--no-update');
 
     // Flags
     if (args.release) {

@@ -19,6 +19,7 @@ multidict==6.7.0
 multitasking==0.0.12
 numpy==1.26.4
 pandas==2.3.3
+vectorbt==0.26.1
 peewee==3.18.3
 pip_system_certs==5.3
 platformdirs==4.5.0
