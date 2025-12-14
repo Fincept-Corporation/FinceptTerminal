@@ -15,22 +15,23 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 /// In production: Uses installed Python from setup.rs
 /// In development: Falls back to system Python if installed Python not found
 pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // Get the resource directory where Python was installed by setup.rs
-    let resource_dir = app
+    // Get the app data directory where Python was installed by setup.rs
+    // Using app_data_dir instead of resource_dir to avoid admin permission issues
+    let app_data_dir = app
         .path()
-        .resource_dir()
-        .map_err(|e| format!("Failed to get resource directory: {}", e))?;
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
 
     // Platform-specific Python executable location
     let python_exe = if cfg!(target_os = "windows") {
-        // Windows: resources/python/python.exe
-        resource_dir.join("python").join("python.exe")
+        // Windows: AppData/python/python.exe
+        app_data_dir.join("python").join("python.exe")
     } else if cfg!(target_os = "linux") {
-        // Linux: resources/python/bin/python3
-        resource_dir.join("python").join("bin").join("python3")
+        // Linux: AppData/python/bin/python3
+        app_data_dir.join("python").join("bin").join("python3")
     } else if cfg!(target_os = "macos") {
-        // macOS: resources/python/bin/python3
-        resource_dir.join("python").join("bin").join("python3")
+        // macOS: AppData/python/bin/python3
+        app_data_dir.join("python").join("bin").join("python3")
     } else {
         return Err("Unsupported platform".to_string());
     };
@@ -69,7 +70,14 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
     // If we get here, Python is not available
     Err(format!(
-        "Python interpreter not found at: {}\n\nPlease run the setup process to install Python.",
+        "Python interpreter not found at: {}\n\n\
+        The Python runtime is required to run analytics and data processing features.\n\n\
+        Troubleshooting steps:\n\
+        1. Run the setup wizard from the application to install Python\n\
+        2. If setup fails, ensure Microsoft Visual C++ Redistributable is installed:\n\
+           Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe\n\
+        3. Alternatively, install Python 3.12 manually from: https://www.python.org/downloads/\n\
+        4. Restart the application after installation",
         python_exe.display()
     ))
 }

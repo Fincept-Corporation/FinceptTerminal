@@ -12,9 +12,10 @@ import ContextSelector from '../common/ContextSelector';
 
 interface ChatTabProps {
   onNavigateToSettings?: () => void;
+  onNavigateToTab?: (tabName: string) => void;
 }
 
-const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
+const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab }) => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentSessionUuid, setCurrentSessionUuid] = useState<string | null>(null);
@@ -1136,10 +1137,28 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings }) => {
               <div style={{
                 color: mcpToolsCount > 0 ? colors.secondary : colors.textMuted,
                 fontSize: '9px',
-                marginBottom: '2px'
+                marginBottom: '6px'
               }}>
                 MCP Tools: {mcpToolsCount > 0 ? `${mcpToolsCount} Available ✓` : 'None'}
               </div>
+              <button
+                onClick={() => onNavigateToTab?.('mcp')}
+                style={{
+                  width: '100%',
+                  backgroundColor: colors.primary,
+                  color: 'black',
+                  border: 'none',
+                  padding: '5px 8px',
+                  fontSize: '9px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  marginBottom: '6px',
+                  borderRadius: '2px'
+                }}
+                title="Configure MCP servers and tools"
+              >
+                🔧 MCP INTEGRATION
+              </button>
               {mcpToolsCount > 0 && !providerSupportsMCP() && (
                 <div style={{
                   color: colors.alert,

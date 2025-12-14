@@ -7,89 +7,163 @@ import { DollarSign, Info } from 'lucide-react';
 import { useFees } from '../../hooks/useAccountInfo';
 import { useBrokerContext } from '../../../../../contexts/BrokerContext';
 
+// Bloomberg color palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
+};
+
 export function FeesDisplay() {
   const { fees, isLoading } = useFees();
   const { activeBroker } = useBrokerContext();
 
   if (isLoading || !fees) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <DollarSign className="w-4 h-4 text-orange-500" />
-          <span className="text-sm font-medium text-gray-300">Trading Fees</span>
+      <div style={{
+        background: BLOOMBERG.PANEL_BG,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        borderRadius: '4px',
+        padding: '12px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '12px'
+        }}>
+          <DollarSign size={14} color={BLOOMBERG.ORANGE} />
+          <span style={{ fontSize: '11px', fontWeight: 600, color: BLOOMBERG.WHITE }}>TRADING FEES</span>
         </div>
         {isLoading ? (
-          <div className="flex items-center justify-center py-4">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-500"></div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+            <div style={{
+              width: '20px',
+              height: '20px',
+              border: `2px solid ${BLOOMBERG.BORDER}`,
+              borderTopColor: BLOOMBERG.ORANGE,
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
           </div>
         ) : (
-          <div className="text-xs text-gray-500">No fee information available</div>
+          <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>No fee information available</div>
         )}
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded p-4">
+    <div style={{
+      background: BLOOMBERG.PANEL_BG,
+      border: `1px solid ${BLOOMBERG.BORDER}`,
+      borderRadius: '4px',
+      padding: '12px'
+    }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <DollarSign className="w-4 h-4 text-orange-500" />
-          <span className="text-sm font-medium text-gray-300">Trading Fees</span>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '12px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <DollarSign size={14} color={BLOOMBERG.ORANGE} />
+          <span style={{ fontSize: '11px', fontWeight: 600, color: BLOOMBERG.WHITE }}>TRADING FEES</span>
         </div>
-        <span className="text-xs text-gray-500 uppercase">{activeBroker}</span>
+        <span style={{ fontSize: '9px', color: BLOOMBERG.GRAY, fontWeight: 600 }}>{activeBroker?.toUpperCase()}</span>
       </div>
 
       {/* Fee Structure */}
-      <div className="space-y-2">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {/* Maker Fee */}
-        <div className="flex items-center justify-between p-2 bg-black/30 rounded">
-          <div className="flex items-center gap-2">
-            <div className="text-xs text-gray-400">Maker Fee</div>
-            <div className="group relative">
-              <Info className="w-3 h-3 text-gray-600 cursor-help" />
-              <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 w-48 p-2 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 z-10">
-                Fee for adding liquidity to the order book (limit orders that don't immediately execute)
-              </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px',
+          background: BLOOMBERG.DARK_BG,
+          border: `1px solid ${BLOOMBERG.BORDER}`,
+          borderRadius: '3px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>MAKER FEE</div>
+            <div style={{ position: 'relative', display: 'inline-block' }} title="Fee for adding liquidity to the order book">
+              <Info size={10} color={BLOOMBERG.MUTED} style={{ cursor: 'help' }} />
             </div>
           </div>
-          <div className="text-sm font-mono text-green-500">{fees.makerPercent}</div>
+          <div style={{ fontSize: '11px', fontFamily: '"IBM Plex Mono", monospace', color: BLOOMBERG.GREEN, fontWeight: 600 }}>
+            {fees.makerPercent}
+          </div>
         </div>
 
         {/* Taker Fee */}
-        <div className="flex items-center justify-between p-2 bg-black/30 rounded">
-          <div className="flex items-center gap-2">
-            <div className="text-xs text-gray-400">Taker Fee</div>
-            <div className="group relative">
-              <Info className="w-3 h-3 text-gray-600 cursor-help" />
-              <div className="hidden group-hover:block absolute bottom-full left-0 mb-2 w-48 p-2 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 z-10">
-                Fee for taking liquidity from the order book (market orders and limit orders that execute immediately)
-              </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '8px',
+          background: BLOOMBERG.DARK_BG,
+          border: `1px solid ${BLOOMBERG.BORDER}`,
+          borderRadius: '3px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>TAKER FEE</div>
+            <div style={{ position: 'relative', display: 'inline-block' }} title="Fee for taking liquidity from the order book">
+              <Info size={10} color={BLOOMBERG.MUTED} style={{ cursor: 'help' }} />
             </div>
           </div>
-          <div className="text-sm font-mono text-orange-500">{fees.takerPercent}</div>
+          <div style={{ fontSize: '11px', fontFamily: '"IBM Plex Mono", monospace', color: BLOOMBERG.ORANGE, fontWeight: 600 }}>
+            {fees.takerPercent}
+          </div>
         </div>
       </div>
 
       {/* Example Calculation */}
-      <div className="mt-3 pt-3 border-t border-gray-800">
-        <div className="text-xs text-gray-500 mb-2">Example: $10,000 trade</div>
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="flex justify-between">
-            <span className="text-gray-400">Maker:</span>
-            <span className="text-green-500 font-mono">${(10000 * fees.maker).toFixed(2)}</span>
+      <div style={{
+        marginTop: '12px',
+        paddingTop: '12px',
+        borderTop: `1px solid ${BLOOMBERG.BORDER}`
+      }}>
+        <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>EXAMPLE: $10,000 TRADE</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: BLOOMBERG.GRAY }}>Maker:</span>
+            <span style={{ color: BLOOMBERG.GREEN, fontFamily: '"IBM Plex Mono", monospace', fontWeight: 600 }}>
+              ${(10000 * fees.maker).toFixed(2)}
+            </span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-400">Taker:</span>
-            <span className="text-orange-500 font-mono">${(10000 * fees.taker).toFixed(2)}</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: BLOOMBERG.GRAY }}>Taker:</span>
+            <span style={{ color: BLOOMBERG.ORANGE, fontFamily: '"IBM Plex Mono", monospace', fontWeight: 600 }}>
+              ${(10000 * fees.taker).toFixed(2)}
+            </span>
           </div>
         </div>
       </div>
 
       {/* Savings Tip */}
-      <div className="mt-3 p-2 bg-blue-500/10 border border-blue-500/20 rounded">
-        <div className="text-xs text-blue-400">
-          💡 Tip: Use limit orders to pay lower maker fees
+      <div style={{
+        marginTop: '12px',
+        padding: '8px',
+        background: `${BLOOMBERG.BLUE}15`,
+        border: `1px solid ${BLOOMBERG.BLUE}40`,
+        borderRadius: '3px'
+      }}>
+        <div style={{ fontSize: '9px', color: BLOOMBERG.CYAN }}>
+          💡 TIP: Use limit orders to pay lower maker fees
         </div>
       </div>
     </div>

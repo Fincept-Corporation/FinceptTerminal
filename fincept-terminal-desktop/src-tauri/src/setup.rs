@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use tauri::{AppHandle, Emitter, Manager};
 
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SetupProgress {
     pub step: String,
@@ -21,25 +22,17 @@ pub struct SetupStatus {
     pub needs_setup: bool,
 }
 
-// Python 3.12.7 download URLs
-const PYTHON_VERSION: &str = "3.12.7";
-const PYTHON_WINDOWS_URL: &str = "https://www.python.org/ftp/python/3.12.7/python-3.12.7-amd64.exe";
-const PYTHON_MACOS_URL: &str = "https://www.python.org/ftp/python/3.12.7/python-3.12.7-macos11.pkg";
-const PYTHON_LINUX_URL: &str = ""; // Linux uses package manager
-
-// Bun download URLs
+// Bun download URL
 const BUN_WINDOWS_URL: &str = "https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64.zip";
-const BUN_MACOS_URL: &str = ""; // Bun install script
-const BUN_LINUX_URL: &str = ""; // Bun install script
 
 /// Check if Python is installed (check app directory first, then system)
 pub fn check_python_installed_in_app(app: &AppHandle) -> (bool, Option<String>) {
-    // First check in app's resource directory
-    if let Ok(resource_dir) = app.path().resource_dir() {
+    // Check in app's data directory (where Python is actually installed)
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
         let python_exe = if cfg!(target_os = "windows") {
-            resource_dir.join("python").join("python.exe")
+            app_data_dir.join("python").join("python.exe")
         } else {
-            resource_dir.join("python").join("bin").join("python3")
+            app_data_dir.join("python").join("bin").join("python3")
         };
 
         if python_exe.exists() {
@@ -212,21 +205,60 @@ fn emit_progress(app: &AppHandle, step: &str, progress: u8, message: &str, is_er
     let _ = app.emit("setup-progress", progress_data);
 }
 
+/// Check if Microsoft Visual C++ Redistributable is installed (Windows only)
+#[cfg(target_os = "windows")]
+fn check_vcredist_installed() -> bool {
+    // Check for VC++ Redistributable by looking for vcruntime140.dll in System32
+    let system32 = std::env::var("SystemRoot")
+        .map(|root| PathBuf::from(root).join("System32"))
+        .unwrap_or_else(|_| PathBuf::from(r"C:\Windows\System32"));
+
+    let vcruntime_dll = system32.join("vcruntime140.dll");
+    let msvcp_dll = system32.join("msvcp140.dll");
+
+    vcruntime_dll.exists() && msvcp_dll.exists()
+}
+
 /// Install Python on Windows in app directory (portable, no admin)
 #[cfg(target_os = "windows")]
 async fn install_python_windows(app: &AppHandle) -> Result<(), String> {
     use std::env;
     use std::fs;
 
-    emit_progress(app, "python", 0, "Preparing Python installation...", false);
+    emit_progress(app, "python", 0, "Checking system requirements...", false);
 
-    // Get app resource directory
-    let resource_dir = app
+    // Check for VC++ Redistributable
+    if !check_vcredist_installed() {
+        emit_progress(
+            app,
+            "python",
+            0,
+            "Warning: Microsoft Visual C++ Redistributable may not be installed",
+            false
+        );
+
+        // Return a warning but allow setup to continue
+        // The detailed error will be shown when Python fails to run
+        return Err(format!(
+            "Microsoft Visual C++ Redistributable 2015-2022 is required but may not be installed.\n\n\
+            Python 3.12 embedded requires this runtime to function.\n\n\
+            Please install it first from:\n\
+            https://aka.ms/vs/17/release/vc_redist.{}.exe\n\n\
+            After installing VC++ Redistributable, please restart the application and try again.",
+            if cfg!(target_arch = "x86_64") { "x64" } else { "x86" }
+        ));
+    }
+
+    emit_progress(app, "python", 5, "Preparing Python installation...", false);
+
+    // Use AppData for Python installation (writable without admin)
+    // resource_dir might be in Program Files which is read-only
+    let app_data_dir = app
         .path()
-        .resource_dir()
-        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
-    let python_dir = resource_dir.join("python");
+    let python_dir = app_data_dir.join("python");
     fs::create_dir_all(&python_dir)
         .map_err(|e| format!("Failed to create python directory: {}", e))?;
 
@@ -234,8 +266,24 @@ async fn install_python_windows(app: &AppHandle) -> Result<(), String> {
     let temp_dir = env::temp_dir();
     let zip_path = temp_dir.join("python-embeddable.zip");
 
-    // Use embeddable package instead of installer
-    let embeddable_url = "https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip";
+    // Detect system architecture and select appropriate Python build
+    let embeddable_url = if cfg!(target_arch = "x86_64") {
+        // 64-bit Windows
+        "https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip"
+    } else if cfg!(target_arch = "x86") {
+        // 32-bit Windows
+        "https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-win32.zip"
+    } else if cfg!(target_arch = "aarch64") {
+        // ARM64 Windows
+        "https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-arm64.zip"
+    } else {
+        return Err(format!(
+            "Unsupported Windows architecture: {}. Please install Python 3.12 manually from python.org",
+            std::env::consts::ARCH
+        ));
+    };
+
+    emit_progress(app, "python", 10, &format!("Downloading Python for {} architecture...", std::env::consts::ARCH), false);
 
     download_file(embeddable_url, &zip_path, app, "python").await?;
 
@@ -254,6 +302,43 @@ async fn install_python_windows(app: &AppHandle) -> Result<(), String> {
 
     // Run get-pip.py
     let python_exe = python_dir.join("python.exe");
+
+    // Test if Python executable can run (checks for VC++ Runtime and other dependencies)
+    emit_progress(app, "python", 70, "Testing Python installation...", false);
+    let test_output = Command::new(&python_exe)
+        .arg("--version")
+        .output();
+
+    match test_output {
+        Err(e) => {
+            return Err(format!(
+                "Python installation failed. The Python interpreter cannot run on this system.\n\n\
+                Common causes:\n\
+                1. Missing Microsoft Visual C++ Redistributable 2015-2022\n\
+                2. System incompatibility\n\n\
+                Error: {}\n\n\
+                Please install:\n\
+                - Microsoft Visual C++ Redistributable from: https://aka.ms/vs/17/release/vc_redist.x64.exe\n\
+                - Or install Python 3.12 manually from: https://www.python.org/downloads/",
+                e
+            ));
+        }
+        Ok(output) if !output.status.success() => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!(
+                "Python installation test failed.\n\n\
+                Error: {}\n\n\
+                Please ensure Microsoft Visual C++ Redistributable 2015-2022 is installed.\n\
+                Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe",
+                stderr
+            ));
+        }
+        Ok(_) => {
+            // Python exe works, continue with pip installation
+        }
+    }
+
+    emit_progress(app, "python", 75, "Installing pip package manager...", false);
     let output = Command::new(&python_exe)
         .arg(&get_pip_path)
         .output()

@@ -504,7 +504,8 @@ export class OrderMatchingEngine {
       price,
       quantity,
       leverage,
-      marginMode
+      marginMode,
+      params?.reduceOnly
     );
 
     // Update portfolio balance (deduct fees)

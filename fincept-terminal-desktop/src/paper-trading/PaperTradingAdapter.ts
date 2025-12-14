@@ -256,22 +256,25 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
     }
 
     console.log('[PaperTradingAdapter] fetchPositions called');
-    console.log('[PaperTradingAdapter] Portfolio ID:', this.paperConfig.portfolioId);
 
+    // FORCE FRESH DB READ - no caching
     const positions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId, 'open');
-    console.log('[PaperTradingAdapter] Raw open positions from DB:', positions.length);
+    console.log('[PaperTradingAdapter] Open positions:', positions.length);
 
-    // Also check ALL positions to see if there are closed ones
-    const allPositions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId);
-    console.log('[PaperTradingAdapter] Total positions (open + closed):', allPositions.length);
-    allPositions.forEach(p => {
-      console.log(`  Position: ${p.symbol} ${p.side} ${p.quantity} @ ${p.entryPrice} - Status: ${p.status}`);
+    positions.forEach(p => {
+      console.log(`  ${p.symbol} ${p.side} ${p.quantity} @ ${p.entryPrice}`);
     });
 
-    // Update positions with current prices
-    for (const p of positions) {
+    // Update positions with current prices - PARALLEL with timeout per position
+    const updatePromises = positions.map(async (p) => {
       try {
-        const ticker = await this.realAdapter.fetchTicker(p.symbol);
+        // Add timeout per ticker fetch (5 seconds max)
+        const tickerPromise = this.realAdapter.fetchTicker(p.symbol);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Ticker timeout')), 5000)
+        );
+
+        const ticker = await Promise.race([tickerPromise, timeoutPromise]) as any;
         const currentPrice = ticker.last || ticker.close || p.currentPrice || p.entryPrice;
 
         const unrealizedPnl = p.side === 'long'
@@ -286,9 +289,20 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
         p.currentPrice = currentPrice;
         p.unrealizedPnl = unrealizedPnl;
       } catch (err) {
-        console.warn(`[PaperTradingAdapter] Failed to update price for ${p.symbol}`);
+        console.warn(`[PaperTradingAdapter] Skipping price update for ${p.symbol}:`, err);
+        // Keep existing price if fetch fails
+        p.currentPrice = p.currentPrice || p.entryPrice;
+        p.unrealizedPnl = p.unrealizedPnl || 0;
       }
-    }
+    });
+
+    // Wait for all updates with overall timeout
+    await Promise.race([
+      Promise.all(updatePromises),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('All updates timeout')), 10000))
+    ]).catch(() => {
+      console.warn('[PaperTradingAdapter] Some price updates timed out, continuing...');
+    });
 
     // Convert to CCXT Position format
     const ccxtPositions: Position[] = positions

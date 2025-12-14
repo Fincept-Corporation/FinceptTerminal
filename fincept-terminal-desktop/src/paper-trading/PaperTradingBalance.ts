@@ -122,44 +122,86 @@ export class PaperTradingBalance {
     fillPrice: number,
     fillQuantity: number,
     leverage: number,
-    marginMode: 'cross' | 'isolated'
+    marginMode: 'cross' | 'isolated',
+    reduceOnly?: boolean
   ): Promise<PaperTradingPosition> {
     // Determine position side from order side
     const positionSide = side === 'buy' ? 'long' : 'short';
+    const oppositePositionSide = positionSide === 'long' ? 'short' : 'long';
+
+    // Check for OPPOSITE position first (for closing)
+    const oppositePosition = await paperTradingDatabase.getPositionBySymbolAndSide(portfolioId, symbol, oppositePositionSide, 'open');
+
+    // If reduceOnly and no opposite position, reject
+    if (reduceOnly && !oppositePosition) {
+      throw new Error(`Cannot reduce position - no ${oppositePositionSide} position exists for ${symbol}`);
+    }
+
+    // If reduceOnly OR opposite position exists, REDUCE/CLOSE that position
+    if (oppositePosition) {
+      console.log(`[PaperTradingBalance] Reducing/closing ${oppositePositionSide} position for ${symbol}`);
+      console.log(`  Existing: ${oppositePosition.quantity} @ ${oppositePosition.entryPrice}`);
+      console.log(`  Reducing by: ${fillQuantity} @ ${fillPrice}`);
+
+      // Validate reduceOnly doesn't exceed position
+      if (reduceOnly && fillQuantity > oppositePosition.quantity) {
+        throw new Error(`Reduce-only order quantity ${fillQuantity} exceeds position size ${oppositePosition.quantity}`);
+      }
+
+      const pnl = oppositePositionSide === 'long'
+        ? (fillPrice - oppositePosition.entryPrice) * fillQuantity
+        : (oppositePosition.entryPrice - fillPrice) * fillQuantity;
+
+      console.log(`  Realized PnL: ${pnl.toFixed(2)}`);
+
+      // Update portfolio balance with realized PnL (done after fee calculation in executeTrade)
+      const portfolio = await paperTradingDatabase.getPortfolio(portfolioId);
+      if (portfolio) {
+        await paperTradingDatabase.updatePortfolioBalance(portfolioId, portfolio.currentBalance + pnl);
+      }
+
+      if (oppositePosition.quantity === fillQuantity) {
+        // FULLY CLOSE position
+        console.log(`  Fully closing position`);
+        await paperTradingDatabase.updatePosition(oppositePosition.id, {
+          status: 'closed',
+          closedAt: new Date().toISOString(),
+          realizedPnl: pnl,
+          quantity: 0
+        });
+      } else if (oppositePosition.quantity > fillQuantity) {
+        // PARTIALLY CLOSE position
+        const remainingQty = oppositePosition.quantity - fillQuantity;
+        console.log(`  Partially closing, remaining: ${remainingQty}`);
+        await paperTradingDatabase.updatePosition(oppositePosition.id, {
+          quantity: remainingQty,
+          realizedPnl: (oppositePosition.realizedPnl || 0) + pnl
+        });
+      } else {
+        // Fill exceeds position - close position and open opposite
+        console.log(`  Fill exceeds position, closing and opening opposite`);
+        await paperTradingDatabase.updatePosition(oppositePosition.id, {
+          status: 'closed',
+          closedAt: new Date().toISOString(),
+          realizedPnl: pnl,
+          quantity: 0
+        });
+
+        const excessQuantity = fillQuantity - oppositePosition.quantity;
+        return await this.createNewPosition(portfolioId, symbol, positionSide, fillPrice, excessQuantity, leverage, marginMode);
+      }
+
+      const updatedPosition = await paperTradingDatabase.getPosition(oppositePosition.id);
+      if (!updatedPosition) throw new Error('Failed to retrieve updated position');
+      return updatedPosition;
+    }
 
     // Check for existing position WITH THE SAME SIDE (hedging mode)
     const existingPosition = await paperTradingDatabase.getPositionBySymbolAndSide(portfolioId, symbol, positionSide, 'open');
 
     if (!existingPosition) {
       // Create new position
-      console.log(`[PaperTradingBalance] Creating new ${positionSide} position for ${symbol}`);
-      const positionId = `pos_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-      const liquidationPrice = this.calculateLiquidationPrice(
-        positionSide,
-        fillPrice,
-        leverage,
-        fillQuantity
-      );
-
-      await paperTradingDatabase.createPosition({
-        id: positionId,
-        portfolioId,
-        symbol,
-        side: positionSide,
-        entryPrice: fillPrice,
-        quantity: fillQuantity,
-        leverage,
-        marginMode,
-      });
-
-      const position = await paperTradingDatabase.getPosition(positionId);
-      if (!position) throw new Error('Failed to create position');
-
-      // Update liquidation price
-      await paperTradingDatabase.updatePosition(positionId, { liquidationPrice });
-
-      return position;
+      return await this.createNewPosition(portfolioId, symbol, positionSide, fillPrice, fillQuantity, leverage, marginMode);
     } else {
       // Position exists with same side - ADD to position (VWAP averaging)
       console.log(`[PaperTradingBalance] Adding to existing ${positionSide} position for ${symbol}`);
@@ -191,6 +233,41 @@ export class PaperTradingBalance {
 
       return updatedPosition;
     }
+  }
+
+  /**
+   * Helper to create new position
+   */
+  private async createNewPosition(
+    portfolioId: string,
+    symbol: string,
+    side: 'long' | 'short',
+    entryPrice: number,
+    quantity: number,
+    leverage: number,
+    marginMode: 'cross' | 'isolated'
+  ): Promise<PaperTradingPosition> {
+    console.log(`[PaperTradingBalance] Creating new ${side} position for ${symbol}`);
+    const positionId = `pos_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    const liquidationPrice = this.calculateLiquidationPrice(side, entryPrice, leverage, quantity);
+
+    await paperTradingDatabase.createPosition({
+      id: positionId,
+      portfolioId,
+      symbol,
+      side,
+      entryPrice,
+      quantity,
+      leverage,
+      marginMode,
+    });
+
+    const position = await paperTradingDatabase.getPosition(positionId);
+    if (!position) throw new Error('Failed to create position');
+
+    await paperTradingDatabase.updatePosition(positionId, { liquidationPrice });
+    return position;
   }
 
   /**

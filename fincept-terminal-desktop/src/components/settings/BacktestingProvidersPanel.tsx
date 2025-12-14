@@ -19,10 +19,28 @@ import {
   Edit,
   Trash2,
   Plus,
+  Zap,
 } from 'lucide-react';
 import { sqliteService, type BacktestingProvider } from '@/services/sqliteService';
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
 import { LeanAdapter } from '@/services/backtesting/adapters/lean';
+
+// Bloomberg Professional Color Palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
+};
 
 interface ProviderPanelProps {
   colors: {
@@ -136,7 +154,11 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
 
       // Initialize with config
       const config = JSON.parse(provider.config);
-      const initResult = await registeredProvider.initialize({ settings: config });
+      const initResult = await registeredProvider.initialize({
+        name: provider.name,
+        adapterType: provider.adapter_type,
+        settings: config
+      });
 
       if (!initResult.success) {
         throw new Error(initResult.error || 'Initialization failed');
@@ -192,7 +214,11 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
 
       // Initialize with config
       const config = JSON.parse(dbProvider.config);
-      const initResult = await registeredProvider.initialize({ settings: config });
+      const initResult = await registeredProvider.initialize({
+        name: dbProvider.name,
+        adapterType: dbProvider.adapter_type,
+        settings: config
+      });
 
       if (!initResult.success) {
         throw new Error(initResult.error || 'Initialization failed');
@@ -289,44 +315,80 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
 
   if (loading) {
     return (
-      <div style={{ padding: '20px', color: colors.text }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Loader size={20} className="animate-spin" />
-          <span>Loading providers...</span>
-        </div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '60px',
+        color: BLOOMBERG.GRAY
+      }}>
+        <Loader size={24} className="animate-spin" style={{ marginRight: '12px' }} />
+        <span style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.5px' }}>LOADING PROVIDERS...</span>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: '20px' }}>
+    <div style={{ fontFamily: '"IBM Plex Mono", "Consolas", monospace' }}>
       {/* Header */}
-      <div style={{ marginBottom: '20px' }}>
-        <h2 style={{ color: colors.text, fontSize: '1.5rem', marginBottom: '8px' }}>
-          Backtesting Providers
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        marginBottom: '24px',
+        paddingBottom: '12px',
+        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`
+      }}>
+        <Activity size={20} color={BLOOMBERG.ORANGE} style={{ filter: `drop-shadow(0 0 4px ${BLOOMBERG.ORANGE})` }} />
+        <h2 style={{
+          color: BLOOMBERG.ORANGE,
+          fontSize: '16px',
+          fontWeight: 700,
+          letterSpacing: '1px',
+          margin: 0,
+          textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
+        }}>
+          BACKTESTING PROVIDERS
         </h2>
-        <p style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
+      </div>
+
+      {/* Description */}
+      <div style={{
+        marginBottom: '20px',
+        padding: '12px',
+        backgroundColor: BLOOMBERG.HEADER_BG,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        borderLeft: `3px solid ${BLOOMBERG.CYAN}`
+      }}>
+        <p style={{
+          color: BLOOMBERG.GRAY,
+          fontSize: '10px',
+          margin: 0,
+          lineHeight: '1.6'
+        }}>
           Manage backtesting engines. Switch between Lean, Backtrader, and other providers seamlessly.
         </p>
       </div>
 
       {/* Message Banner */}
       {message && (
-        <div
-          style={{
-            padding: '12px',
-            marginBottom: '20px',
-            borderRadius: '6px',
-            backgroundColor: message.type === 'success' ? colors.success + '20' : colors.error + '20',
-            border: `1px solid ${message.type === 'success' ? colors.success : colors.error}`,
-            color: message.type === 'success' ? colors.success : colors.error,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          {message.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-          <span>{message.text}</span>
+        <div style={{
+          padding: '12px 16px',
+          marginBottom: '20px',
+          backgroundColor: message.type === 'success' ? `${BLOOMBERG.GREEN}15` : `${BLOOMBERG.RED}15`,
+          border: `1px solid ${message.type === 'success' ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+          borderLeft: `3px solid ${message.type === 'success' ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+          borderRadius: '3px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+        }}>
+          {message.type === 'success' ? <CheckCircle size={16} color={BLOOMBERG.GREEN} /> : <AlertCircle size={16} color={BLOOMBERG.RED} />}
+          <span style={{
+            color: message.type === 'success' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            fontSize: '10px',
+            fontWeight: 600
+          }}>{message.text}</span>
         </div>
       )}
 
@@ -334,51 +396,83 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
       <button
         onClick={() => setShowAddForm(!showAddForm)}
         style={{
-          padding: '10px 16px',
+          padding: '10px 20px',
           marginBottom: '20px',
-          backgroundColor: colors.accent,
-          color: colors.background,
+          backgroundColor: BLOOMBERG.GREEN,
+          color: '#000000',
           border: 'none',
-          borderRadius: '6px',
+          borderRadius: '4px',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          fontWeight: '500',
+          fontWeight: 700,
+          fontSize: '11px',
+          letterSpacing: '0.5px',
+          boxShadow: `0 0 12px ${BLOOMBERG.GREEN}40`,
+          transition: 'all 0.2s'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.boxShadow = `0 0 20px ${BLOOMBERG.GREEN}60`;
+          e.currentTarget.style.transform = 'translateY(-1px)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.boxShadow = `0 0 12px ${BLOOMBERG.GREEN}40`;
+          e.currentTarget.style.transform = 'translateY(0)';
         }}
       >
-        <Plus size={18} />
-        Add Provider
+        <Plus size={16} />
+        ADD PROVIDER
       </button>
 
       {/* Add Provider Form */}
       {showAddForm && (
-        <div
-          style={{
-            marginBottom: '20px',
-            padding: '20px',
-            backgroundColor: colors.surface,
-            border: `1px solid ${colors.border}`,
-            borderRadius: '8px',
-          }}
-        >
-          <h3 style={{ color: colors.text, marginBottom: '16px' }}>Add New Provider</h3>
+        <div style={{
+          marginBottom: '20px',
+          padding: '20px',
+          backgroundColor: BLOOMBERG.PANEL_BG,
+          border: `1px solid ${BLOOMBERG.BORDER}`,
+          borderLeft: `3px solid ${BLOOMBERG.ORANGE}`,
+          borderRadius: '4px',
+        }}>
+          <h3 style={{
+            color: BLOOMBERG.ORANGE,
+            marginBottom: '16px',
+            fontSize: '13px',
+            fontWeight: 700,
+            letterSpacing: '0.5px'
+          }}>ADD NEW PROVIDER</h3>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
-              <label style={{ color: colors.text, display: 'block', marginBottom: '6px' }}>
-                Provider Type
+              <label style={{
+                color: BLOOMBERG.WHITE,
+                display: 'block',
+                marginBottom: '6px',
+                fontSize: '10px',
+                fontWeight: 600,
+                letterSpacing: '0.5px'
+              }}>
+                PROVIDER TYPE
               </label>
               <select
                 value={newProviderForm.name}
                 onChange={(e) => setNewProviderForm({ ...newProviderForm, name: e.target.value })}
                 style={{
                   width: '100%',
-                  padding: '8px',
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: '4px',
+                  padding: '10px',
+                  backgroundColor: BLOOMBERG.DARK_BG,
+                  color: BLOOMBERG.WHITE,
+                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  borderRadius: '3px',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  appearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23FF8800' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 10px center',
+                  paddingRight: '32px'
                 }}
               >
                 <option value="QuantConnect Lean">QuantConnect Lean</option>
@@ -390,8 +484,15 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
             </div>
 
             <div>
-              <label style={{ color: colors.text, display: 'block', marginBottom: '6px' }}>
-                Configuration (JSON)
+              <label style={{
+                color: BLOOMBERG.WHITE,
+                display: 'block',
+                marginBottom: '6px',
+                fontSize: '10px',
+                fontWeight: 600,
+                letterSpacing: '0.5px'
+              }}>
+                CONFIGURATION (JSON)
               </label>
               <textarea
                 value={newProviderForm.config}
@@ -399,43 +500,63 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 rows={10}
                 style={{
                   width: '100%',
-                  padding: '8px',
-                  backgroundColor: colors.background,
-                  color: colors.text,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: '4px',
+                  padding: '10px',
+                  backgroundColor: BLOOMBERG.DARK_BG,
+                  color: BLOOMBERG.WHITE,
+                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  borderRadius: '3px',
                   fontFamily: 'monospace',
-                  fontSize: '0.9rem',
+                  fontSize: '10px',
+                  lineHeight: '1.5',
+                  resize: 'vertical'
                 }}
               />
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <button
                 onClick={saveNewProvider}
                 style={{
-                  padding: '8px 16px',
-                  backgroundColor: colors.success,
-                  color: 'white',
+                  padding: '10px 20px',
+                  backgroundColor: BLOOMBERG.GREEN,
+                  color: '#000000',
                   border: 'none',
                   borderRadius: '4px',
                   cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '10px',
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.2s'
                 }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
               >
-                Save
+                SAVE
               </button>
               <button
                 onClick={() => setShowAddForm(false)}
                 style={{
-                  padding: '8px 16px',
-                  backgroundColor: colors.surface,
-                  color: colors.text,
-                  border: `1px solid ${colors.border}`,
+                  padding: '10px 20px',
+                  backgroundColor: 'transparent',
+                  color: BLOOMBERG.GRAY,
+                  border: `1px solid ${BLOOMBERG.BORDER}`,
                   borderRadius: '4px',
                   cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: '10px',
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = BLOOMBERG.RED;
+                  e.currentTarget.style.color = BLOOMBERG.RED;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                  e.currentTarget.style.color = BLOOMBERG.GRAY;
                 }}
               >
-                Cancel
+                CANCEL
               </button>
             </div>
           </div>
@@ -443,89 +564,134 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
       )}
 
       {/* Providers List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '16px', marginBottom: '20px' }}>
         {providers.length === 0 ? (
-          <div
-            style={{
-              padding: '40px',
-              textAlign: 'center',
-              color: colors.textSecondary,
-              backgroundColor: colors.surface,
-              border: `1px dashed ${colors.border}`,
-              borderRadius: '8px',
-            }}
-          >
-            <Activity size={48} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
-            <p>No providers configured</p>
-            <p style={{ fontSize: '0.9rem', marginTop: '8px' }}>
-              Click "Add Provider" to configure your first backtesting engine
+          <div style={{
+            gridColumn: '1 / -1',
+            padding: '60px 40px',
+            textAlign: 'center',
+            backgroundColor: BLOOMBERG.PANEL_BG,
+            border: `1px dashed ${BLOOMBERG.BORDER}`,
+            borderRadius: '4px',
+          }}>
+            <Activity size={48} style={{ margin: '0 auto 16px', opacity: 0.3, color: BLOOMBERG.ORANGE }} />
+            <p style={{ color: BLOOMBERG.WHITE, fontSize: '13px', fontWeight: 600, marginBottom: '8px' }}>
+              NO PROVIDERS CONFIGURED
+            </p>
+            <p style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
+              Click "ADD PROVIDER" to configure your first backtesting engine
             </p>
           </div>
         ) : (
           providers.map((provider) => {
             const status = statuses[provider.name] || { connected: false, testing: false };
             const capabilities = getProviderCapabilities(provider.name);
+            const isActive = provider.is_active;
 
             return (
               <div
                 key={provider.id}
                 style={{
-                  padding: '20px',
-                  backgroundColor: colors.surface,
-                  border: `2px solid ${provider.is_active ? colors.accent : colors.border}`,
-                  borderRadius: '8px',
+                  padding: '16px',
+                  backgroundColor: BLOOMBERG.PANEL_BG,
+                  border: `1px solid ${isActive ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+                  borderLeft: `3px solid ${isActive ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+                  borderRadius: '4px',
+                  transition: 'all 0.2s',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                    e.currentTarget.style.borderColor = BLOOMBERG.MUTED;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.backgroundColor = BLOOMBERG.PANEL_BG;
+                    e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                  }
                 }}
               >
+                {/* Active Glow */}
+                {isActive && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: '1px',
+                    background: `linear-gradient(90deg, transparent, ${BLOOMBERG.ORANGE}, transparent)`,
+                    opacity: 0.5
+                  }} />
+                )}
+
                 {/* Header */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <Activity size={24} style={{ color: colors.accent }} />
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                    <Activity size={20} style={{ color: isActive ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY }} />
                     <div>
-                      <h3 style={{ color: colors.text, margin: 0 }}>{provider.name}</h3>
-                      <p style={{ color: colors.textSecondary, fontSize: '0.85rem', margin: 0 }}>
+                      <h3 style={{
+                        color: isActive ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
+                        margin: 0,
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        letterSpacing: '0.5px'
+                      }}>{provider.name}</h3>
+                      <p style={{
+                        color: BLOOMBERG.GRAY,
+                        fontSize: '9px',
+                        margin: 0,
+                        fontWeight: 500
+                      }}>
                         {provider.adapter_type}
                       </p>
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {/* Active Badge */}
-                    {provider.is_active && (
-                      <span
-                        style={{
-                          padding: '4px 12px',
-                          backgroundColor: colors.success + '20',
-                          color: colors.success,
-                          borderRadius: '12px',
-                          fontSize: '0.85rem',
-                          fontWeight: '500',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                        }}
-                      >
-                        <Check size={14} />
-                        Active
-                      </span>
+                  {/* Status Badges */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    {isActive && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '3px 8px',
+                        backgroundColor: `${BLOOMBERG.GREEN}20`,
+                        borderRadius: '3px'
+                      }}>
+                        <div style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: BLOOMBERG.GREEN,
+                          boxShadow: `0 0 6px ${BLOOMBERG.GREEN}`
+                        }} />
+                        <span style={{
+                          color: BLOOMBERG.GREEN,
+                          fontSize: '9px',
+                          fontWeight: 700
+                        }}>ACTIVE</span>
+                      </div>
                     )}
 
-                    {/* Connection Status */}
                     {status.connected && (
-                      <span
-                        style={{
-                          padding: '4px 12px',
-                          backgroundColor: colors.success + '20',
-                          color: colors.success,
-                          borderRadius: '12px',
-                          fontSize: '0.85rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                        }}
-                      >
-                        <CheckCircle size={14} />
-                        Connected
-                      </span>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '3px 8px',
+                        backgroundColor: `${BLOOMBERG.CYAN}20`,
+                        borderRadius: '3px'
+                      }}>
+                        <CheckCircle size={10} color={BLOOMBERG.CYAN} />
+                        <span style={{
+                          color: BLOOMBERG.CYAN,
+                          fontSize: '9px',
+                          fontWeight: 700
+                        }}>CONNECTED</span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -533,55 +699,88 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 {/* Capabilities */}
                 {capabilities && (
                   <div style={{ marginBottom: '12px' }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                       {capabilities.backtesting && (
-                        <span style={{ ...capabilityBadgeStyle, color: colors.text }}>Backtesting</span>
+                        <span style={{
+                          padding: '3px 8px',
+                          backgroundColor: `${BLOOMBERG.ORANGE}15`,
+                          border: `1px solid ${BLOOMBERG.ORANGE}40`,
+                          borderRadius: '3px',
+                          color: BLOOMBERG.ORANGE,
+                          fontSize: '8px',
+                          fontWeight: 700,
+                          letterSpacing: '0.5px'
+                        }}>BACKTESTING</span>
                       )}
                       {capabilities.optimization && (
-                        <span style={{ ...capabilityBadgeStyle, color: colors.text }}>Optimization</span>
+                        <span style={{
+                          padding: '3px 8px',
+                          backgroundColor: `${BLOOMBERG.CYAN}15`,
+                          border: `1px solid ${BLOOMBERG.CYAN}40`,
+                          borderRadius: '3px',
+                          color: BLOOMBERG.CYAN,
+                          fontSize: '8px',
+                          fontWeight: 700,
+                          letterSpacing: '0.5px'
+                        }}>OPTIMIZATION</span>
                       )}
                       {capabilities.liveTrading && (
-                        <span style={{ ...capabilityBadgeStyle, color: colors.text }}>Live Trading</span>
+                        <span style={{
+                          padding: '3px 8px',
+                          backgroundColor: `${BLOOMBERG.GREEN}15`,
+                          border: `1px solid ${BLOOMBERG.GREEN}40`,
+                          borderRadius: '3px',
+                          color: BLOOMBERG.GREEN,
+                          fontSize: '8px',
+                          fontWeight: 700,
+                          letterSpacing: '0.5px'
+                        }}>LIVE</span>
                       )}
                       {capabilities.research && (
-                        <span style={{ ...capabilityBadgeStyle, color: colors.text }}>Research</span>
+                        <span style={{
+                          padding: '3px 8px',
+                          backgroundColor: `${BLOOMBERG.YELLOW}15`,
+                          border: `1px solid ${BLOOMBERG.YELLOW}40`,
+                          borderRadius: '3px',
+                          color: BLOOMBERG.YELLOW,
+                          fontSize: '8px',
+                          fontWeight: 700,
+                          letterSpacing: '0.5px'
+                        }}>RESEARCH</span>
                       )}
                     </div>
                   </div>
                 )}
 
-                {/* Status Message */}
+                {/* Status/Error Messages */}
                 {status.message && (
-                  <div
-                    style={{
-                      padding: '8px 12px',
-                      marginBottom: '12px',
-                      backgroundColor: status.connected ? colors.success + '10' : colors.error + '10',
-                      borderRadius: '4px',
-                      fontSize: '0.9rem',
-                      color: status.connected ? colors.success : colors.error,
-                    }}
-                  >
+                  <div style={{
+                    padding: '8px 10px',
+                    marginBottom: '12px',
+                    backgroundColor: status.connected ? `${BLOOMBERG.GREEN}10` : `${BLOOMBERG.RED}10`,
+                    border: `1px solid ${status.connected ? BLOOMBERG.GREEN : BLOOMBERG.RED}40`,
+                    borderRadius: '3px',
+                    fontSize: '9px',
+                    color: status.connected ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                  }}>
                     {status.message}
                   </div>
                 )}
 
-                {/* Error Message */}
                 {status.error && (
-                  <div
-                    style={{
-                      padding: '8px 12px',
-                      marginBottom: '12px',
-                      backgroundColor: colors.error + '10',
-                      borderRadius: '4px',
-                      fontSize: '0.9rem',
-                      color: colors.error,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                    }}
-                  >
-                    <AlertCircle size={16} />
+                  <div style={{
+                    padding: '8px 10px',
+                    marginBottom: '12px',
+                    backgroundColor: `${BLOOMBERG.RED}10`,
+                    border: `1px solid ${BLOOMBERG.RED}40`,
+                    borderRadius: '3px',
+                    fontSize: '9px',
+                    color: BLOOMBERG.RED,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}>
+                    <AlertCircle size={12} />
                     {status.error}
                   </div>
                 )}
@@ -592,67 +791,97 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                     onClick={() => testConnection(provider)}
                     disabled={status.testing}
                     style={{
-                      padding: '8px 16px',
-                      backgroundColor: colors.accent,
-                      color: colors.background,
+                      flex: 1,
+                      padding: '8px 12px',
+                      backgroundColor: status.testing ? BLOOMBERG.MUTED : BLOOMBERG.ORANGE,
+                      color: '#000000',
                       border: 'none',
-                      borderRadius: '4px',
+                      borderRadius: '3px',
                       cursor: status.testing ? 'not-allowed' : 'pointer',
                       opacity: status.testing ? 0.6 : 1,
                       display: 'flex',
                       alignItems: 'center',
+                      justifyContent: 'center',
                       gap: '6px',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      letterSpacing: '0.5px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!status.testing) e.currentTarget.style.opacity = '0.8';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!status.testing) e.currentTarget.style.opacity = '1';
                     }}
                   >
                     {status.testing ? (
                       <>
-                        <Loader size={16} className="animate-spin" />
-                        Testing...
+                        <Loader size={12} className="animate-spin" />
+                        TESTING...
                       </>
                     ) : (
                       <>
-                        <PlayCircle size={16} />
-                        Test Connection
+                        <PlayCircle size={12} />
+                        TEST
                       </>
                     )}
                   </button>
 
-                  {!provider.is_active && (
+                  {!isActive && (
                     <button
                       onClick={() => activateProvider(provider.name)}
                       style={{
-                        padding: '8px 16px',
-                        backgroundColor: colors.success,
-                        color: 'white',
+                        padding: '8px 12px',
+                        backgroundColor: BLOOMBERG.GREEN,
+                        color: '#000000',
                         border: 'none',
-                        borderRadius: '4px',
+                        borderRadius: '3px',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '6px',
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        letterSpacing: '0.5px',
+                        transition: 'all 0.2s'
                       }}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                     >
-                      <Check size={16} />
-                      Activate
+                      <Zap size={12} />
+                      ACTIVATE
                     </button>
                   )}
 
                   <button
                     onClick={() => deleteProvider(provider.name)}
                     style={{
-                      padding: '8px 16px',
-                      backgroundColor: colors.error,
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
+                      padding: '8px 12px',
+                      backgroundColor: 'transparent',
+                      color: BLOOMBERG.GRAY,
+                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      borderRadius: '3px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      letterSpacing: '0.5px',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = BLOOMBERG.RED;
+                      e.currentTarget.style.color = BLOOMBERG.RED;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                      e.currentTarget.style.color = BLOOMBERG.GRAY;
                     }}
                   >
-                    <Trash2 size={16} />
-                    Delete
+                    <Trash2 size={12} />
+                    DELETE
                   </button>
                 </div>
               </div>
@@ -661,33 +890,47 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
         )}
       </div>
 
-      {/* Registry Info */}
-      <div
-        style={{
-          marginTop: '20px',
-          padding: '16px',
-          backgroundColor: colors.surface,
-          border: `1px solid ${colors.border}`,
-          borderRadius: '8px',
-        }}
-      >
-        <h4 style={{ color: colors.text, marginBottom: '12px' }}>Provider Registry Status</h4>
-        <div style={{ color: colors.textSecondary, fontSize: '0.9rem' }}>
-          <p>
-            Registered providers: {backtestingRegistry.listProviders().length}
-          </p>
-          <p>
-            Active provider: {backtestingRegistry.getActiveProvider()?.name || 'None'}
-          </p>
+      {/* Registry Status */}
+      <div style={{
+        padding: '16px',
+        backgroundColor: BLOOMBERG.HEADER_BG,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        borderTop: `2px solid ${BLOOMBERG.CYAN}`,
+        borderRadius: '4px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: '16px'
+      }}>
+        <div>
+          <div style={{
+            color: BLOOMBERG.GRAY,
+            fontSize: '9px',
+            fontWeight: 600,
+            letterSpacing: '0.5px',
+            marginBottom: '6px'
+          }}>REGISTERED PROVIDERS</div>
+          <div style={{
+            color: BLOOMBERG.CYAN,
+            fontSize: '20px',
+            fontWeight: 700
+          }}>{backtestingRegistry.listProviders().length}</div>
+        </div>
+        <div>
+          <div style={{
+            color: BLOOMBERG.GRAY,
+            fontSize: '9px',
+            fontWeight: 600,
+            letterSpacing: '0.5px',
+            marginBottom: '6px'
+          }}>ACTIVE PROVIDER</div>
+          <div style={{
+            color: BLOOMBERG.GREEN,
+            fontSize: '12px',
+            fontWeight: 700,
+            letterSpacing: '0.5px'
+          }}>{backtestingRegistry.getActiveProvider()?.name || 'NONE'}</div>
         </div>
       </div>
     </div>
   );
 }
-
-const capabilityBadgeStyle: React.CSSProperties = {
-  padding: '4px 8px',
-  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  borderRadius: '4px',
-  fontSize: '0.8rem',
-};

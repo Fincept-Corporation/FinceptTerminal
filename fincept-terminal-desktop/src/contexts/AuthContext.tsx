@@ -544,10 +544,10 @@ if (result.success && result.data && result.data.data && result.data.data.api_ke
   console.log('AuthContext: Has subscription:', !!newSession.subscription?.has_subscription);
   return { success: true };
 } else {
-        console.log('AuthContext: Login failed - success:', result.success, 'data:', result.data, 'api_key:', result.data?.api_key);
+        console.log('AuthContext: Login failed - success:', result.success, 'data:', result.data, 'error:', result.error);
         return {
           success: false,
-          error: result.message || result.error || 'Login failed'
+          error: result.error || result.message || 'Login failed'
         };
       }
     } catch (error) {

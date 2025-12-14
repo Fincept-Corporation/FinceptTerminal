@@ -19,6 +19,9 @@ import { OrdersTable, ClosedOrders } from './trading/core/OrderManager';
 import { TradingChart, DepthChart, VolumeProfile } from './trading/charts';
 import { AccountStats, FeesDisplay, MarginPanel } from './trading/core/AccountInfo';
 import { PortfolioAggregator, ArbitrageDetector } from './trading/cross-exchange';
+import { AIAgentsPanel } from './trading/ai-agents/AIAgentsPanel';
+import { ModelChatPanel } from './trading/ai-agents/ModelChatPanel';
+import { LeaderboardPanel } from './trading/ai-agents/LeaderboardPanel';
 import type { OrderRequest } from '../../types/trading';
 
 interface OrderBookLevel {
@@ -104,7 +107,8 @@ export function TradingTab() {
   const [showSymbolDropdown, setShowSymbolDropdown] = useState(false);
   const [showBrokerDropdown, setShowBrokerDropdown] = useState(false);
   const [selectedView, setSelectedView] = useState<'chart' | 'depth' | 'trades'>('chart');
-  const [rightPanelView, setRightPanelView] = useState<'orderbook' | 'volume'>('orderbook');
+  const [rightPanelView, setRightPanelView] = useState<'orderbook' | 'volume' | 'modelchat'>('orderbook');
+  const [leftSidebarView, setLeftSidebarView] = useState<'watchlist' | 'ai-agents' | 'leaderboard'>('watchlist');
 
   // Paper trading state
   const [positions, setPositions] = useState<Position[]>([]);
@@ -123,7 +127,18 @@ export function TradingTab() {
   const [showSettings, setShowSettings] = useState(false);
 
   // Watchlist
-  const [watchlist, setWatchlist] = useState<string[]>(['BTC/USD', 'ETH/USD', 'SOL/USD']);
+  // Top 30 most traded crypto pairs
+  const [watchlist, setWatchlist] = useState<string[]>([
+    'BTC/USD', 'ETH/USD', 'BNB/USD', 'SOL/USD', 'XRP/USD',
+    'ADA/USD', 'DOGE/USD', 'AVAX/USD', 'DOT/USD', 'MATIC/USD',
+    'LTC/USD', 'SHIB/USD', 'TRX/USD', 'LINK/USD', 'UNI/USD',
+    'ATOM/USD', 'XLM/USD', 'ETC/USD', 'BCH/USD', 'NEAR/USD',
+    'APT/USD', 'ARB/USD', 'OP/USD', 'LDO/USD', 'FIL/USD',
+    'ICP/USD', 'INJ/USD', 'STX/USD', 'MKR/USD', 'AAVE/USD'
+  ]);
+
+  // Watchlist prices
+  const [watchlistPrices, setWatchlistPrices] = useState<Record<string, { price: number; change: number }>>({});
 
   // Update time
   useEffect(() => {
@@ -132,6 +147,93 @@ export function TradingTab() {
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Fetch watchlist prices - Using bulk API fetch (updated every 15 minutes)
+  useEffect(() => {
+    const fetchWatchlistPrices = async () => {
+      try {
+        // Approach 1: Try using exchange's bulk fetchTickers if available
+        if (activeAdapter && typeof activeAdapter.fetchTickers === 'function') {
+          try {
+            const tickers = await activeAdapter.fetchTickers(watchlist);
+            const prices: Record<string, { price: number; change: number }> = {};
+
+            let hasValidData = false;
+            watchlist.forEach(symbol => {
+              const ticker = tickers[symbol];
+              if (ticker && ticker.last && ticker.last > 0) {
+                prices[symbol] = {
+                  price: ticker.last,
+                  change: ticker.percentage || 0
+                };
+                hasValidData = true;
+              }
+            });
+
+            // Only update if we got valid data
+            if (hasValidData) {
+              setWatchlistPrices(prices);
+              console.log('[Watchlist] Successfully fetched prices from adapter');
+              return;
+            }
+          } catch (err) {
+            console.warn('[Watchlist] fetchTickers failed, trying fallback API:', err);
+          }
+        }
+
+        // Approach 2: Fallback to public Binance API for crypto prices
+        const symbols = watchlist.map(s => s.replace('/USD', 'USDT').replace('/', ''));
+        const response = await fetch('https://api.binance.com/api/v3/ticker/24hr');
+
+        if (!response.ok) {
+          throw new Error(`Binance API returned ${response.status}`);
+        }
+
+        const allTickers = await response.json();
+
+        if (!Array.isArray(allTickers)) {
+          throw new Error('Invalid response from Binance API');
+        }
+
+        const prices: Record<string, { price: number; change: number }> = {};
+        let hasValidData = false;
+
+        watchlist.forEach((symbol, idx) => {
+          const binanceSymbol = symbols[idx];
+          const ticker = allTickers.find((t: any) => t.symbol === binanceSymbol);
+
+          if (ticker && ticker.lastPrice) {
+            const price = parseFloat(ticker.lastPrice);
+            const change = parseFloat(ticker.priceChangePercent);
+
+            if (price > 0) {
+              prices[symbol] = { price, change };
+              hasValidData = true;
+            }
+          }
+        });
+
+        // Only update if we got valid data
+        if (hasValidData) {
+          setWatchlistPrices(prices);
+          console.log('[Watchlist] Successfully fetched prices from Binance');
+        } else {
+          console.warn('[Watchlist] No valid data received, keeping existing prices');
+        }
+      } catch (error) {
+        console.error('[Watchlist] Failed to fetch prices:', error);
+        // DON'T clear existing data on error - keep what we have
+        console.warn('[Watchlist] Keeping existing prices due to fetch error');
+      }
+    };
+
+    // Initial fetch
+    fetchWatchlistPrices();
+
+    // Update every 15 minutes (900000ms)
+    const interval = setInterval(fetchWatchlistPrices, 900000);
+    return () => clearInterval(interval);
+  }, [activeAdapter, watchlist]);
 
   // Clear data when symbol changes
   useEffect(() => {
@@ -858,56 +960,199 @@ export function TradingTab() {
 
       {/* ========== MAIN CONTENT ========== */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* LEFT SIDEBAR - Watchlist */}
+        {/* LEFT SIDEBAR - Watchlist / AI Agents Toggle */}
         <div style={{
-          width: '220px',
+          width: '320px',
           backgroundColor: BLOOMBERG.PANEL_BG,
           borderRight: `1px solid ${BLOOMBERG.BORDER}`,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
+          {/* Toggle Header */}
           <div style={{
-            padding: '8px 12px',
+            padding: '6px',
             backgroundColor: BLOOMBERG.HEADER_BG,
             borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-            fontSize: '10px',
-            fontWeight: 700,
-            color: BLOOMBERG.ORANGE,
-            letterSpacing: '0.5px'
+            display: 'flex',
+            gap: '4px'
           }}>
-            WATCHLIST
+            <button
+              onClick={() => setLeftSidebarView('watchlist')}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                backgroundColor: leftSidebarView === 'watchlist' ? BLOOMBERG.ORANGE : 'transparent',
+                border: 'none',
+                color: leftSidebarView === 'watchlist' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                cursor: 'pointer',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s',
+                borderRadius: '2px'
+              }}
+            >
+              WATCH
+            </button>
+            <button
+              onClick={() => setLeftSidebarView('ai-agents')}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                backgroundColor: leftSidebarView === 'ai-agents' ? BLOOMBERG.ORANGE : 'transparent',
+                border: 'none',
+                color: leftSidebarView === 'ai-agents' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                cursor: 'pointer',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s',
+                borderRadius: '2px'
+              }}
+            >
+              AGENTS
+            </button>
+            <button
+              onClick={() => setLeftSidebarView('leaderboard')}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                backgroundColor: leftSidebarView === 'leaderboard' ? BLOOMBERG.ORANGE : 'transparent',
+                border: 'none',
+                color: leftSidebarView === 'leaderboard' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                cursor: 'pointer',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s',
+                borderRadius: '2px'
+              }}
+            >
+              LEADER
+            </button>
           </div>
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            {watchlist.map((symbol, idx) => (
-              <div
-                key={symbol}
-                onClick={() => setSelectedSymbol(symbol)}
-                style={{
-                  padding: '10px 12px',
-                  cursor: 'pointer',
-                  backgroundColor: selectedSymbol === symbol ? `${BLOOMBERG.ORANGE}15` : 'transparent',
-                  borderLeft: selectedSymbol === symbol ? `3px solid ${BLOOMBERG.ORANGE}` : '3px solid transparent',
-                  borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedSymbol !== symbol) {
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (selectedSymbol !== symbol) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                <div style={{ fontSize: '11px', fontWeight: 600, color: selectedSymbol === symbol ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE, marginBottom: '4px' }}>
-                  {symbol}
-                </div>
-                <div style={{ fontSize: '10px', color: BLOOMBERG.GREEN }}>+2.45%</div>
+
+          {/* Content */}
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {leftSidebarView === 'watchlist' && (
+              <div style={{
+                flex: 1,
+                overflow: 'auto',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '0',
+                alignContent: 'start'
+              }}>
+                {watchlist.map((symbol, idx) => (
+                  <div
+                    key={symbol}
+                    onClick={() => setSelectedSymbol(symbol)}
+                    style={{
+                      padding: '8px 10px',
+                      cursor: 'pointer',
+                      backgroundColor: selectedSymbol === symbol ? `${BLOOMBERG.ORANGE}15` : 'transparent',
+                      borderLeft: selectedSymbol === symbol ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
+                      borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+                      borderRight: idx % 2 === 0 ? `1px solid ${BLOOMBERG.BORDER}` : 'none',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedSymbol !== symbol) {
+                        e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedSymbol !== symbol) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    {/* Flex container: Ticker on left, Price/Change on right */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      {/* Left side: Ticker symbol */}
+                      <div style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: selectedSymbol === symbol ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {symbol.replace('/USD', '')}
+                      </div>
+
+                      {/* Right side: Price and Change */}
+                      {watchlistPrices[symbol] ? (
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-end',
+                          gap: '2px'
+                        }}>
+                          <div style={{
+                            fontSize: '10px',
+                            color: BLOOMBERG.WHITE,
+                            fontFamily: 'monospace',
+                            fontWeight: 600
+                          }}>
+                            ${watchlistPrices[symbol].price >= 1000
+                              ? watchlistPrices[symbol].price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : watchlistPrices[symbol].price >= 1
+                              ? watchlistPrices[symbol].price.toFixed(2)
+                              : watchlistPrices[symbol].price.toFixed(4)
+                            }
+                          </div>
+                          <div style={{
+                            fontSize: '9px',
+                            color: watchlistPrices[symbol].change >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                            fontFamily: 'monospace',
+                            fontWeight: 700
+                          }}>
+                            {watchlistPrices[symbol].change >= 0 ? '▲' : '▼'} {Math.abs(watchlistPrices[symbol].change).toFixed(2)}%
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{
+                          fontSize: '9px',
+                          color: BLOOMBERG.GRAY,
+                          fontFamily: 'monospace'
+                        }}>
+                          ...
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+
+            {leftSidebarView === 'ai-agents' && (
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                <AIAgentsPanel
+                  selectedSymbol={selectedSymbol}
+                  portfolioData={{
+                    positions: positions.map(p => ({
+                      symbol: p.symbol,
+                      quantity: p.quantity,
+                      entry_price: p.entryPrice,
+                      current_price: p.currentPrice,
+                      value: p.positionValue
+                    })),
+                    total_value: equity
+                  }}
+                />
+              </div>
+            )}
+
+            {leftSidebarView === 'leaderboard' && (
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <LeaderboardPanel refreshInterval={10000} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -915,12 +1160,13 @@ export function TradingTab() {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {/* Chart Area */}
           <div style={{
-            height: '55%',
+            flex: isBottomPanelMinimized ? 1 : '0 0 55%',
             backgroundColor: BLOOMBERG.PANEL_BG,
             borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            transition: 'flex 0.3s ease'
           }}>
             <div style={{
               padding: '8px 12px',
@@ -952,20 +1198,26 @@ export function TradingTab() {
             <div style={{
               flex: 1,
               display: 'flex',
-              alignItems: 'center',
+              alignItems: 'stretch',
               justifyContent: 'center',
               color: BLOOMBERG.GRAY,
               fontSize: '12px',
-              overflow: 'hidden'
+              overflow: 'visible',
+              minHeight: 0
             }}>
               {selectedView === 'chart' && (
-                <div style={{ width: '100%', height: '100%' }}>
-                  <TradingChart symbol={selectedSymbol} height={isBottomPanelMinimized ? 650 : 450} showVolume={true} />
+                <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <TradingChart
+                    symbol={selectedSymbol}
+                    showVolume={true}
+                  />
                 </div>
               )}
               {selectedView === 'depth' && (
                 <div style={{ width: '100%', height: '100%', padding: '8px' }}>
-                  <DepthChart symbol={selectedSymbol} height={420} />
+                  <DepthChart
+                    symbol={selectedSymbol}
+                  />
                 </div>
               )}
               {selectedView === 'trades' && (
@@ -1151,14 +1403,27 @@ export function TradingTab() {
 
               {/* Stats Tab */}
               {activeBottomTab === 'stats' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '12px' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 300px',
+                  gap: '12px',
+                  padding: '12px',
+                  height: '100%',
+                  overflow: 'hidden'
+                }}>
                   {/* Left: Account Statistics */}
-                  <div>
+                  <div style={{ height: '100%', overflow: 'auto' }}>
                     <AccountStats />
                   </div>
 
                   {/* Right: Fees & Margin */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    height: '100%',
+                    overflow: 'auto'
+                  }}>
                     <FeesDisplay />
                     <MarginPanel />
                   </div>
@@ -1232,7 +1497,7 @@ export function TradingTab() {
 
         {/* RIGHT SIDEBAR - Order Entry & Order Book */}
         <div style={{
-          width: '360px',
+          width: '300px',
           backgroundColor: BLOOMBERG.PANEL_BG,
           borderLeft: `1px solid ${BLOOMBERG.BORDER}`,
           display: 'flex',
@@ -1320,7 +1585,7 @@ export function TradingTab() {
               alignItems: 'center'
             }}>
               <div style={{ display: 'flex', gap: '8px' }}>
-                {['orderbook', 'volume'].map((view) => (
+                {['orderbook', 'volume', 'modelchat'].map((view) => (
                   <button
                     key={view}
                     onClick={() => setRightPanelView(view as any)}
@@ -1447,6 +1712,10 @@ export function TradingTab() {
 
           {rightPanelView === 'volume' && (
             <VolumeProfile symbol={selectedSymbol} height={550} />
+          )}
+
+          {rightPanelView === 'modelchat' && (
+            <ModelChatPanel refreshInterval={5000} />
           )}
         </div>
             <div style={{

@@ -7,19 +7,52 @@ import React from 'react';
 import { TrendingUp, TrendingDown, Target, DollarSign } from 'lucide-react';
 import { useTradingStats } from '../../hooks/useAccountInfo';
 
+// Bloomberg color palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
+};
+
 export function AccountStats() {
   const { stats, isLoading } = useTradingStats();
 
   if (isLoading || !stats) {
     return (
-      <div className="flex items-center justify-center p-8 bg-black border border-gray-800 rounded">
-        <div className="text-gray-500 text-sm">
-          {isLoading ? (
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-          ) : (
-            'No statistics available'
-          )}
-        </div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px',
+        background: BLOOMBERG.PANEL_BG,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        color: BLOOMBERG.GRAY,
+        fontSize: '12px'
+      }}>
+        {isLoading ? (
+          <div style={{
+            width: '24px',
+            height: '24px',
+            border: `2px solid ${BLOOMBERG.BORDER}`,
+            borderTopColor: BLOOMBERG.ORANGE,
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+        ) : (
+          'No statistics available'
+        )}
       </div>
     );
   }
@@ -27,78 +60,107 @@ export function AccountStats() {
   const statCards = [
     {
       label: 'Total P&L',
-      value: `${stats.totalPnL >= 0 ? '+' : ''}$${stats.totalPnL.toFixed(2)}`,
-      color: stats.totalPnL >= 0 ? 'text-green-500' : 'text-red-500',
+      value: `${stats.totalPnL >= 0 ? '+' : ''}$${(typeof stats.totalPnL === 'number' ? stats.totalPnL : 0).toFixed(2)}`,
+      color: stats.totalPnL >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
       icon: stats.totalPnL >= 0 ? TrendingUp : TrendingDown,
-      bgColor: stats.totalPnL >= 0 ? 'bg-green-500/10' : 'bg-red-500/10',
     },
     {
       label: 'Return',
-      value: `${stats.returnPercent >= 0 ? '+' : ''}${stats.returnPercent.toFixed(2)}%`,
-      color: stats.returnPercent >= 0 ? 'text-green-500' : 'text-red-500',
+      value: `${stats.returnPercent >= 0 ? '+' : ''}${(typeof stats.returnPercent === 'number' ? stats.returnPercent : 0).toFixed(2)}%`,
+      color: stats.returnPercent >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
       icon: Target,
-      bgColor: stats.returnPercent >= 0 ? 'bg-green-500/10' : 'bg-red-500/10',
     },
     {
       label: 'Win Rate',
-      value: `${stats.winRate.toFixed(1)}%`,
-      color: stats.winRate >= 50 ? 'text-green-500' : 'text-yellow-500',
+      value: `${(typeof stats.winRate === 'number' ? stats.winRate : 0).toFixed(1)}%`,
+      color: stats.winRate >= 50 ? BLOOMBERG.GREEN : BLOOMBERG.YELLOW,
       icon: Target,
-      bgColor: stats.winRate >= 50 ? 'bg-green-500/10' : 'bg-yellow-500/10',
     },
     {
       label: 'Total Trades',
-      value: stats.totalTrades.toString(),
-      color: 'text-blue-500',
+      value: (stats.totalTrades || 0).toString(),
+      color: BLOOMBERG.BLUE,
       icon: DollarSign,
-      bgColor: 'bg-blue-500/10',
     },
     {
       label: 'Winning Trades',
-      value: stats.winningTrades.toString(),
-      color: 'text-green-500',
+      value: (stats.winningTrades || 0).toString(),
+      color: BLOOMBERG.GREEN,
       icon: TrendingUp,
-      bgColor: 'bg-green-500/10',
     },
     {
       label: 'Losing Trades',
-      value: stats.losingTrades.toString(),
-      color: 'text-red-500',
+      value: (stats.losingTrades || 0).toString(),
+      color: BLOOMBERG.RED,
       icon: TrendingDown,
-      bgColor: 'bg-red-500/10',
     },
     {
       label: 'Realized P&L',
-      value: `${stats.realizedPnL >= 0 ? '+' : ''}$${stats.realizedPnL.toFixed(2)}`,
-      color: stats.realizedPnL >= 0 ? 'text-green-500' : 'text-red-500',
+      value: `${stats.realizedPnL >= 0 ? '+' : ''}$${(typeof stats.realizedPnL === 'number' ? stats.realizedPnL : 0).toFixed(2)}`,
+      color: stats.realizedPnL >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
       icon: DollarSign,
-      bgColor: 'bg-gray-800',
     },
     {
       label: 'Unrealized P&L',
-      value: `${stats.unrealizedPnL >= 0 ? '+' : ''}$${stats.unrealizedPnL.toFixed(2)}`,
-      color: stats.unrealizedPnL >= 0 ? 'text-green-500' : 'text-red-500',
+      value: `${stats.unrealizedPnL >= 0 ? '+' : ''}$${(typeof stats.unrealizedPnL === 'number' ? stats.unrealizedPnL : 0).toFixed(2)}`,
+      color: stats.unrealizedPnL >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
       icon: DollarSign,
-      bgColor: 'bg-gray-800',
     },
   ];
 
   return (
-    <div className="space-y-4">
+    <div style={{
+      height: '100%',
+      overflow: 'auto',
+      padding: '12px',
+      background: BLOOMBERG.PANEL_BG
+    }}>
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '12px',
+        marginBottom: '16px'
+      }}>
         {statCards.map((stat, idx) => {
           const Icon = stat.icon;
           return (
             <div
               key={idx}
-              className={`${stat.bgColor} border border-gray-800 rounded p-3 transition-all hover:border-gray-700`}
+              style={{
+                background: BLOOMBERG.DARK_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                borderRadius: '4px',
+                padding: '12px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = BLOOMBERG.MUTED}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
             >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-400 font-medium">{stat.label}</span>
-                <Icon className={`w-4 h-4 ${stat.color}`} />
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '8px'
+              }}>
+                <span style={{
+                  fontSize: '9px',
+                  color: BLOOMBERG.GRAY,
+                  fontWeight: 600,
+                  letterSpacing: '0.5px'
+                }}>
+                  {stat.label.toUpperCase()}
+                </span>
+                <Icon size={14} color={stat.color} />
               </div>
-              <div className={`text-lg font-bold font-mono ${stat.color}`}>{stat.value}</div>
+              <div style={{
+                fontSize: '18px',
+                fontWeight: 700,
+                fontFamily: '"IBM Plex Mono", monospace',
+                color: stat.color
+              }}>
+                {stat.value}
+              </div>
             </div>
           );
         })}
@@ -106,51 +168,109 @@ export function AccountStats() {
 
       {/* Advanced Stats */}
       {stats.averageWin !== undefined && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {stats.averageWin !== undefined && (
-            <div className="bg-gray-900 border border-gray-800 rounded p-3">
-              <div className="text-xs text-gray-400 mb-1">Avg Win</div>
-              <div className="text-sm font-mono text-green-500">${stats.averageWin.toFixed(2)}</div>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '12px',
+          marginBottom: '16px'
+        }}>
+          {stats.averageWin !== undefined && typeof stats.averageWin === 'number' && (
+            <div style={{
+              background: BLOOMBERG.DARK_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              borderRadius: '4px',
+              padding: '12px'
+            }}>
+              <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>AVG WIN</div>
+              <div style={{ fontSize: '14px', fontFamily: '"IBM Plex Mono", monospace', color: BLOOMBERG.GREEN, fontWeight: 600 }}>
+                ${stats.averageWin.toFixed(2)}
+              </div>
             </div>
           )}
-          {stats.averageLoss !== undefined && (
-            <div className="bg-gray-900 border border-gray-800 rounded p-3">
-              <div className="text-xs text-gray-400 mb-1">Avg Loss</div>
-              <div className="text-sm font-mono text-red-500">${stats.averageLoss.toFixed(2)}</div>
+          {stats.averageLoss !== undefined && typeof stats.averageLoss === 'number' && (
+            <div style={{
+              background: BLOOMBERG.DARK_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              borderRadius: '4px',
+              padding: '12px'
+            }}>
+              <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>AVG LOSS</div>
+              <div style={{ fontSize: '14px', fontFamily: '"IBM Plex Mono", monospace', color: BLOOMBERG.RED, fontWeight: 600 }}>
+                ${stats.averageLoss.toFixed(2)}
+              </div>
             </div>
           )}
-          {stats.profitFactor !== undefined && (
-            <div className="bg-gray-900 border border-gray-800 rounded p-3">
-              <div className="text-xs text-gray-400 mb-1">Profit Factor</div>
-              <div className="text-sm font-mono text-blue-500">{stats.profitFactor.toFixed(2)}</div>
+          {stats.profitFactor !== undefined && typeof stats.profitFactor === 'number' && (
+            <div style={{
+              background: BLOOMBERG.DARK_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              borderRadius: '4px',
+              padding: '12px'
+            }}>
+              <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>PROFIT FACTOR</div>
+              <div style={{ fontSize: '14px', fontFamily: '"IBM Plex Mono", monospace', color: BLOOMBERG.BLUE, fontWeight: 600 }}>
+                {stats.profitFactor.toFixed(2)}
+              </div>
             </div>
           )}
-          {stats.largestWin !== undefined && (
-            <div className="bg-gray-900 border border-gray-800 rounded p-3">
-              <div className="text-xs text-gray-400 mb-1">Largest Win</div>
-              <div className="text-sm font-mono text-green-500">${stats.largestWin.toFixed(2)}</div>
+          {stats.largestWin !== undefined && typeof stats.largestWin === 'number' && (
+            <div style={{
+              background: BLOOMBERG.DARK_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              borderRadius: '4px',
+              padding: '12px'
+            }}>
+              <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>LARGEST WIN</div>
+              <div style={{ fontSize: '14px', fontFamily: '"IBM Plex Mono", monospace', color: BLOOMBERG.GREEN, fontWeight: 600 }}>
+                ${stats.largestWin.toFixed(2)}
+              </div>
             </div>
           )}
-          {stats.largestLoss !== undefined && (
-            <div className="bg-gray-900 border border-gray-800 rounded p-3">
-              <div className="text-xs text-gray-400 mb-1">Largest Loss</div>
-              <div className="text-sm font-mono text-red-500">${stats.largestLoss.toFixed(2)}</div>
+          {stats.largestLoss !== undefined && typeof stats.largestLoss === 'number' && (
+            <div style={{
+              background: BLOOMBERG.DARK_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              borderRadius: '4px',
+              padding: '12px'
+            }}>
+              <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>LARGEST LOSS</div>
+              <div style={{ fontSize: '14px', fontFamily: '"IBM Plex Mono", monospace', color: BLOOMBERG.RED, fontWeight: 600 }}>
+                ${stats.largestLoss.toFixed(2)}
+              </div>
             </div>
           )}
-          {stats.sharpeRatio !== undefined && (
-            <div className="bg-gray-900 border border-gray-800 rounded p-3">
-              <div className="text-xs text-gray-400 mb-1">Sharpe Ratio</div>
-              <div className="text-sm font-mono text-purple-500">{stats.sharpeRatio.toFixed(2)}</div>
+          {stats.sharpeRatio !== undefined && typeof stats.sharpeRatio === 'number' && (
+            <div style={{
+              background: BLOOMBERG.DARK_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              borderRadius: '4px',
+              padding: '12px'
+            }}>
+              <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>SHARPE RATIO</div>
+              <div style={{ fontSize: '14px', fontFamily: '"IBM Plex Mono", monospace', color: BLOOMBERG.PURPLE, fontWeight: 600 }}>
+                {stats.sharpeRatio.toFixed(2)}
+              </div>
             </div>
           )}
         </div>
       )}
 
       {/* Total Fees */}
-      <div className="bg-gray-900 border border-gray-800 rounded p-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-400">Total Fees Paid</span>
-          <span className="text-sm font-mono text-orange-500">${stats.totalFees.toFixed(2)}</span>
+      <div style={{
+        background: BLOOMBERG.DARK_BG,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        borderRadius: '4px',
+        padding: '12px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <span style={{ fontSize: '9px', color: BLOOMBERG.GRAY, fontWeight: 600 }}>TOTAL FEES PAID</span>
+          <span style={{ fontSize: '14px', fontFamily: '"IBM Plex Mono", monospace', color: BLOOMBERG.ORANGE, fontWeight: 600 }}>
+            ${(typeof stats.totalFees === 'number' ? stats.totalFees : 0).toFixed(2)}
+          </span>
         </div>
       </div>
     </div>

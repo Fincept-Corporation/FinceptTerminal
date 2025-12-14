@@ -1,13 +1,12 @@
 /**
- * TradingChart - TradingView-style candlestick chart
- * Uses lightweight-charts library for high-performance rendering
+ * TradingChart - TradingView-style candlestick chart with drawing tools
+ * Uses ProChartWithToolkit for professional drawing capabilities
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
-import type { IChartApi, CandlestickData, Time } from 'lightweight-charts';
+import React, { useState } from 'react';
+import { ProChartWithToolkit } from './ProChartWithToolkit';
 import { useOHLCV } from '../hooks/useMarketData';
-import type { Timeframe, OHLCV } from '../types';
+import type { Timeframe } from '../types';
 
 interface TradingChartProps {
   symbol: string;
@@ -22,177 +21,179 @@ export function TradingChart({
   height = 500,
   showVolume = true
 }: TradingChartProps) {
-  const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const candlestickSeriesRef = useRef<any>(null);
-  const volumeSeriesRef = useRef<any>(null);
-
-  const { ohlcv, isLoading, error } = useOHLCV(symbol, timeframe, 200);
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>(timeframe);
-
-  // Initialize chart
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
-
-    const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height,
-      layout: {
-        background: { type: ColorType.Solid, color: '#0a0a0a' },
-        textColor: '#d1d5db',
-      },
-      grid: {
-        vertLines: { color: '#1f1f1f' },
-        horzLines: { color: '#1f1f1f' },
-      },
-      crosshair: {
-        mode: 1,
-      },
-      rightPriceScale: {
-        borderColor: '#2a2a2a',
-      },
-      timeScale: {
-        borderColor: '#2a2a2a',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    });
-
-    chartRef.current = chart;
-
-    // Create candlestick series - v5 API: chart.addSeries(SeriesDefinition, options)
-    const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: '#10b981',
-      downColor: '#ef4444',
-      borderUpColor: '#10b981',
-      borderDownColor: '#ef4444',
-      wickUpColor: '#10b981',
-      wickDownColor: '#ef4444',
-    });
-
-    candlestickSeriesRef.current = candlestickSeries;
-
-    // Create volume series
-    if (showVolume) {
-      const volumeSeries = chart.addSeries(HistogramSeries, {
-        color: '#6b7280',
-        priceFormat: {
-          type: 'volume',
-        },
-        priceScaleId: '',
-      });
-
-      volumeSeries.priceScale().applyOptions({
-        scaleMargins: {
-          top: 0.8,
-          bottom: 0,
-        },
-      });
-
-      volumeSeriesRef.current = volumeSeries;
-    }
-
-    // Handle resize
-    const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.resize(
-          chartContainerRef.current.clientWidth,
-          height,
-          true
-        );
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      chart.remove();
-    };
-  }, [height, showVolume]);
-
-  // Handle height changes
-  useEffect(() => {
-    if (chartRef.current && chartContainerRef.current) {
-      chartRef.current.resize(
-        chartContainerRef.current.clientWidth,
-        height,
-        true
-      );
-    }
-  }, [height]);
-
-  // Update chart data
-  useEffect(() => {
-    if (!ohlcv.length || !candlestickSeriesRef.current) return;
-
-    // Convert OHLCV to candlestick data
-    const candleData: CandlestickData[] = ohlcv.map((candle: OHLCV) => ({
-      time: Math.floor(candle.timestamp / 1000) as any,
-      open: candle.open,
-      high: candle.high,
-      low: candle.low,
-      close: candle.close,
-    }));
-
-    candlestickSeriesRef.current.setData(candleData);
-
-    // Update volume data
-    if (showVolume && volumeSeriesRef.current) {
-      const volumeData = ohlcv.map((candle: OHLCV) => ({
-        time: Math.floor(candle.timestamp / 1000) as any,
-        value: candle.volume,
-        color: candle.close >= candle.open ? '#10b98144' : '#ef444444',
-      }));
-
-      volumeSeriesRef.current.setData(volumeData);
-    }
-
-    // Fit content
-    chartRef.current?.timeScale().fitContent();
-  }, [ohlcv, showVolume]);
+  const { ohlcv, isLoading, error } = useOHLCV(symbol, selectedTimeframe, 200);
 
   const timeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
+  // Prepare data for ProChartWithToolkit
+  const chartData = ohlcv.map((candle) => ({
+    time: candle.timestamp > 10000000000 ? Math.floor(candle.timestamp / 1000) : candle.timestamp,
+    open: candle.open,
+    high: candle.high,
+    low: candle.low,
+    close: candle.close,
+    volume: candle.volume,
+  }));
+
   return (
-    <div className="flex flex-col gap-2">
-      {/* Timeframe selector */}
-      <div className="flex items-center gap-2 px-4">
-        <span className="text-xs text-gray-400">TIMEFRAME:</span>
-        <div className="flex gap-1">
-          {timeframes.map((tf) => (
-            <button
-              key={tf}
-              onClick={() => setSelectedTimeframe(tf)}
-              className={`px-2 py-1 text-xs font-mono rounded transition-colors ${
-                selectedTimeframe === tf
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-              }`}
-            >
-              {tf}
-            </button>
-          ))}
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      width: '100%',
+      position: 'relative'
+    }}>
+      {/* Timeframe selector with OHLC data - Bloomberg style */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '4px 12px',
+        flexShrink: 0,
+        backgroundColor: '#000000',
+        borderBottom: '1px solid #2A2A2A',
+        height: '28px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '10px', color: '#787878', fontWeight: 600, fontFamily: 'monospace' }}>TIMEFRAME:</span>
+          <div style={{ display: 'flex', gap: '3px' }}>
+            {timeframes.map((tf) => (
+              <button
+                key={tf}
+                onClick={() => setSelectedTimeframe(tf)}
+                style={{
+                  padding: '3px 8px',
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  borderRadius: '2px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  backgroundColor: selectedTimeframe === tf ? '#FF8800' : '#1A1A1A',
+                  color: selectedTimeframe === tf ? '#000000' : '#787878',
+                  fontWeight: selectedTimeframe === tf ? 600 : 400,
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedTimeframe !== tf) {
+                    e.currentTarget.style.backgroundColor = '#2A2A2A';
+                    e.currentTarget.style.color = '#FFFFFF';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedTimeframe !== tf) {
+                    e.currentTarget.style.backgroundColor = '#1A1A1A';
+                    e.currentTarget.style.color = '#787878';
+                  }
+                }}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* OHLC Data */}
+        {!isLoading && !error && chartData.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '10px', fontFamily: 'monospace' }}>
+              <span style={{ color: '#FF8800', fontWeight: 600, marginRight: '8px' }}>
+                {symbol} - {selectedTimeframe}
+              </span>
+              <span style={{ color: '#787878' }}>O</span>
+              <span style={{ color: '#FFFFFF', marginRight: '6px' }}>{chartData[chartData.length - 1].open.toFixed(2)}</span>
+              <span style={{ color: '#787878' }}>H</span>
+              <span style={{ color: '#FFFFFF', marginRight: '6px' }}>{chartData[chartData.length - 1].high.toFixed(2)}</span>
+              <span style={{ color: '#787878' }}>L</span>
+              <span style={{ color: '#FFFFFF', marginRight: '6px' }}>{chartData[chartData.length - 1].low.toFixed(2)}</span>
+              <span style={{ color: '#787878' }}>C</span>
+              <span
+                style={{
+                  color: chartData[chartData.length - 1].close >= chartData[chartData.length - 1].open
+                    ? '#00D66F'
+                    : '#FF3B3B',
+                  fontWeight: 600,
+                  marginRight: '12px'
+                }}
+              >
+                {chartData[chartData.length - 1].close.toFixed(2)}
+              </span>
+              <span style={{ color: '#787878', fontSize: '9px' }}>{chartData.length} BARS</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Chart container */}
-      <div className="relative">
+      {/* Chart container with absolute positioning for perfect fit */}
+      <div style={{
+        flex: 1,
+        position: 'relative',
+        minHeight: 0,
+        overflow: 'hidden'
+      }}>
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 10
+          }}>
+            <div style={{
+              width: '32px',
+              height: '32px',
+              border: '2px solid transparent',
+              borderTopColor: '#3b82f6',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
           </div>
         )}
 
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
-            <div className="text-red-500 text-sm">
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 10
+          }}>
+            <div style={{ color: '#ef4444', fontSize: '14px' }}>
               Failed to load chart data: {error.message}
             </div>
           </div>
         )}
 
-        <div ref={chartContainerRef} className="w-full" />
+        {/* ProChartWithToolkit with drawing tools */}
+        {!isLoading && !error && chartData.length > 0 && (
+          <ProChartWithToolkit
+            data={chartData}
+            symbol={`${symbol} - ${selectedTimeframe}`}
+            height={height}
+            showVolume={showVolume}
+            showToolbar={true}
+            showHeader={false}
+          />
+        )}
+
+        {/* Empty state when no data */}
+        {!isLoading && !error && chartData.length === 0 && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#6b7280',
+            fontSize: '12px'
+          }}>
+            No data available
+          </div>
+        )}
       </div>
     </div>
   );

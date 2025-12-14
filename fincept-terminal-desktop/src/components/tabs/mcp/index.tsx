@@ -2,13 +2,17 @@
 // Manage MCP servers and tools in Bloomberg-style interface
 
 import React, { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle, MessageSquare } from 'lucide-react';
 import { mcpManager, MCPServerWithStats } from '../../../services/mcpManager';
 import { sqliteService } from '../../../services/sqliteService';
 import MCPMarketplace from './marketplace/MCPMarketplace';
 import MCPAddServerModal from './MCPAddServerModal';
 
-const MCPTab: React.FC = () => {
+interface MCPTabProps {
+  onNavigateToTab?: (tabName: string) => void;
+}
+
+const MCPTab: React.FC<MCPTabProps> = ({ onNavigateToTab }) => {
   const [view, setView] = useState<'marketplace' | 'installed'>('marketplace');
   const [servers, setServers] = useState<MCPServerWithStats[]>([]);
   const [tools, setTools] = useState<any[]>([]);
@@ -203,6 +207,27 @@ const MCPTab: React.FC = () => {
 
           {/* View Switcher */}
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={() => onNavigateToTab?.('chat')}
+              style={{
+                backgroundColor: 'transparent',
+                border: `1px solid ${ORANGE}`,
+                color: ORANGE,
+                padding: '6px 12px',
+                fontSize: '10px',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 'bold'
+              }}
+              title="Go back to AI Chat"
+            >
+              <MessageSquare size={12} />
+              AI CHAT
+            </button>
+
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}

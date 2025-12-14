@@ -21,7 +21,6 @@ import ChatTab from '@/components/tabs/ChatTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
 import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 import PortfolioTab from '@/components/tabs/PortfolioTab';
-import AnalyticsTab from '@/components/tabs/AnalyticsTab';
 import EquityResearchTab from '@/components/tabs/EquityResearchTab';
 import ScreenerTab from '@/components/tabs/ScreenerTab';
 import DBnomicsTab from '@/components/tabs/DBnomicsTab';
@@ -408,8 +407,8 @@ function FinxeptTerminalContent() {
           break;
         case 'F5':
           event.preventDefault();
-          setActiveTab('analytics');
-          setStatusMessage('Navigated to Analytics (F5)');
+          setActiveTab('backtesting');
+          setStatusMessage('Navigated to Backtesting (F5)');
           setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F6':
@@ -486,9 +485,8 @@ function FinxeptTerminalContent() {
   const tradingMenuItems = [
     { label: 'Trading Desk', shortcut: 'F9', action: () => setActiveTab('trading') },
     { label: 'Fyers Broker', action: () => setActiveTab('fyers') },
-    { label: 'Backtesting', action: () => setActiveTab('backtesting'), separator: true },
     { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
-    { label: 'Analytics', shortcut: 'F5', action: () => setActiveTab('analytics') },
+    { label: 'Backtesting', shortcut: 'F5', action: () => setActiveTab('backtesting') },
     { label: 'Watchlist', shortcut: 'F6', action: () => setActiveTab('watchlist') }
   ];
 
@@ -785,11 +783,11 @@ function FinxeptTerminalContent() {
               Portfolio
             </TabsTrigger>
             <TabsTrigger
-              value="analytics"
-              style={activeTab === 'analytics' ? tabStyles.active : tabStyles.default}
-              title="Analytics (F5)"
+              value="backtesting"
+              style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
+              title="Backtesting (F5)"
             >
-              Analytics
+              Backtesting
             </TabsTrigger>
             <TabsTrigger
               value="watchlist"
@@ -847,61 +845,55 @@ function FinxeptTerminalContent() {
       )}
 
       {/* Command Bar - Hidden in Chat Mode */}
-      {mode !== 'chat' && (
-      <div style={{
-        backgroundColor: '#2d2d2d',
-        borderBottom: '1px solid #404040',
-        padding: '4px 8px',
-        height: '24px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        flexShrink: 0
-      }}>
-        <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 6px', fontSize: '9px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
-        <span style={{ color: '#a3a3a3', fontSize: '10px' }}>Enter Command</span>
-        <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
-        <span style={{ color: '#a3a3a3', fontSize: '10px' }}>Search</span>
-        <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
-        <span style={{ color: '#a3a3a3', fontSize: '10px' }}>2025-09-26 14:00:49</span>
-        <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
-        <span style={{ color: '#10b981', fontSize: '10px', fontWeight: 'bold' }}>v{APP_VERSION}</span>
-        {isFullscreen && (
-          <>
-            <div style={{ width: '1px', height: '16px', backgroundColor: '#525252' }}></div>
-            <span style={{ color: '#fbbf24', fontSize: '10px' }}>FULLSCREEN MODE</span>
-          </>
-        )}
-      </div>
-      )}
-
-      {/* Function Keys Bar - Hidden in Chat Mode */}
+      {/* Merged Status & Function Keys Bar - Single Line */}
       {mode !== 'chat' && (
       <div style={{
         backgroundColor: '#1a1a1a',
         borderBottom: '1px solid #404040',
-        padding: '2px 8px',
-        height: '20px',
+        padding: '3px 8px',
+        height: '22px',
         display: 'flex',
         alignItems: 'center',
+        justifyContent: 'space-between',
         gap: '12px',
         flexShrink: 0,
-        fontSize: '10px'
+        fontSize: '9px'
       }}>
-        <span style={{ color: '#fbbf24' }}>F1:DASH</span>
-        <span style={{ color: '#fbbf24' }}>F2:MKTS</span>
-        <span style={{ color: '#fbbf24' }}>F3:NEWS</span>
-        <span style={{ color: '#fbbf24' }}>F4:PORT</span>
-        <span style={{ color: '#fbbf24' }}>F5:ANLY</span>
-        <span style={{ color: '#fbbf24' }}>F6:WATCH</span>
-        <span style={{ color: '#fbbf24' }}>F7:RSRCH</span>
-        <span style={{ color: '#fbbf24' }}>F8:SCRN</span>
-        <span style={{ color: '#fbbf24' }}>F9:TRADE</span>
-        <span style={{ color: '#fbbf24' }}>F10:AI</span>
-        <span style={{ color: '#fbbf24' }}>F11:FULL</span>
-        <span style={{ color: '#fbbf24' }}>F12:PROF</span>
-        <span style={{ color: '#666', marginLeft: '8px' }}>|</span>
-        <span style={{ color: '#10b981' }}>More tabs in toolbar menus</span>
+        {/* Left: Branding & Status Info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 5px', fontSize: '8px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
+          <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Enter Command</span>
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+          <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Search</span>
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+          <span style={{ color: '#a3a3a3', fontSize: '9px' }}>2025-09-26 14:00:49</span>
+          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+          <span style={{ color: '#10b981', fontSize: '9px', fontWeight: 'bold' }}>v{APP_VERSION}</span>
+          {isFullscreen && (
+            <>
+              <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+              <span style={{ color: '#fbbf24', fontSize: '9px' }}>FULLSCREEN</span>
+            </>
+          )}
+        </div>
+
+        {/* Right: Function Keys */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F1:DASH</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F2:MKTS</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F3:NEWS</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F4:PORT</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F5:BKTEST</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F6:WATCH</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F7:RSRCH</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F8:SCRN</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F9:TRADE</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F10:AI</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F11:FULL</span>
+          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F12:PROF</span>
+          <span style={{ color: '#666', marginLeft: '4px' }}>|</span>
+          <span style={{ color: '#10b981', fontSize: '9px' }}>More tabs in toolbar menus</span>
+        </div>
       </div>
       )}
 
@@ -935,13 +927,16 @@ function FinxeptTerminalContent() {
             <GeopoliticsTab />
           </TabsContent>
           <TabsContent value="chat" className="h-full m-0 p-0">
-            <ChatTab onNavigateToSettings={() => setActiveTab('settings')} />
+            <ChatTab
+              onNavigateToSettings={() => setActiveTab('settings')}
+              onNavigateToTab={(tabName) => setActiveTab(tabName)}
+            />
           </TabsContent>
           <TabsContent value="fyers" className="h-full m-0 p-0">
             <FyersTab />
           </TabsContent>
           <TabsContent value="mcp" className="h-full m-0 p-0">
-            <MCPTab />
+            <MCPTab onNavigateToTab={(tabName) => setActiveTab(tabName)} />
           </TabsContent>
           <TabsContent value="profile" className="h-full m-0 p-0">
             <ProfileTab />
@@ -951,9 +946,6 @@ function FinxeptTerminalContent() {
           </TabsContent>
           <TabsContent value="portfolio" className="h-full m-0 p-0">
             <PortfolioTab />
-          </TabsContent>
-          <TabsContent value="analytics" className="h-full m-0 p-0">
-            <AnalyticsTab />
           </TabsContent>
           <TabsContent value="backtesting" className="h-full m-0 p-0">
             <BacktestingTab />
