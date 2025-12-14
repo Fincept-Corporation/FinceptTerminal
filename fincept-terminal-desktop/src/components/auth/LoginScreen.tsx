@@ -46,16 +46,26 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
       } else {
         console.log('Login failed:', result.error);
 
-        // Check for specific error messages and provide helpful feedback
+        // Provide user-friendly error messages
         const errorMessage = result.error || 'Login failed. Please check your credentials.';
 
-        if (errorMessage.toLowerCase().includes('user not found') ||
+        // Check for specific error patterns
+        if (errorMessage.toLowerCase().includes('invalid email or password') ||
             errorMessage.toLowerCase().includes('invalid credentials') ||
-            errorMessage.toLowerCase().includes('user does not exist')) {
-          setError(t('login.errors.accountNotFound'));
+            errorMessage.toLowerCase().includes('check your credentials')) {
+          setError('Invalid email or password. Please double-check your login information.');
+        } else if (errorMessage.toLowerCase().includes('account not found') ||
+                   errorMessage.toLowerCase().includes('user not found') ||
+                   errorMessage.toLowerCase().includes('user does not exist')) {
+          setError('No account found with this email. Please check your email or sign up for a new account.');
         } else if (errorMessage.toLowerCase().includes('password')) {
-          setError(t('login.errors.incorrectPassword'));
+          setError('Incorrect password. Please try again or use "Forgot Password" to reset it.');
+        } else if (errorMessage.toLowerCase().includes('server error')) {
+          setError('Server error. Please try again in a few moments.');
+        } else if (errorMessage.toLowerCase().includes('unable to connect')) {
+          setError('Unable to connect to server. Please check your internet connection and try again.');
         } else {
+          // Display the error as-is if it's already user-friendly
           setError(errorMessage);
         }
       }
@@ -138,7 +148,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
                 setPassword(e.target.value);
                 if (error) setError("");
               }}
-              className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 pr-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
+              className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 pr-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
+              style={{ WebkitTextSecurity: showPassword ? 'none' : undefined } as any}
+              autoComplete="current-password"
               disabled={isLoading || isGuestLoading}
               required
             />

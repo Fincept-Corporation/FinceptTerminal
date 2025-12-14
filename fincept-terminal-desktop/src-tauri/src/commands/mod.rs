@@ -84,3 +84,6 @@ pub mod backtesting;
 
 // Company News
 pub mod company_news;
+
+// Agno Trading Agents
+pub mod agno_trading;

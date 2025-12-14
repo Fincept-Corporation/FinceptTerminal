@@ -125,7 +125,6 @@ fn spawn_mcp_server(
             let (response_tx, response_rx): (Sender<String>, Receiver<String>) = channel();
 
             // Spawn background thread to read stdout
-            let server_id_clone = server_id.clone();
             thread::spawn(move || {
                 let reader = BufReader::new(stdout);
 
@@ -1049,7 +1048,21 @@ pub fn run() {
             commands::company_news::fetch_company_news,
             commands::company_news::fetch_news_by_topic,
             commands::company_news::get_full_article,
-            commands::company_news::get_company_news_help
+            commands::company_news::get_company_news_help,
+            // Agno Trading Agents
+            commands::agno_trading::agno_list_models,
+            commands::agno_trading::agno_recommend_model,
+            commands::agno_trading::agno_validate_config,
+            commands::agno_trading::agno_create_agent,
+            commands::agno_trading::agno_run_agent,
+            commands::agno_trading::agno_analyze_market,
+            commands::agno_trading::agno_generate_trade_signal,
+            commands::agno_trading::agno_manage_risk,
+            commands::agno_trading::agno_get_config_template,
+            commands::agno_trading::agno_create_competition,
+            commands::agno_trading::agno_run_competition,
+            commands::agno_trading::agno_get_leaderboard,
+            commands::agno_trading::agno_get_recent_decisions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

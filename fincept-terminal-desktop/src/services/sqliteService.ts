@@ -476,9 +476,6 @@ class SQLiteService {
         PRIMARY KEY (symbol, category)
       )`,
 
-      // Migration: Add position_value column if it doesn't exist
-      `ALTER TABLE paper_trading_positions ADD COLUMN position_value REAL`,
-
       // Data source connections table
       `CREATE TABLE IF NOT EXISTS data_source_connections (
         id TEXT PRIMARY KEY,
@@ -845,8 +842,15 @@ class SQLiteService {
       const defaultConfigs = [
         { provider: 'ollama', model: 'llama3.2:3b', base_url: 'http://localhost:11434', is_active: true },
         { provider: 'openai', model: 'gpt-4o-mini', is_active: false },
-        { provider: 'gemini', model: 'gemini-2.0-flash-exp', is_active: false },
+        { provider: 'anthropic', model: 'claude-sonnet-4', is_active: false },
+        { provider: 'google', model: 'gemini-2.0-flash-exp', is_active: false },
+        { provider: 'groq', model: 'llama-3.1-70b-versatile', is_active: false },
         { provider: 'deepseek', model: 'deepseek-chat', base_url: 'https://api.deepseek.com', is_active: false },
+        { provider: 'xai', model: 'grok-beta', is_active: false },
+        { provider: 'cohere', model: 'command-r-plus', is_active: false },
+        { provider: 'mistral', model: 'mistral-large-latest', is_active: false },
+        { provider: 'together', model: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo', is_active: false },
+        { provider: 'fireworks', model: 'accounts/fireworks/models/llama-v3p1-70b-instruct', is_active: false },
         { provider: 'openrouter', model: 'meta-llama/llama-3.1-8b-instruct:free', base_url: 'https://openrouter.ai/api/v1', is_active: false },
       ];
 

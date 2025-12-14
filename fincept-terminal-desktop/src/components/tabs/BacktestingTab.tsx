@@ -101,7 +101,11 @@ export default function BacktestingTab() {
 
             // Initialize it
             const config = JSON.parse(activeDbProvider.config);
-            await registeredProvider.initialize({ settings: config });
+            await registeredProvider.initialize({
+              name: activeDbProvider.name,
+              adapterType: activeDbProvider.adapter_type,
+              settings: config
+            });
 
             // Set as active
             await backtestingRegistry.setActiveProvider(activeDbProvider.name);

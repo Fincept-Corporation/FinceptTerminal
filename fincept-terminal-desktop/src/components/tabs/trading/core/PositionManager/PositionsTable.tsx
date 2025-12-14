@@ -35,10 +35,19 @@ export function PositionsTable() {
     }
 
     try {
+      console.log('[PositionsTable] Closing position:', position);
       await closePosition(position);
+      console.log('[PositionsTable] Position closed, refreshing...');
+
+      // Force immediate refresh
       await refresh();
+
+      // Additional refresh after 500ms to ensure DB sync
+      setTimeout(() => refresh(), 500);
+
       alert(`✓ Position closed: ${position.symbol}`);
     } catch (error) {
+      console.error('[PositionsTable] Close error:', error);
       alert(`✗ Failed to close position: ${(error as Error).message}`);
     }
   };

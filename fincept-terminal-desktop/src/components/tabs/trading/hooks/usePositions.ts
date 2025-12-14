@@ -10,21 +10,33 @@ import type { UnifiedPosition } from '../types';
 export function usePositions(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 2000) {
   const { activeAdapter, tradingMode } = useBrokerContext();
   const [positions, setPositions] = useState<UnifiedPosition[]>([]);
+  // Start with loading false - only set true when actually fetching
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchPositions = useCallback(async () => {
-    if (!activeAdapter || !activeAdapter.isConnected()) {
+    // Quick early exit if no adapter - don't set loading state
+    if (!activeAdapter) {
       setPositions([]);
+      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    // Set loading only if we don't have positions yet
+    if (positions.length === 0) {
+      setIsLoading(true);
+    }
     setError(null);
 
     try {
-      // Fetch positions from adapter
-      const rawPositions = await activeAdapter.fetchPositions(symbol ? [symbol] : undefined);
+      // Fetch positions from adapter with reduced timeout
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Position fetch timeout after 15s')), 15000)
+      );
+
+      const fetchPromise = activeAdapter.fetchPositions(symbol ? [symbol] : undefined);
+
+      const rawPositions = await Promise.race([fetchPromise, timeoutPromise]) as any[];
 
       // Normalize to unified format
       const normalized: UnifiedPosition[] = (rawPositions || []).map((pos: any) => ({
@@ -46,10 +58,15 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
       }));
 
       setPositions(normalized);
+      setError(null); // Clear error on success
+      console.log('[usePositions] Successfully fetched', normalized.length, 'positions');
     } catch (err) {
       const error = err as Error;
       console.error('[usePositions] Failed to fetch positions:', error);
       setError(error);
+      // DON'T clear positions on error - keep existing data
+      // This prevents the "0 positions" flash when API fails temporarily
+      console.warn('[usePositions] Keeping existing positions due to fetch error');
     } finally {
       setIsLoading(false);
     }

@@ -3,6 +3,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { invoke } from '@tauri-apps/api/core';
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, BarSeries } from 'lightweight-charts';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Area } from 'recharts';
+import { ProChartWithToolkit } from './trading/charts/ProChartWithToolkit';
 
 const COLORS = {
   ORANGE: '#FFA500',
@@ -918,8 +919,9 @@ const EquityResearchTab: React.FC = () => {
     }
   };
 
-  // Initialize price chart with volume
-  useEffect(() => {
+  // OLD CHART INITIALIZATION - NOW USING ProChartWithToolkit
+  // ProChartWithToolkit handles all chart creation and management
+  /* useEffect(() => {
     if (chartContainerRef.current && !chartRef.current) {
       const containerHeight = chartContainerRef.current.clientHeight;
       const containerWidth = chartContainerRef.current.clientWidth;
@@ -982,7 +984,6 @@ const EquityResearchTab: React.FC = () => {
         }
       };
 
-      // Use ResizeObserver for better resize detection
       const resizeObserver = new ResizeObserver(handleResize);
       if (chartContainerRef.current) {
         resizeObserver.observe(chartContainerRef.current);
@@ -998,10 +999,11 @@ const EquityResearchTab: React.FC = () => {
         volumeSeriesRef.current = null;
       };
     }
-  }, []);
+  }, []); */
 
-  // Update price chart data
-  useEffect(() => {
+  // OLD CHART DATA UPDATE - NOW HANDLED BY ProChartWithToolkit
+  // Data is passed directly to ProChartWithToolkit component via props
+  /* useEffect(() => {
     if (candlestickSeriesRef.current && volumeSeriesRef.current && historicalData.length > 0) {
       const chartData = historicalData.map((d) => ({
         time: Math.floor(d.timestamp) as any,
@@ -1024,7 +1026,7 @@ const EquityResearchTab: React.FC = () => {
         chartRef.current.timeScale().fitContent();
       }
     }
-  }, [historicalData]);
+  }, [historicalData]); */
 
   // Helper function to create a financial chart with dynamic metrics
   const createFinancialChart = (
@@ -1618,27 +1620,46 @@ const EquityResearchTab: React.FC = () => {
                   ))}
                 </div>
 
-                {/* Chart with Volume */}
+                {/* Chart with Volume - NOW WITH FULL TRADING TOOLKIT! */}
                 <div style={{
                   backgroundColor: COLORS.PANEL_BG,
                   border: `1px solid ${COLORS.BORDER}`,
-                  padding: '6px',
                   overflow: 'hidden',
                   flex: 1,
                   display: 'flex',
                   flexDirection: 'column',
                   minHeight: 0,
                 }}>
-                  <div style={{ color: COLORS.ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', flexShrink: 0 }}>
-                    PRICE CHART & VOLUME - {chartPeriod}
-                  </div>
-                  <div ref={chartContainerRef} style={{
-                    backgroundColor: COLORS.DARK_BG,
-                    flex: 1,
-                    width: '100%',
-                    overflow: 'hidden',
-                    minHeight: '280px',
-                  }} />
+                  {historicalData && historicalData.length > 0 ? (
+                    <ProChartWithToolkit
+                      data={historicalData.map(h => ({
+                        time: h.timestamp,
+                        open: h.open,
+                        high: h.high,
+                        low: h.low,
+                        close: h.close,
+                        volume: h.volume,
+                      }))}
+                      symbol={`${currentSymbol} - ${chartPeriod}`}
+                      height={400}
+                      showVolume={true}
+                      showToolbar={true}
+                      onToolChange={(tool) => {
+                        console.log('[EquityResearch] Active tool:', tool);
+                      }}
+                    />
+                  ) : (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: '100%',
+                      color: COLORS.GRAY,
+                      fontSize: '11px',
+                    }}>
+                      {loading ? 'Loading chart data...' : 'No chart data available'}
+                    </div>
+                  )}
                 </div>
               </div>
 

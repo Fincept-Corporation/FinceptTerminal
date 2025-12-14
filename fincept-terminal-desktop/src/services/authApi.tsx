@@ -161,18 +161,59 @@ const makeApiRequest = async <T = any>(
       console.error('❌ Auth JSON parse failed:', parseError);
       console.log('📄 Full auth response text:', responseText);
 
+      // Provide user-friendly error messages based on status code
+      let userFriendlyError = 'Unable to connect to server. Please try again later.';
+
+      if (response.status === 401 || response.status === 403) {
+        userFriendlyError = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (response.status === 404) {
+        userFriendlyError = 'Account not found. Please check your email or sign up for a new account.';
+      } else if (response.status === 400) {
+        userFriendlyError = 'Invalid request. Please check your information and try again.';
+      } else if (response.status >= 500) {
+        userFriendlyError = 'Server error. Please try again later.';
+      } else if (!response.ok) {
+        userFriendlyError = 'An error occurred. Please try again.';
+      }
+
       return {
         success: false,
-        error: `Invalid JSON response: ${responseText.substring(0, 100)}...`,
+        error: userFriendlyError,
         status_code: response.status
       };
+    }
+
+    // Generate user-friendly error message
+    let errorMessage: string | undefined;
+    if (!response.ok) {
+      const backendMessage = responseData.message || responseData.error || '';
+
+      // Map common backend error messages to user-friendly ones
+      if (response.status === 401 || response.status === 403) {
+        // Check if it's specifically about password or general authentication
+        if (backendMessage.toLowerCase().includes('password')) {
+          errorMessage = 'Incorrect password. Please try again.';
+        } else if (backendMessage.toLowerCase().includes('credential')) {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        } else {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        }
+      } else if (response.status === 404) {
+        errorMessage = 'Account not found. Please check your email or sign up for a new account.';
+      } else if (response.status === 400) {
+        errorMessage = backendMessage || 'Invalid request. Please check your information and try again.';
+      } else if (response.status >= 500) {
+        errorMessage = 'Server error. Please try again later.';
+      } else {
+        errorMessage = backendMessage || `HTTP ${response.status}`;
+      }
     }
 
     return {
       success: response.ok,
       data: responseData,
       status_code: response.status,
-      error: response.ok ? undefined : responseData.message || `HTTP ${response.status}`
+      error: errorMessage
     };
 
   } catch (error) {
