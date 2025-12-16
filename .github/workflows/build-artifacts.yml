@@ -92,6 +92,7 @@ jobs:
             exit 1
           fi
           echo "Resources verified successfully"
+        shell: bash
 
       - name: Install frontend dependencies
         run: bun install
@@ -107,6 +108,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ""
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           projectPath: fincept-terminal-desktop
           args: ${{ matrix.args }}
