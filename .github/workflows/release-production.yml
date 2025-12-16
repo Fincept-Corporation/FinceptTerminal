@@ -147,11 +147,12 @@ jobs:
 
             find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.dmg \; 2>/dev/null && echo "[OK] Found .dmg" || echo "[WARN] No .dmg found"
 
-          elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
+          elif [[ "${{ matrix.platform }}" == "ubuntu-20.04" ]]; then
             # Linux builds
             SUFFIX="Linux-x64"
             find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.AppImage \; 2>/dev/null && echo "[OK] Found .AppImage" || echo "[WARN] No .AppImage found"
             find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.deb" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.deb \; 2>/dev/null && echo "[OK] Found .deb" || echo "[WARN] No .deb found"
+            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.rpm" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.rpm \; 2>/dev/null && echo "[OK] Found .rpm" || echo "[WARN] No .rpm found"
 
           elif [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
             # Windows builds
@@ -212,7 +213,7 @@ jobs:
           mkdir -p release-files
 
           # Move all files to release-files directory
-          find all-artifacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" \) -exec cp {} release-files/ \;
+          find all-artifacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) -exec cp {} release-files/ \;
 
           # Also copy updater files (latest.json and .sig files)
           find all-artifacts -type f \( -name "latest.json" -o -name "*.tar.gz" -o -name "*.tar.gz.sig" -o -name "*.zip" -o -name "*.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || true
@@ -255,7 +256,8 @@ jobs:
 
           ### Linux
           - **AppImage (Universal)**: Download \`FinceptTerminal-v${VERSION}-Linux-x64.AppImage\`
-          - **Debian/Ubuntu**: Download \`FinceptTerminal-v${VERSION}-Linux-x64.deb\`
+          - **Debian/Ubuntu (.deb)**: Download \`FinceptTerminal-v${VERSION}-Linux-x64.deb\`
+          - **Fedora/RHEL (.rpm)**: Download \`FinceptTerminal-v${VERSION}-Linux-x64.rpm\`
 
           ### Windows
           - **Windows Installer**: Download \`FinceptTerminal-v${VERSION}-Windows-x64.msi\`
@@ -328,7 +330,8 @@ jobs:
           | **macOS** | Apple Silicon (ARM64) | [Download .dmg](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-macOS-arm64.dmg) |
           | **macOS** | Intel (x64) | [Download .dmg](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-macOS-x64.dmg) |
           | **Linux** | x64 (AppImage) | [Download .AppImage](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Linux-x64.AppImage) |
-          | **Linux** | x64 (Debian) | [Download .deb](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Linux-x64.deb) |
+          | **Linux** | x64 (Debian/Ubuntu) | [Download .deb](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Linux-x64.deb) |
+          | **Linux** | x64 (Fedora/RHEL) | [Download .rpm](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Linux-x64.rpm) |
           | **Windows** | x64 | [Download .msi](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Windows-x64.msi) |
 
           > **One-Click Downloads** - These links will start downloading immediately - no GitHub login required.

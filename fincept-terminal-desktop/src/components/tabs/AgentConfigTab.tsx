@@ -625,6 +625,88 @@ const AgentConfigTab: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Scoring Weights */}
+                    {(selectedAgent as any).scoring_weights && Object.keys((selectedAgent as any).scoring_weights).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
+                          SCORING WEIGHTS (User Configurable)
+                        </div>
+                        <div style={{
+                          padding: '8px',
+                          backgroundColor: BLOOMBERG.PANEL_BG,
+                          border: `1px solid ${BLOOMBERG.ORANGE}`,
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr',
+                          gap: '8px',
+                          fontSize: '10px'
+                        }}>
+                          {Object.entries((selectedAgent as any).scoring_weights || {}).map(([key, value]) => (
+                            <div key={key}>
+                              <span style={{ color: BLOOMBERG.GRAY }}>{key}:</span>{' '}
+                              <span style={{ color: BLOOMBERG.ORANGE, fontWeight: 600 }}>{((value as number) * 100).toFixed(0)}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Thresholds */}
+                    {(selectedAgent as any).thresholds && Object.keys((selectedAgent as any).thresholds).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
+                          ANALYSIS THRESHOLDS (User Configurable)
+                        </div>
+                        <div style={{
+                          padding: '8px',
+                          backgroundColor: BLOOMBERG.PANEL_BG,
+                          border: `1px solid ${BLOOMBERG.CYAN}`,
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr 1fr',
+                          gap: '6px',
+                          fontSize: '9px',
+                          maxHeight: '150px',
+                          overflow: 'auto'
+                        }}>
+                          {Object.entries((selectedAgent as any).thresholds || {}).map(([key, value]) => (
+                            <div key={key}>
+                              <span style={{ color: BLOOMBERG.GRAY }}>{key}:</span>{' '}
+                              <span style={{ color: BLOOMBERG.CYAN }}>{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Data Sources */}
+                    {(selectedAgent as any).data_sources && (
+                      <div>
+                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
+                          DATA SOURCES (User Configurable)
+                        </div>
+                        <div style={{
+                          padding: '8px',
+                          backgroundColor: BLOOMBERG.PANEL_BG,
+                          border: `1px solid ${BLOOMBERG.PURPLE}`,
+                          fontSize: '10px'
+                        }}>
+                          {(selectedAgent as any).data_sources?.line_items && Array.isArray((selectedAgent as any).data_sources.line_items) && (
+                            <div style={{ marginBottom: '6px' }}>
+                              <span style={{ color: BLOOMBERG.GRAY }}>Line Items:</span>{' '}
+                              <span style={{ color: BLOOMBERG.PURPLE }}>
+                                {(selectedAgent as any).data_sources.line_items.join(', ')}
+                              </span>
+                            </div>
+                          )}
+                          {(selectedAgent as any).data_sources?.years_of_data != null && (
+                            <div>
+                              <span style={{ color: BLOOMBERG.GRAY }}>Years of Data:</span>{' '}
+                              <span style={{ color: BLOOMBERG.YELLOW }}>{(selectedAgent as any).data_sources.years_of_data}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Instructions */}
                     <div>
                       <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>

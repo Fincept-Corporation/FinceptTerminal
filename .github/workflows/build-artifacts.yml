@@ -140,11 +140,12 @@ jobs:
 
             find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.dmg \; 2>/dev/null && echo "[OK] Found .dmg" || echo "[WARN] No .dmg found"
 
-          elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
+          elif [[ "${{ matrix.platform }}" == "ubuntu-20.04" ]]; then
             # Linux builds
             SUFFIX="Linux-x64"
             find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.AppImage \; 2>/dev/null && echo "[OK] Found .AppImage" || echo "[WARN] No .AppImage found"
             find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.deb" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.deb \; 2>/dev/null && echo "[OK] Found .deb" || echo "[WARN] No .deb found"
+            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.rpm" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.rpm \; 2>/dev/null && echo "[OK] Found .rpm" || echo "[WARN] No .rpm found"
 
           elif [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
             # Windows builds
