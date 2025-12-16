@@ -94,6 +94,7 @@ jobs:
             exit 1
           fi
           echo "Resources verified successfully"
+        shell: bash
 
       - name: Install frontend dependencies
         run: bun install
