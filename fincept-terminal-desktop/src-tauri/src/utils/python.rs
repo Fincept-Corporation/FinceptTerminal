@@ -15,41 +15,28 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 /// In production: Uses installed Python from setup.rs
 /// In development: Falls back to system Python if installed Python not found
 pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // Get the app data directory where Python was installed by setup.rs
-    // Using app_data_dir instead of resource_dir to avoid admin permission issues
-    let app_data_dir = app
+    // Get the resource directory where Python was installed by setup.rs
+    // Python is installed in the app's installation folder (resources/python)
+    let resource_dir = app
         .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource directory: {}", e))?;
 
     // Platform-specific Python executable location
     let python_exe = if cfg!(target_os = "windows") {
-        // Windows: AppData/python/python.exe
-        app_data_dir.join("python").join("python.exe")
+        // Windows: resources/python/python.exe
+        resource_dir.join("python").join("python.exe")
     } else if cfg!(target_os = "linux") {
-        // Linux: AppData/python/bin/python3
-        app_data_dir.join("python").join("bin").join("python3")
+        // Linux: resources/python/bin/python3
+        resource_dir.join("python").join("bin").join("python3")
     } else if cfg!(target_os = "macos") {
-        // macOS: AppData/python/bin/python3
-        app_data_dir.join("python").join("bin").join("python3")
+        // macOS: resources/python/bin/python3
+        resource_dir.join("python").join("bin").join("python3")
     } else {
         return Err("Unsupported platform".to_string());
     };
 
-    // Check if installed Python exists
-    if python_exe.exists() {
-        // Strip the \\?\ prefix that can cause issues on Windows
-        let path_str = python_exe.to_string_lossy().to_string();
-        let clean_path = if path_str.starts_with(r"\\?\") {
-            PathBuf::from(&path_str[4..])
-        } else {
-            python_exe
-        };
-        return Ok(clean_path);
-    }
-
-    // DEVELOPMENT MODE FALLBACK: Try system Python
-    // This allows development without running setup first
+    // DEVELOPMENT MODE: Prefer system Python (has packages installed)
     #[cfg(debug_assertions)]
     {
         use std::process::Command;
@@ -60,12 +47,25 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
             "python3"
         };
 
-        // Check if system Python is available
+        // Try system Python first in dev mode
         if let Ok(output) = Command::new(system_python).arg("--version").output() {
             if output.status.success() {
+                eprintln!("[DEV MODE] Using system Python");
                 return Ok(PathBuf::from(system_python));
             }
         }
+    }
+
+    // PRODUCTION MODE or dev fallback: Check bundled Python
+    if python_exe.exists() {
+        // Strip the \\?\ prefix that can cause issues on Windows
+        let path_str = python_exe.to_string_lossy().to_string();
+        let clean_path = if path_str.starts_with(r"\\?\") {
+            PathBuf::from(&path_str[4..])
+        } else {
+            python_exe
+        };
+        return Ok(clean_path);
     }
 
     // If we get here, Python is not available
@@ -95,23 +95,12 @@ pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let bun_exe = if cfg!(target_os = "windows") {
         // Windows: resources/bun/bun.exe
         resource_dir.join("bun").join("bun.exe")
-    } else if cfg!(target_os = "linux") {
-        // Linux: resources/bun/bin/bun
-        resource_dir.join("bun").join("bin").join("bun")
-    } else if cfg!(target_os = "macos") {
-        // macOS: resources/bun/bin/bun
-        resource_dir.join("bun").join("bin").join("bun")
     } else {
-        return Err("Unsupported platform".to_string());
+        // Unix (Linux/macOS): resources/bun/bun
+        resource_dir.join("bun").join("bun")
     };
 
-    // Check if installed Bun exists
-    if bun_exe.exists() {
-        return Ok(bun_exe);
-    }
-
-    // DEVELOPMENT MODE FALLBACK: Try system Bun
-    // This allows development without running setup first
+    // DEVELOPMENT MODE: Prefer system Bun
     #[cfg(debug_assertions)]
     {
         use std::process::Command;
@@ -122,12 +111,18 @@ pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
             "bun"
         };
 
-        // Check if system Bun is available
+        // Try system Bun first in dev mode
         if let Ok(output) = Command::new(system_bun).arg("--version").output() {
             if output.status.success() {
+                eprintln!("[DEV MODE] Using system Bun");
                 return Ok(PathBuf::from(system_bun));
             }
         }
+    }
+
+    // PRODUCTION MODE or dev fallback: Check bundled Bun
+    if bun_exe.exists() {
+        return Ok(bun_exe);
     }
 
     // If we get here, Bun is not available

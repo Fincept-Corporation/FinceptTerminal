@@ -19,7 +19,9 @@ multidict==6.7.0
 multitasking==0.0.12
 numpy==1.26.4
 pandas==2.3.3
-vectorbt==0.26.1
+vectorbt==0.28.2
+backtesting==0.6.5
+# fast-trade==1.0.2  # Commented out - not tested with Python 3.12, use backtesting.py instead
 peewee==3.18.3
 pip_system_certs==5.3
 platformdirs==4.5.0

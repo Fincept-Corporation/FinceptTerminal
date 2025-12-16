@@ -28,7 +28,9 @@ import {
   Send,
   User,
   Sparkles,
-  ChevronDown
+  ChevronDown,
+  MessageSquare,
+  Maximize2
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -187,6 +189,9 @@ const ReportBuilderTab: React.FC = () => {
   const [availableModels, setAvailableModels] = useState<{id: string, name: string, provider: string}[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const aiMessagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Right panel view toggle: 'split' | 'properties' | 'chat'
+  const [rightPanelView, setRightPanelView] = useState<'split' | 'properties' | 'chat'>('split');
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1253,9 +1258,44 @@ const ReportBuilderTab: React.FC = () => {
         </div>
 
         {/* Right Panel - Properties and AI Chat */}
-        <div className="w-1/5 border-l flex flex-col" style={{ borderColor: BLOOMBERG_COLORS.BORDER, backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
-          {/* Properties Section - Top Half */}
-          <div className="flex-1 overflow-y-auto border-b" style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
+        <div className="w-1/5 border-l flex flex-col min-h-0" style={{ borderColor: BLOOMBERG_COLORS.BORDER, backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
+          {/* Toggle Buttons */}
+          <div className="flex border-b" style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
+            <button
+              onClick={() => setRightPanelView('properties')}
+              className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${
+                rightPanelView === 'properties' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              }`}
+              style={{ color: rightPanelView === 'properties' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}
+            >
+              <SettingsIcon size={14} />
+              Properties
+            </button>
+            <button
+              onClick={() => setRightPanelView('chat')}
+              className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${
+                rightPanelView === 'chat' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              }`}
+              style={{ color: rightPanelView === 'chat' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}
+            >
+              <MessageSquare size={14} />
+              AI Chat
+            </button>
+            <button
+              onClick={() => setRightPanelView('split')}
+              className={`px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center ${
+                rightPanelView === 'split' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+              }`}
+              style={{ color: rightPanelView === 'split' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}
+              title="Split View"
+            >
+              <Maximize2 size={14} />
+            </button>
+          </div>
+
+          {/* Properties Section */}
+          {(rightPanelView === 'properties' || rightPanelView === 'split') && (
+          <div className={`${rightPanelView === 'split' ? 'flex-1 border-b' : 'flex-1'} overflow-y-auto min-h-0`} style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
             {selectedComp ? (
               <div className="p-4">
                 <div className="flex items-center justify-between mb-4">
@@ -1458,11 +1498,13 @@ const ReportBuilderTab: React.FC = () => {
               </div>
             )}
           </div>
+          )}
 
-          {/* AI Writing Assistant Section - Bottom Half */}
-          <div className="flex-1 flex flex-col" style={{ backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
+          {/* AI Writing Assistant Section */}
+          {(rightPanelView === 'chat' || rightPanelView === 'split') && (
+          <div className={`${rightPanelView === 'split' ? 'flex-1' : 'flex-1'} flex flex-col min-h-0`} style={{ backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
         {/* AI Assistant Header */}
-        <div className="p-4 border-b border-[#333333]">
+        <div className="p-4 border-b border-[#333333] flex-shrink-0">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Bot size={18} style={{ color: BLOOMBERG_COLORS.ORANGE }} />
@@ -1529,7 +1571,7 @@ const ReportBuilderTab: React.FC = () => {
         </div>
 
         {/* AI Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
           {aiMessages.length === 0 && (
             <div className="text-center py-8">
               <Bot size={32} className="mx-auto mb-3" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }} />
@@ -1556,7 +1598,7 @@ const ReportBuilderTab: React.FC = () => {
                     : 'bg-[#1a1a1a] border border-[#333333]'
                 }`}
               >
-                <div className="text-xs" style={{ color: msg.role === 'user' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}>
+                <div className="text-xs break-words" style={{ color: msg.role === 'user' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}>
                   {msg.role === 'assistant' ? (
                     <MarkdownRenderer content={msg.content} />
                   ) : (
@@ -1578,7 +1620,7 @@ const ReportBuilderTab: React.FC = () => {
                 <Bot size={14} style={{ color: '#000' }} />
               </div>
               <div className="max-w-[85%] rounded-lg p-3 bg-[#1a1a1a] border border-[#333333]">
-                <div className="text-xs" style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}>
+                <div className="text-xs break-words" style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}>
                   <MarkdownRenderer content={streamingContent} />
                 </div>
               </div>
@@ -1604,7 +1646,7 @@ const ReportBuilderTab: React.FC = () => {
         </div>
 
         {/* AI Input */}
-        <div className="p-4 border-t border-[#333333]">
+        <div className="p-4 border-t border-[#333333] flex-shrink-0">
           <div className="flex gap-2">
             <input
               type="text"
@@ -1630,6 +1672,7 @@ const ReportBuilderTab: React.FC = () => {
           </div>
         </div>
         </div>
+          )}
       </div>
       </div>
 

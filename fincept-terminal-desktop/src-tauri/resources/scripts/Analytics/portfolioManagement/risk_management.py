@@ -700,3 +700,50 @@ class RiskManagement:
                     dollar_metrics[var_level]["parametric_var"] = var_data["parametric_normal"]["var"] * portfolio_value
 
         return dollar_metrics
+
+# ============================================================================
+# CLI Interface
+# ============================================================================
+
+if __name__ == "__main__":
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "No command specified"}))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "comprehensive_risk_analysis":
+            returns_data = json.loads(sys.argv[2])
+            weights = json.loads(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] != "null" else None
+            portfolio_value = float(sys.argv[4]) if len(sys.argv) > 4 else 1000000.0
+
+            risk_mgmt = RiskManagement()
+            result = risk_mgmt.comprehensive_risk_analysis(returns_data, weights, portfolio_value)
+            
+            # Convert numpy arrays to lists for JSON serialization
+            def convert_numpy(obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, dict):
+                    return {k: convert_numpy(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy(item) for item in obj]
+                elif isinstance(obj, (np.integer, np.floating)):
+                    return float(obj)
+                return obj
+            
+            result = convert_numpy(result)
+            print(json.dumps(result))
+
+        else:
+            print(json.dumps({"error": f"Unknown command: {command}"}))
+            sys.exit(1)
+
+    except Exception as e:
+        import traceback
+        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
+        sys.exit(1)

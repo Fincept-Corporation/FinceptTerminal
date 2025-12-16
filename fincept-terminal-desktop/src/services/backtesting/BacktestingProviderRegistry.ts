@@ -254,6 +254,9 @@ export class BacktestingProviderRegistry {
   /**
    * Switch from one provider to another
    *
+   * NOTE: This does NOT disconnect the previous provider - all providers
+   * remain initialized so you can switch between them freely.
+   *
    * @param fromProvider Current provider name (optional)
    * @param toProvider Target provider name
    */
@@ -273,15 +276,8 @@ export class BacktestingProviderRegistry {
       );
     }
 
-    // Disconnect from current provider
-    if (this.activeProviderId) {
-      const currentProvider = this.providers.get(this.activeProviderId);
-      if (currentProvider) {
-        await currentProvider.disconnect();
-      }
-    }
-
-    // Activate new provider
+    // Just switch to new provider - don't disconnect the old one
+    // This allows users to freely switch between initialized providers
     await this.setActiveProvider(toProvider);
 
     console.log(`✓ Switched provider: ${fromProvider} → ${toProvider}`);

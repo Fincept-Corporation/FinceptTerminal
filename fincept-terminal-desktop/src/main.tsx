@@ -15,6 +15,8 @@ import './tauri-cors-config' // Initialize Tauri CORS plugin
 import { backtestingRegistry } from './services/backtesting/BacktestingProviderRegistry'
 import { LeanAdapter } from './services/backtesting/adapters/lean'
 import { VectorBTAdapter } from './services/backtesting/adapters/vectorbt/VectorBTAdapter'
+import { BacktestingPyAdapter } from './services/backtesting/adapters/backtestingpy'
+import { FastTradeAdapter } from './services/backtesting/adapters/fasttrade'
 
 // Register default backtesting providers
 try {
@@ -23,6 +25,12 @@ try {
 
   const vectorbtAdapter = new VectorBTAdapter();
   backtestingRegistry.registerProvider(vectorbtAdapter);
+
+  const backtestingPyAdapter = new BacktestingPyAdapter();
+  backtestingRegistry.registerProvider(backtestingPyAdapter);
+
+  const fastTradeAdapter = new FastTradeAdapter();
+  backtestingRegistry.registerProvider(fastTradeAdapter);
 
   console.log('[App] Registered backtesting providers:', backtestingRegistry.listProviders());
 } catch (error) {

@@ -10,6 +10,11 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use tauri::State;
+use crate::utils::python;
+
+// Windows-specific imports to hide console windows
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 
 // ============================================================================
 // Types
@@ -175,19 +180,28 @@ pub async fn execute_python_backtest(
     provider: String,
     command: String,
     args: String,
+    app: tauri::AppHandle,
 ) -> Result<String, String> {
-    // Determine Python path (bundled or system)
-    let python_path = get_python_path();
+    // Use the central get_python_path utility which handles dev/prod mode correctly
+    let python_path = python::get_python_path(&app)?;
 
-    // Build script path
-    let script_path = format!(
-        "resources/scripts/Analytics/backtesting/{}/{}",
+    // Build script path - handle both dev and production
+    let script_relative_path = format!(
+        "Analytics/backtesting/{}/{}",
         provider.to_lowercase(),
         format!("{}_provider.py", provider.to_lowercase())
     );
 
+    // Use the central get_script_path utility which handles path resolution
+    let script_path = python::get_script_path(&app, &script_relative_path)?;
+
     // Execute Python script
-    let output = Command::new(&python_path)
+    let mut cmd = Command::new(&python_path);
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
+    let output = cmd
         .arg(&script_path)
         .arg(&command)
         .arg(&args)
@@ -251,37 +265,5 @@ pub async fn read_file(path: String) -> Result<String, String> {
 // Helper Functions
 // ============================================================================
 
-/**
- * Get Python executable path
- *
- * Returns path to bundled Python or system Python.
- */
-fn get_python_path() -> String {
-    // Check for bundled Python first
-    #[cfg(target_os = "windows")]
-    {
-        let bundled_path = "resources/python/python.exe";
-        if std::path::Path::new(bundled_path).exists() {
-            return bundled_path.to_string();
-        }
-        "python".to_string()
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        let bundled_path = "resources/python/bin/python3";
-        if std::path::Path::new(bundled_path).exists() {
-            return bundled_path.to_string();
-        }
-        "python3".to_string()
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        let bundled_path = "resources/python/bin/python3";
-        if std::path::Path::new(bundled_path).exists() {
-            return bundled_path.to_string();
-        }
-        "python3".to_string()
-    }
-}
+// Note: get_python_path() has been removed - now using crate::utils::python::get_python_path()
+// which properly handles dev vs production mode with #[cfg(debug_assertions)]

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle, MessageSquare, Terminal } from 'lucide-react';
+import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle, MessageSquare, Terminal, Bot } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { InterfaceModeProvider, useInterfaceMode } from '@/contexts/InterfaceModeContext';
@@ -20,7 +20,7 @@ import GeopoliticsTab from '@/components/tabs/GeopoliticsTab';
 import ChatTab from '@/components/tabs/ChatTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
 import MarketplaceTab from '@/components/tabs/MarketplaceTab';
-import PortfolioTab from '@/components/tabs/PortfolioTab';
+import PortfolioTab from '@/components/tabs/portfolio-tab/PortfolioTab';
 import EquityResearchTab from '@/components/tabs/EquityResearchTab';
 import ScreenerTab from '@/components/tabs/ScreenerTab';
 import DBnomicsTab from '@/components/tabs/DBnomicsTab';
@@ -38,8 +38,9 @@ import SupportTicketTab from '@/components/tabs/SupportTicketTab';
 import PolygonEqTab from '@/components/tabs/PolygonEqTab';
 import { TradingTab } from '@/components/tabs/TradingTab';
 import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
-import BacktestingTab from '@/components/tabs/BacktestingTab';
+import BacktestingTab from '@/components/tabs/BacktestingTabNew';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
+import AgentConfigTab from '@/components/tabs/AgentConfigTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -492,6 +493,7 @@ function FinxeptTerminalContent() {
 
   const toolsMenuItems = [
     { label: 'AI Assistant', shortcut: 'F10', action: () => setActiveTab('chat') },
+    { label: 'Agent Config', action: () => setActiveTab('agents') },
     { label: 'MCP Servers', action: () => setActiveTab('mcp'), separator: true },
     { label: 'Node Editor', action: () => setActiveTab('nodes') },
     { label: 'Code Editor', action: () => setActiveTab('code') },
@@ -825,6 +827,13 @@ function FinxeptTerminalContent() {
               AI Chat
             </TabsTrigger>
             <TabsTrigger
+              value="agents"
+              style={activeTab === 'agents' ? tabStyles.active : tabStyles.default}
+              title="Agent Config"
+            >
+              Agents
+            </TabsTrigger>
+            <TabsTrigger
               value="settings"
               style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
               title="Settings"
@@ -997,6 +1006,9 @@ function FinxeptTerminalContent() {
           </TabsContent>
           <TabsContent value="reportbuilder" className="h-full m-0 p-0">
             <ReportBuilderTab />
+          </TabsContent>
+          <TabsContent value="agents" className="h-full m-0 p-0">
+            <AgentConfigTab />
           </TabsContent>
         </Tabs>
         )}

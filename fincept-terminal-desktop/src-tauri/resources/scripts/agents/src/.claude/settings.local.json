@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Read(//c/windowsdisk/finceptTerminal/fincept-terminal-desktop/src-tauri/resources/scripts/agents/**)"
-    ],
-    "deny": [],
-    "ask": []
-  }
-}

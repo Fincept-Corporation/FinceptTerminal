@@ -115,22 +115,26 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   const [nextId, setNextId] = useState(1);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [dbInitialized, setDbInitialized] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   // Initialize database for caching
   useEffect(() => {
     const initDatabase = async () => {
       try {
+        console.log('[Dashboard] Initializing database for caching...');
         await sqliteService.initialize();
         const healthCheck = await sqliteService.healthCheck();
         if (healthCheck.healthy) {
           setDbInitialized(true);
-          console.log('[Dashboard] SQLite database initialized for caching');
+          console.log('[Dashboard] ✓ SQLite database initialized and ready for caching');
         } else {
           console.warn('[Dashboard] Database not healthy:', healthCheck.message);
+          setDbInitialized(true); // Allow dashboard to load anyway
         }
       } catch (error) {
         console.error('[Dashboard] Database initialization error:', error);
+        setDbInitialized(true); // Allow dashboard to load anyway
       }
     };
     initDatabase();
@@ -334,6 +338,48 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         return <div>Unknown widget type</div>;
     }
   };
+
+  // Show loading screen while database initializes
+  if (!dbInitialized) {
+    return (
+      <div style={{
+        height: '100%',
+        backgroundColor: colors.background,
+        color: colors.text,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '20px'
+      }}>
+        <div style={{
+          width: '60px',
+          height: '60px',
+          border: '4px solid #404040',
+          borderTop: '4px solid #ea580c',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+        <div style={{ textAlign: 'center', maxWidth: '500px' }}>
+          <h3 style={{ color: '#ea580c', fontSize: '18px', marginBottom: '10px' }}>
+            Initializing Dashboard
+          </h3>
+          <p style={{ color: '#a3a3a3', fontSize: '13px', lineHeight: '1.5' }}>
+            Setting up database cache for faster data loading...
+          </p>
+          <p style={{ color: '#787878', fontSize: '11px', marginTop: '10px' }}>
+            This will only take a moment on first launch
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{

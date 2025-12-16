@@ -9,10 +9,11 @@ import { useWebSocketManager } from '@/hooks/useWebSocket';
 import { DataSourcesPanel } from '@/components/settings/DataSourcesPanel';
 import { BacktestingProvidersPanel } from '@/components/settings/BacktestingProvidersPanel';
 import { LanguageSelector } from '@/components/settings/LanguageSelector';
+import { TerminalConfigPanel } from '@/components/settings/TerminalConfigPanel';
 
 export default function SettingsTab() {
   const { theme, updateTheme, resetTheme, colors, fontSize: themeFontSize, fontFamily: themeFontFamily, fontWeight: themeFontWeight, fontStyle } = useTerminalTheme();
-  const [activeSection, setActiveSection] = useState<'credentials' | 'terminal' | 'llm' | 'dataConnections' | 'backtesting' | 'language'>('credentials');
+  const [activeSection, setActiveSection] = useState<'credentials' | 'terminal' | 'terminalConfig' | 'llm' | 'dataConnections' | 'backtesting' | 'language'>('credentials');
   const [apiKeys, setApiKeys] = useState<ApiKeys>({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -561,7 +562,8 @@ export default function SettingsTab() {
               { id: 'llm', icon: Bot, label: 'LLM Configuration' },
               { id: 'dataConnections', icon: Database, label: 'Data Sources' },
               { id: 'backtesting', icon: Activity, label: 'Backtesting Providers' },
-              { id: 'terminal', icon: Terminal, label: 'Terminal Config' },
+              { id: 'terminalConfig', icon: SettingsIcon, label: 'Tab Layout' },
+              { id: 'terminal', icon: Terminal, label: 'Appearance' },
               { id: 'language', icon: Globe, label: 'Language' }
             ].map((item) => (
               <div
@@ -1006,6 +1008,11 @@ export default function SettingsTab() {
                   {loading ? 'SAVING...' : 'SAVE LLM CONFIGURATION'}
                 </button>
               </div>
+            )}
+
+            {/* Terminal Tab Configuration Section */}
+            {activeSection === 'terminalConfig' && (
+              <TerminalConfigPanel />
             )}
 
             {/* Terminal Appearance Section */}

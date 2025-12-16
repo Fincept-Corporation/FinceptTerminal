@@ -128,6 +128,13 @@ export interface BacktestRequest {
   commissionModel?: CommissionModel;
   timeframe?: Timeframe;
   warmupPeriod?: number;
+
+  // Advanced Backtesting.py parameters
+  commission?: number; // Trading commission as decimal (e.g., 0.001 = 0.1%)
+  tradeOnClose?: boolean; // Execute orders at bar close vs next bar open
+  hedging?: boolean; // Allow simultaneous long/short positions
+  exclusiveOrders?: boolean; // Auto-close previous positions when opening new ones
+  margin?: number; // Leverage/margin ratio (1.0 = no leverage, 2.0 = 2x)
 }
 
 export interface BacktestConfig {

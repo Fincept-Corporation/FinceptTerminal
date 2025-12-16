@@ -1,0 +1,168 @@
+name: Build Artifacts Only
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin'
+            os_name: 'macOS'
+            arch: 'arm64'
+            target: 'aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin'
+            os_name: 'macOS'
+            arch: 'x64'
+            target: 'x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: '--target x86_64-unknown-linux-gnu'
+            os_name: 'Linux'
+            arch: 'x64'
+            target: 'x86_64-unknown-linux-gnu'
+          - platform: 'windows-latest'
+            args: '--target x86_64-pc-windows-msvc'
+            os_name: 'Windows'
+            arch: 'x64'
+            target: 'x86_64-pc-windows-msvc'
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libwebkit2gtk-4.0-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libjavascriptcoregtk-4.0-dev \
+            libsoup-3.0-dev \
+            libsoup2.4-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libnss3-dev \
+            libxss1 \
+            libasound2-dev
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './fincept-terminal-desktop/src-tauri -> target'
+
+      - name: Sync node version and setup cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+          cache-dependency-path: './fincept-terminal-desktop/package-lock.json'
+
+      - name: Verify project structure and resources
+        run: |
+          echo "Verifying project structure..."
+          ls -la fincept-terminal-desktop/
+          ls -la fincept-terminal-desktop/src-tauri/
+          ls -la fincept-terminal-desktop/src-tauri/resources/
+          echo "Checking requirements.txt exists..."
+          if [ ! -f "fincept-terminal-desktop/src-tauri/resources/requirements.txt" ]; then
+            echo "Error: requirements.txt not found!"
+            exit 1
+          fi
+          echo "Checking scripts directory exists..."
+          if [ ! -d "fincept-terminal-desktop/src-tauri/resources/scripts" ]; then
+            echo "Error: scripts directory not found!"
+            exit 1
+          fi
+          echo "Resources verified successfully"
+
+      - name: Install frontend dependencies
+        run: npm install
+        working-directory: ./fincept-terminal-desktop
+
+      # NOTE: Python and Bun are NOT bundled in the app
+      # They are downloaded and installed on first run via setup.rs
+      # Only requirements.txt and scripts are bundled as resources
+      # See: fincept-terminal-desktop/src-tauri/src/setup.rs for installation logic
+      # See: fincept-terminal-desktop/src-tauri/src/utils/python.rs for runtime path resolution
+
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: fincept-terminal-desktop
+          args: ${{ matrix.args }}
+
+      - name: Prepare artifacts with proper naming
+        id: prepare
+        run: |
+          mkdir -p release-artifacts
+
+          # Get version for consistent naming
+          if [ -f "fincept-terminal-desktop/src-tauri/Cargo.toml" ]; then
+            VERSION=$(grep '^version = ' fincept-terminal-desktop/src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
+          else
+            VERSION="1.0.0"
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Find and rename artifacts based on platform
+          if [[ "${{ matrix.platform }}" == "macos-latest" ]]; then
+            # macOS builds
+            if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+              SUFFIX="macOS-arm64"
+            else
+              SUFFIX="macOS-x64"
+            fi
+
+            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.dmg \; 2>/dev/null && echo "[OK] Found .dmg" || echo "[WARN] No .dmg found"
+
+          elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
+            # Linux builds
+            SUFFIX="Linux-x64"
+            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.AppImage \; 2>/dev/null && echo "[OK] Found .AppImage" || echo "[WARN] No .AppImage found"
+            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.deb" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.deb \; 2>/dev/null && echo "[OK] Found .deb" || echo "[WARN] No .deb found"
+
+          elif [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            # Windows builds
+            SUFFIX="Windows-x64"
+            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.msi" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.msi \; 2>/dev/null && echo "[OK] Found .msi" || echo "[WARN] No .msi found"
+          fi
+
+          # List what we found
+          echo "=== Release Artifacts ==="
+          ls -la release-artifacts/ || echo "No artifacts prepared"
+
+          # Set output for later steps
+          artifact_count=$(find release-artifacts -type f | wc -l)
+          echo "artifact_count=$artifact_count" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload build artifacts
+        if: steps.prepare.outputs.artifact_count > 0
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os_name }}-${{ matrix.arch }}
+          path: release-artifacts/
+          retention-days: 30

@@ -917,6 +917,7 @@ pub fn run() {
             commands::agents::list_available_agents,
             commands::agents::execute_python_agent,
             commands::agents::get_agent_metadata,
+            commands::agents::execute_python_agent_command,
             // Portfolio Analytics Commands
             commands::portfolio::calculate_portfolio_metrics,
             commands::portfolio::optimize_portfolio,
@@ -927,6 +928,21 @@ pub fn run() {
             commands::portfolio::calculate_retirement_plan,
             commands::portfolio::analyze_behavioral_biases,
             commands::portfolio::analyze_etf_costs,
+            // Active Management Commands
+            commands::portfolio::calculate_active_value_added,
+            commands::portfolio::calculate_active_information_ratio,
+            commands::portfolio::calculate_active_tracking_risk,
+            commands::portfolio::comprehensive_active_analysis,
+            commands::portfolio::analyze_manager_selection,
+            // Risk Management Commands
+            commands::portfolio::comprehensive_risk_analysis,
+            // Portfolio Planning Commands
+            commands::portfolio::strategic_asset_allocation,
+            commands::portfolio::calculate_retirement_planning,
+            // Economics & Markets Commands
+            commands::portfolio::comprehensive_economics_analysis,
+            commands::portfolio::analyze_business_cycle,
+            commands::portfolio::analyze_equity_risk_premium,
             // Technical Analysis Commands
             commands::technical_analysis::execute_technical_analysis_command,
             commands::technical_analysis::get_technical_analysis_help,

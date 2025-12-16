@@ -746,3 +746,76 @@ class EconomicsMarkets:
             BusinessCyclePhase.TROUGH: "Distressed opportunities, value investing"
         }
         return guidance_map[phase]
+
+# ============================================================================
+# CLI Interface
+# ============================================================================
+
+if __name__ == "__main__":
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "No command specified"}))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "comprehensive_analysis":
+            cycle_phase_str = sys.argv[2]  # e.g., "expansion", "peak", "contraction", "trough"
+            economic_data = json.loads(sys.argv[3]) if len(sys.argv) > 3 else {}
+            
+            # Map string to enum
+            phase_map = {
+                "expansion": BusinessCyclePhase.EXPANSION,
+                "peak": BusinessCyclePhase.PEAK,
+                "contraction": BusinessCyclePhase.CONTRACTION,
+                "trough": BusinessCyclePhase.TROUGH
+            }
+            
+            cycle_phase = phase_map.get(cycle_phase_str.lower(), BusinessCyclePhase.EXPANSION)
+            
+            econ_markets = EconomicsMarkets()
+            result = econ_markets.comprehensive_economics_analysis(cycle_phase, economic_data)
+            
+            print(json.dumps(result))
+
+        elif command == "business_cycle_analysis":
+            cycle_phase_str = sys.argv[2]
+            
+            phase_map = {
+                "expansion": BusinessCyclePhase.EXPANSION,
+                "peak": BusinessCyclePhase.PEAK,
+                "contraction": BusinessCyclePhase.CONTRACTION,
+                "trough": BusinessCyclePhase.TROUGH
+            }
+            
+            cycle_phase = phase_map.get(cycle_phase_str.lower(), BusinessCyclePhase.EXPANSION)
+            
+            cycle_analysis = BusinessCycleAnalysis()
+            result = cycle_analysis.analyze_cycle_effects(cycle_phase)
+            
+            print(json.dumps(result))
+
+        elif command == "equity_risk_premium":
+            risk_free_rate = float(sys.argv[2]) if len(sys.argv) > 2 else 0.03
+            market_risk_premium = float(sys.argv[3]) if len(sys.argv) > 3 else 0.05
+            
+            erp = EquityRiskPremium()
+            result = {
+                "historical_erp": erp.historical_equity_risk_premium_analysis(),
+                "risk_free_rate": risk_free_rate,
+                "market_risk_premium": market_risk_premium
+            }
+            
+            print(json.dumps(result))
+
+        else:
+            print(json.dumps({"error": f"Unknown command: {command}"}))
+            sys.exit(1)
+
+    except Exception as e:
+        import traceback
+        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
+        sys.exit(1)

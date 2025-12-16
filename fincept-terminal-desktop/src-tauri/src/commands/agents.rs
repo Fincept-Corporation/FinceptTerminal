@@ -1084,3 +1084,84 @@ pub async fn get_agent_metadata(agent_type: String) -> Result<AgentMetadata, Str
     get_agent_metadata_internal(&agent_type)
         .ok_or_else(|| format!("Agent not found: {}", agent_type))
 }
+
+/// Execute finagent_core Python agent command via tauri_bridge.py
+#[tauri::command]
+pub async fn execute_python_agent_command(
+    app: tauri::AppHandle,
+    action: String,
+    parameters: serde_json::Value,
+    inputs: Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    // Get Python executable
+    let python_path = get_python_path(&app)?;
+
+    // Get tauri_bridge.py script path
+    let bridge_script_path = if cfg!(debug_assertions) {
+        // Development mode
+        let current_dir = std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+        let base_dir = if current_dir.ends_with("src-tauri") {
+            current_dir
+        } else {
+            current_dir.join("src-tauri")
+        };
+
+        base_dir
+            .join("resources")
+            .join("scripts")
+            .join("agents")
+            .join("finagent_core")
+            .join("tauri_bridge.py")
+    } else {
+        // Production mode
+        let resource_dir = app.path().resource_dir()
+            .map_err(|e| format!("Failed to get resource directory: {}", e))?;
+
+        resource_dir
+            .join("resources")
+            .join("scripts")
+            .join("agents")
+            .join("finagent_core")
+            .join("tauri_bridge.py")
+    };
+
+    // Verify script exists
+    if !bridge_script_path.exists() {
+        return Err(format!("finagent_core tauri_bridge.py not found: {}", bridge_script_path.display()));
+    }
+
+    // Build command
+    let mut cmd = std::process::Command::new(&python_path);
+    cmd.arg(&bridge_script_path)
+       .arg("--action")
+       .arg(&action)
+       .arg("--parameters")
+       .arg(serde_json::to_string(&parameters).unwrap_or_else(|_| "{}".to_string()));
+
+    // Add inputs if provided
+    if let Some(inputs_val) = inputs {
+        cmd.arg("--inputs")
+           .arg(serde_json::to_string(&inputs_val).unwrap_or_else(|_| "{}".to_string()));
+    }
+
+    // Hide console on Windows
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    // Execute
+    let output = cmd.output()
+        .map_err(|e| format!("Failed to execute finagent_core: {}", e))?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        // Parse JSON output
+        serde_json::from_str::<serde_json::Value>(&stdout)
+            .map_err(|e| format!("Failed to parse JSON response: {}. Output: {}", e, stdout))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("finagent_core execution failed: {}", stderr))
+    }
+}

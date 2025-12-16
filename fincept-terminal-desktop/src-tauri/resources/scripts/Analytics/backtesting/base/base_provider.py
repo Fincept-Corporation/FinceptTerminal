@@ -407,9 +407,26 @@ class BacktestingProviderBase(ABC):
 # Utility Functions
 # ============================================================================
 
+def snake_to_camel(snake_str: str) -> str:
+    """Convert snake_case to camelCase"""
+    components = snake_str.split('_')
+    return components[0] + ''.join(x.title() for x in components[1:])
+
+
+def convert_keys_to_camel(data: Any) -> Any:
+    """Recursively convert dictionary keys from snake_case to camelCase"""
+    if isinstance(data, dict):
+        return {snake_to_camel(k): convert_keys_to_camel(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [convert_keys_to_camel(item) for item in data]
+    else:
+        return data
+
+
 def json_response(data: Any) -> str:
-    """Convert data to JSON string for stdout output"""
-    return json.dumps(data, default=str, ensure_ascii=False)
+    """Convert data to JSON string for stdout output with camelCase keys"""
+    camel_data = convert_keys_to_camel(data)
+    return json.dumps(camel_data, default=str, ensure_ascii=False)
 
 
 def parse_json_input(json_str: str) -> Dict[str, Any]:

@@ -1024,7 +1024,9 @@ class ToolkitPaneView implements IPrimitivePaneView {
     const hitThreshold = 12; // Slightly larger for anchors
 
     for (let i = 0; i < coords.length; i++) {
-      const [cx, cy] = coords[i];
+      const coord = coords[i];
+      if (coord === null) continue;
+      const [cx, cy] = coord;
       const distance = Math.sqrt((x - cx) ** 2 + (y - cy) ** 2);
       if (distance <= hitThreshold) {
         return i;

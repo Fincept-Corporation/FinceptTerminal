@@ -24,6 +24,7 @@ import {
 import { sqliteService, type BacktestingProvider } from '@/services/sqliteService';
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
 import { LeanAdapter } from '@/services/backtesting/adapters/lean';
+import { PathService } from '@/services/backtesting/PathService';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {
@@ -62,6 +63,120 @@ interface ProviderStatus {
   message?: string;
 }
 
+/**
+ * Path Info Panel - Shows where data will be stored
+ */
+function PathInfoPanel() {
+  const [pathsInfo, setPathsInfo] = useState<{
+    platform: string;
+    baseDir: string;
+    projectsDir: string;
+    dataDir: string;
+    resultsDir: string;
+  } | null>(null);
+  const [showPaths, setShowPaths] = useState(false);
+
+  useEffect(() => {
+    loadPathsInfo();
+  }, []);
+
+  const loadPathsInfo = async () => {
+    try {
+      const info = await PathService.getPathsInfo();
+      setPathsInfo(info);
+    } catch (error) {
+      console.error('[PathInfo] Failed to load paths:', error);
+    }
+  };
+
+  if (!pathsInfo) return null;
+
+  return (
+    <div style={{
+      marginBottom: '20px',
+      padding: '12px',
+      backgroundColor: BLOOMBERG.PANEL_BG,
+      border: `1px solid ${BLOOMBERG.BORDER}`,
+      borderLeft: `3px solid ${BLOOMBERG.YELLOW}`,
+      borderRadius: '3px'
+    }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          cursor: 'pointer'
+        }}
+        onClick={() => setShowPaths(!showPaths)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Settings size={14} color={BLOOMBERG.YELLOW} />
+          <span style={{
+            color: BLOOMBERG.WHITE,
+            fontSize: '11px',
+            fontWeight: 600,
+            letterSpacing: '0.5px'
+          }}>
+            DATA STORAGE LOCATION
+          </span>
+        </div>
+        <span style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
+          {showPaths ? '▼' : '▶'} {showPaths ? 'Hide' : 'Show'} Paths
+        </span>
+      </div>
+
+      {showPaths && (
+        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${BLOOMBERG.BORDER}` }}>
+          <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>
+            Platform: <span style={{ color: BLOOMBERG.CYAN }}>{pathsInfo.platform}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <PathItem label="Base Directory" path={pathsInfo.baseDir} />
+            <PathItem label="Projects" path={pathsInfo.projectsDir} />
+            <PathItem label="Data" path={pathsInfo.dataDir} />
+            <PathItem label="Results" path={pathsInfo.resultsDir} />
+          </div>
+          <div style={{
+            marginTop: '10px',
+            padding: '8px',
+            backgroundColor: BLOOMBERG.HEADER_BG,
+            borderRadius: '2px',
+            fontSize: '9px',
+            color: BLOOMBERG.GRAY,
+            lineHeight: '1.5'
+          }}>
+            ℹ️ Backtesting data is stored in your application data folder, separate from the project directory.
+            This ensures clean project management and follows OS best practices.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PathItem({ label, path }: { label: string; path: string }) {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '2px',
+      fontSize: '9px'
+    }}>
+      <span style={{ color: BLOOMBERG.GRAY }}>{label}:</span>
+      <code style={{
+        color: BLOOMBERG.CYAN,
+        backgroundColor: BLOOMBERG.HEADER_BG,
+        padding: '4px 6px',
+        borderRadius: '2px',
+        fontFamily: 'monospace',
+        wordBreak: 'break-all'
+      }}>
+        {path}
+      </code>
+    </div>
+  );
+}
+
 export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
   const [providers, setProviders] = useState<BacktestingProvider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,16 +185,16 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // New provider form
+  // New provider form - will be initialized with OS-specific paths
   const [newProviderForm, setNewProviderForm] = useState({
     name: 'QuantConnect Lean',
     adapter_type: 'LeanAdapter',
     config: JSON.stringify(
       {
-        leanCliPath: 'C:/Users/Tilak/AppData/Roaming/Python/Python313/Scripts/lean.exe',
-        projectsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_projects',
-        dataPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_data',
-        resultsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_results',
+        leanCliPath: 'lean',
+        projectsPath: '',
+        dataPath: '',
+        resultsPath: '',
         environment: 'backtesting',
       },
       null,
@@ -88,9 +203,80 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
   });
 
   useEffect(() => {
+    initializeDefaultPaths();
     loadProviders();
     registerDefaultProviders();
+    migrateExistingProviderPaths();
   }, []);
+
+  /**
+   * Initialize default paths using OS-specific directories
+   */
+  const initializeDefaultPaths = async () => {
+    try {
+      const defaultConfig = await PathService.getDefaultLeanConfig();
+
+      setNewProviderForm({
+        name: 'QuantConnect Lean',
+        adapter_type: 'LeanAdapter',
+        config: JSON.stringify(defaultConfig, null, 2),
+      });
+
+      console.log('[Backtesting] Initialized OS-specific paths:', defaultConfig);
+    } catch (error) {
+      console.error('[Backtesting] Failed to initialize default paths:', error);
+    }
+  };
+
+  /**
+   * Migrate existing providers to use OS-specific paths
+   * This updates any providers that are using old project-directory paths
+   */
+  const migrateExistingProviderPaths = async () => {
+    try {
+      const dbProviders = await sqliteService.getBacktestingProviders();
+      const defaultConfig = await PathService.getDefaultLeanConfig();
+
+      for (const provider of dbProviders) {
+        try {
+          const config = JSON.parse(provider.config);
+
+          // Check if using old paths (containing project directory)
+          const needsMigration =
+            config.projectsPath?.includes('fincept-terminal-desktop') ||
+            config.dataPath?.includes('fincept-terminal-desktop') ||
+            config.resultsPath?.includes('fincept-terminal-desktop');
+
+          if (needsMigration) {
+            console.log(`[Backtesting] Migrating provider "${provider.name}" to new paths`);
+
+            // Update paths while preserving other config
+            const updatedConfig = {
+              ...config,
+              projectsPath: defaultConfig.projectsPath,
+              dataPath: defaultConfig.dataPath,
+              resultsPath: defaultConfig.resultsPath,
+            };
+
+            // Save updated provider
+            await sqliteService.saveBacktestingProvider({
+              ...provider,
+              config: JSON.stringify(updatedConfig, null, 2),
+            });
+
+            console.log(`[Backtesting] Migrated provider "${provider.name}" successfully`);
+          }
+        } catch (error) {
+          console.error(`[Backtesting] Failed to migrate provider "${provider.name}":`, error);
+        }
+      }
+
+      // Reload providers to show updated configs
+      await loadProviders();
+    } catch (error) {
+      console.error('[Backtesting] Failed to migrate provider paths:', error);
+    }
+  };
 
   /**
    * Register default providers with the registry
@@ -261,22 +447,8 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
       setShowAddForm(false);
       showMessage('success', 'Provider added successfully');
 
-      // Reset form
-      setNewProviderForm({
-        name: 'QuantConnect Lean',
-        adapter_type: 'LeanAdapter',
-        config: JSON.stringify(
-          {
-            leanCliPath: 'C:/Users/Tilak/AppData/Roaming/Python/Python313/Scripts/lean.exe',
-            projectsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_projects',
-            dataPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_data',
-            resultsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_results',
-            environment: 'backtesting',
-          },
-          null,
-          2
-        ),
-      });
+      // Reset form with OS-specific paths
+      await initializeDefaultPaths();
     } catch (error) {
       showMessage('error', `Failed to save provider: ${error}`);
     }
@@ -370,6 +542,9 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
         </p>
       </div>
 
+      {/* Path Info Panel */}
+      <PathInfoPanel />
+
       {/* Message Banner */}
       {message && (
         <div style={{
@@ -457,7 +632,36 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
               </label>
               <select
                 value={newProviderForm.name}
-                onChange={(e) => setNewProviderForm({ ...newProviderForm, name: e.target.value })}
+                onChange={(e) => {
+                  const selectedProvider = e.target.value;
+                  let defaultConfig = {};
+
+                  // Set default config based on provider type
+                  if (selectedProvider === 'QuantConnect Lean') {
+                    defaultConfig = {
+                      leanCliPath: 'C:/Users/Tilak/AppData/Roaming/Python/Python313/Scripts/lean.exe',
+                      projectsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_projects',
+                      dataPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_data',
+                      resultsPath: 'C:/windowsdisk/finceptTerminal/fincept-terminal-desktop/lean_results',
+                      environment: 'backtesting',
+                    };
+                  } else if (selectedProvider === 'Backtesting.py') {
+                    defaultConfig = {
+                      // Backtesting.py doesn't require configuration
+                      // Advanced options are set per-backtest
+                    };
+                  } else if (selectedProvider === 'VectorBT') {
+                    defaultConfig = {
+                      // VectorBT configuration
+                    };
+                  }
+
+                  setNewProviderForm({
+                    ...newProviderForm,
+                    name: selectedProvider,
+                    config: JSON.stringify(defaultConfig, null, 2)
+                  });
+                }}
                 style={{
                   width: '100%',
                   padding: '10px',
@@ -478,6 +682,7 @@ export function BacktestingProvidersPanel({ colors }: ProviderPanelProps) {
                 <option value="QuantConnect Lean">QuantConnect Lean</option>
                 <option value="Backtrader">Backtrader</option>
                 <option value="VectorBT">VectorBT</option>
+                <option value="Backtesting.py">Backtesting.py</option>
                 <option value="QuantLib">QuantLib</option>
                 <option value="Custom">Custom</option>
               </select>

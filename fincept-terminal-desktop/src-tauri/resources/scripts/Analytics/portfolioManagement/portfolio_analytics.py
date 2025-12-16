@@ -673,3 +673,55 @@ class PortfolioAnalytics:
             "trough_index": max_dd_idx,
             "recovery_time": None  # Would need to calculate recovery
         }
+
+# ============================================================================
+# CLI Interface
+# ============================================================================
+
+if __name__ == "__main__":
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "No command specified"}))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "comprehensive_analysis":
+            returns_data = json.loads(sys.argv[2])
+            weights = json.loads(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] != "null" else None
+            market_returns = json.loads(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4] != "null" else None
+            
+            # Convert to numpy arrays
+            returns_dict = {k: np.array(v) for k, v in returns_data.items()}
+            weights_arr = np.array(weights) if weights else None
+            market_arr = np.array(market_returns) if market_returns else None
+            
+            analytics = PortfolioAnalytics()
+            result = analytics.comprehensive_analysis(returns_dict, weights_arr, market_arr)
+            
+            # Convert numpy to JSON-serializable
+            def convert_numpy(obj):
+                if isinstance(obj, np.ndarray):
+                    return obj.tolist()
+                elif isinstance(obj, dict):
+                    return {k: convert_numpy(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [convert_numpy(item) for item in obj]
+                elif isinstance(obj, (np.integer, np.floating)):
+                    return float(obj)
+                return obj
+            
+            result = convert_numpy(result)
+            print(json.dumps(result))
+
+        else:
+            print(json.dumps({"error": f"Unknown command: {command}"}))
+            sys.exit(1)
+
+    except Exception as e:
+        import traceback
+        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
+        sys.exit(1)

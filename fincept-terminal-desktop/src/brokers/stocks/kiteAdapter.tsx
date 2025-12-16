@@ -3,7 +3,15 @@
 // Modular design for plug-and-play integration
 
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import crypto from 'crypto';
+
+// Browser-compatible SHA256 helper
+async function sha256(text: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 // ================================
 // TYPE DEFINITIONS
@@ -471,10 +479,7 @@ export class KiteConnectAdapter {
    * Call this with the request_token received from redirect
    */
   async generateSession(requestToken: string): Promise<SessionData> {
-    const checksum = crypto
-      .createHash('sha256')
-      .update(this.config.apiKey + requestToken + this.config.apiSecret)
-      .digest('hex');
+    const checksum = await sha256(this.config.apiKey + requestToken + this.config.apiSecret);
 
     const data = new URLSearchParams({
       api_key: this.config.apiKey,
@@ -976,12 +981,8 @@ export class KiteConnectAdapter {
   /**
    * Validate postback checksum
    */
-  validatePostbackChecksum(orderId: string, orderTimestamp: string, receivedChecksum: string): boolean {
-    const expectedChecksum = crypto
-      .createHash('sha256')
-      .update(orderId + orderTimestamp + this.config.apiSecret)
-      .digest('hex');
-
+  async validatePostbackChecksum(orderId: string, orderTimestamp: string, receivedChecksum: string): Promise<boolean> {
+    const expectedChecksum = await sha256(orderId + orderTimestamp + this.config.apiSecret);
     return expectedChecksum === receivedChecksum;
   }
 
@@ -1091,16 +1092,12 @@ export class WebhookHandler {
   /**
    * Process postback webhook payload
    */
-  processPostback(payload: PostbackPayload): {
+  async processPostback(payload: PostbackPayload): Promise<{
     isValid: boolean;
     order: PostbackPayload | null;
-  } {
+  }> {
     // Validate checksum
-    const expectedChecksum = crypto
-      .createHash('sha256')
-      .update(payload.order_id + payload.order_timestamp + this.apiSecret)
-      .digest('hex');
-
+    const expectedChecksum = await sha256(payload.order_id + payload.order_timestamp + this.apiSecret);
     const isValid = expectedChecksum === payload.checksum;
 
     return {
