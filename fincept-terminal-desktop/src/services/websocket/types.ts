@@ -51,6 +51,7 @@ export interface Subscription {
   topic: string;
   callback: MessageCallback;
   unsubscribe: () => void;
+  params?: Record<string, any>;
 }
 
 /**
