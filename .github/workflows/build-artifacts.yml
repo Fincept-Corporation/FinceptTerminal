@@ -104,15 +104,14 @@ jobs:
       # See: fincept-terminal-desktop/src-tauri/src/setup.rs for installation logic
       # See: fincept-terminal-desktop/src-tauri/src/utils/python.rs for runtime path resolution
 
-      - name: Build the app
+      - name: Build the app (without updater)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ""
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           projectPath: fincept-terminal-desktop
           args: ${{ matrix.args }}
+          includeUpdaterJson: false
 
       - name: Prepare artifacts with proper naming
         id: prepare
