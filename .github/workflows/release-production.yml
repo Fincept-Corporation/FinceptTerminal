@@ -72,12 +72,10 @@ jobs:
         with:
           workspaces: './fincept-terminal-desktop/src-tauri -> target'
 
-      - name: Sync node version and setup cache
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
         with:
-          node-version: 'lts/*'
-          cache: 'npm'
-          cache-dependency-path: './fincept-terminal-desktop/package-lock.json'
+          bun-version: latest
 
       - name: Verify project structure and resources
         run: |
@@ -98,7 +96,7 @@ jobs:
           echo "Resources verified successfully"
 
       - name: Install frontend dependencies
-        run: npm install
+        run: bun install
         working-directory: ./fincept-terminal-desktop
 
       # NOTE: Python and Bun are NOT bundled in the app
