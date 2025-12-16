@@ -1425,3 +1425,77 @@ class ActiveManagement:
                 "Capacity utilization tracking"
             ]
         }
+
+# ============================================================================
+# CLI Interface
+# ============================================================================
+
+if __name__ == "__main__":
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "No command specified"}))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "value_added":
+            portfolio_returns = json.loads(sys.argv[2])
+            benchmark_returns = json.loads(sys.argv[3])
+            weights = json.loads(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4] != "null" else None
+
+            result = ValueAddedMeasurement.calculate_value_added(
+                np.array(portfolio_returns),
+                np.array(benchmark_returns),
+                np.array(weights) if weights else None
+            )
+            print(json.dumps(result))
+
+        elif command == "information_ratio":
+            portfolio_returns = json.loads(sys.argv[2])
+            benchmark_returns = json.loads(sys.argv[3])
+
+            result = InformationRatioAnalysis.calculate_information_ratio_ex_post(
+                np.array(portfolio_returns),
+                np.array(benchmark_returns)
+            )
+            print(json.dumps(result))
+
+        elif command == "tracking_risk":
+            portfolio_returns = json.loads(sys.argv[2])
+            benchmark_returns = json.loads(sys.argv[3])
+
+            result = ActiveRiskTracking.calculate_tracking_risk(
+                np.array(portfolio_returns),
+                np.array(benchmark_returns)
+            )
+            print(json.dumps(result))
+
+        elif command == "comprehensive_analysis":
+            portfolio_data = json.loads(sys.argv[2])
+            benchmark_data = json.loads(sys.argv[3])
+
+            am = ActiveManagement()
+            result = am.comprehensive_active_management_analysis(
+                portfolio_data,
+                benchmark_data
+            )
+            print(json.dumps(result))
+
+        elif command == "manager_selection":
+            manager_candidates = json.loads(sys.argv[2])
+
+            am = ActiveManagement()
+            result = am.manager_selection_analysis(manager_candidates)
+            print(json.dumps(result))
+
+        else:
+            print(json.dumps({"error": f"Unknown command: {command}"}))
+            sys.exit(1)
+
+    except Exception as e:
+        print(json.dumps({"error": str(e)}))
+        sys.exit(1)
+

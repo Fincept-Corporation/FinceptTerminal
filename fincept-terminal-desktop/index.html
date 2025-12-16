@@ -4,7 +4,34 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri + React + Typescript</title>
+    <title>Fincept Terminal</title>
+
+    <!-- Critical polyfills that must load before any other scripts -->
+    <script>
+      // Emergency polyfill injection before any module loads
+      // This ensures module, process, and Buffer are available globally
+      if (typeof module === 'undefined') {
+        window.module = { exports: {} };
+        globalThis.module = window.module;
+      }
+      if (typeof process === 'undefined') {
+        window.process = {
+          env: { NODE_ENV: 'production' },
+          browser: true,
+          version: 'v18.0.0',
+          nextTick: function(fn) { setTimeout(fn, 0); },
+          cwd: function() { return '/'; },
+          platform: 'browser',
+          argv: [],
+          pid: 1
+        };
+        globalThis.process = window.process;
+      }
+      if (typeof global === 'undefined') {
+        window.global = window;
+        globalThis.global = globalThis;
+      }
+    </script>
   </head>
 
   <body>

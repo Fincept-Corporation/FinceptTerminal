@@ -113,7 +113,6 @@
     "baseline-browser-mapping": "^2.8.32",
     "browserify-zlib": "^0.2.0",
     "buffer": "^6.0.3",
-    "crypto-browserify": "^3.12.1",
     "http-proxy-agent": "^7.0.2",
     "https-browserify": "^1.0.0",
     "https-proxy-agent": "^7.0.6",

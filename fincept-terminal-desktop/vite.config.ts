@@ -4,7 +4,46 @@ import tailwindcss from '@tailwindcss/vite'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import path from 'path'
 
-// Plugin to handle CCXT's .cjs files
+// Plugin to inject globals at build time
+const injectGlobalsPlugin = (): Plugin => ({
+  name: 'inject-globals',
+  enforce: 'pre',
+  transformIndexHtml() {
+    return [
+      {
+        tag: 'script',
+        children: `
+          // Critical: Set up globals before any module loads
+          window.global = window;
+          window.process = {
+            env: { NODE_ENV: '${process.env.NODE_ENV || 'production'}' },
+            version: 'v18.0.0',
+            browser: true,
+            nextTick: function(fn) {
+              var args = Array.prototype.slice.call(arguments, 1);
+              setTimeout(function() { fn.apply(null, args); }, 0);
+            },
+            cwd: function() { return '/'; },
+            platform: 'browser',
+            argv: [],
+            pid: 1
+          };
+          window.module = { exports: {} };
+
+          // Make them available on globalThis too
+          globalThis.global = window.global;
+          globalThis.process = window.process;
+          globalThis.module = window.module;
+
+          console.log('[Polyfills] Emergency globals injected (process, global, module, Buffer will be loaded by vite-plugin-node-polyfills)');
+        `,
+        injectTo: 'head-prepend',
+      }
+    ];
+  }
+});
+
+// Plugin to handle CCXT's .cjs files, bn.js, and module.exports
 const ccxtFixPlugin = (): Plugin => ({
   name: 'ccxt-cjs-fix',
   enforce: 'pre',
@@ -15,33 +54,70 @@ const ccxtFixPlugin = (): Plugin => ({
     return null;
   },
   transform(code, id) {
+    // Handle CCXT .cjs files
     if (id.includes('ccxt') && id.endsWith('.cjs')) {
-      if (code.includes('typeof exports === "object"')) {
+      // Wrap CommonJS module.exports in ES module
+      if (code.includes('module.exports')) {
+        const wrappedCode = `
+          const module = { exports: {} };
+          const exports = module.exports;
+          ${code}
+          export default module.exports;
+        `;
         return {
-          code: code + '\nexport default module.exports;',
+          code: wrappedCode,
           map: null
         };
       }
     }
+
+    // Replace typeof checks that might fail
+    if (id.includes('node_modules')) {
+      let transformed = code;
+
+      // Replace typeof module checks
+      if (code.includes('typeof module')) {
+        transformed = transformed.replace(
+          /typeof module\s*(!==?|===?)\s*['"]undefined['"]/g,
+          'typeof window !== "undefined"'
+        );
+      }
+
+      // Replace typeof exports checks
+      if (code.includes('typeof exports')) {
+        transformed = transformed.replace(
+          /typeof exports\s*(!==?|===?)\s*['"]undefined['"]/g,
+          'typeof window !== "undefined"'
+        );
+      }
+
+      if (transformed !== code) {
+        return {
+          code: transformed,
+          map: null
+        };
+      }
+    }
+
     return null;
   }
 });
 
 export default defineConfig({
   plugins: [
+    injectGlobalsPlugin(),  // Must be first to inject globals early
     react(),
     tailwindcss(),
     nodePolyfills({
       globals: {
-        Buffer: 'build',  // Changed from true to 'build' to inject in build output
-        global: true,
-        process: true,
+        Buffer: true,   // Let vite-plugin-node-polyfills handle Buffer
+        global: false,  // Handled by injectGlobalsPlugin
+        process: true,  // Let vite-plugin-node-polyfills handle process
       },
       protocolImports: true,
-      exclude: ['net', 'assert', 'vm'],
+      exclude: ['net', 'assert', 'vm'],  // We have custom polyfills for these
       overrides: {
-        // Force readable-stream to use proper Buffer
-        'readable-stream': 'readable-stream',
+        // Don't override readable-stream, let it use the polyfilled modules
       },
     }),
     ccxtFixPlugin()
@@ -62,22 +138,39 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['@mapbox/node-pre-gyp', 'mock-aws-s3', 'aws-sdk', 'nock'],
-    include: ['buffer', 'process', 'ccxt', 'readable-stream', 'crypto-browserify', 'stream-browserify'],
+    // Force these to be pre-bundled and ensure they have proper globals
+    include: [
+      'buffer',
+      'process',
+      'ccxt',  // Include main CCXT package
+      'readable-stream',
+      'stream-browserify',
+      'events',
+      'util',
+    ],
     esbuildOptions: {
       define: {
         global: 'globalThis',
-      }
-    }
+      },
+      // Don't inject globals via esbuild - let vite-plugin-node-polyfills handle it
+      // inject: [path.resolve(__dirname, './src/polyfills/globals-inject.ts')],
+    },
+    // Force optimization even in production
+    force: false,
   },
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
     'global': 'globalThis',
+    // Don't define module here - let the runtime polyfill handle it
   },
   build: {
     commonjsOptions: {
       transformMixedEsModules: true,
-      include: [/node_modules/],
-      extensions: ['.js', '.cjs'],
+      include: [/node_modules/, /ccxt/],  // Explicitly include ccxt
+      extensions: ['.js', '.cjs', '.mjs'],
+      defaultIsModuleExports: true,  // Treat CommonJS exports as default exports
+      requireReturnsDefault: 'auto',  // Auto-detect require behavior
+      esmExternals: true,
     },
     rollupOptions: {
       external: [
@@ -100,10 +193,16 @@ export default defineConfig({
           'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-popover', '@radix-ui/react-tabs'],
           'flow-vendor': ['reactflow'],
           'tauri-vendor': ['@tauri-apps/api', '@tauri-apps/plugin-dialog', '@tauri-apps/plugin-sql'],
-        }
+          'ccxt-vendor': ['ccxt'],  // Separate chunk for CCXT
+        },
       }
     },
     chunkSizeWarningLimit: 1000,
+    // Enable source maps for easier debugging in production
+    sourcemap: false,
+    // Use esbuild for minification (faster and already installed)
+    minify: 'esbuild',
+    target: 'es2020',  // Modern browsers support
   },
   clearScreen: false,
   server: {

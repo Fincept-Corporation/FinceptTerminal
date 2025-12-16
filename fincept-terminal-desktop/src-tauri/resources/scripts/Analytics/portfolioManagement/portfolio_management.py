@@ -1258,3 +1258,60 @@ class PortfolioManagement:
             "cost_benefit_analysis": "Consider transaction costs vs. rebalancing benefits",
             "tax_implications": "Consider tax consequences of rebalancing transactions"
         }
+
+# ============================================================================
+# CLI Interface
+# ============================================================================
+
+if __name__ == "__main__":
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "No command specified"}))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "comprehensive_management_analysis":
+            investor_data = json.loads(sys.argv[2])
+            
+            # Create investor profile
+            investor_type_map = {
+                "individual": InvestorType.INDIVIDUAL,
+                "institutional": InvestorType.INSTITUTIONAL_ENDOWMENT,
+                "pension": InvestorType.INSTITUTIONAL_PENSION,
+                "foundation": InvestorType.INSTITUTIONAL_FOUNDATION
+            }
+            
+            profile = InvestorProfile(
+                investor_type=investor_type_map.get(investor_data.get("type", "individual"), InvestorType.INDIVIDUAL),
+                age=investor_data.get("age", 35),
+                investment_experience=investor_data.get("experience", "moderate"),
+                risk_tolerance=investor_data.get("risk_tolerance", "moderate"),
+                time_horizon_years=investor_data.get("time_horizon", 10)
+            )
+            
+            pm = PortfolioManagement()
+            result = pm.comprehensive_portfolio_management_analysis(profile)
+            
+            print(json.dumps(result))
+
+        elif command == "pension_analysis":
+            plan_type = sys.argv[2]  # "dc", "db", or "compare"
+            participant_data = json.loads(sys.argv[3]) if len(sys.argv) > 3 else {"age": 35}
+            
+            pm = PortfolioManagement()
+            result = pm.pension_plan_analysis(plan_type, participant_data)
+            
+            print(json.dumps(result))
+
+        else:
+            print(json.dumps({"error": f"Unknown command: {command}"}))
+            sys.exit(1)
+
+    except Exception as e:
+        import traceback
+        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
+        sys.exit(1)

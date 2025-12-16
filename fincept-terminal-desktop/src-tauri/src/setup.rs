@@ -1,8 +1,16 @@
 // setup.rs - First-time setup for Python and Bun installation
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use tauri::{AppHandle, Emitter, Manager};
+
+// Windows-specific imports to hide console windows
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+// Windows creation flags to hide console window
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,83 +30,173 @@ pub struct SetupStatus {
     pub needs_setup: bool,
 }
 
-// Bun download URL
-const BUN_WINDOWS_URL: &str = "https://github.com/oven-sh/bun/releases/latest/download/bun-windows-x64.zip";
+// Bun download URLs - Using v1.1.0 with CPU-optimized builds
+const BUN_VERSION: &str = "1.1.0";
 
-/// Check if Python is installed (check app directory first, then system)
+// Optimized builds (require AVX2 - modern CPUs from ~2013+)
+const BUN_WINDOWS_X64_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-windows-x64.zip";
+const BUN_MACOS_X64_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-x64.zip";
+const BUN_LINUX_X64_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-linux-x64.zip";
+
+// Baseline builds (work on all CPUs, slightly slower)
+const BUN_WINDOWS_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-windows-x64-baseline.zip";
+const BUN_MACOS_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-x64-baseline.zip";
+const BUN_LINUX_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-linux-x64-baseline.zip";
+
+// ARM builds (always optimized for their architecture)
+const BUN_MACOS_ARM_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-aarch64.zip";
+const BUN_LINUX_ARM_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-linux-aarch64.zip";
+
+/// Detect if CPU supports AVX2 (required for optimized Bun builds)
+#[cfg(target_os = "windows")]
+fn cpu_supports_avx2() -> bool {
+    // Use CPUID to check for AVX2 support on Windows
+    // Run 'wmic cpu get caption' to check CPU model as fallback
+    let mut cmd = Command::new("wmic");
+    cmd.args(&["cpu", "get", "caption"]);
+    cmd.creation_flags(CREATE_NO_WINDOW); // Hide console window
+    match cmd.output()
+    {
+        Ok(output) if output.status.success() => {
+            let cpu_info = String::from_utf8_lossy(&output.stdout);
+            eprintln!("[SETUP] CPU Info: {}", cpu_info);
+
+            // Check for modern CPU families that support AVX2
+            // Intel: Haswell (2013+), AMD: Excavator (2015+)
+            let has_modern_cpu = cpu_info.contains("i3-4") || cpu_info.contains("i5-4") ||
+                                 cpu_info.contains("i7-4") || cpu_info.contains("i9-") ||
+                                 cpu_info.contains("i3-5") || cpu_info.contains("i5-5") ||
+                                 cpu_info.contains("i7-5") || cpu_info.contains("i3-6") ||
+                                 cpu_info.contains("i5-6") || cpu_info.contains("i7-6") ||
+                                 cpu_info.contains("i3-7") || cpu_info.contains("i5-7") ||
+                                 cpu_info.contains("i7-7") || cpu_info.contains("i3-8") ||
+                                 cpu_info.contains("i5-8") || cpu_info.contains("i7-8") ||
+                                 cpu_info.contains("i3-9") || cpu_info.contains("i5-9") ||
+                                 cpu_info.contains("i7-9") || cpu_info.contains("i3-10") ||
+                                 cpu_info.contains("i5-10") || cpu_info.contains("i7-10") ||
+                                 cpu_info.contains("i3-11") || cpu_info.contains("i5-11") ||
+                                 cpu_info.contains("i7-11") || cpu_info.contains("i3-12") ||
+                                 cpu_info.contains("i5-12") || cpu_info.contains("i7-12") ||
+                                 cpu_info.contains("i3-13") || cpu_info.contains("i5-13") ||
+                                 cpu_info.contains("i7-13") || cpu_info.contains("i3-14") ||
+                                 cpu_info.contains("i5-14") || cpu_info.contains("i7-14") ||
+                                 cpu_info.contains("Ryzen");
+
+            if has_modern_cpu {
+                eprintln!("[SETUP] Modern CPU detected - using optimized Bun build");
+                return true;
+            }
+
+            eprintln!("[SETUP] Older CPU detected - using baseline Bun build for compatibility");
+            false
+        }
+        _ => {
+            eprintln!("[SETUP] Could not detect CPU, using baseline build for safety");
+            false
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn cpu_supports_avx2() -> bool {
+    // macOS: Check sysctl for CPU features
+    match Command::new("sysctl")
+        .arg("machdep.cpu.features")
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            let features = String::from_utf8_lossy(&output.stdout);
+            let has_avx2 = features.contains("AVX2");
+            eprintln!("[SETUP] macOS CPU AVX2 support: {}", has_avx2);
+            has_avx2
+        }
+        _ => {
+            eprintln!("[SETUP] Could not detect CPU features, using baseline build");
+            false
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn cpu_supports_avx2() -> bool {
+    // Linux: Check /proc/cpuinfo for flags
+    use std::fs;
+
+    match fs::read_to_string("/proc/cpuinfo") {
+        Ok(cpuinfo) => {
+            let has_avx2 = cpuinfo.contains("avx2");
+            eprintln!("[SETUP] Linux CPU AVX2 support: {}", has_avx2);
+            has_avx2
+        }
+        _ => {
+            eprintln!("[SETUP] Could not read /proc/cpuinfo, using baseline build");
+            false
+        }
+    }
+}
+
+/// Check if Python is installed (ONLY check app directory, not system)
 pub fn check_python_installed_in_app(app: &AppHandle) -> (bool, Option<String>) {
-    // Check in app's data directory (where Python is actually installed)
-    if let Ok(app_data_dir) = app.path().app_data_dir() {
+    // Check in app's resource directory (where Python should be installed)
+    if let Ok(resource_dir) = app.path().resource_dir() {
         let python_exe = if cfg!(target_os = "windows") {
-            app_data_dir.join("python").join("python.exe")
+            resource_dir.join("python").join("python.exe")
         } else {
-            app_data_dir.join("python").join("bin").join("python3")
+            resource_dir.join("python").join("bin").join("python3")
         };
 
+        eprintln!("[SETUP] Checking Python at: {}", python_exe.display());
+
         if python_exe.exists() {
-            match Command::new(&python_exe)
-                .arg("--version")
-                .output()
+            let mut cmd = Command::new(&python_exe);
+            cmd.arg("--version");
+            #[cfg(target_os = "windows")]
+            cmd.creation_flags(CREATE_NO_WINDOW); // Hide console window
+            match cmd.output()
             {
                 Ok(output) if output.status.success() => {
                     let version = String::from_utf8_lossy(&output.stdout)
                         .trim()
                         .to_string();
+                    eprintln!("[SETUP] Found app Python: {}", version);
                     return (true, Some(version));
                 }
-                _ => {}
+                _ => {
+                    eprintln!("[SETUP] Python exe exists but failed to run");
+                }
             }
+        } else {
+            eprintln!("[SETUP] Python exe not found at expected location");
         }
     }
 
-    // Fallback: check system Python
-    check_python_installed()
+    // Do NOT fallback to system Python - we need app's own Python
+    eprintln!("[SETUP] App Python not installed");
+    (false, None)
 }
 
-/// Check system Python installation
-pub fn check_python_installed() -> (bool, Option<String>) {
-    #[cfg(target_os = "windows")]
-    let python_cmd = "python";
-
-    #[cfg(not(target_os = "windows"))]
-    let python_cmd = "python3";
-
-    match Command::new(python_cmd)
-        .arg("--version")
-        .output()
-    {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout)
-                .trim()
-                .to_string();
-            (true, Some(version))
-        }
-        _ => (false, None),
-    }
-}
-
-/// Check if Bun is installed and get version
-pub fn check_bun_installed() -> (bool, Option<String>) {
-    match Command::new("bun")
-        .arg("--version")
-        .output()
-    {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout)
-                .trim()
-                .to_string();
-            (true, Some(version))
-        }
-        _ => (false, None),
-    }
-}
+// System Python/Bun check functions removed - we only check app's own installations now
+// This ensures the app always uses its bundled runtimes, not system ones
 
 /// Check overall setup status
 #[tauri::command]
 pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
+    // Debug: Print resource_dir path
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        eprintln!("[SETUP] Resource dir: {}", resource_dir.display());
+        eprintln!("[SETUP] Python check path: {}", resource_dir.join("python").display());
+        eprintln!("[SETUP] Bun check path: {}", resource_dir.join("bun").display());
+    } else {
+        eprintln!("[SETUP] Failed to get resource_dir!");
+    }
+
     let (python_installed, python_version) = check_python_installed_in_app(&app);
     let (bun_installed, bun_version) = check_bun_installed_in_app(&app);
 
+    eprintln!("[SETUP] Python installed: {}, Bun installed: {}", python_installed, bun_installed);
+    eprintln!("[SETUP] Needs setup: {}", !python_installed || !bun_installed);
+
+    // Both Python and Bun needed (Bun is required for MCP servers)
     let needs_setup = !python_installed || !bun_installed;
 
     Ok(SetupStatus {
@@ -112,32 +210,70 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
 
 /// Check if Bun is installed in app directory
 pub fn check_bun_installed_in_app(app: &AppHandle) -> (bool, Option<String>) {
-    // First check in app's resource directory
     if let Ok(resource_dir) = app.path().resource_dir() {
         let bun_exe = if cfg!(target_os = "windows") {
             resource_dir.join("bun").join("bun.exe")
         } else {
-            resource_dir.join("bun").join("bin").join("bun")
+            resource_dir.join("bun").join("bun")
         };
 
+        eprintln!("[SETUP] Checking Bun at: {}", bun_exe.display());
+
         if bun_exe.exists() {
-            match Command::new(&bun_exe)
-                .arg("--version")
-                .output()
-            {
-                Ok(output) if output.status.success() => {
-                    let version = String::from_utf8_lossy(&output.stdout)
-                        .trim()
-                        .to_string();
-                    return (true, Some(version));
+            if let Ok(metadata) = std::fs::metadata(&bun_exe) {
+                eprintln!("[SETUP] Bun file size: {} bytes", metadata.len());
+
+                if metadata.len() == 0 {
+                    eprintln!("[SETUP] Bun exe is empty!");
+                    return (false, None);
                 }
-                _ => {}
+
+                // On Windows, use PowerShell to execute (avoids bash path issues)
+                #[cfg(target_os = "windows")]
+                {
+                    let mut cmd = Command::new("powershell");
+                    cmd.args(&["-Command", &format!("& '{}' --version", bun_exe.display())]);
+                    cmd.creation_flags(CREATE_NO_WINDOW); // Hide console window
+                    match cmd.output()
+                    {
+                        Ok(output) if output.status.success() => {
+                            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                            eprintln!("[SETUP] Found Bun v{}", version);
+                            return (true, Some(version));
+                        }
+                        Ok(output) => {
+                            eprintln!("[SETUP] Bun failed to run: {:?}", output.status.code());
+                            eprintln!("[SETUP] Stderr: {}", String::from_utf8_lossy(&output.stderr));
+                        }
+                        Err(e) => {
+                            eprintln!("[SETUP] Failed to execute Bun: {}", e);
+                        }
+                    }
+                }
+
+                // On Unix, execute directly
+                #[cfg(not(target_os = "windows"))]
+                {
+                    match Command::new(&bun_exe).arg("--version").output() {
+                        Ok(output) if output.status.success() => {
+                            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                            eprintln!("[SETUP] Found Bun v{}", version);
+                            return (true, Some(version));
+                        }
+                        Ok(output) => {
+                            eprintln!("[SETUP] Bun failed to run: {:?}", output.status.code());
+                        }
+                        Err(e) => {
+                            eprintln!("[SETUP] Failed to execute Bun: {}", e);
+                        }
+                    }
+                }
             }
         }
     }
 
-    // Fallback: check system Bun
-    check_bun_installed()
+    eprintln!("[SETUP] Bun not installed");
+    (false, None)
 }
 
 /// Download file with progress reporting
@@ -251,14 +387,14 @@ async fn install_python_windows(app: &AppHandle) -> Result<(), String> {
 
     emit_progress(app, "python", 5, "Preparing Python installation...", false);
 
-    // Use AppData for Python installation (writable without admin)
-    // resource_dir might be in Program Files which is read-only
-    let app_data_dir = app
+    // Install Python in the application's resource directory
+    // This keeps everything together in the installation folder
+    let resource_dir = app
         .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+        .resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?;
 
-    let python_dir = app_data_dir.join("python");
+    let python_dir = resource_dir.join("python");
     fs::create_dir_all(&python_dir)
         .map_err(|e| format!("Failed to create python directory: {}", e))?;
 
@@ -305,9 +441,10 @@ async fn install_python_windows(app: &AppHandle) -> Result<(), String> {
 
     // Test if Python executable can run (checks for VC++ Runtime and other dependencies)
     emit_progress(app, "python", 70, "Testing Python installation...", false);
-    let test_output = Command::new(&python_exe)
-        .arg("--version")
-        .output();
+    let mut test_cmd = Command::new(&python_exe);
+    test_cmd.arg("--version");
+    test_cmd.creation_flags(CREATE_NO_WINDOW); // Hide console window
+    let test_output = test_cmd.output();
 
     match test_output {
         Err(e) => {
@@ -339,9 +476,10 @@ async fn install_python_windows(app: &AppHandle) -> Result<(), String> {
     }
 
     emit_progress(app, "python", 75, "Installing pip package manager...", false);
-    let output = Command::new(&python_exe)
-        .arg(&get_pip_path)
-        .output()
+    let mut pip_cmd = Command::new(&python_exe);
+    pip_cmd.arg(&get_pip_path);
+    pip_cmd.creation_flags(CREATE_NO_WINDOW); // Hide console window
+    let output = pip_cmd.output()
         .map_err(|e| format!("Failed to install pip: {}", e))?;
 
     if !output.status.success() {
@@ -435,6 +573,7 @@ async fn install_python_macos(app: &AppHandle) -> Result<(), String> {
     let tar_path = temp_dir.join("python.tar.gz");
 
     // Download standalone Python build for macOS
+    // These builds from indygreg include pip, setuptools, and wheel
     let url = if cfg!(target_arch = "aarch64") {
         "https://github.com/indygreg/python-build-standalone/releases/download/20241016/cpython-3.12.7+20241016-aarch64-apple-darwin-install_only_stripped.tar.gz"
     } else {
@@ -453,6 +592,27 @@ async fn install_python_macos(app: &AppHandle) -> Result<(), String> {
 
     if !output.status.success() {
         return Err("Failed to extract Python".to_string());
+    }
+
+    emit_progress(app, "python", 75, "Verifying Python installation...", false);
+
+    // Verify Python and pip are working
+    let python_exe = python_dir.join("bin").join("python3");
+    let test_output = Command::new(&python_exe)
+        .arg("--version")
+        .output();
+
+    match test_output {
+        Err(e) => {
+            return Err(format!("Python installation test failed: {}", e));
+        }
+        Ok(output) if !output.status.success() => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Python installation test failed: {}", stderr));
+        }
+        Ok(_) => {
+            // Python works, continue
+        }
     }
 
     emit_progress(app, "python", 100, "Python installed successfully", false);
@@ -482,6 +642,7 @@ async fn install_python_linux(app: &AppHandle) -> Result<(), String> {
     let tar_path = temp_dir.join("python.tar.gz");
 
     // Download standalone Python build for Linux
+    // These builds from indygreg include pip, setuptools, and wheel
     let url = if cfg!(target_arch = "aarch64") {
         "https://github.com/indygreg/python-build-standalone/releases/download/20241016/cpython-3.12.7+20241016-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"
     } else {
@@ -500,6 +661,27 @@ async fn install_python_linux(app: &AppHandle) -> Result<(), String> {
 
     if !output.status.success() {
         return Err("Failed to extract Python".to_string());
+    }
+
+    emit_progress(app, "python", 75, "Verifying Python installation...", false);
+
+    // Verify Python and pip are working
+    let python_exe = python_dir.join("bin").join("python3");
+    let test_output = Command::new(&python_exe)
+        .arg("--version")
+        .output();
+
+    match test_output {
+        Err(e) => {
+            return Err(format!("Python installation test failed: {}", e));
+        }
+        Ok(output) if !output.status.success() => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Python installation test failed: {}", stderr));
+        }
+        Ok(_) => {
+            // Python works, continue
+        }
     }
 
     emit_progress(app, "python", 100, "Python installed successfully", false);
@@ -529,7 +711,17 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         let zip_path = temp_dir.join("bun-windows.zip");
-        download_file(BUN_WINDOWS_URL, &zip_path, app, "bun").await?;
+
+        // Detect CPU and choose appropriate build
+        let url = if cpu_supports_avx2() {
+            emit_progress(app, "bun", 5, "Downloading optimized Bun for modern CPU...", false);
+            BUN_WINDOWS_X64_URL
+        } else {
+            emit_progress(app, "bun", 5, "Downloading baseline Bun for maximum compatibility...", false);
+            BUN_WINDOWS_X64_BASELINE_URL
+        };
+
+        download_file(url, &zip_path, app, "bun").await?;
 
         emit_progress(app, "bun", 50, "Extracting Bun...", false);
 
@@ -563,7 +755,33 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
         }
 
         if !bun_found {
-            return Err("bun.exe not found in extracted archive".to_string());
+            // List what we actually found to help debug
+            let mut found_files = Vec::new();
+            if let Ok(entries) = fs::read_dir(&temp_extract_dir) {
+                for entry in entries.flatten() {
+                    found_files.push(entry.path().display().to_string());
+                }
+            }
+            return Err(format!(
+                "bun.exe not found in extracted archive.\n\n\
+                Expected structure: bun-windows-x64/bun.exe\n\
+                Found in archive:\n{}\n\n\
+                This may indicate a corrupted download. Please retry the setup.",
+                found_files.join("\n")
+            ));
+        }
+
+        // Verify the file was copied and has content
+        let target_bun = bun_dir.join("bun.exe");
+        if !target_bun.exists() {
+            return Err("Failed to copy bun.exe to target directory".to_string());
+        }
+
+        if let Ok(metadata) = fs::metadata(&target_bun) {
+            if metadata.len() == 0 {
+                return Err("Copied bun.exe is empty (0 bytes). Download may be corrupted.".to_string());
+            }
+            eprintln!("[SETUP] Bun.exe copied successfully, size: {} bytes", metadata.len());
         }
 
         emit_progress(app, "bun", 100, "Bun installed successfully", false);
@@ -577,17 +795,37 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
     {
         let zip_path = temp_dir.join("bun.zip");
 
+        // Choose URL based on OS, architecture, and CPU features
         let url = if cfg!(target_os = "macos") {
             if cfg!(target_arch = "aarch64") {
-                "https://github.com/oven-sh/bun/releases/latest/download/bun-darwin-aarch64.zip"
+                // ARM Macs always use optimized build
+                emit_progress(app, "bun", 5, "Downloading Bun for Apple Silicon...", false);
+                BUN_MACOS_ARM_URL
             } else {
-                "https://github.com/oven-sh/bun/releases/latest/download/bun-darwin-x64.zip"
+                // Intel Macs - check for AVX2
+                if cpu_supports_avx2() {
+                    emit_progress(app, "bun", 5, "Downloading optimized Bun for modern CPU...", false);
+                    BUN_MACOS_X64_URL
+                } else {
+                    emit_progress(app, "bun", 5, "Downloading baseline Bun for compatibility...", false);
+                    BUN_MACOS_X64_BASELINE_URL
+                }
             }
         } else {
+            // Linux
             if cfg!(target_arch = "aarch64") {
-                "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-aarch64.zip"
+                // ARM Linux always use optimized build
+                emit_progress(app, "bun", 5, "Downloading Bun for ARM64...", false);
+                BUN_LINUX_ARM_URL
             } else {
-                "https://github.com/oven-sh/bun/releases/latest/download/bun-linux-x64.zip"
+                // x64 Linux - check for AVX2
+                if cpu_supports_avx2() {
+                    emit_progress(app, "bun", 5, "Downloading optimized Bun for modern CPU...", false);
+                    BUN_LINUX_X64_URL
+                } else {
+                    emit_progress(app, "bun", 5, "Downloading baseline Bun for compatibility...", false);
+                    BUN_LINUX_X64_BASELINE_URL
+                }
             }
         };
 
@@ -610,12 +848,7 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
             return Err("Failed to extract Bun".to_string());
         }
 
-        // Create bin directory in final location
-        let bin_dir = bun_dir.join("bin");
-        fs::create_dir_all(&bin_dir)
-            .map_err(|e| format!("Failed to create bin directory: {}", e))?;
-
-        // Find the bun executable in extracted folder and move it
+        // Find the bun executable in extracted folder and move it directly to bun_dir
         // Bun zips contain a folder like "bun-darwin-aarch64/bun" or "bun-linux-x64/bun"
         let extracted_entries = fs::read_dir(&temp_extract_dir)
             .map_err(|e| format!("Failed to read extracted directory: {}", e))?;
@@ -627,7 +860,7 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
                 if path.is_dir() {
                     let bun_exe_path = path.join("bun");
                     if bun_exe_path.exists() {
-                        let target_bun = bin_dir.join("bun");
+                        let target_bun = bun_dir.join("bun");
                         fs::copy(&bun_exe_path, &target_bun)
                             .map_err(|e| format!("Failed to copy bun executable: {}", e))?;
 
@@ -637,6 +870,7 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
                             .output()
                             .ok();
 
+                        eprintln!("[SETUP] Bun copied to: {}", target_bun.display());
                         bun_found = true;
                         break;
                     }
@@ -645,7 +879,17 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
         }
 
         if !bun_found {
-            return Err("Bun executable not found in extracted archive".to_string());
+            let mut found_files = Vec::new();
+            if let Ok(entries) = fs::read_dir(&temp_extract_dir) {
+                for entry in entries.flatten() {
+                    found_files.push(entry.path().display().to_string());
+                }
+            }
+            return Err(format!(
+                "Bun executable not found in extracted archive.\n\
+                Found:\n{}",
+                found_files.join("\n")
+            ));
         }
 
         emit_progress(app, "bun", 100, "Bun installed successfully", false);
@@ -660,6 +904,9 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
 
 /// Install Python packages from requirements.txt using app's Python
 async fn install_python_packages(app: &AppHandle) -> Result<(), String> {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
     emit_progress(app, "packages", 0, "Installing Python packages...", false);
 
     // Get Python executable from app directory
@@ -678,34 +925,173 @@ async fn install_python_packages(app: &AppHandle) -> Result<(), String> {
         return Err("Python not found in app directory".to_string());
     }
 
-    // Get requirements.txt path
-    let requirements_path = resource_dir.join("requirements.txt");
+    // Step 1: Upgrade pip, setuptools, and wheel first
+    // This is critical for embedded Python to handle modern packages
+    emit_progress(app, "packages", 5, "Upgrading pip...", false);
 
-    if !requirements_path.exists() {
-        return Err("requirements.txt not found".to_string());
+    let mut upgrade_cmd = Command::new(&python_exe);
+    upgrade_cmd.args(&[
+        "-m",
+        "pip",
+        "install",
+        "--upgrade",
+        "pip",
+        "setuptools",
+        "wheel",
+    ]);
+
+    #[cfg(target_os = "windows")]
+    upgrade_cmd.creation_flags(CREATE_NO_WINDOW); // Hide console window
+
+    let upgrade_output = upgrade_cmd.output()
+        .map_err(|e| format!("Failed to upgrade pip/setuptools: {}", e))?;
+
+    if !upgrade_output.status.success() {
+        let error = String::from_utf8_lossy(&upgrade_output.stderr);
+        eprintln!("[SETUP] Warning: Failed to upgrade pip/setuptools: {}", error);
+        // Continue anyway - might still work
+    } else {
+        emit_progress(app, "packages", 15, "✓ pip, setuptools, and wheel upgraded", false);
     }
 
-    emit_progress(app, "packages", 25, "Running pip install...", false);
+    // Step 2: Get requirements.txt path using resolve_resource (works in dev and prod)
+    let requirements_path = app
+        .path()
+        .resolve("resources/requirements.txt", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to resolve requirements.txt path: {}", e))?;
 
-    let output = Command::new(&python_exe)
-        .args(&[
-            "-m",
-            "pip",
-            "install",
-            "-r",
-            requirements_path.to_str().unwrap(),
-        ])
-        .output()
+    eprintln!("[SETUP] Looking for requirements.txt at: {}", requirements_path.display());
+
+    if !requirements_path.exists() {
+        return Err(format!("requirements.txt not found at: {}", requirements_path.display()));
+    }
+
+    // Step 2.5: Count total packages for progress calculation
+    let total_packages = count_packages(&requirements_path)?;
+    eprintln!("[SETUP] Total packages to install: {}", total_packages);
+
+    // Step 3: Install packages from requirements.txt with real-time progress
+    emit_progress(app, "packages", 20, "Reading requirements.txt...", false);
+
+    let mut child_cmd = Command::new(&python_exe);
+    child_cmd.args(&[
+        "-m",
+        "pip",
+        "install",
+        "--no-cache-dir",  // Avoid cache issues
+        "-r",
+        requirements_path.to_str().unwrap(),
+    ]);
+    child_cmd.stdout(Stdio::piped());
+    child_cmd.stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    child_cmd.creation_flags(CREATE_NO_WINDOW); // Hide console window
+
+    let mut child = child_cmd.spawn()
         .map_err(|e| format!("Failed to run pip: {}", e))?;
 
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
+    // Capture stdout and stderr for progress tracking
+    let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
+    let stderr = child.stderr.take().ok_or("Failed to capture stderr")?;
+
+    let app_clone = app.clone();
+    let total_packages_clone = total_packages;
+
+    // Spawn thread to read stdout in real-time
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        let mut installed_count = 0;
+
+        for line in reader.lines() {
+            if let Ok(line) = line {
+                eprintln!("[PIP] {}", line);
+
+                // Parse pip output for package installation
+                if line.contains("Collecting") {
+                    let package_name = extract_package_name(&line, "Collecting");
+                    let progress = 20 + ((installed_count as f32 / total_packages_clone as f32) * 75.0) as u8;
+                    emit_progress(&app_clone, "packages", progress, &format!("📦 Collecting {}...", package_name), false);
+                } else if line.contains("Downloading") {
+                    let package_name = extract_package_name(&line, "Downloading");
+                    let progress = 20 + ((installed_count as f32 / total_packages_clone as f32) * 75.0) as u8;
+                    emit_progress(&app_clone, "packages", progress, &format!("⬇️  Downloading {}...", package_name), false);
+                } else if line.contains("Installing collected packages:") {
+                    emit_progress(&app_clone, "packages", 85, "Installing collected packages...", false);
+                } else if line.contains("Successfully installed") {
+                    installed_count = total_packages_clone; // All done
+                    let progress = 95;
+                    emit_progress(&app_clone, "packages", progress, "✓ All packages installed successfully", false);
+                }
+            }
+        }
+    });
+
+    // Read stderr for errors
+    let stderr_reader = BufReader::new(stderr);
+    let mut error_messages = Vec::new();
+
+    for line in stderr_reader.lines() {
+        if let Ok(line) = line {
+            eprintln!("[PIP STDERR] {}", line);
+            if line.contains("ERROR") || line.contains("error") {
+                error_messages.push(line);
+            }
+        }
+    }
+
+    // Wait for process to complete
+    let status = child.wait().map_err(|e| format!("Failed to wait for pip: {}", e))?;
+
+    if !status.success() {
+        let error = if !error_messages.is_empty() {
+            error_messages.join("\n")
+        } else {
+            "Package installation failed (unknown error)".to_string()
+        };
         return Err(format!("Package installation failed: {}", error));
     }
 
-    emit_progress(app, "packages", 100, "All packages installed successfully", false);
+    emit_progress(app, "packages", 100, "✓ All packages installed successfully", false);
 
     Ok(())
+}
+
+/// Count number of packages in requirements.txt
+fn count_packages(requirements_path: &std::path::PathBuf) -> Result<usize, String> {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+
+    let file = File::open(requirements_path)
+        .map_err(|e| format!("Failed to open requirements.txt: {}", e))?;
+
+    let reader = BufReader::new(file);
+    let mut count = 0;
+
+    for line in reader.lines() {
+        if let Ok(line) = line {
+            let trimmed = line.trim();
+            // Count non-empty, non-comment lines
+            if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                count += 1;
+            }
+        }
+    }
+
+    Ok(count)
+}
+
+/// Extract package name from pip output line
+fn extract_package_name(line: &str, prefix: &str) -> String {
+    if let Some(pos) = line.find(prefix) {
+        let after_prefix = &line[pos + prefix.len()..];
+        let words: Vec<&str> = after_prefix.trim().split_whitespace().collect();
+        if !words.is_empty() {
+            // Remove version specifiers like (==1.2.3)
+            return words[0].split('=').next().unwrap_or(words[0]).to_string();
+        }
+    }
+    "package".to_string()
 }
 
 /// Run complete setup process
@@ -730,18 +1116,37 @@ pub async fn run_setup(app: AppHandle) -> Result<(), String> {
             return Err("Python installation verification failed".to_string());
         }
         emit_progress(&app, "python", 100, &format!("Python {} verified", version.unwrap_or_default()), false);
+    } else {
+        // Python already installed, skip
+        emit_progress(&app, "python", 100, &format!("✓ Python {} already installed", status.python_version.unwrap_or_default()), false);
     }
 
-    // Install Bun if needed
+    // Install Bun if needed (required for MCP servers)
     if !status.bun_installed {
         install_bun(&app).await?;
+
+        // Wait for filesystem sync on Windows
+        #[cfg(target_os = "windows")]
+        tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
 
         // Verify installation
         let (installed, version) = check_bun_installed_in_app(&app);
         if !installed {
-            return Err("Bun installation verification failed".to_string());
+            return Err(format!(
+                "Bun v{} installation verification failed.\n\n\
+                The file was downloaded but cannot execute.\n\
+                This is needed for MCP server functionality.\n\n\
+                Please try:\n\
+                1. Retry the setup\n\
+                2. Check antivirus settings\n\
+                3. Run as administrator",
+                BUN_VERSION
+            ));
         }
-        emit_progress(&app, "bun", 100, &format!("Bun {} verified", version.unwrap_or_default()), false);
+        emit_progress(&app, "bun", 100, &format!("✓ Bun v{} installed", version.unwrap_or_default()), false);
+    } else {
+        // Bun already installed, skip
+        emit_progress(&app, "bun", 100, &format!("✓ Bun {} already installed", status.bun_version.unwrap_or_default()), false);
     }
 
     // Install Python packages

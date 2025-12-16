@@ -1565,3 +1565,84 @@ class PortfolioPlanning:
             recommendations.append("Consider adding inflation-protected securities or commodities")
 
         return recommendations
+
+# ============================================================================
+# CLI Interface
+# ============================================================================
+
+if __name__ == "__main__":
+    import sys
+    import json
+
+    if len(sys.argv) < 2:
+        print(json.dumps({"error": "No command specified"}))
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    try:
+        if command == "asset_allocation":
+            age = int(sys.argv[2])
+            risk_tolerance = sys.argv[3]
+            time_horizon = int(sys.argv[4])
+            
+            # Create simple investor profile
+            profile = InvestorProfile(
+                age=age,
+                investment_experience="moderate",
+                risk_tolerance=risk_tolerance,
+                time_horizon_years=time_horizon
+            )
+            
+            planning = PortfolioPlanning()
+            asset_classes = planning.asset_allocation_framework.define_asset_classes()
+            
+            allocation = planning.asset_allocation_framework.strategic_asset_allocation(
+                profile,
+                {"return_objectives": {"target_return": 0.07}, "risk_objectives": {"max_volatility": 0.15}},
+                {"liquidity": {}, "time_horizon": {}, "tax": {}, "legal": {}},
+                asset_classes
+            )
+            
+            print(json.dumps(allocation))
+
+        elif command == "retirement_planning":
+            current_age = int(sys.argv[2])
+            retirement_age = int(sys.argv[3])
+            current_savings = float(sys.argv[4])
+            annual_contribution = float(sys.argv[5])
+            
+            # Simple retirement calculation
+            years_to_retirement = retirement_age - current_age
+            expected_return = 0.07
+            inflation = 0.03
+            
+            # Future value calculation
+            fv = current_savings * ((1 + expected_return) ** years_to_retirement)
+            if expected_return != 0:
+                contrib_fv = annual_contribution * (((1 + expected_return) ** years_to_retirement - 1) / expected_return)
+            else:
+                contrib_fv = annual_contribution * years_to_retirement
+            
+            total_savings = fv + contrib_fv
+            real_value = total_savings / ((1 + inflation) ** years_to_retirement)
+            safe_withdrawal = total_savings * 0.04
+            
+            result = {
+                "years_to_retirement": years_to_retirement,
+                "projected_savings": total_savings,
+                "inflation_adjusted_value": real_value,
+                "annual_income_4pct_rule": safe_withdrawal,
+                "monthly_income": safe_withdrawal / 12
+            }
+            
+            print(json.dumps(result))
+
+        else:
+            print(json.dumps({"error": f"Unknown command: {command}"}))
+            sys.exit(1)
+
+    except Exception as e:
+        import traceback
+        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
+        sys.exit(1)

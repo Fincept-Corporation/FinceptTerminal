@@ -309,7 +309,6 @@ export function ProChartWithToolkit({
         } else {
           // Check if hovering over a drawing
           const hoveredDrawing = toolkitRef.current.getDrawings().find(d =>
-            toolkitRef.current!.findDrawingAtPoint &&
             d.id === (toolkitRef.current as any)._hoveredDrawingId
           );
 

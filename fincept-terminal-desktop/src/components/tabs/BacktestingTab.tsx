@@ -25,6 +25,8 @@ import {
   CheckCircle,
   AlertCircle,
   FileText,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { backtestingService } from '@/services/backtesting/BacktestingService';
@@ -53,6 +55,17 @@ export default function BacktestingTab() {
     assets: [{ symbol: 'SPY', assetClass: 'stocks' as const, timeframe: 'daily' as const }],
   });
 
+  // Advanced configuration (Backtesting.py specific)
+  const [advancedConfig, setAdvancedConfig] = useState({
+    commission: 0.001, // 0.1% commission
+    tradeOnClose: false,
+    hedging: false,
+    exclusiveOrders: true,
+    margin: 1.0, // No leverage by default
+  });
+
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+
   // Execution state
   const [isRunning, setIsRunning] = useState(false);
   const [currentResult, setCurrentResult] = useState<BacktestResult | null>(null);
@@ -65,6 +78,9 @@ export default function BacktestingTab() {
 
   // Provider
   const [activeProvider, setActiveProvider] = useState<string | null>(null);
+  const [availableProviders, setAvailableProviders] = useState<string[]>([]);
+  const [showProviderDropdown, setShowProviderDropdown] = useState(false);
+  const [providerStatus, setProviderStatus] = useState<'connected' | 'disconnected' | 'error'>('disconnected');
 
   // Template state
   const [selectedTemplate, setSelectedTemplate] = useState<StrategyTemplate | null>(null);
@@ -118,8 +134,61 @@ export default function BacktestingTab() {
 
       console.log('[BacktestingTab] All registered providers:', backtestingRegistry.listProviders());
       setActiveProvider(provider?.name || null);
+
+      // Load all available providers - extract just the names
+      const allProviders = backtestingRegistry.listProviders();
+      const providerNames = allProviders.map(p => typeof p === 'string' ? p : p.name);
+      setAvailableProviders(providerNames);
+
+      // Set provider status
+      if (provider) {
+        setProviderStatus('connected');
+      } else {
+        setProviderStatus('disconnected');
+      }
     } catch (error) {
       console.error('[BacktestingTab] Failed to initialize provider:', error);
+      setProviderStatus('error');
+    }
+  };
+
+  // Provider switching function
+  const handleProviderSwitch = async (providerName: string) => {
+    try {
+      setShowProviderDropdown(false);
+      setProviderStatus('disconnected');
+
+      // Get provider from registry
+      const provider = backtestingRegistry.getProvider(providerName);
+      if (!provider) {
+        throw new Error(`Provider ${providerName} not found`);
+      }
+
+      // Load config from database
+      const dbProviders = await sqliteService.getBacktestingProviders();
+      const dbProvider = dbProviders.find(p => p.name === providerName);
+
+      if (dbProvider) {
+        const config = JSON.parse(dbProvider.config);
+        await provider.initialize({
+          name: dbProvider.name,
+          adapterType: dbProvider.adapter_type,
+          settings: config
+        });
+      }
+
+      // Set as active
+      await backtestingRegistry.setActiveProvider(providerName);
+      await sqliteService.setActiveBacktestingProvider(providerName);
+
+      setActiveProvider(providerName);
+      setProviderStatus('connected');
+
+      addLog(`Switched to provider: ${providerName}`);
+    } catch (error) {
+      console.error('[BacktestingTab] Failed to switch provider:', error);
+      setProviderStatus('error');
+      setError(`Failed to switch provider: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -230,7 +299,7 @@ export default function BacktestingTab() {
 
       addLog('Building backtest request...');
 
-      // Build backtest request
+      // Build backtest request with advanced parameters
       const request: BacktestRequest = {
         strategy,
         startDate: config.startDate,
@@ -238,6 +307,12 @@ export default function BacktestingTab() {
         initialCapital: config.initialCapital,
         assets: config.assets,
         parameters: {},
+        // Advanced Backtesting.py parameters
+        commission: advancedConfig.commission,
+        tradeOnClose: advancedConfig.tradeOnClose,
+        hedging: advancedConfig.hedging,
+        exclusiveOrders: advancedConfig.exclusiveOrders,
+        margin: advancedConfig.margin,
       };
 
       console.log('[Backtest] Request:', request);
@@ -304,12 +379,12 @@ export default function BacktestingTab() {
     }
   };
 
-  const formatPercentage = (value: number) => {
-    return (value * 100).toFixed(2) + '%';
+  const formatPercentage = (value: number | undefined) => {
+    return ((value ?? 0) * 100).toFixed(2) + '%';
   };
 
-  const formatCurrency = (value: number) => {
-    return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatCurrency = (value: number | undefined) => {
+    return '$' + (value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   const handleSelectTemplate = (template: StrategyTemplate) => {
@@ -341,62 +416,222 @@ export default function BacktestingTab() {
       color: colors.text,
       overflow: 'hidden',
     }}>
-      {/* Header */}
+      {/* Bloomberg-Style Header */}
       <div style={{
-        padding: '16px 20px',
-        borderBottom: `1px solid ${colors.textMuted}`,
+        backgroundColor: '#1A1A1A',
+        borderBottom: `2px solid #FF8800`,
+        padding: '8px 16px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        flexShrink: 0,
+        boxShadow: '0 2px 8px rgba(255, 136, 0, 0.2)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Activity size={24} style={{ color: colors.accent }} />
-          <div>
-            <h1 style={{ margin: 0, fontSize: '1.5rem' }}>Backtesting</h1>
-            <p style={{ margin: 0, fontSize: '0.85rem', color: colors.textMuted }}>
-              {activeProvider ? `Using ${activeProvider}` : 'No provider active'}
-            </p>
+        {/* Left Section - Title and Provider */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          {/* Title */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Activity size={20} color="#FF8800" style={{ filter: 'drop-shadow(0 0 4px #FF8800)' }} />
+            <span style={{
+              color: '#FF8800',
+              fontWeight: 700,
+              fontSize: '14px',
+              letterSpacing: '0.5px',
+              textShadow: '0 0 10px rgba(255, 136, 0, 0.4)'
+            }}>
+              BACKTESTING TERMINAL
+            </span>
+          </div>
+
+          {/* Provider Selector */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowProviderDropdown(!showProviderDropdown)}
+              style={{
+                backgroundColor: '#0F0F0F',
+                border: `1px solid ${providerStatus === 'connected' ? '#00D66F' : providerStatus === 'error' ? '#FF3B3B' : '#2A2A2A'}`,
+                borderRadius: '4px',
+                padding: '6px 12px',
+                color: '#FFFFFF',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '12px',
+                fontWeight: 500,
+                minWidth: '180px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1F1F1F'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F0F0F'}
+            >
+              {/* Status Indicator */}
+              <div style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: providerStatus === 'connected' ? '#00D66F' : providerStatus === 'error' ? '#FF3B3B' : '#787878',
+                boxShadow: providerStatus === 'connected' ? '0 0 6px #00D66F' : providerStatus === 'error' ? '0 0 6px #FF3B3B' : 'none'
+              }} />
+
+              {/* Provider Name */}
+              <span style={{ flex: 1, textAlign: 'left' }}>
+                {activeProvider || 'No Provider'}
+              </span>
+
+              {/* Dropdown Icon */}
+              <ChevronDown size={14} color="#787878" />
+            </button>
+
+            {/* Provider Dropdown */}
+            {showProviderDropdown && (
+              <div style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                marginTop: '4px',
+                backgroundColor: '#0F0F0F',
+                border: '1px solid #2A2A2A',
+                borderRadius: '4px',
+                minWidth: '180px',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+                zIndex: 1000,
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}>
+                {availableProviders.length > 0 ? (
+                  availableProviders.map(provider => (
+                    <div
+                      key={provider}
+                      onClick={() => handleProviderSwitch(provider)}
+                      style={{
+                        padding: '10px 12px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        color: activeProvider === provider ? '#FF8800' : '#FFFFFF',
+                        backgroundColor: activeProvider === provider ? '#1F1F1F' : 'transparent',
+                        borderLeft: activeProvider === provider ? '3px solid #FF8800' : '3px solid transparent',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (activeProvider !== provider) {
+                          e.currentTarget.style.backgroundColor = '#1A1A1A';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (activeProvider !== provider) {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }
+                      }}
+                    >
+                      {provider}
+                    </div>
+                  ))
+                ) : (
+                  <div style={{
+                    padding: '10px 12px',
+                    fontSize: '12px',
+                    color: '#787878',
+                    fontStyle: 'italic'
+                  }}>
+                    No providers available
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Provider Status */}
+          <div style={{
+            fontSize: '11px',
+            color: '#787878',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            {providerStatus === 'connected' && (
+              <>
+                <CheckCircle size={12} color="#00D66F" />
+                <span style={{ color: '#00D66F' }}>Connected</span>
+              </>
+            )}
+            {providerStatus === 'disconnected' && (
+              <>
+                <AlertCircle size={12} color="#787878" />
+                <span>Disconnected</span>
+              </>
+            )}
+            {providerStatus === 'error' && (
+              <>
+                <AlertCircle size={12} color="#FF3B3B" />
+                <span style={{ color: '#FF3B3B' }}>Error</span>
+              </>
+            )}
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        {/* Right Section - Action Buttons */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {/* Refresh Provider Button */}
           <button
             onClick={checkAndInitializeProvider}
             style={{
-              padding: '8px 16px',
-              background: colors.panel,
-              color: colors.text,
-              border: `1px solid ${colors.textMuted}`,
-              borderRadius: '6px',
+              padding: '6px 12px',
+              backgroundColor: '#0F0F0F',
+              color: '#FFFFFF',
+              border: '1px solid #2A2A2A',
+              borderRadius: '4px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
+              fontSize: '12px',
+              fontWeight: 500,
+              transition: 'all 0.2s'
             }}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1F1F1F'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0F0F0F'}
           >
-            <RefreshCw size={16} />
-            Refresh Provider
+            <RefreshCw size={14} />
+            Refresh
           </button>
+
+          {/* Run Backtest Button */}
           <button
             onClick={handleRunBacktest}
             disabled={isRunning || !activeProvider}
             style={{
-              padding: '8px 16px',
-              background: isRunning || !activeProvider ? colors.panel : colors.accent,
-              color: 'white',
+              padding: '6px 16px',
+              backgroundColor: isRunning || !activeProvider ? '#2A2A2A' : '#FF8800',
+              color: '#FFFFFF',
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: '4px',
               cursor: isRunning || !activeProvider ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              fontWeight: '600',
-              opacity: isRunning || !activeProvider ? 0.6 : 1,
+              fontSize: '12px',
+              fontWeight: 600,
+              opacity: isRunning || !activeProvider ? 0.5 : 1,
+              transition: 'all 0.2s',
+              boxShadow: !isRunning && activeProvider ? '0 0 10px rgba(255, 136, 0, 0.3)' : 'none'
+            }}
+            onMouseEnter={(e) => {
+              if (!isRunning && activeProvider) {
+                e.currentTarget.style.backgroundColor = '#FF9922';
+                e.currentTarget.style.boxShadow = '0 0 15px rgba(255, 136, 0, 0.5)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isRunning && activeProvider) {
+                e.currentTarget.style.backgroundColor = '#FF8800';
+                e.currentTarget.style.boxShadow = '0 0 10px rgba(255, 136, 0, 0.3)';
+              }
             }}
           >
             {isRunning ? (
               <>
-                <Loader size={16} className="animate-spin" />
+                <Loader size={14} className="animate-spin" />
                 Running...
               </>
             ) : (
@@ -799,6 +1034,166 @@ export default function BacktestingTab() {
                 />
               </div>
             </div>
+
+            {/* Advanced Settings Toggle */}
+            <button
+              onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+              style={{
+                width: '100%',
+                marginTop: '12px',
+                padding: '8px 12px',
+                background: colors.background,
+                color: colors.text,
+                border: `1px solid ${colors.textMuted}`,
+                borderRadius: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.85rem',
+                fontWeight: '500',
+              }}
+            >
+              <span>Advanced Settings</span>
+              {showAdvancedSettings ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+
+            {/* Advanced Settings Panel */}
+            {showAdvancedSettings && (
+              <div style={{
+                marginTop: '12px',
+                padding: '12px',
+                background: colors.background,
+                border: `1px solid ${colors.textMuted}`,
+                borderRadius: '4px',
+              }}>
+                <div style={{ marginBottom: '8px', fontSize: '0.8rem', color: colors.textMuted, fontStyle: 'italic' }}>
+                  Advanced options for Backtesting.py provider
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {/* Commission */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px', color: colors.textMuted }}>
+                      Commission (decimal)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      min="0"
+                      max="1"
+                      value={advancedConfig.commission}
+                      onChange={(e) => setAdvancedConfig({ ...advancedConfig, commission: Number(e.target.value) })}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        background: colors.panel,
+                        border: `1px solid ${colors.textMuted}`,
+                        borderRadius: '4px',
+                        color: colors.text,
+                        fontSize: '0.85rem',
+                      }}
+                    />
+                    <div style={{ fontSize: '0.7rem', color: colors.textMuted, marginTop: '2px' }}>
+                      {((advancedConfig.commission ?? 0) * 100).toFixed(2)}% per trade
+                    </div>
+                  </div>
+
+                  {/* Margin/Leverage */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', marginBottom: '4px', color: colors.textMuted }}>
+                      Margin/Leverage
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      max="10"
+                      value={advancedConfig.margin}
+                      onChange={(e) => setAdvancedConfig({ ...advancedConfig, margin: Number(e.target.value) })}
+                      style={{
+                        width: '100%',
+                        padding: '8px',
+                        background: colors.panel,
+                        border: `1px solid ${colors.textMuted}`,
+                        borderRadius: '4px',
+                        color: colors.text,
+                        fontSize: '0.85rem',
+                      }}
+                    />
+                    <div style={{ fontSize: '0.7rem', color: colors.textMuted, marginTop: '2px' }}>
+                      {advancedConfig.margin}x leverage (1.0 = no leverage)
+                    </div>
+                  </div>
+
+                  {/* Trade on Close */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={advancedConfig.tradeOnClose}
+                      onChange={(e) => setAdvancedConfig({ ...advancedConfig, tradeOnClose: e.target.checked })}
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        cursor: 'pointer',
+                      }}
+                    />
+                    <label style={{ fontSize: '0.85rem', color: colors.text, cursor: 'pointer' }}>
+                      Trade on Close
+                    </label>
+                  </div>
+
+                  {/* Hedging */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={advancedConfig.hedging}
+                      onChange={(e) => setAdvancedConfig({ ...advancedConfig, hedging: e.target.checked })}
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        cursor: 'pointer',
+                      }}
+                    />
+                    <label style={{ fontSize: '0.85rem', color: colors.text, cursor: 'pointer' }}>
+                      Allow Hedging
+                    </label>
+                  </div>
+
+                  {/* Exclusive Orders */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', gridColumn: '1 / -1' }}>
+                    <input
+                      type="checkbox"
+                      checked={advancedConfig.exclusiveOrders}
+                      onChange={(e) => setAdvancedConfig({ ...advancedConfig, exclusiveOrders: e.target.checked })}
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        cursor: 'pointer',
+                      }}
+                    />
+                    <label style={{ fontSize: '0.85rem', color: colors.text, cursor: 'pointer' }}>
+                      Exclusive Orders (auto-close previous positions)
+                    </label>
+                  </div>
+                </div>
+
+                {/* Tooltips */}
+                <div style={{
+                  marginTop: '12px',
+                  padding: '8px',
+                  background: colors.panel,
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  color: colors.textMuted,
+                  lineHeight: '1.4',
+                }}>
+                  <div style={{ marginBottom: '4px' }}><strong>Trade on Close:</strong> Execute orders at bar close vs next bar open</div>
+                  <div style={{ marginBottom: '4px' }}><strong>Hedging:</strong> Allow simultaneous long and short positions</div>
+                  <div><strong>Exclusive Orders:</strong> Auto-close existing positions when opening new ones</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -983,12 +1378,12 @@ export default function BacktestingTab() {
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
                     {[
-                      { label: 'Total Return', value: formatPercentage(currentResult.performance.totalReturn), positive: currentResult.performance.totalReturn > 0 },
-                      { label: 'Annualized Return', value: formatPercentage(currentResult.performance.annualizedReturn), positive: currentResult.performance.annualizedReturn > 0 },
-                      { label: 'Sharpe Ratio', value: currentResult.performance.sharpeRatio.toFixed(2), positive: currentResult.performance.sharpeRatio > 0 },
-                      { label: 'Max Drawdown', value: formatPercentage(currentResult.performance.maxDrawdown), positive: false },
-                      { label: 'Win Rate', value: formatPercentage(currentResult.performance.winRate), positive: true },
-                      { label: 'Total Trades', value: currentResult.performance.totalTrades.toString(), positive: true },
+                      { label: 'Total Return', value: formatPercentage(currentResult.performance.totalReturn ?? 0), positive: (currentResult.performance.totalReturn ?? 0) > 0 },
+                      { label: 'Annualized Return', value: formatPercentage(currentResult.performance.annualizedReturn ?? 0), positive: (currentResult.performance.annualizedReturn ?? 0) > 0 },
+                      { label: 'Sharpe Ratio', value: (currentResult.performance.sharpeRatio ?? 0).toFixed(2), positive: (currentResult.performance.sharpeRatio ?? 0) > 0 },
+                      { label: 'Max Drawdown', value: formatPercentage(currentResult.performance.maxDrawdown ?? 0), positive: false },
+                      { label: 'Win Rate', value: formatPercentage(currentResult.performance.winRate ?? 0), positive: true },
+                      { label: 'Total Trades', value: (currentResult.performance.totalTrades ?? 0).toString(), positive: true },
                     ].map((metric) => (
                       <div key={metric.label} style={{
                         padding: '16px',
@@ -1221,9 +1616,9 @@ export default function BacktestingTab() {
           <div style={{ display: 'flex', gap: '16px' }}>
             {currentResult && currentResult.status === 'completed' && (
               <>
-                <span>Total Return: {formatPercentage(currentResult.performance.totalReturn)}</span>
-                <span>Sharpe: {currentResult.performance.sharpeRatio.toFixed(2)}</span>
-                <span>Max DD: {formatPercentage(currentResult.performance.maxDrawdown)}</span>
+                <span>Total Return: {formatPercentage(currentResult.performance.totalReturn ?? 0)}</span>
+                <span>Sharpe: {(currentResult.performance.sharpeRatio ?? 0).toFixed(2)}</span>
+                <span>Max DD: {formatPercentage(currentResult.performance.maxDrawdown ?? 0)}</span>
               </>
             )}
             <span style={{ color: isRunning ? colors.warning : colors.secondary }}>
