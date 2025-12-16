@@ -110,6 +110,7 @@ export class WebSocketManager {
         id: subscriptionId,
         topic,
         callback,
+        params,
         unsubscribe: () => this.unsubscribe(subscriptionId, topic, provider, adapterTopic, eventBusUnsubscribe)
       };
 
@@ -359,8 +360,7 @@ export class WebSocketManager {
     const subsToRestore = providerSubs.map(sub => ({
       topic: sub.topic,
       callback: sub.callback,
-      // Extract params from topic if needed
-      params: {} // TODO: Store params in Subscription if needed
+      params: sub.params
     }));
 
     // Reconnect the adapter
