@@ -19,7 +19,7 @@ jobs:
             os_name: 'macOS'
             arch: 'x64'
             target: 'x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04'
+          - platform: 'ubuntu-20.04'
             args: '--target x86_64-unknown-linux-gnu'
             os_name: 'Linux'
             arch: 'x64'
@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+        if: matrix.platform == 'ubuntu-20.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
