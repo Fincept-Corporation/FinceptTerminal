@@ -255,23 +255,16 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       throw new Error('Paper trading adapter not initialized. Call connect() first.');
     }
 
-    console.log('[PaperTradingAdapter] fetchPositions called');
-
     // FORCE FRESH DB READ - no caching
     const positions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId, 'open');
-    console.log('[PaperTradingAdapter] Open positions:', positions.length);
-
-    positions.forEach(p => {
-      console.log(`  ${p.symbol} ${p.side} ${p.quantity} @ ${p.entryPrice}`);
-    });
 
     // Update positions with current prices - PARALLEL with timeout per position
     const updatePromises = positions.map(async (p) => {
       try {
-        // Add timeout per ticker fetch (5 seconds max)
+        // Add timeout per ticker fetch (10 seconds max)
         const tickerPromise = this.realAdapter.fetchTicker(p.symbol);
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Ticker timeout')), 5000)
+          setTimeout(() => reject(new Error('Ticker timeout')), 10000)
         );
 
         const ticker = await Promise.race([tickerPromise, timeoutPromise]) as any;
@@ -289,8 +282,7 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
         p.currentPrice = currentPrice;
         p.unrealizedPnl = unrealizedPnl;
       } catch (err) {
-        console.warn(`[PaperTradingAdapter] Skipping price update for ${p.symbol}:`, err);
-        // Keep existing price if fetch fails
+        // Silently keep existing price if fetch fails
         p.currentPrice = p.currentPrice || p.entryPrice;
         p.unrealizedPnl = p.unrealizedPnl || 0;
       }
@@ -299,9 +291,9 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
     // Wait for all updates with overall timeout
     await Promise.race([
       Promise.all(updatePromises),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('All updates timeout')), 10000))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('All updates timeout')), 20000))
     ]).catch(() => {
-      console.warn('[PaperTradingAdapter] Some price updates timed out, continuing...');
+      // Silently continue if some updates timeout
     });
 
     // Convert to CCXT Position format

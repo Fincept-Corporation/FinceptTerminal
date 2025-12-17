@@ -1078,7 +1078,19 @@ pub fn run() {
             commands::agno_trading::agno_create_competition,
             commands::agno_trading::agno_run_competition,
             commands::agno_trading::agno_get_leaderboard,
-            commands::agno_trading::agno_get_recent_decisions
+            commands::agno_trading::agno_get_recent_decisions,
+            // New commands: Auto-Trading, Debate, Evolution
+            commands::agno_trading::agno_execute_trade,
+            commands::agno_trading::agno_close_position,
+            commands::agno_trading::agno_get_agent_trades,
+            commands::agno_trading::agno_get_agent_performance,
+            commands::agno_trading::agno_get_db_leaderboard,
+            commands::agno_trading::agno_get_db_decisions,
+            commands::agno_trading::agno_run_debate,
+            commands::agno_trading::agno_get_recent_debates,
+            commands::agno_trading::agno_evolve_agent,
+            commands::agno_trading::agno_check_evolution,
+            commands::agno_trading::agno_get_evolution_summary
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

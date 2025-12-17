@@ -44,32 +44,75 @@ export function CompetitionPanel({ selectedSymbol }: CompetitionPanelProps) {
 
   // Competition setup state
   const [competitionName, setCompetitionName] = useState('AI Trading Competition');
-  const [selectedModels, setSelectedModels] = useState<string[]>([
-    'openai:gpt-4o-mini',
-    'anthropic:claude-sonnet-4',
-    'google:gemini-2.0-flash'
-  ]);
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
   const [taskType, setTaskType] = useState<'analyze' | 'signal' | 'evaluate'>('analyze');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [availableModels, setAvailableModels] = useState<Array<{ value: string; label: string; color: string }>>([]);
 
-  // Available models
-  const availableModels = [
-    { value: 'openai:gpt-4o-mini', label: 'GPT-4o Mini', color: BLOOMBERG.GREEN },
-    { value: 'openai:gpt-4o', label: 'GPT-4o', color: BLOOMBERG.GREEN },
-    { value: 'anthropic:claude-sonnet-4', label: 'Claude Sonnet 4', color: BLOOMBERG.ORANGE },
-    { value: 'anthropic:claude-3-5-sonnet', label: 'Claude 3.5 Sonnet', color: BLOOMBERG.ORANGE },
-    { value: 'google:gemini-2.0-flash', label: 'Gemini 2.0 Flash', color: BLOOMBERG.BLUE },
-    { value: 'google:gemini-1.5-pro', label: 'Gemini 1.5 Pro', color: BLOOMBERG.BLUE },
-    { value: 'groq:llama-3.1-70b', label: 'Llama 3.1 70B', color: BLOOMBERG.PURPLE },
-    { value: 'groq:mixtral-8x7b', label: 'Mixtral 8x7B', color: BLOOMBERG.PURPLE },
-    { value: 'deepseek:deepseek-chat', label: 'DeepSeek Chat', color: BLOOMBERG.CYAN },
-    { value: 'xai:grok-2', label: 'Grok 2', color: BLOOMBERG.YELLOW }
-  ];
+  // Color mapping for providers
+  const getProviderColor = (provider: string) => {
+    const colorMap: Record<string, string> = {
+      'openai': BLOOMBERG.GREEN,
+      'anthropic': BLOOMBERG.ORANGE,
+      'google': BLOOMBERG.BLUE,
+      'groq': BLOOMBERG.PURPLE,
+      'deepseek': BLOOMBERG.CYAN,
+      'xai': BLOOMBERG.YELLOW,
+      'together': BLOOMBERG.PURPLE,
+      'mistral': BLOOMBERG.BLUE,
+      'cohere': BLOOMBERG.CYAN
+    };
+    return colorMap[provider.toLowerCase()] || BLOOMBERG.GRAY;
+  };
+
+  // Load configured models from database
+  useEffect(() => {
+    const loadConfiguredModels = async () => {
+      try {
+        console.log('[CompetitionPanel] Loading configured models...');
+        const { sqliteService } = await import('../../../../services/sqliteService');
+        const configs = await sqliteService.getLLMConfigs();
+        console.log('[CompetitionPanel] Raw configs:', configs);
+
+        // Filter to only models with API keys configured
+        const configuredModels = configs
+          .filter(c => c.api_key && c.api_key.trim().length > 0)
+          .map(c => ({
+            value: `${c.provider}:${c.model}`,
+            label: `${c.provider.charAt(0).toUpperCase() + c.provider.slice(1)} - ${c.model}`,
+            color: getProviderColor(c.provider)
+          }));
+
+        console.log('[CompetitionPanel] Configured models:', configuredModels);
+        setAvailableModels(configuredModels);
+
+        // Auto-select first 3 models if available
+        if (configuredModels.length >= 3) {
+          const selected = configuredModels.slice(0, 3).map(m => m.value);
+          console.log('[CompetitionPanel] Auto-selecting first 3 models:', selected);
+          setSelectedModels(selected);
+        } else if (configuredModels.length >= 2) {
+          const selected = configuredModels.slice(0, 2).map(m => m.value);
+          console.log('[CompetitionPanel] Auto-selecting first 2 models:', selected);
+          setSelectedModels(selected);
+        } else {
+          console.warn('[CompetitionPanel] Not enough models configured for competition (need at least 2)');
+        }
+      } catch (err) {
+        console.error('[CompetitionPanel] Failed to load configured models:', err);
+        setError('Failed to load configured models. Please configure API keys in Settings → LLM Config');
+      }
+    };
+
+    loadConfiguredModels();
+  }, []);
 
   // Create competition
   const handleCreateCompetition = async () => {
     if (selectedModels.length < 2) {
-      setError('Select at least 2 models to compete');
+      const errorMsg = 'Select at least 2 models to compete';
+      console.error('[CompetitionPanel]', errorMsg);
+      setError(errorMsg);
       return;
     }
 
@@ -77,20 +120,33 @@ export function CompetitionPanel({ selectedSymbol }: CompetitionPanelProps) {
       setIsLoading(true);
       setError(null);
 
+      console.log('[CompetitionPanel] Creating competition:', {
+        name: competitionName,
+        models: selectedModels,
+        type: 'trading'
+      });
+
       const response = await agnoTradingService.createCompetition(
         competitionName,
         selectedModels,
         'trading'
       );
 
+      console.log('[CompetitionPanel] Create competition response:', response);
+
       if (response.success && response.data) {
+        console.log('[CompetitionPanel] Competition created successfully. Team ID:', response.data.team_id);
         setTeamId(response.data.team_id);
         setShowSetup(false);
       } else {
-        setError(response.error || 'Failed to create competition');
+        const errorMsg = response.error || 'Failed to create competition';
+        console.error('[CompetitionPanel] Competition creation failed:', errorMsg);
+        setError(errorMsg);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      console.error('[CompetitionPanel] Exception during competition creation:', err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -98,12 +154,21 @@ export function CompetitionPanel({ selectedSymbol }: CompetitionPanelProps) {
 
   // Run competition
   const handleRunCompetition = async () => {
-    if (!teamId) return;
+    if (!teamId) {
+      console.error('[CompetitionPanel] No team ID available');
+      return;
+    }
 
     try {
       setIsLoading(true);
       setIsRunning(true);
       setError(null);
+
+      console.log('[CompetitionPanel] Running competition:', {
+        teamId,
+        symbol: selectedSymbol,
+        taskType
+      });
 
       const response = await agnoTradingService.runCompetition(
         teamId,
@@ -111,13 +176,26 @@ export function CompetitionPanel({ selectedSymbol }: CompetitionPanelProps) {
         taskType
       );
 
+      console.log('[CompetitionPanel] Run competition response:', response);
+
       if (response.success && response.data) {
+        console.log('[CompetitionPanel] Competition completed successfully');
         setResult(response.data);
       } else {
-        setError(response.error || 'Competition failed');
+        const errorMsg = response.error || 'Competition failed';
+        console.error('[CompetitionPanel] Competition run failed:', errorMsg);
+        console.error('[CompetitionPanel] Full response:', JSON.stringify(response, null, 2));
+        setError(errorMsg);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      console.error('[CompetitionPanel] Exception during competition run:', err);
+      console.error('[CompetitionPanel] Error details:', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+        raw: err
+      });
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
       setIsRunning(false);
@@ -160,11 +238,20 @@ export function CompetitionPanel({ selectedSymbol }: CompetitionPanelProps) {
 
   // Toggle model selection
   const toggleModel = (model: string) => {
-    setSelectedModels(prev =>
-      prev.includes(model)
+    setSelectedModels(prev => {
+      const newSelection = prev.includes(model)
         ? prev.filter(m => m !== model)
-        : [...prev, model]
-    );
+        : [...prev, model];
+
+      console.log('[CompetitionPanel] Model selection updated:', {
+        toggled: model,
+        wasPreviouslySelected: prev.includes(model),
+        previousSelection: prev,
+        newSelection: newSelection
+      });
+
+      return newSelection;
+    });
   };
 
   return (
@@ -393,30 +480,89 @@ function SetupView({
       {/* Model Selection */}
       <div>
         <label style={{ color: BLOOMBERG.GRAY, fontSize: '9px', display: 'block', marginBottom: '6px' }}>
-          SELECT MODELS (min 2)
+          SELECT MODELS (min 2) - {availableModels.length} Available
         </label>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
-          {availableModels.map((model: any) => (
-            <button
-              key={model.value}
-              onClick={() => toggleModel(model.value)}
-              style={{
-                background: selectedModels.includes(model.value) ? `${model.color}20` : BLOOMBERG.DARK_BG,
-                border: `1px solid ${selectedModels.includes(model.value) ? model.color : BLOOMBERG.BORDER}`,
-                color: selectedModels.includes(model.value) ? model.color : BLOOMBERG.GRAY,
-                padding: '6px',
-                borderRadius: '2px',
-                fontSize: '9px',
-                fontWeight: selectedModels.includes(model.value) ? '700' : '400',
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                textAlign: 'left'
-              }}
-            >
-              {model.label}
-            </button>
-          ))}
-        </div>
+
+        {availableModels.length === 0 ? (
+          <div style={{
+            background: `${BLOOMBERG.YELLOW}15`,
+            border: `1px solid ${BLOOMBERG.YELLOW}`,
+            borderRadius: '2px',
+            padding: '8px',
+            fontSize: '9px',
+            color: BLOOMBERG.YELLOW,
+            textAlign: 'center'
+          }}>
+            No models configured. Go to Settings → LLM Config to add API keys.
+          </div>
+        ) : availableModels.length < 2 ? (
+          <div style={{
+            background: `${BLOOMBERG.ORANGE}15`,
+            border: `1px solid ${BLOOMBERG.ORANGE}`,
+            borderRadius: '2px',
+            padding: '8px',
+            fontSize: '9px',
+            color: BLOOMBERG.ORANGE,
+            textAlign: 'center'
+          }}>
+            Need at least 2 models for competition. Configure more in Settings → LLM Config.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+            {availableModels.map((model: any) => {
+              const isSelected = selectedModels.includes(model.value);
+              return (
+                <button
+                  key={model.value}
+                  onClick={() => {
+                    console.log('[CompetitionPanel] Toggle model:', model.value, 'Currently selected:', isSelected);
+                    toggleModel(model.value);
+                  }}
+                  style={{
+                    background: isSelected ? `${model.color}30` : BLOOMBERG.DARK_BG,
+                    border: `2px solid ${isSelected ? model.color : BLOOMBERG.BORDER}`,
+                    color: isSelected ? model.color : BLOOMBERG.GRAY,
+                    padding: '8px 10px',
+                    borderRadius: '3px',
+                    fontSize: '9px',
+                    fontWeight: isSelected ? '700' : '500',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    textAlign: 'left',
+                    position: 'relative',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background = BLOOMBERG.HOVER;
+                      e.currentTarget.style.borderColor = model.color + '50';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background = BLOOMBERG.DARK_BG;
+                      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                    }
+                  }}
+                >
+                  {/* Selection Indicator */}
+                  <div style={{
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    border: `2px solid ${isSelected ? model.color : BLOOMBERG.BORDER}`,
+                    background: isSelected ? model.color : 'transparent',
+                    flexShrink: 0,
+                    transition: 'all 0.2s'
+                  }} />
+                  <span>{model.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Task Type */}

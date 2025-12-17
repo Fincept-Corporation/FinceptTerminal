@@ -237,9 +237,57 @@ pub fn execute_python_command(
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.to_string())
+
+        // Filter out log lines (ERROR, WARNING, INFO, DEBUG) and keep only JSON
+        // Log lines typically start with log level keywords
+        let filtered_output: Vec<&str> = stdout
+            .lines()
+            .filter(|line| {
+                let trimmed = line.trim();
+                // Skip empty lines
+                if trimmed.is_empty() {
+                    return false;
+                }
+                // Skip lines that start with log level indicators
+                if trimmed.starts_with("ERROR")
+                    || trimmed.starts_with("WARNING")
+                    || trimmed.starts_with("INFO")
+                    || trimmed.starts_with("DEBUG")
+                    || trimmed.starts_with("TRACE") {
+                    return false;
+                }
+                // Skip continuation lines (lines that are indented)
+                if line.starts_with("         ") || line.starts_with("\t") {
+                    return false;
+                }
+                // Keep everything else (JSON output)
+                true
+            })
+            .collect();
+
+        Ok(filtered_output.join("\n"))
     } else {
+        let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(format!("Command failed: {}", stderr))
+
+        // Build detailed error message
+        let mut error_msg = format!("Command failed with exit code: {:?}\n\n", output.status.code());
+
+        if !stderr.is_empty() {
+            error_msg.push_str(&format!("STDERR:\n{}\n\n", stderr));
+        }
+
+        if !stdout.is_empty() {
+            error_msg.push_str(&format!("STDOUT:\n{}\n\n", stdout));
+        }
+
+        if stderr.is_empty() && stdout.is_empty() {
+            error_msg.push_str("No output was produced by the Python script.\n");
+            error_msg.push_str(&format!("Script: {}\n", script_path.display()));
+            error_msg.push_str(&format!("Python: {}\n", python_path.display()));
+            error_msg.push_str(&format!("Args: {:?}", args));
+        }
+
+        Err(error_msg)
     }
 }

@@ -59,7 +59,6 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
 
       setPositions(normalized);
       setError(null); // Clear error on success
-      console.log('[usePositions] Successfully fetched', normalized.length, 'positions');
     } catch (err) {
       const error = err as Error;
       console.error('[usePositions] Failed to fetch positions:', error);

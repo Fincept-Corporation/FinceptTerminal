@@ -169,47 +169,160 @@ export interface CompetitionResult {
 }
 
 // ============================================================================
+// NEW TYPES: Auto-Trading, Debate, Evolution
+// ============================================================================
+
+export interface AgentTrade {
+  id: number;
+  agent_id: string;
+  model: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  order_type: string;
+  quantity: number;
+  entry_price: number;
+  exit_price?: number;
+  stop_loss?: number;
+  take_profit?: number;
+  pnl: number;
+  pnl_percent: number;
+  status: 'open' | 'closed' | 'cancelled';
+  entry_timestamp: number;
+  exit_timestamp?: number;
+  reasoning?: string;
+  metadata?: string;
+  execution_time_ms?: number;
+  is_paper_trade: boolean;
+}
+
+export interface AgentPerformance {
+  agent_id: string;
+  model: string;
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  total_pnl: number;
+  daily_pnl: number;
+  weekly_pnl: number;
+  monthly_pnl: number;
+  win_rate: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  max_drawdown: number;
+  current_drawdown: number;
+  avg_win: number;
+  avg_loss: number;
+  profit_factor: number;
+  largest_win: number;
+  largest_loss: number;
+  consecutive_wins: number;
+  consecutive_losses: number;
+  max_consecutive_wins: number;
+  max_consecutive_losses: number;
+  total_volume: number;
+  positions: number;
+  last_trade_timestamp?: number;
+  last_updated: number;
+}
+
+export interface DebateResult {
+  success: boolean;
+  debate_id: string;
+  symbol: string;
+  bull_argument: string;
+  bear_argument: string;
+  analyst_decision: string;
+  final_action: 'BUY' | 'SELL' | 'HOLD';
+  confidence: number;
+  entry_price?: number;
+  stop_loss?: number;
+  take_profit?: number;
+  position_size?: number;
+  reasoning?: string;
+  execution_time_ms: number;
+}
+
+export interface Decision {
+  id: number;
+  agent_id: string;
+  model: string;
+  decision_type: 'analysis' | 'signal' | 'trade' | 'risk';
+  symbol?: string;
+  decision: string;
+  reasoning?: string;
+  confidence?: number;
+  timestamp: number;
+  execution_time_ms?: number;
+}
+
+export interface EvolutionCheck {
+  should_evolve: boolean;
+  trigger?: string;
+  performance: AgentPerformance;
+}
+
+export interface EvolutionResult {
+  success: boolean;
+  agent_id: string;
+  trigger: string;
+  old_instructions: string[];
+  new_instructions: string[];
+  patterns: any;
+  metrics_before: {
+    total_pnl: number;
+    win_rate: number;
+    total_trades: number;
+  };
+}
+
+export interface TradeExecutionResult {
+  success: boolean;
+  trade_id?: number;
+  trade_data?: any;
+  warnings?: string[];
+  execution_time_ms?: number;
+  error?: string;
+}
+
+// ============================================================================
 // Service Class
 // ============================================================================
 
 class AgnoTradingService {
 
   /**
-   * Sync API keys from Settings to environment
-   * Called before each API request
+   * Get API keys from Settings and build env var map
+   * Returns a map of API keys in the format: { OPENAI_API_KEY: "sk-...", ... }
    */
-  private async syncApiKeys(): Promise<void> {
+  private async getApiKeysMap(): Promise<Record<string, string>> {
     try {
       const configs = await sqliteService.getLLMConfigs();
 
-      // Map provider names to environment variable format
-      const keyMap: Record<string, string> = {
-        'openai': 'OPENAI_API_KEY',
-        'anthropic': 'ANTHROPIC_API_KEY',
-        'google': 'GOOGLE_API_KEY',
-        'groq': 'GROQ_API_KEY',
-        'deepseek': 'DEEPSEEK_API_KEY',
-        'xai': 'XAI_API_KEY',
-        'cohere': 'COHERE_API_KEY',
-        'mistral': 'MISTRAL_API_KEY',
-        'together': 'TOGETHER_API_KEY',
-        'fireworks': 'FIREWORKS_API_KEY'
-      };
+      // Build API keys map
+      const apiKeys: Record<string, string> = {};
+      configs.forEach(config => {
+        if (config.api_key) {
+          const provider = config.provider.toLowerCase();
 
-      // Send API keys to Rust backend
-      for (const config of configs) {
-        if (config.api_key && keyMap[config.provider]) {
-          await invoke('set_env_var', {
-            key: keyMap[config.provider],
-            value: config.api_key
-          }).catch(() => {
-            // Ignore errors - backend may not support this command
-            console.log(`Could not sync ${config.provider} API key to backend`);
-          });
+          // Map provider name to standard env var format
+          // Handle aliases: gemini -> google
+          let standardProvider = provider;
+          if (provider === 'gemini') {
+            standardProvider = 'google';
+            // Also add GEMINI_API_KEY for backward compatibility
+            apiKeys['GEMINI_API_KEY'] = config.api_key;
+          }
+
+          // Format: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, etc.
+          const keyName = `${standardProvider.toUpperCase()}_API_KEY`;
+          apiKeys[keyName] = config.api_key;
         }
-      }
+      });
+
+      return apiKeys;
     } catch (error) {
-      console.warn('Failed to sync API keys:', error);
+      console.warn('Failed to load API keys:', error);
+      return {};
     }
   }
 
@@ -318,10 +431,14 @@ class AgnoTradingService {
     analysisType: 'quick' | 'comprehensive' | 'deep' = 'comprehensive'
   ): Promise<AgnoResponse<MarketAnalysis>> {
     try {
+      // Get API keys from Settings
+      const apiKeys = await this.getApiKeysMap();
+
       const response = await invoke<string>('agno_analyze_market', {
         symbol,
         agentModel,
-        analysisType
+        analysisType,
+        apiKeysJson: JSON.stringify(apiKeys)
       });
       return JSON.parse(response);
     } catch (error) {
@@ -342,11 +459,15 @@ class AgnoTradingService {
     marketData?: any
   ): Promise<AgnoResponse<TradeSignal>> {
     try {
+      // Get API keys from Settings
+      const apiKeys = await this.getApiKeysMap();
+
       const response = await invoke<string>('agno_generate_trade_signal', {
         symbol,
         strategy,
         agentModel,
-        marketData: marketData ? JSON.stringify(marketData) : undefined
+        marketData: marketData ? JSON.stringify(marketData) : undefined,
+        apiKeysJson: JSON.stringify(apiKeys)
       });
       return JSON.parse(response);
     } catch (error) {
@@ -369,10 +490,14 @@ class AgnoTradingService {
     riskTolerance: 'conservative' | 'moderate' | 'aggressive' = 'moderate'
   ): Promise<AgnoResponse<RiskAnalysis>> {
     try {
+      // Get API keys from Settings
+      const apiKeys = await this.getApiKeysMap();
+
       const response = await invoke<string>('agno_manage_risk', {
         portfolioData: JSON.stringify(portfolioData),
         agentModel,
-        riskTolerance
+        riskTolerance,
+        apiKeysJson: JSON.stringify(apiKeys)
       });
       return JSON.parse(response);
     } catch (error) {
@@ -414,12 +539,15 @@ class AgnoTradingService {
     models: string[],
     taskType: 'trading' | 'analysis' | 'research' = 'trading'
   ): Promise<AgnoResponse<CompetitionInfo>> {
-    await this.syncApiKeys();
     try {
+      // Get API keys from Settings
+      const apiKeys = await this.getApiKeysMap();
+
       const response = await invoke<string>('agno_create_competition', {
         name,
         modelsJson: JSON.stringify(models),
-        taskType
+        taskType,
+        apiKeysJson: JSON.stringify(apiKeys)
       });
       return JSON.parse(response);
     } catch (error) {
@@ -438,12 +566,15 @@ class AgnoTradingService {
     symbol: string,
     task: 'analyze' | 'signal' | 'evaluate' = 'analyze'
   ): Promise<AgnoResponse<CompetitionResult>> {
-    await this.syncApiKeys();
     try {
+      // Get API keys from Settings
+      const apiKeys = await this.getApiKeysMap();
+
       const response = await invoke<string>('agno_run_competition', {
         teamId,
         symbol,
-        task
+        task,
+        apiKeysJson: JSON.stringify(apiKeys)
       });
       return JSON.parse(response);
     } catch (error) {
@@ -588,6 +719,279 @@ class AgnoTradingService {
   parseModelString(modelString: string): { provider: string; model: string } {
     const [provider, model] = modelString.split(':');
     return { provider, model };
+  }
+
+  // ============================================================================
+  // NEW METHODS: Auto-Trading, Debate, Evolution
+  // ============================================================================
+
+  /**
+   * Execute a trade based on signal
+   */
+  async executeTrade(
+    signal: TradeSignal & { side?: string; quantity?: number; entry_price?: number; stop_loss?: number; take_profit?: number },
+    portfolio: { total_value: number; positions: any[]; daily_pnl: number },
+    agentId: string,
+    model: string
+  ): Promise<AgnoResponse<TradeExecutionResult>> {
+    try {
+      const apiKeysMap = await this.getApiKeysMap();
+
+      const response = await invoke('agno_execute_trade', {
+        signalJson: JSON.stringify(signal),
+        portfolioJson: JSON.stringify(portfolio),
+        agentId,
+        model,
+        apiKeysJson: JSON.stringify(apiKeysMap)
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Execute trade error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Close an open position
+   */
+  async closePosition(
+    tradeId: number,
+    exitPrice: number,
+    reason: string = 'manual'
+  ): Promise<AgnoResponse<any>> {
+    try {
+      const response = await invoke('agno_close_position', {
+        tradeId,
+        exitPrice,
+        reason
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Close position error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Get trade history for an agent
+   */
+  async getAgentTrades(
+    agentId: string,
+    limit: number = 100,
+    status?: string
+  ): Promise<AgnoResponse<{ trades: AgentTrade[] }>> {
+    try {
+      const response = await invoke('agno_get_agent_trades', {
+        agentId,
+        limit,
+        status
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Get agent trades error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Get performance metrics for an agent
+   */
+  async getAgentPerformance(
+    agentId: string
+  ): Promise<AgnoResponse<{ performance: AgentPerformance }>> {
+    try {
+      const response = await invoke('agno_get_agent_performance', {
+        agentId
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Get agent performance error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Get leaderboard from database
+   */
+  async getDbLeaderboard(
+    limit: number = 20
+  ): Promise<AgnoResponse<{ leaderboard: AgentPerformance[] }>> {
+    try {
+      const response = await invoke('agno_get_db_leaderboard', {
+        limit
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Get leaderboard error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Get recent decisions from database
+   */
+  async getDbDecisions(
+    limit: number = 50,
+    agentId?: string
+  ): Promise<AgnoResponse<{ decisions: Decision[] }>> {
+    try {
+      const response = await invoke('agno_get_db_decisions', {
+        limit,
+        agentId
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Get decisions error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Run a Bull/Bear/Analyst debate
+   */
+  async runDebate(
+    symbol: string,
+    marketData: any,
+    bullModel: string,
+    bearModel: string,
+    analystModel: string
+  ): Promise<AgnoResponse<DebateResult>> {
+    try {
+      const apiKeysMap = await this.getApiKeysMap();
+
+      const response = await invoke('agno_run_debate', {
+        symbol,
+        marketDataJson: JSON.stringify(marketData),
+        bullModel,
+        bearModel,
+        analystModel,
+        apiKeysJson: JSON.stringify(apiKeysMap)
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Run debate error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Get recent debate sessions
+   */
+  async getRecentDebates(
+    limit: number = 10
+  ): Promise<AgnoResponse<{ debates: any[] }>> {
+    try {
+      const response = await invoke('agno_get_recent_debates', {
+        limit
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Get debates error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Check if agent should evolve
+   */
+  async checkEvolution(
+    agentId: string
+  ): Promise<AgnoResponse<EvolutionCheck>> {
+    try {
+      const response = await invoke('agno_check_evolution', {
+        agentId
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Check evolution error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Evolve an agent based on performance
+   */
+  async evolveAgent(
+    agentId: string,
+    model: string,
+    currentInstructions: string[],
+    trigger: string,
+    notes?: string
+  ): Promise<AgnoResponse<EvolutionResult>> {
+    try {
+      const response = await invoke('agno_evolve_agent', {
+        agentId,
+        model,
+        currentInstructionsJson: JSON.stringify(currentInstructions),
+        trigger,
+        notes
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Evolve agent error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Get evolution summary for an agent
+   */
+  async getEvolutionSummary(
+    agentId: string
+  ): Promise<AgnoResponse<any>> {
+    try {
+      const response = await invoke('agno_get_evolution_summary', {
+        agentId
+      });
+
+      return this.parseResponse(response);
+    } catch (error) {
+      console.error('[AgnoService] Get evolution summary error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
   }
 }
 
