@@ -24,10 +24,32 @@ Commands:
 import sys
 import json
 import os
+import logging
 from typing import Dict, Any, Optional, List
+
+# Configure logging to output to stderr only (stdout is reserved for JSON responses)
+logging.basicConfig(
+    level=logging.ERROR,
+    format='%(levelname)s: %(message)s',
+    stream=sys.stderr,
+    force=True
+)
+
+# Suppress Agno library logs that go to stdout
+# Agno uses loguru which outputs to stdout - we need to disable it
+os.environ['LOGURU_LEVEL'] = 'CRITICAL'
+os.environ['LOGURU_AUTOINIT'] = 'False'
 
 # Add agno_trading to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'agno_trading'))
+
+# Disable loguru after import
+try:
+    from loguru import logger
+    logger.remove()  # Remove all default handlers
+    logger.add(sys.stderr, level="CRITICAL")  # Only critical errors to stderr
+except ImportError:
+    pass
 
 # Import after path is set
 from config.settings import AgnoConfig, LLMConfig, LLMProvider, TradingConfig, TradingMode
@@ -153,10 +175,16 @@ def run_agent_command(agent_id: str, prompt: str, session_id: Optional[str] = No
 def analyze_market_command(
     symbol: str,
     agent_model: str = "openai:gpt-4o-mini",
-    analysis_type: str = "comprehensive"
+    analysis_type: str = "comprehensive",
+    api_keys_json: str = "{}"
 ) -> str:
     """Analyze market for a given symbol"""
     try:
+        # Parse API keys and set environment variables
+        api_keys = json.loads(api_keys_json)
+        for key, value in api_keys.items():
+            os.environ[key] = value
+
         # Parse model string
         if ":" in agent_model:
             model_provider, model_name = agent_model.split(":", 1)
@@ -164,9 +192,26 @@ def analyze_market_command(
             model_provider = "openai"
             model_name = agent_model
 
+        # Normalize provider name (gemini -> google for Agno)
+        normalized_provider = model_provider.lower()
+        if normalized_provider == "gemini":
+            normalized_provider = "google"
+
+        # Validate API key is configured for the selected provider
+        # Check both original and normalized provider names
+        required_keys = [
+            f"{model_provider.upper()}_API_KEY",
+            f"{normalized_provider.upper()}_API_KEY"
+        ]
+        if not any(key in api_keys and api_keys[key] for key in required_keys):
+            return create_response(
+                False,
+                error=f"API key not configured for {model_provider}. Please configure {model_provider.upper()}_API_KEY or {normalized_provider.upper()}_API_KEY in Settings → LLM Config."
+            )
+
         # Create market analyst agent
         analyst = MarketAnalystAgent(
-            model_provider=model_provider,
+            model_provider=normalized_provider,
             model_name=model_name,
             symbols=[symbol]
         )
@@ -183,10 +228,16 @@ def generate_trade_signal_command(
     symbol: str,
     strategy: str = "momentum",
     agent_model: str = "anthropic:claude-sonnet-4",
-    market_data: Optional[str] = None
+    market_data: Optional[str] = None,
+    api_keys_json: str = "{}"
 ) -> str:
     """Generate trading signal"""
     try:
+        # Parse API keys and set environment variables
+        api_keys = json.loads(api_keys_json)
+        for key, value in api_keys.items():
+            os.environ[key] = value
+
         # Parse model string
         if ":" in agent_model:
             model_provider, model_name = agent_model.split(":", 1)
@@ -194,9 +245,25 @@ def generate_trade_signal_command(
             model_provider = "anthropic"
             model_name = agent_model
 
+        # Normalize provider name (gemini -> google for Agno)
+        normalized_provider = model_provider.lower()
+        if normalized_provider == "gemini":
+            normalized_provider = "google"
+
+        # Validate API key is configured for the selected provider
+        required_keys = [
+            f"{model_provider.upper()}_API_KEY",
+            f"{normalized_provider.upper()}_API_KEY"
+        ]
+        if not any(key in api_keys and api_keys[key] for key in required_keys):
+            return create_response(
+                False,
+                error=f"API key not configured for {model_provider}. Please configure {model_provider.upper()}_API_KEY or {normalized_provider.upper()}_API_KEY in Settings → LLM Config."
+            )
+
         # Create trading strategy agent
         strategist = TradingStrategyAgent(
-            model_provider=model_provider,
+            model_provider=normalized_provider,
             model_name=model_name,
             symbols=[symbol]
         )
@@ -212,10 +279,16 @@ def generate_trade_signal_command(
 def manage_risk_command(
     portfolio_data: str,
     agent_model: str = "openai:gpt-4",
-    risk_tolerance: str = "moderate"
+    risk_tolerance: str = "moderate",
+    api_keys_json: str = "{}"
 ) -> str:
     """Run risk management analysis"""
     try:
+        # Parse API keys and set environment variables
+        api_keys = json.loads(api_keys_json)
+        for key, value in api_keys.items():
+            os.environ[key] = value
+
         portfolio = json.loads(portfolio_data)
 
         # Parse model string
@@ -225,9 +298,25 @@ def manage_risk_command(
             model_provider = "openai"
             model_name = agent_model
 
+        # Normalize provider name (gemini -> google for Agno)
+        normalized_provider = model_provider.lower()
+        if normalized_provider == "gemini":
+            normalized_provider = "google"
+
+        # Validate API key is configured for the selected provider
+        required_keys = [
+            f"{model_provider.upper()}_API_KEY",
+            f"{normalized_provider.upper()}_API_KEY"
+        ]
+        if not any(key in api_keys and api_keys[key] for key in required_keys):
+            return create_response(
+                False,
+                error=f"API key not configured for {model_provider}. Please configure {model_provider.upper()}_API_KEY or {normalized_provider.upper()}_API_KEY in Settings → LLM Config."
+            )
+
         # Create risk manager agent
         risk_manager = RiskManagerAgent(
-            model_provider=model_provider,
+            model_provider=normalized_provider,
             model_name=model_name,
             risk_tolerance=risk_tolerance
         )
@@ -279,7 +368,8 @@ def get_config_template_command(config_type: str = "default") -> str:
 def create_competition_command(
     name: str,
     models_json: str,
-    task_type: str = "trading"
+    task_type: str = "trading",
+    api_keys_json: str = "{}"
 ) -> str:
     """
     Create multi-model competition
@@ -288,6 +378,7 @@ def create_competition_command(
         name: Competition name
         models_json: JSON array of models ["openai:gpt-4", "anthropic:claude-sonnet-4"]
         task_type: Type of task
+        api_keys_json: JSON object of API keys (optional)
     """
     try:
         import json
@@ -295,17 +386,29 @@ def create_competition_command(
         from agno_trading.core.agent_manager import AgentManager
 
         models = json.loads(models_json)
+        api_keys = json.loads(api_keys_json)
+
+        # Set API keys in environment if provided
+        if api_keys:
+            import os
+            for key, value in api_keys.items():
+                os.environ[key] = value
+
         manager = AgentManager()
         orchestrator = TeamOrchestrator()
 
         # Create agents for each model
+        from agno_trading.core.base_agent import AgentConfig
+
         agents = []
         for model_str in models:
-            agent_config = {
-                "name": f"Agent-{model_str}",
-                "role": "Market Analyst",
-                "agent_model": model_str
-            }
+            # Create proper AgentConfig object (not dict)
+            agent_config = AgentConfig(
+                name=f"Agent-{model_str.replace(':', '-')}",
+                role="Market Analyst",
+                agent_model=model_str,
+                instructions=["Analyze market data and provide trading insights."]
+            )
             agent_id = manager.create_agent(agent_config)
             agent = manager.get_agent(agent_id)
 
@@ -325,7 +428,12 @@ def create_competition_command(
         return create_response(False, error=str(e))
 
 
-def run_competition_command(team_id: str, symbol: str, task: str = "analyze") -> str:
+def run_competition_command(
+    team_id: str,
+    symbol: str,
+    task: str = "analyze",
+    api_keys_json: str = "{}"
+) -> str:
     """
     Run multi-model competition
 
@@ -333,10 +441,19 @@ def run_competition_command(team_id: str, symbol: str, task: str = "analyze") ->
         team_id: Competition ID
         symbol: Trading symbol
         task: Task type (analyze, signal)
+        api_keys_json: JSON object of API keys (optional)
     """
     try:
         import asyncio
+        import json
         from agno_trading.core.team_orchestrator import TeamOrchestrator
+
+        # Set API keys in environment if provided
+        api_keys = json.loads(api_keys_json)
+        if api_keys:
+            import os
+            for key, value in api_keys.items():
+                os.environ[key] = value
 
         orchestrator = TeamOrchestrator()
 
@@ -385,6 +502,210 @@ def get_recent_decisions_command(limit: int = 50) -> str:
         return create_response(False, error=str(e))
 
 
+# ============================================================================
+# NEW COMMANDS: Auto-Trading, Debate, Evolution
+# ============================================================================
+
+def execute_trade_command(
+    signal_json: str,
+    portfolio_json: str,
+    agent_id: str,
+    model: str,
+    api_keys_json: str = "{}"
+) -> str:
+    """Execute a trade based on signal"""
+    try:
+        from agno_trading.core.trade_executor import get_trade_executor
+
+        signal = json.loads(signal_json)
+        portfolio = json.loads(portfolio_json)
+        api_keys = json.loads(api_keys_json)
+
+        # Set API keys
+        for key, value in api_keys.items():
+            os.environ[key] = value
+
+        executor = get_trade_executor()
+        result = executor.execute_trade(signal, portfolio, agent_id, model, paper_trading=True)
+
+        return create_response(True, result)
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def close_position_command(trade_id: int, exit_price: float, reason: str = "manual") -> str:
+    """Close an open position"""
+    try:
+        from agno_trading.core.trade_executor import get_trade_executor
+
+        executor = get_trade_executor()
+        result = executor.close_position(int(trade_id), float(exit_price), reason)
+
+        return create_response(True, result)
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def get_agent_trades_command(agent_id: str, limit: int = 100, status: str = None) -> str:
+    """Get trade history for an agent"""
+    try:
+        from agno_trading.db.database_manager import get_db_manager
+
+        db = get_db_manager()
+        trades = db.get_agent_trades(agent_id, int(limit), status)
+
+        return create_response(True, {"trades": trades})
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def get_agent_performance_command(agent_id: str) -> str:
+    """Get performance metrics for an agent"""
+    try:
+        from agno_trading.db.database_manager import get_db_manager
+
+        db = get_db_manager()
+        performance = db.get_agent_performance(agent_id)
+
+        if performance:
+            return create_response(True, {"performance": performance})
+        else:
+            return create_response(False, error="Agent performance not found")
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def get_db_leaderboard_command(limit: int = 20) -> str:
+    """Get leaderboard from database"""
+    try:
+        from agno_trading.db.database_manager import get_db_manager
+
+        db = get_db_manager()
+        leaderboard = db.get_leaderboard(int(limit))
+
+        return create_response(True, {"leaderboard": leaderboard})
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def get_db_decisions_command(limit: int = 50, agent_id: str = None) -> str:
+    """Get recent decisions from database"""
+    try:
+        from agno_trading.db.database_manager import get_db_manager
+
+        db = get_db_manager()
+        decisions = db.get_recent_decisions(int(limit), agent_id)
+
+        return create_response(True, {"decisions": decisions})
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def run_debate_command(
+    symbol: str,
+    market_data_json: str,
+    bull_model: str,
+    bear_model: str,
+    analyst_model: str,
+    api_keys_json: str = "{}"
+) -> str:
+    """Run a Bull/Bear/Analyst debate"""
+    try:
+        from agno_trading.core.debate_orchestrator import get_debate_orchestrator
+
+        market_data = json.loads(market_data_json)
+        api_keys = json.loads(api_keys_json)
+
+        # Set API keys
+        for key, value in api_keys.items():
+            os.environ[key] = value
+
+        orchestrator = get_debate_orchestrator()
+        result = orchestrator.run_debate(
+            symbol,
+            market_data,
+            bull_model,
+            bear_model,
+            analyst_model,
+            api_keys
+        )
+
+        return create_response(True, result)
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def get_recent_debates_command(limit: int = 10) -> str:
+    """Get recent debate sessions"""
+    try:
+        from agno_trading.db.database_manager import get_db_manager
+
+        db = get_db_manager()
+        debates = db.get_recent_debates(int(limit))
+
+        return create_response(True, {"debates": debates})
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def evolve_agent_command(
+    agent_id: str,
+    model: str,
+    current_instructions_json: str,
+    trigger: str,
+    notes: str = None
+) -> str:
+    """Evolve an agent based on performance"""
+    try:
+        from agno_trading.core.agent_evolution import get_agent_evolution
+
+        current_instructions = json.loads(current_instructions_json)
+
+        evolution = get_agent_evolution()
+        result = evolution.evolve_agent(agent_id, model, current_instructions, trigger, notes)
+
+        return create_response(True, result)
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def check_evolution_command(agent_id: str) -> str:
+    """Check if agent should evolve"""
+    try:
+        from agno_trading.core.agent_evolution import get_agent_evolution
+        from agno_trading.db.database_manager import get_db_manager
+
+        db = get_db_manager()
+        performance = db.get_agent_performance(agent_id)
+
+        if not performance:
+            return create_response(False, error="Agent performance not found")
+
+        evolution = get_agent_evolution()
+        should_evolve, trigger = evolution.should_evolve(agent_id, performance)
+
+        return create_response(True, {
+            "should_evolve": should_evolve,
+            "trigger": trigger,
+            "performance": performance
+        })
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
+def get_evolution_summary_command(agent_id: str) -> str:
+    """Get evolution summary for an agent"""
+    try:
+        from agno_trading.core.agent_evolution import get_agent_evolution
+
+        evolution = get_agent_evolution()
+        summary = evolution.get_evolution_summary(agent_id)
+
+        return create_response(True, summary)
+    except Exception as e:
+        return create_response(False, error=str(e))
+
+
 # Command dispatcher
 COMMANDS = {
     "list_models": list_models_command,
@@ -400,6 +721,18 @@ COMMANDS = {
     "run_competition": run_competition_command,
     "get_leaderboard": get_leaderboard_command,
     "get_recent_decisions": get_recent_decisions_command,
+    # New commands
+    "execute_trade": execute_trade_command,
+    "close_position": close_position_command,
+    "get_agent_trades": get_agent_trades_command,
+    "get_agent_performance": get_agent_performance_command,
+    "get_db_leaderboard": get_db_leaderboard_command,
+    "get_db_decisions": get_db_decisions_command,
+    "run_debate": run_debate_command,
+    "get_recent_debates": get_recent_debates_command,
+    "evolve_agent": evolve_agent_command,
+    "check_evolution": check_evolution_command,
+    "get_evolution_summary": get_evolution_summary_command,
 }
 
 

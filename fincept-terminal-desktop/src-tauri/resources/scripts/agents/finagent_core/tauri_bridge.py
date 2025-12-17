@@ -14,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from finagent_core.base_agent import AgentRegistry, AgentConfig
+from finagent_core.llm_executor import LLMExecutor
 
 
 class TauriBridge:
@@ -46,10 +47,16 @@ class TauriBridge:
             registry = AgentRegistry(config_path)
             agents = registry.list_agents()
 
+            # Check if this is a team configuration
+            team_name = registry.config_data.get("team_name", None)
+            team_description = registry.config_data.get("team_description", None)
+
             return {
                 "success": True,
                 "agents": [agent.to_dict() for agent in agents],
-                "count": len(agents)
+                "count": len(agents),
+                "team_name": team_name,
+                "team_description": team_description
             }
         except Exception as e:
             return {
@@ -145,11 +152,13 @@ class TauriBridge:
         }
 
     def execute_agent(self, parameters: Dict, inputs: Dict) -> Dict:
-        """Execute an agent (placeholder - actual execution requires LLM setup)"""
+        """Execute an agent with real LLM execution"""
         try:
             agent_id = parameters.get("agent_id")
             category = parameters.get("category", "TraderInvestorsAgent")
             query = parameters.get("query", "")
+            api_keys = inputs.get("api_keys", {})
+            llm_override = inputs.get("llm_override", None)
 
             config_path = self.get_config_path(category)
             registry = AgentRegistry(config_path)
@@ -161,18 +170,122 @@ class TauriBridge:
                     "error": f"Agent not found: {agent_id}"
                 }
 
-            # For now, return agent info (actual LLM execution would go here)
-            return {
-                "success": True,
-                "agent_id": agent_id,
-                "response": f"Agent '{agent.name}' received query: {query}\n\nNote: Full LLM execution requires API keys and Agno framework setup.",
-                "config": agent.to_dict()
-            }
+            # Override LLM config with active provider from Settings
+            agent_config = agent.to_dict()
+            if llm_override:
+                if "llm_config" not in agent_config:
+                    agent_config["llm_config"] = {}
+                agent_config["llm_config"]["provider"] = llm_override.get("provider")
+                agent_config["llm_config"]["model_id"] = llm_override.get("model")
+
+            # Execute with real LLM
+            executor = LLMExecutor(api_keys)
+            result = executor.execute(agent_config, query)
+
+            # Add agent metadata to result
+            if result.get("success"):
+                result["agent_id"] = agent_id
+                result["agent_name"] = agent.name
+                result["config"] = agent_config
+
+            return result
         except Exception as e:
             return {
                 "success": False,
                 "error": str(e)
             }
+
+    def execute_team_collaboration(self, parameters: Dict, inputs: Dict) -> Dict:
+        """Execute multi-agent collaboration discussion - SEQUENTIAL, one at a time"""
+        try:
+            category = parameters.get("category", "GeopoliticsAgents")
+            query = parameters.get("query", "")
+            api_keys = inputs.get("api_keys", {})
+            llm_override = inputs.get("llm_override", None)
+            agent_ids = parameters.get("agent_ids", None)  # NEW: filter by specific agents
+
+            config_path = self.get_config_path(category)
+            registry = AgentRegistry(config_path)
+            all_agents = registry.list_agents()
+
+            # Filter agents if specific IDs provided (for book-specific discussion)
+            if agent_ids:
+                agents_list = [a for a in all_agents if a.id in agent_ids]
+            else:
+                agents_list = all_agents
+
+            if not agents_list:
+                return {"success": False, "error": "No agents found"}
+
+            executor = LLMExecutor(api_keys)
+            discussion = []
+
+            # ROUND 1: Each agent analyzes query ONE BY ONE
+            import sys
+            sys.stderr.write(f"\n=== ROUND 1: Initial Analysis ({len(agents_list)} agents) ===\n")
+            for idx, agent in enumerate(agents_list, 1):
+                sys.stderr.write(f"Agent {idx}/{len(agents_list)}: {agent.name}\n")
+
+                agent_config = agent.to_dict()
+                if llm_override:
+                    if "llm_config" not in agent_config:
+                        agent_config["llm_config"] = {}
+                    agent_config["llm_config"]["provider"] = llm_override.get("provider")
+                    agent_config["llm_config"]["model_id"] = llm_override.get("model")
+
+                result = executor.execute(agent_config, query)
+                if result.get("success"):
+                    response = result.get("response", "")
+                    discussion.append({
+                        "agent": agent.name,
+                        "role": agent.role,
+                        "response": response,
+                        "round": 1
+                    })
+                    sys.stderr.write(f"[OK] {agent.name}: {response[:100]}...\n")
+                else:
+                    sys.stderr.write(f"[FAIL] {agent.name}: Failed - {result.get('error', 'Unknown error')}\n")
+
+            # ROUND 2: Agents respond to discussion ONE BY ONE
+            sys.stderr.write(f"\n=== ROUND 2: Response to Discussion ===\n")
+            context = f"Original Query: {query}\n\nDiscussion so far:\n"
+            for d in discussion:
+                context += f"\n{d['agent']}: {d['response'][:150]}...\n"
+            context += "\n\nBased on the above discussion, provide your additional insights:"
+
+            for idx, agent in enumerate(agents_list, 1):
+                sys.stderr.write(f"Agent {idx}/{len(agents_list)}: {agent.name}\n")
+
+                agent_config = agent.to_dict()
+                if llm_override:
+                    agent_config["llm_config"]["provider"] = llm_override.get("provider")
+                    agent_config["llm_config"]["model_id"] = llm_override.get("model")
+
+                result = executor.execute(agent_config, context)
+                if result.get("success"):
+                    response = result.get("response", "")
+                    discussion.append({
+                        "agent": agent.name,
+                        "role": agent.role,
+                        "response": response,
+                        "round": 2
+                    })
+                    sys.stderr.write(f"[OK] {agent.name}: {response[:100]}...\n")
+                else:
+                    sys.stderr.write(f"[FAIL] {agent.name}: Failed - {result.get('error', 'Unknown error')}\n")
+
+            return {
+                "success": True,
+                "discussion": discussion,
+                "total_agents": len(agents_list),
+                "rounds": 2,
+                "query": query
+            }
+        except Exception as e:
+            import traceback
+            sys.stderr.write(f"ERROR in execute_team_collaboration: {str(e)}\n")
+            sys.stderr.write(traceback.format_exc())
+            return {"success": False, "error": str(e)}
 
     def execute(self, action: str, parameters: Dict, inputs: Dict) -> Dict:
         """Execute an action"""
@@ -182,11 +295,12 @@ class TauriBridge:
             "update_config": self.update_config,
             "get_providers": self.get_providers,
             "execute_agent": self.execute_agent,
+            "execute_team_collaboration": self.execute_team_collaboration,
         }
 
         handler = actions.get(action)
         if handler:
-            if action == "execute_agent":
+            if action in ["execute_agent", "execute_team_collaboration"]:
                 return handler(parameters, inputs)
             else:
                 return handler(parameters)

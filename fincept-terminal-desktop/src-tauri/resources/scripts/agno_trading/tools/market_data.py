@@ -98,7 +98,9 @@ def get_historical_data(
     """
     try:
         if YFINANCE_AVAILABLE:
-            ticker = yf.Ticker(symbol)
+            # Convert crypto symbols to yfinance format: BTC/USD -> BTC-USD
+            yf_symbol = symbol.replace('/', '-')
+            ticker = yf.Ticker(yf_symbol)
             hist = ticker.history(period=period, interval=interval)
 
             if hist.empty:

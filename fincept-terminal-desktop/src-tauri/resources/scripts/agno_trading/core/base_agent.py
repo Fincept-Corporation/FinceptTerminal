@@ -6,6 +6,7 @@ All specialized trading agents inherit from this base class.
 """
 
 import os
+import sys
 import json
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
@@ -149,8 +150,13 @@ class BaseAgent:
             from agno.models.anthropic import Claude
             return Claude(**model_config)
         elif provider == "google":
-            from agno.models.google import Gemini
-            return Gemini(**model_config)
+            # Use OpenAI-compatible API for Google Gemini
+            from agno.models.openai import OpenAIChat
+            return OpenAIChat(
+                id=model_name,
+                api_key=api_key,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+            )
         elif provider == "groq":
             from agno.models.groq import Groq
             return Groq(**model_config)
@@ -199,13 +205,19 @@ class BaseAgent:
 
     def _get_market_data_tools(self) -> List[Any]:
         """Get market data tools"""
-        # Placeholder - will be implemented in tools/market_data.py
-        return []
+        try:
+            from tools.market_data import get_market_data_tools
+            return get_market_data_tools()
+        except ImportError:
+            return []
 
     def _get_technical_analysis_tools(self) -> List[Any]:
         """Get technical analysis tools"""
-        # Placeholder - will be implemented in tools/technical_indicators.py
-        return []
+        try:
+            from tools.technical_indicators import get_technical_analysis_tools
+            return get_technical_analysis_tools()
+        except ImportError:
+            return []
 
     def _get_order_execution_tools(self) -> List[Any]:
         """Get order execution tools"""
@@ -252,8 +264,6 @@ class BaseAgent:
             "instructions": self.config.instructions,
             "tools": self.tools if self.tools else None,
             "knowledge": self.knowledge,
-            "memory": self.memory,
-            "show_tool_calls": self.config.show_tool_calls,
             "markdown": self.config.markdown,
         }
 
@@ -285,6 +295,13 @@ class BaseAgent:
         Returns:
             ModelResponse object or streaming response
         """
+        # Log what's being sent to the model
+        print(f"\n{'='*80}", file=sys.stderr)
+        print(f"[Agent: {self.config.name}] Running with model: {self.config.model_provider}:{self.config.model_name}", file=sys.stderr)
+        print(f"Prompt length: {len(prompt)} chars", file=sys.stderr)
+        print(f"Prompt preview: {prompt[:500]}...", file=sys.stderr)
+        print(f"{'='*80}\n", file=sys.stderr)
+
         # Track in session
         if session_id:
             if session_id not in self.sessions:
@@ -295,17 +312,8 @@ class BaseAgent:
                 "type": "user"
             })
 
-        # Run agent
-        run_params = {
-            "message": prompt,
-            "stream": stream or self.config.stream,
-            **kwargs
-        }
-
-        if session_id:
-            run_params["session_id"] = session_id
-
-        response = self.agent.run(**run_params)
+        # Run agent (Agno uses 'input' parameter)
+        response = self.agent.run(prompt, stream=stream or self.config.stream, **kwargs)
 
         # Track response in session
         if session_id and not stream:

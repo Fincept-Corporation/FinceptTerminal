@@ -34,6 +34,7 @@ class AgentRegistry:
     def __init__(self, config_path: Optional[Path] = None):
         self.config_path = config_path
         self.agents: Dict[str, AgentConfig] = {}
+        self.config_data: Dict[str, Any] = {}
 
         if config_path and config_path.exists():
             self.load_configs_from_json(config_path)
@@ -43,6 +44,8 @@ class AgentRegistry:
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+
+            self.config_data = data  # Store full config including team_name
 
             agents_list = data.get('agents', [])
             for agent_dict in agents_list:

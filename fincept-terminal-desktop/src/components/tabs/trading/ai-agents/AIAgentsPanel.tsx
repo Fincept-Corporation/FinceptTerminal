@@ -17,10 +17,14 @@ import agnoTradingService, {
   type AgentInfo,
   type MarketAnalysis,
   type TradeSignal,
-  type RiskAnalysis
+  type RiskAnalysis,
+  type TradeExecutionResult
 } from '../../../../services/agnoTradingService';
 import { AgentConfigurationUI } from './AgentConfigurationUI';
 import { CompetitionPanel } from './CompetitionPanel';
+import { DebateArenaPanel } from './DebateArenaPanel';
+import { DecisionFeedPanel } from './DecisionFeedPanel';
+import { TradeHistoryPanel } from './TradeHistoryPanel';
 
 // Bloomberg color palette
 const BLOOMBERG = {
@@ -234,6 +238,54 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
     }
   };
 
+  const handleExecuteTrade = async () => {
+    if (!result || result.type !== 'trade_signal') {
+      setError('Generate a trade signal first');
+      return;
+    }
+
+    if (!portfolioData) {
+      setError('Portfolio data not available');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Extract signal data
+      const signalData = result.data;
+
+      // Create portfolio snapshot
+      const portfolio = {
+        total_value: portfolioData.total_value,
+        positions: portfolioData.positions || [],
+        daily_pnl: 0
+      };
+
+      // Execute trade via trade executor
+      const response = await agnoTradingService.executeTrade(
+        signalData,
+        portfolio,
+        'quick_action_agent',
+        selectedModel
+      );
+
+      if (response.success && response.data) {
+        setResult({
+          type: 'trade_execution',
+          data: response.data
+        });
+      } else {
+        setError(response.error || 'Trade execution failed');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // ============================================================================
   // Render
   // ============================================================================
@@ -369,6 +421,7 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
               onGenerateSignal={handleGenerateSignal}
               onAssessRisk={handleAssessRisk}
               onStartCompetition={handleStartCompetition}
+              onExecuteTrade={handleExecuteTrade}
             />
           </div>
         )}
@@ -422,6 +475,7 @@ interface QuickActionsViewProps {
   onGenerateSignal: () => void;
   onAssessRisk: () => void;
   onStartCompetition: () => void;
+  onExecuteTrade: () => void;
 }
 
 function QuickActionsView({
@@ -440,7 +494,8 @@ function QuickActionsView({
   onAnalyzeMarket,
   onGenerateSignal,
   onAssessRisk,
-  onStartCompetition
+  onStartCompetition,
+  onExecuteTrade
 }: QuickActionsViewProps) {
   const models = availableModels.length > 0 ? availableModels : [
     { value: 'openai:gpt-4o-mini', label: 'GPT-4o Mini (Configure in Settings)' },
@@ -695,7 +750,36 @@ function QuickActionsView({
               {result.type === 'trade_signal' && 'TRADE SIGNAL'}
               {result.type === 'risk_analysis' && 'RISK ASSESSMENT'}
               {result.type === 'competition' && 'MULTI-MODEL COMPETITION'}
+              {result.type === 'trade_execution' && 'TRADE EXECUTED'}
             </span>
+
+            {/* Execute Button for Trade Signals */}
+            {result.type === 'trade_signal' && (
+              <button
+                onClick={onExecuteTrade}
+                disabled={isLoading}
+                style={{
+                  marginLeft: 'auto',
+                  background: BLOOMBERG.ORANGE,
+                  border: `1px solid ${BLOOMBERG.ORANGE}`,
+                  color: BLOOMBERG.DARK_BG,
+                  padding: '3px 8px',
+                  borderRadius: '2px',
+                  fontSize: '9px',
+                  fontWeight: '700',
+                  cursor: isLoading ? 'not-allowed' : 'pointer',
+                  opacity: isLoading ? 0.5 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  letterSpacing: '0.3px',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {isLoading ? <Loader2 size={10} className="animate-spin" /> : <Zap size={10} />}
+                EXECUTE
+              </button>
+            )}
           </div>
 
           {result.type === 'competition' ? (
@@ -755,6 +839,106 @@ function QuickActionsView({
                   ))}
                 </div>
               </div>
+            </div>
+          ) : result.type === 'trade_execution' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {/* Trade Success Message */}
+              {result.data.success && (
+                <div style={{
+                  background: `${BLOOMBERG.GREEN}15`,
+                  border: `1px solid ${BLOOMBERG.GREEN}`,
+                  borderRadius: '2px',
+                  padding: '6px',
+                  fontSize: '9px',
+                  color: BLOOMBERG.GREEN
+                }}>
+                  ✓ Trade executed successfully (Paper Trading)
+                  {result.data.trade_id && <span style={{ marginLeft: '6px' }}>ID: {result.data.trade_id}</span>}
+                </div>
+              )}
+
+              {/* Warnings */}
+              {result.data.warnings && result.data.warnings.length > 0 && (
+                <div style={{
+                  background: `${BLOOMBERG.YELLOW}15`,
+                  border: `1px solid ${BLOOMBERG.YELLOW}`,
+                  borderRadius: '2px',
+                  padding: '6px'
+                }}>
+                  {result.data.warnings.map((warn: string, idx: number) => (
+                    <div key={idx} style={{ fontSize: '8px', color: BLOOMBERG.YELLOW, marginBottom: '2px' }}>
+                      ⚠ {warn}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Trade Details */}
+              {result.data.trade_data && (
+                <div style={{
+                  background: BLOOMBERG.PANEL_BG,
+                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  borderRadius: '2px',
+                  padding: '6px',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '4px',
+                  fontSize: '9px'
+                }}>
+                  <div>
+                    <span style={{ color: BLOOMBERG.GRAY }}>Symbol:</span>
+                    <span style={{ color: BLOOMBERG.WHITE, fontWeight: '700', marginLeft: '4px' }}>
+                      {result.data.trade_data.symbol}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: BLOOMBERG.GRAY }}>Side:</span>
+                    <span style={{
+                      color: result.data.trade_data.side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                      fontWeight: '700',
+                      marginLeft: '4px',
+                      textTransform: 'uppercase'
+                    }}>
+                      {result.data.trade_data.side}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: BLOOMBERG.GRAY }}>Entry:</span>
+                    <span style={{ color: BLOOMBERG.CYAN, fontWeight: '700', marginLeft: '4px' }}>
+                      ${result.data.trade_data.entry_price?.toFixed(2)}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: BLOOMBERG.GRAY }}>Quantity:</span>
+                    <span style={{ color: BLOOMBERG.WHITE, fontWeight: '700', marginLeft: '4px' }}>
+                      {result.data.trade_data.quantity}
+                    </span>
+                  </div>
+                  {result.data.trade_data.stop_loss && (
+                    <div>
+                      <span style={{ color: BLOOMBERG.GRAY }}>Stop Loss:</span>
+                      <span style={{ color: BLOOMBERG.RED, fontWeight: '700', marginLeft: '4px' }}>
+                        ${result.data.trade_data.stop_loss.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  {result.data.trade_data.take_profit && (
+                    <div>
+                      <span style={{ color: BLOOMBERG.GRAY }}>Take Profit:</span>
+                      <span style={{ color: BLOOMBERG.GREEN, fontWeight: '700', marginLeft: '4px' }}>
+                        ${result.data.trade_data.take_profit.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Execution Time */}
+              {result.data.execution_time_ms && (
+                <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, textAlign: 'right' }}>
+                  Executed in {result.data.execution_time_ms}ms
+                </div>
+              )}
             </div>
           ) : (
             <div style={{
