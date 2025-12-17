@@ -737,7 +737,7 @@ class AgnoTradingService {
     try {
       const apiKeysMap = await this.getApiKeysMap();
 
-      const response = await invoke('agno_execute_trade', {
+      const response = await invoke<string>('agno_execute_trade', {
         signalJson: JSON.stringify(signal),
         portfolioJson: JSON.stringify(portfolio),
         agentId,
@@ -764,7 +764,7 @@ class AgnoTradingService {
     reason: string = 'manual'
   ): Promise<AgnoResponse<any>> {
     try {
-      const response = await invoke('agno_close_position', {
+      const response = await invoke<string>('agno_close_position', {
         tradeId,
         exitPrice,
         reason
@@ -789,7 +789,7 @@ class AgnoTradingService {
     status?: string
   ): Promise<AgnoResponse<{ trades: AgentTrade[] }>> {
     try {
-      const response = await invoke('agno_get_agent_trades', {
+      const response = await invoke<string>('agno_get_agent_trades', {
         agentId,
         limit,
         status
@@ -812,7 +812,7 @@ class AgnoTradingService {
     agentId: string
   ): Promise<AgnoResponse<{ performance: AgentPerformance }>> {
     try {
-      const response = await invoke('agno_get_agent_performance', {
+      const response = await invoke<string>('agno_get_agent_performance', {
         agentId
       });
 
@@ -833,7 +833,7 @@ class AgnoTradingService {
     limit: number = 20
   ): Promise<AgnoResponse<{ leaderboard: AgentPerformance[] }>> {
     try {
-      const response = await invoke('agno_get_db_leaderboard', {
+      const response = await invoke<string>('agno_get_db_leaderboard', {
         limit
       });
 
@@ -855,7 +855,7 @@ class AgnoTradingService {
     agentId?: string
   ): Promise<AgnoResponse<{ decisions: Decision[] }>> {
     try {
-      const response = await invoke('agno_get_db_decisions', {
+      const response = await invoke<string>('agno_get_db_decisions', {
         limit,
         agentId
       });
@@ -883,7 +883,7 @@ class AgnoTradingService {
     try {
       const apiKeysMap = await this.getApiKeysMap();
 
-      const response = await invoke('agno_run_debate', {
+      const response = await invoke<string>('agno_run_debate', {
         symbol,
         marketDataJson: JSON.stringify(marketData),
         bullModel,
@@ -909,7 +909,7 @@ class AgnoTradingService {
     limit: number = 10
   ): Promise<AgnoResponse<{ debates: any[] }>> {
     try {
-      const response = await invoke('agno_get_recent_debates', {
+      const response = await invoke<string>('agno_get_recent_debates', {
         limit
       });
 
@@ -930,7 +930,7 @@ class AgnoTradingService {
     agentId: string
   ): Promise<AgnoResponse<EvolutionCheck>> {
     try {
-      const response = await invoke('agno_check_evolution', {
+      const response = await invoke<string>('agno_check_evolution', {
         agentId
       });
 
@@ -955,7 +955,7 @@ class AgnoTradingService {
     notes?: string
   ): Promise<AgnoResponse<EvolutionResult>> {
     try {
-      const response = await invoke('agno_evolve_agent', {
+      const response = await invoke<string>('agno_evolve_agent', {
         agentId,
         model,
         currentInstructionsJson: JSON.stringify(currentInstructions),
@@ -980,7 +980,7 @@ class AgnoTradingService {
     agentId: string
   ): Promise<AgnoResponse<any>> {
     try {
-      const response = await invoke('agno_get_evolution_summary', {
+      const response = await invoke<string>('agno_get_evolution_summary', {
         agentId
       });
 
@@ -990,6 +990,30 @@ class AgnoTradingService {
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }
+
+  /**
+   * Sync API keys from Settings to ensure they're available
+   * This is a no-op since getApiKeysMap() already loads from Settings
+   */
+  private async syncApiKeys(): Promise<void> {
+    // API keys are loaded dynamically from Settings in getApiKeysMap()
+    // This method exists for compatibility but doesn't need to do anything
+    return Promise.resolve();
+  }
+
+  /**
+   * Parse JSON response from Rust commands
+   */
+  private parseResponse<T = any>(response: string): AgnoResponse<T> {
+    try {
+      return JSON.parse(response);
+    } catch (error) {
+      return {
+        success: false,
+        error: `Failed to parse response: ${error instanceof Error ? error.message : String(error)}`
       };
     }
   }
