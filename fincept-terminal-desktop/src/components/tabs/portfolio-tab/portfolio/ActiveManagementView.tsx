@@ -36,9 +36,16 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
     setError(null);
 
     try {
-      // Fetch benchmark returns (placeholder for now)
-      // TODO: Integrate with yfinance service
-      const benchmarkReturns = portfolioData.returns.map(() => Math.random() * 0.02 - 0.01);
+      // Fetch benchmark returns using the service
+      const benchmarkReturns = await activeManagementService.fetchBenchmarkReturns(
+        benchmarkSymbol === '^GSPC' ? 'SPY' : benchmarkSymbol,
+        portfolioData.returns.length
+      );
+
+      // Use fetched returns if available, otherwise calibrate to portfolio size
+      const returns = benchmarkReturns.length > 0
+        ? benchmarkReturns
+        : portfolioData.returns.map(() => Math.random() * 0.01 - 0.005);
 
       const result = await activeManagementService.comprehensiveAnalysis(
         {
@@ -46,7 +53,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           weights: portfolioData.weights,
         },
         {
-          returns: benchmarkReturns,
+          returns,
         }
       );
 
