@@ -3,6 +3,7 @@ import { Node, Edge } from 'reactflow';
 import { pythonAgentService } from './pythonAgentService';
 import { mcpToolService } from './mcpToolService';
 import { agentLLMService } from './agentLLMService';
+import { nodeLogger } from './loggerService';
 
 export type NodeStatus = 'idle' | 'running' | 'completed' | 'error';
 
@@ -161,7 +162,7 @@ class NodeExecutionManager {
           };
 
         default:
-          console.warn(`Unknown node type: ${node.type}, skipping execution`);
+          nodeLogger.warn(`Unknown node type: ${node.type}, skipping execution`);
           return {
             nodeId: node.id,
             success: true,
@@ -232,30 +233,207 @@ class NodeExecutionManager {
   }
 
   /**
-   * Execute data source node (placeholder)
+   * Execute data source node - fetches data using appropriate adapter
    */
   private async executeDataSource(node: Node): Promise<ExecutionResult> {
-    // TODO: Integrate with dataSourceRegistry
-    return {
-      nodeId: node.id,
-      success: true,
-      data: { message: 'Data source execution not yet implemented' }
-    };
+    const { sourceType, connectionConfig, query } = node.data;
+    const startTime = performance.now();
+
+    try {
+      // Dynamic import of adapter factory to avoid circular deps
+      const { createAdapter, hasAdapter } = await import('../components/tabs/data-sources/adapters');
+
+      if (!sourceType || !hasAdapter(sourceType)) {
+        return {
+          nodeId: node.id,
+          success: false,
+          error: `No adapter available for data source type: ${sourceType || 'unknown'}`
+        };
+      }
+
+      // Create connection object from node config
+      const connection = {
+        id: node.id,
+        name: node.data.label || 'Data Source',
+        type: sourceType,
+        category: node.data.category || 'database',
+        config: connectionConfig || {},
+        status: 'connected' as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const adapter = createAdapter(connection);
+
+      if (!adapter) {
+        return {
+          nodeId: node.id,
+          success: false,
+          error: `Failed to create adapter for type: ${sourceType}`
+        };
+      }
+
+      // Execute query using the adapter
+      const result = await adapter.query(query || {});
+      const executionTime = Math.round(performance.now() - startTime);
+
+      nodeLogger.info(`Data source executed: ${sourceType}`, { executionTime });
+
+      return {
+        nodeId: node.id,
+        success: true,
+        data: result,
+        execution_time_ms: executionTime
+      };
+    } catch (error) {
+      const executionTime = Math.round(performance.now() - startTime);
+      nodeLogger.error('Data source execution failed:', error);
+
+      return {
+        nodeId: node.id,
+        success: false,
+        error: error instanceof Error ? error.message : 'Data source execution failed',
+        execution_time_ms: executionTime
+      };
+    }
   }
 
   /**
-   * Execute transformation node (placeholder)
+   * Execute transformation node - applies data transformations
    */
   private async executeTransformation(
     node: Node,
     inputs: Record<string, any>
   ): Promise<ExecutionResult> {
-    // TODO: Implement transformation logic
-    return {
-      nodeId: node.id,
-      success: true,
-      data: inputs // Pass through for now
-    };
+    const { transformType, transformConfig } = node.data;
+    const startTime = performance.now();
+
+    try {
+      // Get input data (first input or merged inputs)
+      let data = Object.values(inputs)[0];
+
+      if (!data) {
+        return {
+          nodeId: node.id,
+          success: false,
+          error: 'No input data for transformation'
+        };
+      }
+
+      // Apply transformations based on type
+      let result: any;
+
+      switch (transformType) {
+        case 'filter':
+          // Filter items based on condition
+          if (Array.isArray(data)) {
+            const { field, operator, value } = transformConfig || {};
+            result = data.filter((item: any) => {
+              const fieldValue = item[field];
+              switch (operator) {
+                case 'eq': return fieldValue === value;
+                case 'ne': return fieldValue !== value;
+                case 'gt': return fieldValue > value;
+                case 'lt': return fieldValue < value;
+                case 'gte': return fieldValue >= value;
+                case 'lte': return fieldValue <= value;
+                case 'contains': return String(fieldValue).includes(value);
+                default: return true;
+              }
+            });
+          } else {
+            result = data;
+          }
+          break;
+
+        case 'map':
+          // Transform each item
+          if (Array.isArray(data)) {
+            const { fields } = transformConfig || {};
+            if (fields && Array.isArray(fields)) {
+              result = data.map((item: any) => {
+                const mapped: any = {};
+                fields.forEach((f: string) => {
+                  if (item[f] !== undefined) mapped[f] = item[f];
+                });
+                return mapped;
+              });
+            } else {
+              result = data;
+            }
+          } else {
+            result = data;
+          }
+          break;
+
+        case 'aggregate':
+          // Aggregate data
+          if (Array.isArray(data)) {
+            const { operation, field } = transformConfig || {};
+            const values = data.map((item: any) => Number(item[field]) || 0);
+            switch (operation) {
+              case 'sum': result = values.reduce((a, b) => a + b, 0); break;
+              case 'avg': result = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0; break;
+              case 'min': result = Math.min(...values); break;
+              case 'max': result = Math.max(...values); break;
+              case 'count': result = values.length; break;
+              default: result = data;
+            }
+          } else {
+            result = data;
+          }
+          break;
+
+        case 'select':
+          // Select specific fields
+          const { selectFields } = transformConfig || {};
+          if (selectFields && Array.isArray(selectFields)) {
+            if (Array.isArray(data)) {
+              result = data.map((item: any) => {
+                const selected: any = {};
+                selectFields.forEach((f: string) => {
+                  selected[f] = item[f];
+                });
+                return selected;
+              });
+            } else if (typeof data === 'object') {
+              result = {};
+              selectFields.forEach((f: string) => {
+                result[f] = data[f];
+              });
+            } else {
+              result = data;
+            }
+          } else {
+            result = data;
+          }
+          break;
+
+        default:
+          // Pass through if no transformation type
+          result = data;
+      }
+
+      const executionTime = Math.round(performance.now() - startTime);
+      nodeLogger.info(`Transformation executed: ${transformType || 'passthrough'}`, { executionTime });
+
+      return {
+        nodeId: node.id,
+        success: true,
+        data: result,
+        execution_time_ms: executionTime
+      };
+    } catch (error) {
+      const executionTime = Math.round(performance.now() - startTime);
+      nodeLogger.error('Transformation failed:', error);
+
+      return {
+        nodeId: node.id,
+        success: false,
+        error: error instanceof Error ? error.message : 'Transformation failed',
+        execution_time_ms: executionTime
+      };
+    }
   }
 
   /**
@@ -267,11 +445,11 @@ class NodeExecutionManager {
   ): Promise<ExecutionResult> {
     const { selectedProvider, customPrompt } = node.data;
 
-    console.log('[NodeExecutionManager] Agent mediator executing with inputs:', inputs);
+    nodeLogger.info('Agent mediator executing with inputs:', inputs);
 
     // Check if we have multiple agents to synthesize
     if (inputs.multipleAgents && Array.isArray(inputs.multipleAgents)) {
-      console.log('[NodeExecutionManager] Synthesizing multiple agents:', inputs.multipleAgents.length);
+      nodeLogger.info('Synthesizing multiple agents: ' + inputs.multipleAgents.length);
 
       const result = await agentLLMService.synthesizeMultipleAgents(
         inputs.multipleAgents,
@@ -332,22 +510,22 @@ class NodeExecutionManager {
     inputs: Record<string, any>
   ): Promise<ExecutionResult> {
     // Results display just receives and displays data
-    console.log('[NodeExecutionManager] ========================================');
-    console.log('[NodeExecutionManager] Results Display Node Execution');
-    console.log('[NodeExecutionManager] Node ID:', node.id);
-    console.log('[NodeExecutionManager] Raw inputs:', inputs);
-    console.log('[NodeExecutionManager] Input keys:', Object.keys(inputs));
-    console.log('[NodeExecutionManager] Input type:', typeof inputs);
-    console.log('[NodeExecutionManager] ========================================');
+    nodeLogger.debug('========================================');
+    nodeLogger.debug('Results Display Node Execution');
+    nodeLogger.debug('Node ID:', node.id);
+    nodeLogger.debug('Raw inputs:', inputs);
+    nodeLogger.debug('Input keys:', Object.keys(inputs));
+    nodeLogger.debug('Input type:', typeof inputs);
+    nodeLogger.debug('========================================');
 
     // Extract actual data if it's wrapped in a success object
     let displayData = inputs;
     if (inputs.success !== undefined && inputs.data !== undefined) {
       displayData = inputs.data;
-      console.log('[NodeExecutionManager] Unwrapped data from success wrapper');
+      nodeLogger.debug('Unwrapped data from success wrapper');
     }
 
-    console.log('[NodeExecutionManager] Final display data:', displayData);
+    nodeLogger.debug('Final display data:', displayData);
 
     return {
       nodeId: node.id,
@@ -368,21 +546,21 @@ class NodeExecutionManager {
     const sortedNodes = this.topologicalSort(nodes, edges);
     const results = new Map<string, any>();
 
-    console.log('[NodeExecutionManager] Executing workflow with nodes:', sortedNodes.map(n => n.id));
+    nodeLogger.info('Executing workflow with nodes:', sortedNodes.map(n => n.id));
 
     for (const node of sortedNodes) {
-      console.log(`[NodeExecutionManager] Executing node: ${node.id} (${node.type})`);
+      nodeLogger.info(`Executing node: ${node.id} (${node.type})`);
 
       // Update status to running
       onNodeStatusChange(node.id, 'running');
 
       // Get inputs from previous nodes
       const inputs = this.getNodeInputs(node, edges, results);
-      console.log(`[NodeExecutionManager] Node ${node.id} inputs:`, inputs);
+      nodeLogger.debug(`Node ${node.id} inputs:`, inputs);
 
       // Execute node
       const result = await this.executeNode(node, inputs);
-      console.log(`[NodeExecutionManager] Node ${node.id} result:`, result);
+      nodeLogger.debug(`Node ${node.id} result:`, result);
 
       // Store result
       results.set(node.id, result.data);
@@ -396,7 +574,7 @@ class NodeExecutionManager {
       }
     }
 
-    console.log('[NodeExecutionManager] Workflow completed successfully');
+    nodeLogger.info('Workflow completed successfully');
     return results;
   }
 }

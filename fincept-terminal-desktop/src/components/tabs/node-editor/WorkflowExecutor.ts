@@ -155,16 +155,74 @@ class WorkflowExecutor {
 
   private async executePythonAgentNode(node: Node, previousResults: Map<string, any>): Promise<any> {
     console.log('[WorkflowExecutor] Executing Python agent node:', node.id);
-    // TODO: Implement Python agent execution
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return { message: 'Python agent executed' };
+
+    try {
+      const { pythonAgentService } = await import('../../../services/pythonAgentService');
+      const { agentId, parameters } = node.data;
+
+      if (!agentId) {
+        throw new Error('No agent ID specified in node');
+      }
+
+      // Get input data from previous results if connected
+      const inputData = previousResults.size > 0
+        ? Object.fromEntries(previousResults)
+        : parameters || {};
+
+      // Execute the Python agent
+      const result = await pythonAgentService.executeAgent(
+        agentId,
+        parameters || {},
+        inputData
+      );
+
+      console.log('[WorkflowExecutor] Python agent completed:', result);
+      return result;
+    } catch (error) {
+      console.error('[WorkflowExecutor] Python agent failed:', error);
+      throw error;
+    }
   }
 
   private async executeDataSourceNode(node: Node, previousResults: Map<string, any>): Promise<any> {
     console.log('[WorkflowExecutor] Executing data source node:', node.id);
-    // TODO: Implement data source execution
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return { message: 'Data source executed' };
+
+    try {
+      const { createAdapter, hasAdapter } = await import('../data-sources/adapters');
+      const { sourceType, connectionConfig, query } = node.data;
+
+      if (!sourceType) {
+        throw new Error('No source type specified');
+      }
+
+      if (!hasAdapter(sourceType)) {
+        throw new Error(`No adapter available for: ${sourceType}`);
+      }
+
+      // Create connection from node config
+      const connection = {
+        id: node.id,
+        name: node.data.label || 'Data Source',
+        type: sourceType,
+        category: node.data.category || 'database',
+        config: connectionConfig || {},
+        status: 'connected' as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const adapter = createAdapter(connection);
+      if (!adapter) {
+        throw new Error(`Failed to create adapter for: ${sourceType}`);
+      }
+
+      const result = await adapter.query(query || {});
+      console.log('[WorkflowExecutor] Data source completed:', result);
+      return result;
+    } catch (error) {
+      console.error('[WorkflowExecutor] Data source failed:', error);
+      throw error;
+    }
   }
 
   async saveDraft(
