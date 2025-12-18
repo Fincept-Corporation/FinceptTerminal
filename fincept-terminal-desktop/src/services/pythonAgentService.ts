@@ -1,5 +1,6 @@
 // Python Agent Service - Interface to execute Python agents via Tauri
 import { invoke } from '@tauri-apps/api/core';
+import { pythonAgentLogger } from './loggerService';
 
 export interface AgentParameter {
   name: string;
@@ -39,10 +40,10 @@ class PythonAgentService {
   async getAvailableAgents(): Promise<AgentMetadata[]> {
     try {
       const agents = await invoke<AgentMetadata[]>('list_available_agents');
-      console.log('[PythonAgentService] Loaded agents:', agents.length);
+      pythonAgentLogger.info('Loaded agents:', agents.length);
       return agents;
     } catch (error) {
-      console.error('[PythonAgentService] Failed to load agents:', error);
+      pythonAgentLogger.error('Failed to load agents:', error);
       return [];
     }
   }
@@ -56,7 +57,7 @@ class PythonAgentService {
     inputs: Record<string, any>
   ): Promise<AgentExecutionResult> {
     try {
-      console.log(`[PythonAgentService] Executing agent: ${agentType}`, {parameters, inputs});
+      pythonAgentLogger.info(`Executing agent: ${agentType}`, { parameters, inputs });
 
       const result = await invoke<AgentExecutionResult>('execute_python_agent', {
         agentType,
@@ -64,10 +65,10 @@ class PythonAgentService {
         inputs
       });
 
-      console.log(`[PythonAgentService] Agent ${agentType} completed:`, result);
+      pythonAgentLogger.info(`Agent ${agentType} completed:`, result);
       return result;
     } catch (error: any) {
-      console.error(`[PythonAgentService] Agent ${agentType} failed:`, error);
+      pythonAgentLogger.error(`Agent ${agentType} failed:`, error);
       return {
         success: false,
         error: error.message || 'Unknown error',
@@ -85,7 +86,7 @@ class PythonAgentService {
       const metadata = await invoke<AgentMetadata>('get_agent_metadata', { agentType });
       return metadata;
     } catch (error) {
-      console.error(`[PythonAgentService] Failed to get metadata for ${agentType}:`, error);
+      pythonAgentLogger.error(`Failed to get metadata for ${agentType}:`, error);
       return null;
     }
   }

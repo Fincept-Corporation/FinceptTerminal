@@ -4,6 +4,7 @@
 import { fetch } from '@tauri-apps/plugin-http';
 import * as OTPAuth from 'otpauth';
 import { invoke } from '@tauri-apps/api/core';
+import { fyersLogger } from './loggerService';
 
 export interface FyersAuthConfig {
   clientId: string;
@@ -24,11 +25,11 @@ export interface FyersAuthResult {
  * Follows the complete OAuth flow with TOTP
  */
 export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersAuthResult> {
-  console.log('[FyersAuth] Starting authentication...');
+  fyersLogger.info('Starting authentication...');
 
   try {
     // Step 1: Send login OTP
-    console.log('[FyersAuth] Step 1: Sending login OTP...');
+    fyersLogger.debug('Step 1: Sending login OTP...');
     let response = await fetch('https://api-t2.fyers.in/vagator/v2/send_login_otp', {
       method: 'POST',
       headers: {
@@ -41,8 +42,8 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
     });
 
     let data = await response.json();
-    console.log('[FyersAuth] OTP Response status:', response.status);
-    console.log('[FyersAuth] OTP Response data:', data);
+    fyersLogger.debug('OTP Response status:', response.status);
+    fyersLogger.debug('OTP Response data:', data);
 
     if (response.status !== 200) {
       throw new Error(`Failed to send OTP: HTTP ${response.status}`);
@@ -53,15 +54,15 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
     }
 
     let requestKey = data.request_key;
-    console.log('[FyersAuth] ✓ OTP sent successfully');
+    fyersLogger.info('OTP sent successfully');
 
     // Step 2: Generate TOTP and verify
-    console.log('[FyersAuth] Step 2: Generating TOTP...');
+    fyersLogger.debug('Step 2: Generating TOTP...');
     const totpGenerator = new OTPAuth.TOTP({
       secret: config.totpKey
     });
     const totp = totpGenerator.generate();
-    console.log('[FyersAuth] TOTP generated:', totp);
+    fyersLogger.debug('TOTP generated:', totp);
 
     response = await fetch('https://api-t2.fyers.in/vagator/v2/verify_otp', {
       method: 'POST',
@@ -75,8 +76,8 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
     });
 
     data = await response.json();
-    console.log('[FyersAuth] Verify OTP Response status:', response.status);
-    console.log('[FyersAuth] Verify OTP Response data:', data);
+    fyersLogger.debug('Verify OTP Response status:', response.status);
+    fyersLogger.debug('Verify OTP Response data:', data);
 
     if (response.status !== 200) {
       throw new Error(`Failed to verify OTP: HTTP ${response.status}`);
@@ -87,10 +88,10 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
     }
 
     requestKey = data.request_key;
-    console.log('[FyersAuth] ✓ TOTP verified successfully');
+    fyersLogger.info('TOTP verified successfully');
 
     // Step 3: Verify PIN
-    console.log('[FyersAuth] Step 3: Verifying PIN...');
+    fyersLogger.debug('Step 3: Verifying PIN...');
     response = await fetch('https://api-t2.fyers.in/vagator/v2/verify_pin', {
       method: 'POST',
       headers: {
@@ -104,8 +105,8 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
     });
 
     data = await response.json();
-    console.log('[FyersAuth] Verify PIN Response status:', response.status);
-    console.log('[FyersAuth] Verify PIN Response data:', data);
+    fyersLogger.debug('Verify PIN Response status:', response.status);
+    fyersLogger.debug('Verify PIN Response data:', data);
 
     if (response.status !== 200) {
       throw new Error(`Failed to verify PIN: HTTP ${response.status}`);
@@ -116,10 +117,10 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
     }
 
     const token1 = data.data.access_token;
-    console.log('[FyersAuth] ✓ PIN verified successfully');
+    fyersLogger.info('PIN verified successfully');
 
     // Step 4: Get authorization code (expects HTTP 308 redirect)
-    console.log('[FyersAuth] Step 4: Getting authorization code...');
+    fyersLogger.debug('Step 4: Getting authorization code...');
     response = await fetch('https://api-t1.fyers.in/api/v3/token', {
       method: 'POST',
       headers: {
@@ -141,8 +142,8 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
     });
 
     data = await response.json();
-    console.log('[FyersAuth] Token API Response status:', response.status);
-    console.log('[FyersAuth] Token API Response data:', data);
+    fyersLogger.debug('Token API Response status:', response.status);
+    fyersLogger.debug('Token API Response data:', data);
 
     if (response.status !== 308) {
       throw new Error(`Expected HTTP 308 but got ${response.status}: ${JSON.stringify(data)}`);
@@ -159,15 +160,15 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
       throw new Error('No auth_code in response URL');
     }
 
-    console.log('[FyersAuth] ✓ Authorization code obtained');
+    fyersLogger.info('Authorization code obtained');
 
     // Step 5: Generate app hash and validate auth code
-    console.log('[FyersAuth] Step 5: Validating auth code...');
+    fyersLogger.debug('Step 5: Validating auth code...');
     const appIdHash = await invoke<string>('sha256_hash', {
       input: `${config.appId}-${config.appType}:${config.appSecret}`
     });
 
-    console.log('[FyersAuth] Generated appIdHash');
+    fyersLogger.debug('Generated appIdHash');
 
     response = await fetch('https://api-t1.fyers.in/api/v3/validate-authcode', {
       method: 'POST',
@@ -182,8 +183,8 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
     });
 
     data = await response.json();
-    console.log('[FyersAuth] Validate Auth Code Response status:', response.status);
-    console.log('[FyersAuth] Validate Auth Code Response data:', data);
+    fyersLogger.debug('Validate Auth Code Response status:', response.status);
+    fyersLogger.debug('Validate Auth Code Response data:', data);
 
     if (response.status !== 200) {
       throw new Error(`Failed to validate auth code: HTTP ${response.status}`);
@@ -196,15 +197,15 @@ export async function authenticateFyers(config: FyersAuthConfig): Promise<FyersA
     const accessToken = data.access_token;
     const connectionString = `${config.appId}-${config.appType}:${accessToken}`;
 
-    console.log('[FyersAuth] ✓ Authentication successful!');
-    console.log('[FyersAuth] Final access token obtained');
+    fyersLogger.info('Authentication successful!');
+    fyersLogger.info('Final access token obtained');
 
     return {
       accessToken,
       connectionString
     };
   } catch (error: any) {
-    console.error('[FyersAuth] Authentication failed:', error);
+    fyersLogger.error('Authentication failed:', error);
     throw new Error(error.message || 'Authentication failed');
   }
 }

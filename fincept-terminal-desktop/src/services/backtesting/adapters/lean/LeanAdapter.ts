@@ -7,6 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { BaseBacktestingAdapter } from '../BaseAdapter';
+import { backtestingLogger } from '../../../loggerService';
 import {
   ProviderCapabilities,
   ProviderConfig,
@@ -149,7 +150,7 @@ export class LeanAdapter extends BaseBacktestingAdapter {
       try {
         await this.cancelBacktest(backtestId);
       } catch (error) {
-        console.error(`Failed to cancel backtest ${backtestId}:`, error);
+        backtestingLogger.error(`Failed to cancel backtest ${backtestId}:`, error);
       }
     }
 
@@ -164,17 +165,17 @@ export class LeanAdapter extends BaseBacktestingAdapter {
     const backtestId = this.generateId();
 
     try {
-      console.log('[LeanAdapter] Starting backtest:', backtestId);
+      backtestingLogger.debug('Starting backtest:', backtestId);
 
       // 1. Translate strategy to Lean Python code
-      console.log('[LeanAdapter] Translating strategy...');
+      backtestingLogger.debug('Translating strategy...');
       const pythonCode = this.strategyTranslator.translate(request.strategy);
-      console.log('[LeanAdapter] Strategy code length:', pythonCode.length);
+      backtestingLogger.debug('Strategy code length:', pythonCode.length);
 
       // 2. Create Lean project
-      console.log('[LeanAdapter] Creating Lean project...');
+      backtestingLogger.debug('Creating Lean project...');
       const projectPath = await this.createLeanProject(backtestId, pythonCode, request);
-      console.log('[LeanAdapter] Project created at:', projectPath);
+      backtestingLogger.debug('Project created at:', projectPath);
 
       // 3. Build CLI arguments
       const cliArgs = {
@@ -187,12 +188,12 @@ export class LeanAdapter extends BaseBacktestingAdapter {
         resultsFolder: this.joinPath(this.leanConfig!.resultsPath, backtestId),
       };
 
-      console.log('[LeanAdapter] CLI args:', cliArgs);
+      backtestingLogger.debug('CLI args:', cliArgs);
 
       // 4. Execute backtest via CLI
-      console.log('[LeanAdapter] Executing Lean CLI...');
+      backtestingLogger.debug('Executing Lean CLI...');
       const execution = await this.cliExecutor!.runBacktest(projectPath, cliArgs);
-      console.log('[LeanAdapter] Execution started, process ID:', execution.processId);
+      backtestingLogger.debug('Execution started, process ID:', execution.processId);
 
       // Track as active
       this.activeBacktests.set(backtestId, {
@@ -203,22 +204,22 @@ export class LeanAdapter extends BaseBacktestingAdapter {
       });
 
       // 5. Wait for completion (or poll in production)
-      console.log('[LeanAdapter] Waiting for completion...');
+      backtestingLogger.debug('Waiting for completion...');
       const resultJson = await this.waitForBacktestCompletion(backtestId, execution.processId);
-      console.log('[LeanAdapter] Backtest completed');
+      backtestingLogger.info('Backtest completed');
 
       // 6. Parse results
       const logs = this.cliExecutor!.getProcessStatus(backtestId)?.logs || [];
       const result = this.resultsParser.parseBacktestResult(backtestId, resultJson, logs);
 
-      console.log('[LeanAdapter] Results parsed successfully');
+      backtestingLogger.debug('Results parsed successfully');
 
       // Mark as completed
       this.activeBacktests.delete(backtestId);
 
       return result;
     } catch (error) {
-      console.error('[LeanAdapter] Backtest error:', error);
+      backtestingLogger.error('Backtest error:', error);
       this.activeBacktests.delete(backtestId);
 
       // Return failed result instead of throwing
@@ -502,11 +503,11 @@ export class LeanAdapter extends BaseBacktestingAdapter {
         command: `${cliPath} --version`,
       });
 
-      console.log('[Lean] CLI check result:', result);
+      backtestingLogger.debug('CLI check result:', result);
 
       return result.success;
     } catch (error) {
-      console.error('[Lean] CLI check failed:', error);
+      backtestingLogger.error('CLI check failed:', error);
       return false;
     }
   }
@@ -518,7 +519,7 @@ export class LeanAdapter extends BaseBacktestingAdapter {
       try {
         await invoke('create_directory', { path: dir });
       } catch (error) {
-        console.error(`Failed to create directory ${dir}:`, error);
+        backtestingLogger.error(`Failed to create directory ${dir}:`, error);
       }
     }
   }
@@ -555,7 +556,7 @@ export class LeanAdapter extends BaseBacktestingAdapter {
       content: JSON.stringify(leanConfigContent, null, 2),
     });
 
-    console.log('[LeanAdapter] Created lean.json config file');
+    backtestingLogger.debug('Created lean.json config file');
 
     return projectPath;
   }

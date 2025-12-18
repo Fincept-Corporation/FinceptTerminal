@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import Database from '@tauri-apps/plugin-sql';
+import { notebookLogger } from './loggerService';
 
 interface NotebookHistory {
   id?: number;
@@ -43,9 +44,9 @@ class NotebookService {
       `);
 
       this.isInitialized = true;
-      console.log('Notebook service initialized successfully');
+      notebookLogger.info('Notebook service initialized successfully');
     } catch (error) {
-      console.error('Failed to initialize notebook service:', error);
+      notebookLogger.error('Failed to initialize notebook service:', error);
       throw error;
     }
   }
@@ -71,7 +72,7 @@ class NotebookService {
 
       return result.lastInsertId || 0;
     } catch (error) {
-      console.error('Failed to save notebook to history:', error);
+      notebookLogger.error('Failed to save notebook to history:', error);
       throw error;
     }
   }
@@ -114,7 +115,7 @@ class NotebookService {
         values
       );
     } catch (error) {
-      console.error('Failed to update notebook history:', error);
+      notebookLogger.error('Failed to update notebook history:', error);
       throw error;
     }
   }
@@ -132,7 +133,7 @@ class NotebookService {
 
       return result;
     } catch (error) {
-      console.error('Failed to get notebook history:', error);
+      notebookLogger.error('Failed to get notebook history:', error);
       return [];
     }
   }
@@ -148,7 +149,7 @@ class NotebookService {
 
       return result.length > 0 ? result[0] : null;
     } catch (error) {
-      console.error('Failed to get notebook by ID:', error);
+      notebookLogger.error('Failed to get notebook by ID:', error);
       return null;
     }
   }
@@ -162,7 +163,7 @@ class NotebookService {
         [id]
       );
     } catch (error) {
-      console.error('Failed to delete notebook from history:', error);
+      notebookLogger.error('Failed to delete notebook from history:', error);
       throw error;
     }
   }
@@ -181,7 +182,7 @@ class NotebookService {
 
       return result;
     } catch (error) {
-      console.error('Failed to search notebook history:', error);
+      notebookLogger.error('Failed to search notebook history:', error);
       return [];
     }
   }
@@ -192,7 +193,7 @@ class NotebookService {
     try {
       await this.db!.execute('DELETE FROM notebook_history');
     } catch (error) {
-      console.error('Failed to clear notebook history:', error);
+      notebookLogger.error('Failed to clear notebook history:', error);
       throw error;
     }
   }
