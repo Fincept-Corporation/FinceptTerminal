@@ -2,6 +2,7 @@
 // Handles real-time streaming for orders, trades, positions
 
 import { fyersOrderSocket } from 'fyers-web-sdk-v3';
+import { fyersLogger } from './loggerService';
 
 export interface FyersOrderUpdate {
   clientId: string;
@@ -67,7 +68,7 @@ class FyersWebSocketService {
    */
   connect(appId: string, accessToken: string): void {
     if (this.isConnected) {
-      console.log('[FyersWS] Already connected');
+      fyersLogger.debug('Already connected');
       return;
     }
 
@@ -76,13 +77,13 @@ class FyersWebSocketService {
 
     // Error handler
     this.socket.on('error', (error: any) => {
-      console.error('[FyersWS] Error:', error);
+      fyersLogger.error('Error:', error);
       this.errorCallbacks.forEach(cb => cb(error));
     });
 
     // Connection established
     this.socket.on('connect', () => {
-      console.log('[FyersWS] Connected successfully');
+      fyersLogger.info('Connected successfully');
       this.isConnected = true;
 
       // Subscribe to all channels
@@ -97,13 +98,13 @@ class FyersWebSocketService {
 
     // Connection closed
     this.socket.on('close', () => {
-      console.log('[FyersWS] Connection closed');
+      fyersLogger.info('Connection closed');
       this.isConnected = false;
     });
 
     // Order updates
     this.socket.on('orders', (data: any) => {
-      console.log('[FyersWS] Order update:', data);
+      fyersLogger.debug('Order update:', data);
       if (data.orders) {
         this.orderCallbacks.forEach(cb => cb(data.orders));
       }
@@ -111,7 +112,7 @@ class FyersWebSocketService {
 
     // Trade updates
     this.socket.on('trades', (data: any) => {
-      console.log('[FyersWS] Trade update:', data);
+      fyersLogger.debug('Trade update:', data);
       if (data.trades) {
         this.tradeCallbacks.forEach(cb => cb(data.trades));
       }
@@ -119,7 +120,7 @@ class FyersWebSocketService {
 
     // Position updates
     this.socket.on('positions', (data: any) => {
-      console.log('[FyersWS] Position update:', data);
+      fyersLogger.debug('Position update:', data);
       if (data.positions) {
         this.positionCallbacks.forEach(cb => cb(data.positions));
       }
@@ -127,7 +128,7 @@ class FyersWebSocketService {
 
     // General updates (EDIS, price alerts)
     this.socket.on('general', (data: any) => {
-      console.log('[FyersWS] General update:', data);
+      fyersLogger.debug('General update:', data);
       this.generalCallbacks.forEach(cb => cb(data));
     });
 
@@ -146,7 +147,7 @@ class FyersWebSocketService {
       this.socket.close();
       this.socket = null;
       this.isConnected = false;
-      console.log('[FyersWS] Disconnected');
+      fyersLogger.info('Disconnected');
     }
   }
 

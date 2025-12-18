@@ -4,6 +4,7 @@
  */
 
 import { sqliteService, RecordedContext, RecordingSession } from './sqliteService';
+import { contextLogger } from './loggerService';
 
 export interface RecordingOptions {
   autoRecord?: boolean;
@@ -30,7 +31,7 @@ class ContextRecorderService {
     if (!sqliteService.isReady()) {
       await sqliteService.initialize();
     }
-    console.log('[ContextRecorder] Service initialized');
+    contextLogger.info('Service initialized');
   }
 
   // =========================
@@ -54,7 +55,7 @@ class ContextRecorderService {
     await sqliteService.startRecordingSession(session);
     this.activeSessions.set(tabName, sessionId);
 
-    console.log(`[ContextRecorder] Started recording for ${tabName} (Session: ${sessionId})`);
+    contextLogger.info(`Started recording for ${tabName} (Session: ${sessionId})`);
     return sessionId;
   }
 
@@ -64,7 +65,7 @@ class ContextRecorderService {
   async stopRecording(tabName: string): Promise<void> {
     await sqliteService.stopRecordingSession(tabName);
     this.activeSessions.delete(tabName);
-    console.log(`[ContextRecorder] Stopped recording for ${tabName}`);
+    contextLogger.info(`Stopped recording for ${tabName}`);
   }
 
   /**
@@ -101,7 +102,7 @@ class ContextRecorderService {
     const session = await sqliteService.getActiveRecordingSession(tabName);
 
     if (!session || !session.is_active) {
-      console.warn(`[ContextRecorder] No active recording session for ${tabName}`);
+      contextLogger.warn(`No active recording session for ${tabName}`);
       return null;
     }
 
@@ -110,11 +111,11 @@ class ContextRecorderService {
       try {
         const filters = JSON.parse(session.filters);
         if (filters.dataTypes && !filters.dataTypes.includes(dataType)) {
-          console.log(`[ContextRecorder] Skipping ${dataType} - filtered out`);
+          contextLogger.debug(`Skipping ${dataType} - filtered out`);
           return null;
         }
       } catch (e) {
-        console.error('[ContextRecorder] Error parsing filters:', e);
+        contextLogger.error('Error parsing filters:', e);
       }
     }
 
@@ -140,7 +141,7 @@ class ContextRecorderService {
 
     await sqliteService.saveRecordedContext(context);
 
-    console.log(`[ContextRecorder] Recorded ${dataType} for ${tabName} (ID: ${contextId}, Size: ${rawData.length} bytes)`);
+    contextLogger.debug(`Recorded ${dataType} for ${tabName} (ID: ${contextId}, Size: ${rawData.length} bytes)`);
     return contextId;
   }
 
@@ -255,7 +256,7 @@ class ContextRecorderService {
    */
   async linkToChat(chatSessionUuid: string, contextId: string): Promise<void> {
     await sqliteService.linkContextToChat(chatSessionUuid, contextId);
-    console.log(`[ContextRecorder] Linked context ${contextId} to chat ${chatSessionUuid}`);
+    contextLogger.debug(`Linked context ${contextId} to chat ${chatSessionUuid}`);
   }
 
   /**
@@ -263,7 +264,7 @@ class ContextRecorderService {
    */
   async unlinkFromChat(chatSessionUuid: string, contextId: string): Promise<void> {
     await sqliteService.unlinkContextFromChat(chatSessionUuid, contextId);
-    console.log(`[ContextRecorder] Unlinked context ${contextId} from chat ${chatSessionUuid}`);
+    contextLogger.debug(`Unlinked context ${contextId} from chat ${chatSessionUuid}`);
   }
 
   /**
@@ -355,7 +356,7 @@ ${formatted.join('\n\n---\n\n')}`;
    */
   async deleteContext(id: string): Promise<void> {
     await sqliteService.deleteRecordedContext(id);
-    console.log(`[ContextRecorder] Deleted context ${id}`);
+    contextLogger.debug(`Deleted context ${id}`);
   }
 
   /**
@@ -363,7 +364,7 @@ ${formatted.join('\n\n---\n\n')}`;
    */
   async clearOldContexts(maxAgeDays: number): Promise<void> {
     await sqliteService.clearOldContexts(maxAgeDays);
-    console.log(`[ContextRecorder] Cleared contexts older than ${maxAgeDays} days`);
+    contextLogger.debug(`Cleared contexts older than ${maxAgeDays} days`);
   }
 
   /**
@@ -417,10 +418,10 @@ ${formatted.join('\n\n---\n\n')}`;
       };
 
       await sqliteService.saveRecordedContext(newContext);
-      console.log(`[ContextRecorder] Imported context as ${newId}`);
+      contextLogger.debug(`Imported context as ${newId}`);
       return newId;
     } catch (error) {
-      console.error('[ContextRecorder] Failed to import context:', error);
+      contextLogger.error('Failed to import context:', error);
       throw new Error('Invalid context JSON');
     }
   }

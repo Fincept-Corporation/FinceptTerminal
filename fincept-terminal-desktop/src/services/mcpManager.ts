@@ -3,6 +3,7 @@
 
 import MCPClient, { MCPTool, MCPConnectionConfig } from './mcpClient';
 import { sqliteService } from './sqliteService';
+import { mcpLogger } from './loggerService';
 
 export interface MCPServer {
   id: string;
@@ -48,13 +49,13 @@ class MCPManager {
     icon: string;
   }): Promise<void> {
     try {
-      console.log(`[MCPManager] Installing server: ${config.name}`);
+      mcpLogger.info(`Installing server: ${config.name}`);
 
       // Check if server already exists
       const existing = await sqliteService.getMCPServer(config.id);
 
       if (existing) {
-        console.log(`[MCPManager] Server ${config.id} already installed, updating config...`);
+        mcpLogger.info(`Server ${config.id} already installed, updating config...`);
 
         // Update existing server config
         await sqliteService.updateMCPServerConfig(config.id, {
@@ -70,11 +71,11 @@ class MCPManager {
         try {
           await this.startServer(config.id);
         } catch (startError) {
-          console.warn(`[MCPManager] Failed to start existing server: ${startError}`);
+          mcpLogger.warn(`Failed to start existing server: ${startError}`);
           // Don't throw - server is already installed
         }
 
-        console.log(`[MCPManager] Server ${config.name} updated successfully`);
+        mcpLogger.info(`Server ${config.name} updated successfully`);
         return;
       }
 
@@ -97,13 +98,13 @@ class MCPManager {
       try {
         await this.startServer(config.id);
       } catch (startError) {
-        console.warn(`[MCPManager] Server installed but failed to start: ${startError}`);
+        mcpLogger.warn(`Server installed but failed to start: ${startError}`);
         // Server is installed, just not running - this is OK
       }
 
-      console.log(`[MCPManager] Server ${config.name} installed successfully`);
+      mcpLogger.info(`Server ${config.name} installed successfully`);
     } catch (error) {
-      console.error('[MCPManager] Installation error:', error);
+      mcpLogger.error('Installation error:', error);
       throw error;
     }
   }
@@ -121,7 +122,7 @@ class MCPManager {
         throw new Error(`Server ${serverId} is disabled`);
       }
 
-      console.log(`[MCPManager] Starting server: ${server.name}`);
+      mcpLogger.info(`Starting server: ${server.name}`);
 
       // Create client if doesn't exist
       if (!this.clients.has(serverId)) {
@@ -132,7 +133,7 @@ class MCPManager {
 
       // Check if already connected
       if (client.isConnected()) {
-        console.log(`[MCPManager] Server ${serverId} already running`);
+        mcpLogger.info(`Server ${serverId} already running`);
         return;
       }
 
@@ -158,9 +159,9 @@ class MCPManager {
       // Clear error tracking on successful start
       this.serverErrors.delete(serverId);
 
-      console.log(`[MCPManager] Server ${server.name} started with ${tools.length} tools`);
+      mcpLogger.info(`Server ${server.name} started with ${tools.length} tools`);
     } catch (error) {
-      console.error(`[MCPManager] Error starting server ${serverId}:`, error);
+      mcpLogger.error(`Error starting server ${serverId}:`, error);
 
       // Track error
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
@@ -186,9 +187,9 @@ class MCPManager {
       }
 
       await sqliteService.updateMCPServerStatus(serverId, 'stopped');
-      console.log(`[MCPManager] Server ${serverId} stopped`);
+      mcpLogger.info(`Server ${serverId} stopped`);
     } catch (error) {
-      console.error(`[MCPManager] Error stopping server ${serverId}:`, error);
+      mcpLogger.error(`Error stopping server ${serverId}:`, error);
       throw error;
     }
   }
@@ -202,9 +203,9 @@ class MCPManager {
       // Remove from database
       await sqliteService.deleteMCPServer(serverId);
 
-      console.log(`[MCPManager] Server ${serverId} removed`);
+      mcpLogger.info(`Server ${serverId} removed`);
     } catch (error) {
-      console.error(`[MCPManager] Error removing server ${serverId}:`, error);
+      mcpLogger.error(`Error removing server ${serverId}:`, error);
       throw error;
     }
   }
@@ -253,7 +254,7 @@ class MCPManager {
 
           allTools.push(...enrichedTools);
         } catch (error) {
-          console.error(`[MCPManager] Error getting tools from ${serverId}:`, error);
+          mcpLogger.error(`Error getting tools from ${serverId}:`, error);
         }
       }
     }
@@ -339,13 +340,13 @@ class MCPManager {
     const servers = await sqliteService.getMCPServers();
     const enabledServers = servers.filter(s => s.enabled);
 
-    console.log(`[MCPManager] Starting ${enabledServers.length} enabled servers`);
+    mcpLogger.info(`Starting ${enabledServers.length} enabled servers`);
 
     for (const server of enabledServers) {
       try {
         await this.startServer(server.id);
       } catch (error) {
-        console.error(`[MCPManager] Failed to start ${server.name}:`, error);
+        mcpLogger.error(`Failed to start ${server.name}:`, error);
       }
     }
   }
@@ -355,18 +356,18 @@ class MCPManager {
     try {
       const autoStartServers = await sqliteService.getAutoStartServers();
 
-      console.log(`[MCPManager] Auto-starting ${autoStartServers.length} servers`);
+      mcpLogger.info(`Auto-starting ${autoStartServers.length} servers`);
 
       for (const server of autoStartServers) {
         try {
           await this.startServer(server.id);
-          console.log(`[MCPManager] Auto-started: ${server.name}`);
+          mcpLogger.info(`Auto-started: ${server.name}`);
         } catch (error) {
-          console.error(`[MCPManager] Failed to auto-start ${server.name}:`, error);
+          mcpLogger.error(`Failed to auto-start ${server.name}:`, error);
         }
       }
     } catch (error) {
-      console.error('[MCPManager] Error during auto-start:', error);
+      mcpLogger.error('Error during auto-start:', error);
     }
   }
 
@@ -378,7 +379,7 @@ class MCPManager {
       try {
         await this.stopServer(serverId);
       } catch (error) {
-        console.error(`[MCPManager] Error stopping ${serverId}:`, error);
+        mcpLogger.error(`Error stopping ${serverId}:`, error);
       }
     }
   }
@@ -397,7 +398,7 @@ class MCPManager {
             const isAlive = await client.ping();
 
             if (!isAlive) {
-              console.warn(`[MCPManager] Server ${serverId} is not responding`);
+              mcpLogger.warn(`Server ${serverId} is not responding`);
 
               // Get server config to check if we should auto-restart
               const server = await sqliteService.getMCPServer(serverId);
@@ -410,18 +411,18 @@ class MCPManager {
                 const shouldRetry = errorInfo.count < 3 && timeSinceLastError > 300000; // 5 minutes
 
                 if (shouldRetry) {
-                  console.log(`[MCPManager] Attempting automatic restart of ${serverId} (attempt ${errorInfo.count + 1}/3)`);
+                  mcpLogger.info(`Attempting automatic restart of ${serverId} (attempt ${errorInfo.count + 1}/3)`);
 
                   try {
                     // Stop and restart
                     await this.stopServer(serverId);
                     await this.startServer(serverId);
-                    console.log(`[MCPManager] Successfully restarted ${serverId}`);
+                    mcpLogger.info(`Successfully restarted ${serverId}`);
                   } catch (restartError) {
-                    console.error(`[MCPManager] Failed to restart ${serverId}:`, restartError);
+                    mcpLogger.error(`Failed to restart ${serverId}:`, restartError);
                   }
                 } else if (errorInfo.count >= 3) {
-                  console.error(`[MCPManager] Server ${serverId} exceeded max restart attempts (3)`);
+                  mcpLogger.error(`Server ${serverId} exceeded max restart attempts (3)`);
                   await sqliteService.updateMCPServerStatus(serverId, 'error');
                 }
               } else {
@@ -435,7 +436,7 @@ class MCPManager {
             }
           } catch (error) {
             // Don't track errors during health check - too noisy
-            console.debug(`[MCPManager] Health check failed for ${serverId}:`, error);
+            mcpLogger.debug(`Health check failed for ${serverId}:`, error);
           }
         }
       }, 60000); // Check every 60 seconds (less aggressive)

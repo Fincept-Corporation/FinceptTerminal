@@ -2,6 +2,7 @@
 // Lightweight pub/sub event bus for distributing WebSocket messages
 
 import { EventBusEvent, MessageCallback, NormalizedMessage } from './types';
+import { websocketLogger } from '../loggerService';
 
 /**
  * Topic subscription metadata
@@ -46,7 +47,7 @@ export class EventBus {
     this.enableLogging = options?.enableLogging ?? false;
 
     if (this.enableLogging) {
-      console.log('[EventBus] Initialized with history:', this.enableHistory);
+      websocketLogger.info('EventBus initialized', { historyEnabled: this.enableHistory });
     }
   }
 
@@ -82,7 +83,7 @@ export class EventBus {
     this.subscriptions.get(key)!.push(subscription);
 
     if (this.enableLogging) {
-      console.log(`[EventBus] Subscribed to topic: ${topic} (ID: ${subscriptionId})`);
+      websocketLogger.debug(`Subscribed to topic: ${topic}`, { subscriptionId });
     }
 
     // Return unsubscribe function
@@ -107,7 +108,7 @@ export class EventBus {
         }
 
         if (this.enableLogging) {
-          console.log(`[EventBus] Unsubscribed from topic: ${topic} (ID: ${subscriptionId})`);
+          websocketLogger.debug(`Unsubscribed from topic: ${topic}`, { subscriptionId });
         }
       }
     }
@@ -136,7 +137,7 @@ export class EventBus {
 
     // Only log chart/candle related messages
     if (this.enableLogging && matchingSubscriptions.length > 0 && (topic.includes('ohlc') || topic.includes('candle'))) {
-      console.log(`[EventBus] 📊 Publishing chart data to ${matchingSubscriptions.length} subscribers: ${topic}`);
+      websocketLogger.debug(`Publishing chart data to ${matchingSubscriptions.length} subscribers: ${topic}`);
     }
 
     // Deliver message to all matching subscribers
@@ -144,7 +145,7 @@ export class EventBus {
       try {
         sub.callback(message);
       } catch (error) {
-        console.error(`[EventBus] Error in subscription callback for ${topic}:`, error);
+        websocketLogger.error(`Error in subscription callback for ${topic}:`, error);
       }
     });
   }
@@ -233,7 +234,7 @@ export class EventBus {
    */
   getHistory(limit?: number): EventBusEvent[] {
     if (!this.enableHistory) {
-      console.warn('[EventBus] History is disabled');
+      websocketLogger.warn('History is disabled');
       return [];
     }
 
@@ -264,7 +265,7 @@ export class EventBus {
   clearHistory(): void {
     this.messageHistory = [];
     if (this.enableLogging) {
-      console.log('[EventBus] History cleared');
+      websocketLogger.info('History cleared');
     }
   }
 
@@ -310,7 +311,7 @@ export class EventBus {
     this.messageRate = 0;
 
     if (this.enableLogging) {
-      console.log('[EventBus] All subscriptions cleared');
+      websocketLogger.info('All subscriptions cleared');
     }
   }
 

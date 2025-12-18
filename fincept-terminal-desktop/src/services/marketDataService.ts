@@ -3,6 +3,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { sqliteService } from './sqliteService';
+import { marketDataLogger } from './loggerService';
 
 export interface QuoteData {
   symbol: string;
@@ -58,7 +59,7 @@ class MarketDataService {
       this.isAvailable = result;
       return result;
     } catch (error) {
-      console.error('[MarketDataService] Health check failed:', error);
+      marketDataLogger.error('Health check failed:', error);
       this.isAvailable = false;
       return false;
     }
@@ -75,11 +76,11 @@ class MarketDataService {
       if (response.success && response.data) {
         return response.data;
       } else {
-        console.warn(`[MarketDataService] Failed to fetch quote for ${symbol}:`, response.error);
+        marketDataLogger.warn(`Failed to fetch quote for ${symbol}:`, response.error);
         return null;
       }
     } catch (error) {
-      console.error(`[MarketDataService] Error fetching quote for ${symbol}:`, error);
+      marketDataLogger.error(`Error fetching quote for ${symbol}:`, error);
       return null;
     }
   }
@@ -95,11 +96,11 @@ class MarketDataService {
       if (response.success) {
         return response.data;
       } else {
-        console.warn('[MarketDataService] Failed to fetch quotes:', response.error);
+        marketDataLogger.warn('Failed to fetch quotes:', response.error);
         return [];
       }
     } catch (error) {
-      console.error('[MarketDataService] Error fetching quotes:', error);
+      marketDataLogger.error('Error fetching quotes:', error);
       return [];
     }
   }
@@ -115,11 +116,11 @@ class MarketDataService {
       if (response.success && response.data) {
         return response.data;
       } else {
-        console.warn(`[MarketDataService] Failed to fetch returns for ${symbol}:`, response.error);
+        marketDataLogger.warn(`Failed to fetch returns for ${symbol}:`, response.error);
         return null;
       }
     } catch (error) {
-      console.error(`[MarketDataService] Error fetching returns for ${symbol}:`, error);
+      marketDataLogger.error(`Error fetching returns for ${symbol}:`, error);
       return null;
     }
   }
@@ -174,7 +175,7 @@ class MarketDataService {
     try {
       // Check if database is initialized
       if (!sqliteService.isReady()) {
-        console.warn('[MarketDataService] Database not ready, fetching without cache');
+        marketDataLogger.warn('Database not ready, fetching without cache');
         return await this.getEnhancedQuotes(symbols);
       }
 
@@ -186,12 +187,12 @@ class MarketDataService {
 
       // If all data is cached, return it
       if (symbolsNeedingFetch.length === 0) {
-        console.log(`[MarketDataService] Using cached data for ${symbols.length} symbols in ${category}`);
+        marketDataLogger.debug(`Using cached data for ${symbols.length} symbols in ${category}`);
         return symbols.map(symbol => cachedData.get(symbol)!);
       }
 
       // Fetch missing data from API
-      console.log(`[MarketDataService] Fetching ${symbolsNeedingFetch.length}/${symbols.length} symbols from API for ${category}`);
+      marketDataLogger.debug(`Fetching ${symbolsNeedingFetch.length}/${symbols.length} symbols from API for ${category}`);
       const freshQuotes = await this.getEnhancedQuotes(symbolsNeedingFetch);
 
       // Cache the fresh data
@@ -212,7 +213,7 @@ class MarketDataService {
 
       return result;
     } catch (error) {
-      console.error('[MarketDataService] Cache error, falling back to direct fetch:', error);
+      marketDataLogger.error('Cache error, falling back to direct fetch:', error);
       return await this.getEnhancedQuotes(symbols);
     }
   }

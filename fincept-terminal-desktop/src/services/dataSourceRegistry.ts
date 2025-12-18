@@ -5,6 +5,7 @@ import { sqliteService, DataSource } from './sqliteService';
 import { getWebSocketManager } from './websocket';
 import { mappingEngine } from '../components/tabs/data-mapping/engine/MappingEngine';
 import { DataMappingConfig } from '../components/tabs/data-mapping/types';
+import { dataSourceLogger } from './loggerService';
 
 export interface WebSocketSourceConfig {
   provider: string;
@@ -73,13 +74,13 @@ export async function createWebSocketDataSource(input: {
           api_secret: input.params?.api_secret,
           endpoint: input.params?.endpoint
         });
-        console.log(`[DataSourceRegistry] Provider config set for: ${config.provider}`);
+        dataSourceLogger.debug(`Provider config set for: ${config.provider}`);
       }
 
       // Note: Actual subscription happens when component uses useDataSource
-      console.log(`[DataSourceRegistry] WebSocket source created: ${input.alias} -> ${topic}`);
+      dataSourceLogger.debug(`WebSocket source created: ${input.alias} -> ${topic}`);
     } catch (error) {
-      console.error('[DataSourceRegistry] Failed to initialize WS source:', error);
+      dataSourceLogger.error('Failed to initialize WS source:', error);
     }
   }
 
@@ -195,7 +196,7 @@ export function getWebSocketTopic(source: DataSource): string | null {
     const config: WebSocketSourceConfig = JSON.parse(source.config);
     return `${config.provider}.${config.channel}${config.symbol ? '.' + config.symbol : ''}`;
   } catch (error) {
-    console.error('[DataSourceRegistry] Failed to parse WS config:', error);
+    dataSourceLogger.error('Failed to parse WS config:', error);
     return null;
   }
 }
@@ -207,7 +208,7 @@ export function parseDataSourceConfig(source: DataSource): WebSocketSourceConfig
   try {
     return JSON.parse(source.config);
   } catch (error) {
-    console.error('[DataSourceRegistry] Failed to parse config:', error);
+    dataSourceLogger.error('Failed to parse config:', error);
     return null;
   }
 }

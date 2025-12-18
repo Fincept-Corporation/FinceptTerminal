@@ -3,6 +3,7 @@
 
 import { llmApiService, ChatMessage } from './llmApi';
 import { sqliteService, LLMConfig } from './sqliteService';
+import { agentLogger } from './loggerService';
 
 export interface AgentMediationConfig {
   llmProvider?: string; // Specific provider to use (optional, uses active if not set)
@@ -27,7 +28,7 @@ class AgentLLMService {
     config: AgentMediationConfig = {}
   ): Promise<AgentMediationResult> {
     try {
-      console.log('[AgentLLMService] Mediating agent output:', previousAgentOutput);
+      agentLogger.debug('Mediating agent output:', previousAgentOutput);
 
       // Extract meaningful content from previous agent
       const agentData = this.extractAgentData(previousAgentOutput);
@@ -76,7 +77,7 @@ class AgentLLMService {
         };
       }
 
-      console.log('[AgentLLMService] Mediation successful:', response.content);
+      agentLogger.debug('Mediation successful:', response.content);
 
       return {
         success: true,
@@ -86,7 +87,7 @@ class AgentLLMService {
       };
 
     } catch (error) {
-      console.error('[AgentLLMService] Mediation error:', error);
+      agentLogger.error('Mediation error:', error);
       return {
         success: false,
         mediatedContext: '',
@@ -147,7 +148,7 @@ Be concise but comprehensive. Focus on facts, signals, and metrics that would be
     synthesisPrompt?: string
   ): Promise<AgentMediationResult> {
     try {
-      console.log('[AgentLLMService] Synthesizing multiple agent outputs:', agentOutputs.length);
+      agentLogger.debug('Synthesizing multiple agent outputs:', agentOutputs.length);
 
       if (agentOutputs.length === 0) {
         return {
@@ -205,7 +206,7 @@ Be objective and data-driven. Present a holistic view that respects each agent's
       };
 
     } catch (error) {
-      console.error('[AgentLLMService] Synthesis error:', error);
+      agentLogger.error('Synthesis error:', error);
       return {
         success: false,
         mediatedContext: '',
