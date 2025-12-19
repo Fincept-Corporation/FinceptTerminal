@@ -7,6 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { BaseBacktestingAdapter } from '../BaseAdapter';
+import { backtestingLogger } from '../../../loggerService';
 import {
   ProviderCapabilities,
   ProviderConfig,
@@ -139,7 +140,7 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
 
       return this.createSuccessResult(result.message || 'Backtesting.py initialized successfully');
     } catch (error) {
-      console.error('[BacktestingPyAdapter] Initialize error:', error);
+      backtestingLogger.error('Initialize error:', error);
       return this.createErrorResult(error instanceof Error ? error.message : String(error));
     }
   }
@@ -195,7 +196,7 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
       this.connected = false;
       this.initialized = false;
     } catch (error) {
-      console.error('[BacktestingPyAdapter] Disconnect error:', error);
+      backtestingLogger.error('Disconnect error:', error);
     }
   }
 
@@ -213,7 +214,7 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
         message: 'Running Backtesting.py backtest...',
       });
 
-      console.log('[BacktestingPyAdapter] Running backtest:', {
+      backtestingLogger.debug('Running backtest:', {
         id: backtestId,
         strategy: request.strategy?.name,
         assets: request.assets?.map(a => a.symbol),
@@ -242,14 +243,14 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
         }
       );
 
-      console.log('[BacktestingPyAdapter] Raw Python output length:', stdout.length);
-      console.log('[BacktestingPyAdapter] Raw Python output (first 500):', stdout.substring(0, 500));
-      console.log('[BacktestingPyAdapter] Raw Python output (last 500):', stdout.substring(Math.max(0, stdout.length - 500)));
+      backtestingLogger.debug('Raw Python output length:', stdout.length);
+      backtestingLogger.debug('Raw Python output (first 500):', stdout.substring(0, 500));
+      backtestingLogger.debug('Raw Python output (last 500):', stdout.substring(Math.max(0, stdout.length - 500)));
 
       const result = this.extractJSON(stdout) as { success: boolean; data?: any; error?: string };
 
-      console.log('[BacktestingPyAdapter] Python response:', result);
-      console.log('[BacktestingPyAdapter] Has data field?', 'data' in result);
+      backtestingLogger.debug('Python response:', result);
+      backtestingLogger.debug('Has data field?', 'data' in result);
 
       // Update status
       this.activeBacktests.delete(backtestId);
@@ -259,14 +260,14 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
       }
 
       if (!result.data) {
-        console.error('[BacktestingPyAdapter] No data in result:', result);
+        backtestingLogger.error('No data in result:', result);
         throw new Error('Backtest completed but no data returned');
       }
 
       const backtestResult = result.data as BacktestResult;
 
-      console.log('[BacktestingPyAdapter] Full result.data:', JSON.stringify(result.data, null, 2));
-      console.log('[BacktestingPyAdapter] Backtest completed:', {
+      backtestingLogger.debug('Full result.data:', JSON.stringify(result.data, null, 2));
+      backtestingLogger.info('Backtest completed:', {
         id: backtestId,
         totalReturn: backtestResult.performance?.totalReturn,
         sharpeRatio: backtestResult.performance?.sharpeRatio,
@@ -277,7 +278,7 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
       return backtestResult;
     } catch (error) {
       this.activeBacktests.delete(backtestId);
-      console.error('[BacktestingPyAdapter] Backtest error:', error);
+      backtestingLogger.error('Backtest error:', error);
       throw error;
     }
   }
@@ -286,7 +287,7 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
     this.ensureConnected();
 
     try {
-      console.log('[BacktestingPyAdapter] Running optimization:', {
+      backtestingLogger.debug('Running optimization:', {
         strategy: request.strategy?.name,
         parameters: Object.keys(request.parameters || {}),
       });
@@ -317,14 +318,14 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
 
       const optimizationResult = result.data as OptimizationResult;
 
-      console.log('[BacktestingPyAdapter] Optimization completed:', {
+      backtestingLogger.info('Optimization completed:', {
         bestParams: optimizationResult.bestParameters,
         iterations: optimizationResult.iterations,
       });
 
       return optimizationResult;
     } catch (error) {
-      console.error('[BacktestingPyAdapter] Optimization error:', error);
+      backtestingLogger.error('Optimization error:', error);
       throw error;
     }
   }
@@ -335,10 +336,10 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
     try {
       // Backtesting.py doesn't provide data fetching
       // This would need to be implemented using external data providers
-      console.warn('[BacktestingPyAdapter] Data fetching not implemented');
+      backtestingLogger.warn('Data fetching not implemented');
       return [];
     } catch (error) {
-      console.error('[BacktestingPyAdapter] Data fetch error:', error);
+      backtestingLogger.error('Data fetch error:', error);
       throw error;
     }
   }
@@ -358,7 +359,7 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
 
     try {
       // Indicators can be calculated, but backtesting.py uses external libraries
-      console.warn('[BacktestingPyAdapter] Indicator calculation not directly supported');
+      backtestingLogger.warn('Indicator calculation not directly supported');
 
       return {
         indicator: type,
@@ -366,7 +367,7 @@ export class BacktestingPyAdapter extends BaseBacktestingAdapter {
         values: [],
       };
     } catch (error) {
-      console.error('[BacktestingPyAdapter] Indicator calculation error:', error);
+      backtestingLogger.error('Indicator calculation error:', error);
       throw error;
     }
   }

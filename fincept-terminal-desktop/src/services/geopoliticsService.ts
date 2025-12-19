@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { geopoliticsLogger } from './loggerService';
 
 export interface GeopoliticsData {
   tariffData: any[];
@@ -23,10 +24,10 @@ class GeopoliticsService {
         args: [this.wtoApiKey]
       });
       const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-      console.log('QR raw:', parsed);
+      geopoliticsLogger.debug('QR raw:', parsed);
       return parsed;
     } catch (error) {
-      console.error('Failed to fetch WTO QR notifications:', error);
+      geopoliticsLogger.error('Failed to fetch WTO QR notifications:', error);
       return null;
     }
   }
@@ -38,10 +39,10 @@ class GeopoliticsService {
         args: [`--page_size=${pageSize}`, this.wtoApiKey]
       });
       const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-      console.log('ePing raw:', parsed);
+      geopoliticsLogger.debug('ePing raw:', parsed);
       return parsed;
     } catch (error) {
-      console.error('Failed to fetch WTO ePing notifications:', error);
+      geopoliticsLogger.error('Failed to fetch WTO ePing notifications:', error);
       return null;
     }
   }
@@ -53,10 +54,10 @@ class GeopoliticsService {
         args: [`--i=${indicator}`, `--reporters=${reporters}`, `--periods=${periods}`, this.wtoApiKey]
       });
       const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-      console.log('Tariff raw:', parsed);
+      geopoliticsLogger.debug('Tariff raw:', parsed);
       return parsed;
     } catch (error) {
-      console.error('Failed to fetch WTO timeseries data:', error);
+      geopoliticsLogger.error('Failed to fetch WTO timeseries data:', error);
       return null;
     }
   }
@@ -69,7 +70,7 @@ class GeopoliticsService {
       });
       return typeof result === 'string' ? JSON.parse(result) : result;
     } catch (error) {
-      console.error('Failed to fetch WTO QR list:', error);
+      geopoliticsLogger.error('Failed to fetch WTO QR list:', error);
       return null;
     }
   }
@@ -82,7 +83,7 @@ class GeopoliticsService {
       });
       return typeof result === 'string' ? JSON.parse(result) : result;
     } catch (error) {
-      console.error('Failed to fetch WTO QR products:', error);
+      geopoliticsLogger.error('Failed to fetch WTO QR products:', error);
       return null;
     }
   }
@@ -95,7 +96,7 @@ class GeopoliticsService {
       });
       return typeof result === 'string' ? JSON.parse(result) : result;
     } catch (error) {
-      console.error('Failed to fetch WTO reporters:', error);
+      geopoliticsLogger.error('Failed to fetch WTO reporters:', error);
       return null;
     }
   }
@@ -108,7 +109,7 @@ class GeopoliticsService {
       });
       return typeof result === 'string' ? JSON.parse(result) : result;
     } catch (error) {
-      console.error('Failed to fetch WTO partners:', error);
+      geopoliticsLogger.error('Failed to fetch WTO partners:', error);
       return null;
     }
   }
@@ -121,7 +122,7 @@ class GeopoliticsService {
       });
       return typeof result === 'string' ? JSON.parse(result) : result;
     } catch (error) {
-      console.error('Failed to fetch WTO TFAD data:', error);
+      geopoliticsLogger.error('Failed to fetch WTO TFAD data:', error);
       return null;
     }
   }
@@ -134,7 +135,7 @@ class GeopoliticsService {
       });
       return typeof result === 'string' ? JSON.parse(result) : result;
     } catch (error) {
-      console.error('Failed to fetch WTO trade flow data:', error);
+      geopoliticsLogger.error('Failed to fetch WTO trade flow data:', error);
       return null;
     }
   }
@@ -155,11 +156,11 @@ class GeopoliticsService {
     ] = await Promise.all([
       this.getWTOQRNotifications(),
       this.getWTOEPingNotifications(50),
-      this.getWTOTimeseriesData('TP_A_0010', countryCode, `${currentYear-10}-${currentYear-1}`),
+      this.getWTOTimeseriesData('TP_A_0010', countryCode, `${currentYear - 10}-${currentYear - 1}`),
       this.getWTOQRList(countryCode),
       this.getWTOQRProducts('2017'),
       this.getWTOTFAD(countryCode),
-      this.getWTOTradeFlow('ITS_MTV_AM', countryCode, 'all', `${currentYear-5}-${currentYear-1}`), // Merchandise trade value
+      this.getWTOTradeFlow('ITS_MTV_AM', countryCode, 'all', `${currentYear - 5}-${currentYear - 1}`), // Merchandise trade value
       this.getWTOReporters(),
       this.getWTOPartners()
     ]);

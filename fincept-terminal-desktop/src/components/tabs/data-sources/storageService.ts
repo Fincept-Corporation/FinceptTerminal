@@ -66,10 +66,19 @@ export class DataSourceStorageService {
       const result = await sqliteService.getDataSourceConnection(id);
       if (!result) return null;
 
+      // Map snake_case DB fields to camelCase interface
       return {
-        ...result,
+        id: result.id,
+        name: result.name,
+        type: result.type,
+        category: result.category,
         config: JSON.parse(result.config),
-      };
+        status: result.status,
+        lastTested: result.lastTested,
+        errorMessage: result.errorMessage,
+        createdAt: result.created_at,
+        updatedAt: result.updated_at,
+      } as DataSourceConnection;
     } catch (error) {
       console.error('Error getting connection:', error);
       return null;
@@ -138,7 +147,7 @@ export class DataSourceStorageService {
   }
 
   /**
-   * Test a connection (placeholder for actual implementation)
+   * Test a connection using the appropriate adapter
    */
   static async testConnection(connection: DataSourceConnection): Promise<{
     success: boolean;
@@ -146,24 +155,38 @@ export class DataSourceStorageService {
     metadata?: Record<string, any>;
   }> {
     try {
-      // TODO: Implement actual connection testing based on type
-      // This would make actual network requests to test the connection
+      // Dynamic import to avoid circular dependencies
+      const { testConnection: adapterTestConnection, hasAdapter } = await import('./adapters');
 
-      // Simulate connection test
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Check if we have an adapter for this type
+      if (hasAdapter(connection.type)) {
+        const startTime = performance.now();
+        const result = await adapterTestConnection(connection);
+        const latency = performance.now() - startTime;
 
+        return {
+          ...result,
+          metadata: {
+            ...result.metadata,
+            latency: Math.round(latency),
+            testedAt: new Date().toISOString(),
+          },
+        };
+      }
+
+      // Fallback: Return a message indicating no adapter is available
       return {
-        success: true,
-        message: `Successfully connected to ${connection.name}`,
+        success: false,
+        message: `No adapter available for connection type: ${connection.type}. Connection testing is not yet implemented for this type.`,
         metadata: {
-          latency: Math.random() * 100 + 50,
-          version: '1.0.0',
+          testedAt: new Date().toISOString(),
+          fallback: true,
         },
       };
     } catch (error) {
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Connection failed',
+        message: error instanceof Error ? error.message : 'Connection test failed',
       };
     }
   }

@@ -1,12 +1,14 @@
-export interface Workflow {
-  id: string;
-  name: string;
-  description?: string;
-  nodes: any[];
-  edges: any[];
-  status: 'idle' | 'running' | 'completed' | 'error' | 'draft';
-  results?: any;
-}
+import {
+  Workflow,
+  WorkflowNode,
+  WorkflowEdge,
+  WorkflowStatus
+} from '@/types/workflow';
+import { workflowLogger } from './loggerService';
+
+// Re-export the Workflow type for consumers
+export type { Workflow, WorkflowNode, WorkflowEdge, WorkflowStatus };
+
 
 class WorkflowService {
   private workflows: Map<string, Workflow> = new Map();
@@ -24,10 +26,10 @@ class WorkflowService {
       if (stored) {
         const workflows: Workflow[] = JSON.parse(stored);
         workflows.forEach(wf => this.workflows.set(wf.id, wf));
-        console.log(`[WorkflowService] Loaded ${workflows.length} workflows from storage`);
+        workflowLogger.info(`Loaded ${workflows.length} workflows from storage`);
       }
     } catch (error) {
-      console.error('[WorkflowService] Failed to load workflows:', error);
+      workflowLogger.error('Failed to load workflows:', error);
     }
   }
 
@@ -35,23 +37,23 @@ class WorkflowService {
     try {
       const workflows = Array.from(this.workflows.values());
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(workflows));
-      console.log(`[WorkflowService] Saved ${workflows.length} workflows to storage`);
+      workflowLogger.info(`Saved ${workflows.length} workflows to storage`);
     } catch (error) {
-      console.error('[WorkflowService] Failed to save workflows:', error);
+      workflowLogger.error('Failed to save workflows:', error);
     }
   }
 
   async saveWorkflow(workflow: Workflow): Promise<void> {
     this.workflows.set(workflow.id, workflow);
     this.saveToStorage();
-    console.log(`[WorkflowService] Saved workflow: ${workflow.id}`);
+    workflowLogger.info(`Saved workflow: ${workflow.id}`);
   }
 
   async saveDraft(
     name: string,
     description: string,
-    nodes: any[],
-    edges: any[]
+    nodes: WorkflowNode[],
+    edges: WorkflowEdge[]
   ): Promise<string> {
     const id = `draft_${Date.now()}`;
     const workflow: Workflow = {
@@ -74,7 +76,7 @@ class WorkflowService {
     this.workflows.delete(id);
     this.runningWorkflows.delete(id);
     this.saveToStorage();
-    console.log(`[WorkflowService] Deleted workflow: ${id}`);
+    workflowLogger.info(`Deleted workflow: ${id}`);
   }
 
   async listWorkflows(): Promise<Workflow[]> {
@@ -91,7 +93,7 @@ class WorkflowService {
     workflow.status = 'running';
     this.saveToStorage(); // Save the 'running' state
 
-    console.log(`[WorkflowService] Executing workflow: ${id}`);
+    workflowLogger.info(`Executing workflow: ${id}`);
 
     // Simulate async workflow execution
     setTimeout(() => {
@@ -100,7 +102,7 @@ class WorkflowService {
         completedWorkflow.status = 'completed';
         this.runningWorkflows.delete(id);
         this.saveToStorage(); // Save the 'completed' state
-        console.log(`[WorkflowService] Workflow ${id} completed`);
+        workflowLogger.info(`Workflow ${id} completed`);
       }
     }, 100); // Simulate a 100ms execution time
   }
@@ -111,11 +113,11 @@ class WorkflowService {
     if (workflow) {
       workflow.status = 'idle';
     }
-    console.log(`[WorkflowService] Stopped workflow: ${id}`);
+    workflowLogger.info(`Stopped workflow: ${id}`);
   }
 
   async cleanupRunningWorkflows(): Promise<void> {
-    console.log('[WorkflowService] Cleaning up running workflows...');
+    workflowLogger.info('Cleaning up running workflows...');
     for (const workflowId of this.runningWorkflows) {
       await this.stopWorkflow(workflowId);
     }
@@ -130,8 +132,8 @@ class WorkflowService {
     id: string,
     name: string,
     description: string,
-    nodes: any[],
-    edges: any[]
+    nodes: WorkflowNode[],
+    edges: WorkflowEdge[]
   ): Promise<void> {
     const workflow = this.workflows.get(id);
     if (workflow) {
@@ -142,7 +144,7 @@ class WorkflowService {
       workflow.status = 'draft';
       this.workflows.set(id, workflow);
       this.saveToStorage();
-      console.log(`[WorkflowService] Updated draft: ${id}`);
+      workflowLogger.info(`Updated draft: ${id}`);
     }
   }
 }

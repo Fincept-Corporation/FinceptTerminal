@@ -3,6 +3,7 @@
 
 import Database from '@tauri-apps/plugin-sql';
 import { marketDataService, QuoteData } from './marketDataService';
+import { watchlistLogger } from './loggerService';
 
 // ==================== TYPES ====================
 
@@ -51,9 +52,9 @@ class WatchlistService {
     try {
       this.db = await Database.load(this.dbPath);
       this.isInitialized = true;
-      console.log('[WatchlistService] Initialized successfully');
+      watchlistLogger.info('Initialized successfully');
     } catch (error) {
-      console.error('[WatchlistService] Initialization failed:', error);
+      watchlistLogger.error('Initialization failed:', error);
       throw error;
     }
   }
@@ -87,7 +88,7 @@ class WatchlistService {
       [id]
     );
 
-    console.log(`[WatchlistService] Created watchlist: ${name} (ID: ${id})`);
+    watchlistLogger.info(`Created watchlist: ${name}`, { id });
     return result[0];
   }
 
@@ -158,7 +159,7 @@ class WatchlistService {
     this.ensureInitialized();
 
     await this.db!.execute('DELETE FROM watchlists WHERE id = $1', [watchlistId]);
-    console.log(`[WatchlistService] Deleted watchlist: ${watchlistId}`);
+    watchlistLogger.info(`Deleted watchlist: ${watchlistId}`);
   }
 
   // ==================== STOCK MANAGEMENT ====================
@@ -191,7 +192,7 @@ class WatchlistService {
       [id]
     );
 
-    console.log(`[WatchlistService] Added stock ${symbol} to watchlist ${watchlistId}`);
+    watchlistLogger.info(`Added stock ${symbol} to watchlist`, { watchlistId });
     return result[0];
   }
 
@@ -206,7 +207,7 @@ class WatchlistService {
       [watchlistId, symbol.toUpperCase()]
     );
 
-    console.log(`[WatchlistService] Removed stock ${symbol} from watchlist ${watchlistId}`);
+    watchlistLogger.info(`Removed stock ${symbol} from watchlist`, { watchlistId });
   }
 
   /**
