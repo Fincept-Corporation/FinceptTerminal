@@ -1,30 +1,128 @@
 import { invoke } from '@tauri-apps/api/core';
 
 import { sqliteService } from './sqliteService';
+import { polygonLogger } from './loggerService';
+import type {
+  PolygonResponse,
+  PolygonTickerDetails,
+  PolygonQuote,
+  PolygonNews,
+  PolygonAggregate,
+  PolygonTrade,
+  PolygonBalanceSheet,
+  PolygonIncomeStatement,
+  PolygonCashFlow,
+  PolygonIndicatorResult
+} from '@/types/api';
 
+// =============================================================================
+// Polygon API Option Types
+// =============================================================================
+
+export interface TickerListOptions {
+  ticker?: string;
+  type?: string;
+  market?: string;
+  exchange?: string;
+  cusip?: string;
+  cik?: string;
+  date?: string;
+  search?: string;
+  active?: boolean;
+  sort?: string;
+  order?: 'asc' | 'desc';
+  limit?: number;
+}
+
+export interface NewsOptions {
+  ticker?: string;
+  publishedUtc?: string;
+  order?: 'asc' | 'desc';
+  limit?: number;
+  sort?: string;
+}
+
+export interface CorporateActionOptions {
+  ticker?: string;
+  exDividendDate?: string;
+  recordDate?: string;
+  declarationDate?: string;
+  payDate?: string;
+  frequency?: number;
+  cashAmount?: number;
+  dividendType?: string;
+  sort?: string;
+  order?: 'asc' | 'desc';
+  limit?: number;
+}
+
+export interface AggregatesOptions {
+  adjusted?: boolean;
+  sort?: 'asc' | 'desc';
+  limit?: number;
+}
+
+export interface TradesQuotesOptions {
+  timestamp?: string;
+  timestampGt?: string;
+  timestampLt?: string;
+  order?: 'asc' | 'desc';
+  limit?: number;
+  sort?: string;
+}
+
+export interface IndicatorOptions {
+  timespan?: 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+  adjusted?: boolean;
+  window?: number;
+  seriesType?: 'close' | 'open' | 'high' | 'low';
+  expandUnderlying?: boolean;
+  order?: 'asc' | 'desc';
+  limit?: number;
+  shortWindow?: number;
+  longWindow?: number;
+  signalWindow?: number;
+}
+
+export interface FinancialsOptions {
+  period?: 'annual' | 'quarterly' | 'ttm';
+  limit?: number;
+  order?: 'asc' | 'desc';
+  sort?: string;
+  filingDateGte?: string;
+  filingDateLte?: string;
+}
+
+export interface SnapshotOptions {
+  tickers?: string;
+  includeOtc?: boolean;
+}
+
+// =============================================================================
 // Polygon.io Service Layer - Comprehensive Coverage of 31 Endpoints
+// =============================================================================
 class PolygonService {
   private apiKey: string = '';
 
   async loadApiKey(): Promise<string> {
     try {
-      console.log('[PolygonService] Loading API key from database...');
+      polygonLogger.info('Loading API key from database...');
       const credentials = await sqliteService.getCredentials();
-      console.log('[PolygonService] Found credentials:', credentials.map(c => c.service_name));
+      polygonLogger.debug('Found credentials:', credentials.map(c => c.service_name));
 
       const polygonCred = credentials.find(c => c.service_name.toLowerCase() === 'polygon.io');
-      console.log('[PolygonService] Polygon credential found:', !!polygonCred);
+      polygonLogger.debug('Polygon credential found:', !!polygonCred);
 
       if (polygonCred?.api_key) {
         this.apiKey = polygonCred.api_key;
         // Set environment variable for Python script
         localStorage.setItem('POLYGON_API_KEY', polygonCred.api_key);
-        console.log('[PolygonService] API key loaded successfully, length:', polygonCred.api_key.length);
+        polygonLogger.info('API key loaded successfully, length:', polygonCred.api_key.length);
         return polygonCred.api_key;
       }
-      console.warn('[PolygonService] No Polygon.io API key found in credentials');
+      polygonLogger.warn('No Polygon.io API key found in credentials');
     } catch (error) {
-      console.error('[PolygonService] Failed to load Polygon API key from database:', error);
+      polygonLogger.error('Failed to load Polygon API key from database:', error);
     }
     return '';
   }
@@ -37,12 +135,12 @@ class PolygonService {
     try {
       // Ensure API key is loaded
       if (!this.apiKey) {
-        console.log('[PolygonService] API key not set, loading...');
+        polygonLogger.debug('API key not set, loading...');
         await this.loadApiKey();
       }
 
-      console.log('[PolygonService] Executing command:', command, 'with args:', args);
-      console.log('[PolygonService] API key present:', !!this.apiKey);
+      polygonLogger.debug('Executing command: ' + command, { args });
+      polygonLogger.debug('API key present:', !!this.apiKey);
 
       const result = await invoke<string>('execute_polygon_command', {
         command,
@@ -50,13 +148,13 @@ class PolygonService {
         apiKey: this.apiKey || null
       });
 
-      console.log('[PolygonService] Command result received, length:', result.length);
+      polygonLogger.debug('Command result received, length:', result.length);
       const parsed = JSON.parse(result);
-      console.log('[PolygonService] Parsed result success:', parsed.success);
+      polygonLogger.debug('Parsed result success:', parsed.success);
 
       return parsed;
     } catch (error) {
-      console.error('[PolygonService] Polygon API error:', error);
+      polygonLogger.error('Polygon API error:', error);
       throw error;
     }
   }

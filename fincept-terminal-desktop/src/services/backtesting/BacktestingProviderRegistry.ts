@@ -6,6 +6,7 @@
 
 import { IBacktestingProvider } from './interfaces/IBacktestingProvider';
 import { ProviderInfo, ProviderConfig } from './interfaces/types';
+import { backtestingLogger } from '../loggerService';
 
 /**
  * BacktestingProviderRegistry
@@ -37,7 +38,7 @@ export class BacktestingProviderRegistry {
     this.providers.set(provider.name, provider);
     this.notifyListeners('provider:registered', { provider: provider.name });
 
-    console.log(`✓ Registered backtesting provider: ${provider.name}`);
+    backtestingLogger.info(`Registered backtesting provider: ${provider.name}`);
   }
 
   /**
@@ -53,7 +54,7 @@ export class BacktestingProviderRegistry {
     }
 
     // Disconnect provider before removing
-    provider.disconnect().catch(console.error);
+    provider.disconnect().catch(e => backtestingLogger.error('Disconnect error:', e));
 
     this.providers.delete(name);
     this.configs.delete(name);
@@ -65,7 +66,7 @@ export class BacktestingProviderRegistry {
 
     this.notifyListeners('provider:unregistered', { provider: name });
 
-    console.log(`✓ Unregistered backtesting provider: ${name}`);
+    backtestingLogger.info(`Unregistered backtesting provider: ${name}`);
     return true;
   }
 
@@ -101,7 +102,7 @@ export class BacktestingProviderRegistry {
       previous: previousProvider,
     });
 
-    console.log(`✓ Activated backtesting provider: ${name}`);
+    backtestingLogger.info(`Activated backtesting provider: ${name}`);
   }
 
   /**
@@ -271,8 +272,8 @@ export class BacktestingProviderRegistry {
 
     // If fromProvider specified, validate it's currently active
     if (fromProvider && this.activeProviderId !== fromProvider) {
-      console.warn(
-        `Warning: fromProvider "${fromProvider}" is not active. Current: ${this.activeProviderId}`
+      backtestingLogger.warn(
+        `fromProvider "${fromProvider}" is not active. Current: ${this.activeProviderId}`
       );
     }
 
@@ -280,7 +281,7 @@ export class BacktestingProviderRegistry {
     // This allows users to freely switch between initialized providers
     await this.setActiveProvider(toProvider);
 
-    console.log(`✓ Switched provider: ${fromProvider} → ${toProvider}`);
+    backtestingLogger.info(`Switched provider: ${fromProvider} → ${toProvider}`);
   }
 
   // ============================================================================
@@ -316,7 +317,7 @@ export class BacktestingProviderRegistry {
       try {
         listener(event, data);
       } catch (error) {
-        console.error('Error in registry listener:', error);
+        backtestingLogger.error('Error in registry listener:', error);
       }
     });
   }
@@ -333,7 +334,7 @@ export class BacktestingProviderRegistry {
     // Disconnect all providers
     await Promise.all(
       Array.from(this.providers.values()).map((p) =>
-        p.disconnect().catch(console.error)
+        p.disconnect().catch(e => backtestingLogger.error('Disconnect error:', e))
       )
     );
 
@@ -342,7 +343,7 @@ export class BacktestingProviderRegistry {
     this.activeProviderId = null;
     this.listeners.clear();
 
-    console.log('✓ Cleared all backtesting providers');
+    backtestingLogger.info('Cleared all backtesting providers');
   }
 
   /**

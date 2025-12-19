@@ -2,6 +2,7 @@
 // Handles stdio/SSE transport for MCP servers
 
 import { invoke } from '@tauri-apps/api/core';
+import { mcpLogger } from './loggerService';
 
 export interface MCPTool {
   name: string;
@@ -60,7 +61,7 @@ class MCPClient {
   // Connect to MCP server via stdio
   async connect(config: MCPConnectionConfig): Promise<void> {
     try {
-      console.log(`[MCP] Connecting to server: ${config.serverId}`);
+      mcpLogger.info(`Connecting to server: ${config.serverId}`);
 
       // Spawn MCP server process via Tauri
       const result = await invoke<{ pid: number; success: boolean; error?: string }>(
@@ -78,13 +79,13 @@ class MCPClient {
       }
 
       this.processId = result.pid;
-      console.log(`[MCP] Server spawned with PID: ${this.processId}`);
+      mcpLogger.info(`Server spawned with PID: ${this.processId}`);
 
       // Initialize MCP protocol
       await this.initialize();
-      console.log(`[MCP] Server initialized successfully`);
+      mcpLogger.info(`Server initialized successfully`);
     } catch (error) {
-      console.error('[MCP] Connection error:', error);
+      mcpLogger.error('Connection error:', error);
       throw error;
     }
   }
@@ -122,7 +123,7 @@ class MCPClient {
       const response = await this.sendRequest('tools/list', {});
       return response.tools || [];
     } catch (error) {
-      console.error('[MCP] Error listing tools:', error);
+      mcpLogger.error('Error listing tools:', error);
       return [];
     }
   }
@@ -141,7 +142,7 @@ class MCPClient {
 
       return response;
     } catch (error) {
-      console.error(`[MCP] Error calling tool ${name}:`, error);
+      mcpLogger.error(`Error calling tool ${name}:`, error);
       return {
         content: [{
           type: 'text',
@@ -162,7 +163,7 @@ class MCPClient {
       const response = await this.sendRequest('resources/list', {});
       return response.resources || [];
     } catch (error) {
-      console.error('[MCP] Error listing resources:', error);
+      mcpLogger.error('Error listing resources:', error);
       return [];
     }
   }
@@ -177,7 +178,7 @@ class MCPClient {
       const response = await this.sendRequest('resources/read', { uri });
       return response.contents || [];
     } catch (error) {
-      console.error(`[MCP] Error reading resource ${uri}:`, error);
+      mcpLogger.error(`Error reading resource ${uri}:`, error);
       throw error;
     }
   }
@@ -192,7 +193,7 @@ class MCPClient {
       });
       return result;
     } catch (error) {
-      console.error('[MCP] Ping error:', error);
+      mcpLogger.error('Ping error:', error);
       return false;
     }
   }
@@ -204,9 +205,9 @@ class MCPClient {
         await invoke('kill_mcp_server', {
           serverId: this.serverId
         });
-        console.log(`[MCP] Server ${this.serverId} disconnected`);
+        mcpLogger.info(`Server ${this.serverId} disconnected`);
       } catch (error) {
-        console.error('[MCP] Disconnect error:', error);
+        mcpLogger.error('Disconnect error:', error);
       }
 
       this.processId = null;
@@ -265,7 +266,7 @@ class MCPClient {
         notification: JSON.stringify(notification)
       });
     } catch (error) {
-      console.error('[MCP] Notification error:', error);
+      mcpLogger.error('Notification error:', error);
     }
   }
 

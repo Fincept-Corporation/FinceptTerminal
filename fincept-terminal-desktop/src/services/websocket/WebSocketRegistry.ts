@@ -8,6 +8,7 @@ import {
   ProviderConfig
 } from './types';
 import { EventBus } from './EventBus';
+import { websocketLogger } from '../loggerService';
 
 /**
  * Registry entry for a WebSocket adapter
@@ -52,7 +53,7 @@ export class WebSocketRegistry {
     this.startCleanupTimer();
 
     if (this.enableLogging) {
-      console.log('[WebSocketRegistry] Initialized');
+      websocketLogger.info('Registry initialized');
     }
   }
 
@@ -74,7 +75,7 @@ export class WebSocketRegistry {
     this.registry.set(provider, entry);
 
     if (this.enableLogging) {
-      console.log(`[WebSocketRegistry] Registered provider: ${provider}`);
+      websocketLogger.info(`Registered provider: ${provider}`);
     }
   }
 
@@ -85,7 +86,7 @@ export class WebSocketRegistry {
     const entry = this.registry.get(provider);
 
     if (!entry) {
-      console.warn(`[WebSocketRegistry] Provider not found: ${provider}`);
+      websocketLogger.warn(`Provider not found: ${provider}`);
       return;
     }
 
@@ -94,13 +95,13 @@ export class WebSocketRegistry {
       await entry.adapter.disconnect();
       entry.adapter.destroy();
     } catch (error) {
-      console.error(`[WebSocketRegistry] Error cleaning up ${provider}:`, error);
+      websocketLogger.error(`Error cleaning up ${provider}:`, error);
     }
 
     this.registry.delete(provider);
 
     if (this.enableLogging) {
-      console.log(`[WebSocketRegistry] Unregistered provider: ${provider}`);
+      websocketLogger.info(`Unregistered provider: ${provider}`);
     }
   }
 
@@ -135,7 +136,7 @@ export class WebSocketRegistry {
       entry.refCount++;
 
       if (this.enableLogging) {
-        console.log(`[WebSocketRegistry] ${provider} refCount: ${entry.refCount}`);
+        websocketLogger.debug(`${provider} refCount: ${entry.refCount}`);
       }
     }
   }
@@ -149,7 +150,7 @@ export class WebSocketRegistry {
       entry.refCount = Math.max(0, entry.refCount - 1);
 
       if (this.enableLogging) {
-        console.log(`[WebSocketRegistry] ${provider} refCount: ${entry.refCount}`);
+        websocketLogger.debug(`${provider} refCount: ${entry.refCount}`);
       }
 
       // Schedule cleanup if no active references
@@ -265,7 +266,7 @@ export class WebSocketRegistry {
     // Cleanup idle connections
     for (const provider of toCleanup) {
       if (this.enableLogging) {
-        console.log(`[WebSocketRegistry] Cleaning up idle connection: ${provider}`);
+        websocketLogger.info(`Cleaning up idle connection: ${provider}`);
       }
       await this.unregister(provider);
     }
@@ -287,7 +288,7 @@ export class WebSocketRegistry {
     }
 
     if (this.enableLogging) {
-      console.log('[WebSocketRegistry] All connections cleaned up');
+      websocketLogger.info('All connections cleaned up');
     }
   }
 
@@ -340,14 +341,14 @@ export class WebSocketRegistry {
     }
 
     if (this.enableLogging) {
-      console.log(`[WebSocketRegistry] Reconnecting provider: ${provider}`);
+      websocketLogger.info(`Reconnecting provider: ${provider}`);
     }
 
     try {
       await entry.adapter.disconnect();
       await entry.adapter.connect(entry.config);
     } catch (error) {
-      console.error(`[WebSocketRegistry] Failed to reconnect ${provider}:`, error);
+      websocketLogger.error(`Failed to reconnect ${provider}:`, error);
       throw error;
     }
   }
@@ -362,7 +363,7 @@ export class WebSocketRegistry {
       try {
         await this.reconnect(provider);
       } catch (error) {
-        console.error(`[WebSocketRegistry] Failed to reconnect ${provider}:`, error);
+        websocketLogger.error(`Failed to reconnect ${provider}:`, error);
       }
     }
   }
@@ -379,7 +380,7 @@ export class WebSocketRegistry {
           const latency = await entry.adapter.ping();
           results.set(provider, latency);
         } catch (error) {
-          console.error(`[WebSocketRegistry] Ping failed for ${provider}:`, error);
+          websocketLogger.error(`Ping failed for ${provider}:`, error);
           results.set(provider, -1);
         }
       }
@@ -402,7 +403,7 @@ export class WebSocketRegistry {
     await this.cleanup();
 
     if (this.enableLogging) {
-      console.log('[WebSocketRegistry] Destroyed');
+      websocketLogger.info('Registry destroyed');
     }
   }
 }

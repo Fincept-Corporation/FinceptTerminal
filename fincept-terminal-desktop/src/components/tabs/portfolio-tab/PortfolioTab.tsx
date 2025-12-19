@@ -17,6 +17,7 @@ import AlertsView from './portfolio/AlertsView';
 import ActiveManagementView from './portfolio/ActiveManagementView';
 import { getBloombergColors, formatCurrency, formatPercent, formatNumber } from './portfolio/utils';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { TimezoneSelector } from '../../common/TimezoneSelector';
 
 const PortfolioTab: React.FC = () => {
   const { colors: themeColors } = useTerminalTheme();
@@ -292,9 +293,7 @@ const PortfolioTab: React.FC = () => {
               ● {refreshing ? 'UPDATING' : 'LIVE'}
             </span>
             <span style={{ color: WHITE }}>|</span>
-            <span style={{ color: CYAN, fontSize: '11px' }}>
-              {currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC
-            </span>
+            <TimezoneSelector compact />
           </div>
 
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -605,12 +604,14 @@ const PortfolioTab: React.FC = () => {
                 <AlertsView portfolioSummary={portfolioSummary} />
               )}
 
-              {/* Active Management View */}
               {selectedView === 'ACTIVE_MGMT' && (
                 <ActiveManagementView
                   portfolioId={selectedPortfolio.id}
                   portfolioData={{
-                    returns: [], // TODO: Calculate from holdings
+                    // Calculate daily returns from holdings' price changes
+                    returns: portfolioSummary.holdings.length > 0
+                      ? portfolioSummary.holdings.map(h => (h.day_change_percent || 0) / 100)
+                      : [],
                     weights: portfolioSummary.holdings.map(h => h.weight / 100)
                   }}
                 />

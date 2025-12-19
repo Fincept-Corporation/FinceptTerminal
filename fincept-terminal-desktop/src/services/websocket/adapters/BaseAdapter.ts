@@ -19,6 +19,7 @@ import {
   PerformanceMetrics,
   generateId
 } from '../utils';
+import { websocketLogger } from '../../loggerService';
 
 /**
  * Base WebSocket Adapter
@@ -105,7 +106,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
    * Connect to WebSocket
    */
   async connect(config: ProviderConfig): Promise<void> {
-    console.log(`[${this.provider}] 🔌 Connecting to WebSocket...`);
+    websocketLogger.info(`[${this.provider}] Connecting to WebSocket...`);
 
     if (!this.circuitBreaker.isAllowed()) {
       throw new Error(`Circuit breaker is open for ${this.provider}`);
@@ -116,17 +117,17 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
 
     try {
       const url = this.getWebSocketUrl(config);
-      console.log(`[${this.provider}] WebSocket URL: ${url}`);
+      websocketLogger.debug(`[${this.provider}] WebSocket URL: ${url}`);
 
       this.ws = new WebSocket(url);
-      console.log(`[${this.provider}] WebSocket object created, readyState: ${this.ws.readyState}`);
+      websocketLogger.debug(`[${this.provider}] WebSocket object created, readyState: ${this.ws.readyState}`);
 
       this.setupWebSocketHandlers();
 
       // Wait for connection
-      console.log(`[${this.provider}] Waiting for WebSocket to open...`);
+      websocketLogger.debug(`[${this.provider}] Waiting for WebSocket to open...`);
       await this.waitForConnection();
-      console.log(`[${this.provider}] ✓ WebSocket opened! readyState: ${this.ws?.readyState}`);
+      websocketLogger.debug(`[${this.provider}] WebSocket opened! readyState: ${this.ws?.readyState}`);
 
       this.reconnectionManager.recordSuccess();
       this.circuitBreaker.recordSuccess();
@@ -135,15 +136,15 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
 
       // Start heartbeat monitoring
       this.heartbeatMonitor.start(() => this.handleStaleConnection());
-      console.log(`[${this.provider}] Heartbeat monitoring started`);
+      websocketLogger.debug(`[${this.provider}] Heartbeat monitoring started`);
 
       // Perform provider-specific initialization
       await this.onConnected();
 
-      console.log(`[${this.provider}] ✓ Connection complete!`);
+      websocketLogger.info(`[${this.provider}] Connection complete!`);
       this.log('Connected successfully');
     } catch (error) {
-      console.error(`[${this.provider}] ✗ Connection failed:`, error);
+      websocketLogger.error(`[${this.provider}] Connection failed:`, error);
 
       this.circuitBreaker.recordFailure();
       this.reconnectionManager.recordAttempt();
@@ -159,7 +160,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
 
       // Attempt reconnection if policy allows
       if (this.reconnectionManager.shouldAttempt()) {
-        console.log(`[${this.provider}] Will retry connection...`);
+        websocketLogger.info(`[${this.provider}] Will retry connection...`);
         await this.scheduleReconnection();
       } else {
         throw error;
@@ -197,10 +198,10 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
    * Subscribe to a topic
    */
   async subscribe(topic: string, params?: Record<string, any>): Promise<void> {
-    console.log(`[${this.provider}] Subscribe requested: ${topic}`);
-    console.log(`[${this.provider}] - WebSocket exists: ${!!this.ws}`);
-    console.log(`[${this.provider}] - readyState: ${this.ws?.readyState} (OPEN=${WebSocket.OPEN})`);
-    console.log(`[${this.provider}] - Status: ${this._status}`);
+    websocketLogger.debug(`[${this.provider}] Subscribe requested: ${topic}`);
+    websocketLogger.debug(`[${this.provider}] - WebSocket exists: ${!!this.ws}`);
+    websocketLogger.debug(`[${this.provider}] - readyState: ${this.ws?.readyState} (OPEN=${WebSocket.OPEN})`);
+    websocketLogger.debug(`[${this.provider}] - Status: ${this._status}`);
 
     // Check WebSocket is actually open FIRST (most accurate check)
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -367,7 +368,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
       try {
         this.handleMessage(event);
       } catch (error) {
-        console.error(`[${this.provider}] Error handling message:`, error);
+        websocketLogger.error(`[${this.provider}] Error handling message:`, error);
         this.addError({
           timestamp: Date.now(),
           error: `Message handling error: ${error}`
@@ -456,7 +457,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
         // Resubscribe to previous topics
         await this.resubscribe();
       } catch (error) {
-        console.error(`[${this.provider}] Reconnection failed:`, error);
+        websocketLogger.error(`[${this.provider}] Reconnection failed:`, error);
       }
     }
   }
@@ -472,7 +473,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
       try {
         await this.subscribe(topic);
       } catch (error) {
-        console.error(`[${this.provider}] Failed to resubscribe to ${topic}:`, error);
+        websocketLogger.error(`[${this.provider}] Failed to resubscribe to ${topic}:`, error);
       }
     }
   }
@@ -504,7 +505,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
       try {
         callback(message);
       } catch (error) {
-        console.error(`[${this.provider}] Error in message callback:`, error);
+        websocketLogger.error(`[${this.provider}] Error in message callback:`, error);
       }
     });
   }
@@ -517,7 +518,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
       try {
         callback(error);
       } catch (err) {
-        console.error(`[${this.provider}] Error in error callback:`, err);
+        websocketLogger.error(`[${this.provider}] Error in error callback:`, err);
       }
     });
   }
@@ -534,7 +535,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
         try {
           callback(status);
         } catch (error) {
-          console.error(`[${this.provider}] Error in status callback:`, error);
+          websocketLogger.error(`[${this.provider}] Error in status callback:`, error);
         }
       });
 
@@ -560,7 +561,7 @@ export abstract class BaseAdapter implements IWebSocketAdapter {
    */
   protected log(...args: any[]): void {
     if (this.enableLogging) {
-      console.log(`[${this.provider}]`, ...args);
+      websocketLogger.debug(`[${this.provider}]`, ...args);
     }
   }
 

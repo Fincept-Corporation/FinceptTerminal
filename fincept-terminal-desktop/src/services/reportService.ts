@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { sqliteService } from './sqliteService';
+import { reportLogger } from './loggerService';
 
 export interface ReportComponent {
   id: string;
@@ -75,7 +76,7 @@ class ReportService {
       const parsed = JSON.parse(result);
       return parsed;
     } catch (error) {
-      console.error('Failed to generate HTML:', error);
+      reportLogger.error('Failed to generate HTML:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -97,7 +98,7 @@ class ReportService {
       const parsed = JSON.parse(result);
       return parsed;
     } catch (error) {
-      console.error('Failed to generate PDF:', error);
+      reportLogger.error('Failed to generate PDF:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -114,7 +115,7 @@ class ReportService {
       const parsed = JSON.parse(result);
       return parsed;
     } catch (error) {
-      console.error('Failed to create default template:', error);
+      reportLogger.error('Failed to create default template:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -127,7 +128,7 @@ class ReportService {
    */
   async openInFolder(filePath: string): Promise<boolean> {
     try {
-      console.log('[ReportService] Opening folder for:', filePath);
+      reportLogger.debug('Opening folder for:', filePath);
 
       // Extract directory from file path
       const pathParts = filePath.replace(/\\/g, '/').split('/');
@@ -136,7 +137,7 @@ class ReportService {
 
       // Detect platform
       const platform = await this.getPlatform();
-      console.log('[ReportService] Platform:', platform);
+      reportLogger.debug('Platform:', platform);
 
       if (platform === 'windows') {
         // Windows: Use explorer with /select flag to highlight the file
@@ -153,7 +154,7 @@ class ReportService {
 
       return true;
     } catch (error) {
-      console.error('Failed to open folder:', error);
+      reportLogger.error('Failed to open folder:', error);
       return false;
     }
   }
@@ -206,7 +207,7 @@ class ReportService {
 
       localStorage.setItem('financial_report_templates', JSON.stringify(templates));
     } catch (error) {
-      console.error('Failed to save template:', error);
+      reportLogger.error('Failed to save template:', error);
       throw error;
     }
   }

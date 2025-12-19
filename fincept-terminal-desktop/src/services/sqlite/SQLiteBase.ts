@@ -1,0 +1,535 @@
+/**
+ * SQLite Base Service
+ * Core database connection, schema, and utility methods
+ */
+
+import Database from '@tauri-apps/plugin-sql';
+import { sqliteLogger } from '../loggerService';
+import type { DatabaseInstance } from './types';
+
+/**
+ * SQLiteBase provides core database functionality:
+ * - Database connection management
+ * - Schema creation and migrations
+ * - Low-level query execution
+ */
+export class SQLiteBase {
+    protected db: Database | null = null;
+    protected initPromise: Promise<void> | null = null;
+
+    /**
+     * Initialize database connection and schema
+     */
+    async initialize(): Promise<void> {
+        if (this.initPromise) {
+            return this.initPromise;
+        }
+
+        this.initPromise = this._initializeDatabase();
+        return this.initPromise;
+    }
+
+    private async _initializeDatabase(): Promise<void> {
+        try {
+            sqliteLogger.info('Initializing database...');
+
+            // Connect to SQLite database
+            this.db = await Database.load('sqlite:fincept_terminal.db');
+
+            sqliteLogger.debug('Creating schema...');
+            await this.createSchema();
+
+            sqliteLogger.info('Database initialized successfully');
+        } catch (error) {
+            sqliteLogger.error('Failed to initialize:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Schema statements grouped by domain
+     */
+    private getSchemaStatements(): string[] {
+        return [
+            // Credentials table
+            `CREATE TABLE IF NOT EXISTS credentials (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        service_name TEXT NOT NULL UNIQUE,
+        username TEXT,
+        password TEXT,
+        api_key TEXT,
+        api_secret TEXT,
+        additional_data TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // Settings table
+            `CREATE TABLE IF NOT EXISTS settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value TEXT NOT NULL,
+        category TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // LLM configurations table
+            `CREATE TABLE IF NOT EXISTS llm_configs (
+        provider TEXT PRIMARY KEY,
+        api_key TEXT,
+        base_url TEXT,
+        model TEXT NOT NULL,
+        is_active INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // LLM global settings table
+            `CREATE TABLE IF NOT EXISTS llm_global_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        temperature REAL DEFAULT 0.7,
+        max_tokens INTEGER DEFAULT 2000,
+        system_prompt TEXT DEFAULT ''
+      )`,
+
+            // Chat sessions table
+            `CREATE TABLE IF NOT EXISTS chat_sessions (
+        session_uuid TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        message_count INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // Chat messages table
+            `CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        session_uuid TEXT NOT NULL,
+        role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+        content TEXT NOT NULL,
+        timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+        provider TEXT,
+        model TEXT,
+        tokens_used INTEGER,
+        FOREIGN KEY (session_uuid) REFERENCES chat_sessions(session_uuid) ON DELETE CASCADE
+      )`,
+
+            // Data sources table
+            `CREATE TABLE IF NOT EXISTS data_sources (
+        id TEXT PRIMARY KEY,
+        alias TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        description TEXT,
+        type TEXT NOT NULL CHECK (type IN ('websocket', 'rest_api')),
+        provider TEXT NOT NULL,
+        category TEXT,
+        config TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        tags TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // WebSocket provider configs table
+            `CREATE TABLE IF NOT EXISTS ws_provider_configs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider_name TEXT NOT NULL UNIQUE,
+        enabled INTEGER DEFAULT 1,
+        api_key TEXT,
+        api_secret TEXT,
+        endpoint TEXT,
+        config_data TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // Paper trading portfolios table
+            `CREATE TABLE IF NOT EXISTS paper_trading_portfolios (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        initial_balance REAL NOT NULL DEFAULT 100000,
+        current_balance REAL NOT NULL,
+        currency TEXT DEFAULT 'USD',
+        margin_mode TEXT DEFAULT 'cross',
+        leverage REAL DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // Paper trading positions table
+            `CREATE TABLE IF NOT EXISTS paper_trading_positions (
+        id TEXT PRIMARY KEY,
+        portfolio_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        side TEXT NOT NULL CHECK (side IN ('long', 'short')),
+        entry_price REAL NOT NULL,
+        quantity REAL NOT NULL,
+        position_value REAL,
+        current_price REAL,
+        unrealized_pnl REAL,
+        realized_pnl REAL DEFAULT 0,
+        leverage REAL DEFAULT 1,
+        margin_mode TEXT DEFAULT 'cross',
+        liquidation_price REAL,
+        opened_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        closed_at TEXT,
+        status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+        FOREIGN KEY (portfolio_id) REFERENCES paper_trading_portfolios(id) ON DELETE CASCADE
+      )`,
+
+            // Paper trading orders table
+            `CREATE TABLE IF NOT EXISTS paper_trading_orders (
+        id TEXT PRIMARY KEY,
+        portfolio_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        side TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
+        type TEXT NOT NULL CHECK (type IN ('market', 'limit', 'stop_market', 'stop_limit')),
+        quantity REAL NOT NULL,
+        price REAL,
+        stop_price REAL,
+        filled_quantity REAL DEFAULT 0,
+        avg_fill_price REAL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'filled', 'partial', 'cancelled', 'rejected', 'triggered')),
+        time_in_force TEXT DEFAULT 'GTC',
+        post_only INTEGER DEFAULT 0,
+        reduce_only INTEGER DEFAULT 0,
+        trailing_percent REAL,
+        trailing_amount REAL,
+        iceberg_qty REAL,
+        leverage REAL,
+        margin_mode TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        filled_at TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (portfolio_id) REFERENCES paper_trading_portfolios(id) ON DELETE CASCADE
+      )`,
+
+            // Paper trading trades table
+            `CREATE TABLE IF NOT EXISTS paper_trading_trades (
+        id TEXT PRIMARY KEY,
+        portfolio_id TEXT NOT NULL,
+        order_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        side TEXT NOT NULL,
+        price REAL NOT NULL,
+        quantity REAL NOT NULL,
+        fee REAL DEFAULT 0,
+        fee_rate REAL DEFAULT 0,
+        is_maker INTEGER DEFAULT 0,
+        timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (portfolio_id) REFERENCES paper_trading_portfolios(id) ON DELETE CASCADE,
+        FOREIGN KEY (order_id) REFERENCES paper_trading_orders(id) ON DELETE CASCADE
+      )`,
+
+            // Indexes for paper trading tables
+            `CREATE INDEX IF NOT EXISTS idx_paper_positions_portfolio ON paper_trading_positions(portfolio_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_paper_positions_status ON paper_trading_positions(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_paper_orders_portfolio ON paper_trading_orders(portfolio_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_paper_orders_status ON paper_trading_orders(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_paper_trades_portfolio ON paper_trading_trades(portfolio_id)`,
+
+            // MCP servers table
+            `CREATE TABLE IF NOT EXISTS mcp_servers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        command TEXT NOT NULL,
+        args TEXT,
+        env TEXT,
+        category TEXT,
+        icon TEXT,
+        enabled INTEGER DEFAULT 1,
+        auto_start INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'stopped',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // MCP tools table
+            `CREATE TABLE IF NOT EXISTS mcp_tools (
+        id TEXT PRIMARY KEY,
+        server_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        input_schema TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (server_id) REFERENCES mcp_servers(id) ON DELETE CASCADE
+      )`,
+
+            // MCP tool usage logs table
+            `CREATE TABLE IF NOT EXISTS mcp_tool_usage_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id TEXT NOT NULL,
+        tool_name TEXT NOT NULL,
+        args TEXT,
+        result TEXT,
+        success INTEGER,
+        execution_time INTEGER,
+        error TEXT,
+        timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // Market data cache table
+            `CREATE TABLE IF NOT EXISTS market_data_cache (
+        symbol TEXT NOT NULL,
+        category TEXT NOT NULL,
+        quote_data TEXT NOT NULL,
+        cached_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (symbol, category)
+      )`,
+
+            // Data source connections table
+            `CREATE TABLE IF NOT EXISTS data_source_connections (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        category TEXT NOT NULL,
+        config TEXT NOT NULL,
+        status TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_tested TEXT,
+        error_message TEXT
+      )`,
+
+            // Forum cache tables
+            `CREATE TABLE IF NOT EXISTS forum_categories_cache (
+        id INTEGER PRIMARY KEY,
+        data TEXT NOT NULL,
+        cached_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            `CREATE TABLE IF NOT EXISTS forum_posts_cache (
+        cache_key TEXT PRIMARY KEY,
+        category_id INTEGER,
+        sort_by TEXT,
+        data TEXT NOT NULL,
+        cached_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            `CREATE TABLE IF NOT EXISTS forum_stats_cache (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        data TEXT NOT NULL,
+        cached_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            `CREATE TABLE IF NOT EXISTS forum_post_details_cache (
+        post_uuid TEXT PRIMARY KEY,
+        data TEXT NOT NULL,
+        comments_data TEXT NOT NULL,
+        cached_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // Context Recording tables
+            `CREATE TABLE IF NOT EXISTS recorded_contexts (
+        id TEXT PRIMARY KEY,
+        tab_name TEXT NOT NULL,
+        data_type TEXT NOT NULL,
+        label TEXT,
+        raw_data TEXT NOT NULL,
+        metadata TEXT,
+        data_size INTEGER,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        tags TEXT
+      )`,
+
+            `CREATE INDEX IF NOT EXISTS idx_recorded_contexts_tab ON recorded_contexts(tab_name)`,
+            `CREATE INDEX IF NOT EXISTS idx_recorded_contexts_type ON recorded_contexts(data_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_recorded_contexts_created ON recorded_contexts(created_at DESC)`,
+
+            `CREATE TABLE IF NOT EXISTS recording_sessions (
+        id TEXT PRIMARY KEY,
+        tab_name TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        auto_record INTEGER DEFAULT 0,
+        filters TEXT,
+        started_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        ended_at TEXT
+      )`,
+
+            `CREATE TABLE IF NOT EXISTS chat_context_links (
+        chat_session_uuid TEXT NOT NULL,
+        context_id TEXT NOT NULL,
+        added_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        is_active INTEGER DEFAULT 1,
+        PRIMARY KEY (chat_session_uuid, context_id),
+        FOREIGN KEY(chat_session_uuid) REFERENCES chat_sessions(session_uuid) ON DELETE CASCADE,
+        FOREIGN KEY(context_id) REFERENCES recorded_contexts(id) ON DELETE CASCADE
+      )`,
+
+            `CREATE TABLE IF NOT EXISTS report_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        template_data TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // Backtesting providers table
+            `CREATE TABLE IF NOT EXISTS backtesting_providers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        adapter_type TEXT NOT NULL,
+        config TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        is_active INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            // Backtesting strategies table
+            `CREATE TABLE IF NOT EXISTS backtesting_strategies (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        version TEXT DEFAULT '1.0.0',
+        author TEXT,
+        provider_type TEXT NOT NULL,
+        strategy_type TEXT NOT NULL CHECK (strategy_type IN ('code', 'visual', 'template')),
+        strategy_definition TEXT NOT NULL,
+        tags TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+            `CREATE INDEX IF NOT EXISTS idx_strategies_provider ON backtesting_strategies(provider_type)`,
+            `CREATE INDEX IF NOT EXISTS idx_strategies_type ON backtesting_strategies(strategy_type)`,
+
+            // Backtest runs table
+            `CREATE TABLE IF NOT EXISTS backtest_runs (
+        id TEXT PRIMARY KEY,
+        strategy_id TEXT,
+        provider_name TEXT NOT NULL,
+        config TEXT NOT NULL,
+        results TEXT,
+        status TEXT NOT NULL CHECK (status IN ('completed', 'failed', 'running', 'cancelled')),
+        performance_metrics TEXT,
+        error_message TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        completed_at TEXT,
+        duration_seconds INTEGER,
+        FOREIGN KEY(strategy_id) REFERENCES backtesting_strategies(id) ON DELETE SET NULL
+      )`,
+
+            `CREATE INDEX IF NOT EXISTS idx_backtest_runs_strategy ON backtest_runs(strategy_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_backtest_runs_provider ON backtest_runs(provider_name)`,
+            `CREATE INDEX IF NOT EXISTS idx_backtest_runs_status ON backtest_runs(status)`,
+            `CREATE INDEX IF NOT EXISTS idx_backtest_runs_created ON backtest_runs(created_at DESC)`,
+
+            // Optimization runs table
+            `CREATE TABLE IF NOT EXISTS optimization_runs (
+        id TEXT PRIMARY KEY,
+        strategy_id TEXT,
+        provider_name TEXT NOT NULL,
+        parameter_grid TEXT NOT NULL,
+        objective TEXT NOT NULL,
+        best_parameters TEXT,
+        best_result TEXT,
+        all_results TEXT,
+        iterations INTEGER,
+        status TEXT NOT NULL CHECK (status IN ('completed', 'failed', 'running', 'cancelled')),
+        error_message TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        completed_at TEXT,
+        duration_seconds INTEGER,
+        FOREIGN KEY(strategy_id) REFERENCES backtesting_strategies(id) ON DELETE SET NULL
+      )`,
+
+            `CREATE INDEX IF NOT EXISTS idx_optimization_runs_strategy ON optimization_runs(strategy_id)`,
+            `CREATE INDEX IF NOT EXISTS idx_optimization_runs_provider ON optimization_runs(provider_name)`,
+            `CREATE INDEX IF NOT EXISTS idx_optimization_runs_status ON optimization_runs(status)`,
+
+            // Insert default LLM global settings
+            `INSERT OR IGNORE INTO llm_global_settings (id, temperature, max_tokens, system_prompt)
+       VALUES (1, 0.7, 2000, 'You are a helpful AI assistant specialized in financial analysis and market data.')`,
+        ];
+    }
+
+    private async createSchema(): Promise<void> {
+        if (!this.db) throw new Error('Database not connected');
+
+        const statements = this.getSchemaStatements();
+
+        for (const sql of statements) {
+            try {
+                await this.db.execute(sql);
+            } catch (error: any) {
+                // Ignore "duplicate column" errors from ALTER TABLE
+                if (!error.message?.includes('duplicate column')) {
+                    throw error;
+                }
+            }
+        }
+
+        // Update existing positions to populate position_value
+        try {
+            await this.db.execute(`
+        UPDATE paper_trading_positions
+        SET position_value = entry_price * quantity
+        WHERE position_value IS NULL
+      `);
+        } catch (error) {
+            sqliteLogger.error('Failed to populate position_value:', error);
+        }
+    }
+
+    // =========================
+    // Utility Methods
+    // =========================
+
+    /**
+     * Ensure database is initialized before operations
+     */
+    async ensureInitialized(): Promise<void> {
+        if (!this.db) {
+            await this.initialize();
+        }
+    }
+
+    /**
+     * Check if database is ready
+     */
+    isReady(): boolean {
+        return this.db !== null;
+    }
+
+    /**
+     * Get database instance (for modules)
+     */
+    getDatabase(): Database | null {
+        return this.db;
+    }
+
+    /**
+     * Execute raw SQL statement
+     */
+    async execute(sql: string, params?: any[]): Promise<any> {
+        await this.ensureInitialized();
+        return this.db!.execute(sql, params || []);
+    }
+
+    /**
+     * Execute raw SQL select query
+     */
+    async select<T>(sql: string, params?: any[]): Promise<T> {
+        await this.ensureInitialized();
+        return this.db!.select<T>(sql, params || []);
+    }
+
+    /**
+     * Health check
+     */
+    async healthCheck(): Promise<{ healthy: boolean; message: string }> {
+        try {
+            await this.ensureInitialized();
+            await this.db!.execute('SELECT 1');
+            return { healthy: true, message: 'Database is healthy' };
+        } catch (error) {
+            return {
+                healthy: false,
+                message: error instanceof Error ? error.message : 'Unknown error',
+            };
+        }
+    }
+}

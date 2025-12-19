@@ -2,6 +2,7 @@
 // Provides fault-tolerant, modular access to MCP tools for Chat, Node Editor, and Agents
 
 import { mcpManager } from './mcpManager';
+import { mcpLogger } from './loggerService';
 
 export interface MCPTool {
   serverId: string;
@@ -57,11 +58,11 @@ class MCPToolService {
 
       // Only log when tools are actually available or when count changes
       if (tools.length > 0 && tools.length !== this.toolCache.length) {
-        console.log('[MCPToolService] Tools updated:', tools.length);
+        mcpLogger.debug('Tools updated:', tools.length);
       }
       return tools;
     } catch (error) {
-      console.error('[MCPToolService] Error fetching tools:', error);
+      mcpLogger.error('Error fetching tools:', error);
       // Return cached tools as fallback
       return this.toolCache;
     }
@@ -116,7 +117,7 @@ class MCPToolService {
       };
     } catch (error: any) {
       const executionTime = Date.now() - startTime;
-      console.error(`[MCPToolService] Tool execution failed:`, error);
+      mcpLogger.error(`Tool execution failed:`, error);
 
       return {
         success: false,
@@ -137,7 +138,7 @@ class MCPToolService {
       const allTools = await this.getAllTools();
       return allTools.filter(tool => this.categorizeTool(tool) === category);
     } catch (error) {
-      console.error('[MCPToolService] Error filtering tools by category:', error);
+      mcpLogger.error('Error filtering tools by category:', error);
       return [];
     }
   }
@@ -150,7 +151,7 @@ class MCPToolService {
       const allTools = await this.getAllTools();
       return allTools.filter(tool => tool.serverId === serverId);
     } catch (error) {
-      console.error('[MCPToolService] Error filtering tools by server:', error);
+      mcpLogger.error('Error filtering tools by server:', error);
       return [];
     }
   }
@@ -213,39 +214,39 @@ class MCPToolService {
 
     // Database tools
     if (serverId.includes('postgres') || serverId.includes('questdb') ||
-        serverId.includes('sqlite') || serverId.includes('mysql') ||
-        toolName.includes('query') || toolName.includes('database')) {
+      serverId.includes('sqlite') || serverId.includes('mysql') ||
+      toolName.includes('query') || toolName.includes('database')) {
       return 'database';
     }
 
     // Web tools
     if (serverId.includes('wikipedia') || serverId.includes('search') ||
-        serverId.includes('fetch') || serverId.includes('brave') ||
-        toolName.includes('search') || toolName.includes('fetch')) {
+      serverId.includes('fetch') || serverId.includes('brave') ||
+      toolName.includes('search') || toolName.includes('fetch')) {
       return 'web';
     }
 
     // File tools
     if (serverId.includes('filesystem') || serverId.includes('file') ||
-        toolName.includes('read') || toolName.includes('write') || toolName.includes('file')) {
+      toolName.includes('read') || toolName.includes('write') || toolName.includes('file')) {
       return 'file';
     }
 
     // API tools
     if (serverId.includes('api') || serverId.includes('http') ||
-        toolName.includes('api') || toolName.includes('request')) {
+      toolName.includes('api') || toolName.includes('request')) {
       return 'api';
     }
 
     // Data tools
     if (toolName.includes('data') || toolName.includes('analyze') ||
-        toolName.includes('transform')) {
+      toolName.includes('transform')) {
       return 'data';
     }
 
     // Productivity tools
     if (serverId.includes('slack') || serverId.includes('email') ||
-        serverId.includes('calendar') || serverId.includes('notion')) {
+      serverId.includes('calendar') || serverId.includes('notion')) {
       return 'productivity';
     }
 
@@ -260,7 +261,7 @@ class MCPToolService {
       const tools = await this.getAllTools();
       return tools.find(t => t.serverId === serverId && t.name === toolName) || null;
     } catch (error) {
-      console.error('[MCPToolService] Error getting tool:', error);
+      mcpLogger.error('Error getting tool:', error);
       return null;
     }
   }
@@ -282,7 +283,7 @@ class MCPToolService {
       const serverIds = new Set(tools.map(t => t.serverId));
       return Array.from(serverIds);
     } catch (error) {
-      console.error('[MCPToolService] Error getting available servers:', error);
+      mcpLogger.error('Error getting available servers:', error);
       return [];
     }
   }
@@ -320,7 +321,7 @@ class MCPToolService {
   parseOpenAIFunctionName(functionName: string): { serverId: string; toolName: string } | null {
     const parts = functionName.split('__');
     if (parts.length !== 2) {
-      console.error('[MCPToolService] Invalid function name format:', functionName);
+      mcpLogger.error('Invalid function name format:', functionName);
       return null;
     }
     return {

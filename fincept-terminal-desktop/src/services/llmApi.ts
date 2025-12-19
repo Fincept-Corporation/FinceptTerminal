@@ -3,6 +3,7 @@
 
 import { fetch } from '@tauri-apps/plugin-http';
 import { sqliteService } from './sqliteService';
+import { llmLogger } from './loggerService';
 
 export interface LLMConfig {
   provider: string;
@@ -75,7 +76,7 @@ class LLMApiService {
         };
       }
     } catch (error) {
-      console.error('OpenAI API Error:', error);
+      llmLogger.error('OpenAI API Error:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -178,11 +179,11 @@ class LLMApiService {
       }
     };
 
-    console.log('[Gemini] 📨 Request details:');
-    console.log('[Gemini] - Contents count:', contents.length);
-    console.log('[Gemini] - System instruction length:', systemPrompt?.length || 0, 'characters');
-    console.log('[Gemini] - First content role:', contents[0]?.role);
-    console.log('[Gemini] - First content preview:', JSON.stringify(contents[0]).substring(0, 200));
+    llmLogger.debug('[Gemini] Request details:');
+    llmLogger.debug('[Gemini] - Contents count:', contents.length);
+    llmLogger.debug('[Gemini] - System instruction length: ' + (systemPrompt?.length || 0) + ' characters');
+    llmLogger.debug('[Gemini] - First content role:', contents[0]?.role);
+    llmLogger.debug('[Gemini] - First content preview:', JSON.stringify(contents[0]).substring(0, 200));
 
     try {
       const response = await fetch(url, {
@@ -199,9 +200,9 @@ class LLMApiService {
         try {
           const error = JSON.parse(errorText);
           errorMessage = error.error?.message || errorMessage;
-          console.error('[Gemini] API Error Response:', error);
+          llmLogger.error('[Gemini] API Error Response:', error);
         } catch {
-          console.error('[Gemini] API Error Text:', errorText);
+          llmLogger.error('[Gemini] API Error Text:', errorText);
         }
         throw new Error(errorMessage);
       }
@@ -237,7 +238,7 @@ class LLMApiService {
         };
       }
     } catch (error) {
-      console.error('Gemini API Error:', error);
+      llmLogger.error('Gemini API Error:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -287,8 +288,8 @@ class LLMApiService {
           }
         }
       } catch (e) {
-        console.error('[Gemini Stream] Failed to parse JSON:', e);
-        console.error('[Gemini Stream] Accumulated JSON:', accumulatedJson);
+        llmLogger.error('[Gemini Stream] Failed to parse JSON:', e);
+        llmLogger.debug('[Gemini Stream] Accumulated JSON:', accumulatedJson);
         throw new Error('Failed to parse Gemini response');
       }
 
@@ -324,7 +325,7 @@ class LLMApiService {
       };
     });
 
-    console.log('[MCP] Sending tools to Gemini:', functionDeclarations.length, 'tools');
+    llmLogger.debug('[MCP] Sending tools to Gemini: ' + functionDeclarations.length + ' tools');
 
     // Convert messages to Gemini format
     const systemPrompt = conversationHistory.find(m => m.role === 'system')?.content || config.systemPrompt || '';
@@ -374,7 +375,7 @@ class LLMApiService {
       const functionCall = candidate?.content?.parts?.find((part: any) => part.functionCall);
 
       if (functionCall) {
-        console.log('[MCP] Gemini requested function call:', functionCall.functionCall.name);
+        llmLogger.info('[MCP] Gemini requested function call:', functionCall.functionCall.name);
 
         const toolName = functionCall.functionCall.name;
         const toolArgs = functionCall.functionCall.args || {};
@@ -416,7 +417,7 @@ class LLMApiService {
             onToolCall(toolName, toolArgs, toolResult);
           }
 
-          console.log('[MCP] Tool result:', resultContent);
+          llmLogger.debug('[MCP] Tool result:', resultContent);
 
           // Second call with function response
           contents.push({
@@ -435,7 +436,7 @@ class LLMApiService {
           });
 
         } catch (error) {
-          console.error('[MCP] Tool execution error:', error);
+          llmLogger.error('[MCP] Tool execution error:', error);
           contents.push({
             role: 'user',
             parts: [{
@@ -479,7 +480,7 @@ class LLMApiService {
         finalContent = resultContent;
       }
 
-      console.log('[MCP] Gemini final response length:', finalContent.length);
+      llmLogger.debug('[MCP] Gemini final response length:', finalContent.length);
 
       // Signal completion to UI
       if (onStream && finalContent) {
@@ -497,7 +498,7 @@ class LLMApiService {
       };
 
     } catch (error) {
-      console.error('Gemini function calling error:', error);
+      llmLogger.error('Gemini function calling error:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -575,7 +576,7 @@ class LLMApiService {
         };
       }
     } catch (error) {
-      console.error('Ollama API Error:', error);
+      llmLogger.error('Ollama API Error:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error. Is Ollama running?'
@@ -652,7 +653,7 @@ class LLMApiService {
       };
     });
 
-    console.log('[MCP] Sending tools to Ollama:', ollamaTools.length, 'tools');
+    llmLogger.debug('[MCP] Sending tools to Ollama: ' + ollamaTools.length + ' tools');
 
     // Build messages
     const systemPrompt = conversationHistory.find(m => m.role === 'system')?.content || config.systemPrompt || '';
@@ -698,7 +699,7 @@ class LLMApiService {
 
       // Check if Ollama wants to call tools
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        console.log('[MCP] Ollama requested tool calls:', assistantMessage.tool_calls.length);
+        llmLogger.info('[MCP] Ollama requested tool calls:', assistantMessage.tool_calls.length);
 
         // Add assistant's tool call message to conversation
         messages.push(assistantMessage);
@@ -708,7 +709,7 @@ class LLMApiService {
           const toolName = toolCall.function.name;
           const toolArgs = toolCall.function.arguments;
 
-          console.log(`[MCP] Calling tool: ${toolName}`, toolArgs);
+          llmLogger.debug(`[MCP] Calling tool: ${toolName}`, toolArgs);
 
           // Notify UI that tool is being called
           if (onToolCall) {
@@ -755,9 +756,9 @@ class LLMApiService {
               onToolCall(toolName, toolArgs, toolResult);
             }
 
-            console.log(`[MCP] Tool result:`, resultContent);
+            llmLogger.debug(`[MCP] Tool result:`, resultContent);
           } catch (error) {
-            console.error(`[MCP] Tool execution error:`, error);
+            llmLogger.error(`[MCP] Tool execution error:`, error);
             messages.push({
               role: 'tool',
               content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -798,7 +799,7 @@ class LLMApiService {
         finalContent = resultContent;
       }
 
-      console.log('[MCP] Ollama final response length:', finalContent.length);
+      llmLogger.debug('[MCP] Ollama final response length:', finalContent.length);
 
       // Signal completion to UI
       if (onStream && finalContent) {
@@ -816,7 +817,7 @@ class LLMApiService {
       };
 
     } catch (error) {
-      console.error('Ollama function calling error:', error);
+      llmLogger.error('Ollama function calling error:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -852,7 +853,7 @@ class LLMApiService {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('OpenRouter full error response:', JSON.stringify(errorData, null, 2));
+        llmLogger.debug('OpenRouter full error response:', JSON.stringify(errorData, null, 2));
         const errorMessage = errorData.error?.message || errorData.message || JSON.stringify(errorData);
         throw new Error(`OpenRouter error (${response.status}): ${errorMessage}`);
       }
@@ -871,7 +872,7 @@ class LLMApiService {
         };
       }
     } catch (error) {
-      console.error('OpenRouter API Error:', error);
+      llmLogger.error('OpenRouter API Error:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -943,7 +944,7 @@ class LLMApiService {
           };
       }
     } catch (error) {
-      console.error('Error in chat:', error);
+      llmLogger.error('Error in chat:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -974,7 +975,7 @@ class LLMApiService {
 
       if (!supportsTools && tools.length > 0) {
         // Provider doesn't support tools - show warning message
-        console.warn(`[MCP] Provider '${activeConfig.provider}' does not support function calling. Available tools: ${tools.length}`);
+        llmLogger.warn(`Provider '${activeConfig.provider}' does not support function calling. Available tools: ${tools.length}`);
 
         const warningMessage = `⚠️ MCP Tools Not Supported\n\n` +
           `Your current LLM provider (${activeConfig.provider.toUpperCase()}) does not support function calling with MCP tools.\n\n` +
@@ -1034,8 +1035,8 @@ class LLMApiService {
         }
       }));
 
-      console.log('[MCP] Sending tools to API:', functions.length, 'tools');
-      console.log('[MCP] Tool names:', functions.map(f => f.function.name));
+      llmLogger.debug('[MCP] Sending tools to API:', functions.length + ' tools');
+      llmLogger.debug('[MCP] Tool names:', functions.map(f => f.function.name));
 
       // Determine base URL based on provider
       let baseUrl = config.baseUrl;
@@ -1082,7 +1083,7 @@ class LLMApiService {
 
       // Check if AI wants to call tools
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        console.log('[MCP] AI requested tool calls:', assistantMessage.tool_calls.length);
+        llmLogger.info('[MCP] AI requested tool calls:', assistantMessage.tool_calls.length);
 
         // Add assistant's tool call message to conversation
         messages.push(assistantMessage);
@@ -1092,7 +1093,7 @@ class LLMApiService {
           const toolName = toolCall.function.name;
           const toolArgs = JSON.parse(toolCall.function.arguments);
 
-          console.log(`[MCP] Calling tool: ${toolName}`, toolArgs);
+          llmLogger.debug(`[MCP] Calling tool: ${toolName}`, toolArgs);
 
           // Notify UI that tool is being called
           if (onToolCall) {
@@ -1141,9 +1142,9 @@ class LLMApiService {
               onToolCall(toolName, toolArgs, toolResult);
             }
 
-            console.log(`[MCP] Tool result:`, resultContent);
+            llmLogger.debug(`[MCP] Tool result:`, resultContent);
           } catch (error) {
-            console.error(`[MCP] Tool execution error:`, error);
+            llmLogger.error(`[MCP] Tool execution error:`, error);
             messages.push({
               role: 'tool',
               tool_call_id: toolCall.id,
@@ -1182,7 +1183,7 @@ class LLMApiService {
 
       // Ensure content exists
       const finalContent = assistantMessage.content || '';
-      console.log('[MCP] Final response length:', finalContent.length);
+      llmLogger.debug('[MCP] Final response length:', finalContent.length);
 
       return {
         content: finalContent,
@@ -1194,7 +1195,7 @@ class LLMApiService {
       };
 
     } catch (error) {
-      console.error('Error in chatWithTools:', error);
+      llmLogger.error('Error in chatWithTools:', error);
       return {
         content: '',
         error: error instanceof Error ? error.message : 'Unknown error'
