@@ -10,9 +10,12 @@ import { DataSourcesPanel } from '@/components/settings/DataSourcesPanel';
 import { BacktestingProvidersPanel } from '@/components/settings/BacktestingProvidersPanel';
 import { LanguageSelector } from '@/components/settings/LanguageSelector';
 import { TerminalConfigPanel } from '@/components/settings/TerminalConfigPanel';
+import { useTimezone, TIMEZONE_OPTIONS } from '@/contexts/TimezoneContext';
+import { Clock } from 'lucide-react';
 
 export default function SettingsTab() {
   const { theme, updateTheme, resetTheme, colors, fontSize: themeFontSize, fontFamily: themeFontFamily, fontWeight: themeFontWeight, fontStyle } = useTerminalTheme();
+  const { defaultTimezone, setDefaultTimezone, options: timezoneOptions } = useTimezone();
   const [activeSection, setActiveSection] = useState<'credentials' | 'terminal' | 'terminalConfig' | 'llm' | 'dataConnections' | 'backtesting' | 'language'>('credentials');
   const [apiKeys, setApiKeys] = useState<ApiKeys>({});
   const [loading, setLoading] = useState(false);
@@ -1285,6 +1288,77 @@ export default function SettingsTab() {
                   </div>
                 </div>
 
+                {/* Default Timezone Selection */}
+                <div style={{
+                  background: '#0F0F0F',
+                  border: '1px solid #2A2A2A',
+                  borderLeft: `3px solid ${colors.primary}`,
+                  borderRadius: '4px',
+                  padding: '16px',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <Clock size={18} color={colors.primary} style={{ filter: `drop-shadow(0 0 2px ${colors.primary})` }} />
+                    <span style={{ color: colors.text, fontWeight: 'bold', fontSize: '12px' }}>
+                      DEFAULT TIMEZONE
+                    </span>
+                  </div>
+                  <p style={{ color: colors.textMuted, fontSize: '10px', marginBottom: '12px' }}>
+                    Set the default timezone displayed in the navigation bar. Dashboard widgets can use their own timezone settings.
+                  </p>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: '8px',
+                    maxHeight: '280px',
+                    overflowY: 'auto',
+                    paddingRight: '4px'
+                  }}>
+                    {timezoneOptions.map((tz) => (
+                      <button
+                        key={tz.id}
+                        onClick={() => setDefaultTimezone(tz.id)}
+                        style={{
+                          background: defaultTimezone.id === tz.id ? `${colors.primary}20` : '#1A1A1A',
+                          border: `1px solid ${defaultTimezone.id === tz.id ? colors.primary : '#2A2A2A'}`,
+                          borderRadius: '4px',
+                          padding: '12px 8px',
+                          cursor: 'pointer',
+                          textAlign: 'center',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (defaultTimezone.id !== tz.id) {
+                            e.currentTarget.style.borderColor = colors.primary;
+                            e.currentTarget.style.background = '#2A2A2A';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (defaultTimezone.id !== tz.id) {
+                            e.currentTarget.style.borderColor = '#2A2A2A';
+                            e.currentTarget.style.background = '#1A1A1A';
+                          }
+                        }}
+                      >
+                        <div style={{
+                          color: defaultTimezone.id === tz.id ? colors.primary : colors.text,
+                          fontWeight: 'bold',
+                          fontSize: '11px',
+                          marginBottom: '4px'
+                        }}>
+                          {tz.shortLabel}
+                        </div>
+                        <div style={{
+                          color: colors.textMuted,
+                          fontSize: '9px'
+                        }}>
+                          {tz.label.split('(')[0].trim()}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Key Mapping Configuration */}
                 <div style={{
                   background: '#0F0F0F',
@@ -1501,14 +1575,14 @@ export default function SettingsTab() {
                     transition: 'all 0.2s',
                     boxShadow: `0 0 12px ${colors.primary}40`
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = `0 0 20px ${colors.primary}60`;
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = `0 0 12px ${colors.primary}40`;
-                    e.currentTarget.style.transform = 'translateY(0)';
-                  }}>
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = `0 0 20px ${colors.primary}60`;
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = `0 0 12px ${colors.primary}40`;
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}>
                     <Save size={16} /> SAVE CONFIGURATION
                   </button>
                   <button onClick={handleResetTerminalAppearance} style={{
@@ -1526,14 +1600,14 @@ export default function SettingsTab() {
                     gap: '8px',
                     transition: 'all 0.2s'
                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = colors.alert;
-                    e.currentTarget.style.color = colors.alert;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = '#2A2A2A';
-                    e.currentTarget.style.color = colors.textMuted;
-                  }}>
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = colors.alert;
+                      e.currentTarget.style.color = colors.alert;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#2A2A2A';
+                      e.currentTarget.style.color = colors.textMuted;
+                    }}>
                     <RefreshCw size={16} /> RESET
                   </button>
                 </div>
