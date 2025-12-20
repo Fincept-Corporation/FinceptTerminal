@@ -1,0 +1,4 @@
+feat: Add TimezoneProvider to app root
+
+- Import TimezoneProvider from TimezoneContext
+- Wrap App component with TimezoneProvider for app-wide timezone state
