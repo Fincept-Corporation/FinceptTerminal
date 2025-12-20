@@ -4,6 +4,7 @@ import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye,
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { InterfaceModeProvider, useInterfaceMode } from '@/contexts/InterfaceModeContext';
+import { useCurrentTime, useDefaultTime } from '@/contexts/TimezoneContext';
 import { ChatModeInterface } from '@/components/chat-mode';
 import { APP_VERSION } from '@/constants/version';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
@@ -60,7 +61,7 @@ const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any
 
   return (
     <div ref={menuRef} style={{ position: 'relative', display: 'inline-block' }}>
-      <span 
+      <span
         style={{ cursor: 'pointer', padding: '2px 4px', borderRadius: '2px', backgroundColor: isOpen ? '#404040' : 'transparent' }}
         onClick={() => setIsOpen(!isOpen)}
       >
@@ -119,6 +120,34 @@ const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any
         </div>
       )}
     </div>
+  );
+};
+
+// Header Time Display Component - uses DEFAULT timezone from settings for nav bar
+const HeaderTimeDisplay = () => {
+  const { formattedTime, timezone } = useDefaultTime();
+
+  // Get current date in YYYY-MM-DD format
+  const [currentDate, setCurrentDate] = React.useState(() => {
+    const now = new Date();
+    return now.toISOString().split('T')[0];
+  });
+
+  // Update date at midnight
+  React.useEffect(() => {
+    const updateDate = () => {
+      const now = new Date();
+      setCurrentDate(now.toISOString().split('T')[0]);
+    };
+
+    const timer = setInterval(updateDate, 60000); // Check every minute
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <span style={{ color: '#a3a3a3', fontSize: '9px' }}>
+      {currentDate} {formattedTime}
+    </span>
   );
 };
 
@@ -278,7 +307,7 @@ function FinxeptTerminalContent() {
         setStatusMessage("Exited fullscreen mode");
       });
     }
-    
+
     // Clear status message after 3 seconds
     setTimeout(() => setStatusMessage(""), 3000);
   };
@@ -295,7 +324,7 @@ function FinxeptTerminalContent() {
     setStatusMessage(`${item.label} clicked`);
 
     // Handle specific string actions
-    switch(item.action) {
+    switch (item.action) {
       case 'fullscreen':
         toggleFullscreen();
         break;
@@ -716,194 +745,194 @@ function FinxeptTerminalContent() {
 
       {/* Main Navigation Bar with Tabs - Hidden in Chat Mode */}
       {mode !== 'chat' && (
-      <div style={{
-        backgroundColor: '#3f3f3f',
-        borderBottom: '1px solid #404040',
-        height: '26px',
-        position: 'relative',
-        flexShrink: 0
-      }}>
-        <div
-          style={{
-            overflowX: 'auto',
-            overflowY: 'hidden',
-            height: '100%',
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none'
-          }}
-          className="hide-scrollbar"
-          onWheel={(e) => {
-            e.preventDefault();
-            const container = e.currentTarget;
-            container.scrollLeft += e.deltaY;
-          }}
-        >
-          <style>{`
+        <div style={{
+          backgroundColor: '#3f3f3f',
+          borderBottom: '1px solid #404040',
+          height: '26px',
+          position: 'relative',
+          flexShrink: 0
+        }}>
+          <div
+            style={{
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              height: '100%',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none'
+            }}
+            className="hide-scrollbar"
+            onWheel={(e) => {
+              e.preventDefault();
+              const container = e.currentTarget;
+              container.scrollLeft += e.deltaY;
+            }}
+          >
+            <style>{`
             .hide-scrollbar::-webkit-scrollbar {
               display: none;
             }
           `}</style>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-            <TabsList style={{
-              backgroundColor: 'transparent',
-              border: 'none',
-              padding: '2px 4px',
-              height: '100%',
-              justifyContent: 'flex-start',
-              borderRadius: '0',
-              flexWrap: 'nowrap',
-              width: 'max-content',
-              minWidth: '100%'
-            }}>
-            {/* PRIMARY TABS - F1 to F12 */}
-            <TabsTrigger
-              value="dashboard"
-              style={activeTab === 'dashboard' ? tabStyles.active : tabStyles.default}
-              title="Dashboard (F1)"
-            >
-              Dashboard
-            </TabsTrigger>
-            <TabsTrigger
-              value="markets"
-              style={activeTab === 'markets' ? tabStyles.active : tabStyles.default}
-              title="Markets (F2)"
-            >
-              Markets
-            </TabsTrigger>
-            <TabsTrigger
-              value="news"
-              style={activeTab === 'news' ? tabStyles.active : tabStyles.default}
-              title="News (F3)"
-            >
-              News
-            </TabsTrigger>
-            <TabsTrigger
-              value="portfolio"
-              style={activeTab === 'portfolio' ? tabStyles.active : tabStyles.default}
-              title="Portfolio (F4)"
-            >
-              Portfolio
-            </TabsTrigger>
-            <TabsTrigger
-              value="backtesting"
-              style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
-              title="Backtesting (F5)"
-            >
-              Backtesting
-            </TabsTrigger>
-            <TabsTrigger
-              value="watchlist"
-              style={activeTab === 'watchlist' ? tabStyles.active : tabStyles.default}
-              title="Watchlist (F6)"
-            >
-              Watchlist
-            </TabsTrigger>
-            <TabsTrigger
-              value="research"
-              style={activeTab === 'research' ? tabStyles.active : tabStyles.default}
-              title="Equity Research (F7)"
-            >
-              Research
-            </TabsTrigger>
-            <TabsTrigger
-              value="screener"
-              style={activeTab === 'screener' ? tabStyles.active : tabStyles.default}
-              title="Screener (F8)"
-            >
-              Screener
-            </TabsTrigger>
-            <TabsTrigger
-              value="trading"
-              style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
-              title="Trading (F9)"
-            >
-              Trading
-            </TabsTrigger>
-            <TabsTrigger
-              value="chat"
-              style={activeTab === 'chat' ? tabStyles.active : tabStyles.default}
-              title="AI Chat (F10)"
-            >
-              AI Chat
-            </TabsTrigger>
-            <TabsTrigger
-              value="agents"
-              style={activeTab === 'agents' ? tabStyles.active : tabStyles.default}
-              title="Agent Config"
-            >
-              Agents
-            </TabsTrigger>
-            <TabsTrigger
-              value="settings"
-              style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
-              title="Settings"
-            >
-              Settings
-            </TabsTrigger>
-            <TabsTrigger
-              value="profile"
-              style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
-              title="Profile (F12)"
-            >
-              Profile
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+              <TabsList style={{
+                backgroundColor: 'transparent',
+                border: 'none',
+                padding: '2px 4px',
+                height: '100%',
+                justifyContent: 'flex-start',
+                borderRadius: '0',
+                flexWrap: 'nowrap',
+                width: 'max-content',
+                minWidth: '100%'
+              }}>
+                {/* PRIMARY TABS - F1 to F12 */}
+                <TabsTrigger
+                  value="dashboard"
+                  style={activeTab === 'dashboard' ? tabStyles.active : tabStyles.default}
+                  title="Dashboard (F1)"
+                >
+                  Dashboard
+                </TabsTrigger>
+                <TabsTrigger
+                  value="markets"
+                  style={activeTab === 'markets' ? tabStyles.active : tabStyles.default}
+                  title="Markets (F2)"
+                >
+                  Markets
+                </TabsTrigger>
+                <TabsTrigger
+                  value="news"
+                  style={activeTab === 'news' ? tabStyles.active : tabStyles.default}
+                  title="News (F3)"
+                >
+                  News
+                </TabsTrigger>
+                <TabsTrigger
+                  value="portfolio"
+                  style={activeTab === 'portfolio' ? tabStyles.active : tabStyles.default}
+                  title="Portfolio (F4)"
+                >
+                  Portfolio
+                </TabsTrigger>
+                <TabsTrigger
+                  value="backtesting"
+                  style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
+                  title="Backtesting (F5)"
+                >
+                  Backtesting
+                </TabsTrigger>
+                <TabsTrigger
+                  value="watchlist"
+                  style={activeTab === 'watchlist' ? tabStyles.active : tabStyles.default}
+                  title="Watchlist (F6)"
+                >
+                  Watchlist
+                </TabsTrigger>
+                <TabsTrigger
+                  value="research"
+                  style={activeTab === 'research' ? tabStyles.active : tabStyles.default}
+                  title="Equity Research (F7)"
+                >
+                  Research
+                </TabsTrigger>
+                <TabsTrigger
+                  value="screener"
+                  style={activeTab === 'screener' ? tabStyles.active : tabStyles.default}
+                  title="Screener (F8)"
+                >
+                  Screener
+                </TabsTrigger>
+                <TabsTrigger
+                  value="trading"
+                  style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
+                  title="Trading (F9)"
+                >
+                  Trading
+                </TabsTrigger>
+                <TabsTrigger
+                  value="chat"
+                  style={activeTab === 'chat' ? tabStyles.active : tabStyles.default}
+                  title="AI Chat (F10)"
+                >
+                  AI Chat
+                </TabsTrigger>
+                <TabsTrigger
+                  value="agents"
+                  style={activeTab === 'agents' ? tabStyles.active : tabStyles.default}
+                  title="Agent Config"
+                >
+                  Agents
+                </TabsTrigger>
+                <TabsTrigger
+                  value="settings"
+                  style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
+                  title="Settings"
+                >
+                  Settings
+                </TabsTrigger>
+                <TabsTrigger
+                  value="profile"
+                  style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
+                  title="Profile (F12)"
+                >
+                  Profile
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Command Bar - Hidden in Chat Mode */}
       {/* Merged Status & Function Keys Bar - Single Line */}
       {mode !== 'chat' && (
-      <div style={{
-        backgroundColor: '#1a1a1a',
-        borderBottom: '1px solid #404040',
-        padding: '3px 8px',
-        height: '22px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '12px',
-        flexShrink: 0,
-        fontSize: '9px'
-      }}>
-        {/* Left: Branding & Status Info */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 5px', fontSize: '8px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
-          <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Enter Command</span>
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-          <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Search</span>
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-          <span style={{ color: '#a3a3a3', fontSize: '9px' }}>2025-09-26 14:00:49</span>
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-          <span style={{ color: '#10b981', fontSize: '9px', fontWeight: 'bold' }}>v{APP_VERSION}</span>
-          {isFullscreen && (
-            <>
-              <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-              <span style={{ color: '#fbbf24', fontSize: '9px' }}>FULLSCREEN</span>
-            </>
-          )}
-        </div>
+        <div style={{
+          backgroundColor: '#1a1a1a',
+          borderBottom: '1px solid #404040',
+          padding: '3px 8px',
+          height: '22px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          flexShrink: 0,
+          fontSize: '9px'
+        }}>
+          {/* Left: Branding & Status Info */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 5px', fontSize: '8px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
+            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Enter Command</span>
+            <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Search</span>
+            <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+            <HeaderTimeDisplay />
+            <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+            <span style={{ color: '#10b981', fontSize: '9px', fontWeight: 'bold' }}>v{APP_VERSION}</span>
+            {isFullscreen && (
+              <>
+                <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
+                <span style={{ color: '#fbbf24', fontSize: '9px' }}>FULLSCREEN</span>
+              </>
+            )}
+          </div>
 
-        {/* Right: Function Keys */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F1:DASH</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F2:MKTS</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F3:NEWS</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F4:PORT</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F5:BKTEST</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F6:WATCH</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F7:RSRCH</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F8:SCRN</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F9:TRADE</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F10:AI</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F11:FULL</span>
-          <span style={{ color: '#fbbf24', fontSize: '9px' }}>F12:PROF</span>
-          <span style={{ color: '#666', marginLeft: '4px' }}>|</span>
-          <span style={{ color: '#10b981', fontSize: '9px' }}>More tabs in toolbar menus</span>
+          {/* Right: Function Keys */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F1:DASH</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F2:MKTS</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F3:NEWS</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F4:PORT</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F5:BKTEST</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F6:WATCH</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F7:RSRCH</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F8:SCRN</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F9:TRADE</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F10:AI</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F11:FULL</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F12:PROF</span>
+            <span style={{ color: '#666', marginLeft: '4px' }}>|</span>
+            <span style={{ color: '#10b981', fontSize: '9px' }}>More tabs in toolbar menus</span>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Main Content Area with Tab Content */}
@@ -920,97 +949,97 @@ function FinxeptTerminalContent() {
             <TabsContent value="dashboard" className="h-full m-0 p-0">
               <DashboardTab onNavigateToTab={setActiveTab} />
             </TabsContent>
-          <TabsContent value="markets" className="h-full m-0 p-0">
-            <MarketsTab />
-          </TabsContent>
-          <TabsContent value="news" className="h-full m-0 p-0">
-            <NewsTab />
-          </TabsContent>
-          <TabsContent value="forum" className="h-full m-0 p-0">
-            <ForumTab />
-          </TabsContent>
-          <TabsContent value="watchlist" className="h-full m-0 p-0">
-            <WatchlistTab />
-          </TabsContent>
-          <TabsContent value="geopolitics" className="h-full m-0 p-0">
-            <GeopoliticsTab />
-          </TabsContent>
-          <TabsContent value="chat" className="h-full m-0 p-0">
-            <ChatTab
-              onNavigateToSettings={() => setActiveTab('settings')}
-              onNavigateToTab={(tabName) => setActiveTab(tabName)}
-            />
-          </TabsContent>
-          <TabsContent value="fyers" className="h-full m-0 p-0">
-            <FyersTab />
-          </TabsContent>
-          <TabsContent value="mcp" className="h-full m-0 p-0">
-            <MCPTab onNavigateToTab={(tabName) => setActiveTab(tabName)} />
-          </TabsContent>
-          <TabsContent value="profile" className="h-full m-0 p-0">
-            <ProfileTab />
-          </TabsContent>
-          <TabsContent value="marketplace" className="h-full m-0 p-0">
-            <MarketplaceTab />
-          </TabsContent>
-          <TabsContent value="portfolio" className="h-full m-0 p-0">
-            <PortfolioTab />
-          </TabsContent>
-          <TabsContent value="backtesting" className="h-full m-0 p-0">
-            <BacktestingTab />
-          </TabsContent>
-          <TabsContent value="research" className="h-full m-0 p-0">
-            <EquityResearchTab />
-          </TabsContent>
-          <TabsContent value="polygon" className="h-full m-0 p-0">
-            <PolygonEqTab />
-          </TabsContent>
-          <TabsContent value="screener" className="h-full m-0 p-0">
-            <ScreenerTab />
-          </TabsContent>
-          <TabsContent value="dbnomics" className="h-full m-0 p-0">
-            <DBnomicsTab />
-          </TabsContent>
-          <TabsContent value="economics" className="h-full m-0 p-0">
-            <EconomicsTab />
-          </TabsContent>
-          <TabsContent value="code" className="h-full m-0 p-0">
-            <CodeEditorTab />
-          </TabsContent>
-          <TabsContent value="docs" className="h-full m-0 p-0">
-            <DocsTab />
-          </TabsContent>
-          <TabsContent value="maritime" className="h-full m-0 p-0">
-            <MaritimeTab />
-          </TabsContent>
-          <TabsContent value="trading" className="h-full m-0 p-0">
-            <TradingTab />
-          </TabsContent>
-          <TabsContent value="settings" className="h-full m-0 p-0">
-            <SettingsTab />
-          </TabsContent>
-          <TabsContent value="nodes" className="h-full m-0 p-0">
-            <NodeEditorTab />
-          </TabsContent>
-          <TabsContent value="datasources" className="h-full m-0 p-0">
-            <DataSourcesTab />
-          </TabsContent>
-          <TabsContent value="support" className="h-full m-0 p-0">
-            <SupportTicketTab />
-          </TabsContent>
-          <TabsContent value="datamapping" className="h-full m-0 p-0">
-            <DataMappingTab />
-          </TabsContent>
-          <TabsContent value="contexts" className="h-full m-0 p-0">
-            <RecordedContextsManager />
-          </TabsContent>
-          <TabsContent value="reportbuilder" className="h-full m-0 p-0">
-            <ReportBuilderTab />
-          </TabsContent>
-          <TabsContent value="agents" className="h-full m-0 p-0">
-            <AgentConfigTab />
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="markets" className="h-full m-0 p-0">
+              <MarketsTab />
+            </TabsContent>
+            <TabsContent value="news" className="h-full m-0 p-0">
+              <NewsTab />
+            </TabsContent>
+            <TabsContent value="forum" className="h-full m-0 p-0">
+              <ForumTab />
+            </TabsContent>
+            <TabsContent value="watchlist" className="h-full m-0 p-0">
+              <WatchlistTab />
+            </TabsContent>
+            <TabsContent value="geopolitics" className="h-full m-0 p-0">
+              <GeopoliticsTab />
+            </TabsContent>
+            <TabsContent value="chat" className="h-full m-0 p-0">
+              <ChatTab
+                onNavigateToSettings={() => setActiveTab('settings')}
+                onNavigateToTab={(tabName) => setActiveTab(tabName)}
+              />
+            </TabsContent>
+            <TabsContent value="fyers" className="h-full m-0 p-0">
+              <FyersTab />
+            </TabsContent>
+            <TabsContent value="mcp" className="h-full m-0 p-0">
+              <MCPTab onNavigateToTab={(tabName) => setActiveTab(tabName)} />
+            </TabsContent>
+            <TabsContent value="profile" className="h-full m-0 p-0">
+              <ProfileTab />
+            </TabsContent>
+            <TabsContent value="marketplace" className="h-full m-0 p-0">
+              <MarketplaceTab />
+            </TabsContent>
+            <TabsContent value="portfolio" className="h-full m-0 p-0">
+              <PortfolioTab />
+            </TabsContent>
+            <TabsContent value="backtesting" className="h-full m-0 p-0">
+              <BacktestingTab />
+            </TabsContent>
+            <TabsContent value="research" className="h-full m-0 p-0">
+              <EquityResearchTab />
+            </TabsContent>
+            <TabsContent value="polygon" className="h-full m-0 p-0">
+              <PolygonEqTab />
+            </TabsContent>
+            <TabsContent value="screener" className="h-full m-0 p-0">
+              <ScreenerTab />
+            </TabsContent>
+            <TabsContent value="dbnomics" className="h-full m-0 p-0">
+              <DBnomicsTab />
+            </TabsContent>
+            <TabsContent value="economics" className="h-full m-0 p-0">
+              <EconomicsTab />
+            </TabsContent>
+            <TabsContent value="code" className="h-full m-0 p-0">
+              <CodeEditorTab />
+            </TabsContent>
+            <TabsContent value="docs" className="h-full m-0 p-0">
+              <DocsTab />
+            </TabsContent>
+            <TabsContent value="maritime" className="h-full m-0 p-0">
+              <MaritimeTab />
+            </TabsContent>
+            <TabsContent value="trading" className="h-full m-0 p-0">
+              <TradingTab />
+            </TabsContent>
+            <TabsContent value="settings" className="h-full m-0 p-0">
+              <SettingsTab />
+            </TabsContent>
+            <TabsContent value="nodes" className="h-full m-0 p-0">
+              <NodeEditorTab />
+            </TabsContent>
+            <TabsContent value="datasources" className="h-full m-0 p-0">
+              <DataSourcesTab />
+            </TabsContent>
+            <TabsContent value="support" className="h-full m-0 p-0">
+              <SupportTicketTab />
+            </TabsContent>
+            <TabsContent value="datamapping" className="h-full m-0 p-0">
+              <DataMappingTab />
+            </TabsContent>
+            <TabsContent value="contexts" className="h-full m-0 p-0">
+              <RecordedContextsManager />
+            </TabsContent>
+            <TabsContent value="reportbuilder" className="h-full m-0 p-0">
+              <ReportBuilderTab />
+            </TabsContent>
+            <TabsContent value="agents" className="h-full m-0 p-0">
+              <AgentConfigTab />
+            </TabsContent>
+          </Tabs>
         )}
       </div>
 
