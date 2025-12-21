@@ -29,6 +29,7 @@ export const DEFAULT_TABS: TabDefinition[] = [
   { id: 'screener', label: 'Screener', value: 'screener', shortcut: 'F8', component: 'ScreenerTab' },
   { id: 'trading', label: 'Trading', value: 'trading', shortcut: 'F9', component: 'TradingTab' },
   { id: 'chat', label: 'AI Chat', value: 'chat', shortcut: 'F10', component: 'ChatTab' },
+  { id: 'notes', label: 'Notes', value: 'notes', shortcut: 'F11', component: 'NotesTab' },
   { id: 'settings', label: 'Settings', value: 'settings', component: 'SettingsTab' },
   { id: 'profile', label: 'Profile', value: 'profile', shortcut: 'F12', component: 'ProfileTab' },
   { id: 'polygon', label: 'Polygon Data', value: 'polygon', component: 'PolygonEqTab' },
@@ -47,15 +48,17 @@ export const DEFAULT_TABS: TabDefinition[] = [
   { id: 'forum', label: 'Forum', value: 'forum', component: 'ForumTab' },
   { id: 'marketplace', label: 'Marketplace', value: 'marketplace', component: 'MarketplaceTab' },
   { id: 'docs', label: 'Documentation', value: 'docs', component: 'DocsTab' },
-  { id: 'support', label: 'Support', value: 'support', component: 'SupportTicketTab' }
+  { id: 'support', label: 'Support', value: 'support', component: 'SupportTicketTab' },
+  { id: 'agents', label: 'Agents', value: 'agents', component: 'AgentConfigTab' },
+  { id: 'alpha-arena', label: 'Alpha Arena', value: 'alpha-arena', component: 'AlphaArenaTab' }
 ];
 
 export const DEFAULT_TAB_CONFIG: TabConfiguration = {
-  headerTabs: ['dashboard', 'markets', 'news', 'portfolio', 'backtesting', 'watchlist', 'research', 'screener', 'trading', 'chat', 'settings', 'profile'],
+  headerTabs: ['dashboard', 'markets', 'news', 'portfolio', 'backtesting', 'watchlist', 'research', 'screener', 'trading', 'chat', 'notes', 'agents', 'settings', 'profile'],
   menuSections: [
     { id: 'markets-menu', label: 'Markets', tabs: ['polygon', 'economics', 'dbnomics'] },
     { id: 'research-menu', label: 'Research', tabs: ['geopolitics', 'maritime'] },
-    { id: 'trading-menu', label: 'Trading', tabs: ['fyers'] },
+    { id: 'trading-menu', label: 'Trading', tabs: ['fyers', 'alpha-arena'] },
     { id: 'tools-menu', label: 'Tools', tabs: ['mcp', 'nodes', 'code', 'datasources', 'datamapping', 'reportbuilder', 'contexts'] },
     { id: 'community-menu', label: 'Community', tabs: ['forum', 'marketplace', 'docs'] },
     { id: 'help-menu', label: 'Help', tabs: ['support'] }
