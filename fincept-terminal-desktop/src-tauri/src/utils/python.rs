@@ -50,7 +50,6 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         // Try system Python first in dev mode
         if let Ok(output) = Command::new(system_python).arg("--version").output() {
             if output.status.success() {
-                eprintln!("[DEV MODE] Using system Python");
                 return Ok(PathBuf::from(system_python));
             }
         }
@@ -114,7 +113,6 @@ pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         // Try system Bun first in dev mode
         if let Ok(output) = Command::new(system_bun).arg("--version").output() {
             if output.status.success() {
-                eprintln!("[DEV MODE] Using system Bun");
                 return Ok(PathBuf::from(system_bun));
             }
         }

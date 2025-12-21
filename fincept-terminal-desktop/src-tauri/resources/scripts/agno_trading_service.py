@@ -1,33 +1,28 @@
 #!/usr/bin/env python
 """
-Agno Trading Service - Main Entry Point
-========================================
+Alpha Arena Trading Service - New Framework
+===========================================
 
-This service is called from Rust/Tauri commands and provides a unified interface
-to the Agno trading agent system.
-
-Usage from Rust:
-    execute_python_command(&app, "agno_trading_service.py", &["command", "arg1", "arg2", ...])
+Streamlined service using the modular trading framework.
+Clean separation of concerns, extensible architecture.
 
 Commands:
-    - create_agent: Create a new trading agent
-    - run_agent: Execute an agent with a prompt
-    - create_team: Create a team of agents
-    - run_team: Execute a team task
-    - list_models: List available LLM models
-    - get_agent_status: Get agent execution status
-    - analyze_market: Run market analysis
-    - generate_trade_signal: Generate trading signals
-    - manage_risk: Run risk management analysis
+    - create_competition: Create a new multi-LLM competition
+    - run_cycle: Execute a single trading cycle
+    - start_competition: Start continuous trading
+    - stop_competition: Stop the competition
+    - get_leaderboard_alpha: Get current rankings
+    - get_model_decisions_alpha: Get recent decisions
 """
 
 import sys
 import json
 import os
-import logging
-from typing import Dict, Any, Optional, List
+import asyncio
+from typing import Dict, Any, Optional
 
-# Configure logging to output to stderr only (stdout is reserved for JSON responses)
+# Configure logging - stderr only
+import logging
 logging.basicConfig(
     level=logging.ERROR,
     format='%(levelname)s: %(message)s',
@@ -35,730 +30,516 @@ logging.basicConfig(
     force=True
 )
 
-# Suppress Agno library logs that go to stdout
-# Agno uses loguru which outputs to stdout - we need to disable it
+# Redirect stdout to stderr (preserve stdout for JSON)
+class StdoutToStderr:
+    def write(self, text):
+        sys.stderr.write(text)
+    def flush(self):
+        sys.stderr.flush()
+
+_original_stdout = sys.stdout
+
+def _suppress_stdout():
+    sys.stdout = StdoutToStderr()
+
+def _restore_stdout():
+    sys.stdout = _original_stdout
+
+_suppress_stdout()
+
+# Disable loguru
 os.environ['LOGURU_LEVEL'] = 'CRITICAL'
 os.environ['LOGURU_AUTOINIT'] = 'False'
 
-# Add agno_trading to path
+# Add to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'agno_trading'))
 
-# Disable loguru after import
 try:
     from loguru import logger
-    logger.remove()  # Remove all default handlers
-    logger.add(sys.stderr, level="CRITICAL")  # Only critical errors to stderr
+    logger.remove()
+    logger.add(sys.stderr, level="CRITICAL")
 except ImportError:
     pass
 
-# Import after path is set
-from config.settings import AgnoConfig, LLMConfig, LLMProvider, TradingConfig, TradingMode
-from config.models import list_available_models, get_best_model_for_task, validate_model_config
-from core.agent_manager import get_agent_manager, AgentConfig as CoreAgentConfig
-from agents.market_analyst import MarketAnalystAgent
-from agents.trading_strategy import TradingStrategyAgent
-from agents.risk_manager import RiskManagerAgent
-from agents.portfolio_manager import PortfolioManagerAgent
+# Import framework
+from framework import CompetitionRuntime, ModelConfig
+from db.database_manager import DatabaseManager
+
+# Global competition instance
+_active_competition: Optional[CompetitionRuntime] = None
+_db_manager: Optional[DatabaseManager] = None
 
 
-def create_response(success: bool, data: Any = None, error: str = None) -> str:
-    """Create standardized JSON response"""
-    return json.dumps({
-        "success": success,
-        "data": data,
-        "error": error
-    }, indent=2)
+def get_db_manager() -> DatabaseManager:
+    """Get or create database manager."""
+    global _db_manager
+    if _db_manager is None:
+        _db_manager = DatabaseManager()
+    return _db_manager
 
 
-def list_models_command(provider: Optional[str] = None) -> str:
-    """List available LLM models"""
-    try:
-        models = list_available_models(provider)
-        return create_response(True, {"models": models})
-    except Exception as e:
-        return create_response(False, error=str(e))
+def create_competition_command(args: list) -> Dict[str, Any]:
+    """
+    Create a new Alpha Arena competition.
 
-
-def recommend_model_command(task: str, budget: str = "medium", reasoning: bool = False) -> str:
-    """Recommend best model for a task"""
-    try:
-        provider, model = get_best_model_for_task(task, budget, reasoning)
-        return create_response(True, {
-            "provider": provider,
-            "model": model,
-            "model_string": f"{provider}:{model}"
-        })
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def validate_config_command(config_json: str) -> str:
-    """Validate an Agno configuration"""
-    try:
-        config_dict = json.loads(config_json)
-
-        # Create LLM config
-        llm_data = config_dict.get("llm", {})
-        llm_config = LLMConfig(
-            provider=LLMProvider(llm_data.get("provider", "openai")),
-            model=llm_data.get("model", "gpt-4"),
-            temperature=llm_data.get("temperature", 0.7),
-            max_tokens=llm_data.get("max_tokens"),
-            stream=llm_data.get("stream", False),
-            reasoning_effort=llm_data.get("reasoning_effort")
-        )
-
-        # Validate
-        is_valid, error_msg = validate_model_config(llm_config)
-
-        return create_response(is_valid, {"valid": is_valid}, error_msg)
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def create_agent_command(agent_config_json: str) -> str:
-    """Create a new trading agent"""
-    try:
-        config_dict = json.loads(agent_config_json)
-
-        # Parse model string (format: "provider:model")
-        agent_model = config_dict.get("agent_model", "openai:gpt-4o-mini")
-        if ":" in agent_model:
-            model_provider, model_name = agent_model.split(":", 1)
-        else:
-            model_provider = "openai"
-            model_name = agent_model
-
-        # Create agent configuration
-        agent_config = CoreAgentConfig(
-            name=config_dict.get("name", "Agent"),
-            role=config_dict.get("role", "Trading Agent"),
-            description=config_dict.get("description", "AI Trading Agent"),
-            instructions=config_dict.get("instructions", []),
-            model_provider=model_provider,
-            model_name=model_name,
-            temperature=config_dict.get("temperature", 0.7),
-            tools=config_dict.get("tools", ["market_data", "technical_analysis"]),
-            symbols=config_dict.get("symbols", ["BTC/USD"]),
-            enable_memory=config_dict.get("enable_memory", True)
-        )
-
-        # Create agent via agent manager
-        manager = get_agent_manager()
-        agent_id = manager.create_agent(agent_config)
-
-        return create_response(True, {
-            "agent_id": agent_id,
-            "status": "created",
-            "config": {
-                "name": agent_config.name,
-                "role": agent_config.role,
-                "model": f"{model_provider}:{model_name}"
+    Args:
+        args[0]: JSON string with competition config
+            {
+                "competition_id": "comp_123",
+                "competition_name": "My Competition",
+                "models": [
+                    {
+                        "name": "GPT-4",
+                        "provider": "openai",
+                        "model_id": "gpt-4",
+                        "api_key": "sk-..."
+                    },
+                    ...
+                ],
+                "symbols": ["BTC/USD"],
+                "initial_capital": 10000.0,
+                "exchange_id": "kraken",
+                "custom_prompt": "Optional strategy instructions"
             }
-        })
-    except Exception as e:
-        return create_response(False, error=str(e))
+    """
+    global _active_competition
 
-
-def run_agent_command(agent_id: str, prompt: str, session_id: Optional[str] = None) -> str:
-    """Run an agent with a prompt"""
     try:
-        # Get agent manager and run the agent
-        manager = get_agent_manager()
-        result = manager.run_agent(agent_id, prompt, session_id)
+        config = json.loads(args[0])
 
-        return create_response(True, result)
-    except Exception as e:
-        return create_response(False, error=str(e))
+        competition_id = config["competition_id"]
+        competition_name = config.get("competition_name", "Untitled")
+        symbols = config.get("symbols", ["BTC/USD"])
+        initial_capital = float(config.get("initial_capital", 10000.0))
+        exchange_id = config.get("exchange_id", "kraken")
+        custom_prompt = config.get("custom_prompt")
 
+        # Parse model configs
+        models = []
+        for model_data in config["models"]:
+            models.append(ModelConfig(
+                name=model_data["name"],
+                provider=model_data["provider"],
+                model_id=model_data["model_id"],
+                api_key=model_data["api_key"],
+                temperature=float(model_data.get("temperature", 0.7)),
+                max_tokens=int(model_data.get("max_tokens", 1000)),
+                timeout_seconds=int(model_data.get("timeout_seconds", 30))
+            ))
 
-def analyze_market_command(
-    symbol: str,
-    agent_model: str = "openai:gpt-4o-mini",
-    analysis_type: str = "comprehensive",
-    api_keys_json: str = "{}"
-) -> str:
-    """Analyze market for a given symbol"""
-    try:
-        # Parse API keys and set environment variables
-        api_keys = json.loads(api_keys_json)
-        for key, value in api_keys.items():
-            os.environ[key] = value
-
-        # Parse model string
-        if ":" in agent_model:
-            model_provider, model_name = agent_model.split(":", 1)
-        else:
-            model_provider = "openai"
-            model_name = agent_model
-
-        # Normalize provider name (gemini -> google for Agno)
-        normalized_provider = model_provider.lower()
-        if normalized_provider == "gemini":
-            normalized_provider = "google"
-
-        # Validate API key is configured for the selected provider
-        # Check both original and normalized provider names
-        required_keys = [
-            f"{model_provider.upper()}_API_KEY",
-            f"{normalized_provider.upper()}_API_KEY"
-        ]
-        if not any(key in api_keys and api_keys[key] for key in required_keys):
-            return create_response(
-                False,
-                error=f"API key not configured for {model_provider}. Please configure {model_provider.upper()}_API_KEY or {normalized_provider.upper()}_API_KEY in Settings → LLM Config."
-            )
-
-        # Create market analyst agent
-        analyst = MarketAnalystAgent(
-            model_provider=normalized_provider,
-            model_name=model_name,
-            symbols=[symbol]
+        # Create competition runtime
+        _active_competition = CompetitionRuntime(
+            competition_id=competition_id,
+            models=models,
+            symbols=symbols,
+            initial_capital=initial_capital,
+            exchange_id=exchange_id,
+            custom_prompt=custom_prompt
         )
 
-        # Run analysis
-        result = analyst.analyze_market(symbol, analysis_type)
+        # Save to database
+        db = get_db_manager()
+        models_json = json.dumps([{
+            "name": m.name,
+            "provider": m.provider,
+            "model_id": m.model_id
+        } for m in models])
 
-        return create_response(True, result)
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def generate_trade_signal_command(
-    symbol: str,
-    strategy: str = "momentum",
-    agent_model: str = "anthropic:claude-sonnet-4",
-    market_data: Optional[str] = None,
-    api_keys_json: str = "{}"
-) -> str:
-    """Generate trading signal"""
-    try:
-        # Parse API keys and set environment variables
-        api_keys = json.loads(api_keys_json)
-        for key, value in api_keys.items():
-            os.environ[key] = value
-
-        # Parse model string
-        if ":" in agent_model:
-            model_provider, model_name = agent_model.split(":", 1)
-        else:
-            model_provider = "anthropic"
-            model_name = agent_model
-
-        # Normalize provider name (gemini -> google for Agno)
-        normalized_provider = model_provider.lower()
-        if normalized_provider == "gemini":
-            normalized_provider = "google"
-
-        # Validate API key is configured for the selected provider
-        required_keys = [
-            f"{model_provider.upper()}_API_KEY",
-            f"{normalized_provider.upper()}_API_KEY"
-        ]
-        if not any(key in api_keys and api_keys[key] for key in required_keys):
-            return create_response(
-                False,
-                error=f"API key not configured for {model_provider}. Please configure {model_provider.upper()}_API_KEY or {normalized_provider.upper()}_API_KEY in Settings → LLM Config."
-            )
-
-        # Create trading strategy agent
-        strategist = TradingStrategyAgent(
-            model_provider=normalized_provider,
-            model_name=model_name,
-            symbols=[symbol]
+        db.save_competition_config(
+            competition_id=competition_id,
+            name=competition_name,
+            models_json=models_json,
+            symbol=symbols[0],  # Primary symbol
+            mode="baseline",  # Default mode
+            api_keys_json=json.dumps({m.name: m.api_key for m in models})
         )
 
-        # Generate signal
-        result = strategist.generate_trade_signal(symbol, strategy)
-
-        return create_response(True, result)
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def manage_risk_command(
-    portfolio_data: str,
-    agent_model: str = "openai:gpt-4",
-    risk_tolerance: str = "moderate",
-    api_keys_json: str = "{}"
-) -> str:
-    """Run risk management analysis"""
-    try:
-        # Parse API keys and set environment variables
-        api_keys = json.loads(api_keys_json)
-        for key, value in api_keys.items():
-            os.environ[key] = value
-
-        portfolio = json.loads(portfolio_data)
-
-        # Parse model string
-        if ":" in agent_model:
-            model_provider, model_name = agent_model.split(":", 1)
-        else:
-            model_provider = "openai"
-            model_name = agent_model
-
-        # Normalize provider name (gemini -> google for Agno)
-        normalized_provider = model_provider.lower()
-        if normalized_provider == "gemini":
-            normalized_provider = "google"
-
-        # Validate API key is configured for the selected provider
-        required_keys = [
-            f"{model_provider.upper()}_API_KEY",
-            f"{normalized_provider.upper()}_API_KEY"
-        ]
-        if not any(key in api_keys and api_keys[key] for key in required_keys):
-            return create_response(
-                False,
-                error=f"API key not configured for {model_provider}. Please configure {model_provider.upper()}_API_KEY or {normalized_provider.upper()}_API_KEY in Settings → LLM Config."
+        # Save model states
+        for model in models:
+            db.save_model_state(
+                competition_id=competition_id,
+                model_name=model.name,
+                capital=initial_capital,
+                positions_json="{}",
+                trades_count=0,
+                total_pnl=0.0,
+                portfolio_value=initial_capital
             )
 
-        # Create risk manager agent
-        risk_manager = RiskManagerAgent(
-            model_provider=normalized_provider,
-            model_name=model_name,
-            risk_tolerance=risk_tolerance
+        return {
+            "success": True,
+            "competition_id": competition_id,
+            "models": [m.name for m in models],
+            "symbols": symbols
+        }
+
+    except Exception as e:
+        print(f"[ERROR] create_competition failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return {"success": False, "error": str(e)}
+
+
+def load_competition_from_db(competition_id: str) -> Optional[CompetitionRuntime]:
+    """Load competition from database."""
+    try:
+        db = get_db_manager()
+
+        # Get competition config
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT name, models_json, symbol, api_keys_json
+            FROM competition_configs
+            WHERE competition_id = ?
+        """, (competition_id,))
+
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            print(f"[ERROR] Competition {competition_id} not found in database", file=sys.stderr)
+            return None
+
+        name, models_json, symbol, api_keys_json = row
+
+        # Parse models
+        models_data = json.loads(models_json)
+        api_keys = json.loads(api_keys_json) if api_keys_json else {}
+
+        models = []
+        for model_data in models_data:
+            model_name = model_data["name"]
+            api_key = api_keys.get(model_name, "")
+
+            models.append(ModelConfig(
+                name=model_name,
+                provider=model_data["provider"],
+                model_id=model_data["model_id"],
+                api_key=api_key,
+                temperature=0.7,
+                max_tokens=1000,
+                timeout_seconds=30
+            ))
+
+        # Get model states to restore portfolios
+        cursor.execute("""
+            SELECT model_name, capital, positions_json, trades_count, total_pnl, portfolio_value
+            FROM alpha_model_states
+            WHERE competition_id = ?
+        """, (competition_id,))
+
+        model_states = {}
+        for row in cursor.fetchall():
+            model_name, capital, positions_json, trades_count, total_pnl, portfolio_value = row
+            model_states[model_name] = {
+                "capital": capital,
+                "positions": json.loads(positions_json) if positions_json else {},
+                "trades_count": trades_count,
+                "total_pnl": total_pnl,
+                "portfolio_value": portfolio_value
+            }
+
+        conn.close()
+
+        # Create competition
+        competition = CompetitionRuntime(
+            competition_id=competition_id,
+            models=models,
+            symbols=[symbol],
+            initial_capital=10000.0,  # Will restore from states
+            exchange_id="kraken",
+            custom_prompt=None
         )
 
-        # Run risk analysis
-        positions = portfolio.get("positions", [])
-        portfolio_value = portfolio.get("total_value", 10000.0)
+        # Restore portfolio states
+        for model_name, state in model_states.items():
+            if model_name in competition.portfolios:
+                portfolio = competition.portfolios[model_name]
+                portfolio.cash = state["capital"]
+                portfolio.trades_count = state["trades_count"]
+                portfolio.total_realized_pnl = state["total_pnl"]
+                # TODO: Restore positions from state["positions"]
 
-        result = risk_manager.analyze_portfolio_risk(positions, portfolio_value)
+        print(f"[INFO] Loaded competition {competition_id} from database", file=sys.stderr)
+        return competition
 
-        return create_response(True, result)
     except Exception as e:
-        return create_response(False, error=str(e))
+        print(f"[ERROR] Failed to load competition: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return None
 
 
-def get_config_template_command(config_type: str = "default") -> str:
-    """Get configuration template"""
+async def run_cycle_async(args: list) -> Dict[str, Any]:
+    """Run a single trading cycle (async)."""
+    global _active_competition
+
     try:
-        if config_type == "default":
-            config = AgnoConfig()
-        elif config_type == "conservative":
-            config = AgnoConfig(
-                trading=TradingConfig(
-                    mode=TradingMode.PAPER,
-                    max_position_size=0.05,
-                    max_leverage=1.0,
-                    stop_loss_pct=0.03,
-                    take_profit_pct=0.10
+        # Get competition ID from args
+        competition_id = args[0] if args else None
+
+        # If no active competition, try to load from database
+        if _active_competition is None:
+            if not competition_id:
+                return {"success": False, "error": "No competition ID provided"}
+
+            print(f"[INFO] Loading competition {competition_id} from database", file=sys.stderr)
+            _active_competition = load_competition_from_db(competition_id)
+
+            if _active_competition is None:
+                return {"success": False, "error": "Failed to load competition from database"}
+
+        # Verify competition ID matches if provided
+        if competition_id and _active_competition.competition_id != competition_id:
+            print(f"[INFO] Switching to competition {competition_id}", file=sys.stderr)
+            _active_competition = load_competition_from_db(competition_id)
+
+            if _active_competition is None:
+                return {"success": False, "error": "Failed to load competition from database"}
+
+        # Run cycle
+        result = await _active_competition.run_cycle()
+
+        # Save to database
+        db = get_db_manager()
+        competition_id = _active_competition.competition_id
+
+        # Save ALL decisions (including HOLD/WAIT)
+        for compose_result in result.compose_results:
+            # Get portfolio value before
+            portfolio_before = result.portfolio_snapshots.get(compose_result.model_name)
+            portfolio_value_before = portfolio_before.total_value if portfolio_before else 0.0
+
+            # Get the decision type (BUY/SELL/HOLD/WAIT)
+            decision_type = compose_result.decision_type or 'WAIT'
+
+            if compose_result.instructions:
+                # BUY or SELL decision with trade execution
+                for instruction in compose_result.instructions:
+                    db.save_decision_log(
+                        competition_id=competition_id,
+                        model_name=instruction.model_name or compose_result.model_name,
+                        cycle_number=result.cycle_number,
+                        action=instruction.side.value,
+                        symbol=instruction.symbol,
+                        quantity=instruction.quantity,
+                        confidence=instruction.confidence or 0.5,
+                        reasoning=instruction.reasoning or "",
+                        trade_executed=True,
+                        price_at_decision=0.0,  # Will be updated with tx result
+                        portfolio_value_before=portfolio_value_before,
+                        portfolio_value_after=0.0  # Will be updated below
+                    )
+            else:
+                # HOLD or WAIT decision (no trade execution)
+                # Get symbol from features or use competition default
+                symbol = _active_competition.symbols[0] if _active_competition.symbols else 'BTC/USD'
+
+                db.save_decision_log(
+                    competition_id=competition_id,
+                    model_name=compose_result.model_name,
+                    cycle_number=result.cycle_number,
+                    action=decision_type,  # HOLD or WAIT
+                    symbol=symbol,
+                    quantity=0.0,
+                    confidence=0.5,
+                    reasoning=compose_result.rationale or "",
+                    trade_executed=False,
+                    price_at_decision=0.0,
+                    portfolio_value_before=portfolio_value_before,
+                    portfolio_value_after=portfolio_value_before  # No change
                 )
+
+        # Save portfolio snapshots
+        for model_name, portfolio_view in result.portfolio_snapshots.items():
+            db.save_performance_snapshot(
+                competition_id=competition_id,
+                cycle_number=result.cycle_number,
+                model_name=model_name,
+                portfolio_value=portfolio_view.total_value,
+                cash=portfolio_view.cash,
+                pnl=portfolio_view.total_realized_pnl + portfolio_view.total_unrealized_pnl,
+                return_pct=((portfolio_view.total_value - _active_competition.initial_capital) / _active_competition.initial_capital) * 100.0,
+                positions_count=len(portfolio_view.positions),
+                trades_count=portfolio_view.trades_count
             )
-        elif config_type == "aggressive":
-            config = AgnoConfig(
-                trading=TradingConfig(
-                    mode=TradingMode.PAPER,
-                    max_position_size=0.20,
-                    max_leverage=2.0,
-                    stop_loss_pct=0.08,
-                    take_profit_pct=0.25
-                )
+
+            # Update model state
+            db.save_model_state(
+                competition_id=competition_id,
+                model_name=model_name,
+                capital=portfolio_view.cash,
+                positions_json=json.dumps(portfolio_view.to_dict()["positions"]),
+                trades_count=portfolio_view.trades_count,
+                total_pnl=portfolio_view.total_realized_pnl + portfolio_view.total_unrealized_pnl,
+                portfolio_value=portfolio_view.total_value
             )
-        else:
-            return create_response(False, error=f"Unknown config type: {config_type}")
 
-        return create_response(True, {"config": config.to_dict()})
+        return {
+            "success": True,
+            "cycle_number": result.cycle_number,
+            "leaderboard": result.leaderboard,
+            "decisions_count": len(result.tx_results)
+        }
+
     except Exception as e:
-        return create_response(False, error=str(e))
+        print(f"[ERROR] run_cycle failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return {"success": False, "error": str(e)}
 
 
-def create_competition_command(
-    name: str,
-    models_json: str,
-    task_type: str = "trading",
-    api_keys_json: str = "{}"
-) -> str:
-    """
-    Create multi-model competition
+def run_cycle_command(args: list) -> Dict[str, Any]:
+    """Run a single trading cycle (sync wrapper)."""
+    return asyncio.run(run_cycle_async(args))
 
-    Args:
-        name: Competition name
-        models_json: JSON array of models ["openai:gpt-4", "anthropic:claude-sonnet-4"]
-        task_type: Type of task
-        api_keys_json: JSON object of API keys (optional)
-    """
+
+def start_competition_command(args: list) -> Dict[str, Any]:
+    """Start continuous trading (runs one cycle then returns)."""
+    return run_cycle_command(args)
+
+
+def stop_competition_command(args: list) -> Dict[str, Any]:
+    """Stop the competition."""
+    global _active_competition
+
     try:
-        import json
-        from agno_trading.core.team_orchestrator import TeamOrchestrator
-        from agno_trading.core.agent_manager import AgentManager
+        if _active_competition:
+            _active_competition.stop()
+            asyncio.run(_active_competition.close())
+            _active_competition = None
 
-        models = json.loads(models_json)
-        api_keys = json.loads(api_keys_json)
+        return {"success": True}
 
-        # Set API keys in environment if provided
-        if api_keys:
-            import os
-            for key, value in api_keys.items():
-                os.environ[key] = value
-
-        manager = AgentManager()
-        orchestrator = TeamOrchestrator()
-
-        # Create agents for each model
-        from agno_trading.core.base_agent import AgentConfig
-
-        agents = []
-        for model_str in models:
-            # Create proper AgentConfig object (not dict)
-            agent_config = AgentConfig(
-                name=f"Agent-{model_str.replace(':', '-')}",
-                role="Market Analyst",
-                agent_model=model_str,
-                instructions=["Analyze market data and provide trading insights."]
-            )
-            agent_id = manager.create_agent(agent_config)
-            agent = manager.get_agent(agent_id)
-
-            agents.append({
-                "model": model_str,
-                "agent": agent
-            })
-
-        team_id = orchestrator.create_competition(name, agents, task_type)
-
-        return create_response(True, {
-            "team_id": team_id,
-            "models": models,
-            "agent_count": len(agents)
-        })
     except Exception as e:
-        return create_response(False, error=str(e))
+        print(f"[ERROR] stop_competition failed: {e}", file=sys.stderr)
+        return {"success": False, "error": str(e)}
 
 
-def run_competition_command(
-    team_id: str,
-    symbol: str,
-    task: str = "analyze",
-    api_keys_json: str = "{}"
-) -> str:
-    """
-    Run multi-model competition
+async def get_leaderboard_async(args: list) -> Dict[str, Any]:
+    """Get current leaderboard (async)."""
+    global _active_competition
 
-    Args:
-        team_id: Competition ID
-        symbol: Trading symbol
-        task: Task type (analyze, signal)
-        api_keys_json: JSON object of API keys (optional)
-    """
     try:
-        import asyncio
-        import json
-        from agno_trading.core.team_orchestrator import TeamOrchestrator
+        # Get competition ID from args
+        competition_id = args[0] if args else None
 
-        # Set API keys in environment if provided
-        api_keys = json.loads(api_keys_json)
-        if api_keys:
-            import os
-            for key, value in api_keys.items():
-                os.environ[key] = value
+        # If no active competition, try to load from database
+        if _active_competition is None:
+            if not competition_id:
+                return {"success": False, "error": "No competition ID provided"}
 
-        orchestrator = TeamOrchestrator()
+            print(f"[INFO] Loading competition {competition_id} for leaderboard", file=sys.stderr)
+            _active_competition = load_competition_from_db(competition_id)
 
-        # Build prompt based on task
-        if task == "analyze":
-            prompt = f"Analyze {symbol} market conditions and provide trading insights."
-        elif task == "signal":
-            prompt = f"Generate a trade signal for {symbol} with entry/exit points."
-        else:
-            prompt = f"Evaluate {symbol} for trading opportunities."
+            if _active_competition is None:
+                return {"success": False, "error": "Failed to load competition from database"}
 
-        # Run parallel execution
-        loop = asyncio.get_event_loop()
-        result = loop.run_until_complete(
-            orchestrator.run_parallel(team_id, prompt, streaming=True)
-        )
+        # Verify competition ID matches if provided - but DON'T reload if match
+        if competition_id and _active_competition.competition_id != competition_id:
+            print(f"[INFO] Switching to competition {competition_id}", file=sys.stderr)
+            _active_competition = load_competition_from_db(competition_id)
 
-        return create_response(True, result)
+            if _active_competition is None:
+                return {"success": False, "error": "Failed to load competition from database"}
+        elif competition_id and _active_competition.competition_id == competition_id:
+            # Competition matches - sync portfolio states from DB to ensure consistency
+            db = get_db_manager()
+            conn = db.get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT model_name, capital, positions_json, trades_count, total_pnl, portfolio_value
+                FROM alpha_model_states
+                WHERE competition_id = ?
+            """, (competition_id,))
+
+            for row in cursor.fetchall():
+                model_name, capital, positions_json, trades_count, total_pnl, portfolio_value = row
+                if model_name in _active_competition.portfolios:
+                    portfolio = _active_competition.portfolios[model_name]
+                    portfolio.cash = capital
+                    portfolio.trades_count = trades_count
+                    portfolio.total_realized_pnl = total_pnl
+
+            conn.close()
+
+        leaderboard = await _active_competition.get_leaderboard()
+
+        return {
+            "success": True,
+            "leaderboard": leaderboard
+        }
+
     except Exception as e:
-        return create_response(False, error=str(e))
+        print(f"[ERROR] get_leaderboard failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return {"success": False, "error": str(e)}
 
 
-def get_leaderboard_command() -> str:
-    """Get model performance leaderboard"""
+def get_leaderboard_command(args: list) -> Dict[str, Any]:
+    """Get current leaderboard (sync wrapper)."""
+    return asyncio.run(get_leaderboard_async(args))
+
+
+def get_model_decisions_command(args: list) -> Dict[str, Any]:
+    """Get recent model decisions from database."""
     try:
-        from agno_trading.core.team_orchestrator import TeamOrchestrator
-
-        orchestrator = TeamOrchestrator()
-        leaderboard = orchestrator.get_leaderboard()
-
-        return create_response(True, {"leaderboard": leaderboard})
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def get_recent_decisions_command(limit: int = 50) -> str:
-    """Get recent model decisions"""
-    try:
-        from agno_trading.core.team_orchestrator import TeamOrchestrator
-
-        orchestrator = TeamOrchestrator()
-        decisions = orchestrator.get_recent_decisions(int(limit))
-
-        return create_response(True, {"decisions": decisions})
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-# ============================================================================
-# NEW COMMANDS: Auto-Trading, Debate, Evolution
-# ============================================================================
-
-def execute_trade_command(
-    signal_json: str,
-    portfolio_json: str,
-    agent_id: str,
-    model: str,
-    api_keys_json: str = "{}"
-) -> str:
-    """Execute a trade based on signal"""
-    try:
-        from agno_trading.core.trade_executor import get_trade_executor
-
-        signal = json.loads(signal_json)
-        portfolio = json.loads(portfolio_json)
-        api_keys = json.loads(api_keys_json)
-
-        # Set API keys
-        for key, value in api_keys.items():
-            os.environ[key] = value
-
-        executor = get_trade_executor()
-        result = executor.execute_trade(signal, portfolio, agent_id, model, paper_trading=True)
-
-        return create_response(True, result)
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def close_position_command(trade_id: int, exit_price: float, reason: str = "manual") -> str:
-    """Close an open position"""
-    try:
-        from agno_trading.core.trade_executor import get_trade_executor
-
-        executor = get_trade_executor()
-        result = executor.close_position(int(trade_id), float(exit_price), reason)
-
-        return create_response(True, result)
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def get_agent_trades_command(agent_id: str, limit: int = 100, status: str = None) -> str:
-    """Get trade history for an agent"""
-    try:
-        from agno_trading.db.database_manager import get_db_manager
+        competition_id = args[0] if args else None
+        if not competition_id:
+            return {"success": False, "error": "competition_id required"}
 
         db = get_db_manager()
-        trades = db.get_agent_trades(agent_id, int(limit), status)
+        decisions = db.get_decision_logs(competition_id, limit=50)
 
-        return create_response(True, {"trades": trades})
+        return {
+            "success": True,
+            "decisions": decisions
+        }
+
     except Exception as e:
-        return create_response(False, error=str(e))
+        print(f"[ERROR] get_model_decisions failed: {e}", file=sys.stderr)
+        return {"success": False, "error": str(e)}
 
 
-def get_agent_performance_command(agent_id: str) -> str:
-    """Get performance metrics for an agent"""
-    try:
-        from agno_trading.db.database_manager import get_db_manager
-
-        db = get_db_manager()
-        performance = db.get_agent_performance(agent_id)
-
-        if performance:
-            return create_response(True, {"performance": performance})
-        else:
-            return create_response(False, error="Agent performance not found")
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def get_db_leaderboard_command(limit: int = 20) -> str:
-    """Get leaderboard from database"""
-    try:
-        from agno_trading.db.database_manager import get_db_manager
-
-        db = get_db_manager()
-        leaderboard = db.get_leaderboard(int(limit))
-
-        return create_response(True, {"leaderboard": leaderboard})
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def get_db_decisions_command(limit: int = 50, agent_id: str = None) -> str:
-    """Get recent decisions from database"""
-    try:
-        from agno_trading.db.database_manager import get_db_manager
-
-        db = get_db_manager()
-        decisions = db.get_recent_decisions(int(limit), agent_id)
-
-        return create_response(True, {"decisions": decisions})
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def run_debate_command(
-    symbol: str,
-    market_data_json: str,
-    bull_model: str,
-    bear_model: str,
-    analyst_model: str,
-    api_keys_json: str = "{}"
-) -> str:
-    """Run a Bull/Bear/Analyst debate"""
-    try:
-        from agno_trading.core.debate_orchestrator import get_debate_orchestrator
-
-        market_data = json.loads(market_data_json)
-        api_keys = json.loads(api_keys_json)
-
-        # Set API keys
-        for key, value in api_keys.items():
-            os.environ[key] = value
-
-        orchestrator = get_debate_orchestrator()
-        result = orchestrator.run_debate(
-            symbol,
-            market_data,
-            bull_model,
-            bear_model,
-            analyst_model,
-            api_keys
-        )
-
-        return create_response(True, result)
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def get_recent_debates_command(limit: int = 10) -> str:
-    """Get recent debate sessions"""
-    try:
-        from agno_trading.db.database_manager import get_db_manager
-
-        db = get_db_manager()
-        debates = db.get_recent_debates(int(limit))
-
-        return create_response(True, {"debates": debates})
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def evolve_agent_command(
-    agent_id: str,
-    model: str,
-    current_instructions_json: str,
-    trigger: str,
-    notes: str = None
-) -> str:
-    """Evolve an agent based on performance"""
-    try:
-        from agno_trading.core.agent_evolution import get_agent_evolution
-
-        current_instructions = json.loads(current_instructions_json)
-
-        evolution = get_agent_evolution()
-        result = evolution.evolve_agent(agent_id, model, current_instructions, trigger, notes)
-
-        return create_response(True, result)
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def check_evolution_command(agent_id: str) -> str:
-    """Check if agent should evolve"""
-    try:
-        from agno_trading.core.agent_evolution import get_agent_evolution
-        from agno_trading.db.database_manager import get_db_manager
-
-        db = get_db_manager()
-        performance = db.get_agent_performance(agent_id)
-
-        if not performance:
-            return create_response(False, error="Agent performance not found")
-
-        evolution = get_agent_evolution()
-        should_evolve, trigger = evolution.should_evolve(agent_id, performance)
-
-        return create_response(True, {
-            "should_evolve": should_evolve,
-            "trigger": trigger,
-            "performance": performance
-        })
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-def get_evolution_summary_command(agent_id: str) -> str:
-    """Get evolution summary for an agent"""
-    try:
-        from agno_trading.core.agent_evolution import get_agent_evolution
-
-        evolution = get_agent_evolution()
-        summary = evolution.get_evolution_summary(agent_id)
-
-        return create_response(True, summary)
-    except Exception as e:
-        return create_response(False, error=str(e))
-
-
-# Command dispatcher
+# Command registry
 COMMANDS = {
-    "list_models": list_models_command,
-    "recommend_model": recommend_model_command,
-    "validate_config": validate_config_command,
-    "create_agent": create_agent_command,
-    "run_agent": run_agent_command,
-    "analyze_market": analyze_market_command,
-    "generate_trade_signal": generate_trade_signal_command,
-    "manage_risk": manage_risk_command,
-    "get_config_template": get_config_template_command,
     "create_competition": create_competition_command,
-    "run_competition": run_competition_command,
-    "get_leaderboard": get_leaderboard_command,
-    "get_recent_decisions": get_recent_decisions_command,
-    # New commands
-    "execute_trade": execute_trade_command,
-    "close_position": close_position_command,
-    "get_agent_trades": get_agent_trades_command,
-    "get_agent_performance": get_agent_performance_command,
-    "get_db_leaderboard": get_db_leaderboard_command,
-    "get_db_decisions": get_db_decisions_command,
-    "run_debate": run_debate_command,
-    "get_recent_debates": get_recent_debates_command,
-    "evolve_agent": evolve_agent_command,
-    "check_evolution": check_evolution_command,
-    "get_evolution_summary": get_evolution_summary_command,
+    "run_cycle": run_cycle_command,
+    "start_competition": start_competition_command,
+    "stop_competition": stop_competition_command,
+    "get_leaderboard_alpha": get_leaderboard_command,
+    "get_model_decisions_alpha": get_model_decisions_command,
 }
 
 
 def main():
-    """Main entry point for CLI usage"""
+    """Main entry point."""
     if len(sys.argv) < 2:
-        print(create_response(False, error="No command specified"))
-        sys.exit(1)
+        _restore_stdout()
+        print(json.dumps({
+            "success": False,
+            "error": "No command specified"
+        }))
+        return
 
     command = sys.argv[1]
     args = sys.argv[2:]
 
     if command not in COMMANDS:
-        print(create_response(False, error=f"Unknown command: {command}"))
-        sys.exit(1)
+        _restore_stdout()
+        print(json.dumps({
+            "success": False,
+            "error": f"Unknown command: {command}"
+        }))
+        return
 
-    try:
-        # Call command function with args
-        result = COMMANDS[command](*args)
-        print(result)
-    except TypeError as e:
-        print(create_response(False, error=f"Invalid arguments for command '{command}': {str(e)}"))
-        sys.exit(1)
-    except Exception as e:
-        print(create_response(False, error=f"Command execution failed: {str(e)}"))
-        sys.exit(1)
+    # Execute command
+    result = COMMANDS[command](args)
+
+    # Output JSON result
+    _restore_stdout()
+    print(json.dumps(result))
 
 
 if __name__ == "__main__":

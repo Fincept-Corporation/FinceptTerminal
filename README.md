@@ -170,8 +170,13 @@ Maritime Intelligence → Commodity Prices → Macro Strategies
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-terminal-desktop
-npm install && npm run tauri dev
+bun install && bun run tauri:dev
 ```
+
+**Requirements:**
+- [Bun](https://bun.sh) 1.0+
+- [Rust](https://www.rust-lang.org/) (latest stable)
+- Platform-specific dependencies (see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md))
 
 ---
 

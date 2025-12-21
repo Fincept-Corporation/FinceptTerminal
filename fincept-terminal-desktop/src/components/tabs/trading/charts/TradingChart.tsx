@@ -22,7 +22,7 @@ export function TradingChart({
   showVolume = true
 }: TradingChartProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>(timeframe);
-  const { ohlcv, isLoading, error } = useOHLCV(symbol, selectedTimeframe, 200);
+  const { ohlcv, isLoading, error } = useOHLCV(symbol, selectedTimeframe, 100); // Reduced from 200 to 100
 
   const timeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
 

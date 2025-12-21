@@ -214,9 +214,12 @@ export class OrderMatchingEngine {
     const priceSnapshot = await this.fetchPriceSnapshot(symbol);
 
     // Check if order can be immediately filled
+    // BUY limit: can fill if ask price is at or below limit price
+    // SELL limit: can fill if bid price is at or above limit price
+    // Also check last price for better fill opportunities
     const canFillImmediately = side === 'buy'
-      ? priceSnapshot.ask <= limitPrice
-      : priceSnapshot.bid >= limitPrice;
+      ? (priceSnapshot.ask <= limitPrice || priceSnapshot.last <= limitPrice)
+      : (priceSnapshot.bid >= limitPrice || priceSnapshot.last >= limitPrice);
 
     // Handle Post-Only
     if (params?.postOnly && canFillImmediately) {
@@ -235,10 +238,10 @@ export class OrderMatchingEngine {
       if (canFillImmediately) {
         return await this.executeLimitOrder(orderId, symbol, side, amount, limitPrice, params);
       } else {
-        await paperTradingDatabase.updateOrder(orderId, { status: 'canceled' });
+        await paperTradingDatabase.updateOrder(orderId, { status: 'cancelled' });
         return {
           success: false,
-          order: this.createOrderObject(orderId, symbol, 'limit', side, amount, limitPrice, params, 'canceled'),
+          order: this.createOrderObject(orderId, symbol, 'limit', side, amount, limitPrice, params, 'cancelled'),
           trades: [],
           balance: 0,
           error: 'IOC order could not be filled immediately',
@@ -251,10 +254,10 @@ export class OrderMatchingEngine {
       if (canFillImmediately) {
         return await this.executeLimitOrder(orderId, symbol, side, amount, limitPrice, params);
       } else {
-        await paperTradingDatabase.updateOrder(orderId, { status: 'canceled' });
+        await paperTradingDatabase.updateOrder(orderId, { status: 'cancelled' });
         return {
           success: false,
-          order: this.createOrderObject(orderId, symbol, 'limit', side, amount, limitPrice, params, 'canceled'),
+          order: this.createOrderObject(orderId, symbol, 'limit', side, amount, limitPrice, params, 'cancelled'),
           trades: [],
           balance: 0,
           error: 'FOK order could not be fully filled',
@@ -568,13 +571,18 @@ export class OrderMatchingEngine {
           // Check liquidations first
           await this.checkPositionLiquidations(order.symbol, priceSnapshot.last);
 
-          // Check limit orders
+          // Check limit orders - IMPROVED LOGIC
           if (order.type === 'limit' && order.status === 'pending') {
+            // BUY limit: fills when ask price drops to or below limit price
+            // SELL limit: fills when bid price rises to or above limit price
+            // Also check last price as a fallback for better fill opportunities
+            const limitPrice = order.price || 0;
             const canFill = order.side === 'buy'
-              ? priceSnapshot.ask <= (order.price || 0)
-              : priceSnapshot.bid >= (order.price || 0);
+              ? (priceSnapshot.ask <= limitPrice || priceSnapshot.last <= limitPrice)
+              : (priceSnapshot.bid >= limitPrice || priceSnapshot.last >= limitPrice);
 
             if (canFill) {
+              console.log(`[OrderMatching] Limit order ${order.id} can fill - ${order.side} @ ${limitPrice}, market: bid=${priceSnapshot.bid}, ask=${priceSnapshot.ask}, last=${priceSnapshot.last}`);
               await this.executeLimitOrder(order.id, order.symbol, order.side as OrderSide, order.amount, order.price!, {
                 leverage: order.leverage,
                 marginMode: order.marginMode as any,
@@ -622,6 +630,7 @@ export class OrderMatchingEngine {
    * Cancel an order
    */
   async cancelOrder(orderId: string): Promise<PaperTradingOrder> {
+    console.log(`[OrderMatching] Attempting to cancel order ${orderId}`);
     const order = await paperTradingDatabase.getOrder(orderId);
     if (!order) {
       throw new Error(`Order ${orderId} not found`);
@@ -631,7 +640,13 @@ export class OrderMatchingEngine {
       throw new Error(`Cannot cancel filled order ${orderId}`);
     }
 
-    await paperTradingDatabase.updateOrder(orderId, { status: 'canceled' });
+    if (order.status === 'cancelled') {
+      console.warn(`[OrderMatching] Order ${orderId} already cancelled`);
+      return order;
+    }
+
+    await paperTradingDatabase.updateOrder(orderId, { status: 'cancelled' });
+    console.log(`[OrderMatching] Order ${orderId} cancelled successfully`);
 
     const updatedOrder = await paperTradingDatabase.getOrder(orderId);
     return updatedOrder!;
@@ -647,14 +662,14 @@ export class OrderMatchingEngine {
       ? pendingOrders.filter(o => o.symbol === symbol)
       : pendingOrders;
 
-    const canceledOrders: PaperTradingOrder[] = [];
+    const cancelledOrders: PaperTradingOrder[] = [];
     for (const order of ordersToCancel) {
-      await paperTradingDatabase.updateOrder(order.id, { status: 'canceled' });
+      await paperTradingDatabase.updateOrder(order.id, { status: 'cancelled' });
       const updated = await paperTradingDatabase.getOrder(order.id);
-      if (updated) canceledOrders.push(updated);
+      if (updated) cancelledOrders.push(updated);
     }
 
-    return canceledOrders;
+    return cancelledOrders;
   }
 
   // ============================================================================

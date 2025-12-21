@@ -121,6 +121,7 @@ class BaseAgent:
             "openai": os.getenv("OPENAI_API_KEY"),
             "anthropic": os.getenv("ANTHROPIC_API_KEY"),
             "google": os.getenv("GOOGLE_API_KEY"),
+            "gemini": os.getenv("GOOGLE_API_KEY"),  # Gemini uses Google API key
             "groq": os.getenv("GROQ_API_KEY"),
             "deepseek": os.getenv("DEEPSEEK_API_KEY"),
             "xai": os.getenv("XAI_API_KEY"),
@@ -149,8 +150,9 @@ class BaseAgent:
         elif provider == "anthropic":
             from agno.models.anthropic import Claude
             return Claude(**model_config)
-        elif provider == "google":
+        elif provider == "google" or provider == "gemini":
             # Use OpenAI-compatible API for Google Gemini
+            # Support both "google" and "gemini" as provider names
             from agno.models.openai import OpenAIChat
             return OpenAIChat(
                 id=model_name,

@@ -11,6 +11,10 @@ import type { OHLCV, Timeframe, UnifiedOrderBook, UnifiedTicker } from '../types
 // OHLCV / CANDLESTICK DATA
 // ============================================================================
 
+// Cache for OHLCV data
+const ohlcvCache = new Map<string, { data: OHLCV[]; timestamp: number }>();
+const OHLCV_CACHE_TTL = 30000; // 30 seconds
+
 export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: number = 100) {
   const { activeAdapter } = useBrokerContext();
   const [ohlcv, setOhlcv] = useState<OHLCV[]>([]);
@@ -20,6 +24,15 @@ export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: nu
   const fetchOHLCV = useCallback(async () => {
     if (!activeAdapter || !symbol) {
       setOhlcv([]);
+      return;
+    }
+
+    // Check cache
+    const cacheKey = `${symbol}_${timeframe}_${limit}`;
+    const cached = ohlcvCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < OHLCV_CACHE_TTL) {
+      setOhlcv(cached.data);
+      setIsLoading(false);
       return;
     }
 
@@ -41,6 +54,9 @@ export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: nu
       }));
 
       setOhlcv(normalized);
+
+      // Update cache
+      ohlcvCache.set(cacheKey, { data: normalized, timestamp: Date.now() });
     } catch (err) {
       const error = err as Error;
       console.error('[useOHLCV] Failed to fetch OHLCV:', error);

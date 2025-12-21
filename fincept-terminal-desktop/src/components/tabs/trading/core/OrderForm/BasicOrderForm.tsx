@@ -68,15 +68,18 @@ export function BasicOrderForm({
 
   // Handle quantity change
   const handleQuantityChange = (value: string) => {
-    // Allow only numbers and decimal point
-    if (/^\d*\.?\d*$/.test(value) || value === '') {
+    // Allow empty string, numbers and decimal point
+    // This allows users to clear the field and type new values freely
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
       setQuantity(value);
     }
   };
 
   // Handle price change
   const handlePriceChange = (value: string) => {
-    if (/^\d*\.?\d*$/.test(value) || value === '') {
+    // Allow empty string, numbers and decimal point
+    // This allows users to clear the field and type new values freely
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
       setPrice(value);
     }
   };

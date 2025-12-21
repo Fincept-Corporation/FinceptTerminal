@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useBrokerContext } from '../../../../contexts/BrokerContext';
 import type { UnifiedOrder } from '../types';
 
-export function useOrders(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 2000) {
+export function useOrders(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 500) {
   const { activeAdapter } = useBrokerContext();
   const [openOrders, setOpenOrders] = useState<UnifiedOrder[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -120,7 +120,7 @@ export function useCancelOrder() {
       }
 
       // Check if exchange supports cancel all
-      if (typeof (activeAdapter as any).cancelAllOrders !== 'function') {
+      if (typeof activeAdapter.cancelAllOrders !== 'function') {
         throw new Error('This exchange does not support cancel all orders');
       }
 
@@ -128,10 +128,11 @@ export function useCancelOrder() {
       setError(null);
 
       try {
-        await (activeAdapter as any).cancelAllOrders(symbol);
+        await activeAdapter.cancelAllOrders(symbol);
         return true;
       } catch (err) {
         const error = err as Error;
+        console.error('[useCancelOrder] Cancel all failed:', error);
         setError(error);
         throw error;
       } finally {

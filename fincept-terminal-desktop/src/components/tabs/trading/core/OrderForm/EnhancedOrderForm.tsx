@@ -76,6 +76,17 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
       return;
     }
 
+    // Confirm before placing order
+    const confirmMsg = `Place ${orderType.toUpperCase()} ${side.toUpperCase()} order?\n\n` +
+      `Symbol: ${symbol}\n` +
+      `Quantity: ${orderData.quantity}\n` +
+      (orderType === 'limit' ? `Price: ${orderData.price}\n` : '') +
+      `Total: ${((orderData.quantity || 0) * (orderData.price || currentPrice)).toFixed(2)} USD`;
+
+    if (!confirm(confirmMsg)) {
+      return; // User cancelled - don't call placeOrder
+    }
+
     try {
       await placeOrder(completeOrder);
 

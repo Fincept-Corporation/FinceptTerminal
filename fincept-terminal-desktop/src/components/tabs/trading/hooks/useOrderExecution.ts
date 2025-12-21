@@ -37,6 +37,12 @@ export function useOrderExecution(): UseOrderExecutionResult {
       setIsPlacing(true);
       setError(null);
 
+      // Safety timeout - force reset after 10 seconds
+      const timeoutId = setTimeout(() => {
+        console.warn('[useOrderExecution] Force resetting isPlacing after timeout');
+        setIsPlacing(false);
+      }, 10000);
+
       try {
         // Build CCXT-compatible params
         const params: OrderParams = {};
@@ -104,8 +110,10 @@ export function useOrderExecution(): UseOrderExecutionResult {
         );
 
         console.log('[useOrderExecution] Order placed:', result);
+        clearTimeout(timeoutId);
         return result;
       } catch (err) {
+        clearTimeout(timeoutId);
         const error = err as Error;
         console.error('[useOrderExecution] Order failed:', error);
         setError(error);
