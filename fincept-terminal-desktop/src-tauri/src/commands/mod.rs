@@ -87,3 +87,4 @@ pub mod company_news;
 
 // Agno Trading Agents
 pub mod agno_trading;
+pub mod alpha_arena;

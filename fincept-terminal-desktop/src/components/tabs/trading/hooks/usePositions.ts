@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useBrokerContext } from '../../../../contexts/BrokerContext';
 import type { UnifiedPosition } from '../types';
 
-export function usePositions(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 2000) {
+export function usePositions(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 500) {
   const { activeAdapter, tradingMode } = useBrokerContext();
   const [positions, setPositions] = useState<UnifiedPosition[]>([]);
   // Start with loading false - only set true when actually fetching
@@ -29,19 +29,13 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
     setError(null);
 
     try {
-      // Fetch positions from adapter with reduced timeout
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Position fetch timeout after 15s')), 15000)
-      );
-
-      const fetchPromise = activeAdapter.fetchPositions(symbol ? [symbol] : undefined);
-
-      const rawPositions = await Promise.race([fetchPromise, timeoutPromise]) as any[];
+      // Fetch positions from adapter (removed timeout - let it complete naturally)
+      const rawPositions = await activeAdapter.fetchPositions(symbol ? [symbol] : undefined);
 
       // Normalize to unified format
       const normalized: UnifiedPosition[] = (rawPositions || []).map((pos: any) => ({
         symbol: pos.symbol,
-        side: pos.side === 'long' || pos.contracts > 0 ? 'long' : 'short',
+        side: pos.side, // Use actual side from position, don't infer
         quantity: Math.abs(pos.contracts || pos.amount || 0),
         entryPrice: pos.entryPrice || pos.averagePrice || 0,
         currentPrice: pos.markPrice || pos.currentPrice || 0,
@@ -107,6 +101,8 @@ export function useClosePosition() {
       setError(null);
 
       try {
+        console.log(`[useClosePosition] Closing ${position.side} position: ${position.quantity} ${position.symbol}`);
+
         // Create opposite order to close position
         const closeSide = position.side === 'long' ? 'sell' : 'buy';
 

@@ -1090,7 +1090,14 @@ pub fn run() {
             commands::agno_trading::agno_get_recent_debates,
             commands::agno_trading::agno_evolve_agent,
             commands::agno_trading::agno_check_evolution,
-            commands::agno_trading::agno_get_evolution_summary
+            commands::agno_trading::agno_get_evolution_summary,
+            // Alpha Arena Competition
+            commands::alpha_arena::create_alpha_competition,
+            commands::alpha_arena::start_alpha_competition,
+            commands::alpha_arena::get_alpha_leaderboard,
+            commands::alpha_arena::get_alpha_model_decisions,
+            commands::alpha_arena::stop_alpha_competition,
+            commands::alpha_arena::run_alpha_cycle
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

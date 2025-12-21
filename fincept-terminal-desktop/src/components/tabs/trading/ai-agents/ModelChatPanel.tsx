@@ -30,12 +30,26 @@ interface ModelDecision {
   model: string;
   timestamp: string;
   content: string;
-  action?: 'long' | 'short' | 'hold' | 'close';
+  type?: 'analyze' | 'evaluate' | 'signal';
+
+  // For signal type
+  direction?: 'long' | 'short' | 'hold';
+  action?: 'long' | 'short' | 'hold';
   symbol?: string;
   confidence?: number;
   entry?: number;
   target?: number;
   stopLoss?: number;
+  positionSize?: number;
+
+  // For evaluate type
+  riskScore?: number;
+  recommendation?: 'increase' | 'reduce' | 'hold';
+
+  // For analyze type
+  sentiment?: 'bullish' | 'bearish' | 'neutral';
+  support?: number;
+  resistance?: number;
 }
 
 interface ModelChatPanelProps {
@@ -100,12 +114,20 @@ export function ModelChatPanel({ teamId, refreshInterval = 5000 }: ModelChatPane
     return colors[hash % colors.length];
   };
 
-  const getActionColor = (action?: string) => {
+  const getActionColor = (decision: ModelDecision) => {
+    const action = decision.direction || decision.action;
     switch (action) {
       case 'long': return BLOOMBERG.GREEN;
       case 'short': return BLOOMBERG.RED;
-      case 'close': return BLOOMBERG.ORANGE;
-      default: return BLOOMBERG.GRAY;
+      case 'hold': return BLOOMBERG.GRAY;
+      default:
+        // Check sentiment for analyze type
+        if (decision.sentiment === 'bullish') return BLOOMBERG.GREEN;
+        if (decision.sentiment === 'bearish') return BLOOMBERG.RED;
+        // Check recommendation for evaluate type
+        if (decision.recommendation === 'increase') return BLOOMBERG.GREEN;
+        if (decision.recommendation === 'reduce') return BLOOMBERG.RED;
+        return BLOOMBERG.GRAY;
     }
   };
 
@@ -202,7 +224,7 @@ export function ModelChatPanel({ teamId, refreshInterval = 5000 }: ModelChatPane
               key={`${decision.model}-${decision.timestamp}-${idx}`}
               decision={decision}
               modelColor={getModelColor(decision.model)}
-              actionColor={getActionColor(decision.action)}
+              actionColor={getActionColor(decision)}
               formatTimestamp={formatTimestamp}
             />
           ))
@@ -253,31 +275,49 @@ function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: De
             {decision.model.split(':')[1] || decision.model}
           </span>
 
-          {decision.action && (
-            <div style={{
-              background: `${actionColor}20`,
-              border: `1px solid ${actionColor}`,
-              borderRadius: '2px',
-              padding: '2px 6px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '3px'
-            }}>
-              {decision.action === 'long' ? (
-                <TrendingUp size={10} color={actionColor} />
-              ) : decision.action === 'short' ? (
-                <TrendingDown size={10} color={actionColor} />
-              ) : null}
-              <span style={{
-                color: actionColor,
-                fontSize: '8px',
-                fontWeight: '700',
-                letterSpacing: '0.5px'
+          {/* Display action/sentiment/recommendation based on type */}
+          {(() => {
+            let label = '';
+            let showIcon = true;
+
+            if (decision.type === 'signal') {
+              label = (decision.direction || decision.action || 'HOLD').toUpperCase();
+            } else if (decision.type === 'analyze') {
+              label = (decision.sentiment || 'NEUTRAL').toUpperCase();
+            } else if (decision.type === 'evaluate') {
+              label = (decision.recommendation || 'HOLD').toUpperCase();
+            } else if (decision.action) {
+              label = decision.action.toUpperCase();
+            }
+
+            if (!label) return null;
+
+            return (
+              <div style={{
+                background: `${actionColor}20`,
+                border: `1px solid ${actionColor}`,
+                borderRadius: '2px',
+                padding: '2px 6px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px'
               }}>
-                {decision.action.toUpperCase()}
-              </span>
-            </div>
-          )}
+                {(label === 'LONG' || label === 'BULLISH' || label === 'INCREASE') && showIcon ? (
+                  <TrendingUp size={10} color={actionColor} />
+                ) : (label === 'SHORT' || label === 'BEARISH' || label === 'REDUCE') && showIcon ? (
+                  <TrendingDown size={10} color={actionColor} />
+                ) : null}
+                <span style={{
+                  color: actionColor,
+                  fontSize: '8px',
+                  fontWeight: '700',
+                  letterSpacing: '0.5px'
+                }}>
+                  {label}
+                </span>
+              </div>
+            );
+          })()}
 
           {decision.symbol && (
             <span style={{
@@ -310,43 +350,88 @@ function DecisionCard({ decision, modelColor, actionColor, formatTimestamp }: De
         {decision.content}
       </div>
 
-      {/* Trade Details */}
-      {(decision.entry || decision.target || decision.stopLoss) && (
-        <div style={{
-          marginTop: '6px',
-          paddingTop: '6px',
-          borderTop: `1px solid ${BLOOMBERG.BORDER}`,
-          display: 'flex',
-          gap: '12px',
-          fontSize: '9px',
-          fontFamily: '"IBM Plex Mono", monospace'
-        }}>
-          {decision.entry && (
-            <div>
-              <span style={{ color: BLOOMBERG.GRAY }}>ENTRY: </span>
-              <span style={{ color: BLOOMBERG.CYAN, fontWeight: '600' }}>${decision.entry}</span>
-            </div>
-          )}
-          {decision.target && (
-            <div>
-              <span style={{ color: BLOOMBERG.GRAY }}>TARGET: </span>
-              <span style={{ color: BLOOMBERG.GREEN, fontWeight: '600' }}>${decision.target}</span>
-            </div>
-          )}
-          {decision.stopLoss && (
-            <div>
-              <span style={{ color: BLOOMBERG.GRAY }}>STOP: </span>
-              <span style={{ color: BLOOMBERG.RED, fontWeight: '600' }}>${decision.stopLoss}</span>
-            </div>
-          )}
-          {decision.confidence && (
-            <div>
-              <span style={{ color: BLOOMBERG.GRAY }}>CONF: </span>
-              <span style={{ color: BLOOMBERG.YELLOW, fontWeight: '600' }}>{(decision.confidence * 100).toFixed(0)}%</span>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Decision Metadata */}
+      {(() => {
+        const hasSignalData = decision.entry || decision.target || decision.stopLoss || decision.confidence;
+        const hasAnalysisData = decision.support || decision.resistance;
+        const hasEvalData = decision.riskScore !== undefined;
+
+        if (!hasSignalData && !hasAnalysisData && !hasEvalData) return null;
+
+        return (
+          <div style={{
+            marginTop: '6px',
+            paddingTop: '6px',
+            borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+            display: 'flex',
+            gap: '12px',
+            fontSize: '9px',
+            fontFamily: '"IBM Plex Mono", monospace',
+            flexWrap: 'wrap'
+          }}>
+            {/* Signal type data */}
+            {decision.entry && (
+              <div>
+                <span style={{ color: BLOOMBERG.GRAY }}>ENTRY: </span>
+                <span style={{ color: BLOOMBERG.CYAN, fontWeight: '600' }}>${decision.entry.toLocaleString()}</span>
+              </div>
+            )}
+            {decision.target && (
+              <div>
+                <span style={{ color: BLOOMBERG.GRAY }}>TARGET: </span>
+                <span style={{ color: BLOOMBERG.GREEN, fontWeight: '600' }}>${decision.target.toLocaleString()}</span>
+              </div>
+            )}
+            {decision.stopLoss && (
+              <div>
+                <span style={{ color: BLOOMBERG.GRAY }}>STOP: </span>
+                <span style={{ color: BLOOMBERG.RED, fontWeight: '600' }}>${decision.stopLoss.toLocaleString()}</span>
+              </div>
+            )}
+            {decision.positionSize && (
+              <div>
+                <span style={{ color: BLOOMBERG.GRAY }}>SIZE: </span>
+                <span style={{ color: BLOOMBERG.PURPLE, fontWeight: '600' }}>{decision.positionSize.toFixed(1)}%</span>
+              </div>
+            )}
+
+            {/* Analyze type data */}
+            {decision.support && (
+              <div>
+                <span style={{ color: BLOOMBERG.GRAY }}>SUP: </span>
+                <span style={{ color: BLOOMBERG.GREEN, fontWeight: '600' }}>${decision.support.toLocaleString()}</span>
+              </div>
+            )}
+            {decision.resistance && (
+              <div>
+                <span style={{ color: BLOOMBERG.GRAY }}>RES: </span>
+                <span style={{ color: BLOOMBERG.RED, fontWeight: '600' }}>${decision.resistance.toLocaleString()}</span>
+              </div>
+            )}
+
+            {/* Evaluate type data */}
+            {decision.riskScore !== undefined && (
+              <div>
+                <span style={{ color: BLOOMBERG.GRAY }}>RISK: </span>
+                <span style={{
+                  color: decision.riskScore > 0.7 ? BLOOMBERG.RED : decision.riskScore < 0.3 ? BLOOMBERG.GREEN : BLOOMBERG.YELLOW,
+                  fontWeight: '600'
+                }}>
+                  {(decision.riskScore * 10).toFixed(1)}/10
+                </span>
+              </div>
+            )}
+
+            {/* Confidence (all types) */}
+            {decision.confidence && (
+              <div>
+                <span style={{ color: BLOOMBERG.GRAY }}>CONF: </span>
+                <span style={{ color: BLOOMBERG.YELLOW, fontWeight: '600' }}>{(decision.confidence * 100).toFixed(0)}%</span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

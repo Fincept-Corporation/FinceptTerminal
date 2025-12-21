@@ -25,6 +25,7 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
   private balanceManager: PaperTradingBalance;
   private matchingEngine: OrderMatchingEngine;
   private initialized: boolean = false;
+  // NO CACHING - Real-time data only
 
   constructor(config: ExchangeConfig & { paperTradingConfig: PaperTradingConfig; realAdapter: IExchangeAdapter }) {
     // Initialize base with real exchange name (CCXT doesn't support "_paper" suffix)
@@ -66,10 +67,11 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       await this.initializePortfolio();
       console.log('[PaperTradingAdapter] Portfolio initialized');
 
-      // Start order monitoring
+      // Start order monitoring - INCREASED FREQUENCY for better limit order execution
       if (this.paperConfig.enableRealtimeUpdates !== false) {
         console.log('[PaperTradingAdapter] Starting order monitoring...');
-        this.matchingEngine.startMonitoring(this.paperConfig.priceUpdateInterval || 1000);
+        // Reduced from 1000ms to 200ms for more responsive limit order fills
+        this.matchingEngine.startMonitoring(this.paperConfig.priceUpdateInterval || 200);
       }
 
       this._isConnected = true;
@@ -255,46 +257,18 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       throw new Error('Paper trading adapter not initialized. Call connect() first.');
     }
 
-    // FORCE FRESH DB READ - no caching
     const positions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId, 'open');
 
-    // Update positions with current prices - PARALLEL with timeout per position
-    const updatePromises = positions.map(async (p) => {
-      try {
-        // Add timeout per ticker fetch (10 seconds max)
-        const tickerPromise = this.realAdapter.fetchTicker(p.symbol);
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Ticker timeout')), 10000)
-        );
+    // Update PnL with current market prices
+    for (const p of positions) {
+      const currentPrice = p.currentPrice || p.entryPrice;
+      const unrealizedPnl = p.side === 'long'
+        ? (currentPrice - p.entryPrice) * p.quantity
+        : (p.entryPrice - currentPrice) * p.quantity;
 
-        const ticker = await Promise.race([tickerPromise, timeoutPromise]) as any;
-        const currentPrice = ticker.last || ticker.close || p.currentPrice || p.entryPrice;
-
-        const unrealizedPnl = p.side === 'long'
-          ? (currentPrice - p.entryPrice) * p.quantity
-          : (p.entryPrice - currentPrice) * p.quantity;
-
-        await paperTradingDatabase.updatePosition(p.id, {
-          currentPrice,
-          unrealizedPnl,
-        });
-
-        p.currentPrice = currentPrice;
-        p.unrealizedPnl = unrealizedPnl;
-      } catch (err) {
-        // Silently keep existing price if fetch fails
-        p.currentPrice = p.currentPrice || p.entryPrice;
-        p.unrealizedPnl = p.unrealizedPnl || 0;
-      }
-    });
-
-    // Wait for all updates with overall timeout
-    await Promise.race([
-      Promise.all(updatePromises),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('All updates timeout')), 20000))
-    ]).catch(() => {
-      // Silently continue if some updates timeout
-    });
+      p.currentPrice = currentPrice;
+      p.unrealizedPnl = unrealizedPnl;
+    }
 
     // Convert to CCXT Position format
     const ccxtPositions: Position[] = positions
@@ -493,14 +467,13 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
 
   async fetchOpenOrders(symbol?: string): Promise<Order[]> {
     const orders = await paperTradingDatabase.getPortfolioOrders(this.paperConfig.portfolioId);
-
-    const openOrders = orders.filter(o => ['pending', 'triggered', 'partial'].includes(o.status));
+    const openOrders = orders.filter(o => ['pending', 'triggered', 'partial'].includes(o.status)) as Order[];
 
     if (symbol) {
-      return openOrders.filter(o => o.symbol === symbol) as Order[];
+      return openOrders.filter(o => o.symbol === symbol);
     }
 
-    return openOrders as Order[];
+    return openOrders;
   }
 
   async fetchClosedOrders(symbol?: string, limit?: number): Promise<Order[]> {

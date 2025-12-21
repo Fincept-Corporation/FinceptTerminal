@@ -114,6 +114,14 @@ export class PaperTradingBalance {
 
   /**
    * Create or update position after order fill
+   *
+   * Position Logic:
+   * - BUY order creates/adds to LONG position OR closes SHORT position
+   * - SELL order creates/adds to SHORT position OR closes LONG position
+   *
+   * When you already have a position:
+   * - If you have a LONG position and SELL, it CLOSES the long (not creates short)
+   * - If you have a SHORT position and BUY, it CLOSES the short (not creates long)
    */
   async updatePositionAfterFill(
     portfolioId: string,
@@ -125,11 +133,11 @@ export class PaperTradingBalance {
     marginMode: 'cross' | 'isolated',
     reduceOnly?: boolean
   ): Promise<PaperTradingPosition> {
-    // Determine position side from order side
-    const positionSide = side === 'buy' ? 'long' : 'short';
-    const oppositePositionSide = positionSide === 'long' ? 'short' : 'long';
+    console.log(`[PaperTradingBalance] Processing ${side.toUpperCase()} order for ${fillQuantity} ${symbol} @ ${fillPrice}`);
 
-    // Check for OPPOSITE position first (for closing)
+    // CRITICAL FIX: Check for OPPOSITE positions to close
+    // BUY closes SHORT, SELL closes LONG
+    const oppositePositionSide = side === 'buy' ? 'short' : 'long';
     const oppositePosition = await paperTradingDatabase.getPositionBySymbolAndSide(portfolioId, symbol, oppositePositionSide, 'open');
 
     // If reduceOnly and no opposite position, reject
@@ -187,8 +195,11 @@ export class PaperTradingBalance {
           quantity: 0
         });
 
+        // The excess creates a NEW position in the ORIGINAL order direction
         const excessQuantity = fillQuantity - oppositePosition.quantity;
-        return await this.createNewPosition(portfolioId, symbol, positionSide, fillPrice, excessQuantity, leverage, marginMode);
+        const newPositionSide = side === 'buy' ? 'long' : 'short';
+        console.log(`[PaperTradingBalance] Creating ${newPositionSide} position with excess quantity ${excessQuantity}`);
+        return await this.createNewPosition(portfolioId, symbol, newPositionSide, fillPrice, excessQuantity, leverage, marginMode);
       }
 
       const updatedPosition = await paperTradingDatabase.getPosition(oppositePosition.id);
@@ -196,15 +207,23 @@ export class PaperTradingBalance {
       return updatedPosition;
     }
 
-    // Check for existing position WITH THE SAME SIDE (hedging mode)
-    const existingPosition = await paperTradingDatabase.getPositionBySymbolAndSide(portfolioId, symbol, positionSide, 'open');
+    // NO opposite position found - CREATE OR ADD to position with matching side
+    // BUY order creates/adds to LONG position
+    // SELL order creates/adds to SHORT position
+    const newPositionSide = side === 'buy' ? 'long' : 'short';
+
+    console.log(`[PaperTradingBalance] No opposite position found, checking for same-side position...`);
+
+    // Check for existing position WITH THE SAME SIDE (for adding to existing position)
+    const existingPosition = await paperTradingDatabase.getPositionBySymbolAndSide(portfolioId, symbol, newPositionSide, 'open');
 
     if (!existingPosition) {
       // Create new position
-      return await this.createNewPosition(portfolioId, symbol, positionSide, fillPrice, fillQuantity, leverage, marginMode);
+      console.log(`[PaperTradingBalance] Creating new ${newPositionSide.toUpperCase()} position`);
+      return await this.createNewPosition(portfolioId, symbol, newPositionSide, fillPrice, fillQuantity, leverage, marginMode);
     } else {
       // Position exists with same side - ADD to position (VWAP averaging)
-      console.log(`[PaperTradingBalance] Adding to existing ${positionSide} position for ${symbol}`);
+      console.log(`[PaperTradingBalance] Adding to existing ${newPositionSide} position for ${symbol}`);
       console.log(`  Existing: ${existingPosition.quantity} @ ${existingPosition.entryPrice}`);
       console.log(`  Adding: ${fillQuantity} @ ${fillPrice}`);
 
@@ -216,7 +235,7 @@ export class PaperTradingBalance {
       console.log(`  New position: ${totalQuantity} @ ${newEntryPrice}`);
 
       const liquidationPrice = this.calculateLiquidationPrice(
-        positionSide,
+        newPositionSide,
         newEntryPrice,
         leverage,
         totalQuantity

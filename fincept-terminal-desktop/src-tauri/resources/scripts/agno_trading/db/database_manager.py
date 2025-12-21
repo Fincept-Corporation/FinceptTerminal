@@ -14,8 +14,13 @@ class DatabaseManager:
     def __init__(self, db_path: Optional[str] = None):
         """Initialize database manager"""
         if db_path is None:
-            # Default to agno_trading.db in same directory
-            db_path = os.path.join(os.path.dirname(__file__), 'agno_trading.db')
+            # Use temp directory to avoid Tauri file watcher triggering rebuilds
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            db_dir = os.path.join(temp_dir, 'fincept_alpha_arena')
+            os.makedirs(db_dir, exist_ok=True)
+            db_path = os.path.join(db_dir, 'agno_trading.db')
+            print(f"[DatabaseManager] Using database at: {db_path}", file=sys.stderr)
 
         self.db_path = db_path
         self.initialize_database()
@@ -467,6 +472,248 @@ class DatabaseManager:
         conn.close()
 
         return debates
+
+
+    # ============================================================================
+    # COMPETITION STATE MANAGEMENT
+    # ============================================================================
+
+    def save_competition_config(self, competition_id: str, name: str, models_json: str,
+                                  symbol: str, mode: str, api_keys_json: str = "{}"):
+        """Save competition configuration to database"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT OR REPLACE INTO competition_configs (
+                competition_id, name, models_json, symbol, mode,
+                api_keys_json, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'created', ?)
+        """, (
+            competition_id, name, models_json, symbol, mode,
+            api_keys_json, int(datetime.now().timestamp())
+        ))
+
+        conn.commit()
+        conn.close()
+        print(f"[DatabaseManager] Saved competition config: {competition_id}", file=sys.stderr)
+
+    def get_competition_config(self, competition_id: str) -> Optional[Dict]:
+        """Get competition configuration from database"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT * FROM competition_configs WHERE competition_id = ?
+        """, (competition_id,))
+
+        result = cursor.fetchone()
+        conn.close()
+
+        if result:
+            return dict(result)
+        return None
+
+    def get_active_competition(self) -> Optional[Dict]:
+        """Get the most recent active competition"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT * FROM competition_configs
+            WHERE status IN ('created', 'running')
+            ORDER BY created_at DESC LIMIT 1
+        """)
+
+        result = cursor.fetchone()
+        conn.close()
+
+        if result:
+            return dict(result)
+        return None
+
+    def update_competition_status(self, competition_id: str, status: str):
+        """Update competition status"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            UPDATE competition_configs SET status = ? WHERE competition_id = ?
+        """, (status, competition_id))
+
+        conn.commit()
+        conn.close()
+
+    def save_model_state(self, competition_id: str, model_name: str,
+                         capital: float, positions_json: str, trades_count: int,
+                         total_pnl: float = 0.0, portfolio_value: float = 0.0):
+        """Save model state for competition"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Generate unique ID
+        state_id = f"{competition_id}_{model_name}"
+
+        cursor.execute("""
+            INSERT OR REPLACE INTO alpha_model_states (
+                id, competition_id, model_name, capital, positions_json,
+                trades_count, total_pnl, portfolio_value, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            state_id, competition_id, model_name, capital, positions_json,
+            trades_count, total_pnl, portfolio_value, int(datetime.now().timestamp())
+        ))
+
+        conn.commit()
+        conn.close()
+
+    def get_model_states(self, competition_id: str) -> List[Dict]:
+        """Get all model states for a competition"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT * FROM alpha_model_states WHERE competition_id = ?
+        """, (competition_id,))
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        return results
+
+    def initialize_database(self):
+        """Create tables if they don't exist"""
+        schema_path = os.path.join(os.path.dirname(__file__), 'schema.sql')
+
+        conn = self.get_connection()
+
+        if os.path.exists(schema_path):
+            with open(schema_path, 'r') as f:
+                schema_sql = f.read()
+            conn.executescript(schema_sql)
+
+        # Also create competition config and model state tables (legacy table removed, using alpha_model_states from schema.sql)
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS competition_configs (
+                competition_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                models_json TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                api_keys_json TEXT,
+                status TEXT DEFAULT 'created',
+                created_at INTEGER
+            );
+
+            CREATE TABLE IF NOT EXISTS alpha_performance_snapshots (
+                id TEXT PRIMARY KEY,
+                competition_id TEXT NOT NULL,
+                cycle_number INTEGER NOT NULL,
+                model_name TEXT NOT NULL,
+                portfolio_value REAL NOT NULL,
+                cash REAL NOT NULL,
+                pnl REAL NOT NULL,
+                return_pct REAL NOT NULL,
+                positions_count INTEGER NOT NULL,
+                trades_count INTEGER NOT NULL,
+                timestamp TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS alpha_decision_logs (
+                id TEXT PRIMARY KEY,
+                competition_id TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                cycle_number INTEGER NOT NULL,
+                action TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                quantity REAL,
+                confidence REAL NOT NULL,
+                reasoning TEXT NOT NULL,
+                trade_executed TEXT NOT NULL,
+                price_at_decision REAL,
+                portfolio_value_before REAL,
+                portfolio_value_after REAL,
+                timestamp TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_competition_configs_status ON competition_configs(status);
+            CREATE INDEX IF NOT EXISTS idx_alpha_snapshots_competition ON alpha_performance_snapshots(competition_id);
+            CREATE INDEX IF NOT EXISTS idx_alpha_snapshots_cycle ON alpha_performance_snapshots(cycle_number);
+            CREATE INDEX IF NOT EXISTS idx_alpha_decision_logs_competition ON alpha_decision_logs(competition_id);
+            CREATE INDEX IF NOT EXISTS idx_alpha_decision_logs_model ON alpha_decision_logs(model_name);
+            CREATE INDEX IF NOT EXISTS idx_alpha_decision_logs_cycle ON alpha_decision_logs(cycle_number);
+        """)
+
+        conn.commit()
+        conn.close()
+    def save_decision_log(self, competition_id: str, model_name: str, cycle_number: int,
+                         action: str, symbol: str, quantity: float, confidence: float,
+                         reasoning: str, trade_executed: bool, price_at_decision: float,
+                         portfolio_value_before: float, portfolio_value_after: float):
+        """Save decision log to database"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Generate unique ID
+        timestamp = int(datetime.now().timestamp() * 1000)
+        decision_id = f"{competition_id}_{model_name}_{cycle_number}_{timestamp}"
+
+        cursor.execute("""
+            INSERT INTO alpha_decision_logs (
+                id, competition_id, model_name, cycle_number, action, symbol, quantity,
+                confidence, reasoning, trade_executed, price_at_decision,
+                portfolio_value_before, portfolio_value_after, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            decision_id, competition_id, model_name, cycle_number, action, symbol, quantity,
+            confidence, reasoning, trade_executed, price_at_decision,
+            portfolio_value_before, portfolio_value_after, timestamp
+        ))
+
+        conn.commit()
+        conn.close()
+
+    def save_performance_snapshot(self, competition_id: str, cycle_number: int,
+                                 model_name: str, portfolio_value: float, cash: float,
+                                 pnl: float, return_pct: float, positions_count: int,
+                                 trades_count: int):
+        """Save performance snapshot to database"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        # Generate unique ID
+        timestamp = int(datetime.now().timestamp() * 1000)
+        snapshot_id = f"{competition_id}_{model_name}_{cycle_number}_{timestamp}"
+
+        cursor.execute("""
+            INSERT INTO alpha_performance_snapshots (
+                id, competition_id, cycle_number, model_name, portfolio_value, cash,
+                pnl, return_pct, positions_count, trades_count, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            snapshot_id, competition_id, cycle_number, model_name, portfolio_value, cash,
+            pnl, return_pct, positions_count, trades_count, timestamp
+        ))
+
+        conn.commit()
+        conn.close()
+
+    def get_decision_logs(self, competition_id: str, limit: int = 50) -> List[Dict]:
+        """Get recent decision logs for a competition"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT * FROM alpha_decision_logs
+            WHERE competition_id = ?
+            ORDER BY timestamp DESC
+            LIMIT ?
+        """, (competition_id, limit))
+
+        results = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+
+        return results
 
 
 # Global instance

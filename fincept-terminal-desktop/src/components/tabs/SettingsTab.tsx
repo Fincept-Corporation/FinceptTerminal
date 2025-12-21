@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link, Globe, Check } from 'lucide-react';
-import { sqliteService, type LLMConfig, type LLMGlobalSettings, PREDEFINED_API_KEYS, type ApiKeys } from '@/services/sqliteService';
+import { Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link, Globe, Check, Plus, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react';
+import { sqliteService, type LLMConfig, type LLMGlobalSettings, type LLMModelConfig, PREDEFINED_API_KEYS, type ApiKeys } from '@/services/sqliteService';
 import { ollamaService } from '@/services/ollamaService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { terminalThemeService, FONT_FAMILIES, COLOR_THEMES, FontSettings } from '@/services/terminalThemeService';
@@ -85,6 +85,24 @@ export default function SettingsTab() {
   const [ollamaError, setOllamaError] = useState<string | null>(null);
   const [useManualEntry, setUseManualEntry] = useState(false);
   const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({});
+
+  // Multi-model configuration state
+  const [modelConfigs, setModelConfigs] = useState<LLMModelConfig[]>([]);
+  const [showAddModel, setShowAddModel] = useState(false);
+  const [newModelConfig, setNewModelConfig] = useState<{
+    provider: string;
+    model_id: string;
+    display_name: string;
+    api_key: string;
+    base_url: string;
+  }>({
+    provider: 'openai',
+    model_id: '',
+    display_name: '',
+    api_key: '',
+    base_url: ''
+  });
+  const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
 
 
 
@@ -364,8 +382,86 @@ export default function SettingsTab() {
       if (activeConfig) {
         setActiveProvider(activeConfig.provider);
       }
+
+      // Load model configs (multi-model support)
+      const modelCfgs = await sqliteService.getLLMModelConfigs();
+      setModelConfigs(modelCfgs);
     } catch (error) {
       console.error('Failed to load LLM configs:', error);
+    }
+  };
+
+  // Add a new model configuration
+  const handleAddModelConfig = async () => {
+    if (!newModelConfig.model_id) {
+      showMessage('error', 'Model ID is required');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const id = crypto.randomUUID();
+      const displayName = newModelConfig.display_name || `${newModelConfig.provider.toUpperCase()}: ${newModelConfig.model_id}`;
+
+      const result = await sqliteService.saveLLMModelConfig({
+        id,
+        provider: newModelConfig.provider,
+        model_id: newModelConfig.model_id,
+        display_name: displayName,
+        api_key: newModelConfig.api_key || undefined,
+        base_url: newModelConfig.base_url || undefined,
+        is_enabled: true,
+        is_default: modelConfigs.filter(m => m.provider === newModelConfig.provider).length === 0
+      });
+
+      if (result.success) {
+        showMessage('success', 'Model configuration added');
+        setNewModelConfig({
+          provider: 'openai',
+          model_id: '',
+          display_name: '',
+          api_key: '',
+          base_url: ''
+        });
+        setShowAddModel(false);
+        await loadLLMConfigs();
+      } else {
+        showMessage('error', result.message);
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to add model configuration');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete a model configuration
+  const handleDeleteModelConfig = async (id: string) => {
+    try {
+      setLoading(true);
+      const result = await sqliteService.deleteLLMModelConfig(id);
+      if (result.success) {
+        showMessage('success', 'Model configuration deleted');
+        await loadLLMConfigs();
+      } else {
+        showMessage('error', result.message);
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to delete model configuration');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Toggle model enabled state
+  const handleToggleModelEnabled = async (id: string) => {
+    try {
+      const result = await sqliteService.toggleLLMModelConfigEnabled(id);
+      if (result.success) {
+        await loadLLMConfigs();
+      }
+    } catch (error) {
+      showMessage('error', 'Failed to toggle model');
     }
   };
 
@@ -1010,6 +1106,290 @@ export default function SettingsTab() {
                   <Save size={16} />
                   {loading ? 'SAVING...' : 'SAVE LLM CONFIGURATION'}
                 </button>
+
+                {/* Multi-Model Configuration for Alpha Arena */}
+                <div style={{
+                  background: colors.panel,
+                  border: '1px solid #1a1a1a',
+                  padding: '16px',
+                  marginTop: '20px',
+                  borderRadius: '4px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold' }}>
+                      Configured Models (Alpha Arena)
+                    </h3>
+                    <button
+                      onClick={() => setShowAddModel(!showAddModel)}
+                      style={{
+                        background: showAddModel ? '#3a0a0a' : colors.primary,
+                        color: colors.text,
+                        border: 'none',
+                        padding: '6px 12px',
+                        fontSize: '10px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        borderRadius: '3px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      {showAddModel ? <Trash2 size={12} /> : <Plus size={12} />}
+                      {showAddModel ? 'CANCEL' : 'ADD MODEL'}
+                    </button>
+                  </div>
+
+                  <p style={{ color: '#666', fontSize: '9px', marginBottom: '12px' }}>
+                    Configure multiple models with their own API keys for use in Alpha Arena AI trading competition.
+                    Each model can have its own API key or share the provider's key from above.
+                  </p>
+
+                  {/* Add Model Form */}
+                  {showAddModel && (
+                    <div style={{
+                      background: colors.background,
+                      border: '1px solid #2a2a2a',
+                      padding: '12px',
+                      marginBottom: '12px',
+                      borderRadius: '4px'
+                    }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div>
+                          <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                            PROVIDER
+                          </label>
+                          <select
+                            value={newModelConfig.provider}
+                            onChange={(e) => setNewModelConfig({ ...newModelConfig, provider: e.target.value })}
+                            style={{
+                              width: '100%',
+                              background: colors.background,
+                              border: '1px solid #2a2a2a',
+                              color: colors.text,
+                              padding: '8px',
+                              fontSize: '10px',
+                              borderRadius: '3px'
+                            }}
+                          >
+                            <option value="openai">OpenAI</option>
+                            <option value="google">Google (Gemini)</option>
+                            <option value="anthropic">Anthropic (Claude)</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="ollama">Ollama (Local)</option>
+                            <option value="openrouter">OpenRouter</option>
+                            <option value="groq">Groq</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                            MODEL ID *
+                          </label>
+                          <input
+                            type="text"
+                            value={newModelConfig.model_id}
+                            onChange={(e) => setNewModelConfig({ ...newModelConfig, model_id: e.target.value })}
+                            placeholder="e.g. gpt-4o-mini, gemini-2.0-flash-exp"
+                            style={{
+                              width: '100%',
+                              background: colors.background,
+                              border: '1px solid #2a2a2a',
+                              color: colors.text,
+                              padding: '8px',
+                              fontSize: '10px',
+                              borderRadius: '3px'
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                        <div>
+                          <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                            DISPLAY NAME (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={newModelConfig.display_name}
+                            onChange={(e) => setNewModelConfig({ ...newModelConfig, display_name: e.target.value })}
+                            placeholder="e.g. GPT-4o Mini"
+                            style={{
+                              width: '100%',
+                              background: colors.background,
+                              border: '1px solid #2a2a2a',
+                              color: colors.text,
+                              padding: '8px',
+                              fontSize: '10px',
+                              borderRadius: '3px'
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
+                            API KEY (Optional - uses provider key if empty)
+                          </label>
+                          <input
+                            type="password"
+                            value={newModelConfig.api_key}
+                            onChange={(e) => setNewModelConfig({ ...newModelConfig, api_key: e.target.value })}
+                            placeholder="Leave empty to use provider API key"
+                            style={{
+                              width: '100%',
+                              background: colors.background,
+                              border: '1px solid #2a2a2a',
+                              color: colors.text,
+                              padding: '8px',
+                              fontSize: '10px',
+                              borderRadius: '3px'
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleAddModelConfig}
+                        disabled={loading || !newModelConfig.model_id}
+                        style={{
+                          background: colors.primary,
+                          color: colors.text,
+                          border: 'none',
+                          padding: '8px 16px',
+                          fontSize: '10px',
+                          fontWeight: 'bold',
+                          cursor: loading || !newModelConfig.model_id ? 'not-allowed' : 'pointer',
+                          borderRadius: '3px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          opacity: loading || !newModelConfig.model_id ? 0.5 : 1
+                        }}
+                      >
+                        <Plus size={12} />
+                        ADD MODEL
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Configured Models List */}
+                  {modelConfigs.length === 0 ? (
+                    <div style={{
+                      padding: '20px',
+                      textAlign: 'center',
+                      color: '#666',
+                      fontSize: '10px',
+                      border: '1px dashed #2a2a2a',
+                      borderRadius: '4px'
+                    }}>
+                      No models configured yet. Click "ADD MODEL" to add models for Alpha Arena.
+                      <br />
+                      <span style={{ color: '#888', fontSize: '9px' }}>
+                        Note: Models from the legacy config above will also be available.
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {modelConfigs.map((model) => (
+                        <div
+                          key={model.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 12px',
+                            background: model.is_enabled ? colors.background : '#1a1a1a',
+                            border: `1px solid ${model.is_enabled ? '#2a2a2a' : '#1a1a1a'}`,
+                            borderRadius: '4px',
+                            opacity: model.is_enabled ? 1 : 0.6
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <button
+                              onClick={() => handleToggleModelEnabled(model.id)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: '2px'
+                              }}
+                            >
+                              {model.is_enabled ? (
+                                <ToggleRight size={20} color="#00ff00" />
+                              ) : (
+                                <ToggleLeft size={20} color="#666" />
+                              )}
+                            </button>
+                            <div>
+                              <div style={{
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                color: model.is_enabled ? colors.text : '#666'
+                              }}>
+                                {model.display_name || model.model_id}
+                              </div>
+                              <div style={{ fontSize: '9px', color: '#666' }}>
+                                {model.provider.toUpperCase()} · {model.model_id}
+                                {model.api_key && ' · Has API Key'}
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {model.api_key && (
+                              <button
+                                onClick={() => setShowApiKeys(prev => ({ ...prev, [model.id]: !prev[model.id] }))}
+                                style={{
+                                  background: 'transparent',
+                                  border: '1px solid #2a2a2a',
+                                  color: '#666',
+                                  padding: '4px 8px',
+                                  fontSize: '9px',
+                                  cursor: 'pointer',
+                                  borderRadius: '3px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                              >
+                                {showApiKeys[model.id] ? <EyeOff size={10} /> : <Eye size={10} />}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteModelConfig(model.id)}
+                              style={{
+                                background: '#3a0a0a',
+                                border: 'none',
+                                color: '#ff4444',
+                                padding: '4px 8px',
+                                fontSize: '9px',
+                                cursor: 'pointer',
+                                borderRadius: '3px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <Trash2 size={10} />
+                              DELETE
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Summary of all available LLMs */}
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '10px',
+                    background: '#0a1a0a',
+                    border: '1px solid #00ff00',
+                    borderRadius: '4px',
+                    fontSize: '9px',
+                    color: '#00ff00'
+                  }}>
+                    <strong>Available for Alpha Arena:</strong> {modelConfigs.filter(m => m.is_enabled).length} custom models
+                    + {llmConfigs.filter(c => c.api_key).length} provider defaults
+                  </div>
+                </div>
               </div>
             )}
 

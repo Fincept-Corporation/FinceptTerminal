@@ -584,34 +584,99 @@ async fn install_python_macos(app: &AppHandle) -> Result<(), String> {
 
     emit_progress(app, "python", 50, "Extracting Python...", false);
 
-    // Extract tar.gz
+    // Extract tar.gz with --strip-components=1 to flatten directory structure
     let output = Command::new("tar")
-        .args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap()])
+        .args(&[
+            "-xzf",
+            tar_path.to_str().unwrap(),
+            "-C",
+            python_dir.to_str().unwrap(),
+            "--strip-components=1"
+        ])
         .output()
-        .map_err(|e| format!("Failed to extract: {}", e))?;
+        .map_err(|e| format!("Failed to extract tar.gz: {}", e))?;
 
     if !output.status.success() {
-        return Err("Failed to extract Python".to_string());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!(
+            "Failed to extract Python archive.\n\nStderr: {}\nStdout: {}",
+            stderr, stdout
+        ));
+    }
+
+    emit_progress(app, "python", 60, "Checking extraction...", false);
+
+    // Verify extraction succeeded by checking directory structure
+    let python_exe = python_dir.join("bin").join("python3");
+    if !python_exe.exists() {
+        // List what was actually extracted for debugging
+        let mut extracted_files = Vec::new();
+        if let Ok(entries) = fs::read_dir(&python_dir) {
+            for entry in entries.flatten() {
+                extracted_files.push(entry.path().display().to_string());
+            }
+        }
+        return Err(format!(
+            "Python extraction failed: python3 not found at expected path.\n\n\
+            Expected: {}\n\n\
+            Extracted files in {}:\n{}\n\n\
+            This may indicate archive structure mismatch.",
+            python_exe.display(),
+            python_dir.display(),
+            extracted_files.join("\n")
+        ));
+    }
+
+    emit_progress(app, "python", 70, "Making Python executable...", false);
+
+    // Make Python executable (chmod +x)
+    let chmod_output = Command::new("chmod")
+        .args(&["+x", python_exe.to_str().unwrap()])
+        .output()
+        .map_err(|e| format!("Failed to chmod python3: {}", e))?;
+
+    if !chmod_output.status.success() {
+        eprintln!("[SETUP] Warning: chmod failed, but continuing...");
     }
 
     emit_progress(app, "python", 75, "Verifying Python installation...", false);
 
     // Verify Python and pip are working
-    let python_exe = python_dir.join("bin").join("python3");
     let test_output = Command::new(&python_exe)
         .arg("--version")
         .output();
 
     match test_output {
         Err(e) => {
-            return Err(format!("Python installation test failed: {}", e));
+            return Err(format!(
+                "Python installation test failed: {}\n\n\
+                Python path: {}\n\
+                Exists: {}\n\
+                Executable: {:?}\n\n\
+                Possible issues:\n\
+                1. Missing system dependencies\n\
+                2. Permission issues\n\
+                3. Incompatible architecture",
+                e,
+                python_exe.display(),
+                python_exe.exists(),
+                fs::metadata(&python_exe).ok()
+            ));
         }
         Ok(output) if !output.status.success() => {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Python installation test failed: {}", stderr));
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!(
+                "Python installation test failed.\n\n\
+                Stderr: {}\n\
+                Stdout: {}",
+                stderr, stdout
+            ));
         }
-        Ok(_) => {
-            // Python works, continue
+        Ok(output) => {
+            let version = String::from_utf8_lossy(&output.stdout);
+            eprintln!("[SETUP] Python verified: {}", version.trim());
         }
     }
 
@@ -653,34 +718,101 @@ async fn install_python_linux(app: &AppHandle) -> Result<(), String> {
 
     emit_progress(app, "python", 50, "Extracting Python...", false);
 
-    // Extract tar.gz
+    // Extract tar.gz with --strip-components=1 to flatten directory structure
     let output = Command::new("tar")
-        .args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap()])
+        .args(&[
+            "-xzf",
+            tar_path.to_str().unwrap(),
+            "-C",
+            python_dir.to_str().unwrap(),
+            "--strip-components=1"
+        ])
         .output()
-        .map_err(|e| format!("Failed to extract: {}", e))?;
+        .map_err(|e| format!("Failed to extract tar.gz: {}. Ensure 'tar' is installed.", e))?;
 
     if !output.status.success() {
-        return Err("Failed to extract Python".to_string());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(format!(
+            "Failed to extract Python archive.\n\nStderr: {}\nStdout: {}\n\nEnsure 'tar' command is available.",
+            stderr, stdout
+        ));
+    }
+
+    emit_progress(app, "python", 60, "Checking extraction...", false);
+
+    // Verify extraction succeeded by checking directory structure
+    let python_exe = python_dir.join("bin").join("python3");
+    if !python_exe.exists() {
+        // List what was actually extracted for debugging
+        let mut extracted_files = Vec::new();
+        if let Ok(entries) = fs::read_dir(&python_dir) {
+            for entry in entries.flatten() {
+                extracted_files.push(entry.path().display().to_string());
+            }
+        }
+        return Err(format!(
+            "Python extraction failed: python3 not found at expected path.\n\n\
+            Expected: {}\n\n\
+            Extracted files in {}:\n{}\n\n\
+            This may indicate archive structure mismatch.",
+            python_exe.display(),
+            python_dir.display(),
+            extracted_files.join("\n")
+        ));
+    }
+
+    emit_progress(app, "python", 70, "Making Python executable...", false);
+
+    // Make Python executable (chmod +x)
+    let chmod_output = Command::new("chmod")
+        .args(&["+x", python_exe.to_str().unwrap()])
+        .output()
+        .map_err(|e| format!("Failed to chmod python3: {}", e))?;
+
+    if !chmod_output.status.success() {
+        eprintln!("[SETUP] Warning: chmod failed, but continuing...");
     }
 
     emit_progress(app, "python", 75, "Verifying Python installation...", false);
 
     // Verify Python and pip are working
-    let python_exe = python_dir.join("bin").join("python3");
     let test_output = Command::new(&python_exe)
         .arg("--version")
         .output();
 
     match test_output {
         Err(e) => {
-            return Err(format!("Python installation test failed: {}", e));
+            return Err(format!(
+                "Python installation test failed: {}\n\n\
+                Python path: {}\n\
+                Exists: {}\n\
+                Executable: {:?}\n\n\
+                Possible issues:\n\
+                1. Missing system dependencies (check with: ldd {})\n\
+                2. Permission issues\n\
+                3. Incompatible architecture",
+                e,
+                python_exe.display(),
+                python_exe.exists(),
+                fs::metadata(&python_exe).ok(),
+                python_exe.display()
+            ));
         }
         Ok(output) if !output.status.success() => {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Python installation test failed: {}", stderr));
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!(
+                "Python installation test failed.\n\n\
+                Stderr: {}\n\
+                Stdout: {}\n\n\
+                Run 'ldd {}' to check for missing dependencies.",
+                stderr, stdout, python_exe.display()
+            ));
         }
-        Ok(_) => {
-            // Python works, continue
+        Ok(output) => {
+            let version = String::from_utf8_lossy(&output.stdout);
+            eprintln!("[SETUP] Python verified: {}", version.trim());
         }
     }
 
@@ -842,11 +974,18 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
         let output = Command::new("unzip")
             .args(&["-q", zip_path.to_str().unwrap(), "-d", temp_extract_dir.to_str().unwrap()])
             .output()
-            .map_err(|e| format!("Failed to extract Bun: {}", e))?;
+            .map_err(|e| format!("Failed to extract Bun: {}. Ensure 'unzip' is installed.", e))?;
 
         if !output.status.success() {
-            return Err("Failed to extract Bun".to_string());
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return Err(format!(
+                "Failed to extract Bun archive.\n\nStderr: {}\nStdout: {}\n\nEnsure 'unzip' is installed.",
+                stderr, stdout
+            ));
         }
+
+        emit_progress(app, "bun", 60, "Checking extraction...", false);
 
         // Find the bun executable in extracted folder and move it directly to bun_dir
         // Bun zips contain a folder like "bun-darwin-aarch64/bun" or "bun-linux-x64/bun"
@@ -864,11 +1003,17 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
                         fs::copy(&bun_exe_path, &target_bun)
                             .map_err(|e| format!("Failed to copy bun executable: {}", e))?;
 
+                        emit_progress(app, "bun", 70, "Making Bun executable...", false);
+
                         // Make executable
-                        Command::new("chmod")
+                        let chmod_output = Command::new("chmod")
                             .args(&["+x", target_bun.to_str().unwrap()])
                             .output()
-                            .ok();
+                            .map_err(|e| format!("Failed to chmod bun: {}", e))?;
+
+                        if !chmod_output.status.success() {
+                            eprintln!("[SETUP] Warning: chmod failed on bun, but continuing...");
+                        }
 
                         eprintln!("[SETUP] Bun copied to: {}", target_bun.display());
                         bun_found = true;
@@ -886,10 +1031,70 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
                 }
             }
             return Err(format!(
-                "Bun executable not found in extracted archive.\n\
-                Found:\n{}",
+                "Bun executable not found in extracted archive.\n\n\
+                Expected structure: bun-{}-{}/bun\n\
+                Found in archive:\n{}\n\n\
+                This may indicate a corrupted download.",
+                if cfg!(target_os = "macos") { "darwin" } else { "linux" },
+                if cfg!(target_arch = "aarch64") { "aarch64" } else { "x64" },
                 found_files.join("\n")
             ));
+        }
+
+        emit_progress(app, "bun", 75, "Verifying Bun installation...", false);
+
+        // Verify Bun executable works
+        let target_bun = bun_dir.join("bun");
+        if !target_bun.exists() {
+            return Err("Bun executable not found after copy".to_string());
+        }
+
+        // Check file size
+        if let Ok(metadata) = fs::metadata(&target_bun) {
+            if metadata.len() == 0 {
+                return Err("Bun executable is empty (0 bytes). Download may be corrupted.".to_string());
+            }
+            eprintln!("[SETUP] Bun file size: {} bytes", metadata.len());
+        }
+
+        // Test Bun execution
+        let test_output = Command::new(&target_bun)
+            .arg("--version")
+            .output();
+
+        match test_output {
+            Err(e) => {
+                return Err(format!(
+                    "Bun installation test failed: {}\n\n\
+                    Bun path: {}\n\
+                    Exists: {}\n\
+                    Executable: {:?}\n\n\
+                    Possible issues:\n\
+                    1. Missing system dependencies (check with: ldd {})\n\
+                    2. Permission issues\n\
+                    3. Incompatible architecture",
+                    e,
+                    target_bun.display(),
+                    target_bun.exists(),
+                    fs::metadata(&target_bun).ok(),
+                    target_bun.display()
+                ));
+            }
+            Ok(output) if !output.status.success() => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                return Err(format!(
+                    "Bun installation test failed.\n\n\
+                    Stderr: {}\n\
+                    Stdout: {}\n\n\
+                    Run 'ldd {}' to check for missing dependencies.",
+                    stderr, stdout, target_bun.display()
+                ));
+            }
+            Ok(output) => {
+                let version = String::from_utf8_lossy(&output.stdout);
+                eprintln!("[SETUP] Bun verified: {}", version.trim());
+            }
         }
 
         emit_progress(app, "bun", 100, "Bun installed successfully", false);

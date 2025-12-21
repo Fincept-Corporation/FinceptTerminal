@@ -41,6 +41,7 @@ import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
 import BacktestingTab from '@/components/tabs/BacktestingTabNew';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import AgentConfigTab from '@/components/tabs/AgentConfigTab';
+import AlphaArenaTab from '@/components/tabs/AlphaArenaTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -485,6 +486,7 @@ function FinxeptTerminalContent() {
 
   const tradingMenuItems = [
     { label: 'Trading Desk', shortcut: 'F9', action: () => setActiveTab('trading') },
+    { label: 'Alpha Arena', action: () => setActiveTab('alpha-arena') },
     { label: 'Fyers Broker', action: () => setActiveTab('fyers') },
     { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
     { label: 'Backtesting', shortcut: 'F5', action: () => setActiveTab('backtesting') },
@@ -985,6 +987,9 @@ function FinxeptTerminalContent() {
           </TabsContent>
           <TabsContent value="trading" className="h-full m-0 p-0">
             <TradingTab />
+          </TabsContent>
+          <TabsContent value="alpha-arena" className="h-full m-0 p-0">
+            <AlphaArenaTab />
           </TabsContent>
           <TabsContent value="settings" className="h-full m-0 p-0">
             <SettingsTab />

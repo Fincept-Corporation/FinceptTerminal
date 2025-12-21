@@ -117,6 +117,34 @@ CREATE TABLE IF NOT EXISTS debate_sessions (
     execution_time_ms INTEGER
 );
 
+-- Alpha Arena Competition Configurations
+CREATE TABLE IF NOT EXISTS competition_configs (
+    competition_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    models_json TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    api_keys_json TEXT,
+    status TEXT DEFAULT 'created',
+    created_at INTEGER NOT NULL
+);
+
+-- Alpha Arena Model States
+CREATE TABLE IF NOT EXISTS alpha_model_states (
+    id TEXT PRIMARY KEY,
+    competition_id TEXT NOT NULL,
+    model_name TEXT NOT NULL,
+    provider TEXT,
+    model_id TEXT,
+    capital REAL NOT NULL,
+    positions_json TEXT,
+    trades_count INTEGER DEFAULT 0,
+    total_pnl REAL DEFAULT 0,
+    portfolio_value REAL NOT NULL,
+    created_at INTEGER DEFAULT (strftime('%s', 'now')),
+    updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+);
+
 -- Indexes for Performance
 CREATE INDEX IF NOT EXISTS idx_agent_trades_agent ON agent_trades(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_trades_symbol ON agent_trades(symbol);
@@ -125,3 +153,5 @@ CREATE INDEX IF NOT EXISTS idx_agent_trades_timestamp ON agent_trades(entry_time
 CREATE INDEX IF NOT EXISTS idx_agent_decisions_agent ON agent_decisions(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_decisions_timestamp ON agent_decisions(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_competitions_status ON competitions(status);
+CREATE INDEX IF NOT EXISTS idx_competition_configs_status ON competition_configs(status);
+CREATE INDEX IF NOT EXISTS idx_alpha_model_states_comp ON alpha_model_states(competition_id);

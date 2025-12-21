@@ -19,9 +19,6 @@ import { OrdersTable, ClosedOrders } from './trading/core/OrderManager';
 import { TradingChart, DepthChart, VolumeProfile } from './trading/charts';
 import { AccountStats, FeesDisplay, MarginPanel } from './trading/core/AccountInfo';
 import { PortfolioAggregator, ArbitrageDetector } from './trading/cross-exchange';
-import { AIAgentsPanel } from './trading/ai-agents/AIAgentsPanel';
-import { ModelChatPanel } from './trading/ai-agents/ModelChatPanel';
-import { LeaderboardPanel } from './trading/ai-agents/LeaderboardPanel';
 import type { OrderRequest } from '../../types/trading';
 
 interface OrderBookLevel {
@@ -107,8 +104,8 @@ export function TradingTab() {
   const [showSymbolDropdown, setShowSymbolDropdown] = useState(false);
   const [showBrokerDropdown, setShowBrokerDropdown] = useState(false);
   const [selectedView, setSelectedView] = useState<'chart' | 'depth' | 'trades'>('chart');
-  const [rightPanelView, setRightPanelView] = useState<'orderbook' | 'volume' | 'modelchat'>('orderbook');
-  const [leftSidebarView, setLeftSidebarView] = useState<'watchlist' | 'ai-agents' | 'leaderboard'>('watchlist');
+  const [rightPanelView, setRightPanelView] = useState<'orderbook' | 'volume'>('orderbook');
+  const [leftSidebarView, setLeftSidebarView] = useState<'watchlist'>('watchlist');
 
   // Paper trading state
   const [positions, setPositions] = useState<Position[]>([]);
@@ -256,7 +253,7 @@ export function TradingTab() {
     activeBroker ? `${activeBroker}.trade.${selectedSymbol}` : null
   );
 
-  // Update ticker data
+  // Update ticker data and position prices
   useEffect(() => {
     if (tickerMessage && tickerMessage.data) {
       const data = tickerMessage.data;
@@ -271,6 +268,42 @@ export function TradingTab() {
               last: data.last,
             });
           }
+
+          // Update position prices in real-time AND in database
+          setPositions(prev => prev.map(p => {
+            if (p.symbol === selectedSymbol && data.last) {
+              const currentPrice = data.last;
+              const unrealizedPnl = p.side === 'long'
+                ? (currentPrice - p.entryPrice) * p.quantity
+                : (p.entryPrice - currentPrice) * p.quantity;
+              const pnlPercent = ((unrealizedPnl / (p.entryPrice * p.quantity)) * 100);
+
+              // Update DB asynchronously
+              (async () => {
+                try {
+                  const db = (await import('../../paper-trading/PaperTradingDatabase')).paperTradingDatabase;
+                  const dbPositions = await db.getPortfolioPositions(
+                    (paperAdapter as any).paperConfig.portfolioId,
+                    'open'
+                  );
+                  const dbPos = dbPositions.find(pos => pos.symbol === selectedSymbol);
+                  if (dbPos) {
+                    await db.updatePosition(dbPos.id, { currentPrice, unrealizedPnl });
+                  }
+                } catch (err) {
+                  console.error('Failed to update position price in DB:', err);
+                }
+              })();
+
+              return {
+                ...p,
+                currentPrice,
+                unrealizedPnl,
+                pnlPercent
+              };
+            }
+            return p;
+          }));
         }
       }
     }
@@ -342,13 +375,18 @@ export function TradingTab() {
       if (tradingMode !== 'paper' || !paperAdapter) return;
 
       try {
-        const balanceData = await paperAdapter.fetchBalance();
+        const [balanceData, positionsData, ordersData, tradesData] = await Promise.all([
+          paperAdapter.fetchBalance(),
+          paperAdapter.fetchPositions(),
+          paperAdapter.fetchOpenOrders(),
+          paperAdapter.fetchMyTrades(undefined, undefined, 50)
+        ]);
+
         const usdBalance = (balanceData.free as any)?.USD || 0;
         const totalEquity = (balanceData.total as any)?.USD || 0;
         setBalance(usdBalance);
         setEquity(totalEquity);
 
-        const positionsData = await paperAdapter.fetchPositions();
         const mappedPositions: Position[] = positionsData.map((p: any) => ({
           symbol: p.symbol,
           side: p.side,
@@ -361,7 +399,6 @@ export function TradingTab() {
         }));
         setPositions(mappedPositions);
 
-        const ordersData = await paperAdapter.fetchOpenOrders();
         const mappedOrders: Order[] = ordersData.map((o: any) => ({
           id: o.id,
           symbol: o.symbol,
@@ -374,7 +411,6 @@ export function TradingTab() {
         }));
         setOrders(mappedOrders);
 
-        const tradesData = await paperAdapter.fetchMyTrades(undefined, undefined, 50);
         setTrades(tradesData);
 
         if (typeof (paperAdapter as any).getStatistics === 'function') {
@@ -387,7 +423,7 @@ export function TradingTab() {
     };
 
     loadPaperTradingData();
-    const interval = setInterval(loadPaperTradingData, 2000);
+    const interval = setInterval(loadPaperTradingData, 500);
     return () => clearInterval(interval);
   }, [tradingMode, paperAdapter]);
 
@@ -467,9 +503,15 @@ export function TradingTab() {
 
   // Handle order cancellation
   const handleCancelOrder = useCallback(async (orderId: string, symbol: string) => {
-    if (!paperAdapter) return;
+    if (!paperAdapter) {
+      console.error('[TradingTab] Paper adapter not available for cancellation');
+      return;
+    }
     try {
+      console.log(`[TradingTab] Canceling order ${orderId} for ${symbol}`);
       await paperAdapter.cancelOrder(orderId, symbol);
+
+      // Refresh orders list
       const ordersData = await paperAdapter.fetchOpenOrders();
       const mappedOrders: Order[] = ordersData.map((o: any) => ({
         id: o.id,
@@ -482,8 +524,11 @@ export function TradingTab() {
         createdAt: o.datetime,
       }));
       setOrders(mappedOrders);
+
+      console.log(`[TradingTab] Order ${orderId} canceled successfully`);
     } catch (error) {
-      console.error('Cancel failed:', error);
+      console.error('[TradingTab] Cancel failed:', error);
+      alert(`Failed to cancel order: ${(error as Error).message}`);
     }
   }, [paperAdapter]);
 
@@ -969,190 +1014,111 @@ export function TradingTab() {
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
-          {/* Toggle Header */}
+          {/* Header */}
           <div style={{
-            padding: '6px',
+            padding: '8px 12px',
             backgroundColor: BLOOMBERG.HEADER_BG,
             borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-            display: 'flex',
-            gap: '4px'
+            fontSize: '10px',
+            fontWeight: 700,
+            color: BLOOMBERG.ORANGE,
+            letterSpacing: '0.5px'
           }}>
-            <button
-              onClick={() => setLeftSidebarView('watchlist')}
-              style={{
-                flex: 1,
-                padding: '6px 8px',
-                backgroundColor: leftSidebarView === 'watchlist' ? BLOOMBERG.ORANGE : 'transparent',
-                border: 'none',
-                color: leftSidebarView === 'watchlist' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                cursor: 'pointer',
-                fontSize: '9px',
-                fontWeight: 700,
-                letterSpacing: '0.5px',
-                transition: 'all 0.2s',
-                borderRadius: '2px'
-              }}
-            >
-              WATCH
-            </button>
-            <button
-              onClick={() => setLeftSidebarView('ai-agents')}
-              style={{
-                flex: 1,
-                padding: '6px 8px',
-                backgroundColor: leftSidebarView === 'ai-agents' ? BLOOMBERG.ORANGE : 'transparent',
-                border: 'none',
-                color: leftSidebarView === 'ai-agents' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                cursor: 'pointer',
-                fontSize: '9px',
-                fontWeight: 700,
-                letterSpacing: '0.5px',
-                transition: 'all 0.2s',
-                borderRadius: '2px'
-              }}
-            >
-              AGENTS
-            </button>
-            <button
-              onClick={() => setLeftSidebarView('leaderboard')}
-              style={{
-                flex: 1,
-                padding: '6px 8px',
-                backgroundColor: leftSidebarView === 'leaderboard' ? BLOOMBERG.ORANGE : 'transparent',
-                border: 'none',
-                color: leftSidebarView === 'leaderboard' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
-                cursor: 'pointer',
-                fontSize: '9px',
-                fontWeight: 700,
-                letterSpacing: '0.5px',
-                transition: 'all 0.2s',
-                borderRadius: '2px'
-              }}
-            >
-              LEADER
-            </button>
+            WATCHLIST
           </div>
 
           {/* Content */}
-          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {leftSidebarView === 'watchlist' && (
-              <div style={{
-                flex: 1,
-                overflow: 'auto',
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '0',
-                alignContent: 'start'
-              }}>
-                {watchlist.map((symbol, idx) => (
-                  <div
-                    key={symbol}
-                    onClick={() => setSelectedSymbol(symbol)}
-                    style={{
-                      padding: '8px 10px',
-                      cursor: 'pointer',
-                      backgroundColor: selectedSymbol === symbol ? `${BLOOMBERG.ORANGE}15` : 'transparent',
-                      borderLeft: selectedSymbol === symbol ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
-                      borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                      borderRight: idx % 2 === 0 ? `1px solid ${BLOOMBERG.BORDER}` : 'none',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (selectedSymbol !== symbol) {
-                        e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (selectedSymbol !== symbol) {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }
-                    }}
-                  >
-                    {/* Flex container: Ticker on left, Price/Change on right */}
+          <div style={{
+            flex: 1,
+            overflow: 'auto',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '0',
+            alignContent: 'start'
+          }}>
+            {watchlist.map((symbol, idx) => (
+              <div
+                key={symbol}
+                onClick={() => setSelectedSymbol(symbol)}
+                style={{
+                  padding: '8px 10px',
+                  cursor: 'pointer',
+                  backgroundColor: selectedSymbol === symbol ? `${BLOOMBERG.ORANGE}15` : 'transparent',
+                  borderLeft: selectedSymbol === symbol ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
+                  borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+                  borderRight: idx % 2 === 0 ? `1px solid ${BLOOMBERG.BORDER}` : 'none',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedSymbol !== symbol) {
+                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedSymbol !== symbol) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                {/* Flex container: Ticker on left, Price/Change on right */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  {/* Left side: Ticker symbol */}
+                  <div style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    color: selectedSymbol === symbol ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {symbol.replace('/USD', '')}
+                  </div>
+
+                  {/* Right side: Price and Change */}
+                  {watchlistPrices[symbol] ? (
                     <div style={{
                       display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: '8px'
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      gap: '2px'
                     }}>
-                      {/* Left side: Ticker symbol */}
                       <div style={{
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        color: selectedSymbol === symbol ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
-                        whiteSpace: 'nowrap'
+                        fontSize: '10px',
+                        color: BLOOMBERG.WHITE,
+                        fontFamily: 'monospace',
+                        fontWeight: 600
                       }}>
-                        {symbol.replace('/USD', '')}
+                        ${watchlistPrices[symbol].price >= 1000
+                          ? watchlistPrices[symbol].price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                          : watchlistPrices[symbol].price >= 1
+                          ? watchlistPrices[symbol].price.toFixed(2)
+                          : watchlistPrices[symbol].price.toFixed(4)
+                        }
                       </div>
-
-                      {/* Right side: Price and Change */}
-                      {watchlistPrices[symbol] ? (
-                        <div style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'flex-end',
-                          gap: '2px'
-                        }}>
-                          <div style={{
-                            fontSize: '10px',
-                            color: BLOOMBERG.WHITE,
-                            fontFamily: 'monospace',
-                            fontWeight: 600
-                          }}>
-                            ${watchlistPrices[symbol].price >= 1000
-                              ? watchlistPrices[symbol].price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                              : watchlistPrices[symbol].price >= 1
-                              ? watchlistPrices[symbol].price.toFixed(2)
-                              : watchlistPrices[symbol].price.toFixed(4)
-                            }
-                          </div>
-                          <div style={{
-                            fontSize: '9px',
-                            color: watchlistPrices[symbol].change >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
-                            fontFamily: 'monospace',
-                            fontWeight: 700
-                          }}>
-                            {watchlistPrices[symbol].change >= 0 ? '▲' : '▼'} {Math.abs(watchlistPrices[symbol].change).toFixed(2)}%
-                          </div>
-                        </div>
-                      ) : (
-                        <div style={{
-                          fontSize: '9px',
-                          color: BLOOMBERG.GRAY,
-                          fontFamily: 'monospace'
-                        }}>
-                          ...
-                        </div>
-                      )}
+                      <div style={{
+                        fontSize: '9px',
+                        color: watchlistPrices[symbol].change >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                        fontFamily: 'monospace',
+                        fontWeight: 700
+                      }}>
+                        {watchlistPrices[symbol].change >= 0 ? '▲' : '▼'} {Math.abs(watchlistPrices[symbol].change).toFixed(2)}%
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ) : (
+                    <div style={{
+                      fontSize: '9px',
+                      color: BLOOMBERG.GRAY,
+                      fontFamily: 'monospace'
+                    }}>
+                      ...
+                    </div>
+                  )}
+                </div>
               </div>
-            )}
-
-            {leftSidebarView === 'ai-agents' && (
-              <div style={{ flex: 1, overflow: 'auto' }}>
-                <AIAgentsPanel
-                  selectedSymbol={selectedSymbol}
-                  portfolioData={{
-                    positions: positions.map(p => ({
-                      symbol: p.symbol,
-                      quantity: p.quantity,
-                      entry_price: p.entryPrice,
-                      current_price: p.currentPrice,
-                      value: p.positionValue
-                    })),
-                    total_value: equity
-                  }}
-                />
-              </div>
-            )}
-
-            {leftSidebarView === 'leaderboard' && (
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                <LeaderboardPanel refreshInterval={10000} />
-              </div>
-            )}
+            ))}
           </div>
         </div>
 
@@ -1585,7 +1551,7 @@ export function TradingTab() {
               alignItems: 'center'
             }}>
               <div style={{ display: 'flex', gap: '8px' }}>
-                {['orderbook', 'volume', 'modelchat'].map((view) => (
+                {['orderbook', 'volume'].map((view) => (
                   <button
                     key={view}
                     onClick={() => setRightPanelView(view as any)}
@@ -1712,10 +1678,6 @@ export function TradingTab() {
 
           {rightPanelView === 'volume' && (
             <VolumeProfile symbol={selectedSymbol} height={550} />
-          )}
-
-          {rightPanelView === 'modelchat' && (
-            <ModelChatPanel refreshInterval={5000} />
           )}
         </div>
             <div style={{

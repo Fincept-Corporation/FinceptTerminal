@@ -59,6 +59,20 @@ export interface LLMConfig {
   updated_at?: string;
 }
 
+// New interface for individual model configurations (multiple models per provider)
+export interface LLMModelConfig {
+  id: string;
+  provider: string;
+  model_id: string;
+  display_name: string;
+  api_key?: string;
+  base_url?: string;
+  is_enabled: boolean;
+  is_default: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface LLMGlobalSettings {
   temperature: number;
   max_tokens: number;
@@ -212,6 +226,82 @@ export interface OptimizationRun {
   duration_seconds?: number;
 }
 
+// ==================== ALPHA ARENA INTERFACES ====================
+
+export interface AlphaCompetition {
+  id: string;
+  name: string;
+  symbol: string;
+  mode: 'baseline' | 'monk' | 'situational' | 'max_leverage';
+  status: 'created' | 'running' | 'paused' | 'completed';
+  cycle_count: number;
+  cycle_interval_seconds: number;
+  initial_capital: number;
+  created_at: string;
+  started_at?: string;
+  ended_at?: string;
+  updated_at: string;
+}
+
+export interface AlphaModelState {
+  id: string;
+  competition_id: string;
+  model_name: string;
+  provider: string;
+  model_id: string;
+  capital: number;
+  positions_json: string;
+  trades_count: number;
+  total_pnl: number;
+  portfolio_value: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlphaPriceHistory {
+  id: string;
+  competition_id: string;
+  symbol: string;
+  price: number;
+  bid?: number;
+  ask?: number;
+  volume_24h?: number;
+  high_24h?: number;
+  low_24h?: number;
+  timestamp: string;
+}
+
+export interface AlphaDecisionLog {
+  id: string;
+  competition_id: string;
+  model_name: string;
+  cycle_number: number;
+  action: 'buy' | 'sell' | 'hold';
+  symbol: string;
+  quantity?: number;
+  confidence: number;
+  reasoning: string;
+  trade_executed: string;
+  price_at_decision: number;
+  portfolio_value_before: number;
+  portfolio_value_after: number;
+  timestamp: string;
+}
+
+export interface AlphaPerformanceSnapshot {
+  id: string;
+  competition_id: string;
+  cycle_number: number;
+  model_name: string;
+  portfolio_value: number;
+  cash: number;
+  pnl: number;
+  return_pct: number;
+  positions_count: number;
+  trades_count: number;
+  timestamp: string;
+}
+
 class SQLiteService {
   private db: Database | null = null;
   private initPromise: Promise<void> | null = null;
@@ -288,6 +378,23 @@ class SQLiteService {
         max_tokens INTEGER DEFAULT 2000,
         system_prompt TEXT DEFAULT ''
       )`,
+
+      // LLM model configurations table (supports multiple models per provider)
+      `CREATE TABLE IF NOT EXISTS llm_model_configs (
+        id TEXT PRIMARY KEY,
+        provider TEXT NOT NULL,
+        model_id TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        api_key TEXT,
+        base_url TEXT,
+        is_enabled INTEGER DEFAULT 1,
+        is_default INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      `CREATE INDEX IF NOT EXISTS idx_llm_model_configs_provider ON llm_model_configs(provider)`,
+      `CREATE INDEX IF NOT EXISTS idx_llm_model_configs_enabled ON llm_model_configs(is_enabled)`,
 
       // Chat sessions table
       `CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -638,6 +745,112 @@ class SQLiteService {
       `CREATE INDEX IF NOT EXISTS idx_optimization_runs_provider ON optimization_runs(provider_name)`,
       `CREATE INDEX IF NOT EXISTS idx_optimization_runs_status ON optimization_runs(status)`,
 
+      // ==================== ALPHA ARENA TABLES ====================
+
+      // Alpha Arena competitions table
+      `CREATE TABLE IF NOT EXISTS alpha_competitions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        mode TEXT NOT NULL CHECK (mode IN ('baseline', 'monk', 'situational', 'max_leverage')),
+        status TEXT NOT NULL CHECK (status IN ('created', 'running', 'paused', 'completed')) DEFAULT 'created',
+        cycle_count INTEGER DEFAULT 0,
+        cycle_interval_seconds INTEGER DEFAULT 150,
+        initial_capital REAL DEFAULT 10000,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        started_at TEXT,
+        ended_at TEXT,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`,
+
+      `CREATE INDEX IF NOT EXISTS idx_alpha_competitions_status ON alpha_competitions(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_competitions_created ON alpha_competitions(created_at DESC)`,
+
+      // Alpha Arena model states table (persistent model portfolios)
+      `CREATE TABLE IF NOT EXISTS alpha_model_states (
+        id TEXT PRIMARY KEY,
+        competition_id TEXT NOT NULL,
+        model_name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        model_id TEXT NOT NULL,
+        capital REAL NOT NULL,
+        positions_json TEXT NOT NULL DEFAULT '{}',
+        trades_count INTEGER DEFAULT 0,
+        total_pnl REAL DEFAULT 0,
+        portfolio_value REAL NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (competition_id) REFERENCES alpha_competitions(id) ON DELETE CASCADE,
+        UNIQUE(competition_id, model_name)
+      )`,
+
+      `CREATE INDEX IF NOT EXISTS idx_alpha_model_states_competition ON alpha_model_states(competition_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_model_states_model ON alpha_model_states(model_name)`,
+
+      // Alpha Arena price history table (for charting)
+      `CREATE TABLE IF NOT EXISTS alpha_price_history (
+        id TEXT PRIMARY KEY,
+        competition_id TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        price REAL NOT NULL,
+        bid REAL,
+        ask REAL,
+        volume_24h REAL,
+        high_24h REAL,
+        low_24h REAL,
+        timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (competition_id) REFERENCES alpha_competitions(id) ON DELETE CASCADE
+      )`,
+
+      `CREATE INDEX IF NOT EXISTS idx_alpha_price_history_competition ON alpha_price_history(competition_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_price_history_timestamp ON alpha_price_history(timestamp)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_price_history_symbol ON alpha_price_history(symbol)`,
+
+      // Alpha Arena decision logs table (all model decisions and trades)
+      `CREATE TABLE IF NOT EXISTS alpha_decision_logs (
+        id TEXT PRIMARY KEY,
+        competition_id TEXT NOT NULL,
+        model_name TEXT NOT NULL,
+        cycle_number INTEGER NOT NULL,
+        action TEXT NOT NULL CHECK (action IN ('buy', 'sell', 'hold')),
+        symbol TEXT NOT NULL,
+        quantity REAL,
+        confidence REAL NOT NULL,
+        reasoning TEXT NOT NULL,
+        trade_executed TEXT NOT NULL,
+        price_at_decision REAL NOT NULL,
+        portfolio_value_before REAL NOT NULL,
+        portfolio_value_after REAL NOT NULL,
+        timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (competition_id) REFERENCES alpha_competitions(id) ON DELETE CASCADE
+      )`,
+
+      `CREATE INDEX IF NOT EXISTS idx_alpha_decision_logs_competition ON alpha_decision_logs(competition_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_decision_logs_model ON alpha_decision_logs(model_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_decision_logs_cycle ON alpha_decision_logs(cycle_number)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_decision_logs_timestamp ON alpha_decision_logs(timestamp DESC)`,
+
+      // Alpha Arena performance snapshots table (portfolio value over time for charting)
+      `CREATE TABLE IF NOT EXISTS alpha_performance_snapshots (
+        id TEXT PRIMARY KEY,
+        competition_id TEXT NOT NULL,
+        cycle_number INTEGER NOT NULL,
+        model_name TEXT NOT NULL,
+        portfolio_value REAL NOT NULL,
+        cash REAL NOT NULL,
+        pnl REAL NOT NULL,
+        return_pct REAL NOT NULL,
+        positions_count INTEGER DEFAULT 0,
+        trades_count INTEGER DEFAULT 0,
+        timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (competition_id) REFERENCES alpha_competitions(id) ON DELETE CASCADE
+      )`,
+
+      `CREATE INDEX IF NOT EXISTS idx_alpha_performance_competition ON alpha_performance_snapshots(competition_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_performance_model ON alpha_performance_snapshots(model_name)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_performance_cycle ON alpha_performance_snapshots(cycle_number)`,
+      `CREATE INDEX IF NOT EXISTS idx_alpha_performance_timestamp ON alpha_performance_snapshots(timestamp)`,
+
       // Insert default LLM global settings
       `INSERT OR IGNORE INTO llm_global_settings (id, temperature, max_tokens, system_prompt)
        VALUES (1, 0.7, 2000, 'You are a helpful AI assistant specialized in financial analysis and market data.')`,
@@ -884,6 +1097,202 @@ class SQLiteService {
        WHERE id = 1`,
       [settings.temperature, settings.max_tokens, settings.system_prompt]
     );
+  }
+
+  // =========================
+  // LLM MODEL CONFIG METHODS (Multiple models per provider)
+  // =========================
+
+  async saveLLMModelConfig(config: Omit<LLMModelConfig, 'created_at' | 'updated_at'>): Promise<{ success: boolean; message: string; id?: string }> {
+    try {
+      await this.ensureInitialized();
+
+      const id = config.id || crypto.randomUUID();
+
+      await this.db!.execute(
+        `INSERT OR REPLACE INTO llm_model_configs
+         (id, provider, model_id, display_name, api_key, base_url, is_enabled, is_default, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)`,
+        [
+          id,
+          config.provider,
+          config.model_id,
+          config.display_name,
+          config.api_key || null,
+          config.base_url || null,
+          config.is_enabled ? 1 : 0,
+          config.is_default ? 1 : 0,
+        ]
+      );
+
+      return { success: true, message: 'LLM model configuration saved', id };
+    } catch (error) {
+      console.error('[SQLite] Failed to save LLM model config:', error);
+      return { success: false, message: 'Failed to save LLM model configuration' };
+    }
+  }
+
+  async getLLMModelConfigs(): Promise<LLMModelConfig[]> {
+    await this.ensureInitialized();
+    return await this.db!.select<LLMModelConfig[]>(
+      'SELECT * FROM llm_model_configs ORDER BY provider, display_name'
+    );
+  }
+
+  async getLLMModelConfigsByProvider(provider: string): Promise<LLMModelConfig[]> {
+    await this.ensureInitialized();
+    return await this.db!.select<LLMModelConfig[]>(
+      'SELECT * FROM llm_model_configs WHERE provider = $1 ORDER BY display_name',
+      [provider]
+    );
+  }
+
+  async getEnabledLLMModelConfigs(): Promise<LLMModelConfig[]> {
+    await this.ensureInitialized();
+    return await this.db!.select<LLMModelConfig[]>(
+      'SELECT * FROM llm_model_configs WHERE is_enabled = 1 ORDER BY provider, display_name'
+    );
+  }
+
+  async getLLMModelConfig(id: string): Promise<LLMModelConfig | null> {
+    await this.ensureInitialized();
+    const results = await this.db!.select<LLMModelConfig[]>(
+      'SELECT * FROM llm_model_configs WHERE id = $1',
+      [id]
+    );
+    return results[0] || null;
+  }
+
+  async deleteLLMModelConfig(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await this.ensureInitialized();
+      await this.db!.execute('DELETE FROM llm_model_configs WHERE id = $1', [id]);
+      return { success: true, message: 'LLM model configuration deleted' };
+    } catch (error) {
+      console.error('[SQLite] Failed to delete LLM model config:', error);
+      return { success: false, message: 'Failed to delete LLM model configuration' };
+    }
+  }
+
+  async toggleLLMModelConfigEnabled(id: string): Promise<{ success: boolean; enabled: boolean }> {
+    try {
+      await this.ensureInitialized();
+
+      const config = await this.getLLMModelConfig(id);
+      if (!config) {
+        return { success: false, enabled: false };
+      }
+
+      const newEnabled = !config.is_enabled;
+      await this.db!.execute(
+        'UPDATE llm_model_configs SET is_enabled = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+        [newEnabled ? 1 : 0, id]
+      );
+
+      return { success: true, enabled: newEnabled };
+    } catch (error) {
+      console.error('[SQLite] Failed to toggle LLM model config:', error);
+      return { success: false, enabled: false };
+    }
+  }
+
+  async setDefaultLLMModelConfig(id: string, provider: string): Promise<{ success: boolean }> {
+    try {
+      await this.ensureInitialized();
+
+      // Remove default from all models of this provider
+      await this.db!.execute(
+        'UPDATE llm_model_configs SET is_default = 0 WHERE provider = $1',
+        [provider]
+      );
+
+      // Set the new default
+      await this.db!.execute(
+        'UPDATE llm_model_configs SET is_default = 1, updated_at = CURRENT_TIMESTAMP WHERE id = $1',
+        [id]
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error('[SQLite] Failed to set default LLM model:', error);
+      return { success: false };
+    }
+  }
+
+  /**
+   * Get all configured LLMs with their API keys for Alpha Arena
+   * Returns models grouped by provider with API keys
+   */
+  async getConfiguredLLMsForArena(): Promise<{
+    provider: string;
+    api_key: string;
+    models: { id: string; model_id: string; display_name: string }[];
+  }[]> {
+    await this.ensureInitialized();
+
+    // First get from new model configs table
+    const modelConfigs = await this.getEnabledLLMModelConfigs();
+
+    // Also get from legacy llm_configs table
+    const legacyConfigs = await this.getLLMConfigs();
+
+    // Combine and group by provider
+    const providerMap = new Map<string, {
+      api_key: string;
+      models: { id: string; model_id: string; display_name: string }[];
+    }>();
+
+    // Add from new model configs
+    for (const config of modelConfigs) {
+      if (!config.api_key) continue;
+
+      if (!providerMap.has(config.provider)) {
+        providerMap.set(config.provider, {
+          api_key: config.api_key,
+          models: []
+        });
+      }
+
+      const entry = providerMap.get(config.provider)!;
+      // Update API key if this one has it
+      if (config.api_key) {
+        entry.api_key = config.api_key;
+      }
+      entry.models.push({
+        id: config.id,
+        model_id: config.model_id,
+        display_name: config.display_name
+      });
+    }
+
+    // Add from legacy configs if not already present
+    for (const config of legacyConfigs) {
+      if (!config.api_key) continue;
+
+      if (!providerMap.has(config.provider)) {
+        providerMap.set(config.provider, {
+          api_key: config.api_key,
+          models: [{
+            id: `legacy_${config.provider}`,
+            model_id: config.model,
+            display_name: config.model
+          }]
+        });
+      } else if (providerMap.get(config.provider)!.models.length === 0) {
+        // Add legacy model if no models from new table
+        providerMap.get(config.provider)!.models.push({
+          id: `legacy_${config.provider}`,
+          model_id: config.model,
+          display_name: config.model
+        });
+      }
+    }
+
+    // Convert to array
+    return Array.from(providerMap.entries()).map(([provider, data]) => ({
+      provider,
+      ...data
+    }));
   }
 
   // =========================
@@ -2389,6 +2798,251 @@ class SQLiteService {
       console.error('[SQLite] Failed to delete optimization run:', error);
       return { success: false, message: 'Failed to delete optimization run' };
     }
+  }
+
+  // ==================== ALPHA ARENA METHODS ====================
+
+  /**
+   * Create a new Alpha Arena competition
+   */
+  async createAlphaCompetition(competition: Omit<AlphaCompetition, 'created_at' | 'updated_at'>): Promise<AlphaCompetition> {
+    await this.ensureInitialized();
+
+    const now = new Date().toISOString();
+    const comp: AlphaCompetition = {
+      ...competition,
+      created_at: now,
+      updated_at: now
+    };
+
+    await this.db!.execute(
+      `INSERT INTO alpha_competitions
+       (id, name, symbol, mode, status, cycle_count, cycle_interval_seconds, initial_capital, created_at, started_at, ended_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [comp.id, comp.name, comp.symbol, comp.mode, comp.status, comp.cycle_count, comp.cycle_interval_seconds, comp.initial_capital, comp.created_at, comp.started_at, comp.ended_at, comp.updated_at]
+    );
+
+    return comp;
+  }
+
+  /**
+   * Get all competitions
+   */
+  async getAlphaCompetitions(limit?: number): Promise<AlphaCompetition[]> {
+    await this.ensureInitialized();
+    const sql = limit
+      ? 'SELECT * FROM alpha_competitions ORDER BY created_at DESC LIMIT $1'
+      : 'SELECT * FROM alpha_competitions ORDER BY created_at DESC';
+    return limit ? await this.db!.select(sql, [limit]) : await this.db!.select(sql);
+  }
+
+  /**
+   * Get a specific competition by ID
+   */
+  async getAlphaCompetition(id: string): Promise<AlphaCompetition | null> {
+    await this.ensureInitialized();
+    const results = await this.db!.select<AlphaCompetition[]>(
+      'SELECT * FROM alpha_competitions WHERE id = $1',
+      [id]
+    );
+    return results[0] || null;
+  }
+
+  /**
+   * Update competition status and metadata
+   */
+  async updateAlphaCompetition(id: string, updates: Partial<Omit<AlphaCompetition, 'id' | 'created_at'>>): Promise<void> {
+    await this.ensureInitialized();
+
+    const fields: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    Object.entries(updates).forEach(([key, value]) => {
+      fields.push(`${key} = $${paramIndex}`);
+      values.push(value);
+      paramIndex++;
+    });
+
+    fields.push(`updated_at = $${paramIndex}`);
+    values.push(new Date().toISOString());
+    values.push(id);
+
+    await this.db!.execute(
+      `UPDATE alpha_competitions SET ${fields.join(', ')} WHERE id = $${paramIndex + 1}`,
+      values
+    );
+  }
+
+  /**
+   * Delete a competition and all related data
+   */
+  async deleteAlphaCompetition(id: string): Promise<void> {
+    await this.ensureInitialized();
+
+    // Delete from all related tables
+    await this.db!.execute('DELETE FROM alpha_performance_snapshots WHERE competition_id = $1', [id]);
+    await this.db!.execute('DELETE FROM alpha_model_states WHERE competition_id = $1', [id]);
+    await this.db!.execute('DELETE FROM alpha_decision_logs WHERE competition_id = $1', [id]);
+    await this.db!.execute('DELETE FROM alpha_price_history WHERE competition_id = $1', [id]);
+    await this.db!.execute('DELETE FROM alpha_competitions WHERE id = $1', [id]);
+
+    console.log(`[SQLite] Deleted competition ${id} and all related data`);
+  }
+
+  /**
+   * Save/update model state
+   */
+  async saveAlphaModelState(state: Omit<AlphaModelState, 'created_at' | 'updated_at'>): Promise<void> {
+    await this.ensureInitialized();
+
+    const now = new Date().toISOString();
+
+    await this.db!.execute(
+      `INSERT OR REPLACE INTO alpha_model_states
+       (id, competition_id, model_name, provider, model_id, capital, positions_json, trades_count, total_pnl, portfolio_value, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE((SELECT created_at FROM alpha_model_states WHERE id = $1), $11), $12)`,
+      [state.id, state.competition_id, state.model_name, state.provider, state.model_id, state.capital, state.positions_json, state.trades_count, state.total_pnl, state.portfolio_value, now, now]
+    );
+  }
+
+  /**
+   * Get all model states for a competition
+   */
+  async getAlphaModelStates(competitionId: string): Promise<AlphaModelState[]> {
+    await this.ensureInitialized();
+    return await this.db!.select<AlphaModelState[]>(
+      'SELECT * FROM alpha_model_states WHERE competition_id = $1',
+      [competitionId]
+    );
+  }
+
+  /**
+   * Get a specific model state
+   */
+  async getAlphaModelState(competitionId: string, modelName: string): Promise<AlphaModelState | null> {
+    await this.ensureInitialized();
+    const results = await this.db!.select<AlphaModelState[]>(
+      'SELECT * FROM alpha_model_states WHERE competition_id = $1 AND model_name = $2',
+      [competitionId, modelName]
+    );
+    return results[0] || null;
+  }
+
+  /**
+   * Log price data for charting
+   */
+  async logAlphaPrice(price: Omit<AlphaPriceHistory, 'timestamp'>): Promise<void> {
+    await this.ensureInitialized();
+
+    await this.db!.execute(
+      `INSERT INTO alpha_price_history
+       (id, competition_id, symbol, price, bid, ask, volume_24h, high_24h, low_24h, timestamp)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [price.id, price.competition_id, price.symbol, price.price, price.bid, price.ask, price.volume_24h, price.high_24h, price.low_24h, new Date().toISOString()]
+    );
+  }
+
+  /**
+   * Get price history for a competition
+   */
+  async getAlphaPriceHistory(competitionId: string, limit?: number): Promise<AlphaPriceHistory[]> {
+    await this.ensureInitialized();
+    const sql = limit
+      ? 'SELECT * FROM alpha_price_history WHERE competition_id = $1 ORDER BY timestamp DESC LIMIT $2'
+      : 'SELECT * FROM alpha_price_history WHERE competition_id = $1 ORDER BY timestamp DESC';
+    return limit ? await this.db!.select(sql, [competitionId, limit]) : await this.db!.select(sql, [competitionId]);
+  }
+
+  /**
+   * Log a model decision
+   */
+  async logAlphaDecision(decision: Omit<AlphaDecisionLog, 'timestamp'>): Promise<void> {
+    await this.ensureInitialized();
+
+    await this.db!.execute(
+      `INSERT INTO alpha_decision_logs
+       (id, competition_id, model_name, cycle_number, action, symbol, quantity, confidence, reasoning, trade_executed, price_at_decision, portfolio_value_before, portfolio_value_after, timestamp)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+      [decision.id, decision.competition_id, decision.model_name, decision.cycle_number, decision.action, decision.symbol, decision.quantity, decision.confidence, decision.reasoning, decision.trade_executed, decision.price_at_decision, decision.portfolio_value_before, decision.portfolio_value_after, new Date().toISOString()]
+    );
+  }
+
+  /**
+   * Get decision logs for a competition
+   */
+  async getAlphaDecisionLogs(competitionId: string, modelName?: string, limit?: number): Promise<AlphaDecisionLog[]> {
+    await this.ensureInitialized();
+
+    let sql = 'SELECT * FROM alpha_decision_logs WHERE competition_id = $1';
+    const params: any[] = [competitionId];
+
+    if (modelName) {
+      sql += ' AND model_name = $2';
+      params.push(modelName);
+    }
+
+    sql += ' ORDER BY timestamp DESC';
+
+    if (limit) {
+      sql += ` LIMIT $${params.length + 1}`;
+      params.push(limit);
+    }
+
+    return await this.db!.select(sql, params);
+  }
+
+  /**
+   * Save a performance snapshot
+   */
+  async saveAlphaPerformanceSnapshot(snapshot: Omit<AlphaPerformanceSnapshot, 'timestamp'>): Promise<void> {
+    await this.ensureInitialized();
+
+    await this.db!.execute(
+      `INSERT INTO alpha_performance_snapshots
+       (id, competition_id, cycle_number, model_name, portfolio_value, cash, pnl, return_pct, positions_count, trades_count, timestamp)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [snapshot.id, snapshot.competition_id, snapshot.cycle_number, snapshot.model_name, snapshot.portfolio_value, snapshot.cash, snapshot.pnl, snapshot.return_pct, snapshot.positions_count, snapshot.trades_count, new Date().toISOString()]
+    );
+  }
+
+  /**
+   * Get performance snapshots for charting
+   */
+  async getAlphaPerformanceSnapshots(competitionId: string, modelName?: string): Promise<AlphaPerformanceSnapshot[]> {
+    await this.ensureInitialized();
+
+    let sql = 'SELECT * FROM alpha_performance_snapshots WHERE competition_id = $1';
+    const params: any[] = [competitionId];
+
+    if (modelName) {
+      sql += ' AND model_name = $2';
+      params.push(modelName);
+    }
+
+    sql += ' ORDER BY cycle_number ASC';
+
+    return await this.db!.select(sql, params);
+  }
+
+  /**
+   * Get latest performance snapshot for each model in a competition (for leaderboard)
+   */
+  async getAlphaLatestPerformance(competitionId: string): Promise<AlphaPerformanceSnapshot[]> {
+    await this.ensureInitialized();
+
+    return await this.db!.select(
+      `SELECT * FROM alpha_performance_snapshots
+       WHERE competition_id = $1
+       AND (model_name, cycle_number) IN (
+         SELECT model_name, MAX(cycle_number)
+         FROM alpha_performance_snapshots
+         WHERE competition_id = $1
+         GROUP BY model_name
+       )
+       ORDER BY pnl DESC`,
+      [competitionId]
+    );
   }
 
   // =========================
