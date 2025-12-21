@@ -12,8 +12,10 @@ import { LanguageSelector } from '@/components/settings/LanguageSelector';
 import { TerminalConfigPanel } from '@/components/settings/TerminalConfigPanel';
 import { useTimezone, TIMEZONE_OPTIONS } from '@/contexts/TimezoneContext';
 import { Clock } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function SettingsTab() {
+  const { t } = useTranslation('settings');
   const { theme, updateTheme, resetTheme, colors, fontSize: themeFontSize, fontFamily: themeFontFamily, fontWeight: themeFontWeight, fontStyle } = useTerminalTheme();
   const { defaultTimezone, setDefaultTimezone, options: timezoneOptions } = useTimezone();
   const [activeSection, setActiveSection] = useState<'credentials' | 'terminal' | 'terminalConfig' | 'llm' | 'dataConnections' | 'backtesting' | 'language'>('credentials');
@@ -618,7 +620,7 @@ export default function SettingsTab() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <SettingsIcon size={20} color={colors.primary} />
           <span style={{ color: colors.primary, fontSize: '16px', fontWeight: 'bold', letterSpacing: '1px' }}>
-            TERMINAL SETTINGS
+            {t('title')}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -630,7 +632,7 @@ export default function SettingsTab() {
           }}>
             <span style={{ color: dbInitialized ? '#00ff00' : '#ff0000', fontSize: '9px', fontWeight: 'bold' }}>
               <Database size={10} style={{ display: 'inline', marginRight: '4px' }} />
-              SQLite: {dbInitialized ? 'CONNECTED' : 'DISCONNECTED'}
+              SQLite: {dbInitialized ? t('llm.connected') : t('llm.disconnected')}
             </span>
           </div>
         </div>
@@ -657,13 +659,13 @@ export default function SettingsTab() {
         <div style={{ width: '220px', borderRight: '1px solid #1a1a1a', background: colors.panel, flexShrink: 0 }}>
           <div style={{ padding: '16px 0' }}>
             {[
-              { id: 'credentials', icon: Lock, label: 'Credentials' },
-              { id: 'llm', icon: Bot, label: 'LLM Configuration' },
-              { id: 'dataConnections', icon: Database, label: 'Data Sources' },
-              { id: 'backtesting', icon: Activity, label: 'Backtesting Providers' },
-              { id: 'terminalConfig', icon: SettingsIcon, label: 'Tab Layout' },
-              { id: 'terminal', icon: Terminal, label: 'Appearance' },
-              { id: 'language', icon: Globe, label: 'Language' }
+              { id: 'credentials', icon: Lock, label: t('sections.credentials') },
+              { id: 'llm', icon: Bot, label: t('sections.llm') },
+              { id: 'dataConnections', icon: Database, label: t('sections.dataConnections') },
+              { id: 'backtesting', icon: Activity, label: t('sections.backtesting') },
+              { id: 'terminalConfig', icon: SettingsIcon, label: t('sections.terminalConfig') },
+              { id: 'terminal', icon: Terminal, label: t('sections.terminal') },
+              { id: 'language', icon: Globe, label: t('sections.language') }
             ].map((item) => (
               <div
                 key={item.id}
@@ -703,10 +705,10 @@ export default function SettingsTab() {
               <div>
                 <div style={{ marginBottom: '24px' }}>
                   <h2 style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
-                    API KEY MANAGEMENT
+                    {t('credentials.title')}
                   </h2>
                   <p style={{ color: colors.text, fontSize: '10px' }}>
-                    Configure API keys for data providers. All keys are stored locally and encrypted.
+                    {t('credentials.description')}
                   </p>
                 </div>
 
@@ -732,13 +734,13 @@ export default function SettingsTab() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px', alignItems: 'end' }}>
                         <div>
                           <label style={{ color: colors.text, fontSize: '9px', display: 'block', marginBottom: '4px' }}>
-                            API KEY
+                            {t('credentials.apiKey')}
                           </label>
                           <input
                             type="password"
                             value={apiKeys[key] || ''}
                             onChange={(e) => setApiKeys({ ...apiKeys, [key]: e.target.value })}
-                            placeholder="Enter API key"
+                            placeholder={t('credentials.enterValue')}
                             style={{
                               width: '100%',
                               background: colors.background,
@@ -771,7 +773,7 @@ export default function SettingsTab() {
                           }}
                         >
                           <Save size={14} />
-                          SAVE
+                          {t('buttons.save')}
                         </button>
                       </div>
                     </div>
@@ -785,17 +787,17 @@ export default function SettingsTab() {
               <div>
                 <div style={{ marginBottom: '24px' }}>
                   <h2 style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
-                    LLM CONFIGURATION
+                    {t('llm.title')}
                   </h2>
                   <p style={{ color: colors.text, fontSize: '10px' }}>
-                    Configure AI providers for the Chat tab. Changes here are reflected in both Chat and Settings screens.
+                    {t('llm.description')}
                   </p>
                 </div>
 
                 {/* Provider Selection */}
                 <div style={{ marginBottom: '20px' }}>
                   <h3 style={{ color: colors.text, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
-                    Select Active Provider
+                    {t('llm.provider')}
                   </h3>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     {llmConfigs.map(config => (
@@ -1419,7 +1421,7 @@ export default function SettingsTab() {
                     margin: 0,
                     textShadow: `0 0 10px ${colors.primary}40`
                   }}>
-                    TERMINAL CONFIGURATION
+                    {t('terminal.title')}
                   </h2>
                 </div>
 
@@ -1437,7 +1439,7 @@ export default function SettingsTab() {
                     margin: 0,
                     lineHeight: '1.6'
                   }}>
-                    Customize terminal appearance including fonts, colors, and themes. Changes apply across the entire application.
+                    {t('terminal.description')}
                   </p>
                 </div>
 
@@ -1452,12 +1454,12 @@ export default function SettingsTab() {
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                     <Type size={18} color={colors.primary} style={{ filter: `drop-shadow(0 0 2px ${colors.primary})` }} />
-                    <span style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', letterSpacing: '0.5px' }}>FONT SETTINGS</span>
+                    <span style={{ color: colors.primary, fontSize: '14px', fontWeight: 'bold', letterSpacing: '0.5px' }}>{t('terminal.currentSettings')}</span>
                   </div>
 
                   {/* Font Family */}
                   <div style={{ marginBottom: '16px' }}>
-                    <label style={{ color: colors.text, fontSize: '10px', display: 'block', marginBottom: '6px', fontWeight: 600, letterSpacing: '0.5px' }}>FONT FAMILY</label>
+                    <label style={{ color: colors.text, fontSize: '10px', display: 'block', marginBottom: '6px', fontWeight: 600, letterSpacing: '0.5px' }}>{t('terminal.fontFamily')}</label>
                     <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} style={{
                       width: '100%',
                       padding: '10px',

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle, MessageSquare, Terminal, Bot } from 'lucide-react';
+import { tabConfigService } from '@/services/tabConfigService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { InterfaceModeProvider, useInterfaceMode } from '@/contexts/InterfaceModeContext';
@@ -19,6 +20,7 @@ import NewsTab from '@/components/tabs/NewsTab';
 import WatchlistTab from '@/components/tabs/WatchlistTab';
 import GeopoliticsTab from '@/components/tabs/GeopoliticsTab';
 import ChatTab from '@/components/tabs/ChatTab';
+import { NotesTab } from '@/components/tabs/NotesTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
 import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 import PortfolioTab from '@/components/tabs/portfolio-tab/PortfolioTab';
@@ -160,6 +162,17 @@ function FinxeptTerminalContent() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate } = useAutoUpdater();
+
+  // Dynamic tab configuration
+  const [tabConfig, setTabConfig] = useState(() => tabConfigService.getConfiguration());
+
+  // Subscribe to tab configuration changes
+  React.useEffect(() => {
+    const unsubscribe = tabConfigService.subscribe((newConfig) => {
+      setTabConfig(newConfig);
+    });
+    return unsubscribe;
+  }, []);
 
   React.useEffect(() => {
     document.body.style.margin = '0';
@@ -784,98 +797,22 @@ function FinxeptTerminalContent() {
                 width: 'max-content',
                 minWidth: '100%'
               }}>
-                {/* PRIMARY TABS - F1 to F12 */}
-                <TabsTrigger
-                  value="dashboard"
-                  style={activeTab === 'dashboard' ? tabStyles.active : tabStyles.default}
-                  title="Dashboard (F1)"
-                >
-                  Dashboard
-                </TabsTrigger>
-                <TabsTrigger
-                  value="markets"
-                  style={activeTab === 'markets' ? tabStyles.active : tabStyles.default}
-                  title="Markets (F2)"
-                >
-                  Markets
-                </TabsTrigger>
-                <TabsTrigger
-                  value="news"
-                  style={activeTab === 'news' ? tabStyles.active : tabStyles.default}
-                  title="News (F3)"
-                >
-                  News
-                </TabsTrigger>
-                <TabsTrigger
-                  value="portfolio"
-                  style={activeTab === 'portfolio' ? tabStyles.active : tabStyles.default}
-                  title="Portfolio (F4)"
-                >
-                  Portfolio
-                </TabsTrigger>
-                <TabsTrigger
-                  value="backtesting"
-                  style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
-                  title="Backtesting (F5)"
-                >
-                  Backtesting
-                </TabsTrigger>
-                <TabsTrigger
-                  value="watchlist"
-                  style={activeTab === 'watchlist' ? tabStyles.active : tabStyles.default}
-                  title="Watchlist (F6)"
-                >
-                  Watchlist
-                </TabsTrigger>
-                <TabsTrigger
-                  value="research"
-                  style={activeTab === 'research' ? tabStyles.active : tabStyles.default}
-                  title="Equity Research (F7)"
-                >
-                  Research
-                </TabsTrigger>
-                <TabsTrigger
-                  value="screener"
-                  style={activeTab === 'screener' ? tabStyles.active : tabStyles.default}
-                  title="Screener (F8)"
-                >
-                  Screener
-                </TabsTrigger>
-                <TabsTrigger
-                  value="trading"
-                  style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
-                  title="Trading (F9)"
-                >
-                  Trading
-                </TabsTrigger>
-                <TabsTrigger
-                  value="chat"
-                  style={activeTab === 'chat' ? tabStyles.active : tabStyles.default}
-                  title="AI Chat (F10)"
-                >
-                  AI Chat
-                </TabsTrigger>
-                <TabsTrigger
-                  value="agents"
-                  style={activeTab === 'agents' ? tabStyles.active : tabStyles.default}
-                  title="Agent Config"
-                >
-                  Agents
-                </TabsTrigger>
-                <TabsTrigger
-                  value="settings"
-                  style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
-                  title="Settings"
-                >
-                  Settings
-                </TabsTrigger>
-                <TabsTrigger
-                  value="profile"
-                  style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
-                  title="Profile (F12)"
-                >
-                  Profile
-                </TabsTrigger>
+                {/* DYNAMIC TABS - Rendered from tab configuration */}
+                {tabConfig.headerTabs.map((tabId) => {
+                  const tabDef = tabConfigService.getTabById(tabId);
+                  if (!tabDef) return null;
+
+                  return (
+                    <TabsTrigger
+                      key={tabId}
+                      value={tabDef.value}
+                      style={activeTab === tabDef.value ? tabStyles.active : tabStyles.default}
+                      title={tabDef.shortcut ? `${tabDef.label} (${tabDef.shortcut})` : tabDef.label}
+                    >
+                      {tabDef.label}
+                    </TabsTrigger>
+                  );
+                })}
               </TabsList>
             </Tabs>
           </div>
@@ -969,6 +906,9 @@ function FinxeptTerminalContent() {
                 onNavigateToSettings={() => setActiveTab('settings')}
                 onNavigateToTab={(tabName) => setActiveTab(tabName)}
               />
+            </TabsContent>
+            <TabsContent value="notes" className="h-full m-0 p-0">
+              <NotesTab />
             </TabsContent>
             <TabsContent value="fyers" className="h-full m-0 p-0">
               <FyersTab />

@@ -28,6 +28,7 @@ import Header from './components/common/Header';
 import Footer from './components/common/Footer';
 import PaymentOverlay from './components/payment/PaymentOverlay';
 import SetupScreen from './components/setup/SetupScreen';
+import { Toaster } from 'sonner';
 
 export type Screen =
   | 'login'
@@ -264,6 +265,8 @@ const App: React.FC = () => {
         </ProviderProvider>
         {/* In-App Payment Window Overlay */}
         <PaymentOverlay paymentWindow={paymentWindow} />
+        {/* Toast Notifications */}
+        <Toaster position="top-right" richColors closeButton />
       </>
     );
   }
