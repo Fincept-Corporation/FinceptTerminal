@@ -1,0 +1,46 @@
+{
+    "title": "AI CHAT ASSISTANT",
+    "header": {
+        "newChat": "NEW CHAT",
+        "history": "HISTORY",
+        "settings": "SETTINGS"
+    },
+    "input": {
+        "placeholder": "Ask about stocks, markets, analysis...",
+        "send": "Send",
+        "voice": "Voice"
+    },
+    "messages": {
+        "thinking": "Thinking...",
+        "typing": "AI is typing...",
+        "error": "Error processing request",
+        "welcome": "How can I help you with your financial analysis today?"
+    },
+    "suggestions": {
+        "title": "Suggested Questions",
+        "stockAnalysis": "Analyze stock performance",
+        "marketTrends": "What are current market trends?",
+        "portfolioAdvice": "Portfolio optimization suggestions"
+    },
+    "history": {
+        "title": "Chat History",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "thisWeek": "This Week",
+        "older": "Older",
+        "clear": "Clear History"
+    },
+    "actions": {
+        "copy": "Copy",
+        "regenerate": "Regenerate",
+        "like": "Like",
+        "dislike": "Dislike",
+        "share": "Share"
+    },
+    "models": {
+        "select": "Select Model",
+        "gpt4": "GPT-4",
+        "claude": "Claude",
+        "gemini": "Gemini"
+    }
+}

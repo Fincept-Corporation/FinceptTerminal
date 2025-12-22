@@ -1,0 +1,43 @@
+{
+    "title": "DATENQUELLEN",
+    "header": {
+        "available": "VERFÜGBARE QUELLEN",
+        "connected": "VERBUNDEN",
+        "addNew": "QUELLE HINZUFÜGEN",
+        "refresh": "AKTUALISIEREN"
+    },
+    "categories": {
+        "market": "Marktdaten",
+        "economic": "Wirtschaftsdaten",
+        "alternative": "Alternative Daten",
+        "news": "Nachrichten & Sentiment",
+        "fundamental": "Fundamentaldaten"
+    },
+    "status": {
+        "connected": "Verbunden",
+        "disconnected": "Getrennt",
+        "error": "Fehler",
+        "pending": "Ausstehend"
+    },
+    "actions": {
+        "connect": "Verbinden",
+        "disconnect": "Trennen",
+        "configure": "Konfigurieren",
+        "test": "Verbindung testen",
+        "delete": "Entfernen"
+    },
+    "form": {
+        "apiKey": "API-Schlüssel",
+        "endpoint": "Endpunkt-URL",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "save": "Speichern",
+        "cancel": "Abbrechen"
+    },
+    "messages": {
+        "connectionSuccess": "Erfolgreich mit Datenquelle verbunden",
+        "connectionFailed": "Verbindung zur Datenquelle fehlgeschlagen",
+        "noSources": "Keine Datenquellen konfiguriert",
+        "loading": "Lade Datenquellen..."
+    }
+}

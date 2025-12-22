@@ -1,0 +1,41 @@
+{
+    "title": "PANEL DE AUDITORÍA DE INICIO DE SESIÓN",
+    "accessDenied": "Se requiere acceso de administrador para ver el Panel de Auditoría de Inicio de Sesión",
+    "metrics": {
+        "dauToday": "DAU Hoy",
+        "mau": "MAU",
+        "successRate": "Tasa de Éxito",
+        "failed24h": "Fallidos (24h)",
+        "activeSessions": "Sesiones Activas",
+        "uniqueIps": "IPs Únicas"
+    },
+    "views": {
+        "overview": "RESUMEN",
+        "eventLog": "REGISTRO DE EVENTOS",
+        "alerts": "ALERTAS",
+        "analytics": "ANALÍTICAS"
+    },
+    "activity": {
+        "recentLoginActivity": "ACTIVIDAD DE INICIO DE SESIÓN RECIENTE",
+        "securityAlerts": "ALERTAS DE SEGURIDAD",
+        "noActiveAlerts": "Sin alertas activas"
+    },
+    "table": {
+        "time": "Hora",
+        "event": "Evento",
+        "user": "Usuario",
+        "ipAddress": "Dirección IP",
+        "location": "Ubicación",
+        "device": "Dispositivo"
+    },
+    "controls": {
+        "autoRefresh": "Auto-actualizar",
+        "loading": "CARGANDO...",
+        "refresh": "ACTUALIZAR"
+    },
+    "status": {
+        "admin": "Administrador",
+        "updating": "ACTUALIZANDO",
+        "ready": "LISTO"
+    }
+}

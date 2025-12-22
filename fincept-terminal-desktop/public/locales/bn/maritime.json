@@ -1,0 +1,66 @@
+{
+    "title": "সামুদ্রিক",
+    "header": {
+        "overview": "সারসংক্ষেপ",
+        "tracking": "ট্র্যাকিং",
+        "ports": "বন্দর",
+        "routes": "রুট"
+    },
+    "vessels": {
+        "type": "জাহাজের ধরন",
+        "cargo": "মালবাহী",
+        "tanker": "ট্যাঙ্কার",
+        "container": "কন্টেইনার",
+        "bulk": "বাল্ক",
+        "passenger": "যাত্রীবাহী",
+        "status": "স্থিতি"
+    },
+    "tracking": {
+        "position": "অবস্থান",
+        "speed": "গতি",
+        "heading": "দিক",
+        "destination": "গন্তব্য",
+        "eta": "আনুমানিক আগমন",
+        "lastUpdate": "শেষ আপডেট"
+    },
+    "ports": {
+        "name": "বন্দরের নাম",
+        "country": "দেশ",
+        "arrivals": "আগমন",
+        "departures": "প্রস্থান",
+        "congestion": "যানজট",
+        "waitTime": "অপেক্ষার সময়"
+    },
+    "routes": {
+        "origin": "উৎপত্তি",
+        "destination": "গন্তব্য",
+        "distance": "দূরত্ব",
+        "transitTime": "ট্রানজিট সময়",
+        "riskLevel": "ঝুঁকির মাত্রা"
+    },
+    "status": {
+        "anchored": "নোঙর করা",
+        "underway": "চলমান",
+        "moored": "বাঁধা",
+        "atPort": "বন্দরে",
+        "drifting": "ভাসমান"
+    },
+    "metrics": {
+        "dwt": "ডেডওয়েট",
+        "teu": "টিইইউ",
+        "draft": "ড্রাফট",
+        "length": "দৈর্ঘ্য",
+        "speed": "গতি (নট)"
+    },
+    "actions": {
+        "track": "জাহাজ ট্র্যাক করুন",
+        "setAlert": "সতর্কতা সেট করুন",
+        "export": "রপ্তানি",
+        "filter": "ফিল্টার"
+    },
+    "messages": {
+        "loading": "ডেটা লোড হচ্ছে...",
+        "noVessels": "কোনো জাহাজ নেই",
+        "updated": "আপডেট হয়েছে"
+    }
+}

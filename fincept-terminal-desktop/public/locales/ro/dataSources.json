@@ -1,0 +1,43 @@
+{
+    "title": "SURSE DE DATE",
+    "header": {
+        "available": "SURSE DISPONIBILE",
+        "connected": "CONECTAT",
+        "addNew": "ADAUGĂ SURSĂ",
+        "refresh": "REÎMPROSPĂTEAZĂ"
+    },
+    "categories": {
+        "market": "Date de Piață",
+        "economic": "Date Economice",
+        "alternative": "Date Alternative",
+        "news": "Știri",
+        "fundamental": "Date Fundamentale"
+    },
+    "status": {
+        "connected": "Conectat",
+        "disconnected": "Deconectat",
+        "error": "Eroare",
+        "pending": "În așteptare"
+    },
+    "actions": {
+        "connect": "Conectează",
+        "disconnect": "Deconectează",
+        "configure": "Configurează",
+        "test": "Testează",
+        "delete": "Șterge"
+    },
+    "form": {
+        "apiKey": "Cheie API",
+        "endpoint": "URL",
+        "username": "Utilizator",
+        "password": "Parolă",
+        "save": "Salvează",
+        "cancel": "Anulează"
+    },
+    "messages": {
+        "connectionSuccess": "Conectat cu succes",
+        "connectionFailed": "Eroare conexiune",
+        "noSources": "Nicio sursă",
+        "loading": "Se încarcă..."
+    }
+}

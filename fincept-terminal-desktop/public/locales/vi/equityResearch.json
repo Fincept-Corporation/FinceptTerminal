@@ -1,0 +1,62 @@
+{
+    "title": "NGHIÊN CỨU CỔ PHIẾU",
+    "header": {
+        "overview": "TỔNG QUAN",
+        "financials": "TÀI CHÍNH",
+        "analysis": "PHÂN TÍCH",
+        "ratings": "KHUYẾN NGHỊ"
+    },
+    "summary": {
+        "marketCap": "Vốn hóa",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Tỷ suất cổ tức",
+        "beta": "Beta",
+        "52weekHigh": "Cao nhất 52 tuần",
+        "52weekLow": "Thấp nhất 52 tuần",
+        "avgVolume": "KL TB"
+    },
+    "financials": {
+        "revenue": "Doanh thu",
+        "netIncome": "Lợi nhuận ròng",
+        "grossMargin": "Biên lợi nhuận gộp",
+        "operatingMargin": "Biên lợi nhuận hoạt động",
+        "roe": "ROE",
+        "roa": "ROA",
+        "debtEquity": "Nợ/Vốn CSH",
+        "currentRatio": "Hệ số thanh toán"
+    },
+    "analysis": {
+        "buy": "Mua",
+        "hold": "Giữ",
+        "sell": "Bán",
+        "strongBuy": "Mua mạnh",
+        "strongSell": "Bán mạnh",
+        "targetPrice": "Giá mục tiêu",
+        "upside": "Tiềm năng tăng",
+        "downside": "Rủi ro giảm"
+    },
+    "periods": {
+        "annual": "Năm",
+        "quarterly": "Quý",
+        "ttm": "12 tháng gần nhất",
+        "ytd": "Từ đầu năm"
+    },
+    "sections": {
+        "incomeStatement": "Báo cáo KQKD",
+        "balanceSheet": "Bảng cân đối",
+        "cashFlow": "Lưu chuyển tiền tệ",
+        "keyMetrics": "Chỉ số quan trọng"
+    },
+    "actions": {
+        "compare": "So sánh",
+        "export": "Xuất",
+        "addToWatchlist": "Thêm vào danh sách",
+        "setAlert": "Đặt cảnh báo"
+    },
+    "messages": {
+        "loading": "Đang tải...",
+        "noData": "Không có dữ liệu",
+        "updated": "Cập nhật"
+    }
+}

@@ -1,0 +1,55 @@
+{
+    "title": "CONFIGURACIÓN",
+    "credentials": {
+        "title": "GESTIÓN DE CLAVES API",
+        "description": "Configure claves API para proveedores de datos. Todas las claves se almacenan localmente y encriptadas."
+    },
+    "llm": {
+        "title": "CONFIGURACIÓN LLM",
+        "description": "Configure proveedores de IA para la pestaña de Chat."
+    },
+    "datasources": {
+        "title": "FUENTES DE DATOS"
+    },
+    "backtesting": {
+        "title": "PROVEEDORES DE BACKTESTING"
+    },
+    "tablayout": {
+        "title": "DISEÑO DE PESTAÑAS"
+    },
+    "appearance": {
+        "title": "APARIENCIA",
+        "fontFamily": "Familia de Fuente",
+        "fontSize": "Tamaño de Fuente",
+        "fontWeight": "Peso de Fuente",
+        "colorTheme": "Tema de Color",
+        "save": "Guardar Apariencia",
+        "reset": "Restaurar Predeterminado"
+    },
+    "language": {
+        "title": "CONFIGURACIÓN DE IDIOMA",
+        "selectLanguage": "Seleccione su idioma preferido para la interfaz del terminal",
+        "currentLanguage": "IDIOMA ACTUAL"
+    },
+    "sidebar": {
+        "credentials": "Credenciales",
+        "llm": "Configuración LLM",
+        "dataSources": "Fuentes de Datos",
+        "backtesting": "Proveedores de Backtesting",
+        "tabLayout": "Diseño de Pestañas",
+        "appearance": "Apariencia",
+        "language": "Idioma"
+    },
+    "actions": {
+        "save": "Guardar Configuración",
+        "cancel": "Cancelar",
+        "apply": "Aplicar",
+        "reset": "Restablecer"
+    },
+    "messages": {
+        "saved": "Configuración guardada correctamente",
+        "error": "Error al guardar configuración",
+        "confirm": "¿Está seguro?",
+        "loading": "Cargando configuración..."
+    }
+}

@@ -1,0 +1,43 @@
+{
+    "title": "NGUỒN DỮ LIỆU",
+    "header": {
+        "available": "NGUỒN CÓ SẴN",
+        "connected": "ĐÃ KẾT NỐI",
+        "addNew": "THÊM NGUỒN",
+        "refresh": "LÀM MỚI"
+    },
+    "categories": {
+        "market": "Dữ liệu Thị trường",
+        "economic": "Dữ liệu Kinh tế",
+        "alternative": "Dữ liệu Thay thế",
+        "news": "Tin tức & Tâm lý",
+        "fundamental": "Dữ liệu Cơ bản"
+    },
+    "status": {
+        "connected": "Đã kết nối",
+        "disconnected": "Đã ngắt",
+        "error": "Lỗi",
+        "pending": "Đang chờ"
+    },
+    "actions": {
+        "connect": "Kết nối",
+        "disconnect": "Ngắt",
+        "configure": "Cấu hình",
+        "test": "Kiểm tra",
+        "delete": "Xóa"
+    },
+    "form": {
+        "apiKey": "Khóa API",
+        "endpoint": "URL",
+        "username": "Tên người dùng",
+        "password": "Mật khẩu",
+        "save": "Lưu",
+        "cancel": "Hủy"
+    },
+    "messages": {
+        "connectionSuccess": "Kết nối thành công",
+        "connectionFailed": "Kết nối thất bại",
+        "noSources": "Không có nguồn",
+        "loading": "Đang tải..."
+    }
+}

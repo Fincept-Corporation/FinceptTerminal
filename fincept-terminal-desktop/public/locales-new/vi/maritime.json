@@ -1,0 +1,66 @@
+{
+    "title": "HÀNG HẢI",
+    "header": {
+        "overview": "TỔNG QUAN",
+        "tracking": "THEO DÕI",
+        "ports": "CẢNG",
+        "routes": "TUYẾN"
+    },
+    "vessels": {
+        "type": "Loại tàu",
+        "cargo": "Tàu hàng",
+        "tanker": "Tàu dầu",
+        "container": "Tàu container",
+        "bulk": "Tàu hàng rời",
+        "passenger": "Tàu khách",
+        "status": "Trạng thái"
+    },
+    "tracking": {
+        "position": "Vị trí",
+        "speed": "Tốc độ",
+        "heading": "Hướng",
+        "destination": "Điểm đến",
+        "eta": "Dự kiến đến",
+        "lastUpdate": "Cập nhật gần nhất"
+    },
+    "ports": {
+        "name": "Tên cảng",
+        "country": "Quốc gia",
+        "arrivals": "Đến",
+        "departures": "Rời",
+        "congestion": "Tắc nghẽn",
+        "waitTime": "Thời gian chờ"
+    },
+    "routes": {
+        "origin": "Xuất phát",
+        "destination": "Đích đến",
+        "distance": "Khoảng cách",
+        "transitTime": "Thời gian di chuyển",
+        "riskLevel": "Mức rủi ro"
+    },
+    "status": {
+        "anchored": "Thả neo",
+        "underway": "Đang di chuyển",
+        "moored": "Cập cảng",
+        "atPort": "Tại cảng",
+        "drifting": "Trôi dạt"
+    },
+    "metrics": {
+        "dwt": "Trọng tải",
+        "teu": "TEU",
+        "draft": "Mớn nước",
+        "length": "Chiều dài",
+        "speed": "Tốc độ (hải lý)"
+    },
+    "actions": {
+        "track": "Theo dõi tàu",
+        "setAlert": "Đặt cảnh báo",
+        "export": "Xuất",
+        "filter": "Lọc"
+    },
+    "messages": {
+        "loading": "Đang tải dữ liệu...",
+        "noVessels": "Không có tàu",
+        "updated": "Cập nhật"
+    }
+}

@@ -1,0 +1,28 @@
+{
+    "title": "МЕНЕДЖЕР ПОРТФЕЛЯ FINCEPT",
+    "header": {
+        "live": "НАЖИВО",
+        "updating": "ОНОВЛЕННЯ",
+        "newPortfolio": "НОВИЙ ПОРТФЕЛЬ",
+        "refresh": "ОНОВИТИ",
+        "exportCsv": "ЕКСПОРТ CSV"
+    },
+    "summary": {
+        "totalValue": "ЗАГАЛЬНА ВАРТІСТЬ",
+        "dayPnl": "ДЕННИЙ П/З",
+        "totalPnl": "ЗАГАЛЬНИЙ П/З",
+        "positions": "ПОЗИЦІЇ"
+    },
+    "sidebar": {
+        "portfolios": "ПОРТФЕЛІ",
+        "loading": "Завантаження портфелів...",
+        "noPortfolios": "Портфелів поки немає."
+    },
+    "modals": {
+        "createNew": "СТВОРИТИ НОВИЙ ПОРТФЕЛЬ",
+        "cancel": "СКАСУВАТИ",
+        "create": "СТВОРИТИ",
+        "add": "ДОДАТИ",
+        "sell": "ПРОДАТИ"
+    }
+}

@@ -1,0 +1,30 @@
+{
+    "title": "BERITA PROFESIONAL FINCEPT TERMINAL",
+    "header": {
+        "liveFeed": "FEED LANGSUNG",
+        "live": "LANGSUNG",
+        "refresh": "SEGARKAN",
+        "updating": "MEMPERBARUI...",
+        "alerts": "PERINGATAN",
+        "sources": "SUMBER",
+        "status": "STATUS",
+        "demoMode": "MODE DEMO",
+        "articles": "ARTIKEL",
+        "activeSources": "SUMBER AKTIF"
+    },
+    "sentiment": {
+        "bullish": "BULLISH",
+        "bearish": "BEARISH",
+        "neutral": "NETRAL"
+    },
+    "autoRefresh": {
+        "title": "INTERVAL AUTO-SEGARKAN",
+        "minute": "menit",
+        "minutes": "menit"
+    },
+    "messages": {
+        "loading": "Memuat berita...",
+        "loadingFeeds": "Memuat feed...",
+        "breaking": "TERBARU"
+    }
+}

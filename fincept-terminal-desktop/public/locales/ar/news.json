@@ -1,0 +1,30 @@
+{
+    "title": "أخبار محطة FINCEPT الاحترافية",
+    "header": {
+        "liveFeed": "بث مباشر",
+        "live": "مباشر",
+        "refresh": "تحديث",
+        "updating": "جاري التحديث...",
+        "alerts": "التنبيهات",
+        "sources": "المصادر",
+        "status": "الحالة",
+        "demoMode": "وضع تجريبي",
+        "articles": "المقالات",
+        "activeSources": "المصادر النشطة"
+    },
+    "sentiment": {
+        "bullish": "صاعد",
+        "bearish": "هابط",
+        "neutral": "محايد"
+    },
+    "autoRefresh": {
+        "title": "فترة التحديث التلقائي",
+        "minute": "دقيقة",
+        "minutes": "دقائق"
+    },
+    "messages": {
+        "loading": "جاري تحميل الأخبار...",
+        "loadingFeeds": "جاري تحميل الموجزات...",
+        "breaking": "عاجل"
+    }
+}

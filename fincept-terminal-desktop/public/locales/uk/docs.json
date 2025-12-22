@@ -1,0 +1,26 @@
+{
+    "title": "ТЕРМІНАЛ ДОКУМЕНТАЦІЇ FINCEPT",
+    "header": {
+        "sections": "РОЗДІЛИ",
+        "topics": "ТЕМИ",
+        "ready": "ГОТОВО"
+    },
+    "search": {
+        "placeholder": "Пошук документації...",
+        "clear": "ОЧИСТИТИ"
+    },
+    "navigation": "НАВІГАЦІЯ",
+    "codeExample": "ПРИКЛАД КОДУ",
+    "content": {
+        "title": "ДОКУМЕНТАЦІЯ ТЕРМІНАЛУ FINCEPT",
+        "description": "Виберіть тему з панелі навігації.",
+        "topicsAvailable": "тем доступно",
+        "selectTopic": "Виберіть тему"
+    },
+    "status": {
+        "version": "Документація Терміналу Fincept v3.0",
+        "sections": "Розділи",
+        "topics": "Теми",
+        "current": "Поточний"
+    }
+}

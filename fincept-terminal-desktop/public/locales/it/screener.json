@@ -1,0 +1,56 @@
+{
+    "title": "SCREENER AZIONI",
+    "header": {
+        "filters": "FILTRI",
+        "results": "RISULTATI",
+        "saved": "SALVATI",
+        "presets": "PRESET"
+    },
+    "filters": {
+        "add": "Aggiungi filtro",
+        "clear": "Cancella tutto",
+        "reset": "Reimposta",
+        "apply": "Applica filtri"
+    },
+    "criteria": {
+        "marketCap": "Capitalizzazione",
+        "price": "Prezzo",
+        "volume": "Volume",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Rendimento dividendo",
+        "beta": "Beta",
+        "sector": "Settore",
+        "industry": "Industria",
+        "country": "Paese",
+        "exchange": "Borsa"
+    },
+    "operators": {
+        "equals": "Uguale a",
+        "greater": "Maggiore di",
+        "less": "Minore di",
+        "between": "Tra",
+        "contains": "Contiene"
+    },
+    "results": {
+        "symbol": "Simbolo",
+        "name": "Nome",
+        "price": "Prezzo",
+        "change": "Variazione",
+        "volume": "Volume",
+        "marketCap": "Cap.",
+        "matches": "risultati"
+    },
+    "actions": {
+        "save": "Salva screen",
+        "load": "Carica screen",
+        "export": "Esporta",
+        "addToWatchlist": "Aggiungi a lista"
+    },
+    "messages": {
+        "loading": "Ricerca...",
+        "noResults": "Nessun risultato",
+        "saved": "Salvato",
+        "applied": "Filtri applicati"
+    }
+}

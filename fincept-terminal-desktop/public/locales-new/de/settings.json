@@ -1,0 +1,55 @@
+{
+    "title": "Einstellungen",
+    "credentials": {
+        "title": "API-SCHLÜSSEL VERWALTUNG",
+        "description": "Konfigurieren Sie API-Schlüssel für Datenanbieter. Alle Schlüssel werden lokal und verschlüsselt gespeichert."
+    },
+    "llm": {
+        "title": "LLM-KONFIGURATION",
+        "description": "Konfigurieren Sie KI-Anbieter für den Chat-Tab."
+    },
+    "datasources": {
+        "title": "DATENQUELLEN"
+    },
+    "backtesting": {
+        "title": "BACKTESTING-ANBIETER"
+    },
+    "tablayout": {
+        "title": "TAB-LAYOUT"
+    },
+    "appearance": {
+        "title": "ERSCHEINUNGSBILD",
+        "fontFamily": "Schriftfamilie",
+        "fontSize": "Schriftgröße",
+        "fontWeight": "Schriftstärke",
+        "colorTheme": "Farbschema",
+        "save": "Erscheinungsbild speichern",
+        "reset": "Auf Standard zurücksetzen"
+    },
+    "language": {
+        "title": "SPRACHEINSTELLUNGEN",
+        "selectLanguage": "Wählen Sie Ihre bevorzugte Sprache für die Terminal-Oberfläche",
+        "currentLanguage": "AKTUELLE SPRACHE"
+    },
+    "sidebar": {
+        "credentials": "Anmeldedaten",
+        "llm": "LLM-Konfiguration",
+        "dataSources": "Datenquellen",
+        "backtesting": "Backtesting-Anbieter",
+        "tabLayout": "Tab-Layout",
+        "appearance": "Erscheinungsbild",
+        "language": "Sprache"
+    },
+    "actions": {
+        "save": "Einstellungen speichern",
+        "cancel": "Abbrechen",
+        "apply": "Anwenden",
+        "reset": "Zurücksetzen"
+    },
+    "messages": {
+        "saved": "Einstellungen erfolgreich gespeichert",
+        "error": "Fehler beim Speichern der Einstellungen",
+        "confirm": "Sind Sie sicher?",
+        "loading": "Einstellungen werden geladen..."
+    }
+}

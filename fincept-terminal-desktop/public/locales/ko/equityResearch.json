@@ -1,0 +1,62 @@
+{
+    "title": "주식 리서치",
+    "header": {
+        "overview": "개요",
+        "financials": "재무",
+        "analysis": "분석",
+        "ratings": "등급"
+    },
+    "summary": {
+        "marketCap": "시가총액",
+        "pe": "PER",
+        "eps": "EPS",
+        "dividend": "배당수익률",
+        "beta": "베타",
+        "52weekHigh": "52주 최고",
+        "52weekLow": "52주 최저",
+        "avgVolume": "평균거래량"
+    },
+    "financials": {
+        "revenue": "매출",
+        "netIncome": "순이익",
+        "grossMargin": "매출총이익률",
+        "operatingMargin": "영업이익률",
+        "roe": "ROE",
+        "roa": "ROA",
+        "debtEquity": "부채비율",
+        "currentRatio": "유동비율"
+    },
+    "analysis": {
+        "buy": "매수",
+        "hold": "보유",
+        "sell": "매도",
+        "strongBuy": "적극매수",
+        "strongSell": "적극매도",
+        "targetPrice": "목표가",
+        "upside": "상승여력",
+        "downside": "하락위험"
+    },
+    "periods": {
+        "annual": "연간",
+        "quarterly": "분기",
+        "ttm": "최근12개월",
+        "ytd": "연초대비"
+    },
+    "sections": {
+        "incomeStatement": "손익계산서",
+        "balanceSheet": "재무상태표",
+        "cashFlow": "현금흐름표",
+        "keyMetrics": "핵심지표"
+    },
+    "actions": {
+        "compare": "비교",
+        "export": "내보내기",
+        "addToWatchlist": "관심목록추가",
+        "setAlert": "알림설정"
+    },
+    "messages": {
+        "loading": "로딩 중...",
+        "noData": "데이터 없음",
+        "updated": "업데이트"
+    }
+}

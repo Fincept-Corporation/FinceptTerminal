@@ -1,0 +1,56 @@
+{
+    "title": "СКРИНЕР АКЦІЙ",
+    "header": {
+        "filters": "ФІЛЬТРИ",
+        "results": "РЕЗУЛЬТАТИ",
+        "saved": "ЗБЕРЕЖЕНІ",
+        "presets": "ПРЕСЕТИ"
+    },
+    "filters": {
+        "add": "Додати фільтр",
+        "clear": "Очистити все",
+        "reset": "Скинути",
+        "apply": "Застосувати фільтри"
+    },
+    "criteria": {
+        "marketCap": "Капіталізація",
+        "price": "Ціна",
+        "volume": "Обсяг",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Дивідендна дохідність",
+        "beta": "Бета",
+        "sector": "Сектор",
+        "industry": "Галузь",
+        "country": "Країна",
+        "exchange": "Біржа"
+    },
+    "operators": {
+        "equals": "Дорівнює",
+        "greater": "Більше",
+        "less": "Менше",
+        "between": "Між",
+        "contains": "Містить"
+    },
+    "results": {
+        "symbol": "Тікер",
+        "name": "Назва",
+        "price": "Ціна",
+        "change": "Зміна",
+        "volume": "Обсяг",
+        "marketCap": "Капіталізація",
+        "matches": "результатів"
+    },
+    "actions": {
+        "save": "Зберегти скрін",
+        "load": "Завантажити скрін",
+        "export": "Експорт",
+        "addToWatchlist": "До списку"
+    },
+    "messages": {
+        "loading": "Скринінг...",
+        "noResults": "Немає результатів",
+        "saved": "Збережено",
+        "applied": "Фільтри застосовано"
+    }
+}

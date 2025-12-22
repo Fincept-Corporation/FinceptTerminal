@@ -1,0 +1,66 @@
+{
+    "title": "DENİZCİLİK",
+    "header": {
+        "overview": "GENEL BAKIŞ",
+        "tracking": "TAKİP",
+        "ports": "LİMANLAR",
+        "routes": "ROTALAR"
+    },
+    "vessels": {
+        "type": "Gemi Tipi",
+        "cargo": "Kargo",
+        "tanker": "Tanker",
+        "container": "Konteyner",
+        "bulk": "Dökme Yük",
+        "passenger": "Yolcu",
+        "status": "Durum"
+    },
+    "tracking": {
+        "position": "Konum",
+        "speed": "Hız",
+        "heading": "Yön",
+        "destination": "Varış",
+        "eta": "Tahmini Varış",
+        "lastUpdate": "Son Güncelleme"
+    },
+    "ports": {
+        "name": "Liman Adı",
+        "country": "Ülke",
+        "arrivals": "Varışlar",
+        "departures": "Kalkışlar",
+        "congestion": "Tıkanıklık",
+        "waitTime": "Bekleme Süresi"
+    },
+    "routes": {
+        "origin": "Çıkış",
+        "destination": "Varış",
+        "distance": "Mesafe",
+        "transitTime": "Geçiş Süresi",
+        "riskLevel": "Risk Seviyesi"
+    },
+    "status": {
+        "anchored": "Demirli",
+        "underway": "Yolda",
+        "moored": "Kıyıda",
+        "atPort": "Limanda",
+        "drifting": "Sürükleniyor"
+    },
+    "metrics": {
+        "dwt": "DWT",
+        "teu": "TEU",
+        "draft": "Draft",
+        "length": "Uzunluk",
+        "speed": "Hız (Knot)"
+    },
+    "actions": {
+        "track": "Gemiyi Takip Et",
+        "setAlert": "Uyarı Ayarla",
+        "export": "Dışa Aktar",
+        "filter": "Filtrele"
+    },
+    "messages": {
+        "loading": "Veri yükleniyor...",
+        "noVessels": "Gemi bulunamadı",
+        "updated": "Güncellendi"
+    }
+}

@@ -1,0 +1,46 @@
+{
+    "title": "AI চ্যাট সহকারী",
+    "header": {
+        "newChat": "নতুন চ্যাট",
+        "history": "ইতিহাস",
+        "settings": "সেটিংস"
+    },
+    "input": {
+        "placeholder": "স্টক, মার্কেট সম্পর্কে জিজ্ঞাসা করুন...",
+        "send": "পাঠান",
+        "voice": "ভয়েস"
+    },
+    "messages": {
+        "thinking": "চিন্তা করছে...",
+        "typing": "AI টাইপ করছে...",
+        "error": "প্রক্রিয়াকরণ ত্রুটি",
+        "welcome": "আজ আপনার আর্থিক বিশ্লেষণে কীভাবে সাহায্য করতে পারি?"
+    },
+    "suggestions": {
+        "title": "সুপারিশকৃত প্রশ্ন",
+        "stockAnalysis": "স্টক পারফরম্যান্স বিশ্লেষণ",
+        "marketTrends": "বর্তমান বাজার প্রবণতা?",
+        "portfolioAdvice": "পোর্টফোলিও অপ্টিমাইজেশন পরামর্শ"
+    },
+    "history": {
+        "title": "চ্যাট ইতিহাস",
+        "today": "আজ",
+        "yesterday": "গতকাল",
+        "thisWeek": "এই সপ্তাহ",
+        "older": "পুরানো",
+        "clear": "ইতিহাস মুছুন"
+    },
+    "actions": {
+        "copy": "কপি",
+        "regenerate": "পুনরায় তৈরি",
+        "like": "পছন্দ",
+        "dislike": "অপছন্দ",
+        "share": "শেয়ার"
+    },
+    "models": {
+        "select": "মডেল নির্বাচন",
+        "gpt4": "GPT-4",
+        "claude": "Claude",
+        "gemini": "Gemini"
+    }
+}

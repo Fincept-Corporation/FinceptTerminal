@@ -1,0 +1,61 @@
+{
+    "title": "FINCEPT 论坛",
+    "header": {
+        "trending": "热门",
+        "new": "最新",
+        "following": "关注",
+        "myPosts": "我的帖子"
+    },
+    "categories": {
+        "all": "所有话题",
+        "stocks": "股票",
+        "options": "期权",
+        "crypto": "加密货币",
+        "forex": "外汇",
+        "strategies": "策略",
+        "general": "综合"
+    },
+    "post": {
+        "create": "发帖",
+        "reply": "回复",
+        "edit": "编辑",
+        "delete": "删除",
+        "share": "分享",
+        "report": "举报",
+        "save": "收藏"
+    },
+    "form": {
+        "title": "标题",
+        "content": "内容",
+        "tags": "标签",
+        "category": "分类",
+        "submit": "发布",
+        "cancel": "取消",
+        "preview": "预览"
+    },
+    "engagement": {
+        "likes": "点赞",
+        "comments": "评论",
+        "views": "浏览",
+        "shares": "分享"
+    },
+    "user": {
+        "posts": "帖子",
+        "followers": "粉丝",
+        "following": "关注",
+        "reputation": "声望",
+        "joined": "加入时间"
+    },
+    "sort": {
+        "newest": "最新",
+        "popular": "最热",
+        "mostCommented": "评论最多",
+        "topRated": "最高评分"
+    },
+    "messages": {
+        "loading": "加载帖子中...",
+        "noPosts": "暂无帖子",
+        "postSuccess": "发布成功",
+        "deleteConfirm": "确认删除此帖?"
+    }
+}

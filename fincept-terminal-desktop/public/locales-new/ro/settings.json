@@ -1,0 +1,55 @@
+{
+    "title": "Setări",
+    "credentials": {
+        "title": "GESTIONAREA CHEILOR API",
+        "description": "Configurați cheile API pentru furnizorii de date. Toate cheile sunt stocate local și criptate."
+    },
+    "llm": {
+        "title": "CONFIGURARE LLM",
+        "description": "Configurați furnizorii de AI pentru fila Chat."
+    },
+    "datasources": {
+        "title": "SURSE DE DATE"
+    },
+    "backtesting": {
+        "title": "FURNIZORI DE BACKTESTING"
+    },
+    "tablayout": {
+        "title": "ASPECT FILE"
+    },
+    "appearance": {
+        "title": "ASPECT",
+        "fontFamily": "Familie Font",
+        "fontSize": "Dimensiune Font",
+        "fontWeight": "Greutate Font",
+        "colorTheme": "Temă Culoare",
+        "save": "Salvare Aspect",
+        "reset": "Resetare la Implicit"
+    },
+    "language": {
+        "title": "SETĂRI LIMBĂ",
+        "selectLanguage": "Selectați limba preferată pentru interfața terminalului",
+        "currentLanguage": "LIMBA CURENTĂ"
+    },
+    "sidebar": {
+        "credentials": "Credențiale",
+        "llm": "Configurare LLM",
+        "dataSources": "Surse de Date",
+        "backtesting": "Furnizori Backtesting",
+        "tabLayout": "Aspect File",
+        "appearance": "Aspect",
+        "language": "Limbă"
+    },
+    "actions": {
+        "save": "Salvare Setări",
+        "cancel": "Anulare",
+        "apply": "Aplicare",
+        "reset": "Resetare"
+    },
+    "messages": {
+        "saved": "Setări salvate cu succes",
+        "error": "Eroare la salvarea setărilor",
+        "confirm": "Sunteți sigur?",
+        "loading": "Se încarcă setările..."
+    }
+}

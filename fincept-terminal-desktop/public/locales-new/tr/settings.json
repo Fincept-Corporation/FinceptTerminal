@@ -1,0 +1,55 @@
+{
+    "title": "Ayarlar",
+    "credentials": {
+        "title": "API ANAHTARI YÖNETİMİ",
+        "description": "Veri sağlayıcıları için API anahtarlarını yapılandırın. Tüm anahtarlar yerel olarak saklanır ve şifrelenir."
+    },
+    "llm": {
+        "title": "LLM YAPILANDIRMASI",
+        "description": "Sohbet sekmesi için AI sağlayıcılarını yapılandırın."
+    },
+    "datasources": {
+        "title": "VERİ KAYNAKLARI"
+    },
+    "backtesting": {
+        "title": "BACKTESTING SAĞLAYICILARI"
+    },
+    "tablayout": {
+        "title": "SEKME DÜZENİ"
+    },
+    "appearance": {
+        "title": "GÖRÜNÜM",
+        "fontFamily": "Yazı Tipi Ailesi",
+        "fontSize": "Yazı Tipi Boyutu",
+        "fontWeight": "Yazı Tipi Kalınlığı",
+        "colorTheme": "Renk Teması",
+        "save": "Görünümü Kaydet",
+        "reset": "Varsayılana Sıfırla"
+    },
+    "language": {
+        "title": "DİL AYARLARI",
+        "selectLanguage": "Terminal arayüzü için tercih ettiğiniz dili seçin",
+        "currentLanguage": "MEVCUT DİL"
+    },
+    "sidebar": {
+        "credentials": "Kimlik Bilgileri",
+        "llm": "LLM Yapılandırması",
+        "dataSources": "Veri Kaynakları",
+        "backtesting": "Backtesting Sağlayıcıları",
+        "tabLayout": "Sekme Düzeni",
+        "appearance": "Görünüm",
+        "language": "Dil"
+    },
+    "actions": {
+        "save": "Ayarları Kaydet",
+        "cancel": "İptal",
+        "apply": "Uygula",
+        "reset": "Sıfırla"
+    },
+    "messages": {
+        "saved": "Ayarlar başarıyla kaydedildi",
+        "error": "Ayarlar kaydedilirken hata",
+        "confirm": "Emin misiniz?",
+        "loading": "Ayarlar yükleniyor..."
+    }
+}

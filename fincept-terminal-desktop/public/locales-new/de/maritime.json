@@ -1,0 +1,66 @@
+{
+    "title": "SCHIFFFAHRT",
+    "header": {
+        "overview": "ÜBERSICHT",
+        "tracking": "VERFOLGUNG",
+        "ports": "HÄFEN",
+        "routes": "ROUTEN"
+    },
+    "vessels": {
+        "type": "Schiffstyp",
+        "cargo": "Frachtschiff",
+        "tanker": "Tanker",
+        "container": "Containerschiff",
+        "bulk": "Massengutfrachter",
+        "passenger": "Passagierschiff",
+        "status": "Status"
+    },
+    "tracking": {
+        "position": "Position",
+        "speed": "Geschwindigkeit",
+        "heading": "Kurs",
+        "destination": "Ziel",
+        "eta": "Ankunft",
+        "lastUpdate": "Letzte Aktualisierung"
+    },
+    "ports": {
+        "name": "Hafenname",
+        "country": "Land",
+        "arrivals": "Ankünfte",
+        "departures": "Abfahrten",
+        "congestion": "Stau",
+        "waitTime": "Wartezeit"
+    },
+    "routes": {
+        "origin": "Herkunft",
+        "destination": "Ziel",
+        "distance": "Entfernung",
+        "transitTime": "Fahrtzeit",
+        "riskLevel": "Risikolevel"
+    },
+    "status": {
+        "anchored": "Vor Anker",
+        "underway": "Unterwegs",
+        "moored": "Vertäut",
+        "atPort": "Im Hafen",
+        "drifting": "Treibend"
+    },
+    "metrics": {
+        "dwt": "Tragfähigkeit",
+        "teu": "TEU",
+        "draft": "Tiefgang",
+        "length": "Länge",
+        "speed": "Geschwindigkeit (Knoten)"
+    },
+    "actions": {
+        "track": "Schiff verfolgen",
+        "setAlert": "Alarm setzen",
+        "export": "Exportieren",
+        "filter": "Filtern"
+    },
+    "messages": {
+        "loading": "Lade Schifffahrtsdaten...",
+        "noVessels": "Keine Schiffe gefunden",
+        "updated": "Aktualisiert"
+    }
+}

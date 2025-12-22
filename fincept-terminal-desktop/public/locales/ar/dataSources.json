@@ -1,0 +1,43 @@
+{
+    "title": "مصادر البيانات",
+    "header": {
+        "available": "المصادر المتاحة",
+        "connected": "متصل",
+        "addNew": "إضافة مصدر",
+        "refresh": "تحديث"
+    },
+    "categories": {
+        "market": "بيانات السوق",
+        "economic": "البيانات الاقتصادية",
+        "alternative": "البيانات البديلة",
+        "news": "الأخبار والمشاعر",
+        "fundamental": "البيانات الأساسية"
+    },
+    "status": {
+        "connected": "متصل",
+        "disconnected": "غير متصل",
+        "error": "خطأ",
+        "pending": "معلق"
+    },
+    "actions": {
+        "connect": "اتصال",
+        "disconnect": "قطع الاتصال",
+        "configure": "تكوين",
+        "test": "اختبار الاتصال",
+        "delete": "حذف"
+    },
+    "form": {
+        "apiKey": "مفتاح API",
+        "endpoint": "عنوان النهاية",
+        "username": "اسم المستخدم",
+        "password": "كلمة المرور",
+        "save": "حفظ",
+        "cancel": "إلغاء"
+    },
+    "messages": {
+        "connectionSuccess": "تم الاتصال بمصدر البيانات بنجاح",
+        "connectionFailed": "فشل الاتصال بمصدر البيانات",
+        "noSources": "لم يتم تكوين مصادر بيانات",
+        "loading": "جاري تحميل مصادر البيانات..."
+    }
+}

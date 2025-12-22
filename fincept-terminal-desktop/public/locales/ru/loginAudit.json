@@ -1,0 +1,27 @@
+{
+    "title": "ПАНЕЛЬ АУДИТА ВХОДА",
+    "accessDenied": "Требуется доступ администратора",
+    "metrics": {
+        "dauToday": "DAU сегодня",
+        "mau": "MAU",
+        "successRate": "Успешность",
+        "failed24h": "Неудачные (24ч)",
+        "activeSessions": "Активные сессии"
+    },
+    "views": {
+        "overview": "ОБЗОР",
+        "eventLog": "ЖУРНАЛ СОБЫТИЙ",
+        "alerts": "ОПОВЕЩЕНИЯ",
+        "analytics": "АНАЛИТИКА"
+    },
+    "controls": {
+        "autoRefresh": "Автообновление",
+        "loading": "ЗАГРУЗКА...",
+        "refresh": "ОБНОВИТЬ"
+    },
+    "status": {
+        "admin": "Админ",
+        "updating": "ОБНОВЛЕНИЕ",
+        "ready": "ГОТОВО"
+    }
+}

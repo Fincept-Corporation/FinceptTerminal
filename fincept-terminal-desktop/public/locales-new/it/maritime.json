@@ -1,0 +1,66 @@
+{
+    "title": "MARITTIMO",
+    "header": {
+        "overview": "PANORAMICA",
+        "tracking": "TRACCIAMENTO",
+        "ports": "PORTI",
+        "routes": "ROTTE"
+    },
+    "vessels": {
+        "type": "Tipo di nave",
+        "cargo": "Cargo",
+        "tanker": "Petroliera",
+        "container": "Portacontainer",
+        "bulk": "Rinfusiera",
+        "passenger": "Passeggeri",
+        "status": "Stato"
+    },
+    "tracking": {
+        "position": "Posizione",
+        "speed": "Velocità",
+        "heading": "Rotta",
+        "destination": "Destinazione",
+        "eta": "Arrivo previsto",
+        "lastUpdate": "Ultimo aggiornamento"
+    },
+    "ports": {
+        "name": "Nome porto",
+        "country": "Paese",
+        "arrivals": "Arrivi",
+        "departures": "Partenze",
+        "congestion": "Congestione",
+        "waitTime": "Tempo di attesa"
+    },
+    "routes": {
+        "origin": "Origine",
+        "destination": "Destinazione",
+        "distance": "Distanza",
+        "transitTime": "Tempo di transito",
+        "riskLevel": "Livello di rischio"
+    },
+    "status": {
+        "anchored": "Ancorata",
+        "underway": "In navigazione",
+        "moored": "Ormeggiata",
+        "atPort": "In porto",
+        "drifting": "Alla deriva"
+    },
+    "metrics": {
+        "dwt": "Portata lorda",
+        "teu": "TEU",
+        "draft": "Pescaggio",
+        "length": "Lunghezza",
+        "speed": "Velocità (nodi)"
+    },
+    "actions": {
+        "track": "Traccia nave",
+        "setAlert": "Imposta avviso",
+        "export": "Esporta",
+        "filter": "Filtra"
+    },
+    "messages": {
+        "loading": "Caricamento dati...",
+        "noVessels": "Nessuna nave trovata",
+        "updated": "Aggiornato"
+    }
+}

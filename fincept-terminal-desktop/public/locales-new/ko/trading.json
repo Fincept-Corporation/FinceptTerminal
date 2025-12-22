@@ -1,0 +1,43 @@
+{
+    "title": "트레이딩",
+    "header": {
+        "orders": "주문",
+        "positions": "포지션",
+        "history": "거래내역",
+        "settings": "설정",
+        "terminal": "FINCEPT 터미널",
+        "selectBroker": "브로커 선택",
+        "paper": "모의",
+        "live": "실거래"
+    },
+    "orderTypes": {
+        "market": "시장가",
+        "limit": "지정가",
+        "stop": "스탑"
+    },
+    "actions": {
+        "buy": "매수",
+        "sell": "매도",
+        "cancel": "취소",
+        "close": "청산",
+        "closeAll": "전체 청산"
+    },
+    "form": {
+        "symbol": "종목",
+        "quantity": "수량",
+        "price": "가격",
+        "stopPrice": "스탑 가격"
+    },
+    "position": {
+        "openPrice": "진입가",
+        "currentPrice": "현재가",
+        "pnl": "손익",
+        "margin": "증거금",
+        "size": "수량"
+    },
+    "messages": {
+        "orderPlaced": "주문이 완료되었습니다",
+        "orderFailed": "주문 실패",
+        "noPositions": "보유 포지션 없음"
+    }
+}

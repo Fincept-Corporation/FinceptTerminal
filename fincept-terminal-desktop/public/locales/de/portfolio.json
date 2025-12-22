@@ -1,0 +1,35 @@
+{
+    "title": "FINCEPT PORTFOLIO MANAGER",
+    "header": {
+        "live": "LIVE",
+        "updating": "AKTUALISIERE",
+        "newPortfolio": "NEUES PORTFOLIO",
+        "refresh": "AKTUALISIEREN",
+        "exportCsv": "CSV EXPORTIEREN"
+    },
+    "summary": {
+        "totalValue": "GESAMTWERT",
+        "dayPnl": "TAGES-G/V",
+        "totalPnl": "GESAMT-G/V",
+        "positions": "POSITIONEN"
+    },
+    "views": {
+        "positions": "POSITIONEN",
+        "addAsset": "ANLAGE HINZUFÜGEN",
+        "sellAsset": "ANLAGE VERKAUFEN",
+        "analytics": "ANALYSEN",
+        "history": "HISTORIE"
+    },
+    "sidebar": {
+        "portfolios": "PORTFOLIOS",
+        "loading": "Portfolios werden geladen...",
+        "noPortfolios": "Noch keine Portfolios vorhanden."
+    },
+    "modals": {
+        "createNew": "NEUES PORTFOLIO ERSTELLEN",
+        "cancel": "ABBRECHEN",
+        "create": "ERSTELLEN",
+        "add": "HINZUFÜGEN",
+        "sell": "VERKAUFEN"
+    }
+}

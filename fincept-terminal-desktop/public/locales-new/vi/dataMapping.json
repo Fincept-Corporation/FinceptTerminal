@@ -1,0 +1,52 @@
+{
+    "title": "ÁNH XẠ DỮ LIỆU",
+    "header": {
+        "mappings": "ÁNH XẠ",
+        "templates": "MẪU",
+        "create": "TẠO MỚI",
+        "refresh": "LÀM MỚI"
+    },
+    "views": {
+        "list": "Danh sách",
+        "create": "Tạo ánh xạ",
+        "templates": "Mẫu"
+    },
+    "list": {
+        "name": "Tên",
+        "source": "Nguồn",
+        "destination": "Đích",
+        "status": "Trạng thái",
+        "lastRun": "Lần chạy cuối",
+        "actions": "Hành động"
+    },
+    "status": {
+        "active": "Hoạt động",
+        "inactive": "Không hoạt động",
+        "error": "Lỗi",
+        "running": "Đang chạy"
+    },
+    "actions": {
+        "edit": "Sửa",
+        "delete": "Xóa",
+        "run": "Chạy",
+        "duplicate": "Nhân bản",
+        "export": "Xuất"
+    },
+    "create": {
+        "title": "Tạo ánh xạ",
+        "name": "Tên",
+        "description": "Mô tả",
+        "sourceApi": "API nguồn",
+        "destApi": "API đích",
+        "fieldMapping": "Ánh xạ trường",
+        "save": "Lưu",
+        "cancel": "Hủy"
+    },
+    "messages": {
+        "saved": "Đã lưu",
+        "deleted": "Đã xóa",
+        "runSuccess": "Thành công",
+        "error": "Lỗi",
+        "noMappings": "Không có ánh xạ"
+    }
+}

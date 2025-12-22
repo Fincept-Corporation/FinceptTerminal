@@ -1,0 +1,21 @@
+{
+    "title": "LISTĂ DE URMĂRIRE",
+    "header": {
+        "myWatchlists": "LISTELE MELE",
+        "create": "CREEAZĂ",
+        "import": "IMPORTĂ",
+        "export": "EXPORTĂ"
+    },
+    "actions": {
+        "add": "Adaugă simbol",
+        "remove": "Elimină",
+        "edit": "Editează",
+        "delete": "Șterge"
+    },
+    "messages": {
+        "created": "Listă creată",
+        "deleted": "Listă ștearsă",
+        "noWatchlists": "Fără liste",
+        "loading": "Încărcare..."
+    }
+}

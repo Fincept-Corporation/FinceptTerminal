@@ -1,0 +1,58 @@
+{
+    "title": "WATCHLIST",
+    "header": {
+        "myWatchlists": "MY WATCHLISTS",
+        "create": "CREATE",
+        "import": "IMPORT",
+        "export": "EXPORT"
+    },
+    "list": {
+        "name": "Name",
+        "symbols": "Symbols",
+        "created": "Created",
+        "updated": "Last Updated",
+        "actions": "Actions"
+    },
+    "actions": {
+        "add": "Add Symbol",
+        "remove": "Remove",
+        "edit": "Edit",
+        "delete": "Delete",
+        "rename": "Rename",
+        "duplicate": "Duplicate"
+    },
+    "form": {
+        "name": "Watchlist Name",
+        "description": "Description",
+        "symbols": "Add Symbols",
+        "save": "Save",
+        "cancel": "Cancel"
+    },
+    "symbol": {
+        "price": "Price",
+        "change": "Change",
+        "volume": "Volume",
+        "marketCap": "Market Cap",
+        "alert": "Set Alert"
+    },
+    "alerts": {
+        "priceAbove": "Price Above",
+        "priceBelow": "Price Below",
+        "changePercent": "Change %",
+        "volume": "Volume Alert"
+    },
+    "sort": {
+        "name": "By Name",
+        "price": "By Price",
+        "change": "By Change",
+        "custom": "Custom Order"
+    },
+    "messages": {
+        "created": "Watchlist created",
+        "deleted": "Watchlist deleted",
+        "symbolAdded": "Symbol added",
+        "symbolRemoved": "Symbol removed",
+        "noWatchlists": "No watchlists yet",
+        "loading": "Loading..."
+    }
+}

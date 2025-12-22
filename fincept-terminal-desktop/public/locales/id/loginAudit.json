@@ -1,0 +1,26 @@
+{
+    "title": "DASBOR AUDIT LOGIN",
+    "accessDenied": "Akses admin diperlukan",
+    "metrics": {
+        "dauToday": "DAU Hari Ini",
+        "mau": "MAU",
+        "successRate": "Tingkat Keberhasilan",
+        "activeSessions": "Sesi Aktif"
+    },
+    "views": {
+        "overview": "IKHTISAR",
+        "eventLog": "LOG PERISTIWA",
+        "alerts": "PERINGATAN",
+        "analytics": "ANALITIK"
+    },
+    "controls": {
+        "autoRefresh": "Auto segarkan",
+        "loading": "MEMUAT...",
+        "refresh": "SEGARKAN"
+    },
+    "status": {
+        "admin": "Admin",
+        "updating": "MEMPERBARUI",
+        "ready": "SIAP"
+    }
+}

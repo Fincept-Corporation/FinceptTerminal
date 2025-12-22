@@ -1,0 +1,52 @@
+{
+    "title": "VERİ EŞLEMESİ",
+    "header": {
+        "mappings": "EŞLEMELER",
+        "templates": "ŞABLONLAR",
+        "create": "YENİ OLUŞTUR",
+        "refresh": "YENİLE"
+    },
+    "views": {
+        "list": "Eşleme Listesi",
+        "create": "Eşleme Oluştur",
+        "templates": "Şablonlar"
+    },
+    "list": {
+        "name": "Ad",
+        "source": "Kaynak",
+        "destination": "Hedef",
+        "status": "Durum",
+        "lastRun": "Son Çalışma",
+        "actions": "İşlemler"
+    },
+    "status": {
+        "active": "Aktif",
+        "inactive": "Pasif",
+        "error": "Hata",
+        "running": "Çalışıyor"
+    },
+    "actions": {
+        "edit": "Düzenle",
+        "delete": "Sil",
+        "run": "Çalıştır",
+        "duplicate": "Çoğalt",
+        "export": "Dışa Aktar"
+    },
+    "create": {
+        "title": "Eşleme Oluştur",
+        "name": "Ad",
+        "description": "Açıklama",
+        "sourceApi": "Kaynak API",
+        "destApi": "Hedef API",
+        "fieldMapping": "Alan Eşleme",
+        "save": "Kaydet",
+        "cancel": "İptal"
+    },
+    "messages": {
+        "saved": "Kaydedildi",
+        "deleted": "Silindi",
+        "runSuccess": "Başarılı",
+        "error": "Hata",
+        "noMappings": "Eşleme yok"
+    }
+}

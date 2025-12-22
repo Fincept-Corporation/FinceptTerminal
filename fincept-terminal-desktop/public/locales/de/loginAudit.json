@@ -1,0 +1,28 @@
+{
+    "title": "LOGIN-AUDIT-DASHBOARD",
+    "accessDenied": "Admin-Zugang erforderlich für Login-Audit-Dashboard",
+    "metrics": {
+        "dauToday": "DAU Heute",
+        "mau": "MAU",
+        "successRate": "Erfolgsrate",
+        "failed24h": "Fehlgeschlagen (24h)",
+        "activeSessions": "Aktive Sitzungen",
+        "uniqueIps": "Einzigartige IPs"
+    },
+    "views": {
+        "overview": "ÜBERSICHT",
+        "eventLog": "EREIGNISPROTOKOLL",
+        "alerts": "WARNUNGEN",
+        "analytics": "ANALYSEN"
+    },
+    "controls": {
+        "autoRefresh": "Auto-Aktualisierung",
+        "loading": "LADEN...",
+        "refresh": "AKTUALISIEREN"
+    },
+    "status": {
+        "admin": "Admin",
+        "updating": "AKTUALISIERE",
+        "ready": "BEREIT"
+    }
+}

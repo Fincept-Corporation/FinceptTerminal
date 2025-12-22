@@ -1,0 +1,43 @@
+{
+    "title": "ДЖЕРЕЛА ДАНИХ",
+    "header": {
+        "available": "ДОСТУПНІ ДЖЕРЕЛА",
+        "connected": "ПІДКЛЮЧЕНО",
+        "addNew": "ДОДАТИ ДЖЕРЕЛО",
+        "refresh": "ОНОВИТИ"
+    },
+    "categories": {
+        "market": "Ринкові дані",
+        "economic": "Економічні дані",
+        "alternative": "Альтернативні дані",
+        "news": "Новини",
+        "fundamental": "Фундаментальні дані"
+    },
+    "status": {
+        "connected": "Підключено",
+        "disconnected": "Відключено",
+        "error": "Помилка",
+        "pending": "Очікування"
+    },
+    "actions": {
+        "connect": "Підключити",
+        "disconnect": "Відключити",
+        "configure": "Налаштувати",
+        "test": "Тест",
+        "delete": "Видалити"
+    },
+    "form": {
+        "apiKey": "API ключ",
+        "endpoint": "URL",
+        "username": "Користувач",
+        "password": "Пароль",
+        "save": "Зберегти",
+        "cancel": "Скасувати"
+    },
+    "messages": {
+        "connectionSuccess": "Успішно підключено",
+        "connectionFailed": "Помилка підключення",
+        "noSources": "Немає джерел",
+        "loading": "Завантаження..."
+    }
+}

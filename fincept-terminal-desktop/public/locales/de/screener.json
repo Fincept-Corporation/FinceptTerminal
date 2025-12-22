@@ -1,0 +1,56 @@
+{
+    "title": "AKTIEN-SCREENER",
+    "header": {
+        "filters": "FILTER",
+        "results": "ERGEBNISSE",
+        "saved": "GESPEICHERT",
+        "presets": "VORLAGEN"
+    },
+    "filters": {
+        "add": "Filter hinzufügen",
+        "clear": "Alle löschen",
+        "reset": "Zurücksetzen",
+        "apply": "Filter anwenden"
+    },
+    "criteria": {
+        "marketCap": "Marktkapitalisierung",
+        "price": "Preis",
+        "volume": "Volumen",
+        "pe": "KGV",
+        "eps": "Gewinn/Aktie",
+        "dividend": "Dividendenrendite",
+        "beta": "Beta",
+        "sector": "Sektor",
+        "industry": "Branche",
+        "country": "Land",
+        "exchange": "Börse"
+    },
+    "operators": {
+        "equals": "Gleich",
+        "greater": "Größer als",
+        "less": "Kleiner als",
+        "between": "Zwischen",
+        "contains": "Enthält"
+    },
+    "results": {
+        "symbol": "Symbol",
+        "name": "Name",
+        "price": "Preis",
+        "change": "Änderung",
+        "volume": "Volumen",
+        "marketCap": "MarktKap.",
+        "matches": "Treffer"
+    },
+    "actions": {
+        "save": "Screen speichern",
+        "load": "Screen laden",
+        "export": "Exportieren",
+        "addToWatchlist": "Zur Liste hinzufügen"
+    },
+    "messages": {
+        "loading": "Screene Aktien...",
+        "noResults": "Keine Treffer",
+        "saved": "Gespeichert",
+        "applied": "Filter angewendet"
+    }
+}

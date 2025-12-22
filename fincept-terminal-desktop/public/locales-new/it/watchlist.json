@@ -1,0 +1,21 @@
+{
+    "title": "LISTA DI OSSERVAZIONE",
+    "header": {
+        "myWatchlists": "LE MIE LISTE",
+        "create": "CREA",
+        "import": "IMPORTA",
+        "export": "ESPORTA"
+    },
+    "actions": {
+        "add": "Aggiungi simbolo",
+        "remove": "Rimuovi",
+        "edit": "Modifica",
+        "delete": "Elimina"
+    },
+    "messages": {
+        "created": "Lista creata",
+        "deleted": "Lista eliminata",
+        "noWatchlists": "Nessuna lista",
+        "loading": "Caricamento..."
+    }
+}

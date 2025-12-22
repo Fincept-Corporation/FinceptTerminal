@@ -1,0 +1,25 @@
+{
+    "title": "TİCARET",
+    "header": {
+        "orders": "EMİRLER",
+        "positions": "POZİSYONLAR",
+        "history": "GEÇMİŞ",
+        "settings": "AYARLAR",
+        "terminal": "FINCEPT TERMİNAL",
+        "selectBroker": "BROKER SEÇ",
+        "paper": "KAĞIT",
+        "live": "CANLI"
+    },
+    "actions": {
+        "buy": "AL",
+        "sell": "SAT",
+        "cancel": "İptal",
+        "close": "Kapat",
+        "closeAll": "Tümünü Kapat"
+    },
+    "messages": {
+        "orderPlaced": "Emir verildi",
+        "orderFailed": "Emir başarısız",
+        "noPositions": "Açık pozisyon yok"
+    }
+}

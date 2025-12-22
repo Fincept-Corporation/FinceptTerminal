@@ -1,0 +1,26 @@
+{
+    "title": "ПАНЕЛЬ АУДИТУ ВХОДУ",
+    "accessDenied": "Необхідний доступ адміністратора",
+    "metrics": {
+        "dauToday": "DAU сьогодні",
+        "mau": "MAU",
+        "successRate": "Успішність",
+        "activeSessions": "Активні сесії"
+    },
+    "views": {
+        "overview": "ОГЛЯД",
+        "eventLog": "ЖУРНАЛ ПОДІЙ",
+        "alerts": "СПОВІЩЕННЯ",
+        "analytics": "АНАЛІТИКА"
+    },
+    "controls": {
+        "autoRefresh": "Автооновлення",
+        "loading": "ЗАВАНТАЖЕННЯ...",
+        "refresh": "ОНОВИТИ"
+    },
+    "status": {
+        "admin": "Адмін",
+        "updating": "ОНОВЛЕННЯ",
+        "ready": "ГОТОВО"
+    }
+}

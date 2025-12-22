@@ -1,0 +1,66 @@
+{
+    "title": "航运",
+    "header": {
+        "overview": "概览",
+        "tracking": "跟踪",
+        "ports": "港口",
+        "routes": "航线"
+    },
+    "vessels": {
+        "type": "船舶类型",
+        "cargo": "货船",
+        "tanker": "油轮",
+        "container": "集装箱船",
+        "bulk": "散货船",
+        "passenger": "客轮",
+        "status": "状态"
+    },
+    "tracking": {
+        "position": "位置",
+        "speed": "航速",
+        "heading": "航向",
+        "destination": "目的地",
+        "eta": "预计到达",
+        "lastUpdate": "最后更新"
+    },
+    "ports": {
+        "name": "港口名称",
+        "country": "国家",
+        "arrivals": "抵达",
+        "departures": "离港",
+        "congestion": "拥堵",
+        "waitTime": "等待时间"
+    },
+    "routes": {
+        "origin": "起点",
+        "destination": "终点",
+        "distance": "距离",
+        "transitTime": "航行时间",
+        "riskLevel": "风险等级"
+    },
+    "status": {
+        "anchored": "锚泊",
+        "underway": "航行中",
+        "moored": "靠泊",
+        "atPort": "在港",
+        "drifting": "漂泊"
+    },
+    "metrics": {
+        "dwt": "载重吨",
+        "teu": "标准箱",
+        "draft": "吃水",
+        "length": "船长",
+        "speed": "航速(节)"
+    },
+    "actions": {
+        "track": "跟踪船舶",
+        "setAlert": "设置提醒",
+        "export": "导出",
+        "filter": "筛选"
+    },
+    "messages": {
+        "loading": "加载航运数据...",
+        "noVessels": "未找到船舶",
+        "updated": "更新时间"
+    }
+}

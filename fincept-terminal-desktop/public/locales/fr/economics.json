@@ -1,0 +1,59 @@
+{
+    "title": "ÉCONOMIE",
+    "header": {
+        "overview": "APERÇU",
+        "indicators": "INDICATEURS",
+        "calendar": "CALENDRIER",
+        "countries": "PAYS"
+    },
+    "indicators": {
+        "gdp": "PIB",
+        "inflation": "Inflation",
+        "unemployment": "Chômage",
+        "interestRate": "Taux d'intérêt",
+        "tradeBalance": "Balance commerciale",
+        "consumerConfidence": "Confiance des consommateurs",
+        "pmi": "PMI",
+        "cpi": "IPC"
+    },
+    "calendar": {
+        "date": "Date",
+        "event": "Événement",
+        "actual": "Réel",
+        "forecast": "Prévision",
+        "previous": "Précédent",
+        "impact": "Impact"
+    },
+    "impact": {
+        "high": "Élevé",
+        "medium": "Moyen",
+        "low": "Faible"
+    },
+    "trends": {
+        "rising": "Hausse",
+        "falling": "Baisse",
+        "stable": "Stable",
+        "yoy": "A/A",
+        "mom": "M/M",
+        "qoq": "T/T"
+    },
+    "regions": {
+        "global": "Mondial",
+        "northAmerica": "Amérique du Nord",
+        "europe": "Europe",
+        "asia": "Asie-Pacifique",
+        "latam": "Amérique latine",
+        "mena": "MENA"
+    },
+    "actions": {
+        "compare": "Comparer les pays",
+        "export": "Exporter données",
+        "subscribe": "S'abonner",
+        "filter": "Filtrer événements"
+    },
+    "messages": {
+        "loading": "Chargement des données...",
+        "noEvents": "Aucun événement prévu",
+        "updated": "Mis à jour"
+    }
+}

@@ -1,0 +1,62 @@
+{
+    "title": "АНАЛІЗ АКЦІЙ",
+    "header": {
+        "overview": "ОГЛЯД",
+        "financials": "ФІНАНСИ",
+        "analysis": "АНАЛІЗ",
+        "ratings": "РЕЙТИНГИ"
+    },
+    "summary": {
+        "marketCap": "Капіталізація",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Дивідендна дохідність",
+        "beta": "Бета",
+        "52weekHigh": "Макс. 52тиж",
+        "52weekLow": "Мін. 52тиж",
+        "avgVolume": "Сер. обсяг"
+    },
+    "financials": {
+        "revenue": "Виручка",
+        "netIncome": "Чистий прибуток",
+        "grossMargin": "Валова маржа",
+        "operatingMargin": "Операційна маржа",
+        "roe": "ROE",
+        "roa": "ROA",
+        "debtEquity": "Борг/Капітал",
+        "currentRatio": "Коеф. ліквідності"
+    },
+    "analysis": {
+        "buy": "Купувати",
+        "hold": "Тримати",
+        "sell": "Продавати",
+        "strongBuy": "Активно купувати",
+        "strongSell": "Активно продавати",
+        "targetPrice": "Цільова ціна",
+        "upside": "Потенціал зростання",
+        "downside": "Ризик падіння"
+    },
+    "periods": {
+        "annual": "Річний",
+        "quarterly": "Квартальний",
+        "ttm": "За 12 місяців",
+        "ytd": "З початку року"
+    },
+    "sections": {
+        "incomeStatement": "Звіт про прибутки",
+        "balanceSheet": "Баланс",
+        "cashFlow": "Грошовий потік",
+        "keyMetrics": "Ключові показники"
+    },
+    "actions": {
+        "compare": "Порівняти",
+        "export": "Експорт",
+        "addToWatchlist": "До списку",
+        "setAlert": "Створити сповіщення"
+    },
+    "messages": {
+        "loading": "Завантаження...",
+        "noData": "Немає даних",
+        "updated": "Оновлено"
+    }
+}

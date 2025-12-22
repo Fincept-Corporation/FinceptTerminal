@@ -1,0 +1,62 @@
+{
+    "title": "أبحاث الأسهم",
+    "header": {
+        "overview": "نظرة عامة",
+        "financials": "المالية",
+        "analysis": "التحليل",
+        "ratings": "التقييمات"
+    },
+    "summary": {
+        "marketCap": "القيمة السوقية",
+        "pe": "مكرر الربحية",
+        "eps": "ربحية السهم",
+        "dividend": "عائد التوزيعات",
+        "beta": "بيتا",
+        "52weekHigh": "أعلى 52 أسبوع",
+        "52weekLow": "أدنى 52 أسبوع",
+        "avgVolume": "متوسط الحجم"
+    },
+    "financials": {
+        "revenue": "الإيرادات",
+        "netIncome": "صافي الدخل",
+        "grossMargin": "هامش الربح الإجمالي",
+        "operatingMargin": "هامش التشغيل",
+        "roe": "العائد على حقوق الملكية",
+        "roa": "العائد على الأصول",
+        "debtEquity": "الدين/حقوق الملكية",
+        "currentRatio": "نسبة التداول"
+    },
+    "analysis": {
+        "buy": "شراء",
+        "hold": "احتفاظ",
+        "sell": "بيع",
+        "strongBuy": "شراء قوي",
+        "strongSell": "بيع قوي",
+        "targetPrice": "السعر المستهدف",
+        "upside": "إمكانية الصعود",
+        "downside": "إمكانية الهبوط"
+    },
+    "periods": {
+        "annual": "سنوي",
+        "quarterly": "ربع سنوي",
+        "ttm": "آخر 12 شهر",
+        "ytd": "منذ بداية العام"
+    },
+    "sections": {
+        "incomeStatement": "قائمة الدخل",
+        "balanceSheet": "الميزانية العمومية",
+        "cashFlow": "التدفق النقدي",
+        "keyMetrics": "المؤشرات الرئيسية"
+    },
+    "actions": {
+        "compare": "مقارنة",
+        "export": "تصدير",
+        "addToWatchlist": "إضافة للقائمة",
+        "setAlert": "تعيين تنبيه"
+    },
+    "messages": {
+        "loading": "جاري التحميل...",
+        "noData": "لا توجد بيانات",
+        "updated": "آخر تحديث"
+    }
+}

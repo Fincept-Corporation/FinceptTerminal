@@ -1,0 +1,30 @@
+{
+    "title": "FINCEPT 터미널 전문 뉴스",
+    "header": {
+        "liveFeed": "실시간 피드",
+        "live": "실시간",
+        "refresh": "새로고침",
+        "updating": "업데이트 중...",
+        "alerts": "알림",
+        "sources": "소스",
+        "status": "상태",
+        "demoMode": "데모 모드",
+        "articles": "기사",
+        "activeSources": "활성 소스"
+    },
+    "sentiment": {
+        "bullish": "강세",
+        "bearish": "약세",
+        "neutral": "중립"
+    },
+    "autoRefresh": {
+        "title": "자동 새로고침 간격",
+        "minute": "분",
+        "minutes": "분"
+    },
+    "messages": {
+        "loading": "뉴스 로딩 중...",
+        "loadingFeeds": "뉴스 피드 로딩 중...",
+        "breaking": "속보"
+    }
+}

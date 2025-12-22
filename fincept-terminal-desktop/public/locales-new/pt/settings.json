@@ -1,0 +1,55 @@
+{
+    "title": "Configurações",
+    "credentials": {
+        "title": "GERENCIAMENTO DE CHAVES API",
+        "description": "Configure chaves de API para provedores de dados. Todas as chaves são armazenadas localmente e criptografadas."
+    },
+    "llm": {
+        "title": "CONFIGURAÇÃO LLM",
+        "description": "Configure provedores de IA para a aba de Chat."
+    },
+    "datasources": {
+        "title": "FONTES DE DADOS"
+    },
+    "backtesting": {
+        "title": "PROVEDORES DE BACKTESTING"
+    },
+    "tablayout": {
+        "title": "LAYOUT DE ABAS"
+    },
+    "appearance": {
+        "title": "APARÊNCIA",
+        "fontFamily": "Família da Fonte",
+        "fontSize": "Tamanho da Fonte",
+        "fontWeight": "Peso da Fonte",
+        "colorTheme": "Tema de Cores",
+        "save": "Salvar Aparência",
+        "reset": "Restaurar Padrão"
+    },
+    "language": {
+        "title": "CONFIGURAÇÕES DE IDIOMA",
+        "selectLanguage": "Selecione seu idioma preferido para a interface do terminal",
+        "currentLanguage": "IDIOMA ATUAL"
+    },
+    "sidebar": {
+        "credentials": "Credenciais",
+        "llm": "Configuração LLM",
+        "dataSources": "Fontes de Dados",
+        "backtesting": "Provedores de Backtesting",
+        "tabLayout": "Layout de Abas",
+        "appearance": "Aparência",
+        "language": "Idioma"
+    },
+    "actions": {
+        "save": "Salvar Configurações",
+        "cancel": "Cancelar",
+        "apply": "Aplicar",
+        "reset": "Restaurar"
+    },
+    "messages": {
+        "saved": "Configurações salvas com sucesso",
+        "error": "Erro ao salvar configurações",
+        "confirm": "Tem certeza?",
+        "loading": "Carregando configurações..."
+    }
+}

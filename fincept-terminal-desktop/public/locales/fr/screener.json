@@ -1,0 +1,56 @@
+{
+    "title": "SCREENER ACTIONS",
+    "header": {
+        "filters": "FILTRES",
+        "results": "RÉSULTATS",
+        "saved": "ENREGISTRÉS",
+        "presets": "PRÉRÉGLAGES"
+    },
+    "filters": {
+        "add": "Ajouter filtre",
+        "clear": "Tout effacer",
+        "reset": "Réinitialiser",
+        "apply": "Appliquer filtres"
+    },
+    "criteria": {
+        "marketCap": "Capitalisation",
+        "price": "Prix",
+        "volume": "Volume",
+        "pe": "PER",
+        "eps": "BPA",
+        "dividend": "Rendement dividende",
+        "beta": "Bêta",
+        "sector": "Secteur",
+        "industry": "Industrie",
+        "country": "Pays",
+        "exchange": "Bourse"
+    },
+    "operators": {
+        "equals": "Égal à",
+        "greater": "Supérieur à",
+        "less": "Inférieur à",
+        "between": "Entre",
+        "contains": "Contient"
+    },
+    "results": {
+        "symbol": "Symbole",
+        "name": "Nom",
+        "price": "Prix",
+        "change": "Variation",
+        "volume": "Volume",
+        "marketCap": "Cap.",
+        "matches": "résultats"
+    },
+    "actions": {
+        "save": "Enregistrer écran",
+        "load": "Charger écran",
+        "export": "Exporter",
+        "addToWatchlist": "Ajouter à la liste"
+    },
+    "messages": {
+        "loading": "Recherche en cours...",
+        "noResults": "Aucun résultat",
+        "saved": "Enregistré",
+        "applied": "Filtres appliqués"
+    }
+}

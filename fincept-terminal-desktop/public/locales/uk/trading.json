@@ -1,0 +1,25 @@
+{
+    "title": "ТОРГІВЛЯ",
+    "header": {
+        "orders": "ОРДЕРИ",
+        "positions": "ПОЗИЦІЇ",
+        "history": "ІСТОРІЯ",
+        "settings": "НАЛАШТУВАННЯ",
+        "terminal": "ТЕРМІНАЛ FINCEPT",
+        "selectBroker": "ВИБРАТИ БРОКЕРА",
+        "paper": "ДЕМО",
+        "live": "РЕАЛЬНА"
+    },
+    "actions": {
+        "buy": "КУПИТИ",
+        "sell": "ПРОДАТИ",
+        "cancel": "Скасувати",
+        "close": "Закрити",
+        "closeAll": "Закрити всі"
+    },
+    "messages": {
+        "orderPlaced": "Ордер розміщено",
+        "orderFailed": "Помилка ордера",
+        "noPositions": "Немає відкритих позицій"
+    }
+}

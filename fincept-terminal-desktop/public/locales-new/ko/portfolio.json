@@ -1,0 +1,35 @@
+{
+    "title": "FINCEPT 포트폴리오 매니저",
+    "header": {
+        "live": "실시간",
+        "updating": "업데이트 중",
+        "newPortfolio": "새 포트폴리오",
+        "refresh": "새로고침",
+        "exportCsv": "CSV 내보내기"
+    },
+    "summary": {
+        "totalValue": "총 가치",
+        "dayPnl": "일간 손익",
+        "totalPnl": "총 손익",
+        "positions": "포지션"
+    },
+    "views": {
+        "positions": "포지션",
+        "addAsset": "자산 추가",
+        "sellAsset": "자산 매도",
+        "analytics": "분석",
+        "history": "내역"
+    },
+    "sidebar": {
+        "portfolios": "포트폴리오",
+        "loading": "포트폴리오 로딩 중...",
+        "noPortfolios": "포트폴리오가 없습니다."
+    },
+    "modals": {
+        "createNew": "새 포트폴리오 만들기",
+        "cancel": "취소",
+        "create": "생성",
+        "add": "추가",
+        "sell": "매도"
+    }
+}

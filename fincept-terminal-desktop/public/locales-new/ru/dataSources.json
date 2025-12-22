@@ -1,0 +1,43 @@
+{
+    "title": "ИСТОЧНИКИ ДАННЫХ",
+    "header": {
+        "available": "ДОСТУПНЫЕ ИСТОЧНИКИ",
+        "connected": "ПОДКЛЮЧЕНО",
+        "addNew": "ДОБАВИТЬ ИСТОЧНИК",
+        "refresh": "ОБНОВИТЬ"
+    },
+    "categories": {
+        "market": "Рыночные данные",
+        "economic": "Экономические данные",
+        "alternative": "Альтернативные данные",
+        "news": "Новости и Настроения",
+        "fundamental": "Фундаментальные данные"
+    },
+    "status": {
+        "connected": "Подключено",
+        "disconnected": "Отключено",
+        "error": "Ошибка",
+        "pending": "Ожидание"
+    },
+    "actions": {
+        "connect": "Подключить",
+        "disconnect": "Отключить",
+        "configure": "Настроить",
+        "test": "Тест соединения",
+        "delete": "Удалить"
+    },
+    "form": {
+        "apiKey": "API ключ",
+        "endpoint": "URL конечной точки",
+        "username": "Имя пользователя",
+        "password": "Пароль",
+        "save": "Сохранить",
+        "cancel": "Отмена"
+    },
+    "messages": {
+        "connectionSuccess": "Успешно подключено",
+        "connectionFailed": "Ошибка подключения",
+        "noSources": "Нет настроенных источников",
+        "loading": "Загрузка источников..."
+    }
+}

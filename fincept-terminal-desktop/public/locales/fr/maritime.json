@@ -1,0 +1,66 @@
+{
+    "title": "MARITIME",
+    "header": {
+        "overview": "APERÇU",
+        "tracking": "SUIVI",
+        "ports": "PORTS",
+        "routes": "ROUTES"
+    },
+    "vessels": {
+        "type": "Type de navire",
+        "cargo": "Cargo",
+        "tanker": "Pétrolier",
+        "container": "Porte-conteneurs",
+        "bulk": "Vraquier",
+        "passenger": "Passagers",
+        "status": "Statut"
+    },
+    "tracking": {
+        "position": "Position",
+        "speed": "Vitesse",
+        "heading": "Cap",
+        "destination": "Destination",
+        "eta": "Arrivée prévue",
+        "lastUpdate": "Dernière mise à jour"
+    },
+    "ports": {
+        "name": "Nom du port",
+        "country": "Pays",
+        "arrivals": "Arrivées",
+        "departures": "Départs",
+        "congestion": "Congestion",
+        "waitTime": "Temps d'attente"
+    },
+    "routes": {
+        "origin": "Origine",
+        "destination": "Destination",
+        "distance": "Distance",
+        "transitTime": "Temps de trajet",
+        "riskLevel": "Niveau de risque"
+    },
+    "status": {
+        "anchored": "À l'ancre",
+        "underway": "En route",
+        "moored": "Amarré",
+        "atPort": "Au port",
+        "drifting": "À la dérive"
+    },
+    "metrics": {
+        "dwt": "Port en lourd",
+        "teu": "EVP",
+        "draft": "Tirant d'eau",
+        "length": "Longueur",
+        "speed": "Vitesse (nœuds)"
+    },
+    "actions": {
+        "track": "Suivre le navire",
+        "setAlert": "Définir alerte",
+        "export": "Exporter",
+        "filter": "Filtrer"
+    },
+    "messages": {
+        "loading": "Chargement des données...",
+        "noVessels": "Aucun navire trouvé",
+        "updated": "Mis à jour"
+    }
+}

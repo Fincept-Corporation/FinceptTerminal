@@ -1,0 +1,56 @@
+{
+    "title": "SCREENER AKCJI",
+    "header": {
+        "filters": "FILTRY",
+        "results": "WYNIKI",
+        "saved": "ZAPISANE",
+        "presets": "PREDEFINIOWANE"
+    },
+    "filters": {
+        "add": "Dodaj filtr",
+        "clear": "Wyczyść wszystko",
+        "reset": "Resetuj",
+        "apply": "Zastosuj filtry"
+    },
+    "criteria": {
+        "marketCap": "Kapitalizacja",
+        "price": "Cena",
+        "volume": "Wolumen",
+        "pe": "C/Z",
+        "eps": "Zysk/akcję",
+        "dividend": "Stopa dywidendy",
+        "beta": "Beta",
+        "sector": "Sektor",
+        "industry": "Branża",
+        "country": "Kraj",
+        "exchange": "Giełda"
+    },
+    "operators": {
+        "equals": "Równa się",
+        "greater": "Większe niż",
+        "less": "Mniejsze niż",
+        "between": "Pomiędzy",
+        "contains": "Zawiera"
+    },
+    "results": {
+        "symbol": "Symbol",
+        "name": "Nazwa",
+        "price": "Cena",
+        "change": "Zmiana",
+        "volume": "Wolumen",
+        "marketCap": "Kap.",
+        "matches": "wyników"
+    },
+    "actions": {
+        "save": "Zapisz screener",
+        "load": "Wczytaj screener",
+        "export": "Eksportuj",
+        "addToWatchlist": "Dodaj do listy"
+    },
+    "messages": {
+        "loading": "Szukanie...",
+        "noResults": "Brak wyników",
+        "saved": "Zapisano",
+        "applied": "Filtry zastosowane"
+    }
+}

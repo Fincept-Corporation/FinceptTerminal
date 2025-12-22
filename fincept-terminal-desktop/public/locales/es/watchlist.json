@@ -1,0 +1,38 @@
+{
+    "title": "LISTA DE SEGUIMIENTO",
+    "header": {
+        "myWatchlists": "MIS LISTAS",
+        "create": "CREAR",
+        "import": "IMPORTAR",
+        "export": "EXPORTAR"
+    },
+    "list": {
+        "name": "Nombre",
+        "symbols": "Símbolos",
+        "created": "Creado",
+        "updated": "Última actualización"
+    },
+    "actions": {
+        "add": "Añadir Símbolo",
+        "remove": "Eliminar",
+        "edit": "Editar",
+        "delete": "Borrar"
+    },
+    "symbol": {
+        "price": "Precio",
+        "change": "Cambio",
+        "volume": "Volumen",
+        "marketCap": "Cap. de Mercado"
+    },
+    "sort": {
+        "name": "Por Nombre",
+        "price": "Por Precio",
+        "change": "Por Cambio"
+    },
+    "messages": {
+        "created": "Lista creada",
+        "deleted": "Lista eliminada",
+        "noWatchlists": "Sin listas de seguimiento",
+        "loading": "Cargando..."
+    }
+}

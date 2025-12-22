@@ -1,0 +1,55 @@
+{
+    "title": "Pengaturan",
+    "credentials": {
+        "title": "MANAJEMEN KUNCI API",
+        "description": "Konfigurasi kunci API untuk penyedia data. Semua kunci disimpan secara lokal dan terenkripsi."
+    },
+    "llm": {
+        "title": "KONFIGURASI LLM",
+        "description": "Konfigurasi penyedia AI untuk tab Obrolan."
+    },
+    "datasources": {
+        "title": "SUMBER DATA"
+    },
+    "backtesting": {
+        "title": "PENYEDIA BACKTESTING"
+    },
+    "tablayout": {
+        "title": "TATA LETAK TAB"
+    },
+    "appearance": {
+        "title": "TAMPILAN",
+        "fontFamily": "Keluarga Font",
+        "fontSize": "Ukuran Font",
+        "fontWeight": "Ketebalan Font",
+        "colorTheme": "Tema Warna",
+        "save": "Simpan Tampilan",
+        "reset": "Reset ke Default"
+    },
+    "language": {
+        "title": "PENGATURAN BAHASA",
+        "selectLanguage": "Pilih bahasa pilihan Anda untuk antarmuka terminal",
+        "currentLanguage": "BAHASA SAAT INI"
+    },
+    "sidebar": {
+        "credentials": "Kredensial",
+        "llm": "Konfigurasi LLM",
+        "dataSources": "Sumber Data",
+        "backtesting": "Penyedia Backtesting",
+        "tabLayout": "Tata Letak Tab",
+        "appearance": "Tampilan",
+        "language": "Bahasa"
+    },
+    "actions": {
+        "save": "Simpan Pengaturan",
+        "cancel": "Batal",
+        "apply": "Terapkan",
+        "reset": "Reset"
+    },
+    "messages": {
+        "saved": "Pengaturan berhasil disimpan",
+        "error": "Gagal menyimpan pengaturan",
+        "confirm": "Apakah Anda yakin?",
+        "loading": "Memuat pengaturan..."
+    }
+}

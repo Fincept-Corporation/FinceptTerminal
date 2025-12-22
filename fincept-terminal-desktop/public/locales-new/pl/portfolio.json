@@ -1,0 +1,28 @@
+{
+    "title": "MENEDŻER PORTFELA FINCEPT",
+    "header": {
+        "live": "NA ŻYWO",
+        "updating": "AKTUALIZACJA",
+        "newPortfolio": "NOWY PORTFEL",
+        "refresh": "ODŚWIEŻ",
+        "exportCsv": "EKSPORT CSV"
+    },
+    "summary": {
+        "totalValue": "WARTOŚĆ CAŁKOWITA",
+        "dayPnl": "DZIENNY Z/S",
+        "totalPnl": "CAŁKOWITY Z/S",
+        "positions": "POZYCJE"
+    },
+    "sidebar": {
+        "portfolios": "PORTFELE",
+        "loading": "Ładowanie portfeli...",
+        "noPortfolios": "Brak portfeli."
+    },
+    "modals": {
+        "createNew": "UTWÓRZ NOWY PORTFEL",
+        "cancel": "ANULUJ",
+        "create": "UTWÓRZ",
+        "add": "DODAJ",
+        "sell": "SPRZEDAJ"
+    }
+}

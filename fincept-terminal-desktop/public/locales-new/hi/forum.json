@@ -1,0 +1,61 @@
+{
+    "title": "फिंसेप्ट फोरम",
+    "header": {
+        "trending": "ट्रेंडिंग",
+        "new": "नया",
+        "following": "फॉलोइंग",
+        "myPosts": "मेरी पोस्ट"
+    },
+    "categories": {
+        "all": "सभी विषय",
+        "stocks": "स्टॉक्स",
+        "options": "ऑप्शन्स",
+        "crypto": "क्रिप्टो",
+        "forex": "फॉरेक्स",
+        "strategies": "रणनीतियाँ",
+        "general": "सामान्य"
+    },
+    "post": {
+        "create": "पोस्ट बनाएं",
+        "reply": "जवाब दें",
+        "edit": "संपादित",
+        "delete": "हटाएं",
+        "share": "शेयर",
+        "report": "रिपोर्ट",
+        "save": "सहेजें"
+    },
+    "form": {
+        "title": "शीर्षक",
+        "content": "सामग्री",
+        "tags": "टैग",
+        "category": "श्रेणी",
+        "submit": "पोस्ट करें",
+        "cancel": "रद्द",
+        "preview": "पूर्वावलोकन"
+    },
+    "engagement": {
+        "likes": "पसंद",
+        "comments": "टिप्पणियाँ",
+        "views": "व्यूज",
+        "shares": "शेयर"
+    },
+    "user": {
+        "posts": "पोस्ट",
+        "followers": "अनुयायी",
+        "following": "फॉलोइंग",
+        "reputation": "प्रतिष्ठा",
+        "joined": "शामिल"
+    },
+    "sort": {
+        "newest": "नवीनतम",
+        "popular": "सबसे लोकप्रिय",
+        "mostCommented": "सबसे अधिक टिप्पणियाँ",
+        "topRated": "शीर्ष रेटेड"
+    },
+    "messages": {
+        "loading": "पोस्ट लोड हो रहे हैं...",
+        "noPosts": "कोई पोस्ट नहीं",
+        "postSuccess": "पोस्ट सफलतापूर्वक बनाई गई",
+        "deleteConfirm": "इस पोस्ट को हटाएं?"
+    }
+}

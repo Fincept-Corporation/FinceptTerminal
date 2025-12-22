@@ -1,0 +1,21 @@
+{
+    "title": "LISTA OBSERWOWANYCH",
+    "header": {
+        "myWatchlists": "MOJE LISTY",
+        "create": "UTWÓRZ",
+        "import": "IMPORTUJ",
+        "export": "EKSPORTUJ"
+    },
+    "actions": {
+        "add": "Dodaj symbol",
+        "remove": "Usuń",
+        "edit": "Edytuj",
+        "delete": "Usuń"
+    },
+    "messages": {
+        "created": "Lista utworzona",
+        "deleted": "Lista usunięta",
+        "noWatchlists": "Brak list",
+        "loading": "Ładowanie..."
+    }
+}

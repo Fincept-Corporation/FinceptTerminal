@@ -1,0 +1,30 @@
+{
+    "title": "ȘTIRI PROFESIONALE FINCEPT TERMINAL",
+    "header": {
+        "liveFeed": "ÎN DIRECT",
+        "live": "ÎN DIRECT",
+        "refresh": "REÎMPROSPĂTARE",
+        "updating": "ACTUALIZARE...",
+        "alerts": "ALERTE",
+        "sources": "SURSE",
+        "status": "STARE",
+        "demoMode": "MOD DEMO",
+        "articles": "ARTICOLE",
+        "activeSources": "SURSE ACTIVE"
+    },
+    "sentiment": {
+        "bullish": "BULLISH",
+        "bearish": "BEARISH",
+        "neutral": "NEUTRU"
+    },
+    "autoRefresh": {
+        "title": "INTERVAL AUTO-REÎMPROSPĂTARE",
+        "minute": "minut",
+        "minutes": "minute"
+    },
+    "messages": {
+        "loading": "Încărcare știri...",
+        "loadingFeeds": "Încărcare feed-uri...",
+        "breaking": "URGENT"
+    }
+}

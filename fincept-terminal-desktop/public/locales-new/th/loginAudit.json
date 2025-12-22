@@ -1,0 +1,26 @@
+{
+    "title": "แดชบอร์ดตรวจสอบการเข้าสู่ระบบ",
+    "accessDenied": "ต้องการสิทธิ์ผู้ดูแลระบบ",
+    "metrics": {
+        "dauToday": "DAU วันนี้",
+        "mau": "MAU",
+        "successRate": "อัตราความสำเร็จ",
+        "activeSessions": "เซสชันที่ใช้งาน"
+    },
+    "views": {
+        "overview": "ภาพรวม",
+        "eventLog": "บันทึกเหตุการณ์",
+        "alerts": "การแจ้งเตือน",
+        "analytics": "การวิเคราะห์"
+    },
+    "controls": {
+        "autoRefresh": "รีเฟรชอัตโนมัติ",
+        "loading": "กำลังโหลด...",
+        "refresh": "รีเฟรช"
+    },
+    "status": {
+        "admin": "แอดมิน",
+        "updating": "กำลังอัปเดต",
+        "ready": "พร้อม"
+    }
+}

@@ -1,0 +1,46 @@
+{
+    "title": "ASSISTENTE CHAT AI",
+    "header": {
+        "newChat": "NUOVA CHAT",
+        "history": "CRONOLOGIA",
+        "settings": "IMPOSTAZIONI"
+    },
+    "input": {
+        "placeholder": "Chiedi di azioni, mercati...",
+        "send": "Invia",
+        "voice": "Voce"
+    },
+    "messages": {
+        "thinking": "Sto pensando...",
+        "typing": "AI sta scrivendo...",
+        "error": "Errore elaborazione",
+        "welcome": "Come posso aiutarti con l'analisi finanziaria?"
+    },
+    "suggestions": {
+        "title": "Domande suggerite",
+        "stockAnalysis": "Analisi performance azioni",
+        "marketTrends": "Tendenze di mercato attuali?",
+        "portfolioAdvice": "Suggerimenti ottimizzazione portafoglio"
+    },
+    "history": {
+        "title": "Cronologia chat",
+        "today": "Oggi",
+        "yesterday": "Ieri",
+        "thisWeek": "Questa settimana",
+        "older": "Precedenti",
+        "clear": "Cancella cronologia"
+    },
+    "actions": {
+        "copy": "Copia",
+        "regenerate": "Rigenera",
+        "like": "Mi piace",
+        "dislike": "Non mi piace",
+        "share": "Condividi"
+    },
+    "models": {
+        "select": "Seleziona modello",
+        "gpt4": "GPT-4",
+        "claude": "Claude",
+        "gemini": "Gemini"
+    }
+}

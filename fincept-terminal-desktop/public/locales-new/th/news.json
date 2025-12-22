@@ -1,0 +1,30 @@
+{
+    "title": "ข่าวมืออาชีพ FINCEPT TERMINAL",
+    "header": {
+        "liveFeed": "ฟีดสด",
+        "live": "สด",
+        "refresh": "รีเฟรช",
+        "updating": "กำลังอัปเดต...",
+        "alerts": "การแจ้งเตือน",
+        "sources": "แหล่งข้อมูล",
+        "status": "สถานะ",
+        "demoMode": "โหมดสาธิต",
+        "articles": "บทความ",
+        "activeSources": "แหล่งที่ใช้งาน"
+    },
+    "sentiment": {
+        "bullish": "ขาขึ้น",
+        "bearish": "ขาลง",
+        "neutral": "เป็นกลาง"
+    },
+    "autoRefresh": {
+        "title": "ช่วงรีเฟรชอัตโนมัติ",
+        "minute": "นาที",
+        "minutes": "นาที"
+    },
+    "messages": {
+        "loading": "กำลังโหลดข่าว...",
+        "loadingFeeds": "กำลังโหลดฟีด...",
+        "breaking": "ด่วน"
+    }
+}

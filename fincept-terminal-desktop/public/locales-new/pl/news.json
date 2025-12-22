@@ -1,0 +1,30 @@
+{
+    "title": "PROFESJONALNE WIADOMOŚCI FINCEPT TERMINAL",
+    "header": {
+        "liveFeed": "NA ŻYWO",
+        "live": "NA ŻYWO",
+        "refresh": "ODŚWIEŻ",
+        "updating": "AKTUALIZACJA...",
+        "alerts": "ALERTY",
+        "sources": "ŹRÓDŁA",
+        "status": "STATUS",
+        "demoMode": "TRYB DEMO",
+        "articles": "ARTYKUŁY",
+        "activeSources": "AKTYWNE ŹRÓDŁA"
+    },
+    "sentiment": {
+        "bullish": "WZROSTOWY",
+        "bearish": "SPADKOWY",
+        "neutral": "NEUTRALNY"
+    },
+    "autoRefresh": {
+        "title": "INTERWAŁ AUTO-ODŚWIEŻANIA",
+        "minute": "minuta",
+        "minutes": "minut"
+    },
+    "messages": {
+        "loading": "Ładowanie wiadomości...",
+        "loadingFeeds": "Ładowanie feedów...",
+        "breaking": "PILNE"
+    }
+}

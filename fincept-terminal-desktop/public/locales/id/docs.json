@@ -1,0 +1,26 @@
+{
+    "title": "TERMINAL DOKUMENTASI FINCEPT",
+    "header": {
+        "sections": "BAGIAN",
+        "topics": "TOPIK",
+        "ready": "SIAP"
+    },
+    "search": {
+        "placeholder": "Cari dokumentasi...",
+        "clear": "HAPUS"
+    },
+    "navigation": "NAVIGASI",
+    "codeExample": "CONTOH KODE",
+    "content": {
+        "title": "DOKUMENTASI TERMINAL FINCEPT",
+        "description": "Pilih topik dari panel navigasi.",
+        "topicsAvailable": "topik tersedia",
+        "selectTopic": "Pilih topik"
+    },
+    "status": {
+        "version": "Dokumentasi Terminal Fincept v3.0",
+        "sections": "Bagian",
+        "topics": "Topik",
+        "current": "Saat Ini"
+    }
+}

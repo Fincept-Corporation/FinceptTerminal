@@ -1,0 +1,36 @@
+{
+    "title": "ТОРГОВЛЯ",
+    "header": {
+        "orders": "ОРДЕРА",
+        "positions": "ПОЗИЦИИ",
+        "history": "ИСТОРИЯ",
+        "settings": "НАСТРОЙКИ",
+        "terminal": "ТЕРМИНАЛ FINCEPT",
+        "selectBroker": "ВЫБРАТЬ БРОКЕРА",
+        "paper": "ДЕМО",
+        "live": "ЖИВАЯ"
+    },
+    "orderTypes": {
+        "market": "Рыночный",
+        "limit": "Лимитный",
+        "stop": "Стоп"
+    },
+    "actions": {
+        "buy": "КУПИТЬ",
+        "sell": "ПРОДАТЬ",
+        "cancel": "Отменить",
+        "close": "Закрыть",
+        "closeAll": "Закрыть все"
+    },
+    "position": {
+        "openPrice": "Цена входа",
+        "currentPrice": "Текущая цена",
+        "pnl": "П/У",
+        "margin": "Маржа"
+    },
+    "messages": {
+        "orderPlaced": "Ордер размещен",
+        "orderFailed": "Ордер не выполнен",
+        "noPositions": "Нет открытых позиций"
+    }
+}

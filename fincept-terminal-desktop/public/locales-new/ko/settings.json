@@ -1,0 +1,55 @@
+{
+    "title": "설정",
+    "credentials": {
+        "title": "API 키 관리",
+        "description": "데이터 제공업체의 API 키를 구성합니다. 모든 키는 로컬에 암호화되어 저장됩니다."
+    },
+    "llm": {
+        "title": "LLM 구성",
+        "description": "채팅 탭용 AI 제공업체를 구성합니다."
+    },
+    "datasources": {
+        "title": "데이터 소스"
+    },
+    "backtesting": {
+        "title": "백테스팅 제공업체"
+    },
+    "tablayout": {
+        "title": "탭 레이아웃"
+    },
+    "appearance": {
+        "title": "외관",
+        "fontFamily": "글꼴 패밀리",
+        "fontSize": "글꼴 크기",
+        "fontWeight": "글꼴 굵기",
+        "colorTheme": "색상 테마",
+        "save": "외관 저장",
+        "reset": "기본값으로 재설정"
+    },
+    "language": {
+        "title": "언어 설정",
+        "selectLanguage": "터미널 인터페이스에 사용할 언어를 선택하세요",
+        "currentLanguage": "현재 언어"
+    },
+    "sidebar": {
+        "credentials": "자격 증명",
+        "llm": "LLM 구성",
+        "dataSources": "데이터 소스",
+        "backtesting": "백테스팅 제공업체",
+        "tabLayout": "탭 레이아웃",
+        "appearance": "외관",
+        "language": "언어"
+    },
+    "actions": {
+        "save": "설정 저장",
+        "cancel": "취소",
+        "apply": "적용",
+        "reset": "재설정"
+    },
+    "messages": {
+        "saved": "설정이 성공적으로 저장되었습니다",
+        "error": "설정 저장 중 오류 발생",
+        "confirm": "확실합니까?",
+        "loading": "설정 로딩 중..."
+    }
+}

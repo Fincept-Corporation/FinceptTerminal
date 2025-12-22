@@ -1,0 +1,27 @@
+{
+    "title": "СПИСОК НАБЛЮДЕНИЯ",
+    "header": {
+        "myWatchlists": "МОИ СПИСКИ",
+        "create": "СОЗДАТЬ",
+        "import": "ИМПОРТ",
+        "export": "ЭКСПОРТ"
+    },
+    "actions": {
+        "add": "Добавить символ",
+        "remove": "Удалить",
+        "edit": "Изменить",
+        "delete": "Удалить"
+    },
+    "symbol": {
+        "price": "Цена",
+        "change": "Изменение",
+        "volume": "Объем",
+        "marketCap": "Капитализация"
+    },
+    "messages": {
+        "created": "Список создан",
+        "deleted": "Список удален",
+        "noWatchlists": "Нет списков",
+        "loading": "Загрузка..."
+    }
+}

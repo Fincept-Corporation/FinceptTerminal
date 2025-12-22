@@ -1,0 +1,59 @@
+{
+    "title": "भू-राजनीति",
+    "header": {
+        "overview": "अवलोकन",
+        "regions": "क्षेत्र",
+        "analysis": "विश्लेषण",
+        "alerts": "अलर्ट"
+    },
+    "regions": {
+        "global": "वैश्विक",
+        "northAmerica": "उत्तरी अमेरिका",
+        "europe": "यूरोप",
+        "asia": "एशिया प्रशांत",
+        "middleEast": "मध्य पूर्व",
+        "africa": "अफ्रीका",
+        "latam": "लैटिन अमेरिका"
+    },
+    "categories": {
+        "conflict": "संघर्ष",
+        "sanctions": "प्रतिबंध",
+        "trade": "व्यापार संबंध",
+        "diplomacy": "कूटनीति",
+        "elections": "चुनाव",
+        "policy": "नीति परिवर्तन"
+    },
+    "risk": {
+        "level": "जोखिम स्तर",
+        "high": "उच्च",
+        "medium": "मध्यम",
+        "low": "निम्न",
+        "critical": "गंभीर",
+        "stable": "स्थिर"
+    },
+    "impact": {
+        "economic": "आर्थिक प्रभाव",
+        "market": "बाजार प्रभाव",
+        "trade": "व्यापार प्रभाव",
+        "currency": "मुद्रा प्रभाव"
+    },
+    "timeline": {
+        "latest": "नवीनतम",
+        "thisWeek": "इस सप्ताह",
+        "thisMonth": "इस महीने",
+        "upcoming": "आगामी"
+    },
+    "actions": {
+        "subscribe": "सब्सक्राइब",
+        "export": "निर्यात",
+        "share": "शेयर",
+        "setAlert": "अलर्ट सेट",
+        "filter": "फ़िल्टर"
+    },
+    "messages": {
+        "loading": "भू-राजनीतिक डेटा लोड हो रहा है...",
+        "noEvents": "कोई घटना नहीं",
+        "updated": "अंतिम अपडेट",
+        "breaking": "ब्रेकिंग न्यूज़"
+    }
+}

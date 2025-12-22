@@ -1,0 +1,52 @@
+{
+    "title": "تعيين البيانات",
+    "header": {
+        "mappings": "التعيينات",
+        "templates": "القوالب",
+        "create": "إنشاء جديد",
+        "refresh": "تحديث"
+    },
+    "views": {
+        "list": "قائمة التعيينات",
+        "create": "إنشاء تعيين",
+        "templates": "القوالب"
+    },
+    "list": {
+        "name": "الاسم",
+        "source": "المصدر",
+        "destination": "الوجهة",
+        "status": "الحالة",
+        "lastRun": "آخر تشغيل",
+        "actions": "الإجراءات"
+    },
+    "status": {
+        "active": "نشط",
+        "inactive": "غير نشط",
+        "error": "خطأ",
+        "running": "قيد التشغيل"
+    },
+    "actions": {
+        "edit": "تعديل",
+        "delete": "حذف",
+        "run": "تشغيل",
+        "duplicate": "تكرار",
+        "export": "تصدير"
+    },
+    "create": {
+        "title": "إنشاء تعيين بيانات",
+        "name": "اسم التعيين",
+        "description": "الوصف",
+        "sourceApi": "API المصدر",
+        "destApi": "API الوجهة",
+        "fieldMapping": "تعيين الحقول",
+        "save": "حفظ",
+        "cancel": "إلغاء"
+    },
+    "messages": {
+        "saved": "تم الحفظ",
+        "deleted": "تم الحذف",
+        "runSuccess": "تم التنفيذ بنجاح",
+        "error": "حدث خطأ",
+        "noMappings": "لا توجد تعيينات"
+    }
+}

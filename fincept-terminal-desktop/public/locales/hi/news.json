@@ -1,0 +1,37 @@
+{
+    "title": "फिनसेप्ट टर्मिनल प्रोफेशनल न्यूज़",
+    "header": {
+        "liveFeed": "लाइव फीड",
+        "live": "लाइव",
+        "refresh": "रिफ्रेश",
+        "updating": "अपडेट हो रहा है...",
+        "alerts": "अलर्ट",
+        "sources": "स्रोत",
+        "topics": "विषय",
+        "status": "स्थिति",
+        "demoMode": "डेमो मोड",
+        "articles": "लेख",
+        "activeSources": "सक्रिय स्रोत"
+    },
+    "categories": {
+        "all": "सभी",
+        "markets": "बाजार",
+        "crypto": "क्रिप्टो",
+        "earnings": "कमाई"
+    },
+    "sentiment": {
+        "bullish": "तेजी",
+        "bearish": "मंदी",
+        "neutral": "तटस्थ"
+    },
+    "autoRefresh": {
+        "title": "ऑटो-रिफ्रेश अंतराल",
+        "minute": "मिनट",
+        "minutes": "मिनट"
+    },
+    "messages": {
+        "loading": "समाचार लोड हो रहे हैं...",
+        "loadingFeeds": "न्यूज़ फीड लोड हो रही हैं...",
+        "breaking": "ब्रेकिंग"
+    }
+}

@@ -1,0 +1,66 @@
+{
+    "title": "해운",
+    "header": {
+        "overview": "개요",
+        "tracking": "추적",
+        "ports": "항구",
+        "routes": "항로"
+    },
+    "vessels": {
+        "type": "선박유형",
+        "cargo": "화물선",
+        "tanker": "유조선",
+        "container": "컨테이너선",
+        "bulk": "벌크선",
+        "passenger": "여객선",
+        "status": "상태"
+    },
+    "tracking": {
+        "position": "위치",
+        "speed": "속도",
+        "heading": "방향",
+        "destination": "목적지",
+        "eta": "도착예정",
+        "lastUpdate": "최근업데이트"
+    },
+    "ports": {
+        "name": "항구명",
+        "country": "국가",
+        "arrivals": "입항",
+        "departures": "출항",
+        "congestion": "혼잡도",
+        "waitTime": "대기시간"
+    },
+    "routes": {
+        "origin": "출발지",
+        "destination": "목적지",
+        "distance": "거리",
+        "transitTime": "항해시간",
+        "riskLevel": "위험수준"
+    },
+    "status": {
+        "anchored": "정박중",
+        "underway": "항해중",
+        "moored": "계류중",
+        "atPort": "항구내",
+        "drifting": "표류중"
+    },
+    "metrics": {
+        "dwt": "재화중량",
+        "teu": "TEU",
+        "draft": "흘수",
+        "length": "선장",
+        "speed": "속도(노트)"
+    },
+    "actions": {
+        "track": "선박추적",
+        "setAlert": "알림설정",
+        "export": "내보내기",
+        "filter": "필터"
+    },
+    "messages": {
+        "loading": "해운 데이터 로딩...",
+        "noVessels": "선박 없음",
+        "updated": "업데이트"
+    }
+}

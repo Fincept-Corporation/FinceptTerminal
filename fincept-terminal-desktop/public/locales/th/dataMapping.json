@@ -1,0 +1,52 @@
+{
+    "title": "การแมปข้อมูล",
+    "header": {
+        "mappings": "แมปปิ้ง",
+        "templates": "เทมเพลต",
+        "create": "สร้างใหม่",
+        "refresh": "รีเฟรช"
+    },
+    "views": {
+        "list": "รายการแมป",
+        "create": "สร้างแมป",
+        "templates": "เทมเพลต"
+    },
+    "list": {
+        "name": "ชื่อ",
+        "source": "แหล่ง",
+        "destination": "ปลายทาง",
+        "status": "สถานะ",
+        "lastRun": "รันล่าสุด",
+        "actions": "การดำเนินการ"
+    },
+    "status": {
+        "active": "ใช้งาน",
+        "inactive": "ไม่ใช้งาน",
+        "error": "ข้อผิดพลาด",
+        "running": "กำลังทำงาน"
+    },
+    "actions": {
+        "edit": "แก้ไข",
+        "delete": "ลบ",
+        "run": "รัน",
+        "duplicate": "ทำซ้ำ",
+        "export": "ส่งออก"
+    },
+    "create": {
+        "title": "สร้างแมปข้อมูล",
+        "name": "ชื่อ",
+        "description": "คำอธิบาย",
+        "sourceApi": "API ต้นทาง",
+        "destApi": "API ปลายทาง",
+        "fieldMapping": "แมปฟิลด์",
+        "save": "บันทึก",
+        "cancel": "ยกเลิก"
+    },
+    "messages": {
+        "saved": "บันทึกแล้ว",
+        "deleted": "ลบแล้ว",
+        "runSuccess": "สำเร็จ",
+        "error": "เกิดข้อผิดพลาด",
+        "noMappings": "ไม่มีแมป"
+    }
+}

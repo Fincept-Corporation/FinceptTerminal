@@ -1,0 +1,56 @@
+{
+    "title": "スクリーナー",
+    "header": {
+        "filters": "フィルター",
+        "results": "結果",
+        "saved": "保存済み",
+        "presets": "プリセット"
+    },
+    "filters": {
+        "add": "条件追加",
+        "clear": "全クリア",
+        "reset": "リセット",
+        "apply": "フィルター適用"
+    },
+    "criteria": {
+        "marketCap": "時価総額",
+        "price": "株価",
+        "volume": "出来高",
+        "pe": "PER",
+        "eps": "EPS",
+        "dividend": "配当利回り",
+        "beta": "ベータ",
+        "sector": "セクター",
+        "industry": "業種",
+        "country": "国",
+        "exchange": "取引所"
+    },
+    "operators": {
+        "equals": "等しい",
+        "greater": "以上",
+        "less": "以下",
+        "between": "範囲",
+        "contains": "含む"
+    },
+    "results": {
+        "symbol": "銘柄コード",
+        "name": "銘柄名",
+        "price": "株価",
+        "change": "変動",
+        "volume": "出来高",
+        "marketCap": "時価総額",
+        "matches": "件"
+    },
+    "actions": {
+        "save": "スクリーン保存",
+        "load": "スクリーン読込",
+        "export": "エクスポート",
+        "addToWatchlist": "ウォッチリストに追加"
+    },
+    "messages": {
+        "loading": "スクリーニング中...",
+        "noResults": "該当銘柄なし",
+        "saved": "保存しました",
+        "applied": "適用しました"
+    }
+}

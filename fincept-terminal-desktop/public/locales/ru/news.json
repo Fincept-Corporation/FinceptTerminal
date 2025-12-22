@@ -1,0 +1,30 @@
+{
+    "title": "ПРОФЕССИОНАЛЬНЫЕ НОВОСТИ FINCEPT TERMINAL",
+    "header": {
+        "liveFeed": "ПРЯМОЙ ЭФИР",
+        "live": "ЖИВОЙ",
+        "refresh": "ОБНОВИТЬ",
+        "updating": "ОБНОВЛЕНИЕ...",
+        "alerts": "ОПОВЕЩЕНИЯ",
+        "sources": "ИСТОЧНИКИ",
+        "status": "СТАТУС",
+        "demoMode": "ДЕМО РЕЖИМ",
+        "articles": "СТАТЬИ",
+        "activeSources": "АКТИВНЫЕ ИСТОЧНИКИ"
+    },
+    "sentiment": {
+        "bullish": "БЫЧИЙ",
+        "bearish": "МЕДВЕЖИЙ",
+        "neutral": "НЕЙТРАЛЬНЫЙ"
+    },
+    "autoRefresh": {
+        "title": "ИНТЕРВАЛ АВТООБНОВЛЕНИЯ",
+        "minute": "минута",
+        "minutes": "минут"
+    },
+    "messages": {
+        "loading": "Загрузка новостей...",
+        "loadingFeeds": "Загрузка лент...",
+        "breaking": "СРОЧНО"
+    }
+}

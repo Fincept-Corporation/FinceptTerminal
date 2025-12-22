@@ -1,0 +1,43 @@
+{
+    "title": "SOURCES DE DONNÉES",
+    "header": {
+        "available": "SOURCES DISPONIBLES",
+        "connected": "CONNECTÉ",
+        "addNew": "AJOUTER SOURCE",
+        "refresh": "ACTUALISER"
+    },
+    "categories": {
+        "market": "Données de marché",
+        "economic": "Données économiques",
+        "alternative": "Données alternatives",
+        "news": "Actualités & Sentiment",
+        "fundamental": "Données fondamentales"
+    },
+    "status": {
+        "connected": "Connecté",
+        "disconnected": "Déconnecté",
+        "error": "Erreur",
+        "pending": "En attente"
+    },
+    "actions": {
+        "connect": "Connecter",
+        "disconnect": "Déconnecter",
+        "configure": "Configurer",
+        "test": "Tester connexion",
+        "delete": "Supprimer"
+    },
+    "form": {
+        "apiKey": "Clé API",
+        "endpoint": "URL du point de terminaison",
+        "username": "Nom d'utilisateur",
+        "password": "Mot de passe",
+        "save": "Enregistrer",
+        "cancel": "Annuler"
+    },
+    "messages": {
+        "connectionSuccess": "Connexion réussie à la source de données",
+        "connectionFailed": "Échec de la connexion",
+        "noSources": "Aucune source de données configurée",
+        "loading": "Chargement des sources de données..."
+    }
+}

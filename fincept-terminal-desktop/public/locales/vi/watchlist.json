@@ -1,0 +1,21 @@
+{
+    "title": "DANH SÁCH THEO DÕI",
+    "header": {
+        "myWatchlists": "DANH SÁCH CỦA TÔI",
+        "create": "TẠO",
+        "import": "NHẬP",
+        "export": "XUẤT"
+    },
+    "actions": {
+        "add": "Thêm mã",
+        "remove": "Xóa",
+        "edit": "Sửa",
+        "delete": "Xóa"
+    },
+    "messages": {
+        "created": "Đã tạo danh sách",
+        "deleted": "Đã xóa danh sách",
+        "noWatchlists": "Chưa có danh sách",
+        "loading": "Đang tải..."
+    }
+}

@@ -1,0 +1,21 @@
+{
+    "title": "DAFTAR PANTAU",
+    "header": {
+        "myWatchlists": "DAFTAR SAYA",
+        "create": "BUAT",
+        "import": "IMPOR",
+        "export": "EKSPOR"
+    },
+    "actions": {
+        "add": "Tambah Simbol",
+        "remove": "Hapus",
+        "edit": "Edit",
+        "delete": "Hapus"
+    },
+    "messages": {
+        "created": "Daftar dibuat",
+        "deleted": "Daftar dihapus",
+        "noWatchlists": "Tidak ada daftar",
+        "loading": "Memuat..."
+    }
+}

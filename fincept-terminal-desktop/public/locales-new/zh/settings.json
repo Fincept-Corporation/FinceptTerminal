@@ -1,0 +1,55 @@
+{
+    "title": "设置",
+    "credentials": {
+        "title": "API密钥管理",
+        "description": "配置数据提供商的API密钥。所有密钥都在本地加密存储。"
+    },
+    "llm": {
+        "title": "LLM配置",
+        "description": "为聊天标签配置AI提供商。"
+    },
+    "datasources": {
+        "title": "数据源"
+    },
+    "backtesting": {
+        "title": "回测提供商"
+    },
+    "tablayout": {
+        "title": "标签布局"
+    },
+    "appearance": {
+        "title": "外观",
+        "fontFamily": "字体",
+        "fontSize": "字号",
+        "fontWeight": "字重",
+        "colorTheme": "颜色主题",
+        "save": "保存外观",
+        "reset": "恢复默认"
+    },
+    "language": {
+        "title": "语言设置",
+        "selectLanguage": "选择终端界面的首选语言",
+        "currentLanguage": "当前语言"
+    },
+    "sidebar": {
+        "credentials": "凭据",
+        "llm": "LLM配置",
+        "dataSources": "数据源",
+        "backtesting": "回测提供商",
+        "tabLayout": "标签布局",
+        "appearance": "外观",
+        "language": "语言"
+    },
+    "actions": {
+        "save": "保存设置",
+        "cancel": "取消",
+        "apply": "应用",
+        "reset": "重置"
+    },
+    "messages": {
+        "saved": "设置保存成功",
+        "error": "保存设置时出错",
+        "confirm": "您确定吗？",
+        "loading": "正在加载设置..."
+    }
+}

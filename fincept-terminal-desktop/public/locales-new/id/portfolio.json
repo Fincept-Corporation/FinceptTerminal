@@ -1,0 +1,28 @@
+{
+    "title": "MANAJER PORTOFOLIO FINCEPT",
+    "header": {
+        "live": "LANGSUNG",
+        "updating": "MEMPERBARUI",
+        "newPortfolio": "PORTOFOLIO BARU",
+        "refresh": "SEGARKAN",
+        "exportCsv": "EKSPOR CSV"
+    },
+    "summary": {
+        "totalValue": "NILAI TOTAL",
+        "dayPnl": "L/R HARI",
+        "totalPnl": "L/R TOTAL",
+        "positions": "POSISI"
+    },
+    "sidebar": {
+        "portfolios": "PORTOFOLIO",
+        "loading": "Memuat portofolio...",
+        "noPortfolios": "Belum ada portofolio."
+    },
+    "modals": {
+        "createNew": "BUAT PORTOFOLIO BARU",
+        "cancel": "BATAL",
+        "create": "BUAT",
+        "add": "TAMBAH",
+        "sell": "JUAL"
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "title": "TERMINAL DOCUMENTAȚIE FINCEPT",
+    "header": {
+        "sections": "SECȚIUNI",
+        "topics": "SUBIECTE",
+        "ready": "GATA"
+    },
+    "search": {
+        "placeholder": "Căutare documentație...",
+        "clear": "ȘTERGE"
+    },
+    "navigation": "NAVIGARE",
+    "codeExample": "EXEMPLU COD",
+    "content": {
+        "title": "DOCUMENTAȚIE TERMINAL FINCEPT",
+        "description": "Selectați un subiect din panoul de navigare.",
+        "topicsAvailable": "subiecte disponibile",
+        "selectTopic": "Selectați subiect"
+    },
+    "status": {
+        "version": "Documentație Terminal Fincept v3.0",
+        "sections": "Secțiuni",
+        "topics": "Subiecte",
+        "current": "Curent"
+    }
+}

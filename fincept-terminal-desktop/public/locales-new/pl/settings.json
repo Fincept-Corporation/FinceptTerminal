@@ -1,0 +1,55 @@
+{
+    "title": "Ustawienia",
+    "credentials": {
+        "title": "ZARZĄDZANIE KLUCZAMI API",
+        "description": "Konfiguruj klucze API dla dostawców danych. Wszystkie klucze są przechowywane lokalnie i szyfrowane."
+    },
+    "llm": {
+        "title": "KONFIGURACJA LLM",
+        "description": "Konfiguruj dostawców AI dla zakładki Czat."
+    },
+    "datasources": {
+        "title": "ŹRÓDŁA DANYCH"
+    },
+    "backtesting": {
+        "title": "DOSTAWCY BACKTESTINGU"
+    },
+    "tablayout": {
+        "title": "UKŁAD ZAKŁADEK"
+    },
+    "appearance": {
+        "title": "WYGLĄD",
+        "fontFamily": "Rodzina Czcionek",
+        "fontSize": "Rozmiar Czcionki",
+        "fontWeight": "Grubość Czcionki",
+        "colorTheme": "Motyw Kolorów",
+        "save": "Zapisz Wygląd",
+        "reset": "Przywróć Domyślne"
+    },
+    "language": {
+        "title": "USTAWIENIA JĘZYKA",
+        "selectLanguage": "Wybierz preferowany język interfejsu terminala",
+        "currentLanguage": "OBECNY JĘZYK"
+    },
+    "sidebar": {
+        "credentials": "Poświadczenia",
+        "llm": "Konfiguracja LLM",
+        "dataSources": "Źródła Danych",
+        "backtesting": "Dostawcy Backtestingu",
+        "tabLayout": "Układ Zakładek",
+        "appearance": "Wygląd",
+        "language": "Język"
+    },
+    "actions": {
+        "save": "Zapisz Ustawienia",
+        "cancel": "Anuluj",
+        "apply": "Zastosuj",
+        "reset": "Resetuj"
+    },
+    "messages": {
+        "saved": "Ustawienia zapisane pomyślnie",
+        "error": "Błąd podczas zapisywania ustawień",
+        "confirm": "Czy jesteś pewien?",
+        "loading": "Ładowanie ustawień..."
+    }
+}

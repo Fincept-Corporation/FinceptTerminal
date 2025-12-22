@@ -1,0 +1,25 @@
+{
+    "title": "PERDAGANGAN",
+    "header": {
+        "orders": "ORDER",
+        "positions": "POSISI",
+        "history": "RIWAYAT",
+        "settings": "PENGATURAN",
+        "terminal": "TERMINAL FINCEPT",
+        "selectBroker": "PILIH BROKER",
+        "paper": "SIMULASI",
+        "live": "LANGSUNG"
+    },
+    "actions": {
+        "buy": "BELI",
+        "sell": "JUAL",
+        "cancel": "Batal",
+        "close": "Tutup",
+        "closeAll": "Tutup Semua"
+    },
+    "messages": {
+        "orderPlaced": "Order berhasil",
+        "orderFailed": "Order gagal",
+        "noPositions": "Tidak ada posisi terbuka"
+    }
+}

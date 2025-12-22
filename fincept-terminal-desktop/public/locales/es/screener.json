@@ -1,0 +1,56 @@
+{
+    "title": "FILTRO DE ACCIONES",
+    "header": {
+        "filters": "FILTROS",
+        "results": "RESULTADOS",
+        "saved": "GUARDADOS",
+        "presets": "PREAJUSTES"
+    },
+    "filters": {
+        "add": "Añadir filtro",
+        "clear": "Borrar todo",
+        "reset": "Restablecer",
+        "apply": "Aplicar filtros"
+    },
+    "criteria": {
+        "marketCap": "Capitalización",
+        "price": "Precio",
+        "volume": "Volumen",
+        "pe": "PER",
+        "eps": "BPA",
+        "dividend": "Rentabilidad dividendo",
+        "beta": "Beta",
+        "sector": "Sector",
+        "industry": "Industria",
+        "country": "País",
+        "exchange": "Bolsa"
+    },
+    "operators": {
+        "equals": "Igual a",
+        "greater": "Mayor que",
+        "less": "Menor que",
+        "between": "Entre",
+        "contains": "Contiene"
+    },
+    "results": {
+        "symbol": "Símbolo",
+        "name": "Nombre",
+        "price": "Precio",
+        "change": "Cambio",
+        "volume": "Volumen",
+        "marketCap": "Cap.",
+        "matches": "resultados"
+    },
+    "actions": {
+        "save": "Guardar filtro",
+        "load": "Cargar filtro",
+        "export": "Exportar",
+        "addToWatchlist": "Añadir a lista"
+    },
+    "messages": {
+        "loading": "Filtrando acciones...",
+        "noResults": "Sin resultados",
+        "saved": "Guardado",
+        "applied": "Filtros aplicados"
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "title": "محطة توثيق فينسبت",
+    "header": {
+        "sections": "الأقسام",
+        "topics": "المواضيع",
+        "ready": "جاهز"
+    },
+    "search": {
+        "placeholder": "البحث في التوثيق...",
+        "clear": "مسح"
+    },
+    "navigation": "التنقل",
+    "codeExample": "مثال الكود",
+    "content": {
+        "title": "توثيق محطة فينسبت",
+        "description": "اختر موضوعاً من لوحة التنقل لعرض الأدلة الشاملة ومرجع API.",
+        "topicsAvailable": "مواضيع متاحة",
+        "selectTopic": "اختر موضوعاً للبدء"
+    },
+    "status": {
+        "version": "توثيق محطة فينسبت الإصدار 3.0",
+        "sections": "الأقسام",
+        "topics": "المواضيع",
+        "current": "الحالي"
+    }
+}

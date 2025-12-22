@@ -1,0 +1,59 @@
+{
+    "title": "ภูมิรัฐศาสตร์",
+    "header": {
+        "overview": "ภาพรวม",
+        "regions": "ภูมิภาค",
+        "analysis": "การวิเคราะห์",
+        "alerts": "การแจ้งเตือน"
+    },
+    "regions": {
+        "global": "โลก",
+        "northAmerica": "อเมริกาเหนือ",
+        "europe": "ยุโรป",
+        "asia": "เอเชียแปซิฟิก",
+        "middleEast": "ตะวันออกกลาง",
+        "africa": "แอฟริกา",
+        "latam": "ละตินอเมริกา"
+    },
+    "categories": {
+        "conflict": "ความขัดแย้ง",
+        "sanctions": "การคว่ำบาตร",
+        "trade": "ความสัมพันธ์ทางการค้า",
+        "diplomacy": "การทูต",
+        "elections": "การเลือกตั้ง",
+        "policy": "การเปลี่ยนแปลงนโยบาย"
+    },
+    "risk": {
+        "level": "ระดับความเสี่ยง",
+        "high": "สูง",
+        "medium": "ปานกลาง",
+        "low": "ต่ำ",
+        "critical": "วิกฤต",
+        "stable": "มั่นคง"
+    },
+    "impact": {
+        "economic": "ผลกระทบทางเศรษฐกิจ",
+        "market": "ผลกระทบต่อตลาด",
+        "trade": "ผลกระทบทางการค้า",
+        "currency": "ผลกระทบต่อสกุลเงิน"
+    },
+    "timeline": {
+        "latest": "ล่าสุด",
+        "thisWeek": "สัปดาห์นี้",
+        "thisMonth": "เดือนนี้",
+        "upcoming": "กำลังจะมาถึง"
+    },
+    "actions": {
+        "subscribe": "สมัครสมาชิก",
+        "export": "ส่งออก",
+        "share": "แชร์",
+        "setAlert": "ตั้งการแจ้งเตือน",
+        "filter": "กรอง"
+    },
+    "messages": {
+        "loading": "กำลังโหลดข้อมูล...",
+        "noEvents": "ไม่มีเหตุการณ์",
+        "updated": "อัปเดตล่าสุด",
+        "breaking": "ข่าวด่วน"
+    }
+}

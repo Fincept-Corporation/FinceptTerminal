@@ -1,0 +1,62 @@
+{
+    "title": "इक्विटी रिसर्च",
+    "header": {
+        "overview": "अवलोकन",
+        "financials": "वित्तीय",
+        "analysis": "विश्लेषण",
+        "ratings": "रेटिंग"
+    },
+    "summary": {
+        "marketCap": "मार्केट कैप",
+        "pe": "P/E अनुपात",
+        "eps": "EPS",
+        "dividend": "लाभांश प्रतिफल",
+        "beta": "बीटा",
+        "52weekHigh": "52सप्ताह उच्च",
+        "52weekLow": "52सप्ताह निम्न",
+        "avgVolume": "औसत वॉल्यूम"
+    },
+    "financials": {
+        "revenue": "राजस्व",
+        "netIncome": "शुद्ध आय",
+        "grossMargin": "सकल मार्जिन",
+        "operatingMargin": "परिचालन मार्जिन",
+        "roe": "ROE",
+        "roa": "ROA",
+        "debtEquity": "ऋण/इक्विटी",
+        "currentRatio": "चालू अनुपात"
+    },
+    "analysis": {
+        "buy": "खरीदें",
+        "hold": "होल्ड",
+        "sell": "बेचें",
+        "strongBuy": "मजबूत खरीदें",
+        "strongSell": "मजबूत बेचें",
+        "targetPrice": "लक्ष्य मूल्य",
+        "upside": "अपसाइड",
+        "downside": "डाउनसाइड"
+    },
+    "periods": {
+        "annual": "वार्षिक",
+        "quarterly": "त्रैमासिक",
+        "ttm": "TTM",
+        "ytd": "YTD"
+    },
+    "sections": {
+        "incomeStatement": "आय विवरण",
+        "balanceSheet": "बैलेंस शीट",
+        "cashFlow": "नकदी प्रवाह",
+        "keyMetrics": "मुख्य मेट्रिक्स"
+    },
+    "actions": {
+        "compare": "तुलना करें",
+        "export": "निर्यात",
+        "addToWatchlist": "वॉचलिस्ट में जोड़ें",
+        "setAlert": "अलर्ट सेट करें"
+    },
+    "messages": {
+        "loading": "डेटा लोड हो रहा है...",
+        "noData": "कोई डेटा उपलब्ध नहीं",
+        "updated": "अंतिम अपडेट"
+    }
+}

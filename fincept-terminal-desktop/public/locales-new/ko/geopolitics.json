@@ -1,0 +1,59 @@
+{
+    "title": "지정학",
+    "header": {
+        "overview": "개요",
+        "regions": "지역",
+        "analysis": "분석",
+        "alerts": "알림"
+    },
+    "regions": {
+        "global": "글로벌",
+        "northAmerica": "북미",
+        "europe": "유럽",
+        "asia": "아시아태평양",
+        "middleEast": "중동",
+        "africa": "아프리카",
+        "latam": "중남미"
+    },
+    "categories": {
+        "conflict": "분쟁",
+        "sanctions": "제재",
+        "trade": "무역관계",
+        "diplomacy": "외교",
+        "elections": "선거",
+        "policy": "정책변화"
+    },
+    "risk": {
+        "level": "위험수준",
+        "high": "높음",
+        "medium": "보통",
+        "low": "낮음",
+        "critical": "심각",
+        "stable": "안정"
+    },
+    "impact": {
+        "economic": "경제영향",
+        "market": "시장영향",
+        "trade": "무역영향",
+        "currency": "환율영향"
+    },
+    "timeline": {
+        "latest": "최신",
+        "thisWeek": "이번주",
+        "thisMonth": "이번달",
+        "upcoming": "예정"
+    },
+    "actions": {
+        "subscribe": "구독",
+        "export": "내보내기",
+        "share": "공유",
+        "setAlert": "알림설정",
+        "filter": "필터"
+    },
+    "messages": {
+        "loading": "지정학 데이터 로딩...",
+        "noEvents": "이벤트 없음",
+        "updated": "업데이트",
+        "breaking": "속보"
+    }
+}

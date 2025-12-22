@@ -1,0 +1,30 @@
+{
+    "title": "FINCEPT টার্মিনাল পেশাদার সংবাদ",
+    "header": {
+        "liveFeed": "লাইভ ফিড",
+        "live": "লাইভ",
+        "refresh": "রিফ্রেশ",
+        "updating": "আপডেট হচ্ছে...",
+        "alerts": "সতর্কতা",
+        "sources": "উৎস",
+        "status": "স্থিতি",
+        "demoMode": "ডেমো মোড",
+        "articles": "প্রবন্ধ",
+        "activeSources": "সক্রিয় উৎস"
+    },
+    "sentiment": {
+        "bullish": "বুলিশ",
+        "bearish": "বেয়ারিশ",
+        "neutral": "নিরপেক্ষ"
+    },
+    "autoRefresh": {
+        "title": "অটো-রিফ্রেশ ইন্টারভাল",
+        "minute": "মিনিট",
+        "minutes": "মিনিট"
+    },
+    "messages": {
+        "loading": "সংবাদ লোড হচ্ছে...",
+        "loadingFeeds": "ফিড লোড হচ্ছে...",
+        "breaking": "ব্রেকিং"
+    }
+}

@@ -1,0 +1,55 @@
+{
+    "title": "Cài Đặt",
+    "credentials": {
+        "title": "QUẢN LÝ KHÓA API",
+        "description": "Cấu hình khóa API cho nhà cung cấp dữ liệu. Tất cả khóa được lưu trữ cục bộ và mã hóa."
+    },
+    "llm": {
+        "title": "CẤU HÌNH LLM",
+        "description": "Cấu hình nhà cung cấp AI cho tab Chat."
+    },
+    "datasources": {
+        "title": "NGUỒN DỮ LIỆU"
+    },
+    "backtesting": {
+        "title": "NHÀ CUNG CẤP BACKTEST"
+    },
+    "tablayout": {
+        "title": "BỐ CỤC TAB"
+    },
+    "appearance": {
+        "title": "GIAO DIỆN",
+        "fontFamily": "Họ Phông Chữ",
+        "fontSize": "Cỡ Chữ",
+        "fontWeight": "Độ Đậm Chữ",
+        "colorTheme": "Chủ Đề Màu",
+        "save": "Lưu Giao Diện",
+        "reset": "Đặt Lại Mặc Định"
+    },
+    "language": {
+        "title": "CÀI ĐẶT NGÔN NGỮ",
+        "selectLanguage": "Chọn ngôn ngữ ưa thích của bạn cho giao diện terminal",
+        "currentLanguage": "NGÔN NGỮ HIỆN TẠI"
+    },
+    "sidebar": {
+        "credentials": "Thông Tin Đăng Nhập",
+        "llm": "Cấu Hình LLM",
+        "dataSources": "Nguồn Dữ Liệu",
+        "backtesting": "Nhà Cung Cấp Backtest",
+        "tabLayout": "Bố Cục Tab",
+        "appearance": "Giao Diện",
+        "language": "Ngôn Ngữ"
+    },
+    "actions": {
+        "save": "Lưu Cài Đặt",
+        "cancel": "Hủy",
+        "apply": "Áp Dụng",
+        "reset": "Đặt Lại"
+    },
+    "messages": {
+        "saved": "Cài đặt đã được lưu thành công",
+        "error": "Lỗi khi lưu cài đặt",
+        "confirm": "Bạn có chắc không?",
+        "loading": "Đang tải cài đặt..."
+    }
+}

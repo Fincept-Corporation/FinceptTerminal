@@ -1,0 +1,28 @@
+{
+    "title": "लॉगिन ऑडिट डैशबोर्ड",
+    "accessDenied": "लॉगिन ऑडिट डैशबोर्ड देखने के लिए व्यवस्थापक पहुंच आवश्यक है",
+    "metrics": {
+        "dauToday": "आज DAU",
+        "mau": "MAU",
+        "successRate": "सफलता दर",
+        "failed24h": "विफल (24h)",
+        "activeSessions": "सक्रिय सत्र",
+        "uniqueIps": "अद्वितीय IPs"
+    },
+    "views": {
+        "overview": "अवलोकन",
+        "eventLog": "इवेंट लॉग",
+        "alerts": "अलर्ट",
+        "analytics": "एनालिटिक्स"
+    },
+    "controls": {
+        "autoRefresh": "ऑटो-रिफ्रेश",
+        "loading": "लोड हो रहा है...",
+        "refresh": "रिफ्रेश"
+    },
+    "status": {
+        "admin": "एडमिन",
+        "updating": "अपडेट हो रहा है",
+        "ready": "तैयार"
+    }
+}

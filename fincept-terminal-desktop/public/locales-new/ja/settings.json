@@ -1,0 +1,55 @@
+{
+    "title": "設定",
+    "credentials": {
+        "title": "APIキー管理",
+        "description": "データプロバイダーのAPIキーを設定します。すべてのキーはローカルで暗号化されて保存されます。"
+    },
+    "llm": {
+        "title": "LLM設定",
+        "description": "チャットタブ用のAIプロバイダーを設定します。"
+    },
+    "datasources": {
+        "title": "データソース"
+    },
+    "backtesting": {
+        "title": "バックテストプロバイダー"
+    },
+    "tablayout": {
+        "title": "タブレイアウト"
+    },
+    "appearance": {
+        "title": "外観",
+        "fontFamily": "フォントファミリー",
+        "fontSize": "フォントサイズ",
+        "fontWeight": "フォントウェイト",
+        "colorTheme": "カラーテーマ",
+        "save": "外観を保存",
+        "reset": "デフォルトに戻す"
+    },
+    "language": {
+        "title": "言語設定",
+        "selectLanguage": "ターミナルインターフェースの優先言語を選択してください",
+        "currentLanguage": "現在の言語"
+    },
+    "sidebar": {
+        "credentials": "認証情報",
+        "llm": "LLM設定",
+        "dataSources": "データソース",
+        "backtesting": "バックテストプロバイダー",
+        "tabLayout": "タブレイアウト",
+        "appearance": "外観",
+        "language": "言語"
+    },
+    "actions": {
+        "save": "設定を保存",
+        "cancel": "キャンセル",
+        "apply": "適用",
+        "reset": "リセット"
+    },
+    "messages": {
+        "saved": "設定が正常に保存されました",
+        "error": "設定の保存中にエラーが発生しました",
+        "confirm": "よろしいですか？",
+        "loading": "設定を読み込み中..."
+    }
+}

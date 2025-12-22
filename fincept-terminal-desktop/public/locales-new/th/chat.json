@@ -1,0 +1,46 @@
+{
+    "title": "ผู้ช่วยแชท AI",
+    "header": {
+        "newChat": "แชทใหม่",
+        "history": "ประวัติ",
+        "settings": "ตั้งค่า"
+    },
+    "input": {
+        "placeholder": "ถามเกี่ยวกับหุ้น ตลาด การวิเคราะห์...",
+        "send": "ส่ง",
+        "voice": "เสียง"
+    },
+    "messages": {
+        "thinking": "กำลังคิด...",
+        "typing": "AI กำลังพิมพ์...",
+        "error": "เกิดข้อผิดพลาด",
+        "welcome": "วันนี้ช่วยอะไรเกี่ยวกับการวิเคราะห์การเงินได้บ้าง?"
+    },
+    "suggestions": {
+        "title": "คำถามแนะนำ",
+        "stockAnalysis": "วิเคราะห์ผลประกอบการหุ้น",
+        "marketTrends": "แนวโน้มตลาดปัจจุบัน?",
+        "portfolioAdvice": "คำแนะนำเพิ่มประสิทธิภาพพอร์ต"
+    },
+    "history": {
+        "title": "ประวัติแชท",
+        "today": "วันนี้",
+        "yesterday": "เมื่อวาน",
+        "thisWeek": "สัปดาห์นี้",
+        "older": "เก่ากว่า",
+        "clear": "ล้างประวัติ"
+    },
+    "actions": {
+        "copy": "คัดลอก",
+        "regenerate": "สร้างใหม่",
+        "like": "ชอบ",
+        "dislike": "ไม่ชอบ",
+        "share": "แชร์"
+    },
+    "models": {
+        "select": "เลือกโมเดล",
+        "gpt4": "GPT-4",
+        "claude": "Claude",
+        "gemini": "Gemini"
+    }
+}

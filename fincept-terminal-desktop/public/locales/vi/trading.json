@@ -1,0 +1,25 @@
+{
+    "title": "GIAO DỊCH",
+    "header": {
+        "orders": "LỆNH",
+        "positions": "VỊ THẾ",
+        "history": "LỊCH SỬ",
+        "settings": "CÀI ĐẶT",
+        "terminal": "TERMINAL FINCEPT",
+        "selectBroker": "CHỌN SÀN",
+        "paper": "GIẢ LẬP",
+        "live": "THỰC"
+    },
+    "actions": {
+        "buy": "MUA",
+        "sell": "BÁN",
+        "cancel": "Hủy",
+        "close": "Đóng",
+        "closeAll": "Đóng tất cả"
+    },
+    "messages": {
+        "orderPlaced": "Lệnh đã được đặt",
+        "orderFailed": "Lệnh thất bại",
+        "noPositions": "Không có vị thế mở"
+    }
+}

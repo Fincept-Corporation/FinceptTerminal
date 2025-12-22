@@ -1,0 +1,26 @@
+{
+    "title": "PANEL AUDYTU LOGOWANIA",
+    "accessDenied": "Wymagany dostęp administratora",
+    "metrics": {
+        "dauToday": "DAU Dziś",
+        "mau": "MAU",
+        "successRate": "Wskaźnik sukcesu",
+        "activeSessions": "Aktywne sesje"
+    },
+    "views": {
+        "overview": "PRZEGLĄD",
+        "eventLog": "DZIENNIK ZDARZEŃ",
+        "alerts": "ALERTY",
+        "analytics": "ANALITYKA"
+    },
+    "controls": {
+        "autoRefresh": "Auto-odświeżanie",
+        "loading": "ŁADOWANIE...",
+        "refresh": "ODŚWIEŻ"
+    },
+    "status": {
+        "admin": "Admin",
+        "updating": "AKTUALIZACJA",
+        "ready": "GOTOWE"
+    }
+}

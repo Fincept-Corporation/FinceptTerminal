@@ -1,0 +1,26 @@
+{
+    "title": "BẢNG KIỂM TOÁN ĐĂNG NHẬP",
+    "accessDenied": "Yêu cầu quyền quản trị viên",
+    "metrics": {
+        "dauToday": "DAU Hôm nay",
+        "mau": "MAU",
+        "successRate": "Tỷ lệ thành công",
+        "activeSessions": "Phiên hoạt động"
+    },
+    "views": {
+        "overview": "TỔNG QUAN",
+        "eventLog": "NHẬT KÝ SỰ KIỆN",
+        "alerts": "CẢNH BÁO",
+        "analytics": "PHÂN TÍCH"
+    },
+    "controls": {
+        "autoRefresh": "Tự động làm mới",
+        "loading": "ĐANG TẢI...",
+        "refresh": "LÀM MỚI"
+    },
+    "status": {
+        "admin": "Admin",
+        "updating": "ĐANG CẬP NHẬT",
+        "ready": "SẴN SÀNG"
+    }
+}

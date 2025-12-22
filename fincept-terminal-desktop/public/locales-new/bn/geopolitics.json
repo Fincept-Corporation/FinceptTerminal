@@ -1,0 +1,59 @@
+{
+    "title": "ভূ-রাজনীতি",
+    "header": {
+        "overview": "সারসংক্ষেপ",
+        "regions": "অঞ্চল",
+        "analysis": "বিশ্লেষণ",
+        "alerts": "সতর্কতা"
+    },
+    "regions": {
+        "global": "বিশ্ব",
+        "northAmerica": "উত্তর আমেরিকা",
+        "europe": "ইউরোপ",
+        "asia": "এশিয়া প্রশান্ত",
+        "middleEast": "মধ্যপ্রাচ্য",
+        "africa": "আফ্রিকা",
+        "latam": "ল্যাটিন আমেরিকা"
+    },
+    "categories": {
+        "conflict": "সংঘাত",
+        "sanctions": "নিষেধাজ্ঞা",
+        "trade": "বাণিজ্য সম্পর্ক",
+        "diplomacy": "কূটনীতি",
+        "elections": "নির্বাচন",
+        "policy": "নীতি পরিবর্তন"
+    },
+    "risk": {
+        "level": "ঝুঁকির মাত্রা",
+        "high": "উচ্চ",
+        "medium": "মধ্যম",
+        "low": "নিম্ন",
+        "critical": "গুরুতর",
+        "stable": "স্থিতিশীল"
+    },
+    "impact": {
+        "economic": "অর্থনৈতিক প্রভাব",
+        "market": "বাজার প্রভাব",
+        "trade": "বাণিজ্য প্রভাব",
+        "currency": "মুদ্রা প্রভাব"
+    },
+    "timeline": {
+        "latest": "সাম্প্রতিক",
+        "thisWeek": "এই সপ্তাহে",
+        "thisMonth": "এই মাসে",
+        "upcoming": "আসন্ন"
+    },
+    "actions": {
+        "subscribe": "সাবস্ক্রাইব",
+        "export": "রপ্তানি",
+        "share": "শেয়ার",
+        "setAlert": "সতর্কতা সেট করুন",
+        "filter": "ফিল্টার"
+    },
+    "messages": {
+        "loading": "ডেটা লোড হচ্ছে...",
+        "noEvents": "কোনো ঘটনা নেই",
+        "updated": "আপডেট হয়েছে",
+        "breaking": "ব্রেকিং নিউজ"
+    }
+}

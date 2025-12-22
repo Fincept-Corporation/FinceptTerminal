@@ -1,0 +1,55 @@
+{
+    "title": "Paramètres",
+    "credentials": {
+        "title": "GESTION DES CLÉS API",
+        "description": "Configurez les clés API pour les fournisseurs de données. Toutes les clés sont stockées localement et chiffrées."
+    },
+    "llm": {
+        "title": "CONFIGURATION LLM",
+        "description": "Configurez les fournisseurs d'IA pour l'onglet Chat."
+    },
+    "datasources": {
+        "title": "SOURCES DE DONNÉES"
+    },
+    "backtesting": {
+        "title": "FOURNISSEURS DE BACKTESTING"
+    },
+    "tablayout": {
+        "title": "DISPOSITION DES ONGLETS"
+    },
+    "appearance": {
+        "title": "APPARENCE",
+        "fontFamily": "Famille de Police",
+        "fontSize": "Taille de Police",
+        "fontWeight": "Graisse de Police",
+        "colorTheme": "Thème de Couleur",
+        "save": "Enregistrer l'Apparence",
+        "reset": "Réinitialiser par Défaut"
+    },
+    "language": {
+        "title": "PARAMÈTRES DE LANGUE",
+        "selectLanguage": "Sélectionnez votre langue préférée pour l'interface du terminal",
+        "currentLanguage": "LANGUE ACTUELLE"
+    },
+    "sidebar": {
+        "credentials": "Identifiants",
+        "llm": "Configuration LLM",
+        "dataSources": "Sources de Données",
+        "backtesting": "Fournisseurs de Backtesting",
+        "tabLayout": "Disposition des Onglets",
+        "appearance": "Apparence",
+        "language": "Langue"
+    },
+    "actions": {
+        "save": "Enregistrer les Paramètres",
+        "cancel": "Annuler",
+        "apply": "Appliquer",
+        "reset": "Réinitialiser"
+    },
+    "messages": {
+        "saved": "Paramètres enregistrés avec succès",
+        "error": "Erreur lors de l'enregistrement des paramètres",
+        "confirm": "Êtes-vous sûr?",
+        "loading": "Chargement des paramètres..."
+    }
+}

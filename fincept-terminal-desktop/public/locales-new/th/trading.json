@@ -1,0 +1,25 @@
+{
+    "title": "การซื้อขาย",
+    "header": {
+        "orders": "คำสั่ง",
+        "positions": "ตำแหน่ง",
+        "history": "ประวัติ",
+        "settings": "ตั้งค่า",
+        "terminal": "FINCEPT เทอร์มินัล",
+        "selectBroker": "เลือกโบรกเกอร์",
+        "paper": "จำลอง",
+        "live": "จริง"
+    },
+    "actions": {
+        "buy": "ซื้อ",
+        "sell": "ขาย",
+        "cancel": "ยกเลิก",
+        "close": "ปิด",
+        "closeAll": "ปิดทั้งหมด"
+    },
+    "messages": {
+        "orderPlaced": "ส่งคำสั่งสำเร็จ",
+        "orderFailed": "คำสั่งล้มเหลว",
+        "noPositions": "ไม่มีตำแหน่งที่เปิด"
+    }
+}

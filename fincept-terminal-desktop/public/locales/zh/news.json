@@ -1,0 +1,37 @@
+{
+    "title": "FINCEPT终端专业新闻",
+    "header": {
+        "liveFeed": "实时动态",
+        "live": "实时",
+        "refresh": "刷新",
+        "updating": "更新中...",
+        "alerts": "警报",
+        "sources": "来源",
+        "topics": "主题",
+        "status": "状态",
+        "demoMode": "演示模式",
+        "articles": "文章",
+        "activeSources": "活跃来源"
+    },
+    "categories": {
+        "all": "全部",
+        "markets": "市场",
+        "crypto": "加密货币",
+        "earnings": "财报"
+    },
+    "sentiment": {
+        "bullish": "看涨",
+        "bearish": "看跌",
+        "neutral": "中性"
+    },
+    "autoRefresh": {
+        "title": "自动刷新间隔",
+        "minute": "分钟",
+        "minutes": "分钟"
+    },
+    "messages": {
+        "loading": "加载新闻中...",
+        "loadingFeeds": "加载新闻源...",
+        "breaking": "突发"
+    }
+}

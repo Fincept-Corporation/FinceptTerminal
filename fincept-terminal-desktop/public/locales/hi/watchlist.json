@@ -1,0 +1,27 @@
+{
+    "title": "वॉचलिस्ट",
+    "header": {
+        "myWatchlists": "मेरी वॉचलिस्ट",
+        "create": "बनाएं",
+        "import": "आयात",
+        "export": "निर्यात"
+    },
+    "actions": {
+        "add": "सिम्बल जोड़ें",
+        "remove": "हटाएं",
+        "edit": "संपादित करें",
+        "delete": "हटाएं"
+    },
+    "symbol": {
+        "price": "मूल्य",
+        "change": "बदलाव",
+        "volume": "वॉल्यूम",
+        "marketCap": "मार्केट कैप"
+    },
+    "messages": {
+        "created": "वॉचलिस्ट बनाई गई",
+        "deleted": "वॉचलिस्ट हटाई गई",
+        "noWatchlists": "कोई वॉचलिस्ट नहीं",
+        "loading": "लोड हो रहा है..."
+    }
+}

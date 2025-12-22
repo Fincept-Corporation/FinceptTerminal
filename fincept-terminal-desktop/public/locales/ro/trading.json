@@ -1,0 +1,25 @@
+{
+    "title": "TRANZACȚIONARE",
+    "header": {
+        "orders": "ORDINE",
+        "positions": "POZIȚII",
+        "history": "ISTORIC",
+        "settings": "SETĂRI",
+        "terminal": "TERMINAL FINCEPT",
+        "selectBroker": "SELECTEAZĂ BROKER",
+        "paper": "SIMULARE",
+        "live": "REAL"
+    },
+    "actions": {
+        "buy": "CUMPĂRĂ",
+        "sell": "VINDE",
+        "cancel": "Anulează",
+        "close": "Închide",
+        "closeAll": "Închide tot"
+    },
+    "messages": {
+        "orderPlaced": "Ordin plasat",
+        "orderFailed": "Ordin eșuat",
+        "noPositions": "Fără poziții deschise"
+    }
+}

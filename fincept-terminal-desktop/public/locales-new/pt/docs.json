@@ -1,0 +1,26 @@
+{
+    "title": "TERMINAL DE DOCUMENTAÇÃO FINCEPT",
+    "header": {
+        "sections": "SEÇÕES",
+        "topics": "TÓPICOS",
+        "ready": "PRONTO"
+    },
+    "search": {
+        "placeholder": "Pesquisar documentação...",
+        "clear": "LIMPAR"
+    },
+    "navigation": "NAVEGAÇÃO",
+    "codeExample": "EXEMPLO DE CÓDIGO",
+    "content": {
+        "title": "DOCUMENTAÇÃO TERMINAL FINCEPT",
+        "description": "Selecione um tópico do painel de navegação.",
+        "topicsAvailable": "tópicos disponíveis",
+        "selectTopic": "Selecione um tópico"
+    },
+    "status": {
+        "version": "Documentação Terminal Fincept v3.0",
+        "sections": "Seções",
+        "topics": "Tópicos",
+        "current": "Atual"
+    }
+}

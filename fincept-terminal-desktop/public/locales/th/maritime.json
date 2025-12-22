@@ -1,0 +1,66 @@
+{
+    "title": "การเดินเรือ",
+    "header": {
+        "overview": "ภาพรวม",
+        "tracking": "ติดตาม",
+        "ports": "ท่าเรือ",
+        "routes": "เส้นทาง"
+    },
+    "vessels": {
+        "type": "ประเภทเรือ",
+        "cargo": "เรือสินค้า",
+        "tanker": "เรือบรรทุกน้ำมัน",
+        "container": "เรือตู้คอนเทนเนอร์",
+        "bulk": "เรือบรรทุกสินค้าเทกอง",
+        "passenger": "เรือโดยสาร",
+        "status": "สถานะ"
+    },
+    "tracking": {
+        "position": "ตำแหน่ง",
+        "speed": "ความเร็ว",
+        "heading": "ทิศทาง",
+        "destination": "จุดหมาย",
+        "eta": "เวลาถึงโดยประมาณ",
+        "lastUpdate": "อัปเดตล่าสุด"
+    },
+    "ports": {
+        "name": "ชื่อท่าเรือ",
+        "country": "ประเทศ",
+        "arrivals": "เข้าเทียบท่า",
+        "departures": "ออกจากท่า",
+        "congestion": "ความหนาแน่น",
+        "waitTime": "เวลารอคอย"
+    },
+    "routes": {
+        "origin": "ต้นทาง",
+        "destination": "ปลายทาง",
+        "distance": "ระยะทาง",
+        "transitTime": "เวลาเดินทาง",
+        "riskLevel": "ระดับความเสี่ยง"
+    },
+    "status": {
+        "anchored": "ทอดสมอ",
+        "underway": "กำลังเดินทาง",
+        "moored": "จอดเทียบท่า",
+        "atPort": "อยู่ในท่า",
+        "drifting": "ลอย"
+    },
+    "metrics": {
+        "dwt": "ระวางบรรทุก",
+        "teu": "ตู้มาตรฐาน",
+        "draft": "กินน้ำลึก",
+        "length": "ความยาว",
+        "speed": "ความเร็ว (นอต)"
+    },
+    "actions": {
+        "track": "ติดตามเรือ",
+        "setAlert": "ตั้งการแจ้งเตือน",
+        "export": "ส่งออก",
+        "filter": "กรอง"
+    },
+    "messages": {
+        "loading": "กำลังโหลดข้อมูล...",
+        "noVessels": "ไม่พบเรือ",
+        "updated": "อัปเดตล่าสุด"
+    }
+}

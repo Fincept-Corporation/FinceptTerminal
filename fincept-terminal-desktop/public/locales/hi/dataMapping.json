@@ -1,0 +1,52 @@
+{
+    "title": "डेटा मैपिंग",
+    "header": {
+        "mappings": "मैपिंग",
+        "templates": "टेम्पलेट",
+        "create": "नया बनाएं",
+        "refresh": "रिफ्रेश"
+    },
+    "views": {
+        "list": "मैपिंग सूची",
+        "create": "मैपिंग बनाएं",
+        "templates": "टेम्पलेट"
+    },
+    "list": {
+        "name": "नाम",
+        "source": "स्रोत",
+        "destination": "गंतव्य",
+        "status": "स्थिति",
+        "lastRun": "अंतिम रन",
+        "actions": "कार्रवाई"
+    },
+    "status": {
+        "active": "सक्रिय",
+        "inactive": "निष्क्रिय",
+        "error": "त्रुटि",
+        "running": "चल रहा है"
+    },
+    "actions": {
+        "edit": "संपादित",
+        "delete": "हटाएं",
+        "run": "चलाएं",
+        "duplicate": "डुप्लिकेट",
+        "export": "निर्यात"
+    },
+    "create": {
+        "title": "डेटा मैपिंग बनाएं",
+        "name": "मैपिंग नाम",
+        "description": "विवरण",
+        "sourceApi": "स्रोत API",
+        "destApi": "गंतव्य API",
+        "fieldMapping": "फ़ील्ड मैपिंग",
+        "save": "सहेजें",
+        "cancel": "रद्द करें"
+    },
+    "messages": {
+        "saved": "मैपिंग सहेजी गई",
+        "deleted": "मैपिंग हटाई गई",
+        "runSuccess": "मैपिंग सफलतापूर्वक निष्पादित",
+        "error": "त्रुटि हुई",
+        "noMappings": "कोई मैपिंग नहीं"
+    }
+}

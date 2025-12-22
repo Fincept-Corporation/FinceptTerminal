@@ -1,0 +1,28 @@
+{
+    "title": "로그인 감사 대시보드",
+    "accessDenied": "로그인 감사 대시보드를 보려면 관리자 권한이 필요합니다",
+    "metrics": {
+        "dauToday": "오늘 DAU",
+        "mau": "MAU",
+        "successRate": "성공률",
+        "failed24h": "실패(24h)",
+        "activeSessions": "활성 세션",
+        "uniqueIps": "고유 IP"
+    },
+    "views": {
+        "overview": "개요",
+        "eventLog": "이벤트 로그",
+        "alerts": "알림",
+        "analytics": "분석"
+    },
+    "controls": {
+        "autoRefresh": "자동 새로고침",
+        "loading": "로딩 중...",
+        "refresh": "새로고침"
+    },
+    "status": {
+        "admin": "관리자",
+        "updating": "업데이트 중",
+        "ready": "준비"
+    }
+}

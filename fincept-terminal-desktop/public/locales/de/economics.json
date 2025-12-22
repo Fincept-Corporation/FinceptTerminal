@@ -1,0 +1,59 @@
+{
+    "title": "WIRTSCHAFT",
+    "header": {
+        "overview": "ÜBERSICHT",
+        "indicators": "INDIKATOREN",
+        "calendar": "KALENDER",
+        "countries": "LÄNDER"
+    },
+    "indicators": {
+        "gdp": "BIP",
+        "inflation": "Inflation",
+        "unemployment": "Arbeitslosigkeit",
+        "interestRate": "Zinssatz",
+        "tradeBalance": "Handelsbilanz",
+        "consumerConfidence": "Verbrauchervertrauen",
+        "pmi": "PMI",
+        "cpi": "VPI"
+    },
+    "calendar": {
+        "date": "Datum",
+        "event": "Ereignis",
+        "actual": "Aktuell",
+        "forecast": "Prognose",
+        "previous": "Vorherig",
+        "impact": "Auswirkung"
+    },
+    "impact": {
+        "high": "Hoch",
+        "medium": "Mittel",
+        "low": "Niedrig"
+    },
+    "trends": {
+        "rising": "Steigend",
+        "falling": "Fallend",
+        "stable": "Stabil",
+        "yoy": "JzJ",
+        "mom": "MzM",
+        "qoq": "QzQ"
+    },
+    "regions": {
+        "global": "Global",
+        "northAmerica": "Nordamerika",
+        "europe": "Europa",
+        "asia": "Asien-Pazifik",
+        "latam": "Lateinamerika",
+        "mena": "MENA"
+    },
+    "actions": {
+        "compare": "Länder vergleichen",
+        "export": "Daten exportieren",
+        "subscribe": "Updates abonnieren",
+        "filter": "Ereignisse filtern"
+    },
+    "messages": {
+        "loading": "Lade Wirtschaftsdaten...",
+        "noEvents": "Keine Ereignisse geplant",
+        "updated": "Aktualisiert"
+    }
+}

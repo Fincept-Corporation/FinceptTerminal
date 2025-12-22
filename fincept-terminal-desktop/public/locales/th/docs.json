@@ -1,0 +1,26 @@
+{
+    "title": "เทอร์มินัลเอกสาร FINCEPT",
+    "header": {
+        "sections": "ส่วน",
+        "topics": "หัวข้อ",
+        "ready": "พร้อม"
+    },
+    "search": {
+        "placeholder": "ค้นหาเอกสาร...",
+        "clear": "ล้าง"
+    },
+    "navigation": "การนำทาง",
+    "codeExample": "ตัวอย่างโค้ด",
+    "content": {
+        "title": "เอกสารเทอร์มินัล FINCEPT",
+        "description": "เลือกหัวข้อจากแผงนำทาง",
+        "topicsAvailable": "หัวข้อที่มี",
+        "selectTopic": "เลือกหัวข้อเพื่อเริ่ม"
+    },
+    "status": {
+        "version": "เอกสารเทอร์มินัล Fincept v3.0",
+        "sections": "ส่วน",
+        "topics": "หัวข้อ",
+        "current": "ปัจจุบัน"
+    }
+}

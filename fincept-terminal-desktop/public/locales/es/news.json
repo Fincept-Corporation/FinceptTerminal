@@ -1,0 +1,38 @@
+{
+    "title": "NOTICIAS PROFESIONALES DE FINCEPT TERMINAL",
+    "header": {
+        "liveFeed": "EN VIVO",
+        "live": "EN VIVO",
+        "refresh": "ACTUALIZAR",
+        "updating": "ACTUALIZANDO...",
+        "alerts": "ALERTAS",
+        "sources": "FUENTES",
+        "topics": "TEMAS",
+        "status": "ESTADO",
+        "demoMode": "MODO DEMO",
+        "articles": "ARTÍCULOS",
+        "activeSources": "FUENTES ACTIVAS"
+    },
+    "categories": {
+        "all": "TODO",
+        "markets": "MERCADOS",
+        "crypto": "CRIPTO",
+        "economic": "ECON",
+        "earnings": "GANANCIAS"
+    },
+    "sentiment": {
+        "bullish": "ALCISTA",
+        "bearish": "BAJISTA",
+        "neutral": "NEUTRAL"
+    },
+    "autoRefresh": {
+        "title": "INTERVALO DE AUTO-ACTUALIZACIÓN",
+        "minute": "minuto",
+        "minutes": "minutos"
+    },
+    "messages": {
+        "loading": "Cargando noticias...",
+        "loadingFeeds": "Cargando fuentes de noticias...",
+        "breaking": "URGENTE"
+    }
+}

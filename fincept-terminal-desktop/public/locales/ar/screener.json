@@ -1,0 +1,56 @@
+{
+    "title": "فلترة الأسهم",
+    "header": {
+        "filters": "المرشحات",
+        "results": "النتائج",
+        "saved": "محفوظة",
+        "presets": "الإعدادات المسبقة"
+    },
+    "filters": {
+        "add": "إضافة فلتر",
+        "clear": "مسح الكل",
+        "reset": "إعادة تعيين",
+        "apply": "تطبيق الفلاتر"
+    },
+    "criteria": {
+        "marketCap": "القيمة السوقية",
+        "price": "السعر",
+        "volume": "الحجم",
+        "pe": "P/E",
+        "eps": "ربحية السهم",
+        "dividend": "عائد التوزيعات",
+        "beta": "بيتا",
+        "sector": "القطاع",
+        "industry": "الصناعة",
+        "country": "البلد",
+        "exchange": "البورصة"
+    },
+    "operators": {
+        "equals": "يساوي",
+        "greater": "أكبر من",
+        "less": "أقل من",
+        "between": "بين",
+        "contains": "يحتوي"
+    },
+    "results": {
+        "symbol": "الرمز",
+        "name": "الاسم",
+        "price": "السعر",
+        "change": "التغير",
+        "volume": "الحجم",
+        "marketCap": "القيمة السوقية",
+        "matches": "نتيجة"
+    },
+    "actions": {
+        "save": "حفظ الفلتر",
+        "load": "تحميل الفلتر",
+        "export": "تصدير النتائج",
+        "addToWatchlist": "إضافة للقائمة"
+    },
+    "messages": {
+        "loading": "جاري الفلترة...",
+        "noResults": "لا توجد نتائج",
+        "saved": "تم الحفظ",
+        "applied": "تم التطبيق"
+    }
+}

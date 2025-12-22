@@ -1,0 +1,35 @@
+{
+    "title": "GERENCIADOR DE PORTFÓLIO FINCEPT",
+    "header": {
+        "live": "AO VIVO",
+        "updating": "ATUALIZANDO",
+        "newPortfolio": "NOVO PORTFÓLIO",
+        "refresh": "ATUALIZAR",
+        "exportCsv": "EXPORTAR CSV"
+    },
+    "summary": {
+        "totalValue": "VALOR TOTAL",
+        "dayPnl": "L/P DIA",
+        "totalPnl": "L/P TOTAL",
+        "positions": "POSIÇÕES"
+    },
+    "views": {
+        "positions": "POSIÇÕES",
+        "addAsset": "ADICIONAR ATIVO",
+        "sellAsset": "VENDER ATIVO",
+        "analytics": "ANÁLISES",
+        "history": "HISTÓRICO"
+    },
+    "sidebar": {
+        "portfolios": "PORTFÓLIOS",
+        "loading": "Carregando portfólios...",
+        "noPortfolios": "Nenhum portfólio ainda."
+    },
+    "modals": {
+        "createNew": "CRIAR NOVO PORTFÓLIO",
+        "cancel": "CANCELAR",
+        "create": "CRIAR",
+        "add": "ADICIONAR",
+        "sell": "VENDER"
+    }
+}

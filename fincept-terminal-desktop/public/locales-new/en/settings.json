@@ -1,0 +1,43 @@
+{
+    "title": "Terminal Settings",
+    "credentials": {
+        "title": "API KEY MANAGEMENT",
+        "description": "Configure API keys for data providers. All keys are stored locally and encrypted."
+    },
+    "llm": {
+        "title": "LLM CONFIGURATION",
+        "description": "Configure AI providers for the Chat tab."
+    },
+    "datasources": {
+        "title": "DATA SOURCES"
+    },
+    "backtesting": {
+        "title": "BACKTESTING PROVIDERS"
+    },
+    "tablayout": {
+        "title": "TAB LAYOUT"
+    },
+    "appearance": {
+        "title": "APPEARANCE",
+        "fontFamily": "Font Family",
+        "fontSize": "Font Size",
+        "fontWeight": "Font Weight",
+        "colorTheme": "Color Theme",
+        "save": "Save Appearance",
+        "reset": "Reset to Default"
+    },
+    "language": {
+        "title": "LANGUAGE SETTINGS",
+        "selectLanguage": "Select your preferred language for the terminal interface",
+        "currentLanguage": "CURRENT LANGUAGE"
+    },
+    "sidebar": {
+        "credentials": "Credentials",
+        "llm": "LLM Configuration",
+        "dataSources": "Data Sources",
+        "backtesting": "Backtesting Providers",
+        "tabLayout": "Tab Layout",
+        "appearance": "Appearance",
+        "language": "Language"
+    }
+}
