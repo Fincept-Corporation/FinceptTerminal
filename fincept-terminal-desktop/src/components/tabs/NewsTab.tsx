@@ -3,6 +3,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { fetchNewsWithCache, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData } from '../../services/newsService';
 import { contextRecorderService } from '../../services/contextRecorderService';
 import RecordingControlPanel from '../common/RecordingControlPanel';
+import { TabFooter } from '@/components/common/TabFooter';
 
 // Extend Window interface for Tauri
 declare global {
@@ -1149,6 +1150,19 @@ const NewsTab: React.FC = () => {
           background: transparent;
         }
       `}</style>
+
+      {/* Footer */}
+      <TabFooter
+        tabName="FINANCIAL NEWS"
+        leftInfo={[
+          { label: `Sources: ${getActiveSources().length}`, color: colors.textMuted },
+          { label: `Feeds: ${getRSSFeedCount()}`, color: colors.textMuted },
+          { label: isUsingMockData() ? 'Mode: DEMO' : 'Mode: LIVE', color: isUsingMockData() ? colors.warning : colors.secondary },
+        ]}
+        statusInfo={`Articles: ${articles.length} | ${isLoading ? 'Refreshing...' : 'Ready'}`}
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
+      />
     </div>
   );
 };

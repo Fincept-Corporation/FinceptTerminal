@@ -36,6 +36,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { BacktestRequest, BacktestResult } from '@/services/backtesting/interfaces/types';
 import { StrategyDefinition } from '@/services/backtesting/interfaces/IStrategyDefinition';
 import { STRATEGY_TEMPLATES, fillTemplate, type StrategyTemplate } from '@/services/backtesting/StrategyTemplates';
+import { TabFooter } from '@/components/common/TabFooter';
 
 type EditorMode = 'code' | 'visual' | 'template';
 
@@ -1598,23 +1599,21 @@ export default function BacktestingTab() {
       </div>
 
       {/* Footer / Status Bar */}
-      <div style={{
-        borderTop: `1px solid ${colors.textMuted}`,
-        backgroundColor: colors.panel,
-        padding: '4px 12px',
-        fontSize: '10px',
-        color: colors.textMuted,
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <span>Backtesting System v1.0 | Strategy testing and optimization platform</span>
-            <span>
-              {activeProvider ? `Provider: ${activeProvider}` : 'No provider active'} |
-              {backtestHistory.length > 0 ? ` History: ${backtestHistory.length} runs` : ' No backtest history'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: '16px' }}>
+      <TabFooter
+        tabName="BACKTESTING"
+        leftInfo={[
+          { label: 'Strategy testing and optimization platform', color: colors.textMuted },
+          {
+            label: activeProvider ? `Provider: ${activeProvider}` : 'No provider active',
+            color: colors.textMuted
+          },
+          {
+            label: backtestHistory.length > 0 ? `History: ${backtestHistory.length} runs` : 'No backtest history',
+            color: colors.textMuted
+          },
+        ]}
+        statusInfo={
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             {currentResult && currentResult.status === 'completed' && (
               <>
                 <span>Total Return: {formatPercentage(currentResult.performance.totalReturn ?? 0)}</span>
@@ -1622,12 +1621,14 @@ export default function BacktestingTab() {
                 <span>Max DD: {formatPercentage(currentResult.performance.maxDrawdown ?? 0)}</span>
               </>
             )}
-            <span style={{ color: isRunning ? colors.warning : colors.secondary }}>
+            <span style={{ color: isRunning ? colors.warning : colors.secondary, fontWeight: 'bold' }}>
               {isRunning ? 'RUNNING...' : 'READY'}
             </span>
           </div>
-        </div>
-      </div>
+        }
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
+      />
     </div>
   );
 }

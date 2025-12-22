@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Play, Square, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { TabFooter } from '@/components/common/TabFooter';
 
 // Bloomberg color palette
 const COLORS = {
@@ -793,6 +794,18 @@ const AlphaArenaTab: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <TabFooter
+        tabName="ALPHA ARENA"
+        leftInfo={[
+          { label: `Competition: ${competitionId || 'None'}`, color: COLORS.GRAY },
+          { label: `Models: ${leaderboard.length}`, color: COLORS.GRAY },
+          { label: `Status: ${isRunning ? 'RUNNING' : 'STOPPED'}`, color: isRunning ? COLORS.GREEN : COLORS.RED },
+        ]}
+        statusInfo={`Cycle: ${currentCycle} | Decisions: ${recentDecisions.length} | ${status}`}
+        backgroundColor={COLORS.PANEL_BG}
+        borderColor={COLORS.BORDER}
+      />
     </div>
   );
 };

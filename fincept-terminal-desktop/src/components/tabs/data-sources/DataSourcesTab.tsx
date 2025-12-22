@@ -20,6 +20,7 @@ import { DATA_SOURCE_CONFIGS } from './dataSourceConfigs';
 import { DataSourceConfig, DataSourceConnection, DataSourceCategory } from './types';
 import { hasAdapter } from './adapters';
 import { useDataSources } from '../../../contexts/DataSourceContext';
+import { TabFooter } from '@/components/common/TabFooter';
 
 export default function DataSourcesTab() {
   const {
@@ -817,6 +818,18 @@ export default function DataSourcesTab() {
           </div>
         </div>
       )}
+
+      <TabFooter
+        tabName="DATA SOURCES"
+        leftInfo={[
+          { label: `Sources: ${DATA_SOURCE_CONFIGS.length}`, color: '#a3a3a3' },
+          { label: `Connections: ${connections.length}`, color: '#a3a3a3' },
+          { label: `View: ${view.toUpperCase()}`, color: '#a3a3a3' },
+        ]}
+        statusInfo={`Connected: ${connections.filter(c => c.status === 'connected').length} | Active adapters available`}
+        backgroundColor="#1a1a1a"
+        borderColor="#2d2d2d"
+      />
     </div>
   );
 }

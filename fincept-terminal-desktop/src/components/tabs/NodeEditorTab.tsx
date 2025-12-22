@@ -47,6 +47,7 @@ import { pythonAgentService, AgentMetadata } from '@/services/pythonAgentService
 import { workflowExecutor } from './node-editor/WorkflowExecutor';
 import { Workflow, workflowService } from '@/services/workflowService';
 import { nodeExecutionManager } from '@/services/nodeExecutionManager';
+import { TabFooter } from '@/components/common/TabFooter';
 
 // Custom Node Component
 const CustomNode = ({ data, id, selected }: any) => {
@@ -1623,39 +1624,16 @@ export default function NodeEditorTab() {
 
       {/* Bottom Info Bar */}
       {activeView === 'editor' && (
-        <div
-          style={{
-            backgroundColor: '#1a1a1a',
-            borderTop: '1px solid #2d2d2d',
-            padding: '6px 12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            fontSize: '10px',
-            color: '#737373',
-            flexShrink: 0,
-          }}
-        >
-          <span>💡 Drag nodes to move | Drag from handles to connect | Select & Delete to remove</span>
-          {selectedNodes.length > 0 && (
-            <>
-              <div style={{ width: '1px', height: '14px', backgroundColor: '#404040' }}></div>
-              <span style={{ color: '#ea580c' }}>
-                Selected: {selectedNodes.length} node(s)
-              </span>
-            </>
-          )}
-          <div
-            style={{
-              marginLeft: 'auto',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-            }}
-          >
-            <span>Scroll to zoom | Right-click drag to pan</span>
-          </div>
-        </div>
+        <TabFooter
+          tabName="NODE EDITOR"
+          leftInfo={[
+            { label: '💡 Drag nodes to move | Drag from handles to connect | Select & Delete to remove', color: '#737373' },
+            ...(selectedNodes.length > 0 ? [{ label: `Selected: ${selectedNodes.length} node(s)`, color: '#ea580c' }] : [])
+          ]}
+          statusInfo="Scroll to zoom | Right-click drag to pan"
+          backgroundColor="#1a1a1a"
+          borderColor="#2d2d2d"
+        />
       )}
 
       {/* Deploy Dialog */}

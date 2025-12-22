@@ -8,6 +8,7 @@ import {
 import { contextRecorderService } from '../../services/contextRecorderService';
 import WatchlistSidebar from './watchlist/WatchlistSidebar';
 import StockListView from './watchlist/StockListView';
+import { TabFooter } from '@/components/common/TabFooter';
 import StockDetailPanel from './watchlist/StockDetailPanel';
 import CreateWatchlistModal from './watchlist/CreateWatchlistModal';
 import AddStockModal from './watchlist/AddStockModal';
@@ -532,6 +533,16 @@ const WatchlistTab: React.FC = () => {
           existingSymbols={stocks.map(s => s.symbol)}
         />
       )}
+
+      {/* Footer */}
+      <TabFooter
+        tabName="WATCHLIST"
+        leftInfo={[
+          { label: `Lists: ${watchlists.length}`, color: '#6b7280' },
+          { label: selectedWatchlist ? `"${selectedWatchlist.name}"` : 'No list selected', color: '#06b6d4' },
+        ]}
+        statusInfo={`Stocks: ${stocks.length} | ${isLoading ? 'Loading...' : 'Ready'}`}
+      />
     </div>
   );
 };

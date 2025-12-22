@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { RefreshCw, Download, Globe, TrendingUp, BarChart3, PieChart } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import bisDataService from '@/services/bisDataService';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface Indicator {
   code: string;
@@ -639,6 +640,18 @@ export default function EconomicsTab() {
           </div>
         </div>
       </div>
+
+      <TabFooter
+        tabName="ECONOMIC INDICATORS"
+        leftInfo={[
+          { label: `Source: ${dataSource.toUpperCase()}`, color: colors.textMuted },
+          { label: `View: ${view.toUpperCase()}`, color: colors.textMuted },
+          ...(indicatorData ? [{ label: `Data points: ${indicatorData.observations.length}`, color: colors.textMuted }] : [])
+        ]}
+        statusInfo={status}
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
+      />
     </div>
   );
 }

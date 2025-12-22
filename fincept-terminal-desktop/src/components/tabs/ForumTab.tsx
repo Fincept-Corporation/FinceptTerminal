@@ -3,6 +3,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ForumApiService, ForumPost as APIForumPost, ForumCategory, ForumStats, ForumComment as APIForumComment } from '../../services/forumApi';
 import { sqliteService } from '../../services/sqliteService';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface ForumPost {
   id: string;
@@ -1715,6 +1716,17 @@ const ForumTab: React.FC = () => {
       {SearchModal}
       {ProfileModal}
       {EditProfileModal}
+
+      <TabFooter
+        tabName="COMMUNITY FORUM"
+        leftInfo={[
+          { label: `Category: ${selectedCategory || 'All'}`, color: colors.textMuted },
+          { label: `Posts: ${forumStats?.total_posts || 0}`, color: colors.textMuted },
+        ]}
+        statusInfo={`Users: ${forumStats?.total_users || 0} | ${isLoading ? 'Loading...' : 'Ready'}`}
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
+      />
     </div>
   );
 };

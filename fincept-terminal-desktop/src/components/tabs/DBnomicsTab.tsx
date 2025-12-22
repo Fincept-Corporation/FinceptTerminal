@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { RefreshCw, Download, Plus, Minus, Trash2 } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface Provider {
   code: string;
@@ -800,6 +801,18 @@ export default function DBnomicsTab() {
           </div>
         </div>
       </div>
+
+      <TabFooter
+        tabName="DBNOMICS ECONOMIC DATABASE"
+        leftInfo={[
+          { label: `Providers: ${providers.length}`, color: colors.textMuted },
+          { label: `Datasets: ${datasets.length}`, color: colors.textMuted },
+          { label: `Series: ${seriesList.length}`, color: colors.textMuted },
+        ]}
+        statusInfo={`${status} | Comparisons: ${selectedDataPoints.length} active`}
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
+      />
     </div>
   );
 }

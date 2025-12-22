@@ -9,6 +9,7 @@ import { contextRecorderService } from '../../services/contextRecorderService';
 import LLMSettingsModal from './LLMSettingsModal';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import ContextSelector from '../common/ContextSelector';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface ChatTabProps {
   onNavigateToSettings?: () => void;
@@ -1186,6 +1187,18 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           setSystemStatus('STATUS: SETTINGS UPDATED');
         }}
         onNavigateToSettings={onNavigateToSettings}
+      />
+
+      {/* Footer */}
+      <TabFooter
+        tabName="AI CHAT"
+        leftInfo={[
+          { label: `Provider: ${currentProvider?.toUpperCase() || 'NONE'}`, color: colors.textMuted },
+          { label: `Session: ${currentSession?.id ? 'Active' : 'None'}`, color: colors.textMuted },
+        ]}
+        statusInfo={`Messages: ${messages.length} | ${isStreaming ? 'Streaming...' : 'Ready'}`}
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
       />
     </div>
   );

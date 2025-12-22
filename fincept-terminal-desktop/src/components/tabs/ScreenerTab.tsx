@@ -4,6 +4,7 @@ import { Search, Download, TrendingUp, BarChart3, Loader2, AlertCircle, FolderTr
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { sqliteService } from '@/services/sqliteService';
 import { invoke } from '@tauri-apps/api/core';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface SeriesData {
   date: string;
@@ -1394,24 +1395,22 @@ export default function ScreenerTab() {
       </div>
 
       {/* Footer */}
-      <div style={{
-        borderTop: `1px solid ${colors.primary}`,
-        padding: '8px 16px',
-        background: colors.panel,
-        fontSize: fontSize.tiny,
-        color: colors.textMuted,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexShrink: 0
-      }}>
-        <span>FRED Economic Data | Federal Reserve Bank of St. Louis</span>
-        {data.length > 0 && (
-          <span style={{ color: colors.primary, fontWeight: 'bold' }}>
-            {data.length} series | {data.reduce((acc, s) => acc + s.observation_count, 0)} observations
-          </span>
-        )}
-      </div>
+      <TabFooter
+        tabName="ECONOMIC SCREENER"
+        leftInfo={[
+          { label: 'FRED Economic Data', color: colors.accent },
+          { label: 'Federal Reserve Bank of St. Louis', color: colors.textMuted },
+        ]}
+        statusInfo={
+          data.length > 0 && (
+            <span style={{ color: colors.primary, fontWeight: 'bold' }}>
+              {data.length} series | {data.reduce((acc, s) => acc + s.observation_count, 0)} observations
+            </span>
+          )
+        }
+        backgroundColor={colors.panel}
+        borderColor={colors.primary}
+      />
     </div>
   );
 }

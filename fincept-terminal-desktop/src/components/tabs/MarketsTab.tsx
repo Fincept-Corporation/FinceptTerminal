@@ -7,6 +7,7 @@ import { sqliteService } from '../../services/sqliteService';
 import { contextRecorderService } from '../../services/contextRecorderService';
 import TickerEditModal from './TickerEditModal';
 import RecordingControlPanel from '../common/RecordingControlPanel';
+import { TabFooter } from '@/components/common/TabFooter';
 
 const MarketsTab: React.FC = () => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
@@ -616,22 +617,13 @@ const MarketsTab: React.FC = () => {
       </div>
 
       {/* Status Bar */}
-      <div style={{
-        borderTop: `1px solid ${colors.textMuted}`,
-        backgroundColor: colors.panel,
-        padding: '6px 12px',
-        fontSize: '10px',
-        color: colors.textMuted,
-        flexShrink: 0
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '8px'
-        }}>
-          <span>Data provided by Yahoo Finance API | Real-time updates</span>
+      <TabFooter
+        tabName="LIVE MARKETS"
+        leftInfo={[
+          { label: 'Data provided by Yahoo Finance API', color: colors.textMuted },
+          { label: 'Real-time updates', color: colors.textMuted },
+        ]}
+        statusInfo={
           <span style={{ whiteSpace: 'nowrap' }}>
             Connected: {Object.keys(regionalData).length} regional markets
             {dbInitialized && (
@@ -640,8 +632,10 @@ const MarketsTab: React.FC = () => {
               </span>
             )}
           </span>
-        </div>
-      </div>
+        }
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
+      />
 
       {/* Edit Modal */}
       <TickerEditModal

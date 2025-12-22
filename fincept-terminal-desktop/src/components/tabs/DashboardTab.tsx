@@ -3,6 +3,7 @@ import GridLayout, { Layout } from 'react-grid-layout';
 import { Plus, RotateCcw, Save } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { sqliteService } from '../../services/sqliteService';
+import { TabFooter } from '@/components/common/TabFooter';
 import {
   NewsWidget,
   MarketDataWidget,
@@ -619,27 +620,26 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
       </div>
 
       {/* Status Bar */}
-      <div style={{
-        borderTop: `1px solid ${colors.textMuted}`,
-        backgroundColor: colors.panel,
-        padding: '4px 12px',
-        fontSize: fontSize.tiny,
-        color: colors.textMuted,
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Fincept Customizable Dashboard v2.0.0 | Drag & drop workspace</span>
-          <span>
-            Widgets: {widgets.length} | Layout: {widgets.length > 0 ? 'Custom' : 'Empty'} |
+      <TabFooter
+        tabName="DASHBOARD"
+        leftInfo={[
+          { label: 'Drag & drop workspace', color: colors.textMuted },
+          { label: `Widgets: ${widgets.length}`, color: colors.textMuted },
+          { label: `Layout: ${widgets.length > 0 ? 'Custom' : 'Empty'}`, color: colors.textMuted },
+        ]}
+        statusInfo={
+          <>
             Status: <span style={{ color: colors.secondary }}>ACTIVE</span>
             {dbInitialized && (
               <span style={{ marginLeft: '8px', color: colors.secondary }}>
                 | Cache: ENABLED
               </span>
             )}
-          </span>
-        </div>
-      </div>
+          </>
+        }
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
+      />
 
       {/* Add Widget Modal */}
       <AddWidgetModal

@@ -4,6 +4,7 @@ import { DOC_SECTIONS } from './content';
 import { DocSubsection } from './types';
 import { getColors } from './constants';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { TabFooter } from '@/components/common/TabFooter';
 
 export default function DocsTab() {
   const { colors: themeColors } = useTerminalTheme();
@@ -547,24 +548,17 @@ export default function DocsTab() {
         </div>
       </div>
 
-      {/* Status Bar */}
-      <div style={{
-        borderTop: `1px solid ${COLORS.GRAY}`,
-        backgroundColor: COLORS.PANEL_BG,
-        padding: '6px 12px',
-        fontSize: '10px',
-        color: COLORS.GRAY,
-        flexShrink: 0,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <span>Fincept Terminal Documentation v3.0 | Complete API Reference & Guides</span>
-          <span>Sections: {totalSections} | Topics: {totalTopics}</span>
-        </div>
-        <span>{activeSubsection ? `Current: ${activeSubsection.title}` : 'Select a topic to begin'}</span>
-      </div>
+      <TabFooter
+        tabName="DOCUMENTATION"
+        leftInfo={[
+          { label: 'Complete API Reference & Guides', color: COLORS.GRAY },
+          { label: `Sections: ${totalSections}`, color: COLORS.GRAY },
+          { label: `Topics: ${totalTopics}`, color: COLORS.GRAY },
+        ]}
+        statusInfo={activeSubsection ? `Current: ${activeSubsection.title}` : 'Select a topic to begin'}
+        backgroundColor={COLORS.PANEL_BG}
+        borderColor={COLORS.GRAY}
+      />
     </div>
   );
 }

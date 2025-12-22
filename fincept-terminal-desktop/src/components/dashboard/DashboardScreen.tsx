@@ -9,6 +9,7 @@ import { useCurrentTime, useDefaultTime } from '@/contexts/TimezoneContext';
 import { ChatModeInterface } from '@/components/chat-mode';
 import { APP_VERSION } from '@/constants/version';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
+import { exit } from '@tauri-apps/plugin-process';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -162,7 +163,7 @@ function FinxeptTerminalContent() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate } = useAutoUpdater();
+  const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate, checkForUpdate } = useAutoUpdater();
 
   // Dynamic tab configuration
   const [tabConfig, setTabConfig] = useState(() => tabConfigService.getConfiguration());
@@ -394,7 +395,8 @@ function FinxeptTerminalContent() {
         break;
       case 'check_updates':
         setStatusMessage("Checking for updates...");
-        setTimeout(() => setStatusMessage("You are running the latest version"), 3000);
+        await checkForUpdate();
+        setTimeout(() => setStatusMessage(""), 3000);
         break;
       case 'logout':
         setStatusMessage("Logging out...");
@@ -402,8 +404,16 @@ function FinxeptTerminalContent() {
         window.location.href = '/';
         break;
       case 'exit':
-        setStatusMessage("Use Alt+F4 to close the application");
-        setTimeout(() => setStatusMessage(''), 3000);
+        setStatusMessage("Closing application...");
+        setTimeout(async () => {
+          try {
+            await exit(0);
+          } catch (error) {
+            console.error('Failed to exit application:', error);
+            setStatusMessage("Failed to close - Use Alt+F4");
+            setTimeout(() => setStatusMessage(''), 3000);
+          }
+        }, 500);
         break;
       default:
         setTimeout(() => setStatusMessage(''), 3000);
@@ -503,12 +513,7 @@ function FinxeptTerminalContent() {
 
   // Menu configurations with tab navigation
   const fileMenuItems = [
-    { label: 'New Workspace', shortcut: 'Ctrl+N', icon: null, action: 'new_workspace' },
-    { label: 'Open Workspace', shortcut: 'Ctrl+O', icon: null, action: 'open_workspace' },
-    { label: 'Save Workspace', shortcut: 'Ctrl+S', icon: null, action: 'save_workspace' },
-    { label: 'Export Portfolio', shortcut: 'Ctrl+E', icon: <Download size={12} />, action: 'export', separator: true },
-    { label: 'Import Data', icon: null, action: 'import_data' },
-    { label: 'Exit', shortcut: 'Alt+F4', icon: null, action: 'exit', separator: true }
+    { label: 'Exit', shortcut: 'Alt+F4', icon: null, action: 'exit' }
   ];
 
   const marketsMenuItems = [
@@ -555,18 +560,13 @@ function FinxeptTerminalContent() {
   ];
 
   const viewMenuItems = [
-    { label: 'Fullscreen', shortcut: 'F11', icon: isFullscreen ? <Minimize size={12} /> : <Maximize size={12} />, action: 'fullscreen' },
-    { label: 'Zoom In', shortcut: 'Ctrl++', icon: null, action: 'zoom_in' },
-    { label: 'Zoom Out', shortcut: 'Ctrl+-', icon: null, action: 'zoom_out' },
-    { label: 'Reset Zoom', shortcut: 'Ctrl+0', icon: null, action: 'zoom_reset', separator: true },
-    { label: 'Toggle Theme', icon: <Eye size={12} />, action: 'toggle_theme' }
+    { label: 'Fullscreen', shortcut: 'F11', icon: isFullscreen ? <Minimize size={12} /> : <Maximize size={12} />, action: 'fullscreen' }
   ];
 
   const helpMenuItems = [
     { label: 'Documentation', action: () => setActiveTab('docs') },
     { label: 'Support Tickets', action: () => setActiveTab('support') },
-    { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+/', action: 'show_shortcuts', separator: true },
-    { label: 'About Fincept', action: 'show_about' },
+    { label: 'About Fincept', action: 'show_about', separator: true },
     { label: 'Check for Updates', action: 'check_updates' },
     { label: 'Logout', icon: <LogOut size={12} />, action: 'logout', separator: true }
   ];

@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SupportApiService } from '@/services/supportApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { RefreshCw, Plus, ArrowLeft, Send, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { TabFooter } from '@/components/common/TabFooter';
 
 type SupportView = 'list' | 'create' | 'details';
 
@@ -917,21 +918,17 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
         )}
       </div>
 
-      {/* Status Bar */}
-      <div style={{
-        borderTop: `1px solid ${C.GRAY}`,
-        backgroundColor: C.PANEL_BG,
-        padding: '6px 12px',
-        fontSize: '10px',
-        color: C.GRAY,
-        flexShrink: 0,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <span>Fincept Terminal Support System | 24/7 Customer Service</span>
-        <span>Response Time: &lt; 24 hours | Status: {loading ? 'UPDATING' : 'READY'}</span>
-      </div>
+      <TabFooter
+        tabName="SUPPORT CENTER"
+        leftInfo={[
+          { label: `View: ${currentView.toUpperCase()}`, color: C.GRAY },
+          { label: `Tickets: ${tickets.length}`, color: C.GRAY },
+          { label: `User: ${session.user_info?.email || 'Guest'}`, color: C.GRAY },
+        ]}
+        statusInfo={`Response Time: < 24 hours | 24/7 Customer Service | ${loading ? 'UPDATING' : 'READY'}`}
+        backgroundColor={C.PANEL_BG}
+        borderColor={C.GRAY}
+      />
     </div>
   );
 };

@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { notebookService } from '@/services/notebookService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface EditorFile {
   id: string;
@@ -1261,27 +1262,25 @@ ${result.output}
       </div>
 
       {/* Footer */}
-      <div style={{ borderTop: `2px solid ${C.ORANGE}`, backgroundColor: C.PANEL_BG, padding: '8px 16px', fontSize: '11px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ color: C.ORANGE, fontWeight: 'bold' }}>FINCEPT CODE EDITOR v1.0</span>
-            <span style={{ color: C.GRAY }}>|</span>
-            <span style={{ color: C.CYAN }}>FinScript Language Support</span>
-            <span style={{ color: C.GRAY }}>|</span>
-            <span style={{ color: C.BLUE }}>Jupyter Integration</span>
-            {editorMode === 'notebook' && currentNotebookPath && (
-              <>
-                <span style={{ color: C.GRAY }}>|</span>
-                <span style={{ color: C.YELLOW, fontSize: '10px' }}>{currentNotebookPath.split(/[/\\]/).pop()}</span>
-              </>
-            )}
-          </div>
-          <div style={{ color: C.GRAY }}>
+      <TabFooter
+        tabName="CODE EDITOR"
+        leftInfo={[
+          { label: 'FinScript Language Support', color: C.CYAN },
+          { label: 'Jupyter Integration', color: C.BLUE },
+          ...(editorMode === 'notebook' && currentNotebookPath
+            ? [{ label: currentNotebookPath.split(/[/\\]/).pop() || '', color: C.YELLOW }]
+            : []
+          ),
+        ]}
+        statusInfo={
+          <>
             Mode: <span style={{ color: C.ORANGE, fontWeight: 'bold' }}>{editorMode.toUpperCase()}</span>
             {editorMode === 'code' ? ` | Files: ${files.length}` : ` | Cells: ${notebookCells.length} | Exec: ${executionCounter - 1}`}
-          </div>
-        </div>
-      </div>
+          </>
+        }
+        backgroundColor={C.PANEL_BG}
+        borderColor={C.ORANGE}
+      />
     </div>
   );
 }

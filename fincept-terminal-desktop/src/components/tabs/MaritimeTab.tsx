@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface MarkerData {
   lat: number;
@@ -1463,33 +1464,23 @@ export default function MaritimeTab() {
       </div>
 
       {/* Footer */}
-      <div style={{
-        borderTop: '2px solid #00ff00',
-        padding: '8px 16px',
-        background: 'linear-gradient(180deg, #000 0%, #0a0a0a 100%)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexShrink: 0,
-        flexWrap: 'wrap',
-        gap: '12px',
-        minHeight: '40px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '9px', flexWrap: 'wrap' }}>
-          <span style={{ color: '#00ff00', fontWeight: 'bold', whiteSpace: 'nowrap' }}>MARITIME INTEL v2.4.1</span>
-          <span style={{ color: '#888' }}>|</span>
-          <span style={{ color: '#0ff', whiteSpace: 'nowrap' }}>AIS Feed: ACTIVE</span>
-          <span style={{ color: '#888' }}>|</span>
-          <span style={{ color: '#0ff', whiteSpace: 'nowrap' }}>Satellite Link: NOMINAL</span>
-          <span style={{ color: '#888' }}>|</span>
-          <span style={{ color: '#0ff', whiteSpace: 'nowrap' }}>Data Latency: 2.3ms</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '9px', flexWrap: 'wrap' }}>
-          <span style={{ color: '#888', whiteSpace: 'nowrap' }}>Powered by Globe.GL 3D Visualization</span>
-          <span style={{ color: '#888' }}>|</span>
-          <span style={{ color: '#ffd700', whiteSpace: 'nowrap' }}>CLEARANCE: TOP SECRET // SCI</span>
-        </div>
-      </div>
+      <TabFooter
+        tabName="MARITIME INTELLIGENCE"
+        leftInfo={[
+          { label: 'AIS Feed: ACTIVE', color: '#0ff' },
+          { label: 'Satellite Link: NOMINAL', color: '#0ff' },
+          { label: 'Data Latency: 2.3ms', color: '#0ff' },
+        ]}
+        statusInfo={
+          <>
+            <span style={{ color: '#888' }}>Powered by Globe.GL 3D Visualization</span>
+            <span style={{ color: '#888', marginLeft: '8px' }}>|</span>
+            <span style={{ color: '#ffd700', marginLeft: '8px' }}>CLEARANCE: TOP SECRET // SCI</span>
+          </>
+        }
+        backgroundColor="#0a0a0a"
+        borderColor="#00ff00"
+      />
     </div>
   );
 }
