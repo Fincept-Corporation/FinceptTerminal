@@ -58,7 +58,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 -   Modèles de remise de dividendes
 -   Multiples et revenus résiduels
 
-**Produits dérivés et risque**
+**Produits dérivés et risques**
 
 -   Prix ​​des options et Grecs
 -   Stratégies de couverture
@@ -85,7 +85,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 **Générateur de flux de travail**
 
--   ReactFlow visual editor
+-   Éditeur visuel ReactFlow
 -   Intégration de plus de 100 outils MCP
 -   Orchestration des agents Python
 
@@ -172,8 +172,14 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-terminal-desktop
-npm install && npm run tauri dev
+bun install && bun run tauri:dev
 ```
+
+**Exigences:**
+
+-   [Bien](https://bun.sh)1.0+
+-   [Rouiller](https://www.rust-lang.org/)(dernière version stable)
+-   Dépendances spécifiques à la plateforme (voir[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md))
 
 * * *
 

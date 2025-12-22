@@ -10,7 +10,7 @@
 
 ### **당신의 생각이 유일한 한계입니다. 데이터는 그렇지 않습니다.**
 
-CFA 수준 분석, AI 자동화, 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
+CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
 
 [📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 문서](docs/)•[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 불화](https://discord.gg/ae87a8ygbN)
 
@@ -30,7 +30,7 @@ CFA 수준 분석, AI 자동화, 무제한 데이터 연결을 갖춘 최첨단 
 | 🤖**AI 에이전트** | 20명 이상의 투자자 페르소나(Buffett, Dalio, Graham) • 헤지펀드 전략(Bridgewater, Citadel, Renaissance) • 현지 LLM 지원 | [AI 에이전트](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/agents)                                                                                                                            |
 | 🌐**데이터 액세스** | 100개 이상의 커넥터(DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • 맞춤형 API 매퍼 • 데이터 제한 없음               | [데이터 어댑터](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                     |
 | 🔗**교차 도메인**  | 공급망 통합 → 포트폴리오 • 지정학 → 형평성 • 해양 → 거시적 • 귀하의 데이터를 귀하의 방식으로                                         | [워크플로우 시스템](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                             |
-| 🎨**워크플로**    | 시각적 노드 편집기 • Python 에이전트 • MCP 도구 • 코드 없는 자동화                                                     | [사용자 정의 노드](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP 서버](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
+| 🎨**워크플로우**   | 시각적 노드 편집기 • Python 에이전트 • MCP 도구 • 코드 없는 자동화                                                     | [사용자 정의 노드](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP 서버](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
 | 🚢**지능**      | 3D 해상 추적 • 위성 모니터링 • 지정학적 프레임워크 • 무역 경로 분석                                                        | [해양 탭](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                              |
 | 💰**가격**      | 100% 무료 및 오픈 소스(MIT 라이선스)                                                                         | [전체 저장소](https://github.com/Fincept-Corporation/FinceptTerminal)                                                                                                                                                                                                   |
 
@@ -67,7 +67,7 @@ CFA 수준 분석, AI 자동화, 무제한 데이터 연결을 갖춘 최첨단 
 </td>
 <td width="50%" valign="top">
 
-### **🤖 AI-Powered Automation**
+### **🤖 AI 기반 자동화**
 
 ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png)
 
@@ -172,8 +172,14 @@ CFA 수준 분석, AI 자동화, 무제한 데이터 연결을 갖춘 최첨단 
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-terminal-desktop
-npm install && npm run tauri dev
+bun install && bun run tauri:dev
 ```
+
+**요구사항:**
+
+-   [좋은](https://bun.sh)1.0+
+-   [녹](https://www.rust-lang.org/)(최신 안정)
+-   플랫폼별 종속성(참조[문서/GETTING_STARTED.md](docs/GETTING_STARTED.md))
 
 * * *
 
