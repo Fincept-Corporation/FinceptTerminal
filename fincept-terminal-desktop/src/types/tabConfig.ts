@@ -50,7 +50,8 @@ export const DEFAULT_TABS: TabDefinition[] = [
   { id: 'docs', label: 'Documentation', value: 'docs', component: 'DocsTab' },
   { id: 'support', label: 'Support', value: 'support', component: 'SupportTicketTab' },
   { id: 'agents', label: 'Agents', value: 'agents', component: 'AgentConfigTab' },
-  { id: 'alpha-arena', label: 'Alpha Arena', value: 'alpha-arena', component: 'AlphaArenaTab' }
+  { id: 'alpha-arena', label: 'Alpha Arena', value: 'alpha-arena', component: 'AlphaArenaTab' },
+  { id: 'ai-quant-lab', label: 'AI Quant Lab', value: 'ai-quant-lab', shortcut: 'Ctrl+Q', component: 'AIQuantLabTab' }
 ];
 
 export const DEFAULT_TAB_CONFIG: TabConfiguration = {
@@ -58,7 +59,7 @@ export const DEFAULT_TAB_CONFIG: TabConfiguration = {
   menuSections: [
     { id: 'markets-menu', label: 'Markets', tabs: ['polygon', 'economics', 'dbnomics'] },
     { id: 'research-menu', label: 'Research', tabs: ['geopolitics', 'maritime'] },
-    { id: 'trading-menu', label: 'Trading', tabs: ['fyers', 'alpha-arena'] },
+    { id: 'trading-menu', label: 'Trading', tabs: ['fyers', 'alpha-arena', 'ai-quant-lab'] },
     { id: 'tools-menu', label: 'Tools', tabs: ['mcp', 'nodes', 'code', 'datasources', 'datamapping', 'reportbuilder', 'contexts'] },
     { id: 'community-menu', label: 'Community', tabs: ['forum', 'marketplace', 'docs'] },
     { id: 'help-menu', label: 'Help', tabs: ['support'] }

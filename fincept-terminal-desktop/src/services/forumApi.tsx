@@ -55,6 +55,7 @@ export interface ForumStats {
   total_comments: number;
   total_votes: number;
   active_users: number;
+  total_users: number;
 }
 
 export interface PostDetails {

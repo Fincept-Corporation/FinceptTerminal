@@ -802,7 +802,7 @@ const AlphaArenaTab: React.FC = () => {
           { label: `Models: ${leaderboard.length}`, color: COLORS.GRAY },
           { label: `Status: ${isRunning ? 'RUNNING' : 'STOPPED'}`, color: isRunning ? COLORS.GREEN : COLORS.RED },
         ]}
-        statusInfo={`Cycle: ${currentCycle} | Decisions: ${recentDecisions.length} | ${status}`}
+        statusInfo={`Cycle: ${cycleCount} | Decisions: ${decisions.length} | ${error || 'Ready'}`}
         backgroundColor={COLORS.PANEL_BG}
         borderColor={COLORS.BORDER}
       />

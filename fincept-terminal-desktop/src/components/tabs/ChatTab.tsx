@@ -1194,9 +1194,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         tabName="AI CHAT"
         leftInfo={[
           { label: `Provider: ${currentProvider?.toUpperCase() || 'NONE'}`, color: colors.textMuted },
-          { label: `Session: ${currentSession?.id ? 'Active' : 'None'}`, color: colors.textMuted },
+          { label: `Session: ${currentSessionUuid ? 'Active' : 'None'}`, color: colors.textMuted },
         ]}
-        statusInfo={`Messages: ${messages.length} | ${isStreaming ? 'Streaming...' : 'Ready'}`}
+        statusInfo={`Messages: ${messages.length} | ${streamingContent ? 'Streaming...' : 'Ready'}`}
         backgroundColor={colors.panel}
         borderColor={colors.textMuted}
       />

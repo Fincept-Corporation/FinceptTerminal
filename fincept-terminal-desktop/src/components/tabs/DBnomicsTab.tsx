@@ -809,7 +809,7 @@ export default function DBnomicsTab() {
           { label: `Datasets: ${datasets.length}`, color: colors.textMuted },
           { label: `Series: ${seriesList.length}`, color: colors.textMuted },
         ]}
-        statusInfo={`${status} | Comparisons: ${selectedDataPoints.length} active`}
+        statusInfo={`${status} | Dataset: ${selectedDataset ? 'Selected' : 'None'}`}
         backgroundColor={colors.panel}
         borderColor={colors.textMuted}
       />

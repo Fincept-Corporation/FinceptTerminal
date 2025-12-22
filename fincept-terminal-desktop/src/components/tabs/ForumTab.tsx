@@ -1720,7 +1720,7 @@ const ForumTab: React.FC = () => {
       <TabFooter
         tabName="COMMUNITY FORUM"
         leftInfo={[
-          { label: `Category: ${selectedCategory || 'All'}`, color: colors.textMuted },
+          { label: `Category: ${activeCategory || 'All'}`, color: colors.textMuted },
           { label: `Posts: ${forumStats?.total_posts || 0}`, color: colors.textMuted },
         ]}
         statusInfo={`Users: ${forumStats?.total_users || 0} | ${isLoading ? 'Loading...' : 'Ready'}`}

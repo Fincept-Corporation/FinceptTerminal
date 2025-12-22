@@ -45,7 +45,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
   const loadAssetAllocation = async () => {
     setLoadingAllocation(true);
     try {
-      const allocation = await portfolioService.generateAssetAllocation(age, riskTolerance, yearsToRetirement);
+      const allocation = await portfolioService.generateAssetAllocation(portfolioSummary.portfolio.id, riskTolerance);
       setAssetAllocation(allocation);
     } catch (error) {
       console.error('Error loading asset allocation:', error);
@@ -57,7 +57,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
   const loadRetirementPlan = async () => {
     setLoadingRetirement(true);
     try {
-      const plan = await portfolioService.calculateRetirementPlan(currentAge, retirementAge, currentSavings, annualContribution);
+      const plan = await portfolioService.calculateRetirementPlan(portfolioSummary.portfolio.id, { currentAge, retirementAge, currentSavings, annualContribution });
       setRetirementPlan(plan);
     } catch (error) {
       console.error('Error loading retirement plan:', error);

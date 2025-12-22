@@ -1,11 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Download, RefreshCw, Trash2, BarChart3, PieChart } from 'lucide-react';
-import {
-  portfolioService,
-  Portfolio,
-  PortfolioSummary,
-  Transaction
-} from '../../../services/portfolioService';
 import PositionsView from './portfolio/PositionsView';
 import HistoryView from './portfolio/HistoryView';
 import AnalyticsView from './portfolio/AnalyticsView';
@@ -15,7 +9,11 @@ import RiskMetricsView from './portfolio/RiskMetricsView';
 import ReportsView from './portfolio/ReportsView';
 import AlertsView from './portfolio/AlertsView';
 import ActiveManagementView from './portfolio/ActiveManagementView';
-import { getBloombergColors, formatCurrency, formatPercent, formatNumber } from './portfolio/utils';
+import CreatePortfolioModal from './modals/CreatePortfolioModal';
+import AddAssetModal from './modals/AddAssetModal';
+import SellAssetModal from './modals/SellAssetModal';
+import { usePortfolioOperations } from './hooks/usePortfolioOperations';
+import { getBloombergColors, formatCurrency, formatPercent } from './portfolio/utils';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TimezoneSelector } from '../../common/TimezoneSelector';
 
@@ -23,12 +21,6 @@ const PortfolioTab: React.FC = () => {
   const { colors: themeColors } = useTerminalTheme();
   const BLOOMBERG_COLORS = getBloombergColors();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
-  const [selectedPortfolio, setSelectedPortfolio] = useState<Portfolio | null>(null);
-  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedView, setSelectedView] = useState('POSITIONS');
 
   // Modal states
@@ -49,24 +41,24 @@ const PortfolioTab: React.FC = () => {
   const [sellAssetQuantity, setSellAssetQuantity] = useState('');
   const [sellAssetPrice, setSellAssetPrice] = useState('');
 
-  // Bloomberg colors from utils
-  const { ORANGE, WHITE, RED, GREEN, GRAY, DARK_BG, PANEL_BG, CYAN, YELLOW } = BLOOMBERG_COLORS;
+  // Use custom hook for portfolio operations
+  const {
+    portfolios,
+    selectedPortfolio,
+    setSelectedPortfolio,
+    portfolioSummary,
+    transactions,
+    loading,
+    refreshing,
+    createPortfolio,
+    addAsset,
+    sellAsset,
+    deletePortfolio,
+    refreshPortfolioData,
+    exportToCSV
+  } = usePortfolioOperations();
 
-  // Initialize service and load portfolios
-  useEffect(() => {
-    const initService = async () => {
-      setLoading(true);
-      try {
-        await portfolioService.initialize();
-        await loadPortfolios();
-      } catch (error) {
-        console.error('[PortfolioTab] Initialization error:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initService();
-  }, []);
+  const { ORANGE, WHITE, RED, GREEN, GRAY, DARK_BG, PANEL_BG, CYAN, YELLOW } = BLOOMBERG_COLORS;
 
   // Update time
   useEffect(() => {
@@ -76,135 +68,41 @@ const PortfolioTab: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Auto-refresh portfolio data
-  useEffect(() => {
-    if (selectedPortfolio) {
-      const refreshTimer = setInterval(() => {
-        refreshPortfolioData();
-      }, 60000); // Refresh every minute
-      return () => clearInterval(refreshTimer);
-    }
-  }, [selectedPortfolio]);
-
-  // Load portfolios
-  const loadPortfolios = async () => {
-    try {
-      const result = await portfolioService.getPortfolios();
-      setPortfolios(result);
-
-      // Select first portfolio if none selected
-      if (result.length > 0 && !selectedPortfolio) {
-        setSelectedPortfolio(result[0]);
-      }
-    } catch (error) {
-      console.error('[PortfolioTab] Error loading portfolios:', error);
-    }
-  };
-
-  // Load portfolio summary
-  const loadPortfolioSummary = async (portfolioId: string) => {
-    try {
-      setRefreshing(true);
-      const summary = await portfolioService.getPortfolioSummary(portfolioId);
-      setPortfolioSummary(summary);
-
-      const txns = await portfolioService.getPortfolioTransactions(portfolioId, 20);
-      setTransactions(txns);
-    } catch (error) {
-      console.error('[PortfolioTab] Error loading portfolio summary:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // Refresh portfolio data
-  const refreshPortfolioData = () => {
-    if (selectedPortfolio) {
-      loadPortfolioSummary(selectedPortfolio.id);
-    }
-  };
-
-  // Handle portfolio selection
-  useEffect(() => {
-    if (selectedPortfolio) {
-      loadPortfolioSummary(selectedPortfolio.id);
-    }
-  }, [selectedPortfolio]);
-
-  // Create new portfolio
+  // Handle create portfolio
   const handleCreatePortfolio = async () => {
-    if (!newPortfolioName || !newPortfolioOwner) {
-      alert('Please fill in all required fields');
-      return;
-    }
-
     try {
-      const portfolio = await portfolioService.createPortfolio(
-        newPortfolioName,
-        newPortfolioOwner,
-        newPortfolioCurrency
-      );
-
-      await loadPortfolios();
-      setSelectedPortfolio(portfolio);
+      await createPortfolio(newPortfolioName, newPortfolioOwner, newPortfolioCurrency);
       setShowCreatePortfolio(false);
-
       // Reset form
       setNewPortfolioName('');
       setNewPortfolioOwner('');
       setNewPortfolioCurrency('USD');
     } catch (error) {
       console.error('[PortfolioTab] Error creating portfolio:', error);
-      alert('Failed to create portfolio');
+      alert(error instanceof Error ? error.message : 'Failed to create portfolio');
     }
   };
 
-  // Add asset to portfolio
+  // Handle add asset
   const handleAddAsset = async () => {
-    if (!selectedPortfolio || !addAssetSymbol || !addAssetQuantity || !addAssetPrice) {
-      alert('Please fill in all required fields');
-      return;
-    }
-
     try {
-      await portfolioService.addAsset(
-        selectedPortfolio.id,
-        addAssetSymbol.toUpperCase(),
-        parseFloat(addAssetQuantity),
-        parseFloat(addAssetPrice)
-      );
-
-      await refreshPortfolioData();
+      await addAsset(addAssetSymbol, addAssetQuantity, addAssetPrice);
       setShowAddAsset(false);
-
       // Reset form
       setAddAssetSymbol('');
       setAddAssetQuantity('');
       setAddAssetPrice('');
     } catch (error) {
       console.error('[PortfolioTab] Error adding asset:', error);
-      alert('Failed to add asset');
+      alert(error instanceof Error ? error.message : 'Failed to add asset');
     }
   };
 
-  // Sell asset
+  // Handle sell asset
   const handleSellAsset = async () => {
-    if (!selectedPortfolio || !sellAssetSymbol || !sellAssetQuantity || !sellAssetPrice) {
-      alert('Please fill in all required fields');
-      return;
-    }
-
     try {
-      await portfolioService.sellAsset(
-        selectedPortfolio.id,
-        sellAssetSymbol.toUpperCase(),
-        parseFloat(sellAssetQuantity),
-        parseFloat(sellAssetPrice)
-      );
-
-      await refreshPortfolioData();
+      await sellAsset(sellAssetSymbol, sellAssetQuantity, sellAssetPrice);
       setShowSellAsset(false);
-
       // Reset form
       setSellAssetSymbol('');
       setSellAssetQuantity('');
@@ -215,48 +113,20 @@ const PortfolioTab: React.FC = () => {
     }
   };
 
-  // Delete portfolio
+  // Handle delete portfolio
   const handleDeletePortfolio = async (portfolioId: string) => {
     if (!confirm('Are you sure you want to delete this portfolio? This action cannot be undone.')) {
       return;
     }
 
     try {
-      await portfolioService.deletePortfolio(portfolioId);
-      await loadPortfolios();
-
-      if (selectedPortfolio?.id === portfolioId) {
-        setSelectedPortfolio(portfolios.length > 1 ? portfolios[0] : null);
-        setPortfolioSummary(null);
-      }
+      await deletePortfolio(portfolioId);
     } catch (error) {
       console.error('[PortfolioTab] Error deleting portfolio:', error);
       alert('Failed to delete portfolio');
     }
   };
 
-  // Export to CSV
-  const handleExportCSV = async () => {
-    if (!selectedPortfolio) return;
-
-    try {
-      const csv = await portfolioService.exportPortfolioCSV(selectedPortfolio.id);
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${selectedPortfolio.name}_${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('[PortfolioTab] Error exporting CSV:', error);
-      alert('Failed to export CSV');
-    }
-  };
-
-  // Get current portfolio currency
   const currency = selectedPortfolio?.currency || 'USD';
 
   return (
@@ -336,7 +206,7 @@ const PortfolioTab: React.FC = () => {
               REFRESH
             </button>
             <button
-              onClick={handleExportCSV}
+              onClick={exportToCSV}
               disabled={!selectedPortfolio}
               style={{
                 background: selectedPortfolio ? CYAN : GRAY,
@@ -564,51 +434,18 @@ const PortfolioTab: React.FC = () => {
             </div>
           ) : (
             <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-              {/* Positions View */}
-              {selectedView === 'POSITIONS' && (
-                <PositionsView portfolioSummary={portfolioSummary} />
-              )}
-
-              {/* History View */}
-              {selectedView === 'HISTORY' && (
-                <HistoryView transactions={transactions} currency={currency} />
-              )}
-
-              {/* Analytics View */}
-              {selectedView === 'ANALYTICS' && (
-                <AnalyticsView portfolioSummary={portfolioSummary} />
-              )}
-
-              {/* Sectors View */}
-              {selectedView === 'SECTORS' && (
-                <SectorsView portfolioSummary={portfolioSummary} />
-              )}
-
-              {/* Performance View */}
-              {selectedView === 'PERFORMANCE' && (
-                <PerformanceView portfolioSummary={portfolioSummary} />
-              )}
-
-              {/* Risk Metrics View (for REBALANCE button - shows risk metrics) */}
-              {selectedView === 'REBALANCE' && (
-                <RiskMetricsView portfolioSummary={portfolioSummary} />
-              )}
-
-              {/* Reports View */}
-              {selectedView === 'REPORTS' && (
-                <ReportsView portfolioSummary={portfolioSummary} transactions={transactions} />
-              )}
-
-              {/* Alerts View */}
-              {selectedView === 'ALERTS' && (
-                <AlertsView portfolioSummary={portfolioSummary} />
-              )}
-
+              {selectedView === 'POSITIONS' && <PositionsView portfolioSummary={portfolioSummary} />}
+              {selectedView === 'HISTORY' && <HistoryView transactions={transactions} currency={currency} />}
+              {selectedView === 'ANALYTICS' && <AnalyticsView portfolioSummary={portfolioSummary} />}
+              {selectedView === 'SECTORS' && <SectorsView portfolioSummary={portfolioSummary} />}
+              {selectedView === 'PERFORMANCE' && <PerformanceView portfolioSummary={portfolioSummary} />}
+              {selectedView === 'REBALANCE' && <RiskMetricsView portfolioSummary={portfolioSummary} />}
+              {selectedView === 'REPORTS' && <ReportsView portfolioSummary={portfolioSummary} transactions={transactions} />}
+              {selectedView === 'ALERTS' && <AlertsView portfolioSummary={portfolioSummary} />}
               {selectedView === 'ACTIVE_MGMT' && (
                 <ActiveManagementView
                   portfolioId={selectedPortfolio.id}
                   portfolioData={{
-                    // Calculate daily returns from holdings' price changes
                     returns: portfolioSummary.holdings.length > 0
                       ? portfolioSummary.holdings.map(h => (h.day_change_percent || 0) / 100)
                       : [],
@@ -616,8 +453,6 @@ const PortfolioTab: React.FC = () => {
                   }}
                 />
               )}
-
-              {/* Other views placeholder */}
               {!['POSITIONS', 'HISTORY', 'ANALYTICS', 'SECTORS', 'PERFORMANCE', 'REBALANCE', 'REPORTS', 'ALERTS', 'ACTIVE_MGMT'].includes(selectedView) && (
                 <div style={{
                   display: 'flex',
@@ -658,368 +493,48 @@ const PortfolioTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Create Portfolio Modal */}
-      {showCreatePortfolio && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: DARK_BG,
-            border: `2px solid ${ORANGE}`,
-            padding: '24px',
-            minWidth: '400px'
-          }}>
-            <div style={{ color: ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '16px' }}>
-              CREATE NEW PORTFOLIO
-            </div>
+      {/* Modals */}
+      <CreatePortfolioModal
+        show={showCreatePortfolio}
+        formState={{
+          name: newPortfolioName,
+          owner: newPortfolioOwner,
+          currency: newPortfolioCurrency
+        }}
+        onNameChange={setNewPortfolioName}
+        onOwnerChange={setNewPortfolioOwner}
+        onCurrencyChange={setNewPortfolioCurrency}
+        onClose={() => setShowCreatePortfolio(false)}
+        onCreate={handleCreatePortfolio}
+      />
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-                PORTFOLIO NAME *
-              </label>
-              <input
-                type="text"
-                value={newPortfolioName}
-                onChange={(e) => setNewPortfolioName(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: PANEL_BG,
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-                placeholder="My Portfolio"
-              />
-            </div>
+      <AddAssetModal
+        show={showAddAsset}
+        formState={{
+          symbol: addAssetSymbol,
+          quantity: addAssetQuantity,
+          price: addAssetPrice
+        }}
+        onSymbolChange={setAddAssetSymbol}
+        onQuantityChange={setAddAssetQuantity}
+        onPriceChange={setAddAssetPrice}
+        onClose={() => setShowAddAsset(false)}
+        onAdd={handleAddAsset}
+      />
 
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-                OWNER *
-              </label>
-              <input
-                type="text"
-                value={newPortfolioOwner}
-                onChange={(e) => setNewPortfolioOwner(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: PANEL_BG,
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-                placeholder="John Doe"
-              />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-                CURRENCY
-              </label>
-              <select
-                value={newPortfolioCurrency}
-                onChange={(e) => setNewPortfolioCurrency(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: PANEL_BG,
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-              >
-                <option value="USD">USD - US Dollar</option>
-                <option value="EUR">EUR - Euro</option>
-                <option value="GBP">GBP - British Pound</option>
-                <option value="INR">INR - Indian Rupee</option>
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowCreatePortfolio(false)}
-                style={{
-                  background: GRAY,
-                  color: 'black',
-                  border: 'none',
-                  padding: '8px 16px',
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                CANCEL
-              </button>
-              <button
-                onClick={handleCreatePortfolio}
-                style={{
-                  background: ORANGE,
-                  color: 'black',
-                  border: 'none',
-                  padding: '8px 16px',
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                CREATE
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Asset Modal */}
-      {showAddAsset && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: DARK_BG,
-            border: `2px solid ${GREEN}`,
-            padding: '24px',
-            minWidth: '400px'
-          }}>
-            <div style={{ color: GREEN, fontSize: '14px', fontWeight: 'bold', marginBottom: '16px' }}>
-              ADD ASSET TO PORTFOLIO
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-                SYMBOL *
-              </label>
-              <input
-                type="text"
-                value={addAssetSymbol}
-                onChange={(e) => setAddAssetSymbol(e.target.value.toUpperCase())}
-                style={{
-                  width: '100%',
-                  background: PANEL_BG,
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
-                  padding: '8px',
-                  fontSize: '11px',
-                  textTransform: 'uppercase'
-                }}
-                placeholder="AAPL"
-              />
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-                QUANTITY *
-              </label>
-              <input
-                type="number"
-                value={addAssetQuantity}
-                onChange={(e) => setAddAssetQuantity(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: PANEL_BG,
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-                placeholder="100"
-                step="0.0001"
-              />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-                BUY PRICE *
-              </label>
-              <input
-                type="number"
-                value={addAssetPrice}
-                onChange={(e) => setAddAssetPrice(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: PANEL_BG,
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-                placeholder="150.00"
-                step="0.01"
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowAddAsset(false)}
-                style={{
-                  background: GRAY,
-                  color: 'black',
-                  border: 'none',
-                  padding: '8px 16px',
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                CANCEL
-              </button>
-              <button
-                onClick={handleAddAsset}
-                style={{
-                  background: GREEN,
-                  color: 'black',
-                  border: 'none',
-                  padding: '8px 16px',
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                ADD
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Sell Asset Modal */}
-      {showSellAsset && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: DARK_BG,
-            border: `2px solid ${RED}`,
-            padding: '24px',
-            minWidth: '400px'
-          }}>
-            <div style={{ color: RED, fontSize: '14px', fontWeight: 'bold', marginBottom: '16px' }}>
-              SELL ASSET FROM PORTFOLIO
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-                SYMBOL *
-              </label>
-              <input
-                type="text"
-                value={sellAssetSymbol}
-                onChange={(e) => setSellAssetSymbol(e.target.value.toUpperCase())}
-                style={{
-                  width: '100%',
-                  background: PANEL_BG,
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
-                  padding: '8px',
-                  fontSize: '11px',
-                  textTransform: 'uppercase'
-                }}
-                placeholder="AAPL"
-              />
-            </div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-                QUANTITY *
-              </label>
-              <input
-                type="number"
-                value={sellAssetQuantity}
-                onChange={(e) => setSellAssetQuantity(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: PANEL_BG,
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-                placeholder="50"
-                step="0.0001"
-              />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-                SELL PRICE *
-              </label>
-              <input
-                type="number"
-                value={sellAssetPrice}
-                onChange={(e) => setSellAssetPrice(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: PANEL_BG,
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
-                  padding: '8px',
-                  fontSize: '11px'
-                }}
-                placeholder="180.00"
-                step="0.01"
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowSellAsset(false)}
-                style={{
-                  background: GRAY,
-                  color: 'black',
-                  border: 'none',
-                  padding: '8px 16px',
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                CANCEL
-              </button>
-              <button
-                onClick={handleSellAsset}
-                style={{
-                  background: RED,
-                  color: 'white',
-                  border: 'none',
-                  padding: '8px 16px',
-                  fontSize: '10px',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                SELL
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SellAssetModal
+        show={showSellAsset}
+        formState={{
+          symbol: sellAssetSymbol,
+          quantity: sellAssetQuantity,
+          price: sellAssetPrice
+        }}
+        onSymbolChange={setSellAssetSymbol}
+        onQuantityChange={setSellAssetQuantity}
+        onPriceChange={setSellAssetPrice}
+        onClose={() => setShowSellAsset(false)}
+        onSell={handleSellAsset}
+      />
     </div>
   );
 };

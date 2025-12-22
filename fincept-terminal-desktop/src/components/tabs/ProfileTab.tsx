@@ -970,7 +970,7 @@ const ProfileTab: React.FC = () => {
         tabName="PROFILE"
         leftInfo={[
           { label: `Type: ${session.user_type?.toUpperCase()}`, color: colors.textMuted },
-          { label: `Screen: ${activeScreen?.toUpperCase()}`, color: colors.textMuted },
+          { label: `Screen: ${currentScreen?.toUpperCase()}`, color: colors.textMuted },
         ]}
         statusInfo={session.user_info?.email || 'Guest Session'}
         backgroundColor={colors.panel}

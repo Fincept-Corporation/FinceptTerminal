@@ -541,7 +541,7 @@ const WatchlistTab: React.FC = () => {
           { label: `Lists: ${watchlists.length}`, color: '#6b7280' },
           { label: selectedWatchlist ? `"${selectedWatchlist.name}"` : 'No list selected', color: '#06b6d4' },
         ]}
-        statusInfo={`Stocks: ${stocks.length} | ${isLoading ? 'Loading...' : 'Ready'}`}
+        statusInfo={`Stocks: ${stocks.length} | ${loading ? 'Loading...' : 'Ready'}`}
       />
     </div>
   );

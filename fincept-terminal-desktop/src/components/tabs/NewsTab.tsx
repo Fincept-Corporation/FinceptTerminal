@@ -1159,7 +1159,7 @@ const NewsTab: React.FC = () => {
           { label: `Feeds: ${getRSSFeedCount()}`, color: colors.textMuted },
           { label: isUsingMockData() ? 'Mode: DEMO' : 'Mode: LIVE', color: isUsingMockData() ? colors.warning : colors.secondary },
         ]}
-        statusInfo={`Articles: ${articles.length} | ${isLoading ? 'Refreshing...' : 'Ready'}`}
+        statusInfo={`Articles: ${newsArticles.length} | ${loading ? 'Refreshing...' : 'Ready'}`}
         backgroundColor={colors.panel}
         borderColor={colors.textMuted}
       />
