@@ -1,0 +1,43 @@
+{
+    "title": "VERİ KAYNAKLARI",
+    "header": {
+        "available": "MEVCUT KAYNAKLAR",
+        "connected": "BAĞLI",
+        "addNew": "KAYNAK EKLE",
+        "refresh": "YENİLE"
+    },
+    "categories": {
+        "market": "Piyasa Verileri",
+        "economic": "Ekonomik Veriler",
+        "alternative": "Alternatif Veriler",
+        "news": "Haberler",
+        "fundamental": "Temel Veriler"
+    },
+    "status": {
+        "connected": "Bağlı",
+        "disconnected": "Bağlı Değil",
+        "error": "Hata",
+        "pending": "Beklemede"
+    },
+    "actions": {
+        "connect": "Bağlan",
+        "disconnect": "Kes",
+        "configure": "Yapılandır",
+        "test": "Test Et",
+        "delete": "Sil"
+    },
+    "form": {
+        "apiKey": "API Anahtarı",
+        "endpoint": "URL",
+        "username": "Kullanıcı",
+        "password": "Şifre",
+        "save": "Kaydet",
+        "cancel": "İptal"
+    },
+    "messages": {
+        "connectionSuccess": "Başarıyla bağlandı",
+        "connectionFailed": "Bağlantı hatası",
+        "noSources": "Kaynak yok",
+        "loading": "Yükleniyor..."
+    }
+}

@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "navigation": {
+    "dashboard": "Панель",
+    "markets": "Рынки",
+    "news": "Новости",
+    "portfolio": "Портфель",
+    "backtesting": "Бэктестинг",
+    "watchlist": "Список наблюдения",
+    "research": "Исследования",
+    "screener": "Скринер",
+    "trading": "Торговля",
+    "chat": "ИИ Чат",
+    "agents": "Агенты",
+    "settings": "Настройки",
+    "profile": "Профиль",
+    "forum": "Форум",
+    "help": "Помощь",
+    "logout": "Выход"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "functionKeys": {
+    "f1": "ПАНЕЛЬ",
+    "f2": "РЫНКИ",
+    "f3": "НОВОСТИ",
+    "f4": "ПОРТ",
+    "f5": "БКТЕСТ",
+    "f6": "НАБЛ",
+    "f7": "ИССЛЕД",
+    "f8": "СКРИН",
+    "f9": "ТОРГ",
+    "f10": "ИИ",
+    "f11": "ПОЛНЫЙ",
+    "f12": "ПРОФ"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "status": {
+    "connected": "Подключено",
+    "disconnected": "Отключено",
+    "loading": "Загрузка...",
+    "error": "Ошибка",
+    "ready": "Готово"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
-  },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Больше вкладок в меню панели",
+    "enterCommand": "Введите команду",
+    "search": "Поиск"
   }
 }

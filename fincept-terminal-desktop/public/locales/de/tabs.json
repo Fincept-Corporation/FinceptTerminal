@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "Märkte",
-    "subtitle": "Echtzeit-Marktdaten und Analysen"
+  "navigation": {
+    "dashboard": "Dashboard",
+    "markets": "Märkte",
+    "news": "Nachrichten",
+    "portfolio": "Portfolio",
+    "backtesting": "Backtesting",
+    "watchlist": "Watchlist",
+    "research": "Forschung",
+    "screener": "Screener",
+    "trading": "Handel",
+    "chat": "KI-Chat",
+    "agents": "Agenten",
+    "settings": "Einstellungen",
+    "profile": "Profil",
+    "forum": "Forum",
+    "help": "Hilfe",
+    "logout": "Abmelden"
   },
-  "news": {
-    "title": "Finanznachrichten",
-    "subtitle": "Neueste Marktnachrichten und Updates"
+  "functionKeys": {
+    "f1": "DASH",
+    "f2": "MÄRKTE",
+    "f3": "NEWS",
+    "f4": "PORT",
+    "f5": "BKTEST",
+    "f6": "WATCH",
+    "f7": "FORSCH",
+    "f8": "SCRN",
+    "f9": "HANDEL",
+    "f10": "KI",
+    "f11": "VOLL",
+    "f12": "PROFIL"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Verfolgen und analysieren Sie Ihre Investitionen"
+  "status": {
+    "connected": "Verbunden",
+    "disconnected": "Getrennt",
+    "loading": "Laden...",
+    "error": "Fehler",
+    "ready": "Bereit"
   },
-  "analytics": {
-    "title": "Analytik",
-    "subtitle": "Fortgeschrittene Finanzanalyse-Tools"
-  },
-  "chat": {
-    "title": "KI-Assistent",
-    "subtitle": "Chatten Sie mit Ihrem KI-Finanzassistenten",
-    "placeholder": "Fragen Sie mich zu Märkten, Trading oder Finanzen...",
-    "send": "Senden"
+  "labels": {
+    "moreTabs": "Weitere Tabs in Toolbar-Menüs",
+    "enterCommand": "Befehl eingeben",
+    "search": "Suchen"
   }
 }

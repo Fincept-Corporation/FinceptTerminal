@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "navigation": {
+    "dashboard": "Panel",
+    "markets": "Piyasalar",
+    "news": "Haberler",
+    "portfolio": "Portföy",
+    "backtesting": "Backtesting",
+    "watchlist": "İzleme Listesi",
+    "research": "Araştırma",
+    "screener": "Tarayıcı",
+    "trading": "Ticaret",
+    "chat": "AI Sohbet",
+    "agents": "Ajanlar",
+    "settings": "Ayarlar",
+    "profile": "Profil",
+    "forum": "Forum",
+    "help": "Yardım",
+    "logout": "Çıkış"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "functionKeys": {
+    "f1": "PANEL",
+    "f2": "PİYASA",
+    "f3": "HABER",
+    "f4": "PORT",
+    "f5": "BKTEST",
+    "f6": "İZLE",
+    "f7": "ARAŞT",
+    "f8": "TARA",
+    "f9": "TİC",
+    "f10": "AI",
+    "f11": "TAM",
+    "f12": "PROFİL"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "status": {
+    "connected": "Bağlı",
+    "disconnected": "Bağlantı Kesildi",
+    "loading": "Yükleniyor...",
+    "error": "Hata",
+    "ready": "Hazır"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
-  },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Araç çubuğu menülerinde daha fazla sekme",
+    "enterCommand": "Komut Girin",
+    "search": "Ara"
   }
 }

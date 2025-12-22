@@ -1,30 +1,52 @@
 {
-  "welcome": "Welcome to Fincept Terminal",
-  "tabs": {
-    "dashboard": "Dashboard",
-    "markets": "Markets",
-    "news": "News",
-    "watchlist": "Watchlist",
-    "portfolio": "Portfolio",
-    "analytics": "Analytics",
-    "economics": "Economics",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Economic Calendar",
-    "geopolitics": "Geopolitics",
-    "maritime": "Maritime",
-    "options": "Options",
-    "equityResearch": "Equity Research",
-    "screener": "Screener",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Docs",
-    "nodeEditor": "Node Editor",
-    "codeEditor": "Code Editor",
-    "forum": "Forum",
-    "marketplace": "Marketplace",
-    "profile": "Profile",
-    "support": "Support",
-    "settings": "Settings"
+  "header": {
+    "title": "कस्टमाइज़ेबल डैशबोर्ड",
+    "live": "लाइव",
+    "widgets": "विजेट्स"
+  },
+  "buttons": {
+    "addWidget": "विजेट जोड़ें",
+    "saveLayout": "लेआउट सेव करें",
+    "reset": "रीसेट"
+  },
+  "widgets": {
+    "loading": "लोड हो रहा है...",
+    "error": "त्रुटि",
+    "configure": "कॉन्फ़िगर करें",
+    "refresh": "रिफ्रेश",
+    "remove": "हटाएं",
+    "globalIndices": "ग्लोबल इंडेक्स - टॉप 12",
+    "forex": "फॉरेक्स पेयर्स",
+    "crypto": "क्रिप्टोकरेंसी",
+    "commodities": "कमोडिटीज",
+    "bonds": "बॉन्ड्स",
+    "etfs": "ETFs",
+    "news": "समाचार",
+    "forum": "फोरम",
+    "watchlist": "वॉचलिस्ट",
+    "maritime": "मैरीटाइम",
+    "index": "इंडेक्स",
+    "symbol": "सिंबल",
+    "name": "नाम",
+    "price": "मूल्य",
+    "change": "बदलाव",
+    "percentChange": "%बदलाव",
+    "high": "उच्च",
+    "low": "निम्न",
+    "noIndexData": "कोई इंडेक्स डेटा उपलब्ध नहीं",
+    "noData": "कोई डेटा उपलब्ध नहीं"
+  },
+  "tips": {
+    "drag": "पुनर्व्यवस्थित करने के लिए विजेट खींचें",
+    "resize": "नीचे-दाएं कोने से आकार बदलें",
+    "remove": "X बटन से विजेट हटाएं"
+  },
+  "loading": {
+    "title": "डैशबोर्ड शुरू हो रहा है",
+    "description": "तेज़ डेटा लोडिंग के लिए डेटाबेस कैश सेटअप हो रहा है..."
+  },
+  "empty": {
+    "noWidgets": "डैशबोर्ड पर कोई विजेट नहीं",
+    "addFirst": "अपना पहला विजेट जोड़ें"
   }
 }

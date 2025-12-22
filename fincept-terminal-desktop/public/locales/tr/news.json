@@ -1,0 +1,30 @@
+{
+    "title": "FINCEPT TERMİNAL PROFESYONEL HABERLER",
+    "header": {
+        "liveFeed": "CANLI YAYIN",
+        "live": "CANLI",
+        "refresh": "YENİLE",
+        "updating": "GÜNCELLENİYOR...",
+        "alerts": "UYARILAR",
+        "sources": "KAYNAKLAR",
+        "status": "DURUM",
+        "demoMode": "DEMO MODU",
+        "articles": "MAKALELER",
+        "activeSources": "AKTİF KAYNAKLAR"
+    },
+    "sentiment": {
+        "bullish": "YÜKSELİŞ",
+        "bearish": "DÜŞÜŞ",
+        "neutral": "NÖTR"
+    },
+    "autoRefresh": {
+        "title": "OTOMATİK YENİLEME ARALIĞI",
+        "minute": "dakika",
+        "minutes": "dakika"
+    },
+    "messages": {
+        "loading": "Haberler yükleniyor...",
+        "loadingFeeds": "Akışlar yükleniyor...",
+        "breaking": "SON DAKİKA"
+    }
+}

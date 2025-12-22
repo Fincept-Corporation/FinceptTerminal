@@ -1,0 +1,28 @@
+{
+    "title": "GESTORE PORTAFOGLIO FINCEPT",
+    "header": {
+        "live": "IN DIRETTA",
+        "updating": "AGGIORNAMENTO",
+        "newPortfolio": "NUOVO PORTAFOGLIO",
+        "refresh": "AGGIORNA",
+        "exportCsv": "ESPORTA CSV"
+    },
+    "summary": {
+        "totalValue": "VALORE TOTALE",
+        "dayPnl": "P/P GIORNO",
+        "totalPnl": "P/P TOTALE",
+        "positions": "POSIZIONI"
+    },
+    "sidebar": {
+        "portfolios": "PORTAFOGLI",
+        "loading": "Caricamento portafogli...",
+        "noPortfolios": "Nessun portafoglio ancora."
+    },
+    "modals": {
+        "createNew": "CREA NUOVO PORTAFOGLIO",
+        "cancel": "ANNULLA",
+        "create": "CREA",
+        "add": "AGGIUNGI",
+        "sell": "VENDI"
+    }
+}

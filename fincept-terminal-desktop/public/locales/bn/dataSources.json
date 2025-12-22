@@ -1,0 +1,43 @@
+{
+    "title": "ডেটা সোর্স",
+    "header": {
+        "available": "উপলব্ধ সোর্স",
+        "connected": "সংযুক্ত",
+        "addNew": "সোর্স যোগ",
+        "refresh": "রিফ্রেশ"
+    },
+    "categories": {
+        "market": "মার্কেট ডেটা",
+        "economic": "অর্থনৈতিক ডেটা",
+        "alternative": "বিকল্প ডেটা",
+        "news": "সংবাদ",
+        "fundamental": "মৌলিক ডেটা"
+    },
+    "status": {
+        "connected": "সংযুক্ত",
+        "disconnected": "বিচ্ছিন্ন",
+        "error": "ত্রুটি",
+        "pending": "অপেক্ষমাণ"
+    },
+    "actions": {
+        "connect": "সংযুক্ত করুন",
+        "disconnect": "বিচ্ছিন্ন",
+        "configure": "কনফিগার",
+        "test": "পরীক্ষা",
+        "delete": "মুছুন"
+    },
+    "form": {
+        "apiKey": "API কী",
+        "endpoint": "URL",
+        "username": "ব্যবহারকারী",
+        "password": "পাসওয়ার্ড",
+        "save": "সংরক্ষণ",
+        "cancel": "বাতিল"
+    },
+    "messages": {
+        "connectionSuccess": "সফলভাবে সংযুক্ত",
+        "connectionFailed": "সংযোগ ব্যর্থ",
+        "noSources": "কোনো সোর্স নেই",
+        "loading": "লোড হচ্ছে..."
+    }
+}

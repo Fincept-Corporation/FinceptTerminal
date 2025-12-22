@@ -1,0 +1,72 @@
+{
+    "title": "FINCEPT TERMINAL PROFESSIONAL NEWS",
+    "header": {
+        "liveFeed": "LIVE FEED",
+        "live": "LIVE",
+        "refresh": "REFRESH",
+        "updating": "UPDATING...",
+        "alerts": "ALERTS",
+        "sources": "SOURCES",
+        "topics": "TOPICS",
+        "status": "STATUS",
+        "demoMode": "DEMO MODE",
+        "articles": "ARTICLES",
+        "activeSources": "ACTIVE SOURCES"
+    },
+    "categories": {
+        "all": "ALL",
+        "markets": "MARKETS",
+        "stocks": "Stocks",
+        "forex": "Forex",
+        "crypto": "CRYPTO",
+        "commodities": "Commodities",
+        "economy": "Economy",
+        "economic": "ECON",
+        "politics": "Politics",
+        "earnings": "EARNINGS",
+        "tech": "TECH",
+        "energy": "ENERGY",
+        "banking": "BANKING",
+        "geopolitics": "GEOPO",
+        "flash": "FLASH",
+        "urgent": "URGENT"
+    },
+    "filters": {
+        "source": "Source",
+        "region": "Region",
+        "timeframe": "Time"
+    },
+    "timeframes": {
+        "1h": "1 Hour",
+        "24h": "24 Hours",
+        "1w": "1 Week",
+        "1m": "1 Month"
+    },
+    "article": {
+        "readMore": "Read More",
+        "source": "Source",
+        "published": "Published",
+        "relatedStocks": "Related Stocks",
+        "sentiment": "Sentiment",
+        "impact": "Impact"
+    },
+    "sentiment": {
+        "bullish": "BULLISH",
+        "bearish": "BEARISH",
+        "neutral": "NEUTRAL",
+        "positive": "Positive",
+        "negative": "Negative"
+    },
+    "autoRefresh": {
+        "title": "AUTO-REFRESH INTERVAL",
+        "minute": "minute",
+        "minutes": "minutes"
+    },
+    "messages": {
+        "loading": "Loading news...",
+        "loadingFeeds": "Loading news feeds...",
+        "error": "Error loading news",
+        "noNews": "No news available",
+        "breaking": "BREAKING"
+    }
+}

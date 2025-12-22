@@ -1,0 +1,56 @@
+{
+    "title": "स्टॉक स्क्रीनर",
+    "header": {
+        "filters": "फ़िल्टर",
+        "results": "परिणाम",
+        "saved": "सहेजी गई स्क्रीन",
+        "presets": "प्रीसेट"
+    },
+    "filters": {
+        "add": "फ़िल्टर जोड़ें",
+        "clear": "सभी साफ़ करें",
+        "reset": "रीसेट",
+        "apply": "फ़िल्टर लागू करें"
+    },
+    "criteria": {
+        "marketCap": "मार्केट कैप",
+        "price": "मूल्य",
+        "volume": "वॉल्यूम",
+        "pe": "P/E अनुपात",
+        "eps": "EPS",
+        "dividend": "लाभांश प्रतिफल",
+        "beta": "बीटा",
+        "sector": "क्षेत्र",
+        "industry": "उद्योग",
+        "country": "देश",
+        "exchange": "एक्सचेंज"
+    },
+    "operators": {
+        "equals": "बराबर",
+        "greater": "से अधिक",
+        "less": "से कम",
+        "between": "के बीच",
+        "contains": "शामिल है"
+    },
+    "results": {
+        "symbol": "सिंबल",
+        "name": "नाम",
+        "price": "मूल्य",
+        "change": "परिवर्तन",
+        "volume": "वॉल्यूम",
+        "marketCap": "मार्केट कैप",
+        "matches": "मैच मिले"
+    },
+    "actions": {
+        "save": "स्क्रीन सहेजें",
+        "load": "स्क्रीन लोड करें",
+        "export": "निर्यात करें",
+        "addToWatchlist": "वॉचलिस्ट में जोड़ें"
+    },
+    "messages": {
+        "loading": "स्टॉक स्क्रीन हो रहे हैं...",
+        "noResults": "कोई स्टॉक मेल नहीं खाता",
+        "saved": "स्क्रीन सहेजी गई",
+        "applied": "फ़िल्टर लागू"
+    }
+}

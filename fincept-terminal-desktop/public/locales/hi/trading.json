@@ -1,0 +1,43 @@
+{
+    "title": "ट्रेडिंग",
+    "header": {
+        "orders": "ऑर्डर",
+        "positions": "पोजीशन",
+        "history": "इतिहास",
+        "settings": "सेटिंग्स",
+        "terminal": "फिनसेप्ट टर्मिनल",
+        "selectBroker": "ब्रोकर चुनें",
+        "paper": "पेपर",
+        "live": "लाइव"
+    },
+    "orderTypes": {
+        "market": "मार्केट",
+        "limit": "लिमिट",
+        "stop": "स्टॉप"
+    },
+    "actions": {
+        "buy": "खरीदें",
+        "sell": "बेचें",
+        "cancel": "रद्द करें",
+        "close": "बंद करें",
+        "closeAll": "सभी बंद करें"
+    },
+    "form": {
+        "symbol": "सिम्बल",
+        "quantity": "मात्रा",
+        "price": "मूल्य",
+        "stopPrice": "स्टॉप मूल्य"
+    },
+    "position": {
+        "openPrice": "ओपनिंग प्राइस",
+        "currentPrice": "करंट प्राइस",
+        "pnl": "P&L",
+        "margin": "मार्जिन",
+        "size": "साइज"
+    },
+    "messages": {
+        "orderPlaced": "ऑर्डर सफलतापूर्वक रखा गया",
+        "orderFailed": "ऑर्डर विफल",
+        "noPositions": "कोई खुली पोजीशन नहीं"
+    }
+}

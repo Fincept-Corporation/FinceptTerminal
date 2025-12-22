@@ -1,0 +1,28 @@
+{
+    "title": "FINCEPT পোর্টফোলিও ম্যানেজার",
+    "header": {
+        "live": "লাইভ",
+        "updating": "আপডেট হচ্ছে",
+        "newPortfolio": "নতুন পোর্টফোলিও",
+        "refresh": "রিফ্রেশ",
+        "exportCsv": "CSV এক্সপোর্ট"
+    },
+    "summary": {
+        "totalValue": "মোট মূল্য",
+        "dayPnl": "দৈনিক P&L",
+        "totalPnl": "মোট P&L",
+        "positions": "পজিশন"
+    },
+    "sidebar": {
+        "portfolios": "পোর্টফোলিও",
+        "loading": "লোড হচ্ছে...",
+        "noPortfolios": "এখনো কোনো পোর্টফোলিও নেই।"
+    },
+    "modals": {
+        "createNew": "নতুন পোর্টফোলিও তৈরি করুন",
+        "cancel": "বাতিল",
+        "create": "তৈরি করুন",
+        "add": "যোগ করুন",
+        "sell": "বিক্রি করুন"
+    }
+}

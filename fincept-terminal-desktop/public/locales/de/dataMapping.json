@@ -1,0 +1,52 @@
+{
+    "title": "DATEN-MAPPING",
+    "header": {
+        "mappings": "MAPPINGS",
+        "templates": "VORLAGEN",
+        "create": "NEU ERSTELLEN",
+        "refresh": "AKTUALISIEREN"
+    },
+    "views": {
+        "list": "Mapping-Liste",
+        "create": "Mapping erstellen",
+        "templates": "Vorlagen"
+    },
+    "list": {
+        "name": "Name",
+        "source": "Quelle",
+        "destination": "Ziel",
+        "status": "Status",
+        "lastRun": "Letzter Lauf",
+        "actions": "Aktionen"
+    },
+    "status": {
+        "active": "Aktiv",
+        "inactive": "Inaktiv",
+        "error": "Fehler",
+        "running": "Läuft"
+    },
+    "actions": {
+        "edit": "Bearbeiten",
+        "delete": "Löschen",
+        "run": "Ausführen",
+        "duplicate": "Duplizieren",
+        "export": "Exportieren"
+    },
+    "create": {
+        "title": "Daten-Mapping erstellen",
+        "name": "Mapping-Name",
+        "description": "Beschreibung",
+        "sourceApi": "Quell-API",
+        "destApi": "Ziel-API",
+        "fieldMapping": "Feld-Mapping",
+        "save": "Speichern",
+        "cancel": "Abbrechen"
+    },
+    "messages": {
+        "saved": "Gespeichert",
+        "deleted": "Gelöscht",
+        "runSuccess": "Erfolgreich ausgeführt",
+        "error": "Fehler aufgetreten",
+        "noMappings": "Keine Mappings"
+    }
+}

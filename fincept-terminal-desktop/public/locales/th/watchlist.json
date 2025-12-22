@@ -1,0 +1,21 @@
+{
+    "title": "รายการเฝ้าดู",
+    "header": {
+        "myWatchlists": "รายการของฉัน",
+        "create": "สร้าง",
+        "import": "นำเข้า",
+        "export": "ส่งออก"
+    },
+    "actions": {
+        "add": "เพิ่มสัญลักษณ์",
+        "remove": "ลบ",
+        "edit": "แก้ไข",
+        "delete": "ลบ"
+    },
+    "messages": {
+        "created": "สร้างรายการแล้ว",
+        "deleted": "ลบรายการแล้ว",
+        "noWatchlists": "ไม่มีรายการ",
+        "loading": "กำลังโหลด..."
+    }
+}

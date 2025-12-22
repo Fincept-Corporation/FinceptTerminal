@@ -1,0 +1,62 @@
+{
+    "title": "EQUITY RESEARCH",
+    "header": {
+        "overview": "OVERVIEW",
+        "financials": "FINANCIALS",
+        "analysis": "ANALYSIS",
+        "ratings": "RATINGS"
+    },
+    "summary": {
+        "marketCap": "Market Cap",
+        "pe": "P/E Ratio",
+        "eps": "EPS",
+        "dividend": "Dividend Yield",
+        "beta": "Beta",
+        "52weekHigh": "52W High",
+        "52weekLow": "52W Low",
+        "avgVolume": "Avg Volume"
+    },
+    "financials": {
+        "revenue": "Revenue",
+        "netIncome": "Net Income",
+        "grossMargin": "Gross Margin",
+        "operatingMargin": "Operating Margin",
+        "roe": "ROE",
+        "roa": "ROA",
+        "debtEquity": "Debt/Equity",
+        "currentRatio": "Current Ratio"
+    },
+    "analysis": {
+        "buy": "Buy",
+        "hold": "Hold",
+        "sell": "Sell",
+        "strongBuy": "Strong Buy",
+        "strongSell": "Strong Sell",
+        "targetPrice": "Target Price",
+        "upside": "Upside",
+        "downside": "Downside"
+    },
+    "periods": {
+        "annual": "Annual",
+        "quarterly": "Quarterly",
+        "ttm": "TTM",
+        "ytd": "YTD"
+    },
+    "sections": {
+        "incomeStatement": "Income Statement",
+        "balanceSheet": "Balance Sheet",
+        "cashFlow": "Cash Flow",
+        "keyMetrics": "Key Metrics"
+    },
+    "actions": {
+        "compare": "Compare",
+        "export": "Export",
+        "addToWatchlist": "Add to Watchlist",
+        "setAlert": "Set Alert"
+    },
+    "messages": {
+        "loading": "Loading data...",
+        "noData": "No data available",
+        "updated": "Last updated"
+    }
+}

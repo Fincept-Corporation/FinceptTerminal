@@ -1,0 +1,61 @@
+{
+    "title": "FINCEPT FORUM",
+    "header": {
+        "trending": "TREND",
+        "new": "YENİ",
+        "following": "TAKİP EDİLEN",
+        "myPosts": "GÖNDERİLERİM"
+    },
+    "categories": {
+        "all": "Tüm Konular",
+        "stocks": "Hisseler",
+        "options": "Opsiyonlar",
+        "crypto": "Kripto",
+        "forex": "Forex",
+        "strategies": "Stratejiler",
+        "general": "Genel"
+    },
+    "post": {
+        "create": "Gönderi Oluştur",
+        "reply": "Yanıtla",
+        "edit": "Düzenle",
+        "delete": "Sil",
+        "share": "Paylaş",
+        "report": "Bildir",
+        "save": "Kaydet"
+    },
+    "form": {
+        "title": "Başlık",
+        "content": "İçerik",
+        "tags": "Etiketler",
+        "category": "Kategori",
+        "submit": "Gönder",
+        "cancel": "İptal",
+        "preview": "Önizleme"
+    },
+    "engagement": {
+        "likes": "Beğeni",
+        "comments": "Yorumlar",
+        "views": "Görüntüleme",
+        "shares": "Paylaşım"
+    },
+    "user": {
+        "posts": "Gönderiler",
+        "followers": "Takipçiler",
+        "following": "Takip Edilen",
+        "reputation": "İtibar",
+        "joined": "Katıldı"
+    },
+    "sort": {
+        "newest": "En Yeni",
+        "popular": "En Popüler",
+        "mostCommented": "En Çok Yorum",
+        "topRated": "En Yüksek Puan"
+    },
+    "messages": {
+        "loading": "Yükleniyor...",
+        "noPosts": "Gönderi yok",
+        "postSuccess": "Başarıyla gönderildi",
+        "deleteConfirm": "Bu gönderiyi sil?"
+    }
+}

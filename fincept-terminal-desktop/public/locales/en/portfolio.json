@@ -1,0 +1,63 @@
+{
+    "title": "FINCEPT PORTFOLIO MANAGER",
+    "header": {
+        "live": "LIVE",
+        "updating": "UPDATING",
+        "newPortfolio": "NEW PORTFOLIO",
+        "refresh": "REFRESH",
+        "exportCsv": "EXPORT CSV"
+    },
+    "summary": {
+        "totalValue": "TOTAL VALUE",
+        "dayPnl": "DAY P&L",
+        "totalPnl": "TOTAL P&L",
+        "positions": "POSITIONS"
+    },
+    "views": {
+        "positions": "POSITIONS",
+        "addAsset": "ADD ASSET",
+        "sellAsset": "SELL ASSET",
+        "analytics": "ANALYTICS",
+        "history": "HISTORY",
+        "activeMgmt": "ACTIVE MGMT",
+        "performance": "PERFORMANCE",
+        "rebalance": "REBALANCE",
+        "reports": "REPORTS",
+        "alerts": "ALERTS",
+        "sectors": "SECTORS",
+        "help": "HELP"
+    },
+    "sidebar": {
+        "portfolios": "PORTFOLIOS",
+        "loading": "Loading portfolios...",
+        "noPortfolios": "No portfolios yet.",
+        "clickCreate": "Click NEW PORTFOLIO to create one.",
+        "owner": "Owner",
+        "currency": "Currency"
+    },
+    "content": {
+        "selectOrCreate": "Select a portfolio or create a new one to get started",
+        "loadingData": "Loading portfolio data...",
+        "comingSoon": "view coming soon..."
+    },
+    "modals": {
+        "createNew": "CREATE NEW PORTFOLIO",
+        "portfolioName": "PORTFOLIO NAME",
+        "owner": "OWNER",
+        "currency": "CURRENCY",
+        "cancel": "CANCEL",
+        "create": "CREATE",
+        "addAssetTitle": "ADD ASSET TO PORTFOLIO",
+        "sellAssetTitle": "SELL ASSET",
+        "symbol": "SYMBOL",
+        "quantity": "QUANTITY",
+        "price": "PRICE",
+        "add": "ADD",
+        "sell": "SELL"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | Real-time tracking with yfinance integration",
+        "lastUpdated": "Last Updated",
+        "connected": "CONNECTED"
+    }
+}

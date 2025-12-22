@@ -1,0 +1,59 @@
+{
+    "title": "경제지표",
+    "header": {
+        "overview": "개요",
+        "indicators": "지표",
+        "calendar": "일정",
+        "countries": "국가"
+    },
+    "indicators": {
+        "gdp": "GDP",
+        "inflation": "물가상승률",
+        "unemployment": "실업률",
+        "interestRate": "금리",
+        "tradeBalance": "무역수지",
+        "consumerConfidence": "소비자신뢰지수",
+        "pmi": "PMI",
+        "cpi": "CPI"
+    },
+    "calendar": {
+        "date": "날짜",
+        "event": "이벤트",
+        "actual": "실제",
+        "forecast": "예상",
+        "previous": "이전",
+        "impact": "영향"
+    },
+    "impact": {
+        "high": "높음",
+        "medium": "보통",
+        "low": "낮음"
+    },
+    "trends": {
+        "rising": "상승",
+        "falling": "하락",
+        "stable": "보합",
+        "yoy": "전년대비",
+        "mom": "전월대비",
+        "qoq": "전분기대비"
+    },
+    "regions": {
+        "global": "글로벌",
+        "northAmerica": "북미",
+        "europe": "유럽",
+        "asia": "아시아태평양",
+        "latam": "중남미",
+        "mena": "중동북아프리카"
+    },
+    "actions": {
+        "compare": "국가 비교",
+        "export": "데이터 내보내기",
+        "subscribe": "구독",
+        "filter": "이벤트 필터"
+    },
+    "messages": {
+        "loading": "경제 데이터 로딩...",
+        "noEvents": "예정된 이벤트 없음",
+        "updated": "업데이트"
+    }
+}

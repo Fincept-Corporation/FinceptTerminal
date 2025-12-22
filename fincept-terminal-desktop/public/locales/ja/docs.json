@@ -1,0 +1,26 @@
+{
+  "title": "FINCEPT ドキュメントターミナル",
+  "header": {
+    "sections": "セクション",
+    "topics": "トピック",
+    "ready": "準備完了"
+  },
+  "search": {
+    "placeholder": "ドキュメント検索...",
+    "clear": "クリア"
+  },
+  "navigation": "ナビゲーション",
+  "codeExample": "コード例",
+  "content": {
+    "title": "FINCEPT ターミナルドキュメント",
+    "description": "ナビゲーションパネルからトピックを選択して詳細ガイドとAPIリファレンスを表示。",
+    "topicsAvailable": "トピック利用可能",
+    "selectTopic": "トピックを選択して開始"
+  },
+  "status": {
+    "version": "Fincept ターミナルドキュメント v3.0",
+    "sections": "セクション",
+    "topics": "トピック",
+    "current": "現在"
+  }
+}

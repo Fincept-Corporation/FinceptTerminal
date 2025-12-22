@@ -1,0 +1,59 @@
+{
+    "title": "الاقتصاد",
+    "header": {
+        "overview": "نظرة عامة",
+        "indicators": "المؤشرات",
+        "calendar": "التقويم",
+        "countries": "الدول"
+    },
+    "indicators": {
+        "gdp": "الناتج المحلي",
+        "inflation": "التضخم",
+        "unemployment": "البطالة",
+        "interestRate": "سعر الفائدة",
+        "tradeBalance": "الميزان التجاري",
+        "consumerConfidence": "ثقة المستهلك",
+        "pmi": "مؤشر مديري المشتريات",
+        "cpi": "مؤشر أسعار المستهلك"
+    },
+    "calendar": {
+        "date": "التاريخ",
+        "event": "الحدث",
+        "actual": "الفعلي",
+        "forecast": "المتوقع",
+        "previous": "السابق",
+        "impact": "التأثير"
+    },
+    "impact": {
+        "high": "عالي",
+        "medium": "متوسط",
+        "low": "منخفض"
+    },
+    "trends": {
+        "rising": "صاعد",
+        "falling": "هابط",
+        "stable": "مستقر",
+        "yoy": "سنوي",
+        "mom": "شهري",
+        "qoq": "ربع سنوي"
+    },
+    "regions": {
+        "global": "عالمي",
+        "northAmerica": "أمريكا الشمالية",
+        "europe": "أوروبا",
+        "asia": "آسيا والمحيط الهادئ",
+        "latam": "أمريكا اللاتينية",
+        "mena": "الشرق الأوسط وشمال أفريقيا"
+    },
+    "actions": {
+        "compare": "مقارنة الدول",
+        "export": "تصدير البيانات",
+        "subscribe": "الاشتراك في التحديثات",
+        "filter": "تصفية الأحداث"
+    },
+    "messages": {
+        "loading": "جاري تحميل البيانات...",
+        "noEvents": "لا توجد أحداث",
+        "updated": "آخر تحديث"
+    }
+}

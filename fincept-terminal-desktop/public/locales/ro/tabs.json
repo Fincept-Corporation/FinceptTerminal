@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "navigation": {
+    "dashboard": "Panou",
+    "markets": "Piețe",
+    "news": "Știri",
+    "portfolio": "Portofoliu",
+    "backtesting": "Backtesting",
+    "watchlist": "Listă urmărire",
+    "research": "Cercetare",
+    "screener": "Screener",
+    "trading": "Trading",
+    "chat": "Chat AI",
+    "agents": "Agenți",
+    "settings": "Setări",
+    "profile": "Profil",
+    "forum": "Forum",
+    "help": "Ajutor",
+    "logout": "Deconectare"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "functionKeys": {
+    "f1": "PANOU",
+    "f2": "PIEȚE",
+    "f3": "ȘTIRI",
+    "f4": "PORT",
+    "f5": "BKTEST",
+    "f6": "URMĂR",
+    "f7": "CERC",
+    "f8": "SCRN",
+    "f9": "TRADE",
+    "f10": "AI",
+    "f11": "PLIN",
+    "f12": "PROFIL"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "status": {
+    "connected": "Conectat",
+    "disconnected": "Deconectat",
+    "loading": "Se încarcă...",
+    "error": "Eroare",
+    "ready": "Pregătit"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
-  },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Mai multe file în meniurile barei de instrumente",
+    "enterCommand": "Introduceți comanda",
+    "search": "Căutare"
   }
 }

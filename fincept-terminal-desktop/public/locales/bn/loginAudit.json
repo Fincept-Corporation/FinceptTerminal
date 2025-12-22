@@ -1,0 +1,26 @@
+{
+    "title": "লগইন অডিট ড্যাশবোর্ড",
+    "accessDenied": "অ্যাডমিন অ্যাক্সেস প্রয়োজন",
+    "metrics": {
+        "dauToday": "আজ DAU",
+        "mau": "MAU",
+        "successRate": "সাফল্যের হার",
+        "activeSessions": "সক্রিয় সেশন"
+    },
+    "views": {
+        "overview": "সারসংক্ষেপ",
+        "eventLog": "ইভেন্ট লগ",
+        "alerts": "সতর্কতা",
+        "analytics": "বিশ্লেষণ"
+    },
+    "controls": {
+        "autoRefresh": "অটো-রিফ্রেশ",
+        "loading": "লোড হচ্ছে...",
+        "refresh": "রিফ্রেশ"
+    },
+    "status": {
+        "admin": "অ্যাডমিন",
+        "updating": "আপডেট হচ্ছে",
+        "ready": "প্রস্তুত"
+    }
+}

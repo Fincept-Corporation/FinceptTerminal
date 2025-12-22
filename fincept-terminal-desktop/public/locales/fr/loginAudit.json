@@ -1,0 +1,28 @@
+{
+    "title": "TABLEAU DE BORD D'AUDIT DE CONNEXION",
+    "accessDenied": "Accès administrateur requis pour voir le tableau de bord d'audit",
+    "metrics": {
+        "dauToday": "DAU Aujourd'hui",
+        "mau": "MAU",
+        "successRate": "Taux de réussite",
+        "failed24h": "Échecs (24h)",
+        "activeSessions": "Sessions actives",
+        "uniqueIps": "IPs uniques"
+    },
+    "views": {
+        "overview": "APERÇU",
+        "eventLog": "JOURNAL D'ÉVÉNEMENTS",
+        "alerts": "ALERTES",
+        "analytics": "ANALYSES"
+    },
+    "controls": {
+        "autoRefresh": "Actualisation auto",
+        "loading": "CHARGEMENT...",
+        "refresh": "ACTUALISER"
+    },
+    "status": {
+        "admin": "Admin",
+        "updating": "MISE À JOUR",
+        "ready": "PRÊT"
+    }
+}

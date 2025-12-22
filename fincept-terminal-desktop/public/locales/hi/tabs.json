@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "navigation": {
+    "dashboard": "डैशबोर्ड",
+    "markets": "बाजार",
+    "news": "समाचार",
+    "portfolio": "पोर्टफोलियो",
+    "backtesting": "बैकटेस्टिंग",
+    "watchlist": "वॉचलिस्ट",
+    "research": "अनुसंधान",
+    "screener": "स्क्रीनर",
+    "trading": "ट्रेडिंग",
+    "chat": "AI चैट",
+    "agents": "एजेंट्स",
+    "settings": "सेटिंग्स",
+    "profile": "प्रोफ़ाइल",
+    "forum": "फोरम",
+    "help": "सहायता",
+    "logout": "लॉगआउट"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "functionKeys": {
+    "f1": "डैश",
+    "f2": "मार्केट",
+    "f3": "न्यूज़",
+    "f4": "पोर्ट",
+    "f5": "बैकटेस्ट",
+    "f6": "वॉच",
+    "f7": "रिसर्च",
+    "f8": "स्क्रीन",
+    "f9": "ट्रेड",
+    "f10": "AI",
+    "f11": "फुल",
+    "f12": "प्रोफ"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "status": {
+    "connected": "कनेक्टेड",
+    "disconnected": "डिस्कनेक्टेड",
+    "loading": "लोड हो रहा है...",
+    "error": "त्रुटि",
+    "ready": "तैयार"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
-  },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "टूलबार मेनू में और टैब",
+    "enterCommand": "कमांड दर्ज करें",
+    "search": "खोजें"
   }
 }

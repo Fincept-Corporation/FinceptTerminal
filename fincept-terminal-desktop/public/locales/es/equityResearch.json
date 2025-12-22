@@ -1,0 +1,62 @@
+{
+    "title": "ANÁLISIS DE ACCIONES",
+    "header": {
+        "overview": "RESUMEN",
+        "financials": "FINANZAS",
+        "analysis": "ANÁLISIS",
+        "ratings": "CALIFICACIONES"
+    },
+    "summary": {
+        "marketCap": "Capitalización",
+        "pe": "PER",
+        "eps": "BPA",
+        "dividend": "Rentabilidad dividendo",
+        "beta": "Beta",
+        "52weekHigh": "Máx. 52S",
+        "52weekLow": "Mín. 52S",
+        "avgVolume": "Volumen promedio"
+    },
+    "financials": {
+        "revenue": "Ingresos",
+        "netIncome": "Beneficio neto",
+        "grossMargin": "Margen bruto",
+        "operatingMargin": "Margen operativo",
+        "roe": "ROE",
+        "roa": "ROA",
+        "debtEquity": "Deuda/Capital",
+        "currentRatio": "Ratio corriente"
+    },
+    "analysis": {
+        "buy": "Comprar",
+        "hold": "Mantener",
+        "sell": "Vender",
+        "strongBuy": "Compra fuerte",
+        "strongSell": "Venta fuerte",
+        "targetPrice": "Precio objetivo",
+        "upside": "Potencial alcista",
+        "downside": "Riesgo bajista"
+    },
+    "periods": {
+        "annual": "Anual",
+        "quarterly": "Trimestral",
+        "ttm": "Últimos 12 meses",
+        "ytd": "Año hasta la fecha"
+    },
+    "sections": {
+        "incomeStatement": "Estado de resultados",
+        "balanceSheet": "Balance general",
+        "cashFlow": "Flujo de caja",
+        "keyMetrics": "Métricas clave"
+    },
+    "actions": {
+        "compare": "Comparar",
+        "export": "Exportar",
+        "addToWatchlist": "Añadir a lista",
+        "setAlert": "Crear alerta"
+    },
+    "messages": {
+        "loading": "Cargando...",
+        "noData": "Sin datos",
+        "updated": "Actualizado"
+    }
+}

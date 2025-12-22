@@ -1,0 +1,26 @@
+{
+    "title": "FINCEPT 文档终端",
+    "header": {
+        "sections": "部分",
+        "topics": "主题",
+        "ready": "就绪"
+    },
+    "search": {
+        "placeholder": "搜索文档...",
+        "clear": "清除"
+    },
+    "navigation": "导航",
+    "codeExample": "代码示例",
+    "content": {
+        "title": "FINCEPT 终端文档",
+        "description": "从导航面板选择主题查看综合指南和API参考。",
+        "topicsAvailable": "个主题可用",
+        "selectTopic": "选择主题开始"
+    },
+    "status": {
+        "version": "Fincept 终端文档 v3.0",
+        "sections": "部分",
+        "topics": "主题",
+        "current": "当前"
+    }
+}

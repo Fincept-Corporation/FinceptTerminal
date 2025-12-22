@@ -1,0 +1,43 @@
+{
+    "title": "FONTI DATI",
+    "header": {
+        "available": "FONTI DISPONIBILI",
+        "connected": "CONNESSO",
+        "addNew": "AGGIUNGI FONTE",
+        "refresh": "AGGIORNA"
+    },
+    "categories": {
+        "market": "Dati di Mercato",
+        "economic": "Dati Economici",
+        "alternative": "Dati Alternativi",
+        "news": "Notizie",
+        "fundamental": "Dati Fondamentali"
+    },
+    "status": {
+        "connected": "Connesso",
+        "disconnected": "Disconnesso",
+        "error": "Errore",
+        "pending": "In attesa"
+    },
+    "actions": {
+        "connect": "Connetti",
+        "disconnect": "Disconnetti",
+        "configure": "Configura",
+        "test": "Testa",
+        "delete": "Elimina"
+    },
+    "form": {
+        "apiKey": "Chiave API",
+        "endpoint": "URL",
+        "username": "Utente",
+        "password": "Password",
+        "save": "Salva",
+        "cancel": "Annulla"
+    },
+    "messages": {
+        "connectionSuccess": "Connesso con successo",
+        "connectionFailed": "Errore connessione",
+        "noSources": "Nessuna fonte",
+        "loading": "Caricamento..."
+    }
+}

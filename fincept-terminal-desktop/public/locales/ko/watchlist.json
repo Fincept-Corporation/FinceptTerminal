@@ -1,0 +1,27 @@
+{
+    "title": "관심목록",
+    "header": {
+        "myWatchlists": "내 관심목록",
+        "create": "만들기",
+        "import": "가져오기",
+        "export": "내보내기"
+    },
+    "actions": {
+        "add": "종목 추가",
+        "remove": "삭제",
+        "edit": "편집",
+        "delete": "삭제"
+    },
+    "symbol": {
+        "price": "가격",
+        "change": "변동",
+        "volume": "거래량",
+        "marketCap": "시가총액"
+    },
+    "messages": {
+        "created": "관심목록 생성됨",
+        "deleted": "관심목록 삭제됨",
+        "noWatchlists": "관심목록 없음",
+        "loading": "로딩 중..."
+    }
+}

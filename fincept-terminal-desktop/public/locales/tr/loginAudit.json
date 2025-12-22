@@ -1,0 +1,26 @@
+{
+    "title": "GİRİŞ DENETİM PANELİ",
+    "accessDenied": "Yönetici erişimi gerekli",
+    "metrics": {
+        "dauToday": "Bugün DAU",
+        "mau": "MAU",
+        "successRate": "Başarı Oranı",
+        "activeSessions": "Aktif Oturumlar"
+    },
+    "views": {
+        "overview": "GENEL BAKIŞ",
+        "eventLog": "OLAY GÜNLÜĞÜ",
+        "alerts": "UYARILAR",
+        "analytics": "ANALİZ"
+    },
+    "controls": {
+        "autoRefresh": "Otomatik yenile",
+        "loading": "YÜKLENİYOR...",
+        "refresh": "YENİLE"
+    },
+    "status": {
+        "admin": "Yönetici",
+        "updating": "GÜNCELLENİYOR",
+        "ready": "HAZIR"
+    }
+}

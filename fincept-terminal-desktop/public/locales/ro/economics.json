@@ -1,0 +1,59 @@
+{
+    "title": "ECONOMIE",
+    "header": {
+        "overview": "PREZENTARE",
+        "indicators": "INDICATORI",
+        "calendar": "CALENDAR",
+        "countries": "ȚĂRI"
+    },
+    "indicators": {
+        "gdp": "PIB",
+        "inflation": "Inflație",
+        "unemployment": "Șomaj",
+        "interestRate": "Rata dobânzii",
+        "tradeBalance": "Balanța comercială",
+        "consumerConfidence": "Încrederea consumatorilor",
+        "pmi": "PMI",
+        "cpi": "IPC"
+    },
+    "calendar": {
+        "date": "Data",
+        "event": "Eveniment",
+        "actual": "Actual",
+        "forecast": "Prognoza",
+        "previous": "Anterior",
+        "impact": "Impact"
+    },
+    "impact": {
+        "high": "Ridicat",
+        "medium": "Mediu",
+        "low": "Scăzut"
+    },
+    "trends": {
+        "rising": "Creștere",
+        "falling": "Scădere",
+        "stable": "Stabil",
+        "yoy": "A/A",
+        "mom": "L/L",
+        "qoq": "T/T"
+    },
+    "regions": {
+        "global": "Global",
+        "northAmerica": "America de Nord",
+        "europe": "Europa",
+        "asia": "Asia-Pacific",
+        "latam": "America Latină",
+        "mena": "MENA"
+    },
+    "actions": {
+        "compare": "Compară țări",
+        "export": "Exportă date",
+        "subscribe": "Abonează-te",
+        "filter": "Filtrează evenimente"
+    },
+    "messages": {
+        "loading": "Se încarcă datele...",
+        "noEvents": "Fără evenimente",
+        "updated": "Actualizat"
+    }
+}

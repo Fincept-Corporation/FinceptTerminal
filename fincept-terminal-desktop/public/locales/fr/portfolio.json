@@ -1,0 +1,35 @@
+{
+    "title": "GESTIONNAIRE DE PORTEFEUILLE FINCEPT",
+    "header": {
+        "live": "EN DIRECT",
+        "updating": "MISE À JOUR",
+        "newPortfolio": "NOUVEAU PORTEFEUILLE",
+        "refresh": "ACTUALISER",
+        "exportCsv": "EXPORTER CSV"
+    },
+    "summary": {
+        "totalValue": "VALEUR TOTALE",
+        "dayPnl": "P&L JOUR",
+        "totalPnl": "P&L TOTAL",
+        "positions": "POSITIONS"
+    },
+    "views": {
+        "positions": "POSITIONS",
+        "addAsset": "AJOUTER ACTIF",
+        "sellAsset": "VENDRE ACTIF",
+        "analytics": "ANALYSES",
+        "history": "HISTORIQUE"
+    },
+    "sidebar": {
+        "portfolios": "PORTEFEUILLES",
+        "loading": "Chargement des portefeuilles...",
+        "noPortfolios": "Aucun portefeuille pour le moment."
+    },
+    "modals": {
+        "createNew": "CRÉER NOUVEAU PORTEFEUILLE",
+        "cancel": "ANNULER",
+        "create": "CRÉER",
+        "add": "AJOUTER",
+        "sell": "VENDRE"
+    }
+}

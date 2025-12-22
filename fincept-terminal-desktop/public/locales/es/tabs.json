@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "Mercados",
-    "subtitle": "Datos y análisis de mercado en tiempo real"
+  "navigation": {
+    "dashboard": "Panel",
+    "markets": "Mercados",
+    "news": "Noticias",
+    "portfolio": "Cartera",
+    "backtesting": "Backtesting",
+    "watchlist": "Lista de seguimiento",
+    "research": "Investigación",
+    "screener": "Screener",
+    "trading": "Trading",
+    "chat": "Chat IA",
+    "agents": "Agentes",
+    "settings": "Configuración",
+    "profile": "Perfil",
+    "forum": "Foro",
+    "help": "Ayuda",
+    "logout": "Cerrar sesión"
   },
-  "news": {
-    "title": "Noticias financieras",
-    "subtitle": "Últimas noticias y actualizaciones del mercado"
+  "functionKeys": {
+    "f1": "PANEL",
+    "f2": "MERC",
+    "f3": "NEWS",
+    "f4": "CART",
+    "f5": "BKTEST",
+    "f6": "SEGUIR",
+    "f7": "INVEST",
+    "f8": "SCRN",
+    "f9": "TRADE",
+    "f10": "IA",
+    "f11": "COMP",
+    "f12": "PERFIL"
   },
-  "portfolio": {
-    "title": "Cartera",
-    "subtitle": "Rastree y analice sus inversiones"
+  "status": {
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "loading": "Cargando...",
+    "error": "Error",
+    "ready": "Listo"
   },
-  "analytics": {
-    "title": "Análisis",
-    "subtitle": "Herramientas avanzadas de análisis financiero"
-  },
-  "chat": {
-    "title": "Asistente AI",
-    "subtitle": "Chatea con tu asistente financiero AI",
-    "placeholder": "Pregúntame sobre mercados, trading o finanzas...",
-    "send": "Enviar"
+  "labels": {
+    "moreTabs": "Más pestañas en menús de herramientas",
+    "enterCommand": "Ingrese comando",
+    "search": "Buscar"
   }
 }

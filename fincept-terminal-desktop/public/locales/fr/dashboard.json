@@ -1,30 +1,43 @@
 {
-  "welcome": "Bienvenue sur Fincept Terminal",
-  "tabs": {
-    "dashboard": "Tableau de bord",
-    "markets": "Marchés",
-    "news": "Actualités",
-    "watchlist": "Liste de surveillance",
-    "portfolio": "Portefeuille",
-    "analytics": "Analytique",
-    "economics": "Économie",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Calendrier économique",
-    "geopolitics": "Géopolitique",
-    "maritime": "Maritime",
-    "options": "Options",
-    "equityResearch": "Recherche sur actions",
-    "screener": "Filtreur",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Documents",
-    "nodeEditor": "Éditeur de nœuds",
-    "codeEditor": "Éditeur de code",
-    "forum": "Forum",
-    "marketplace": "Marché",
-    "profile": "Profil",
-    "support": "Support",
-    "settings": "Paramètres"
+  "header": {
+    "title": "TABLEAU DE BORD PERSONNALISABLE",
+    "live": "EN DIRECT",
+    "widgets": "WIDGETS"
+  },
+  "widgets": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "configure": "Configurer",
+    "refresh": "Actualiser",
+    "remove": "Supprimer",
+    "globalIndices": "INDICES MONDIAUX - TOP 12",
+    "forex": "PAIRES FOREX",
+    "crypto": "CRYPTOMONNAIES",
+    "commodities": "MATIÈRES PREMIÈRES",
+    "bonds": "OBLIGATIONS",
+    "etfs": "ETFs",
+    "news": "ACTUALITÉS",
+    "forum": "FORUM",
+    "watchlist": "LISTE DE SUIVI",
+    "maritime": "MARITIME",
+    "index": "INDICE",
+    "symbol": "SYMBOLE",
+    "name": "NOM",
+    "price": "PRIX",
+    "change": "VAR",
+    "percentChange": "%VAR",
+    "high": "HAUT",
+    "low": "BAS",
+    "noIndexData": "Aucune donnée d'indices disponible",
+    "noData": "Aucune donnée disponible"
+  },
+  "buttons": {
+    "addWidget": "AJOUTER WIDGET",
+    "saveLayout": "SAUVEGARDER DISPOSITION",
+    "reset": "RÉINITIALISER"
+  },
+  "empty": {
+    "noWidgets": "Aucun widget sur le tableau de bord",
+    "addFirst": "AJOUTEZ VOTRE PREMIER WIDGET"
   }
 }

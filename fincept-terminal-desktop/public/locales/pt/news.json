@@ -1,0 +1,30 @@
+{
+    "title": "NOTÍCIAS PROFISSIONAIS FINCEPT TERMINAL",
+    "header": {
+        "liveFeed": "AO VIVO",
+        "live": "AO VIVO",
+        "refresh": "ATUALIZAR",
+        "updating": "ATUALIZANDO...",
+        "alerts": "ALERTAS",
+        "sources": "FONTES",
+        "status": "STATUS",
+        "demoMode": "MODO DEMO",
+        "articles": "ARTIGOS",
+        "activeSources": "FONTES ATIVAS"
+    },
+    "sentiment": {
+        "bullish": "OTIMISTA",
+        "bearish": "PESSIMISTA",
+        "neutral": "NEUTRO"
+    },
+    "autoRefresh": {
+        "title": "INTERVALO DE ATUALIZAÇÃO AUTO",
+        "minute": "minuto",
+        "minutes": "minutos"
+    },
+    "messages": {
+        "loading": "Carregando notícias...",
+        "loadingFeeds": "Carregando feeds...",
+        "breaking": "URGENTE"
+    }
+}

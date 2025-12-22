@@ -1,0 +1,26 @@
+{
+    "title": "DASHBOARD AUDIT ACCESSI",
+    "accessDenied": "Accesso amministratore richiesto",
+    "metrics": {
+        "dauToday": "DAU Oggi",
+        "mau": "MAU",
+        "successRate": "Tasso di successo",
+        "activeSessions": "Sessioni attive"
+    },
+    "views": {
+        "overview": "PANORAMICA",
+        "eventLog": "LOG EVENTI",
+        "alerts": "AVVISI",
+        "analytics": "ANALISI"
+    },
+    "controls": {
+        "autoRefresh": "Aggiornamento automatico",
+        "loading": "CARICAMENTO...",
+        "refresh": "AGGIORNA"
+    },
+    "status": {
+        "admin": "Admin",
+        "updating": "AGGIORNAMENTO",
+        "ready": "PRONTO"
+    }
+}

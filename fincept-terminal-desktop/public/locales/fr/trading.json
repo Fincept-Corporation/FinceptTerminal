@@ -1,0 +1,43 @@
+{
+    "title": "TRADING",
+    "header": {
+        "orders": "ORDRES",
+        "positions": "POSITIONS",
+        "history": "HISTORIQUE",
+        "settings": "PARAMÈTRES",
+        "terminal": "TERMINAL FINCEPT",
+        "selectBroker": "CHOISIR COURTIER",
+        "paper": "PAPIER",
+        "live": "EN DIRECT"
+    },
+    "orderTypes": {
+        "market": "Marché",
+        "limit": "Limite",
+        "stop": "Stop"
+    },
+    "actions": {
+        "buy": "ACHETER",
+        "sell": "VENDRE",
+        "cancel": "Annuler",
+        "close": "Fermer",
+        "closeAll": "Tout fermer"
+    },
+    "form": {
+        "symbol": "Symbole",
+        "quantity": "Quantité",
+        "price": "Prix",
+        "stopPrice": "Prix Stop"
+    },
+    "position": {
+        "openPrice": "Prix d'ouverture",
+        "currentPrice": "Prix actuel",
+        "pnl": "P&L",
+        "margin": "Marge",
+        "size": "Taille"
+    },
+    "messages": {
+        "orderPlaced": "Ordre passé avec succès",
+        "orderFailed": "Échec de l'ordre",
+        "noPositions": "Aucune position ouverte"
+    }
+}

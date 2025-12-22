@@ -1,30 +1,43 @@
 {
-  "welcome": "Willkommen bei Fincept Terminal",
-  "tabs": {
-    "dashboard": "Dashboard",
-    "markets": "Märkte",
-    "news": "Nachrichten",
-    "watchlist": "Beobachtungsliste",
-    "portfolio": "Portfolio",
-    "analytics": "Analytik",
-    "economics": "Wirtschaft",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Wirtschaftskalender",
-    "geopolitics": "Geopolitik",
-    "maritime": "Maritim",
-    "options": "Optionen",
-    "equityResearch": "Aktienforschung",
-    "screener": "Screener",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Dokumente",
-    "nodeEditor": "Knoten-Editor",
-    "codeEditor": "Code-Editor",
-    "forum": "Forum",
-    "marketplace": "Marktplatz",
-    "profile": "Profil",
-    "support": "Support",
-    "settings": "Einstellungen"
+  "header": {
+    "title": "ANPASSBARES DASHBOARD",
+    "live": "LIVE",
+    "widgets": "WIDGETS"
+  },
+  "widgets": {
+    "loading": "Laden...",
+    "error": "Fehler",
+    "configure": "Konfigurieren",
+    "refresh": "Aktualisieren",
+    "remove": "Entfernen",
+    "globalIndices": "GLOBALE INDIZES - TOP 12",
+    "forex": "WÄHRUNGSPAARE",
+    "crypto": "KRYPTOWÄHRUNGEN",
+    "commodities": "ROHSTOFFE",
+    "bonds": "ANLEIHEN",
+    "etfs": "ETFs",
+    "news": "NACHRICHTEN",
+    "forum": "FORUM",
+    "watchlist": "WATCHLIST",
+    "maritime": "MARITIM",
+    "index": "INDEX",
+    "symbol": "SYMBOL",
+    "name": "NAME",
+    "price": "PREIS",
+    "change": "ÄND",
+    "percentChange": "%ÄND",
+    "high": "HOCH",
+    "low": "TIEF",
+    "noIndexData": "Keine Indexdaten verfügbar",
+    "noData": "Keine Daten verfügbar"
+  },
+  "buttons": {
+    "addWidget": "WIDGET HINZUFÜGEN",
+    "saveLayout": "LAYOUT SPEICHERN",
+    "reset": "ZURÜCKSETZEN"
+  },
+  "empty": {
+    "noWidgets": "Keine Widgets im Dashboard",
+    "addFirst": "ERSTES WIDGET HINZUFÜGEN"
   }
 }

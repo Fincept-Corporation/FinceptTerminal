@@ -1,30 +1,43 @@
 {
-  "welcome": "Welcome to Fincept Terminal",
-  "tabs": {
-    "dashboard": "Dashboard",
-    "markets": "Markets",
-    "news": "News",
-    "watchlist": "Watchlist",
-    "portfolio": "Portfolio",
-    "analytics": "Analytics",
-    "economics": "Economics",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Economic Calendar",
-    "geopolitics": "Geopolitics",
-    "maritime": "Maritime",
-    "options": "Options",
-    "equityResearch": "Equity Research",
-    "screener": "Screener",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Docs",
-    "nodeEditor": "Node Editor",
-    "codeEditor": "Code Editor",
-    "forum": "Forum",
-    "marketplace": "Marketplace",
-    "profile": "Profile",
-    "support": "Support",
-    "settings": "Settings"
+  "header": {
+    "title": "แดชบอร์ดที่ปรับแต่งได้",
+    "live": "สด",
+    "widgets": "วิดเจ็ต"
+  },
+  "widgets": {
+    "loading": "กำลังโหลด...",
+    "error": "ข้อผิดพลาด",
+    "configure": "กำหนดค่า",
+    "refresh": "รีเฟรช",
+    "remove": "ลบ",
+    "globalIndices": "ดัชนีโลก - TOP 12",
+    "forex": "คู่สกุลเงิน",
+    "crypto": "คริปโต",
+    "commodities": "สินค้าโภคภัณฑ์",
+    "bonds": "พันธบัตร",
+    "etfs": "ETF",
+    "news": "ข่าว",
+    "forum": "ฟอรัม",
+    "watchlist": "รายการเฝ้าดู",
+    "maritime": "การเดินเรือ",
+    "index": "ดัชนี",
+    "symbol": "สัญลักษณ์",
+    "name": "ชื่อ",
+    "price": "ราคา",
+    "change": "เปลี่ยน",
+    "percentChange": "%เปลี่ยน",
+    "high": "สูง",
+    "low": "ต่ำ",
+    "noIndexData": "ไม่มีข้อมูลดัชนี",
+    "noData": "ไม่มีข้อมูล"
+  },
+  "buttons": {
+    "addWidget": "เพิ่มวิดเจ็ต",
+    "saveLayout": "บันทึกเลย์เอาต์",
+    "reset": "รีเซ็ต"
+  },
+  "empty": {
+    "noWidgets": "ไม่มีวิดเจ็ตบนแดชบอร์ด",
+    "addFirst": "เพิ่มวิดเจ็ตแรกของคุณ"
   }
 }

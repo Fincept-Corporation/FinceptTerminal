@@ -1,30 +1,43 @@
 {
-  "welcome": "Fincept Terminalへようこそ",
-  "tabs": {
-    "dashboard": "ダッシュボード",
-    "markets": "マーケット",
+  "header": {
+    "title": "カスタマイズ可能なダッシュボード",
+    "live": "ライブ",
+    "widgets": "ウィジェット"
+  },
+  "widgets": {
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "configure": "設定",
+    "refresh": "更新",
+    "remove": "削除",
+    "globalIndices": "グローバル指数 - トップ12",
+    "forex": "通貨ペア",
+    "crypto": "暗号通貨",
+    "commodities": "商品",
+    "bonds": "債券",
+    "etfs": "ETF",
     "news": "ニュース",
-    "watchlist": "ウォッチリスト",
-    "portfolio": "ポートフォリオ",
-    "analytics": "分析",
-    "economics": "経済学",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "経済カレンダー",
-    "geopolitics": "地政学",
-    "maritime": "海事",
-    "options": "オプション",
-    "equityResearch": "株式調査",
-    "screener": "スクリーナー",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "チャット",
-    "docs": "ドキュメント",
-    "nodeEditor": "ノードエディター",
-    "codeEditor": "コードエディター",
     "forum": "フォーラム",
-    "marketplace": "マーケットプレイス",
-    "profile": "プロフィール",
-    "support": "サポート",
-    "settings": "設定"
+    "watchlist": "ウォッチリスト",
+    "maritime": "海運",
+    "index": "指数",
+    "symbol": "シンボル",
+    "name": "名前",
+    "price": "価格",
+    "change": "変動",
+    "percentChange": "変動率",
+    "high": "高値",
+    "low": "安値",
+    "noIndexData": "指数データなし",
+    "noData": "データなし"
+  },
+  "buttons": {
+    "addWidget": "ウィジェット追加",
+    "saveLayout": "レイアウト保存",
+    "reset": "リセット"
+  },
+  "empty": {
+    "noWidgets": "ダッシュボードにウィジェットがありません",
+    "addFirst": "最初のウィジェットを追加"
   }
 }

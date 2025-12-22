@@ -1,0 +1,66 @@
+{
+    "title": "समुद्री",
+    "header": {
+        "overview": "अवलोकन",
+        "tracking": "ट्रैकिंग",
+        "ports": "बंदरगाह",
+        "routes": "मार्ग"
+    },
+    "vessels": {
+        "type": "जहाज प्रकार",
+        "cargo": "कार्गो",
+        "tanker": "टैंकर",
+        "container": "कंटेनर",
+        "bulk": "बल्क कैरियर",
+        "passenger": "यात्री",
+        "status": "स्थिति"
+    },
+    "tracking": {
+        "position": "स्थिति",
+        "speed": "गति",
+        "heading": "दिशा",
+        "destination": "गंतव्य",
+        "eta": "अनुमानित आगमन",
+        "lastUpdate": "अंतिम अपडेट"
+    },
+    "ports": {
+        "name": "बंदरगाह नाम",
+        "country": "देश",
+        "arrivals": "आगमन",
+        "departures": "प्रस्थान",
+        "congestion": "भीड़",
+        "waitTime": "प्रतीक्षा समय"
+    },
+    "routes": {
+        "origin": "उद्गम",
+        "destination": "गंतव्य",
+        "distance": "दूरी",
+        "transitTime": "पारगमन समय",
+        "riskLevel": "जोखिम स्तर"
+    },
+    "status": {
+        "anchored": "लंगर डाला",
+        "underway": "चल रहा",
+        "moored": "बंधा हुआ",
+        "atPort": "बंदरगाह पर",
+        "drifting": "बहता हुआ"
+    },
+    "metrics": {
+        "dwt": "डीडब्ल्यूटी",
+        "teu": "टीईयू",
+        "draft": "ड्राफ्ट",
+        "length": "लंबाई",
+        "speed": "गति (नॉट्स)"
+    },
+    "actions": {
+        "track": "जहाज ट्रैक करें",
+        "setAlert": "अलर्ट सेट करें",
+        "export": "निर्यात",
+        "filter": "फ़िल्टर"
+    },
+    "messages": {
+        "loading": "समुद्री डेटा लोड हो रहा है...",
+        "noVessels": "कोई जहाज नहीं मिला",
+        "updated": "अंतिम अपडेट"
+    }
+}

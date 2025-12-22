@@ -1,0 +1,52 @@
+{
+    "title": "MAPPAGE DE DONNÉES",
+    "header": {
+        "mappings": "MAPPAGES",
+        "templates": "MODÈLES",
+        "create": "CRÉER",
+        "refresh": "ACTUALISER"
+    },
+    "views": {
+        "list": "Liste des mappages",
+        "create": "Créer mappage",
+        "templates": "Modèles"
+    },
+    "list": {
+        "name": "Nom",
+        "source": "Source",
+        "destination": "Destination",
+        "status": "Statut",
+        "lastRun": "Dernière exécution",
+        "actions": "Actions"
+    },
+    "status": {
+        "active": "Actif",
+        "inactive": "Inactif",
+        "error": "Erreur",
+        "running": "En cours"
+    },
+    "actions": {
+        "edit": "Modifier",
+        "delete": "Supprimer",
+        "run": "Exécuter",
+        "duplicate": "Dupliquer",
+        "export": "Exporter"
+    },
+    "create": {
+        "title": "Créer mappage",
+        "name": "Nom du mappage",
+        "description": "Description",
+        "sourceApi": "API source",
+        "destApi": "API destination",
+        "fieldMapping": "Mappage de champs",
+        "save": "Enregistrer",
+        "cancel": "Annuler"
+    },
+    "messages": {
+        "saved": "Enregistré",
+        "deleted": "Supprimé",
+        "runSuccess": "Exécuté avec succès",
+        "error": "Erreur survenue",
+        "noMappings": "Aucun mappage"
+    }
+}

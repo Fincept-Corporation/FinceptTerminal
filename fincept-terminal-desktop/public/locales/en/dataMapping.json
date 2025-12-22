@@ -1,0 +1,52 @@
+{
+    "title": "DATA MAPPING",
+    "header": {
+        "mappings": "MAPPINGS",
+        "templates": "TEMPLATES",
+        "create": "CREATE NEW",
+        "refresh": "REFRESH"
+    },
+    "views": {
+        "list": "Mapping List",
+        "create": "Create Mapping",
+        "templates": "Templates"
+    },
+    "list": {
+        "name": "Name",
+        "source": "Source",
+        "destination": "Destination",
+        "status": "Status",
+        "lastRun": "Last Run",
+        "actions": "Actions"
+    },
+    "status": {
+        "active": "Active",
+        "inactive": "Inactive",
+        "error": "Error",
+        "running": "Running"
+    },
+    "actions": {
+        "edit": "Edit",
+        "delete": "Delete",
+        "run": "Run",
+        "duplicate": "Duplicate",
+        "export": "Export"
+    },
+    "create": {
+        "title": "Create Data Mapping",
+        "name": "Mapping Name",
+        "description": "Description",
+        "sourceApi": "Source API",
+        "destApi": "Destination API",
+        "fieldMapping": "Field Mapping",
+        "save": "Save Mapping",
+        "cancel": "Cancel"
+    },
+    "messages": {
+        "saved": "Mapping saved successfully",
+        "deleted": "Mapping deleted",
+        "runSuccess": "Mapping executed successfully",
+        "error": "Error occurred",
+        "noMappings": "No mappings configured"
+    }
+}

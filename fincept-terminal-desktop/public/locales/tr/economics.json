@@ -1,0 +1,59 @@
+{
+    "title": "EKONOMİ",
+    "header": {
+        "overview": "GENEL BAKIŞ",
+        "indicators": "GÖSTERGELER",
+        "calendar": "TAKVİM",
+        "countries": "ÜLKELER"
+    },
+    "indicators": {
+        "gdp": "GSYH",
+        "inflation": "Enflasyon",
+        "unemployment": "İşsizlik",
+        "interestRate": "Faiz Oranı",
+        "tradeBalance": "Dış Ticaret Dengesi",
+        "consumerConfidence": "Tüketici Güveni",
+        "pmi": "PMI",
+        "cpi": "TÜFE"
+    },
+    "calendar": {
+        "date": "Tarih",
+        "event": "Olay",
+        "actual": "Gerçekleşen",
+        "forecast": "Tahmin",
+        "previous": "Önceki",
+        "impact": "Etki"
+    },
+    "impact": {
+        "high": "Yüksek",
+        "medium": "Orta",
+        "low": "Düşük"
+    },
+    "trends": {
+        "rising": "Yükseliş",
+        "falling": "Düşüş",
+        "stable": "Stabil",
+        "yoy": "Y/Y",
+        "mom": "A/A",
+        "qoq": "Ç/Ç"
+    },
+    "regions": {
+        "global": "Küresel",
+        "northAmerica": "Kuzey Amerika",
+        "europe": "Avrupa",
+        "asia": "Asya-Pasifik",
+        "latam": "Latin Amerika",
+        "mena": "MENA"
+    },
+    "actions": {
+        "compare": "Ülke Karşılaştır",
+        "export": "Veri Dışa Aktar",
+        "subscribe": "Abone Ol",
+        "filter": "Olay Filtrele"
+    },
+    "messages": {
+        "loading": "Veri yükleniyor...",
+        "noEvents": "Olay yok",
+        "updated": "Güncellendi"
+    }
+}

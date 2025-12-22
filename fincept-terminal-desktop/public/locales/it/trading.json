@@ -1,0 +1,25 @@
+{
+    "title": "TRADING",
+    "header": {
+        "orders": "ORDINI",
+        "positions": "POSIZIONI",
+        "history": "STORICO",
+        "settings": "IMPOSTAZIONI",
+        "terminal": "TERMINALE FINCEPT",
+        "selectBroker": "SELEZIONA BROKER",
+        "paper": "DEMO",
+        "live": "REALE"
+    },
+    "actions": {
+        "buy": "COMPRA",
+        "sell": "VENDI",
+        "cancel": "Annulla",
+        "close": "Chiudi",
+        "closeAll": "Chiudi tutto"
+    },
+    "messages": {
+        "orderPlaced": "Ordine effettuato",
+        "orderFailed": "Ordine fallito",
+        "noPositions": "Nessuna posizione aperta"
+    }
+}

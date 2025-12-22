@@ -1,0 +1,66 @@
+{
+    "title": "СУДОХОДСТВО",
+    "header": {
+        "overview": "ОБЗОР",
+        "tracking": "ОТСЛЕЖИВАНИЕ",
+        "ports": "ПОРТЫ",
+        "routes": "МАРШРУТЫ"
+    },
+    "vessels": {
+        "type": "Тип судна",
+        "cargo": "Грузовое",
+        "tanker": "Танкер",
+        "container": "Контейнеровоз",
+        "bulk": "Балкер",
+        "passenger": "Пассажирское",
+        "status": "Статус"
+    },
+    "tracking": {
+        "position": "Позиция",
+        "speed": "Скорость",
+        "heading": "Курс",
+        "destination": "Назначение",
+        "eta": "Прибытие",
+        "lastUpdate": "Обновлено"
+    },
+    "ports": {
+        "name": "Название порта",
+        "country": "Страна",
+        "arrivals": "Прибытия",
+        "departures": "Отправления",
+        "congestion": "Загруженность",
+        "waitTime": "Время ожидания"
+    },
+    "routes": {
+        "origin": "Отправление",
+        "destination": "Назначение",
+        "distance": "Расстояние",
+        "transitTime": "Время в пути",
+        "riskLevel": "Уровень риска"
+    },
+    "status": {
+        "anchored": "На якоре",
+        "underway": "В пути",
+        "moored": "Пришвартовано",
+        "atPort": "В порту",
+        "drifting": "Дрейф"
+    },
+    "metrics": {
+        "dwt": "Дедвейт",
+        "teu": "TEU",
+        "draft": "Осадка",
+        "length": "Длина",
+        "speed": "Скорость (узлы)"
+    },
+    "actions": {
+        "track": "Отслеживать судно",
+        "setAlert": "Создать оповещение",
+        "export": "Экспорт",
+        "filter": "Фильтр"
+    },
+    "messages": {
+        "loading": "Загрузка данных...",
+        "noVessels": "Суда не найдены",
+        "updated": "Обновлено"
+    }
+}

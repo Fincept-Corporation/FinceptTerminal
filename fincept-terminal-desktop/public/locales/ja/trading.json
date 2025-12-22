@@ -1,0 +1,43 @@
+{
+    "title": "トレーディング",
+    "header": {
+        "orders": "注文",
+        "positions": "ポジション",
+        "history": "履歴",
+        "settings": "設定",
+        "terminal": "FINCEPTターミナル",
+        "selectBroker": "ブローカー選択",
+        "paper": "ペーパー",
+        "live": "ライブ"
+    },
+    "orderTypes": {
+        "market": "成行",
+        "limit": "指値",
+        "stop": "逆指値"
+    },
+    "actions": {
+        "buy": "買い",
+        "sell": "売り",
+        "cancel": "キャンセル",
+        "close": "決済",
+        "closeAll": "全決済"
+    },
+    "form": {
+        "symbol": "銘柄",
+        "quantity": "数量",
+        "price": "価格",
+        "stopPrice": "逆指値"
+    },
+    "position": {
+        "openPrice": "建値",
+        "currentPrice": "現在値",
+        "pnl": "損益",
+        "margin": "証拠金",
+        "size": "ポジション"
+    },
+    "messages": {
+        "orderPlaced": "注文が完了しました",
+        "orderFailed": "注文が失敗しました",
+        "noPositions": "ポジションなし"
+    }
+}

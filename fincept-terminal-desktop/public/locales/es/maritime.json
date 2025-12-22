@@ -1,0 +1,66 @@
+{
+    "title": "MARÍTIMO",
+    "header": {
+        "overview": "RESUMEN",
+        "tracking": "SEGUIMIENTO",
+        "ports": "PUERTOS",
+        "routes": "RUTAS"
+    },
+    "vessels": {
+        "type": "Tipo de buque",
+        "cargo": "Carga",
+        "tanker": "Petrolero",
+        "container": "Portacontenedores",
+        "bulk": "Granelero",
+        "passenger": "Pasajeros",
+        "status": "Estado"
+    },
+    "tracking": {
+        "position": "Posición",
+        "speed": "Velocidad",
+        "heading": "Rumbo",
+        "destination": "Destino",
+        "eta": "Llegada estimada",
+        "lastUpdate": "Última actualización"
+    },
+    "ports": {
+        "name": "Nombre del puerto",
+        "country": "País",
+        "arrivals": "Llegadas",
+        "departures": "Salidas",
+        "congestion": "Congestión",
+        "waitTime": "Tiempo de espera"
+    },
+    "routes": {
+        "origin": "Origen",
+        "destination": "Destino",
+        "distance": "Distancia",
+        "transitTime": "Tiempo de tránsito",
+        "riskLevel": "Nivel de riesgo"
+    },
+    "status": {
+        "anchored": "Anclado",
+        "underway": "En ruta",
+        "moored": "Amarrado",
+        "atPort": "En puerto",
+        "drifting": "A la deriva"
+    },
+    "metrics": {
+        "dwt": "TPM",
+        "teu": "TEU",
+        "draft": "Calado",
+        "length": "Eslora",
+        "speed": "Velocidad (nudos)"
+    },
+    "actions": {
+        "track": "Seguir buque",
+        "setAlert": "Crear alerta",
+        "export": "Exportar",
+        "filter": "Filtrar"
+    },
+    "messages": {
+        "loading": "Cargando datos marítimos...",
+        "noVessels": "Sin buques",
+        "updated": "Actualizado"
+    }
+}

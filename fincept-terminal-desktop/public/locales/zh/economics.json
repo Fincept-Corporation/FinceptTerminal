@@ -1,0 +1,59 @@
+{
+    "title": "经济数据",
+    "header": {
+        "overview": "概览",
+        "indicators": "指标",
+        "calendar": "日历",
+        "countries": "国家"
+    },
+    "indicators": {
+        "gdp": "GDP",
+        "inflation": "通胀率",
+        "unemployment": "失业率",
+        "interestRate": "利率",
+        "tradeBalance": "贸易差额",
+        "consumerConfidence": "消费者信心",
+        "pmi": "PMI",
+        "cpi": "CPI"
+    },
+    "calendar": {
+        "date": "日期",
+        "event": "事件",
+        "actual": "实际",
+        "forecast": "预期",
+        "previous": "前值",
+        "impact": "影响"
+    },
+    "impact": {
+        "high": "高",
+        "medium": "中",
+        "low": "低"
+    },
+    "trends": {
+        "rising": "上升",
+        "falling": "下降",
+        "stable": "稳定",
+        "yoy": "同比",
+        "mom": "环比",
+        "qoq": "季环比"
+    },
+    "regions": {
+        "global": "全球",
+        "northAmerica": "北美",
+        "europe": "欧洲",
+        "asia": "亚太",
+        "latam": "拉美",
+        "mena": "中东北非"
+    },
+    "actions": {
+        "compare": "国家对比",
+        "export": "导出数据",
+        "subscribe": "订阅更新",
+        "filter": "筛选事件"
+    },
+    "messages": {
+        "loading": "加载经济数据...",
+        "noEvents": "暂无事件",
+        "updated": "更新时间"
+    }
+}

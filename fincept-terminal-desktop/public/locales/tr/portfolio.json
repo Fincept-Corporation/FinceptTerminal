@@ -1,0 +1,28 @@
+{
+    "title": "FINCEPT PORTFÖY YÖNETİCİSİ",
+    "header": {
+        "live": "CANLI",
+        "updating": "GÜNCELLENİYOR",
+        "newPortfolio": "YENİ PORTFÖY",
+        "refresh": "YENİLE",
+        "exportCsv": "CSV DIŞA AKTAR"
+    },
+    "summary": {
+        "totalValue": "TOPLAM DEĞER",
+        "dayPnl": "GÜNLÜK K/Z",
+        "totalPnl": "TOPLAM K/Z",
+        "positions": "POZİSYONLAR"
+    },
+    "sidebar": {
+        "portfolios": "PORTFÖYLER",
+        "loading": "Portföyler yükleniyor...",
+        "noPortfolios": "Henüz portföy yok."
+    },
+    "modals": {
+        "createNew": "YENİ PORTFÖY OLUŞTUR",
+        "cancel": "İPTAL",
+        "create": "OLUŞTUR",
+        "add": "EKLE",
+        "sell": "SAT"
+    }
+}

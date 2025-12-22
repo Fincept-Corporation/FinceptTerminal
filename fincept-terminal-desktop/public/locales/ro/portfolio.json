@@ -1,0 +1,28 @@
+{
+    "title": "MANAGER PORTOFOLIU FINCEPT",
+    "header": {
+        "live": "ÎN DIRECT",
+        "updating": "ACTUALIZARE",
+        "newPortfolio": "PORTOFOLIU NOU",
+        "refresh": "REÎMPROSPĂTARE",
+        "exportCsv": "EXPORT CSV"
+    },
+    "summary": {
+        "totalValue": "VALOARE TOTALĂ",
+        "dayPnl": "P/P ZI",
+        "totalPnl": "P/P TOTAL",
+        "positions": "POZIȚII"
+    },
+    "sidebar": {
+        "portfolios": "PORTOFOLII",
+        "loading": "Încărcare portofolii...",
+        "noPortfolios": "Fără portofolii încă."
+    },
+    "modals": {
+        "createNew": "CREEAZĂ PORTOFOLIU NOU",
+        "cancel": "ANULEAZĂ",
+        "create": "CREEAZĂ",
+        "add": "ADAUGĂ",
+        "sell": "VINDE"
+    }
+}

@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "navigation": {
+    "dashboard": "Painel",
+    "markets": "Mercados",
+    "news": "Notícias",
+    "portfolio": "Portfólio",
+    "backtesting": "Backtesting",
+    "watchlist": "Lista de Observação",
+    "research": "Pesquisa",
+    "screener": "Screener",
+    "trading": "Trading",
+    "chat": "Chat IA",
+    "agents": "Agentes",
+    "settings": "Configurações",
+    "profile": "Perfil",
+    "forum": "Fórum",
+    "help": "Ajuda",
+    "logout": "Sair"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "functionKeys": {
+    "f1": "PAINEL",
+    "f2": "MERC",
+    "f3": "NEWS",
+    "f4": "PORT",
+    "f5": "BKTEST",
+    "f6": "OBS",
+    "f7": "PESQ",
+    "f8": "SCRN",
+    "f9": "TRADE",
+    "f10": "IA",
+    "f11": "COMP",
+    "f12": "PERFIL"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "status": {
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "loading": "Carregando...",
+    "error": "Erro",
+    "ready": "Pronto"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
-  },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Mais abas nos menus de ferramentas",
+    "enterCommand": "Digite comando",
+    "search": "Pesquisar"
   }
 }

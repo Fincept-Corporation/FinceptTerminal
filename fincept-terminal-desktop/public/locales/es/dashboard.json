@@ -1,30 +1,64 @@
 {
-  "welcome": "Bienvenido a Fincept Terminal",
-  "tabs": {
-    "dashboard": "Panel",
-    "markets": "Mercados",
-    "news": "Noticias",
-    "watchlist": "Lista de seguimiento",
-    "portfolio": "Cartera",
-    "analytics": "Análisis",
-    "economics": "Economía",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Calendario económico",
-    "geopolitics": "Geopolítica",
-    "maritime": "Marítimo",
-    "options": "Opciones",
-    "equityResearch": "Investigación de acciones",
-    "screener": "Filtrador",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Documentos",
-    "nodeEditor": "Editor de nodos",
-    "codeEditor": "Editor de código",
-    "forum": "Foro",
-    "marketplace": "Mercado",
-    "profile": "Perfil",
-    "support": "Soporte",
-    "settings": "Configuración"
+  "header": {
+    "title": "PANEL PERSONALIZABLE",
+    "live": "EN VIVO",
+    "widgets": "WIDGETS"
+  },
+  "buttons": {
+    "addWidget": "AGREGAR WIDGET",
+    "saveLayout": "GUARDAR DISEÑO",
+    "reset": "RESTABLECER"
+  },
+  "widgets": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "configure": "Configurar",
+    "refresh": "Actualizar",
+    "remove": "Eliminar",
+    "globalIndices": "ÍNDICES GLOBALES - TOP 12",
+    "forex": "PARES FOREX",
+    "crypto": "CRIPTOMONEDAS",
+    "commodities": "COMMODITIES",
+    "bonds": "BONOS",
+    "etfs": "ETFs",
+    "news": "NOTICIAS",
+    "forum": "FORO",
+    "watchlist": "LISTA DE SEGUIMIENTO",
+    "maritime": "MARÍTIMO",
+    "index": "ÍNDICE",
+    "symbol": "SÍMBOLO",
+    "name": "NOMBRE",
+    "price": "PRECIO",
+    "change": "CAMBIO",
+    "percentChange": "%CAMBIO",
+    "high": "ALTO",
+    "low": "BAJO",
+    "noIndexData": "Sin datos de índices disponibles",
+    "noForexData": "Sin datos de forex disponibles",
+    "noCryptoData": "Sin datos de cripto disponibles",
+    "noData": "Sin datos disponibles"
+  },
+  "tips": {
+    "drag": "Arrastra widgets para reorganizar",
+    "resize": "Redimensiona desde la esquina inferior derecha",
+    "remove": "Elimina widgets con el botón X",
+    "responsive": "Diseño responsive - usa ancho completo"
+  },
+  "loading": {
+    "title": "Inicializando Panel",
+    "description": "Configurando caché de base de datos para carga más rápida...",
+    "note": "Esto solo tomará un momento en el primer inicio"
+  },
+  "empty": {
+    "noWidgets": "Sin widgets en el panel",
+    "addFirst": "AGREGA TU PRIMER WIDGET"
+  },
+  "status": {
+    "version": "Panel Personalizable Fincept v2.0.0 | Espacio de trabajo arrastrable",
+    "layout": "Diseño",
+    "custom": "Personalizado",
+    "empty": "Vacío",
+    "active": "ACTIVO",
+    "cache": "Caché: HABILITADO"
   }
 }

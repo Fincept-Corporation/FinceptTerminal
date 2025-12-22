@@ -1,30 +1,43 @@
 {
-  "welcome": "Welcome to Fincept Terminal",
-  "tabs": {
-    "dashboard": "Dashboard",
-    "markets": "Markets",
-    "news": "News",
-    "watchlist": "Watchlist",
-    "portfolio": "Portfolio",
-    "analytics": "Analytics",
-    "economics": "Economics",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Economic Calendar",
-    "geopolitics": "Geopolitics",
-    "maritime": "Maritime",
-    "options": "Options",
-    "equityResearch": "Equity Research",
-    "screener": "Screener",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Docs",
-    "nodeEditor": "Node Editor",
-    "codeEditor": "Code Editor",
-    "forum": "Forum",
-    "marketplace": "Marketplace",
-    "profile": "Profile",
-    "support": "Support",
-    "settings": "Settings"
+  "header": {
+    "title": "কাস্টমাইজযোগ্য ড্যাশবোর্ড",
+    "live": "লাইভ",
+    "widgets": "উইজেট"
+  },
+  "widgets": {
+    "loading": "লোড হচ্ছে...",
+    "error": "ত্রুটি",
+    "configure": "কনফিগার",
+    "refresh": "রিফ্রেশ",
+    "remove": "মুছুন",
+    "globalIndices": "গ্লোবাল ইনডেক্স - টপ 12",
+    "forex": "ফরেক্স পেয়ার",
+    "crypto": "ক্রিপ্টো",
+    "commodities": "কমোডিটি",
+    "bonds": "বন্ড",
+    "etfs": "ETF",
+    "news": "সংবাদ",
+    "forum": "ফোরাম",
+    "watchlist": "ওয়াচলিস্ট",
+    "maritime": "সামুদ্রিক",
+    "index": "সূচক",
+    "symbol": "প্রতীক",
+    "name": "নাম",
+    "price": "মূল্য",
+    "change": "পরিবর্তন",
+    "percentChange": "%পরিবর্তন",
+    "high": "সর্বোচ্চ",
+    "low": "সর্বনিম্ন",
+    "noIndexData": "কোনো সূচক ডেটা নেই",
+    "noData": "কোনো ডেটা নেই"
+  },
+  "buttons": {
+    "addWidget": "উইজেট যোগ করুন",
+    "saveLayout": "লেআউট সংরক্ষণ",
+    "reset": "রিসেট"
+  },
+  "empty": {
+    "noWidgets": "ড্যাশবোর্ডে কোনো উইজেট নেই",
+    "addFirst": "আপনার প্রথম উইজেট যোগ করুন"
   }
 }

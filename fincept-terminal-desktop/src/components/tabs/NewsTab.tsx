@@ -3,7 +3,8 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { fetchNewsWithCache, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData } from '../../services/newsService';
 import { contextRecorderService } from '../../services/contextRecorderService';
 import RecordingControlPanel from '../common/RecordingControlPanel';
-import { TabFooter } from '@/components/common/TabFooter';
+import { TimezoneSelector } from '../common/TimezoneSelector';
+import { useTranslation } from 'react-i18next';
 
 // Extend Window interface for Tauri
 declare global {
@@ -13,6 +14,7 @@ declare global {
 }
 
 const NewsTab: React.FC = () => {
+  const { t } = useTranslation('news');
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeFilter, setActiveFilter] = useState('ALL');
@@ -150,7 +152,7 @@ const NewsTab: React.FC = () => {
   // Generate continuous ticker text with all news items
   const generateContinuousTickerText = () => {
     if (newsArticles.length === 0) {
-      return 'Loading news feeds...';
+      return t('messages.loadingFeeds');
     }
 
     // Create a long string of all news items
@@ -231,15 +233,15 @@ const NewsTab: React.FC = () => {
       }}>
         {/* Main Status Line */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
-          <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT TERMINAL PROFESSIONAL NEWS</span>
+          <span style={{ color: colors.primary, fontWeight: 'bold' }}>{t('title')}</span>
           <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.alert, fontWeight: 'bold', animation: 'blink 1s infinite' }}>LIVE FEED</span>
+          <span style={{ color: colors.alert, fontWeight: 'bold', animation: 'blink 1s infinite' }}>{t('header.liveFeed')}</span>
           <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.warning }}>ALERTS: {alertCount}</span>
+          <span style={{ color: colors.warning }}>{t('header.alerts')}: {alertCount}</span>
           <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.secondary }}>● {getRSSFeedCount()} SOURCES</span>
+          <span style={{ color: colors.secondary }}>● {getRSSFeedCount()} {t('header.sources')}</span>
           <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
+          <TimezoneSelector compact />
           <span style={{ color: colors.text }}>|</span>
           <button
             onClick={handleRefresh}
@@ -259,7 +261,7 @@ const NewsTab: React.FC = () => {
             }}
             title="Refresh news feeds"
           >
-            🔄 {loading ? 'UPDATING...' : 'REFRESH'}
+            🔄 {loading ? t('header.updating') : t('header.refresh')}
           </button>
           <span style={{ color: colors.text }}>|</span>
           <button
@@ -300,7 +302,7 @@ const NewsTab: React.FC = () => {
             boxShadow: `0 4px 8px rgba(0,0,0,0.3)`
           }}>
             <div style={{ fontSize: '11px', color: colors.warning, fontWeight: 'bold', marginBottom: '6px' }}>
-              AUTO-REFRESH INTERVAL
+              {t('autoRefresh.title')}
             </div>
             {[1, 2, 5, 10, 15, 30].map(min => (
               <button
@@ -322,7 +324,7 @@ const NewsTab: React.FC = () => {
                   textAlign: 'left'
                 }}
               >
-                {min} minute{min > 1 ? 's' : ''}
+                {min} {min > 1 ? t('autoRefresh.minutes') : t('autoRefresh.minute')}
               </button>
             ))}
           </div>
@@ -330,7 +332,7 @@ const NewsTab: React.FC = () => {
 
         {/* News Ticker - Continuous seamless scroll like Bloomberg */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', marginBottom: '2px' }}>
-          <span style={{ color: colors.warning, fontWeight: 'bold' }}>BREAKING:</span>
+          <span style={{ color: colors.warning, fontWeight: 'bold' }}>{t('messages.breaking')}:</span>
           <div className="ticker-wrap" style={{
             flex: 1,
             overflow: 'hidden',
@@ -343,23 +345,23 @@ const NewsTab: React.FC = () => {
             </div>
           </div>
           <span style={{ color: colors.secondary, fontSize: '9px' }}>
-            ● LIVE
+            ● {t('header.live')}
           </span>
         </div>
 
         {/* Sources and Stats */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '10px', flexWrap: 'wrap' }}>
-          <span style={{ color: colors.textMuted }}>ACTIVE SOURCES:</span>
+          <span style={{ color: colors.textMuted }}>{t('header.activeSources')}:</span>
           {activeSources.slice(0, 12).map((source, idx) => (
             <span key={idx} style={{ color: colors.secondary }}>{source}●</span>
           ))}
           <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.textMuted }}>ARTICLES:</span>
+          <span style={{ color: colors.textMuted }}>{t('header.articles')}:</span>
           <span style={{ color: colors.accent }}>{newsArticles.length}</span>
           <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.textMuted }}>STATUS:</span>
+          <span style={{ color: colors.textMuted }}>{t('header.status')}:</span>
           <span style={{ color: loading ? colors.warning : colors.secondary }}>
-            {loading ? 'UPDATING...' : (isUsingMockData() ? '● DEMO MODE' : '● LIVE')}
+            {loading ? t('header.updating') : (isUsingMockData() ? `● ${t('header.demoMode')}` : `● ${t('header.live')}`)}
           </span>
         </div>
       </div>
@@ -455,7 +457,7 @@ const NewsTab: React.FC = () => {
                 backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                 cursor: article.link ? 'pointer' : 'default'
               }}
-              onClick={() => setSelectedArticle(article)}
+                onClick={() => setSelectedArticle(article)}
               >
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
                   <span style={{ color: colors.textMuted, minWidth: '50px' }}>{article.time}</span>
@@ -504,7 +506,7 @@ const NewsTab: React.FC = () => {
                 backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                 cursor: article.link ? 'pointer' : 'default'
               }}
-              onClick={() => setSelectedArticle(article)}
+                onClick={() => setSelectedArticle(article)}
               >
                 <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
                   <span style={{ color: colors.textMuted, minWidth: '50px' }}>{article.time}</span>
@@ -554,15 +556,15 @@ const NewsTab: React.FC = () => {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
                   <span style={{ color: colors.textMuted }}>Bullish Articles:</span>
-                  <span style={{ color: colors.secondary }}>{bullishCount} ({Math.round((bullishCount/totalCount)*100)}%)</span>
+                  <span style={{ color: colors.secondary }}>{bullishCount} ({Math.round((bullishCount / totalCount) * 100)}%)</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
                   <span style={{ color: colors.textMuted }}>Bearish Articles:</span>
-                  <span style={{ color: colors.alert }}>{bearishCount} ({Math.round((bearishCount/totalCount)*100)}%)</span>
+                  <span style={{ color: colors.alert }}>{bearishCount} ({Math.round((bearishCount / totalCount) * 100)}%)</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
                   <span style={{ color: colors.textMuted }}>Neutral Articles:</span>
-                  <span style={{ color: colors.warning }}>{neutralCount} ({Math.round((neutralCount/totalCount)*100)}%)</span>
+                  <span style={{ color: colors.warning }}>{neutralCount} ({Math.round((neutralCount / totalCount) * 100)}%)</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px', paddingTop: '2px', borderTop: `1px solid ${colors.textMuted}` }}>
                   <span style={{ color: colors.accent, fontWeight: 'bold' }}>Sentiment Score:</span>
@@ -615,7 +617,7 @@ const NewsTab: React.FC = () => {
                   backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                   cursor: article.link ? 'pointer' : 'default'
                 }}
-                onClick={() => setSelectedArticle(article)}
+                  onClick={() => setSelectedArticle(article)}
                 >
                   <div style={{ display: 'flex', gap: '4px', marginBottom: '1px', fontSize: '8px' }}>
                     <span style={{ color: colors.textMuted, minWidth: '50px' }}>{article.time}</span>
@@ -682,7 +684,7 @@ const NewsTab: React.FC = () => {
           justifyContent: 'center',
           zIndex: 9999
         }}
-        onClick={() => setSelectedArticle(null)}
+          onClick={() => setSelectedArticle(null)}
         >
           <div style={{
             backgroundColor: colors.panel,
@@ -698,7 +700,7 @@ const NewsTab: React.FC = () => {
             boxShadow: `0 0 20px ${colors.primary}`,
             transition: 'all 0.3s ease'
           }}
-          onClick={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
             <div style={{
@@ -923,63 +925,63 @@ const NewsTab: React.FC = () => {
                     border: `1px solid ${colors.textMuted}`,
                     fontSize: '10px'
                   }}>
-                <div>
-                  <span style={{ color: colors.textMuted }}>SOURCE: </span>
-                  <span style={{ color: colors.accent, fontWeight: 'bold' }}>{selectedArticle.source}</span>
-                </div>
-                <div>
-                  <span style={{ color: colors.textMuted }}>TIME: </span>
-                  <span style={{ color: colors.text }}>{selectedArticle.time}</span>
-                </div>
-                <div>
-                  <span style={{ color: colors.textMuted }}>REGION: </span>
-                  <span style={{ color: colors.purple }}>{selectedArticle.region}</span>
-                </div>
-                <div>
-                  <span style={{ color: colors.textMuted }}>SENTIMENT: </span>
-                  <span style={{ color: getSentimentColor(selectedArticle.sentiment), fontWeight: 'bold' }}>
-                    {selectedArticle.sentiment}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ color: colors.textMuted }}>IMPACT: </span>
-                  <span style={{ color: getImpactColor(selectedArticle.impact), fontWeight: 'bold' }}>
-                    {selectedArticle.impact}
-                  </span>
-                </div>
-                {selectedArticle.tickers && selectedArticle.tickers.length > 0 && (
-                  <div>
-                    <span style={{ color: colors.textMuted }}>TICKERS: </span>
-                    <span style={{ color: colors.secondary, fontWeight: 'bold' }}>
-                      {selectedArticle.tickers.join(', ')}
-                    </span>
+                    <div>
+                      <span style={{ color: colors.textMuted }}>SOURCE: </span>
+                      <span style={{ color: colors.accent, fontWeight: 'bold' }}>{selectedArticle.source}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: colors.textMuted }}>TIME: </span>
+                      <span style={{ color: colors.text }}>{selectedArticle.time}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: colors.textMuted }}>REGION: </span>
+                      <span style={{ color: colors.purple }}>{selectedArticle.region}</span>
+                    </div>
+                    <div>
+                      <span style={{ color: colors.textMuted }}>SENTIMENT: </span>
+                      <span style={{ color: getSentimentColor(selectedArticle.sentiment), fontWeight: 'bold' }}>
+                        {selectedArticle.sentiment}
+                      </span>
+                    </div>
+                    <div>
+                      <span style={{ color: colors.textMuted }}>IMPACT: </span>
+                      <span style={{ color: getImpactColor(selectedArticle.impact), fontWeight: 'bold' }}>
+                        {selectedArticle.impact}
+                      </span>
+                    </div>
+                    {selectedArticle.tickers && selectedArticle.tickers.length > 0 && (
+                      <div>
+                        <span style={{ color: colors.textMuted }}>TICKERS: </span>
+                        <span style={{ color: colors.secondary, fontWeight: 'bold' }}>
+                          {selectedArticle.tickers.join(', ')}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Article Headline */}
-              <div style={{
-                color: colors.text,
-                fontSize: '14px',
-                fontWeight: 'bold',
-                lineHeight: '1.4',
-                marginBottom: '12px',
-                padding: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                borderLeft: `4px solid ${getPriorityColor(selectedArticle.priority)}`
-              }}>
-                {selectedArticle.headline}
-              </div>
+                  {/* Article Headline */}
+                  <div style={{
+                    color: colors.text,
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    lineHeight: '1.4',
+                    marginBottom: '12px',
+                    padding: '8px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    borderLeft: `4px solid ${getPriorityColor(selectedArticle.priority)}`
+                  }}>
+                    {selectedArticle.headline}
+                  </div>
 
-              {/* Article Summary */}
-              <div style={{
-                color: colors.textMuted,
-                fontSize: '12px',
-                lineHeight: '1.6',
-                marginBottom: '16px'
-              }}>
-                {selectedArticle.summary}
-              </div>
+                  {/* Article Summary */}
+                  <div style={{
+                    color: colors.textMuted,
+                    fontSize: '12px',
+                    lineHeight: '1.6',
+                    marginBottom: '16px'
+                  }}>
+                    {selectedArticle.summary}
+                  </div>
 
                   {/* Action Buttons */}
                   {selectedArticle.link && (
@@ -1150,19 +1152,6 @@ const NewsTab: React.FC = () => {
           background: transparent;
         }
       `}</style>
-
-      {/* Footer */}
-      <TabFooter
-        tabName="FINANCIAL NEWS"
-        leftInfo={[
-          { label: `Sources: ${getActiveSources().length}`, color: colors.textMuted },
-          { label: `Feeds: ${getRSSFeedCount()}`, color: colors.textMuted },
-          { label: isUsingMockData() ? 'Mode: DEMO' : 'Mode: LIVE', color: isUsingMockData() ? colors.warning : colors.secondary },
-        ]}
-        statusInfo={`Articles: ${newsArticles.length} | ${loading ? 'Refreshing...' : 'Ready'}`}
-        backgroundColor={colors.panel}
-        borderColor={colors.textMuted}
-      />
     </div>
   );
 };
