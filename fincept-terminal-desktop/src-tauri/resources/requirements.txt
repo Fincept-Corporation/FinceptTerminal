@@ -26,7 +26,7 @@ peewee==3.18.3
 pip_system_certs==5.3
 platformdirs==4.5.0
 propcache==0.4.1
-protobuf==6.33.1
+protobuf>=3.20.2,<6.0.0
 pyarrow==22.0.0
 pycparser==2.23
 python-dateutil==2.9.0.post0
