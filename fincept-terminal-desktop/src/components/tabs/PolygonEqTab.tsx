@@ -3,6 +3,7 @@ import { polygonService } from '../../services/polygonService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { yfinanceService, HistoricalDataPoint } from '../../services/yfinanceService';
 import CandlestickChart, { CandlestickDataPoint } from '../charts/CandlestickChart';
+import { TabFooter } from '@/components/common/TabFooter';
 
 const PolygonEqTab: React.FC = () => {
   const { colors } = useTerminalTheme();
@@ -1207,19 +1208,16 @@ const PolygonEqTab: React.FC = () => {
       </div>
 
       {/* FOOTER - Compact */}
-      <div style={{
-        borderTop: `1px solid ${COLORS.BORDER}`,
-        backgroundColor: COLORS.PANEL_BG,
-        padding: '4px 10px',
-        fontSize: '8px',
-        color: COLORS.GRAY,
-        display: 'flex',
-        justifyContent: 'space-between',
-        flexShrink: 0,
-      }}>
-        <span>Polygon.io API | 31/31 Endpoints | Institutional Data</span>
-        <span>{symbol} | {new Date().toLocaleString()}</span>
-      </div>
+      <TabFooter
+        tabName="POLYGON.IO EQUITY DATA"
+        leftInfo={[
+          { label: '31/31 Endpoints', color: COLORS.GRAY },
+          { label: 'Institutional Data', color: COLORS.GRAY },
+        ]}
+        statusInfo={`${symbol} | ${new Date().toLocaleString()}`}
+        backgroundColor={COLORS.PANEL_BG}
+        borderColor={COLORS.BORDER}
+      />
 
       {/* Custom Scrollbar - Only main window scrolls */}
       <style>{`

@@ -45,6 +45,7 @@ import { Button } from '@/components/ui/button';
 import { llmApiService, ChatMessage as APIMessage } from '@/services/llmApi';
 import { sqliteService } from '@/services/sqliteService';
 import MarkdownRenderer from '../common/MarkdownRenderer';
+import { TabFooter } from '@/components/common/TabFooter';
 
 // Bloomberg color palette
 const BLOOMBERG_COLORS = {
@@ -1710,29 +1711,16 @@ const ReportBuilderTab: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Footer */}
-      <div style={{
-        borderTop: `2px solid ${BLOOMBERG_COLORS.ORANGE}`,
-        padding: '8px 16px',
-        background: `linear-gradient(180deg, ${BLOOMBERG_COLORS.PANEL_BG} 0%, #0a0a0a 100%)`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexShrink: 0,
-        flexWrap: 'wrap',
-        gap: '12px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '9px' }}>
-          <span style={{ color: BLOOMBERG_COLORS.ORANGE, fontWeight: 'bold' }}>REPORT BUILDER v1.0.0</span>
-          <span style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>|</span>
-          <span style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}>Components: {template.components.length}</span>
-          <span style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>|</span>
-          <span style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}>Theme: {pageTheme.charAt(0).toUpperCase() + pageTheme.slice(1)}</span>
-        </div>
-        <div style={{ fontSize: '9px', color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-          {currentTime.toLocaleTimeString()} | PDF Generator: Rust printpdf
-        </div>
-      </div>
+      <TabFooter
+        tabName="REPORT BUILDER"
+        leftInfo={[
+          { label: `Components: ${template.components.length}`, color: BLOOMBERG_COLORS.TEXT_PRIMARY },
+          { label: `Theme: ${pageTheme.charAt(0).toUpperCase() + pageTheme.slice(1)}`, color: BLOOMBERG_COLORS.TEXT_PRIMARY },
+        ]}
+        statusInfo={`${currentTime.toLocaleTimeString()} | PDF Generator: Rust printpdf`}
+        backgroundColor={BLOOMBERG_COLORS.PANEL_BG}
+        borderColor={BLOOMBERG_COLORS.ORANGE}
+      />
     </div>
   );
 };

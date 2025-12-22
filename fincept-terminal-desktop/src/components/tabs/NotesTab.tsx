@@ -11,6 +11,7 @@ import {
 import { notesService, Note, NoteTemplate } from '../../services/notesService';
 import { noteReminderService } from '../../services/noteReminderService.tsx';
 import { toast } from 'sonner';
+import { TabFooter } from '@/components/common/TabFooter';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {
@@ -1550,24 +1551,21 @@ export function NotesTab() {
       </div>
 
       {/* ========== STATUS BAR ========== */}
-      <div style={{
-        borderTop: `1px solid ${BLOOMBERG.BORDER}`,
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        padding: '4px 12px',
-        fontSize: '9px',
-        color: BLOOMBERG.GRAY,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexShrink: 0
-      }}>
-        <span>Fincept Terminal v3.0.12 | Professional Financial Notes</span>
-        <span>
-          Notes: <span style={{ color: BLOOMBERG.ORANGE }}>{statistics?.total || 0}</span> |
-          Category: <span style={{ color: BLOOMBERG.CYAN }}>{selectedCategory}</span> |
-          Displayed: <span style={{ color: BLOOMBERG.YELLOW }}>{filteredNotes.length}</span>
-        </span>
-      </div>
+      <TabFooter
+        tabName="FINANCIAL NOTES"
+        leftInfo={[
+          { label: 'Professional Note-Taking', color: BLOOMBERG.GRAY },
+        ]}
+        statusInfo={
+          <span>
+            Notes: <span style={{ color: BLOOMBERG.ORANGE }}>{statistics?.total || 0}</span> |
+            Category: <span style={{ color: BLOOMBERG.CYAN }}>{selectedCategory}</span> |
+            Displayed: <span style={{ color: BLOOMBERG.YELLOW }}>{filteredNotes.length}</span>
+          </span>
+        }
+        backgroundColor={BLOOMBERG.HEADER_BG}
+        borderColor={BLOOMBERG.BORDER}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { UserApiService } from '@/services/userApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { TabFooter } from '@/components/common/TabFooter';
 
 type ProfileScreen = 'overview' | 'usage' | 'payments' | 'subscriptions' | 'support' | 'settings';
 
@@ -959,7 +960,24 @@ const ProfileTab: React.FC = () => {
     );
   }
 
-  return session.user_type === 'guest' ? renderGuestProfile() : renderUserProfile();
+  const profileContent = session.user_type === 'guest' ? renderGuestProfile() : renderUserProfile();
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {profileContent}
+
+      <TabFooter
+        tabName="PROFILE"
+        leftInfo={[
+          { label: `Type: ${session.user_type?.toUpperCase()}`, color: colors.textMuted },
+          { label: `Screen: ${activeScreen?.toUpperCase()}`, color: colors.textMuted },
+        ]}
+        statusInfo={session.user_info?.email || 'Guest Session'}
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
+      />
+    </div>
+  );
 };
 
 export default ProfileTab;

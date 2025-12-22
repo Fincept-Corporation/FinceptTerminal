@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MarketplaceApiService, Dataset } from '@/services/marketplaceApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface PricingTier {
   tier: string;
@@ -723,20 +724,21 @@ const MarketplaceTab: React.FC = () => {
       </div>
 
       {/* Footer */}
-      <div style={{ borderTop: `3px solid ${C.ORANGE}`, backgroundColor: C.PANEL_BG, padding: '12px 16px', fontSize: '11px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <span style={{ color: C.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>FINCEPT MARKETPLACE v3.0</span>
-            <span style={{ color: C.GRAY }}>|</span>
-            <span style={{ color: C.CYAN }}>🔒 SECURE PRODUCTS</span>
-            <span style={{ color: C.GRAY }}>|</span>
-            <span style={{ color: C.GREEN }}>✓ VERIFIED VENDORS</span>
-          </div>
-          <div style={{ color: C.GRAY }}>
-            Screen: <span style={{ color: C.ORANGE, fontWeight: 'bold' }}>{currentScreen}</span> | Showing: {filteredProducts.length} / {products.length}
-          </div>
-        </div>
-      </div>
+      <TabFooter
+        tabName="MARKETPLACE"
+        leftInfo={[
+          { label: '🔒 SECURE PRODUCTS', color: C.CYAN },
+          { label: '✓ VERIFIED VENDORS', color: C.GREEN },
+        ]}
+        statusInfo={
+          <>
+            Screen: <span style={{ color: C.ORANGE, fontWeight: 'bold' }}>{currentScreen}</span> |
+            Showing: {filteredProducts.length} / {products.length}
+          </>
+        }
+        backgroundColor={C.PANEL_BG}
+        borderColor={C.ORANGE}
+      />
     </div>
   );
 };

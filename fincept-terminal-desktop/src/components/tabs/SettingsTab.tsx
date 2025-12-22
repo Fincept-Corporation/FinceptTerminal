@@ -13,6 +13,7 @@ import { TerminalConfigPanel } from '@/components/settings/TerminalConfigPanel';
 import { useTimezone, TIMEZONE_OPTIONS } from '@/contexts/TimezoneContext';
 import { Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { TabFooter } from '@/components/common/TabFooter';
 
 export default function SettingsTab() {
   const { t } = useTranslation('settings');
@@ -2029,28 +2030,16 @@ export default function SettingsTab() {
       </div>
 
       {/* Footer */}
-      <div style={{
-        borderTop: `2px solid ${colors.primary}`,
-        padding: '8px 16px',
-        background: `linear-gradient(180deg, ${colors.panel} 0%, #1a1a1a 100%)`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexShrink: 0,
-        flexWrap: 'wrap',
-        gap: '12px'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '9px' }}>
-          <span style={{ color: colors.primary, fontWeight: 'bold' }}>SETTINGS v2.0.0</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.text }}>Database: SQLite</span>
-          <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.text }}>Storage: File-based</span>
-        </div>
-        <div style={{ fontSize: '9px', color: colors.text }}>
-          All data stored securely in fincept_terminal.db
-        </div>
-      </div>
+      <TabFooter
+        tabName="SETTINGS"
+        leftInfo={[
+          { label: 'Database: SQLite', color: colors.text },
+          { label: 'Storage: File-based', color: colors.text },
+        ]}
+        statusInfo="All data stored securely in fincept_terminal.db"
+        backgroundColor={colors.panel}
+        borderColor={colors.primary}
+      />
     </div>
   );
 }

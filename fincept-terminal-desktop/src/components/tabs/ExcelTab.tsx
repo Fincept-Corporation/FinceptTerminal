@@ -7,6 +7,7 @@ import { Upload, Download, Plus, Trash2, Save, FileSpreadsheet, History, Camera,
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readFile as tauriReadFile, writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import { excelService, ExcelFile, ExcelSnapshot } from '@/services/excelService';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface SheetData {
   name: string;
@@ -850,6 +851,18 @@ const ExcelTab: React.FC = () => {
           background: #404040 !important;
         }
       `}</style>
+
+      <TabFooter
+        tabName="EXCEL SPREADSHEET"
+        leftInfo={[
+          { label: `File: ${fileName}`, color: '#a3a3a3' },
+          { label: `Sheets: ${sheets.length}`, color: '#a3a3a3' },
+          { label: `Active: ${sheets[activeSheetIndex]?.name}`, color: '#a3a3a3' },
+        ]}
+        statusInfo={`${currentFileId ? 'Saved' : 'Unsaved'} | Snapshots: ${snapshots.length} | Recent: ${recentFiles.length}`}
+        backgroundColor="#1a1a1a"
+        borderColor="#2d2d2d"
+      />
     </div>
   );
 };

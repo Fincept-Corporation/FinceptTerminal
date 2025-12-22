@@ -20,6 +20,7 @@ import { TradingChart, DepthChart, VolumeProfile } from './trading/charts';
 import { AccountStats, FeesDisplay, MarginPanel } from './trading/core/AccountInfo';
 import { PortfolioAggregator, ArbitrageDetector } from './trading/cross-exchange';
 import type { OrderRequest } from '../../types/trading';
+import { TabFooter } from '@/components/common/TabFooter';
 
 interface OrderBookLevel {
   price: number;
@@ -1694,28 +1695,25 @@ export function TradingTab() {
       </div>
 
       {/* ========== STATUS BAR ========== */}
-      <div style={{
-        borderTop: `1px solid ${BLOOMBERG.BORDER}`,
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        padding: '4px 12px',
-        fontSize: '9px',
-        color: BLOOMBERG.GRAY,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexShrink: 0
-      }}>
-        <span>Fincept Terminal v3.0.12 | Professional Trading Platform</span>
-        <span>
-          Broker: <span style={{ color: BLOOMBERG.ORANGE }}>{activeBroker?.toUpperCase() || 'NONE'}</span> |
-          Mode: <span style={{ color: tradingMode === 'paper' ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
-            {tradingMode.toUpperCase()}
-          </span> |
-          Status: <span style={{ color: activeAdapter?.isConnected() ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
-            {activeAdapter?.isConnected() ? 'CONNECTED' : 'DISCONNECTED'}
+      <TabFooter
+        tabName="TRADING PLATFORM"
+        leftInfo={[
+          { label: 'Professional Trading', color: BLOOMBERG.GRAY },
+        ]}
+        statusInfo={
+          <span>
+            Broker: <span style={{ color: BLOOMBERG.ORANGE }}>{activeBroker?.toUpperCase() || 'NONE'}</span> |
+            Mode: <span style={{ color: tradingMode === 'paper' ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+              {tradingMode.toUpperCase()}
+            </span> |
+            Status: <span style={{ color: activeAdapter?.isConnected() ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+              {activeAdapter?.isConnected() ? 'CONNECTED' : 'DISCONNECTED'}
+            </span>
           </span>
-        </span>
-      </div>
+        }
+        backgroundColor={BLOOMBERG.HEADER_BG}
+        borderColor={BLOOMBERG.BORDER}
+      />
     </div>
   );
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, BarChart, Bar } from 'recharts';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { geopoliticsService } from '@/services/geopoliticsService';
+import { TabFooter } from '@/components/common/TabFooter';
 
 const GeopoliticsTab: React.FC = () => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
@@ -820,19 +821,16 @@ const GeopoliticsTab: React.FC = () => {
       </div>
 
       {/* Status Bar */}
-      <div style={{
-        borderTop: `1px solid ${colors.textMuted}`,
-        backgroundColor: colors.panel,
-        padding: '4px 8px',
-        fontSize: '10px',
-        color: colors.textMuted,
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Geopolitical Intelligence System v5.0 | WTO Real-time Data | {qrNotifications.length + epingNotifications.length} Total Notifications</span>
-          <span>Last Updated: {currentTime.toTimeString().substring(0, 8)}</span>
-        </div>
-      </div>
+      <TabFooter
+        tabName="GEOPOLITICS"
+        leftInfo={[
+          { label: 'WTO Real-time Data', color: colors.textMuted },
+          { label: `${qrNotifications.length + epingNotifications.length} Total Notifications`, color: colors.textMuted },
+        ]}
+        statusInfo={`Last Updated: ${currentTime.toTimeString().substring(0, 8)}`}
+        backgroundColor={colors.panel}
+        borderColor={colors.textMuted}
+      />
     </div>
   );
 };

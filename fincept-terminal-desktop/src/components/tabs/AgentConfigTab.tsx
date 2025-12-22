@@ -22,6 +22,7 @@ import {
   Key,
 } from 'lucide-react';
 import { sqliteService, type LLMConfig } from '@/services/sqliteService';
+import { TabFooter } from '@/components/common/TabFooter';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {
@@ -1285,6 +1286,17 @@ const AgentConfigTab: React.FC = () => {
         )}
       </div>
 
+      <TabFooter
+        tabName="AGENT CONFIGURATION"
+        leftInfo={[
+          { label: `Agents: ${agentConfigs.length}`, color: BLOOMBERG.GRAY },
+          { label: `LLM Configs: ${llmConfigs.length}`, color: BLOOMBERG.GRAY },
+          { label: `Active: ${llmConfigs.filter(c => c.is_active).length}`, color: BLOOMBERG.GREEN },
+        ]}
+        statusInfo={testResult ? (testResult.success ? 'Test Passed' : 'Test Failed') : 'Ready'}
+        backgroundColor={BLOOMBERG.PANEL_BG}
+        borderColor={BLOOMBERG.BORDER}
+      />
     </div>
   );
 };

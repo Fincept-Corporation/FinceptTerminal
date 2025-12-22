@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, BarSeries } from 'lightweight-charts';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Area } from 'recharts';
 import { ProChartWithToolkit } from './trading/charts/ProChartWithToolkit';
+import { TabFooter } from '@/components/common/TabFooter';
 
 const COLORS = {
   ORANGE: '#FFA500',
@@ -2814,20 +2815,14 @@ const EquityResearchTab: React.FC = () => {
       </div>
 
       {/* Footer / Status Bar */}
-      <div style={{
-        borderTop: `1px solid ${COLORS.BORDER}`,
-        backgroundColor: COLORS.PANEL_BG,
-        padding: '4px 12px',
-        fontSize: '10px',
-        color: COLORS.GRAY,
-        flexShrink: 0,
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <span>Equity Research Terminal v1.0 | Real-time data analysis and company fundamentals</span>
-            <span>Data Source: YFinance</span>
-          </div>
-          <div style={{ display: 'flex', gap: '16px' }}>
+      <TabFooter
+        tabName="EQUITY RESEARCH"
+        leftInfo={[
+          { label: 'Real-time data analysis and company fundamentals', color: COLORS.GRAY },
+          { label: 'Data Source: YFinance', color: COLORS.GRAY },
+        ]}
+        statusInfo={
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
             <span style={{ color: COLORS.CYAN, fontWeight: 'bold' }}>{currentSymbol}</span>
             {stockInfo?.exchange && <span>{stockInfo.exchange}</span>}
             {currentPrice > 0 && (
@@ -2840,12 +2835,14 @@ const EquityResearchTab: React.FC = () => {
                 )}
               </>
             )}
-            <span style={{ color: loading ? COLORS.YELLOW : COLORS.GREEN }}>
+            <span style={{ color: loading ? COLORS.YELLOW : COLORS.GREEN, fontWeight: 'bold' }}>
               {loading ? 'LOADING...' : 'READY'}
             </span>
           </div>
-        </div>
-      </div>
+        }
+        backgroundColor={COLORS.PANEL_BG}
+        borderColor={COLORS.BORDER}
+      />
 
       {/* Custom Scrollbar Styles */}
       <style>{`

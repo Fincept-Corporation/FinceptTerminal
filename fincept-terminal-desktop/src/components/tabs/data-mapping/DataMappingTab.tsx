@@ -22,6 +22,7 @@ import { TemplateLibrary } from './components/TemplateLibrary';
 import { mappingEngine } from './engine/MappingEngine';
 import { mappingDatabase } from './services/MappingDatabase';
 import { v4 as uuidv4 } from 'uuid';
+import { TabFooter } from '@/components/common/TabFooter';
 
 type View = 'list' | 'create' | 'templates';
 
@@ -742,6 +743,18 @@ export default function DataMappingTab() {
           </button>
         </div>
       )}
+
+      <TabFooter
+        tabName="DATA MAPPING"
+        leftInfo={[
+          { label: `Mappings: ${savedMappings.length}`, color: '#a3a3a3' },
+          { label: `View: ${view.toUpperCase()}`, color: '#a3a3a3' },
+          ...(view === 'create' ? [{ label: `Step: ${currentStep.toUpperCase()}`, color: '#ea580c' }] : [])
+        ]}
+        statusInfo={`Schema transformations | API integrations | Real-time mapping`}
+        backgroundColor="#1a1a1a"
+        borderColor="#2d2d2d"
+      />
     </div>
   );
 }
