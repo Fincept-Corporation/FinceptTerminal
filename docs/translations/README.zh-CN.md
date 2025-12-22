@@ -172,8 +172,14 @@
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-terminal-desktop
-npm install && npm run tauri dev
+bun install && bun run tauri:dev
 ```
+
+**要求：**
+
+-   [好的](https://bun.sh)1.0+
+-   [锈](https://www.rust-lang.org/)（最新稳定）
+-   特定于平台的依赖项（请参阅[文档/GETTING_STARTED.md](docs/GETTING_STARTED.md))
 
 * * *
 

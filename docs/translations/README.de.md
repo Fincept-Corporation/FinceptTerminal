@@ -6,7 +6,7 @@
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
-[Englisch](README.md)\|[Spanisch](docs/translations/README.es.md)\|[chinesisch](docs/translations/README.zh-CN.md)\|[japanisch](docs/translations/README.ja.md)\|[Französisch](docs/translations/README.fr.md)\|[Deutsch](docs/translations/README.de.md)\|[Koreanisch](docs/translations/README.ko.md)\|[हिन्दी](docs/translations/README.hi.md)
+[Englisch](README.md)\|[Spanisch](docs/translations/README.es.md)\|[chinesisch](docs/translations/README.zh-CN.md)\|[japanisch](docs/translations/README.ja.md)\|[Französisch](docs/translations/README.fr.md)\|[Deutsch](docs/translations/README.de.md)\|[Koreanisch](docs/translations/README.ko.md)\|[Hindi](docs/translations/README.hi.md)
 
 ### **Ihr Denken ist die einzige Grenze. Die Daten sind es nicht.**
 
@@ -100,7 +100,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 **Über 100 Datenanschlüsse**
 
--   **Databases**: PostgreSQL, MySQL, MongoDB, Redis, Snowflake
+-   **Datenbanken**: PostgreSQL, MySQL, MongoDB, Redis, Snowflake
 -   **Marktdaten**: Kraken, Polygon.io, Alpha Vantage, Yahoo Finance
 -   **Wirtschaft**: DBnomics (Serie 100M+), Weltbank, IWF, OECD
 -   **Streaming**: Kafka, WebSocket, MQTT
@@ -172,14 +172,20 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-terminal-desktop
-npm install && npm run tauri dev
+bun install && bun run tauri:dev
 ```
+
+**Anforderungen:**
+
+-   [Gut](https://bun.sh)1.0+
+-   [Rost](https://www.rust-lang.org/)(neueste stabile Version)
+-   Plattformspezifische Abhängigkeiten (siehe[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md))
 
 * * *
 
 ## 🛣️ Was kommt als nächstes?
 
-**Q1 2025:**Verbessertes Echtzeit-Streaming • Erweitertes Backtesting • Optionsstrategie-Builder • Über 50 KI-Agenten**2025:**Papierhandel • Multi-Portfolio-Management • Mobile App • Social Trading**Zukunft:**Institutionelle Merkmale • Programmatische API • Benutzeroberfläche für ML-Training • White-Label-Lösungen
+**Q1 2025:**Verbessertes Echtzeit-Streaming • Erweitertes Backtesting • Optionsstrategie-Builder • Über 50 KI-Agenten**2025:**Papierhandel • Multi-Portfolio-Management • Mobile App • Social Trading**Zukunft:**Institutionelle Funktionen • Programmatische API • Benutzeroberfläche für ML-Training • White-Label-Lösungen
 
 * * *
 
