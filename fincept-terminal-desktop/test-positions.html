@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Paper Trading Positions</title>
+</head>
+<body>
+    <h1>Paper Trading Positions Test</h1>
+    <button onclick="testPositions()">Test Fetch Positions</button>
+    <button onclick="testPortfolios()">Test List Portfolios</button>
+    <button onclick="testOrders()">Test Fetch Orders</button>
+    <pre id="output"></pre>
+
+    <script>
+        const { invoke } = window.__TAURI__.core;
+
+        async function testPortfolios() {
+            const output = document.getElementById('output');
+            output.textContent = 'Fetching portfolios...\n';
+
+            try {
+                const portfolios = await invoke('db_list_portfolios');
+                output.textContent += JSON.stringify(portfolios, null, 2);
+            } catch (error) {
+                output.textContent += 'ERROR: ' + error;
+            }
+        }
+
+        async function testPositions() {
+            const output = document.getElementById('output');
+            output.textContent = 'Fetching positions...\n';
+
+            try {
+                // Try to get all portfolios first
+                const portfolios = await invoke('db_list_portfolios');
+                output.textContent += 'Found ' + portfolios.length + ' portfolios:\n';
+                output.textContent += JSON.stringify(portfolios, null, 2) + '\n\n';
+
+                // For each portfolio, get positions
+                for (const portfolio of portfolios) {
+                    output.textContent += `\nFetching positions for portfolio: ${portfolio.id}\n`;
+                    const positions = await invoke('db_get_portfolio_positions', {
+                        portfolioId: portfolio.id,
+                        status: null
+                    });
+                    output.textContent += `Found ${positions.length} positions:\n`;
+                    output.textContent += JSON.stringify(positions, null, 2) + '\n';
+                }
+            } catch (error) {
+                output.textContent += '\nERROR: ' + error;
+            }
+        }
+
+        async function testOrders() {
+            const output = document.getElementById('output');
+            output.textContent = 'Fetching orders...\n';
+
+            try {
+                const portfolios = await invoke('db_list_portfolios');
+                output.textContent += 'Found ' + portfolios.length + ' portfolios:\n';
+
+                for (const portfolio of portfolios) {
+                    output.textContent += `\nFetching orders for portfolio: ${portfolio.id}\n`;
+                    const orders = await invoke('db_get_portfolio_orders', {
+                        portfolioId: portfolio.id
+                    });
+                    output.textContent += `Found ${orders.length} orders:\n`;
+                    output.textContent += JSON.stringify(orders, null, 2) + '\n';
+                }
+            } catch (error) {
+                output.textContent += '\nERROR: ' + error;
+            }
+        }
+    </script>
+</body>
+</html>
