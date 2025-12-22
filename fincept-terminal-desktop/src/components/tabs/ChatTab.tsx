@@ -351,7 +351,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
       // Convert conversation history
       const conversationHistory: APIMessage[] = messages.map(msg => ({
-        role: msg.role,
+        role: (msg.role as 'system' | 'user' | 'assistant'),
         content: msg.content
       }));
 

@@ -1,1 +1,0 @@
-method:subscribe params:channel:book params:symbol:[BTC/USD] params:depth:10 params:snapshot:true req_id:1

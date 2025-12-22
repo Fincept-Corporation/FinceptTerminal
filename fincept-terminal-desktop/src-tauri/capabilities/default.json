@@ -16,14 +16,19 @@
       ]
     },
     "cors-fetch:default",
-    "sql:default",
-    "sql:allow-load",
-    "sql:allow-execute",
-    "sql:allow-select",
-    "sql:allow-close",
     "dialog:default",
     "dialog:allow-ask",
     "dialog:allow-message",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "fs:allow-read-file",
+    "fs:allow-write-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "**" }
+      ]
+    },
     "updater:default",
     "updater:allow-check",
     "updater:allow-download-and-install",

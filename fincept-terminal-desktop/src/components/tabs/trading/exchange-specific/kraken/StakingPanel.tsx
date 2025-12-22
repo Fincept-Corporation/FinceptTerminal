@@ -1,10 +1,30 @@
 /**
  * StakingPanel - Kraken staking management interface
+ * Bloomberg Terminal Style
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { DollarSign, TrendingUp, Clock, AlertCircle, CheckCircle, Loader } from 'lucide-react';
 import { useBrokerContext } from '../../../../../contexts/BrokerContext';
+
+// Bloomberg Professional Color Palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
+};
 
 interface StakingAsset {
   asset: string;
@@ -36,7 +56,6 @@ export function StakingPanel() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Fetch staking assets on mount
   useEffect(() => {
     if (activeBroker === 'kraken') {
       fetchStakingAssets();
@@ -52,57 +71,15 @@ export function StakingPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      // Fetch balance
       const balance = await activeAdapter.fetchBalance();
-      const balances = balance as any; // Type assertion for dynamic currency access
+      const balances = balance as any;
 
-      // Mock staking data (in production, fetch from Kraken API)
       const stakableAssets: StakingAsset[] = [
-        {
-          asset: 'ETH',
-          balance: balances['ETH']?.total || 0,
-          stakedBalance: 0,
-          availableBalance: balances['ETH']?.free || 0,
-          apy: 4.5,
-          lockPeriod: 'Flexible',
-          method: 'ETH2.S',
-        },
-        {
-          asset: 'DOT',
-          balance: balances['DOT']?.total || 0,
-          stakedBalance: 0,
-          availableBalance: balances['DOT']?.free || 0,
-          apy: 12.0,
-          lockPeriod: '28 days',
-          method: 'DOT.S',
-        },
-        {
-          asset: 'SOL',
-          balance: balances['SOL']?.total || 0,
-          stakedBalance: 0,
-          availableBalance: balances['SOL']?.free || 0,
-          apy: 6.5,
-          lockPeriod: '2 days',
-          method: 'SOL.S',
-        },
-        {
-          asset: 'ADA',
-          balance: balances['ADA']?.total || 0,
-          stakedBalance: 0,
-          availableBalance: balances['ADA']?.free || 0,
-          apy: 5.0,
-          lockPeriod: 'Flexible',
-          method: 'ADA.S',
-        },
-        {
-          asset: 'MATIC',
-          balance: balances['MATIC']?.total || 0,
-          stakedBalance: 0,
-          availableBalance: balances['MATIC']?.free || 0,
-          apy: 8.0,
-          lockPeriod: '3 days',
-          method: 'MATIC.S',
-        },
+        { asset: 'ETH', balance: balances['ETH']?.total || 0, stakedBalance: 0, availableBalance: balances['ETH']?.free || 0, apy: 4.5, lockPeriod: 'Flexible', method: 'ETH2.S' },
+        { asset: 'DOT', balance: balances['DOT']?.total || 0, stakedBalance: 0, availableBalance: balances['DOT']?.free || 0, apy: 12.0, lockPeriod: '28 days', method: 'DOT.S' },
+        { asset: 'SOL', balance: balances['SOL']?.total || 0, stakedBalance: 0, availableBalance: balances['SOL']?.free || 0, apy: 6.5, lockPeriod: '2 days', method: 'SOL.S' },
+        { asset: 'ADA', balance: balances['ADA']?.total || 0, stakedBalance: 0, availableBalance: balances['ADA']?.free || 0, apy: 5.0, lockPeriod: 'Flexible', method: 'ADA.S' },
+        { asset: 'MATIC', balance: balances['MATIC']?.total || 0, stakedBalance: 0, availableBalance: balances['MATIC']?.free || 0, apy: 8.0, lockPeriod: '3 days', method: 'MATIC.S' },
       ];
 
       setStakingAssets(stakableAssets.filter(a => a.balance > 0 || a.stakedBalance > 0));
@@ -120,17 +97,9 @@ export function StakingPanel() {
     setError(null);
     setSuccess(null);
 
-    // Set available staking methods for selected asset
     const assetData = stakingAssets.find(a => a.asset === asset);
     if (assetData) {
-      setStakingMethods([
-        {
-          method: assetData.method,
-          apy: assetData.apy,
-          lockPeriod: assetData.lockPeriod,
-          minAmount: 0.01,
-        },
-      ]);
+      setStakingMethods([{ method: assetData.method, apy: assetData.apy, lockPeriod: assetData.lockPeriod, minAmount: 0.01 }]);
       setSelectedMethod(assetData.method);
     }
   };
@@ -152,16 +121,11 @@ export function StakingPanel() {
     setSuccess(null);
 
     try {
-      // Call Kraken adapter's stakeAsset method
       if (typeof (activeAdapter as any).stakeAsset === 'function') {
         await (activeAdapter as any).stakeAsset(selectedAsset, parseFloat(amount), selectedMethod);
         setSuccess(`Successfully staked ${amount} ${selectedAsset}`);
         setAmount('');
-
-        // Refresh staking assets after 2 seconds
-        setTimeout(() => {
-          fetchStakingAssets();
-        }, 2000);
+        setTimeout(() => fetchStakingAssets(), 2000);
       } else {
         setError('Staking not supported by current adapter');
       }
@@ -190,16 +154,11 @@ export function StakingPanel() {
     setSuccess(null);
 
     try {
-      // Call Kraken adapter's unstakeAsset method
       if (typeof (activeAdapter as any).unstakeAsset === 'function') {
         await (activeAdapter as any).unstakeAsset(selectedAsset, parseFloat(amount));
         setSuccess(`Successfully unstaked ${amount} ${selectedAsset}`);
         setAmount('');
-
-        // Refresh staking assets after 2 seconds
-        setTimeout(() => {
-          fetchStakingAssets();
-        }, 2000);
+        setTimeout(() => fetchStakingAssets(), 2000);
       } else {
         setError('Unstaking not supported by current adapter');
       }
@@ -226,188 +185,127 @@ export function StakingPanel() {
 
   if (isLoading) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded p-6">
-        <div className="flex items-center justify-center py-8">
-          <Loader className="w-6 h-6 text-blue-500 animate-spin" />
+      <div style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '4px', padding: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+          <Loader style={{ width: 24, height: 24, color: BLOOMBERG.BLUE, animation: 'spin 1s linear infinite' }} />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded p-6">
+    <div style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '4px', padding: '16px', height: '100%', overflow: 'auto' }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <DollarSign className="w-5 h-5 text-green-500" />
-          <span className="text-lg font-semibold text-white">Kraken Staking</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <DollarSign style={{ width: 18, height: 18, color: BLOOMBERG.GREEN }} />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: BLOOMBERG.WHITE, letterSpacing: '0.5px' }}>KRAKEN STAKING</span>
         </div>
-        <button
-          onClick={fetchStakingAssets}
-          className="px-3 py-1 text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-400/50 rounded transition"
-        >
-          Refresh
+        <button onClick={fetchStakingAssets} style={{ padding: '6px 12px', fontSize: '10px', color: BLOOMBERG.CYAN, backgroundColor: 'transparent', border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px', cursor: 'pointer', transition: 'all 0.2s' }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.CYAN; e.currentTarget.style.backgroundColor = `${BLOOMBERG.CYAN}15`; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; e.currentTarget.style.backgroundColor = 'transparent'; }}>
+          REFRESH
         </button>
       </div>
 
-      {/* Staking Assets List */}
       {stakingAssets.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-600" />
-          <div className="text-sm">No stakable assets found</div>
-          <div className="text-xs mt-1">Add funds to your Kraken account to start staking</div>
+        <div style={{ textAlign: 'center', padding: '40px 0', color: BLOOMBERG.MUTED }}>
+          <AlertCircle style={{ width: 48, height: 48, margin: '0 auto 12px', color: BLOOMBERG.MUTED }} />
+          <div style={{ fontSize: '11px', marginBottom: '6px' }}>NO STAKABLE ASSETS FOUND</div>
+          <div style={{ fontSize: '10px' }}>Add funds to your Kraken account to start staking</div>
         </div>
       ) : (
         <>
           {/* Asset Selection Grid */}
-          <div className="grid grid-cols-2 gap-3 mb-6">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
             {stakingAssets.map((asset) => (
-              <button
-                key={asset.asset}
-                onClick={() => handleAssetSelect(asset.asset)}
-                className={`p-4 rounded border-2 transition ${
-                  selectedAsset === asset.asset
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-white font-semibold">{asset.asset}</span>
-                  <div className="flex items-center gap-1 text-green-500 text-xs">
-                    <TrendingUp className="w-3 h-3" />
+              <div key={asset.asset} onClick={() => handleAssetSelect(asset.asset)}
+                style={{ padding: '12px', borderRadius: '2px', border: `2px solid ${selectedAsset === asset.asset ? BLOOMBERG.CYAN : BLOOMBERG.BORDER}`, backgroundColor: selectedAsset === asset.asset ? `${BLOOMBERG.CYAN}10` : BLOOMBERG.HEADER_BG, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={(e) => { if (selectedAsset !== asset.asset) e.currentTarget.style.borderColor = BLOOMBERG.MUTED; }}
+                onMouseLeave={(e) => { if (selectedAsset !== asset.asset) e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ color: BLOOMBERG.WHITE, fontWeight: 700, fontSize: '12px', fontFamily: 'monospace' }}>{asset.asset}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: BLOOMBERG.GREEN, fontSize: '10px' }}>
+                    <TrendingUp style={{ width: 12, height: 12 }} />
                     {asset.apy.toFixed(2)}% APY
                   </div>
                 </div>
-                <div className="text-xs text-gray-400">
-                  <div>Balance: {asset.balance.toFixed(8)}</div>
-                  {asset.stakedBalance > 0 && (
-                    <div className="text-green-500">Staked: {asset.stakedBalance.toFixed(8)}</div>
-                  )}
+                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>
+                  <div>BALANCE: {asset.balance.toFixed(8)}</div>
+                  {asset.stakedBalance > 0 && <div style={{ color: BLOOMBERG.GREEN }}>STAKED: {asset.stakedBalance.toFixed(8)}</div>}
                 </div>
-                <div className="flex items-center gap-1 text-xs text-gray-500 mt-2">
-                  <Clock className="w-3 h-3" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: BLOOMBERG.MUTED, marginTop: '6px' }}>
+                  <Clock style={{ width: 10, height: 10 }} />
                   {asset.lockPeriod}
                 </div>
-              </button>
+              </div>
             ))}
           </div>
 
           {/* Staking Form */}
           {selectedAsset && (
-            <div className="border-t border-gray-800 pt-6 space-y-4">
-              {/* Amount Input */}
-              <div>
-                <label className="block text-xs text-gray-400 mb-2">Amount to Stake</label>
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:border-blue-500"
-                  step="0.00000001"
-                  min="0"
-                />
-                {/* Quick Percentage Buttons */}
-                <div className="flex gap-2 mt-2">
+            <div style={{ borderTop: `1px solid ${BLOOMBERG.BORDER}`, paddingTop: '16px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>AMOUNT TO STAKE</label>
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
+                  style={{ width: '100%', padding: '10px 12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px', color: BLOOMBERG.WHITE, fontSize: '12px', fontFamily: 'monospace' }} step="0.00000001" min="0" />
+                <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                   {[25, 50, 75, 100].map((pct) => (
-                    <button
-                      key={pct}
-                      onClick={() => setPercentage(pct)}
-                      className="flex-1 px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded transition"
-                    >
+                    <button key={pct} onClick={() => setPercentage(pct)}
+                      style={{ flex: 1, padding: '6px', fontSize: '10px', backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.GRAY, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px', cursor: 'pointer', transition: 'all 0.2s' }}
+                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER; e.currentTarget.style.color = BLOOMBERG.WHITE; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG; e.currentTarget.style.color = BLOOMBERG.GRAY; }}>
                       {pct}%
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Info Display */}
               {selectedAsset && amount && parseFloat(amount) > 0 && (
-                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded">
-                  <div className="text-xs space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Estimated yearly earnings:</span>
-                      <span className="text-green-500 font-semibold">
-                        {(
-                          parseFloat(amount) *
-                          (stakingAssets.find((a) => a.asset === selectedAsset)?.apy || 0) /
-                          100
-                        ).toFixed(8)}{' '}
-                        {selectedAsset}
+                <div style={{ padding: '10px', backgroundColor: `${BLOOMBERG.CYAN}08`, border: `1px solid ${BLOOMBERG.CYAN}25`, borderRadius: '2px', marginBottom: '12px' }}>
+                  <div style={{ fontSize: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ color: BLOOMBERG.GRAY }}>ESTIMATED YEARLY EARNINGS:</span>
+                      <span style={{ color: BLOOMBERG.GREEN, fontWeight: 700, fontFamily: 'monospace' }}>
+                        {(parseFloat(amount) * (stakingAssets.find((a) => a.asset === selectedAsset)?.apy || 0) / 100).toFixed(8)} {selectedAsset}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Lock period:</span>
-                      <span className="text-white">
-                        {stakingAssets.find((a) => a.asset === selectedAsset)?.lockPeriod}
-                      </span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: BLOOMBERG.GRAY }}>LOCK PERIOD:</span>
+                      <span style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>{stakingAssets.find((a) => a.asset === selectedAsset)?.lockPeriod}</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Error/Success Messages */}
               {error && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-xs text-red-400">{error}</span>
+                <div style={{ padding: '10px', backgroundColor: `${BLOOMBERG.RED}10`, border: `1px solid ${BLOOMBERG.RED}30`, borderRadius: '2px', display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '12px' }}>
+                  <AlertCircle style={{ width: 14, height: 14, color: BLOOMBERG.RED, flexShrink: 0, marginTop: '2px' }} />
+                  <span style={{ fontSize: '10px', color: BLOOMBERG.RED }}>{error}</span>
                 </div>
               )}
 
               {success && (
-                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-xs text-green-400">{success}</span>
+                <div style={{ padding: '10px', backgroundColor: `${BLOOMBERG.GREEN}10`, border: `1px solid ${BLOOMBERG.GREEN}30`, borderRadius: '2px', display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '12px' }}>
+                  <CheckCircle style={{ width: 14, height: 14, color: BLOOMBERG.GREEN, flexShrink: 0, marginTop: '2px' }} />
+                  <span style={{ fontSize: '10px', color: BLOOMBERG.GREEN }}>{success}</span>
                 </div>
               )}
 
-              {/* Action Buttons */}
-              <div className="flex gap-3">
-                <button
-                  onClick={handleStake}
-                  disabled={isStaking || !amount || parseFloat(amount) <= 0}
-                  className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded transition flex items-center justify-center gap-2"
-                >
-                  {isStaking ? (
-                    <>
-                      <Loader className="w-4 h-4 animate-spin" />
-                      Staking...
-                    </>
-                  ) : (
-                    <>
-                      <TrendingUp className="w-4 h-4" />
-                      Stake
-                    </>
-                  )}
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
+                <button onClick={handleStake} disabled={isStaking || !amount || parseFloat(amount) <= 0}
+                  style={{ flex: 1, padding: '10px 14px', backgroundColor: isStaking || !amount || parseFloat(amount) <= 0 ? BLOOMBERG.MUTED : BLOOMBERG.GREEN, color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 700, border: 'none', borderRadius: '2px', cursor: isStaking || !amount || parseFloat(amount) <= 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', opacity: isStaking || !amount || parseFloat(amount) <= 0 ? 0.5 : 1, transition: 'all 0.2s', letterSpacing: '0.5px' }}>
+                  {isStaking ? <><Loader style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />STAKING...</> : <><TrendingUp style={{ width: 14, height: 14 }} />STAKE</>}
                 </button>
-
-                <button
-                  onClick={handleUnstake}
-                  disabled={
-                    isUnstaking ||
-                    !amount ||
-                    parseFloat(amount) <= 0 ||
-                    (stakingAssets.find((a) => a.asset === selectedAsset)?.stakedBalance || 0) === 0
-                  }
-                  className="flex-1 px-4 py-3 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-semibold rounded transition flex items-center justify-center gap-2"
-                >
-                  {isUnstaking ? (
-                    <>
-                      <Loader className="w-4 h-4 animate-spin" />
-                      Unstaking...
-                    </>
-                  ) : (
-                    'Unstake'
-                  )}
+                <button onClick={handleUnstake} disabled={isUnstaking || !amount || parseFloat(amount) <= 0 || (stakingAssets.find((a) => a.asset === selectedAsset)?.stakedBalance || 0) === 0}
+                  style={{ flex: 1, padding: '10px 14px', backgroundColor: isUnstaking || !amount || parseFloat(amount) <= 0 ? BLOOMBERG.MUTED : BLOOMBERG.ORANGE, color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 700, border: 'none', borderRadius: '2px', cursor: isUnstaking || !amount || parseFloat(amount) <= 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', opacity: isUnstaking || !amount || parseFloat(amount) <= 0 ? 0.5 : 1, transition: 'all 0.2s', letterSpacing: '0.5px' }}>
+                  {isUnstaking ? <><Loader style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />UNSTAKING...</> : 'UNSTAKE'}
                 </button>
               </div>
 
-              {/* Info Note */}
-              <div className="p-3 bg-gray-800/50 border border-gray-700 rounded">
-                <div className="text-xs text-gray-400">
-                  <strong className="text-gray-300">Note:</strong> Staking rewards are
-                  automatically paid out. Unstaking may take up to the lock period to complete.
-                  Check Kraken's terms for each asset's specific staking conditions.
+              <div style={{ padding: '10px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
+                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, lineHeight: '1.5' }}>
+                  <strong style={{ color: BLOOMBERG.WHITE }}>NOTE:</strong> Staking rewards are automatically paid out. Unstaking may take up to the lock period to complete. Check Kraken's terms for each asset's specific staking conditions.
                 </div>
               </div>
             </div>

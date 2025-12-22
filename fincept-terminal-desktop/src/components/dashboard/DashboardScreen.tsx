@@ -44,6 +44,7 @@ import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
 import BacktestingTab from '@/components/tabs/BacktestingTabNew';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import AgentConfigTab from '@/components/tabs/AgentConfigTab';
+import ExcelTab from '@/components/tabs/ExcelTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -537,6 +538,7 @@ function FinxeptTerminalContent() {
     { label: 'AI Assistant', shortcut: 'F10', action: () => setActiveTab('chat') },
     { label: 'Agent Config', action: () => setActiveTab('agents') },
     { label: 'MCP Servers', action: () => setActiveTab('mcp'), separator: true },
+    { label: 'Excel Workbook', action: () => setActiveTab('excel') },
     { label: 'Node Editor', action: () => setActiveTab('nodes') },
     { label: 'Code Editor', action: () => setActiveTab('code') },
     { label: 'Data Sources', action: () => setActiveTab('datasources'), separator: true },
@@ -978,6 +980,9 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="agents" className="h-full m-0 p-0">
               <AgentConfigTab />
+            </TabsContent>
+            <TabsContent value="excel" className="h-full m-0 p-0">
+              <ExcelTab />
             </TabsContent>
           </Tabs>
         )}

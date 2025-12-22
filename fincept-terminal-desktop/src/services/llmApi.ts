@@ -2,7 +2,7 @@
 // Unified interface for different LLM providers with streaming support
 
 import { fetch } from '@tauri-apps/plugin-http';
-import { sqliteService } from './sqliteService';
+import { invoke } from '@tauri-apps/api/core';
 import { llmLogger } from './loggerService';
 
 export interface LLMConfig {
@@ -887,8 +887,9 @@ class LLMApiService {
     onStream?: StreamCallback
   ): Promise<LLMResponse> {
     try {
-      // Get active provider config from SQLite
-      const activeConfig = await sqliteService.getActiveLLMConfig();
+      // Get active provider config from Rust SQLite
+      const configs = await invoke<any[]>('db_get_llm_configs');
+      const activeConfig = configs.find(c => c.is_active);
       if (!activeConfig) {
         return {
           content: '',
@@ -897,7 +898,7 @@ class LLMApiService {
       }
 
       // Get global settings
-      const globalSettings = await sqliteService.getLLMGlobalSettings();
+      const globalSettings = await invoke<any>('db_get_llm_global_settings');
 
       // Build complete config
       const config: LLMConfig = {
@@ -961,8 +962,9 @@ class LLMApiService {
     onToolCall?: (toolName: string, args: any, result?: any) => void
   ): Promise<LLMResponse> {
     try {
-      // Get active provider config
-      const activeConfig = await sqliteService.getActiveLLMConfig();
+      // Get active provider config from Rust SQLite
+      const configs = await invoke<any[]>('db_get_llm_configs');
+      const activeConfig = configs.find(c => c.is_active);
       if (!activeConfig) {
         return {
           content: '',
@@ -995,7 +997,7 @@ class LLMApiService {
         return this.chat(userMessage, conversationHistory, onStream);
       }
 
-      const globalSettings = await sqliteService.getLLMGlobalSettings();
+      const globalSettings = await invoke<any>('db_get_llm_global_settings');
 
       const config: LLMConfig = {
         provider: activeConfig.provider,
@@ -1206,7 +1208,8 @@ class LLMApiService {
   // Test connection
   async testConnection(): Promise<{ success: boolean; error?: string; model?: string }> {
     try {
-      const activeConfig = await sqliteService.getActiveLLMConfig();
+      const configs = await invoke<any[]>('db_get_llm_configs');
+      const activeConfig = configs.find(c => c.is_active);
       if (!activeConfig) {
         return { success: false, error: 'No active provider configured' };
       }

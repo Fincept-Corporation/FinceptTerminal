@@ -59,7 +59,7 @@ class MCPManager {
 
         // Update existing server config
         await sqliteService.updateMCPServerConfig(config.id, {
-          env: config.env ? JSON.stringify(config.env) : null
+          env: config.env ? JSON.stringify(config.env) : undefined
         });
 
         // Restart if running
@@ -86,7 +86,7 @@ class MCPManager {
         description: config.description,
         command: config.command,
         args: JSON.stringify(config.args),
-        env: config.env ? JSON.stringify(config.env) : null,
+        env: config.env ? JSON.stringify(config.env) : undefined,
         category: config.category,
         icon: config.icon,
         enabled: true,
@@ -138,7 +138,7 @@ class MCPManager {
       }
 
       // Parse config
-      const args = JSON.parse(server.args);
+      const args = server.args ? JSON.parse(server.args) : [];
       const env = server.env ? JSON.parse(server.env) : undefined;
 
       // Connect
@@ -223,7 +223,7 @@ class MCPManager {
 
         return {
           ...server,
-          args: JSON.parse(server.args),
+          args: server.args ? JSON.parse(server.args) : [],
           env: server.env ? JSON.parse(server.env) : undefined,
           status: actualStatus as 'running' | 'stopped' | 'error',
           toolCount: stats.toolCount,
@@ -302,7 +302,7 @@ class MCPManager {
         result: null,
         success: false,
         executionTime,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
       });
 
       throw error;

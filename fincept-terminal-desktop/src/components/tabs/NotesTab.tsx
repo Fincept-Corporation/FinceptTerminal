@@ -9,7 +9,7 @@ import {
   ChevronRight, Copy, Download, Upload, RefreshCw, Maximize2, Minimize2, Bell
 } from 'lucide-react';
 import { notesService, Note, NoteTemplate } from '../../services/notesService';
-import { noteReminderService } from '../../services/noteReminderService';
+import { noteReminderService } from '../../services/noteReminderService.tsx';
 import { toast } from 'sonner';
 
 // Bloomberg Professional Color Palette
@@ -105,10 +105,10 @@ export function NotesTab() {
       }
     };
 
-    window.addEventListener('openNote', handleOpenNote as EventListener);
+    window.addEventListener('openNote', handleOpenNote as unknown as EventListener);
 
     return () => {
-      window.removeEventListener('openNote', handleOpenNote as EventListener);
+      window.removeEventListener('openNote', handleOpenNote as unknown as EventListener);
     };
   }, []);
 
@@ -211,8 +211,8 @@ export function NotesTab() {
         tags: editTags,
         tickers: editTickers,
         sentiment: editSentiment,
-        is_favorite: 0,
-        is_archived: 0,
+        is_favorite: false,
+        is_archived: false,
         color_code: editColorCode,
         attachments: '[]',
         created_at: new Date().toISOString(),
@@ -293,7 +293,7 @@ export function NotesTab() {
   const handleToggleFavorite = async (note: Note) => {
     try {
       await notesService.updateNote(note.id!, {
-        is_favorite: note.is_favorite === 1 ? 0 : 1
+        is_favorite: !note.is_favorite
       });
       await loadNotes();
     } catch (error) {
@@ -305,7 +305,7 @@ export function NotesTab() {
   const handleToggleArchive = async (note: Note) => {
     try {
       await notesService.updateNote(note.id!, {
-        is_archived: note.is_archived === 1 ? 0 : 1
+        is_archived: !note.is_archived
       });
       await loadNotes();
       await loadStatistics();
@@ -1017,7 +1017,7 @@ export function NotesTab() {
                       <span style={{ color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 700 }}>
                         {note.title}
                       </span>
-                      {note.is_favorite === 1 && <Star size={12} fill={BLOOMBERG.YELLOW} color={BLOOMBERG.YELLOW} />}
+                      {note.is_favorite && <Star size={12} fill={BLOOMBERG.YELLOW} color={BLOOMBERG.YELLOW} />}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <span style={{
@@ -1367,7 +1367,7 @@ export function NotesTab() {
                         padding: '4px 8px',
                         backgroundColor: 'transparent',
                         border: `1px solid ${BLOOMBERG.BORDER}`,
-                        color: selectedNote.is_favorite === 1 ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY,
+                        color: selectedNote.is_favorite ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY,
                         cursor: 'pointer',
                         fontSize: '10px',
                         display: 'flex',
@@ -1375,7 +1375,7 @@ export function NotesTab() {
                         gap: '4px'
                       }}
                     >
-                      <Star size={12} fill={selectedNote.is_favorite === 1 ? BLOOMBERG.YELLOW : 'none'} />
+                      <Star size={12} fill={selectedNote.is_favorite ? BLOOMBERG.YELLOW : 'none'} />
                     </button>
                     <button
                       onClick={() => startEditing(selectedNote)}
@@ -1411,7 +1411,7 @@ export function NotesTab() {
                       }}
                     >
                       <Archive size={12} />
-                      {selectedNote.is_archived === 1 ? 'UNARCHIVE' : 'ARCHIVE'}
+                      {selectedNote.is_archived ? 'UNARCHIVE' : 'ARCHIVE'}
                     </button>
                     <button
                       onClick={() => handleDeleteNote(selectedNote.id!)}

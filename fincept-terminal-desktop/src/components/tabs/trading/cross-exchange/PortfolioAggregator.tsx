@@ -1,10 +1,30 @@
 /**
  * PortfolioAggregator - Unified view of balances across all exchanges
+ * Bloomberg Terminal Style
  */
 
 import React from 'react';
 import { Wallet, TrendingUp, RefreshCw, Loader, PieChart } from 'lucide-react';
 import { useCrossExchangePortfolio } from '../hooks/useCrossExchange';
+
+// Bloomberg Professional Color Palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
+};
 
 export function PortfolioAggregator() {
   const { aggregatedBalances, totalPortfolioValue, isLoading, error, refresh } =
@@ -26,9 +46,19 @@ export function PortfolioAggregator() {
 
   if (isLoading) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded p-6">
-        <div className="flex items-center justify-center py-8">
-          <Loader className="w-6 h-6 text-blue-500 animate-spin" />
+      <div style={{
+        backgroundColor: BLOOMBERG.PANEL_BG,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        borderRadius: '4px',
+        padding: '24px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '32px 0'
+        }}>
+          <Loader style={{ width: 24, height: 24, color: BLOOMBERG.BLUE, animation: 'spin 1s linear infinite' }} />
         </div>
       </div>
     );
@@ -36,122 +66,254 @@ export function PortfolioAggregator() {
 
   if (error) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded p-6">
-        <div className="text-center py-8 text-red-500">{error}</div>
+      <div style={{
+        backgroundColor: BLOOMBERG.PANEL_BG,
+        border: `1px solid ${BLOOMBERG.BORDER}`,
+        borderRadius: '4px',
+        padding: '24px'
+      }}>
+        <div style={{
+          textAlign: 'center',
+          padding: '32px 0',
+          color: BLOOMBERG.RED,
+          fontSize: '12px'
+        }}>
+          {error}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded p-6">
+    <div style={{
+      backgroundColor: BLOOMBERG.PANEL_BG,
+      border: `1px solid ${BLOOMBERG.BORDER}`,
+      borderRadius: '4px',
+      padding: '16px',
+      height: '100%',
+      overflow: 'auto'
+    }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <PieChart className="w-5 h-5 text-blue-500" />
-          <span className="text-lg font-semibold text-white">Cross-Exchange Portfolio</span>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '16px',
+        paddingBottom: '12px',
+        borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <PieChart style={{ width: 18, height: 18, color: BLOOMBERG.CYAN }} />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: BLOOMBERG.WHITE, letterSpacing: '0.5px' }}>
+            CROSS-EXCHANGE PORTFOLIO
+          </span>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={refresh}
-            className="px-3 py-1 text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-400/50 rounded transition flex items-center gap-1"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Refresh
-          </button>
-        </div>
+        <button
+          onClick={refresh}
+          style={{
+            padding: '6px 12px',
+            fontSize: '10px',
+            color: BLOOMBERG.CYAN,
+            backgroundColor: 'transparent',
+            border: `1px solid ${BLOOMBERG.BORDER}`,
+            borderRadius: '2px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = BLOOMBERG.CYAN;
+            e.currentTarget.style.backgroundColor = `${BLOOMBERG.CYAN}15`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
+        >
+          <RefreshCw style={{ width: 12, height: 12 }} />
+          REFRESH
+        </button>
       </div>
 
       {/* Total Portfolio Value */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded">
-        <div className="text-xs text-gray-400 mb-1">Total Portfolio Value</div>
-        <div className="flex items-center gap-3">
-          <div className="text-3xl font-bold text-white">${formatCurrency(totalPortfolioValue)}</div>
-          <div className="flex items-center gap-1 text-green-500 text-sm">
-            <TrendingUp className="w-4 h-4" />
+      <div style={{
+        marginBottom: '20px',
+        padding: '16px',
+        backgroundColor: `${BLOOMBERG.CYAN}08`,
+        border: `1px solid ${BLOOMBERG.CYAN}25`,
+        borderRadius: '2px'
+      }}>
+        <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>
+          TOTAL PORTFOLIO VALUE
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace' }}>
+            ${formatCurrency(totalPortfolioValue)}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: BLOOMBERG.GREEN, fontSize: '11px' }}>
+            <TrendingUp style={{ width: 14, height: 14 }} />
             <span>+2.45%</span>
           </div>
         </div>
-        <div className="text-xs text-gray-500 mt-1">Across {aggregatedBalances.length} assets</div>
+        <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED, marginTop: '6px' }}>
+          ACROSS {aggregatedBalances.length} ASSETS
+        </div>
       </div>
 
       {/* Aggregated Balances */}
-      <div className="space-y-3">
-        <div className="text-sm font-semibold text-gray-400 mb-3">Asset Breakdown</div>
+      <div>
+        <div style={{
+          fontSize: '11px',
+          fontWeight: 600,
+          color: BLOOMBERG.GRAY,
+          marginBottom: '12px',
+          letterSpacing: '0.5px'
+        }}>
+          ASSET BREAKDOWN
+        </div>
 
         {aggregatedBalances.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Wallet className="w-12 h-12 mx-auto mb-3 text-gray-600" />
-            <div className="text-sm">No balances found</div>
+          <div style={{
+            textAlign: 'center',
+            padding: '40px 0',
+            color: BLOOMBERG.MUTED
+          }}>
+            <Wallet style={{ width: 48, height: 48, margin: '0 auto 12px', color: BLOOMBERG.MUTED }} />
+            <div style={{ fontSize: '11px' }}>NO BALANCES FOUND</div>
           </div>
         ) : (
-          aggregatedBalances
-            .sort((a, b) => b.totalUsdValue - a.totalUsdValue)
-            .map((balance) => (
-              <div
-                key={balance.currency}
-                className="p-4 bg-gray-800/50 border border-gray-700 rounded hover:border-gray-600 transition"
-              >
-                {/* Currency Header */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                      {balance.currency.substring(0, 2)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {aggregatedBalances
+              .sort((a, b) => b.totalUsdValue - a.totalUsdValue)
+              .map((balance) => (
+                <div
+                  key={balance.currency}
+                  style={{
+                    padding: '12px',
+                    backgroundColor: BLOOMBERG.HEADER_BG,
+                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    borderRadius: '2px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = BLOOMBERG.CYAN;
+                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                    e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                  }}
+                >
+                  {/* Currency Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: 32,
+                        height: 32,
+                        background: `linear-gradient(135deg, ${BLOOMBERG.CYAN}, ${BLOOMBERG.PURPLE})`,
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: BLOOMBERG.WHITE,
+                        fontWeight: 700,
+                        fontSize: '11px',
+                        fontFamily: 'monospace'
+                      }}>
+                        {balance.currency.substring(0, 2)}
+                      </div>
+                      <div>
+                        <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, fontSize: '12px', fontFamily: 'monospace' }}>
+                          {balance.currency}
+                        </div>
+                        <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, fontFamily: 'monospace' }}>
+                          {formatCrypto(balance.totalAmount)} {balance.currency}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-white font-semibold">{balance.currency}</div>
-                      <div className="text-xs text-gray-500">
-                        {formatCrypto(balance.totalAmount)} {balance.currency}
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, fontSize: '12px', fontFamily: 'monospace' }}>
+                        ${formatCurrency(balance.totalUsdValue)}
+                      </div>
+                      <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY }}>
+                        {((balance.totalUsdValue / totalPortfolioValue) * 100).toFixed(2)}%
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-white font-semibold">
-                      ${formatCurrency(balance.totalUsdValue)}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {((balance.totalUsdValue / totalPortfolioValue) * 100).toFixed(2)}%
-                    </div>
-                  </div>
-                </div>
 
-                {/* Exchange Breakdown */}
-                <div className="space-y-2 pl-13">
-                  {balance.exchanges.map((exch, idx) => (
+                  {/* Exchange Breakdown */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingLeft: '42px' }}>
+                    {balance.exchanges.map((exch, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          fontSize: '10px',
+                          padding: '6px 8px',
+                          backgroundColor: `${BLOOMBERG.DARK_BG}80`,
+                          borderRadius: '2px'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            padding: '2px 8px',
+                            backgroundColor: BLOOMBERG.HEADER_BG,
+                            borderRadius: '2px',
+                            color: BLOOMBERG.GRAY,
+                            textTransform: 'uppercase',
+                            fontSize: '9px',
+                            letterSpacing: '0.5px'
+                          }}>
+                            {exch.exchange}
+                          </span>
+                          <span style={{ color: BLOOMBERG.GRAY, fontFamily: 'monospace' }}>
+                            {formatCrypto(exch.amount)} {balance.currency}
+                          </span>
+                        </div>
+                        <span style={{ color: BLOOMBERG.WHITE, fontFamily: 'monospace' }}>
+                          ${formatCurrency(exch.usdValue)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div style={{
+                    marginTop: '10px',
+                    height: '4px',
+                    backgroundColor: BLOOMBERG.HEADER_BG,
+                    borderRadius: '2px',
+                    overflow: 'hidden'
+                  }}>
                     <div
-                      key={idx}
-                      className="flex items-center justify-between text-xs p-2 bg-black/20 rounded"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 bg-gray-700 rounded text-gray-300 capitalize">
-                          {exch.exchange}
-                        </span>
-                        <span className="text-gray-400">
-                          {formatCrypto(exch.amount)} {balance.currency}
-                        </span>
-                      </div>
-                      <span className="text-gray-300">${formatCurrency(exch.usdValue)}</span>
-                    </div>
-                  ))}
+                      style={{
+                        height: '100%',
+                        background: `linear-gradient(90deg, ${BLOOMBERG.CYAN}, ${BLOOMBERG.PURPLE})`,
+                        width: `${(balance.totalUsdValue / totalPortfolioValue) * 100}%`,
+                        transition: 'width 0.3s'
+                      }}
+                    />
+                  </div>
                 </div>
-
-                {/* Progress Bar */}
-                <div className="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all"
-                    style={{
-                      width: `${(balance.totalUsdValue / totalPortfolioValue) * 100}%`,
-                    }}
-                  ></div>
-                </div>
-              </div>
-            ))
+              ))}
+          </div>
         )}
       </div>
 
       {/* Info Note */}
-      <div className="mt-6 p-3 bg-blue-500/10 border border-blue-500/20 rounded">
-        <div className="text-xs text-blue-400">
-          <strong>Note:</strong> This view aggregates balances from all connected exchanges. Values
+      <div style={{
+        marginTop: '16px',
+        padding: '10px',
+        backgroundColor: `${BLOOMBERG.CYAN}08`,
+        border: `1px solid ${BLOOMBERG.CYAN}25`,
+        borderRadius: '2px'
+      }}>
+        <div style={{ fontSize: '10px', color: BLOOMBERG.CYAN, lineHeight: '1.5' }}>
+          <strong>NOTE:</strong> This view aggregates balances from all connected exchanges. Values
           are updated every 30 seconds. Exchange-specific details are shown for each asset.
         </div>
       </div>

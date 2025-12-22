@@ -25,11 +25,11 @@ tauri = { version = "2", features = ["devtools"] }
 tauri-plugin-opener = "2"
 tauri-plugin-http = "2"
 tauri-plugin-cors-fetch = "4"
-tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2.8"
 tauri-plugin-process = "2"
 tauri-plugin-shell = "2"
+tauri-plugin-fs = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
@@ -37,6 +37,11 @@ tokio = { version = "1", features = ["full"] }
 anyhow = "1.0"
 chrono = "0.4"
 uuid = { version = "1.11", features = ["v4", "serde"] }
+rusqlite = { version = "0.32", features = ["bundled", "chrono", "uuid"] }
+r2d2 = "0.8"
+r2d2_sqlite = "0.25"
+once_cell = "1.20"
+parking_lot = "0.12"
 reqwest = { version = "0.11", features = ["json", "stream"] }
 futures-util = "0.3"
 zip = "2.2"
