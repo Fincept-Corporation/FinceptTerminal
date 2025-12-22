@@ -1289,7 +1289,7 @@ const AgentConfigTab: React.FC = () => {
       <TabFooter
         tabName="AGENT CONFIGURATION"
         leftInfo={[
-          { label: `Agents: ${agentConfigs.length}`, color: BLOOMBERG.GRAY },
+          { label: `Agents: ${agents.length}`, color: BLOOMBERG.GRAY },
           { label: `LLM Configs: ${llmConfigs.length}`, color: BLOOMBERG.GRAY },
           { label: `Active: ${llmConfigs.filter(c => c.is_active).length}`, color: BLOOMBERG.GREEN },
         ]}

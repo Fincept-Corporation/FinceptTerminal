@@ -1,68 +1,51 @@
-// Mapping Database - SQLite storage for mappings and cache
+// Mapping Database - LocalStorage-based storage for mappings and cache
+// Migrated from SQLite to LocalStorage for simplicity
 
 import { DataMappingConfig } from '../types';
 import { encryptionService } from './EncryptionService';
-import { sqliteService } from '@/services/sqliteService';
+
+const STORAGE_KEYS = {
+  MAPPINGS: 'fincept_data_mappings',
+  CACHE: 'fincept_mapping_cache',
+  PREFERENCES: 'fincept_mapping_preferences',
+};
+
+interface CacheEntry {
+  cache_key: string;
+  mapping_id: string;
+  params_hash: string;
+  response_json: string;
+  cached_at: string;
+  expires_at: string;
+}
 
 /**
  * Database service for storing mappings and API response cache
+ * Uses localStorage for persistence
  */
 export class MappingDatabase {
   private initialized = false;
 
   /**
-   * Initialize database tables
+   * Initialize database (localStorage setup)
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
     try {
-      // Ensure main SQLite service is initialized
-      if (!sqliteService.isReady()) {
-        await sqliteService.initialize();
+      // Ensure storage keys exist
+      if (!localStorage.getItem(STORAGE_KEYS.MAPPINGS)) {
+        localStorage.setItem(STORAGE_KEYS.MAPPINGS, JSON.stringify({}));
+      }
+      if (!localStorage.getItem(STORAGE_KEYS.CACHE)) {
+        localStorage.setItem(STORAGE_KEYS.CACHE, JSON.stringify({}));
+      }
+      if (!localStorage.getItem(STORAGE_KEYS.PREFERENCES)) {
+        localStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify({}));
       }
 
-      // Create mappings table
-      await sqliteService.execute(`
-        CREATE TABLE IF NOT EXISTS data_mappings (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          description TEXT,
-          config_json TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        )
-      `);
-
-      // Create cache table
-      await sqliteService.execute(`
-        CREATE TABLE IF NOT EXISTS mapping_cache (
-          cache_key TEXT PRIMARY KEY,
-          mapping_id TEXT NOT NULL,
-          params_hash TEXT NOT NULL,
-          response_json TEXT NOT NULL,
-          cached_at TEXT NOT NULL,
-          expires_at TEXT NOT NULL,
-          FOREIGN KEY(mapping_id) REFERENCES data_mappings(id) ON DELETE CASCADE
-        )
-      `);
-
-      // Create index for cache lookups
-      await sqliteService.execute(`
-        CREATE INDEX IF NOT EXISTS idx_mapping_cache_lookup
-        ON mapping_cache(mapping_id, params_hash)
-      `);
-
-      // Create user preferences table
-      await sqliteService.execute(`
-        CREATE TABLE IF NOT EXISTS mapping_preferences (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL
-        )
-      `);
-
       this.initialized = true;
-      console.log('MappingDatabase initialized successfully');
+      console.log('MappingDatabase initialized successfully (localStorage)');
     } catch (error) {
       console.error('Failed to initialize MappingDatabase:', error);
       throw error;
@@ -128,22 +111,10 @@ export class MappingDatabase {
         };
       }
 
-      // Serialize config
-      const configJson = JSON.stringify(configToStore);
-
-      // Upsert mapping
-      await sqliteService.execute(
-        `INSERT OR REPLACE INTO data_mappings (id, name, description, config_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          config.id,
-          config.name,
-          config.description,
-          configJson,
-          config.metadata.createdAt,
-          config.metadata.updatedAt,
-        ]
-      );
+      // Save to localStorage
+      const mappings = this.getMappingsFromStorage();
+      mappings[config.id] = configToStore;
+      localStorage.setItem(STORAGE_KEYS.MAPPINGS, JSON.stringify(mappings));
 
       console.log(`Mapping '${config.name}' saved successfully`);
     } catch (error) {
@@ -159,16 +130,12 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
-      const result = await sqliteService.select<{ config_json: string }>(
-        'SELECT config_json FROM data_mappings WHERE id = ?',
-        [id]
-      );
+      const mappings = this.getMappingsFromStorage();
+      const config = mappings[id];
 
-      if (!result || result.length === 0) {
+      if (!config) {
         return null;
       }
-
-      const config = JSON.parse(result[0].config_json) as DataMappingConfig;
 
       // Decrypt sensitive data if needed
       const encryptionEnabled = await encryptionService.isEncryptionEnabled();
@@ -230,24 +197,13 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
-      const results = await sqliteService.select<{ config_json: string }>(
-        'SELECT config_json FROM data_mappings ORDER BY updated_at DESC'
+      const mappings = this.getMappingsFromStorage();
+      const mappingArray = Object.values(mappings);
+
+      // Sort by updated_at DESC
+      return mappingArray.sort((a, b) =>
+        new Date(b.metadata.updatedAt).getTime() - new Date(a.metadata.updatedAt).getTime()
       );
-
-      if (!results || results.length === 0) {
-        return [];
-      }
-
-      // Parse and decrypt all mappings
-      const mappings = await Promise.all(
-        results.map(async (row: { config_json: string }) => {
-          const config = JSON.parse(row.config_json) as DataMappingConfig;
-          // Note: We don't decrypt here for performance - decrypt on demand in getMapping()
-          return config;
-        })
-      );
-
-      return mappings;
     } catch (error) {
       console.error('Failed to get all mappings:', error);
       return [];
@@ -261,7 +217,13 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
-      await sqliteService.execute('DELETE FROM data_mappings WHERE id = ?', [id]);
+      const mappings = this.getMappingsFromStorage();
+      delete mappings[id];
+      localStorage.setItem(STORAGE_KEYS.MAPPINGS, JSON.stringify(mappings));
+
+      // Also clear related cache
+      await this.clearCache(id);
+
       console.log(`Mapping ${id} deleted`);
     } catch (error) {
       console.error('Failed to delete mapping:', error);
@@ -278,19 +240,22 @@ export class MappingDatabase {
     try {
       const paramsHash = this.hashParams(params);
       const cacheKey = `${mappingId}_${paramsHash}`;
+      const cache = this.getCacheFromStorage();
+      const entry = cache[cacheKey];
 
-      const result = await sqliteService.select<{ response_json: string; expires_at: string }>(
-        `SELECT response_json, expires_at FROM mapping_cache
-         WHERE cache_key = ? AND expires_at > datetime('now')`,
-        [cacheKey]
-      );
+      if (!entry) {
+        return null;
+      }
 
-      if (!result || result.length === 0) {
+      // Check expiration
+      if (new Date(entry.expires_at) <= new Date()) {
+        delete cache[cacheKey];
+        localStorage.setItem(STORAGE_KEYS.CACHE, JSON.stringify(cache));
         return null;
       }
 
       console.log(`Cache hit for mapping ${mappingId}`);
-      return JSON.parse(result[0].response_json);
+      return JSON.parse(entry.response_json);
     } catch (error) {
       console.error('Failed to get cached response:', error);
       return null;
@@ -315,12 +280,17 @@ export class MappingDatabase {
       const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
       const responseJson = JSON.stringify(response);
 
-      await sqliteService.execute(
-        `INSERT OR REPLACE INTO mapping_cache (cache_key, mapping_id, params_hash, response_json, cached_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [cacheKey, mappingId, paramsHash, responseJson, now, expiresAt]
-      );
+      const cache = this.getCacheFromStorage();
+      cache[cacheKey] = {
+        cache_key: cacheKey,
+        mapping_id: mappingId,
+        params_hash: paramsHash,
+        response_json: responseJson,
+        cached_at: now,
+        expires_at: expiresAt,
+      };
 
+      localStorage.setItem(STORAGE_KEYS.CACHE, JSON.stringify(cache));
       console.log(`Response cached for mapping ${mappingId}`);
     } catch (error) {
       console.error('Failed to cache response:', error);
@@ -335,11 +305,18 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
+      const cache = this.getCacheFromStorage();
+
       if (mappingId) {
-        await sqliteService.execute('DELETE FROM mapping_cache WHERE mapping_id = ?', [mappingId]);
+        // Clear cache for specific mapping
+        const filtered = Object.fromEntries(
+          Object.entries(cache).filter(([_, entry]) => entry.mapping_id !== mappingId)
+        );
+        localStorage.setItem(STORAGE_KEYS.CACHE, JSON.stringify(filtered));
         console.log(`Cache cleared for mapping ${mappingId}`);
       } else {
-        await sqliteService.execute('DELETE FROM mapping_cache');
+        // Clear all cache
+        localStorage.setItem(STORAGE_KEYS.CACHE, JSON.stringify({}));
         console.log('All cache cleared');
       }
     } catch (error) {
@@ -355,7 +332,14 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
-      await sqliteService.execute("DELETE FROM mapping_cache WHERE expires_at < datetime('now')");
+      const cache = this.getCacheFromStorage();
+      const now = new Date();
+
+      const filtered = Object.fromEntries(
+        Object.entries(cache).filter(([_, entry]) => new Date(entry.expires_at) > now)
+      );
+
+      localStorage.setItem(STORAGE_KEYS.CACHE, JSON.stringify(filtered));
       console.log('Expired cache entries cleaned');
     } catch (error) {
       console.error('Failed to clean expired cache:', error);
@@ -369,12 +353,8 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
-      const result = await sqliteService.select<{ value: string }>(
-        'SELECT value FROM mapping_preferences WHERE key = ?',
-        [key]
-      );
-
-      return result && result.length > 0 ? result[0].value : null;
+      const prefs = this.getPreferencesFromStorage();
+      return prefs[key] || null;
     } catch (error) {
       console.error('Failed to get preference:', error);
       return null;
@@ -385,10 +365,9 @@ export class MappingDatabase {
     await this.ensureInitialized();
 
     try {
-      await sqliteService.execute(
-        'INSERT OR REPLACE INTO mapping_preferences (key, value) VALUES (?, ?)',
-        [key, value]
-      );
+      const prefs = this.getPreferencesFromStorage();
+      prefs[key] = value;
+      localStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(prefs));
     } catch (error) {
       console.error('Failed to set preference:', error);
       throw error;
@@ -439,6 +418,30 @@ export class MappingDatabase {
     if (!this.initialized) {
       await this.initialize();
     }
+  }
+
+  /**
+   * Get mappings from localStorage
+   */
+  private getMappingsFromStorage(): Record<string, DataMappingConfig> {
+    const data = localStorage.getItem(STORAGE_KEYS.MAPPINGS);
+    return data ? JSON.parse(data) : {};
+  }
+
+  /**
+   * Get cache from localStorage
+   */
+  private getCacheFromStorage(): Record<string, CacheEntry> {
+    const data = localStorage.getItem(STORAGE_KEYS.CACHE);
+    return data ? JSON.parse(data) : {};
+  }
+
+  /**
+   * Get preferences from localStorage
+   */
+  private getPreferencesFromStorage(): Record<string, string> {
+    const data = localStorage.getItem(STORAGE_KEYS.PREFERENCES);
+    return data ? JSON.parse(data) : {};
   }
 }
 

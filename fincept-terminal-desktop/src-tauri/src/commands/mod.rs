@@ -91,3 +91,6 @@ pub mod alpha_arena;
 
 // High-performance Rust SQLite Database
 pub mod database;
+
+// AI Quant Lab - Qlib and RD-Agent
+pub mod ai_quant_lab;

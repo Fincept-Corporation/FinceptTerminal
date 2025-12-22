@@ -1,6 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
-import Database from '@tauri-apps/plugin-sql';
+// Notebook Service - LocalStorage-based notebook history tracking
+// Migrated from SQLite to localStorage for simplicity
+
 import { notebookLogger } from './loggerService';
+
+const STORAGE_KEY = 'fincept_notebook_history';
 
 interface NotebookHistory {
   id?: number;
@@ -14,37 +17,27 @@ interface NotebookHistory {
 }
 
 class NotebookService {
-  private db: Database | null = null;
   private isInitialized = false;
+  private nextId = 1;
 
   async initialize() {
     if (this.isInitialized) return;
 
     try {
-      this.db = await Database.load('sqlite:notebooks.db');
+      // Ensure storage exists
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      }
 
-      // Create notebooks history table
-      await this.db.execute(`
-        CREATE TABLE IF NOT EXISTS notebook_history (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL,
-          content TEXT NOT NULL,
-          path TEXT,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL,
-          cell_count INTEGER DEFAULT 0,
-          execution_count INTEGER DEFAULT 0
-        )
-      `);
-
-      // Create index on updated_at for faster queries
-      await this.db.execute(`
-        CREATE INDEX IF NOT EXISTS idx_notebook_updated
-        ON notebook_history(updated_at DESC)
-      `);
+      // Initialize next ID
+      const history = this.getHistoryFromStorage();
+      if (history.length > 0) {
+        const maxId = Math.max(...history.map(n => n.id || 0));
+        this.nextId = maxId + 1;
+      }
 
       this.isInitialized = true;
-      notebookLogger.info('Notebook service initialized successfully');
+      notebookLogger.info('Notebook service initialized successfully (localStorage)');
     } catch (error) {
       notebookLogger.error('Failed to initialize notebook service:', error);
       throw error;
@@ -55,22 +48,18 @@ class NotebookService {
     await this.initialize();
 
     try {
-      const result = await this.db!.execute(
-        `INSERT INTO notebook_history
-         (name, content, path, created_at, updated_at, cell_count, execution_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          notebook.name,
-          notebook.content,
-          notebook.path,
-          notebook.created_at,
-          notebook.updated_at,
-          notebook.cell_count,
-          notebook.execution_count
-        ]
-      );
+      const history = this.getHistoryFromStorage();
+      const id = this.nextId++;
 
-      return result.lastInsertId || 0;
+      const newEntry: NotebookHistory = {
+        ...notebook,
+        id,
+      };
+
+      history.push(newEntry);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+
+      return id;
     } catch (error) {
       notebookLogger.error('Failed to save notebook to history:', error);
       throw error;
@@ -81,39 +70,21 @@ class NotebookService {
     await this.initialize();
 
     try {
-      const updates: string[] = [];
-      const values: any[] = [];
+      const history = this.getHistoryFromStorage();
+      const index = history.findIndex(n => n.id === id);
 
-      if (notebook.name !== undefined) {
-        updates.push('name = ?');
-        values.push(notebook.name);
-      }
-      if (notebook.content !== undefined) {
-        updates.push('content = ?');
-        values.push(notebook.content);
-      }
-      if (notebook.path !== undefined) {
-        updates.push('path = ?');
-        values.push(notebook.path);
-      }
-      if (notebook.cell_count !== undefined) {
-        updates.push('cell_count = ?');
-        values.push(notebook.cell_count);
-      }
-      if (notebook.execution_count !== undefined) {
-        updates.push('execution_count = ?');
-        values.push(notebook.execution_count);
+      if (index === -1) {
+        throw new Error(`Notebook with id ${id} not found`);
       }
 
-      updates.push('updated_at = ?');
-      values.push(new Date().toISOString());
+      history[index] = {
+        ...history[index],
+        ...notebook,
+        id, // Preserve ID
+        updated_at: new Date().toISOString(),
+      };
 
-      values.push(id);
-
-      await this.db!.execute(
-        `UPDATE notebook_history SET ${updates.join(', ')} WHERE id = ?`,
-        values
-      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
     } catch (error) {
       notebookLogger.error('Failed to update notebook history:', error);
       throw error;
@@ -124,14 +95,12 @@ class NotebookService {
     await this.initialize();
 
     try {
-      const result = await this.db!.select<NotebookHistory[]>(
-        `SELECT * FROM notebook_history
-         ORDER BY updated_at DESC
-         LIMIT ?`,
-        [limit]
-      );
+      const history = this.getHistoryFromStorage();
 
-      return result;
+      // Sort by updated_at DESC and limit
+      return history
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, limit);
     } catch (error) {
       notebookLogger.error('Failed to get notebook history:', error);
       return [];
@@ -142,12 +111,10 @@ class NotebookService {
     await this.initialize();
 
     try {
-      const result = await this.db!.select<NotebookHistory[]>(
-        'SELECT * FROM notebook_history WHERE id = ?',
-        [id]
-      );
+      const history = this.getHistoryFromStorage();
+      const notebook = history.find(n => n.id === id);
 
-      return result.length > 0 ? result[0] : null;
+      return notebook || null;
     } catch (error) {
       notebookLogger.error('Failed to get notebook by ID:', error);
       return null;
@@ -158,10 +125,10 @@ class NotebookService {
     await this.initialize();
 
     try {
-      await this.db!.execute(
-        'DELETE FROM notebook_history WHERE id = ?',
-        [id]
-      );
+      const history = this.getHistoryFromStorage();
+      const filtered = history.filter(n => n.id !== id);
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
     } catch (error) {
       notebookLogger.error('Failed to delete notebook from history:', error);
       throw error;
@@ -172,15 +139,18 @@ class NotebookService {
     await this.initialize();
 
     try {
-      const result = await this.db!.select<NotebookHistory[]>(
-        `SELECT * FROM notebook_history
-         WHERE name LIKE ? OR path LIKE ?
-         ORDER BY updated_at DESC
-         LIMIT 50`,
-        [`%${query}%`, `%${query}%`]
+      const history = this.getHistoryFromStorage();
+      const lowerQuery = query.toLowerCase();
+
+      const results = history.filter(n =>
+        n.name.toLowerCase().includes(lowerQuery) ||
+        (n.path && n.path.toLowerCase().includes(lowerQuery))
       );
 
-      return result;
+      // Sort by updated_at DESC and limit to 50
+      return results
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .slice(0, 50);
     } catch (error) {
       notebookLogger.error('Failed to search notebook history:', error);
       return [];
@@ -191,11 +161,17 @@ class NotebookService {
     await this.initialize();
 
     try {
-      await this.db!.execute('DELETE FROM notebook_history');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      this.nextId = 1;
     } catch (error) {
       notebookLogger.error('Failed to clear notebook history:', error);
       throw error;
     }
+  }
+
+  private getHistoryFromStorage(): NotebookHistory[] {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
   }
 }
 

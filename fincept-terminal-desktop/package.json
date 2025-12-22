@@ -51,7 +51,6 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.3",
-    "@tauri-apps/plugin-sql": "^2.3.0",
     "@tauri-apps/plugin-updater": "~2.9.0",
     "@types/react-grid-layout": "^1.3.5",
     "anychart": "^8.14.0",

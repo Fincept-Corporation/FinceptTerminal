@@ -192,7 +192,7 @@ export default defineConfig({
           'chart-vendor': ['recharts', 'lightweight-charts'],
           'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-popover', '@radix-ui/react-tabs'],
           'flow-vendor': ['reactflow'],
-          'tauri-vendor': ['@tauri-apps/api', '@tauri-apps/plugin-dialog', '@tauri-apps/plugin-sql'],
+          'tauri-vendor': ['@tauri-apps/api', '@tauri-apps/plugin-dialog'],
           'ccxt-vendor': ['ccxt'],  // Separate chunk for CCXT
         },
       }

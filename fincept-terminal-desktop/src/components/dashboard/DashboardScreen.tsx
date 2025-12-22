@@ -46,6 +46,8 @@ import BacktestingTab from '@/components/tabs/BacktestingTabNew';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import AgentConfigTab from '@/components/tabs/AgentConfigTab';
 import ExcelTab from '@/components/tabs/ExcelTab';
+import AlphaArenaTab from '@/components/tabs/AlphaArenaTab';
+import AIQuantLabTab from '@/components/tabs/ai-quant-lab/AIQuantLabTab';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -536,7 +538,9 @@ function FinxeptTerminalContent() {
     { label: 'Fyers Broker', action: () => setActiveTab('fyers') },
     { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
     { label: 'Backtesting', shortcut: 'F5', action: () => setActiveTab('backtesting') },
-    { label: 'Watchlist', shortcut: 'F6', action: () => setActiveTab('watchlist') }
+    { label: 'Watchlist', shortcut: 'F6', action: () => setActiveTab('watchlist'), separator: true },
+    { label: 'Alpha Arena', action: () => setActiveTab('alpha-arena') },
+    { label: 'AI Quant Lab', shortcut: 'Ctrl+Q', action: () => setActiveTab('ai-quant-lab') }
   ];
 
   const toolsMenuItems = [
@@ -983,6 +987,12 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="excel" className="h-full m-0 p-0">
               <ExcelTab />
+            </TabsContent>
+            <TabsContent value="alpha-arena" className="h-full m-0 p-0">
+              <AlphaArenaTab />
+            </TabsContent>
+            <TabsContent value="ai-quant-lab" className="h-full m-0 p-0">
+              <AIQuantLabTab />
             </TabsContent>
           </Tabs>
         )}
