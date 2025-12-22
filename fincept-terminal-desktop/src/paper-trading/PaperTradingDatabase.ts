@@ -1,11 +1,11 @@
 /**
  * Paper Trading Database Operations
  *
- * Thin wrapper over SQLite service for paper trading data persistence
- * Uses existing paper_trading_* tables from sqliteService
+ * Uses Rust SQLite backend via Tauri invoke() commands
+ * NO raw SQL - all operations go through Rust backend
  */
 
-import { sqliteService } from '../services/sqliteService';
+import { invoke } from '@tauri-apps/api/core';
 import type {
   PaperTradingPortfolio,
   PaperTradingPosition,
@@ -32,67 +32,40 @@ export class PaperTradingDatabase {
     marginMode?: 'cross' | 'isolated';
     leverage?: number;
   }): Promise<void> {
-    const sql = `
-      INSERT INTO paper_trading_portfolios
-      (id, name, provider, initial_balance, current_balance, currency, margin_mode, leverage)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-    `;
-
-    await sqliteService.execute(sql, [
-      portfolio.id,
-      portfolio.name,
-      portfolio.provider,
-      portfolio.initialBalance,
-      portfolio.initialBalance,
-      portfolio.currency || 'USD',
-      portfolio.marginMode || 'cross',
-      portfolio.leverage || 1,
-    ]);
+    await invoke('db_create_portfolio', {
+      id: portfolio.id,
+      name: portfolio.name,
+      provider: portfolio.provider,
+      initialBalance: portfolio.initialBalance,
+      currency: portfolio.currency || 'USD',
+      marginMode: portfolio.marginMode || 'cross',
+      leverage: portfolio.leverage || 1,
+    });
   }
 
   async getPortfolio(portfolioId: string): Promise<PaperTradingPortfolio | null> {
-    const sql = `
-      SELECT id, name, provider, initial_balance, current_balance, currency,
-             margin_mode, leverage, created_at, updated_at
-      FROM paper_trading_portfolios
-      WHERE id = $1
-    `;
-
-    const result = await sqliteService.select<DBPortfolio[]>(sql, [portfolioId]);
-
-    if (!result || result.length === 0) {
+    try {
+      const result = await invoke<any>('db_get_portfolio', { id: portfolioId });
+      return this.mapDBPortfolio(result);
+    } catch (error) {
+      console.error('[PaperTradingDatabase] getPortfolio error:', error);
       return null;
     }
-
-    const row = result[0];
-    return this.mapDBPortfolio(row);
   }
 
   async updatePortfolioBalance(portfolioId: string, newBalance: number): Promise<void> {
-    const sql = `
-      UPDATE paper_trading_portfolios
-      SET current_balance = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-    `;
-
-    await sqliteService.execute(sql, [newBalance, portfolioId]);
+    await invoke('db_update_portfolio_balance', {
+      id: portfolioId,
+      newBalance
+    });
   }
 
   async deletePortfolio(portfolioId: string): Promise<void> {
-    // Cascading deletes will remove positions, orders, and trades
-    const sql = `DELETE FROM paper_trading_portfolios WHERE id = $1`;
-    await sqliteService.execute(sql, [portfolioId]);
+    await invoke('db_delete_portfolio', { id: portfolioId });
   }
 
   async listPortfolios(): Promise<PaperTradingPortfolio[]> {
-    const sql = `
-      SELECT id, name, provider, initial_balance, current_balance, currency,
-             margin_mode, leverage, created_at, updated_at
-      FROM paper_trading_portfolios
-      ORDER BY created_at DESC
-    `;
-
-    const result = await sqliteService.select<DBPortfolio[]>(sql, []);
+    const result = await invoke<any[]>('db_list_portfolios');
     return result.map((row: any) => this.mapDBPortfolio(row));
   }
 
@@ -110,63 +83,40 @@ export class PaperTradingDatabase {
     leverage?: number;
     marginMode?: 'cross' | 'isolated';
   }): Promise<void> {
-    const positionValue = position.entryPrice * position.quantity;
-
-    const sql = `
-      INSERT INTO paper_trading_positions
-      (id, portfolio_id, symbol, side, entry_price, quantity, position_value, leverage, margin_mode, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'open')
-    `;
-
-    await sqliteService.execute(sql, [
-      position.id,
-      position.portfolioId,
-      position.symbol,
-      position.side,
-      position.entryPrice,
-      position.quantity,
-      positionValue,
-      position.leverage || 1,
-      position.marginMode || 'cross',
-    ]);
+    await invoke('db_create_position', {
+      id: position.id,
+      portfolioId: position.portfolioId,
+      symbol: position.symbol,
+      side: position.side,
+      entryPrice: position.entryPrice,
+      quantity: position.quantity,
+      leverage: position.leverage || 1,
+      marginMode: position.marginMode || 'cross',
+    });
   }
 
   async getPosition(positionId: string): Promise<PaperTradingPosition | null> {
-    const sql = `
-      SELECT id, portfolio_id, symbol, side, entry_price, quantity, position_value,
-             current_price, unrealized_pnl, realized_pnl, leverage, margin_mode,
-             liquidation_price, opened_at, closed_at, status
-      FROM paper_trading_positions
-      WHERE id = $1
-    `;
-
-    const result = await sqliteService.select<DBPosition[]>(sql, [positionId]);
-
-    if (!result || result.length === 0) {
+    try {
+      const result = await invoke<any>('db_get_position', { id: positionId });
+      return this.mapDBPosition(result);
+    } catch (error) {
+      console.error('[PaperTradingDatabase] getPosition error:', error);
       return null;
     }
-
-    return this.mapDBPosition(result[0]);
   }
 
   async getPositionBySymbol(portfolioId: string, symbol: string, status: 'open' | 'closed' = 'open'): Promise<PaperTradingPosition | null> {
-    const sql = `
-      SELECT id, portfolio_id, symbol, side, entry_price, quantity, position_value,
-             current_price, unrealized_pnl, realized_pnl, leverage, margin_mode,
-             liquidation_price, opened_at, closed_at, status
-      FROM paper_trading_positions
-      WHERE portfolio_id = $1 AND symbol = $2 AND status = $3
-      ORDER BY opened_at DESC
-      LIMIT 1
-    `;
-
-    const result = await sqliteService.select<DBPosition[]>(sql, [portfolioId, symbol, status]);
-
-    if (!result || result.length === 0) {
+    try {
+      const result = await invoke<any | null>('db_get_position_by_symbol', {
+        portfolioId,
+        symbol,
+        status,
+      });
+      return result ? this.mapDBPosition(result) : null;
+    } catch (error) {
+      console.error('[PaperTradingDatabase] getPositionBySymbol error:', error);
       return null;
     }
-
-    return this.mapDBPosition(result[0]);
   }
 
   async getPositionBySymbolAndSide(
@@ -175,44 +125,25 @@ export class PaperTradingDatabase {
     side: 'long' | 'short',
     status: 'open' | 'closed' = 'open'
   ): Promise<PaperTradingPosition | null> {
-    const sql = `
-      SELECT id, portfolio_id, symbol, side, entry_price, quantity, position_value,
-             current_price, unrealized_pnl, realized_pnl, leverage, margin_mode,
-             liquidation_price, opened_at, closed_at, status
-      FROM paper_trading_positions
-      WHERE portfolio_id = $1 AND symbol = $2 AND side = $3 AND status = $4
-      ORDER BY opened_at DESC
-      LIMIT 1
-    `;
-
-    const result = await sqliteService.select<DBPosition[]>(sql, [portfolioId, symbol, side, status]);
-
-    if (!result || result.length === 0) {
+    try {
+      const result = await invoke<any | null>('db_get_position_by_symbol_and_side', {
+        portfolioId,
+        symbol,
+        side,
+        status,
+      });
+      return result ? this.mapDBPosition(result) : null;
+    } catch (error) {
+      console.error('[PaperTradingDatabase] getPositionBySymbolAndSide error:', error);
       return null;
     }
-
-    return this.mapDBPosition(result[0]);
   }
 
   async getPortfolioPositions(portfolioId: string, status?: 'open' | 'closed'): Promise<PaperTradingPosition[]> {
-    let sql = `
-      SELECT id, portfolio_id, symbol, side, entry_price, quantity, position_value,
-             current_price, unrealized_pnl, realized_pnl, leverage, margin_mode,
-             liquidation_price, opened_at, closed_at, status
-      FROM paper_trading_positions
-      WHERE portfolio_id = $1
-    `;
-
-    const params: any[] = [portfolioId];
-
-    if (status) {
-      sql += ` AND status = $2`;
-      params.push(status);
-    }
-
-    sql += ` ORDER BY opened_at DESC`;
-
-    const result = await sqliteService.select<DBPosition[]>(sql, params);
+    const result = await invoke<any[]>('db_get_portfolio_positions', {
+      portfolioId,
+      status: status || null,
+    });
     return result.map((row: any) => this.mapDBPosition(row));
   }
 
@@ -226,54 +157,21 @@ export class PaperTradingDatabase {
     status?: 'open' | 'closed';
     closedAt?: string | null;
   }): Promise<void> {
-    const fields: string[] = [];
-    const values: any[] = [];
-    let paramIndex = 1;
-
-    if (updates.quantity !== undefined) {
-      fields.push(`quantity = $${paramIndex++}`);
-      values.push(updates.quantity);
-    }
-    if (updates.entryPrice !== undefined) {
-      fields.push(`entry_price = $${paramIndex++}`);
-      values.push(updates.entryPrice);
-    }
-    if (updates.currentPrice !== undefined) {
-      fields.push(`current_price = $${paramIndex++}`);
-      values.push(updates.currentPrice);
-    }
-    if (updates.unrealizedPnl !== undefined) {
-      fields.push(`unrealized_pnl = $${paramIndex++}`);
-      values.push(updates.unrealizedPnl);
-    }
-    if (updates.realizedPnl !== undefined) {
-      fields.push(`realized_pnl = $${paramIndex++}`);
-      values.push(updates.realizedPnl);
-    }
-    if (updates.liquidationPrice !== undefined) {
-      fields.push(`liquidation_price = $${paramIndex++}`);
-      values.push(updates.liquidationPrice);
-    }
-    if (updates.status !== undefined) {
-      fields.push(`status = $${paramIndex++}`);
-      values.push(updates.status);
-    }
-    if (updates.closedAt !== undefined) {
-      fields.push(`closed_at = $${paramIndex++}`);
-      values.push(updates.closedAt);
-    }
-
-    if (fields.length === 0) return;
-
-    values.push(positionId);
-    const sql = `UPDATE paper_trading_positions SET ${fields.join(', ')} WHERE id = $${paramIndex}`;
-
-    await sqliteService.execute(sql, values);
+    await invoke('db_update_position', {
+      id: positionId,
+      quantity: updates.quantity || null,
+      entryPrice: updates.entryPrice || null,
+      currentPrice: updates.currentPrice || null,
+      unrealizedPnl: updates.unrealizedPnl || null,
+      realizedPnl: updates.realizedPnl || null,
+      liquidationPrice: updates.liquidationPrice !== undefined ? updates.liquidationPrice : null,
+      status: updates.status || null,
+      closedAt: updates.closedAt !== undefined ? updates.closedAt : null,
+    });
   }
 
   async deletePosition(positionId: string): Promise<void> {
-    const sql = `DELETE FROM paper_trading_positions WHERE id = $1`;
-    await sqliteService.execute(sql, [positionId]);
+    await invoke('db_delete_position', { id: positionId });
   }
 
   // ============================================================================
@@ -298,96 +196,40 @@ export class PaperTradingDatabase {
     leverage?: number;
     marginMode?: string;
   }): Promise<void> {
-    const sql = `
-      INSERT INTO paper_trading_orders
-      (id, portfolio_id, symbol, side, type, quantity, price, stop_price, status,
-       time_in_force, post_only, reduce_only, trailing_percent, trailing_amount,
-       iceberg_qty, leverage, margin_mode, filled_quantity, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, $14, $15, $16, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `;
-
-    await sqliteService.execute(sql, [
-      order.id,
-      order.portfolioId,
-      order.symbol,
-      order.side,
-      order.type,
-      order.quantity,
-      order.price || null,
-      order.stopPrice || null,
-      order.timeInForce || 'GTC',
-      order.postOnly ? 1 : 0,
-      order.reduceOnly ? 1 : 0,
-      order.trailingPercent || null,
-      order.trailingAmount || null,
-      order.icebergQty || null,
-      order.leverage || null,
-      order.marginMode || null,
-    ]);
+    await invoke('db_create_order', {
+      id: order.id,
+      portfolioId: order.portfolioId,
+      symbol: order.symbol,
+      side: order.side,
+      orderType: order.type,
+      quantity: order.quantity,
+      price: order.price || null,
+      timeInForce: order.timeInForce || 'GTC',
+    });
   }
 
   async getOrder(orderId: string): Promise<PaperTradingOrder | null> {
-    const sql = `
-      SELECT id, portfolio_id, symbol, side, type, quantity, price, stop_price,
-             filled_quantity, avg_fill_price, status, time_in_force, post_only,
-             reduce_only, trailing_percent, trailing_amount, iceberg_qty, leverage,
-             margin_mode, created_at, filled_at, updated_at
-      FROM paper_trading_orders
-      WHERE id = $1
-    `;
-
-    const result = await sqliteService.select<DBOrder[]>(sql, [orderId]);
-
-    if (!result || result.length === 0) {
+    try {
+      const result = await invoke<any>('db_get_order', { id: orderId });
+      return this.mapDBOrder(result);
+    } catch (error) {
+      console.error('[PaperTradingDatabase] getOrder error:', error);
       return null;
     }
-
-    return this.mapDBOrder(result[0]);
   }
 
   async getPortfolioOrders(portfolioId: string, status?: string): Promise<PaperTradingOrder[]> {
-    let sql = `
-      SELECT id, portfolio_id, symbol, side, type, quantity, price, stop_price,
-             filled_quantity, avg_fill_price, status, time_in_force, post_only,
-             reduce_only, trailing_percent, trailing_amount, iceberg_qty, leverage,
-             margin_mode, created_at, filled_at, updated_at
-      FROM paper_trading_orders
-      WHERE portfolio_id = $1
-    `;
-
-    const params: any[] = [portfolioId];
-
-    if (status) {
-      sql += ` AND status = $2`;
-      params.push(status);
-    }
-
-    sql += ` ORDER BY created_at DESC`;
-
-    const result = await sqliteService.select<DBOrder[]>(sql, params);
+    const result = await invoke<any[]>('db_get_portfolio_orders', {
+      portfolioId,
+      status: status || null,
+    });
     return result.map(row => this.mapDBOrder(row));
   }
 
   async getPendingOrders(portfolioId?: string): Promise<PaperTradingOrder[]> {
-    let sql = `
-      SELECT id, portfolio_id, symbol, side, type, quantity, price, stop_price,
-             filled_quantity, avg_fill_price, status, time_in_force, post_only,
-             reduce_only, trailing_percent, trailing_amount, iceberg_qty, leverage,
-             margin_mode, created_at, filled_at, updated_at
-      FROM paper_trading_orders
-      WHERE status IN ('pending', 'triggered', 'partial')
-    `;
-
-    const params: any[] = [];
-
-    if (portfolioId) {
-      sql += ` AND portfolio_id = $1`;
-      params.push(portfolioId);
-    }
-
-    sql += ` ORDER BY created_at ASC`;
-
-    const result = await sqliteService.select<DBOrder[]>(sql, params);
+    const result = await invoke<any[]>('db_get_pending_orders', {
+      portfolioId: portfolioId || null,
+    });
     return result.map(row => this.mapDBOrder(row));
   }
 
@@ -397,36 +239,17 @@ export class PaperTradingDatabase {
     status?: string;
     filledAt?: string | null;
   }): Promise<void> {
-    const fields: string[] = ['updated_at = CURRENT_TIMESTAMP'];
-    const values: any[] = [];
-    let paramIndex = 1;
-
-    if (updates.filledQuantity !== undefined) {
-      fields.push(`filled_quantity = $${paramIndex++}`);
-      values.push(updates.filledQuantity);
-    }
-    if (updates.avgFillPrice !== undefined) {
-      fields.push(`avg_fill_price = $${paramIndex++}`);
-      values.push(updates.avgFillPrice);
-    }
-    if (updates.status !== undefined) {
-      fields.push(`status = $${paramIndex++}`);
-      values.push(updates.status);
-    }
-    if (updates.filledAt !== undefined) {
-      fields.push(`filled_at = $${paramIndex++}`);
-      values.push(updates.filledAt);
-    }
-
-    values.push(orderId);
-    const sql = `UPDATE paper_trading_orders SET ${fields.join(', ')} WHERE id = $${paramIndex}`;
-
-    await sqliteService.execute(sql, values);
+    await invoke('db_update_order', {
+      id: orderId,
+      filledQuantity: updates.filledQuantity || null,
+      avgFillPrice: updates.avgFillPrice || null,
+      status: updates.status || null,
+      filledAt: updates.filledAt !== undefined ? updates.filledAt : null,
+    });
   }
 
   async deleteOrder(orderId: string): Promise<void> {
-    const sql = `DELETE FROM paper_trading_orders WHERE id = $1`;
-    await sqliteService.execute(sql, [orderId]);
+    await invoke('db_delete_order', { id: orderId });
   }
 
   // ============================================================================
@@ -445,86 +268,52 @@ export class PaperTradingDatabase {
     feeRate: number;
     isMaker: boolean;
   }): Promise<void> {
-    const sql = `
-      INSERT INTO paper_trading_trades
-      (id, portfolio_id, order_id, symbol, side, price, quantity, fee, fee_rate, is_maker, timestamp)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
-    `;
-
-    await sqliteService.execute(sql, [
-      trade.id,
-      trade.portfolioId,
-      trade.orderId,
-      trade.symbol,
-      trade.side,
-      trade.price,
-      trade.quantity,
-      trade.fee,
-      trade.feeRate,
-      trade.isMaker ? 1 : 0,
-    ]);
+    await invoke('db_create_trade', {
+      id: trade.id,
+      portfolioId: trade.portfolioId,
+      orderId: trade.orderId,
+      symbol: trade.symbol,
+      side: trade.side,
+      price: trade.price,
+      quantity: trade.quantity,
+      fee: trade.fee,
+      feeRate: trade.feeRate,
+      isMaker: trade.isMaker,
+    });
   }
 
   async getTrade(tradeId: string): Promise<PaperTradingTrade | null> {
-    const sql = `
-      SELECT id, portfolio_id, order_id, symbol, side, price, quantity,
-             fee, fee_rate, is_maker, timestamp
-      FROM paper_trading_trades
-      WHERE id = $1
-    `;
-
-    const result = await sqliteService.select<DBTrade[]>(sql, [tradeId]);
-
-    if (!result || result.length === 0) {
+    try {
+      const result = await invoke<any>('db_get_trade', { id: tradeId });
+      return this.mapDBTrade(result);
+    } catch (error) {
+      console.error('[PaperTradingDatabase] getTrade error:', error);
       return null;
     }
-
-    return this.mapDBTrade(result[0]);
   }
 
   async getPortfolioTrades(portfolioId: string, limit?: number): Promise<PaperTradingTrade[]> {
-    let sql = `
-      SELECT id, portfolio_id, order_id, symbol, side, price, quantity,
-             fee, fee_rate, is_maker, timestamp
-      FROM paper_trading_trades
-      WHERE portfolio_id = $1
-      ORDER BY timestamp DESC
-    `;
-
-    const params: any[] = [portfolioId];
-
-    if (limit) {
-      sql += ` LIMIT $2`;
-      params.push(limit);
-    }
-
-    const result = await sqliteService.select<DBTrade[]>(sql, params);
+    const result = await invoke<any[]>('db_get_portfolio_trades', {
+      portfolioId,
+      limit: limit || null,
+    });
     return result.map(row => this.mapDBTrade(row));
   }
 
   async getOrderTrades(orderId: string): Promise<PaperTradingTrade[]> {
-    const sql = `
-      SELECT id, portfolio_id, order_id, symbol, side, price, quantity,
-             fee, fee_rate, is_maker, timestamp
-      FROM paper_trading_trades
-      WHERE order_id = $1
-      ORDER BY timestamp ASC
-    `;
-
-    const result = await sqliteService.select<DBTrade[]>(sql, [orderId]);
+    const result = await invoke<any[]>('db_get_order_trades', { orderId });
     return result.map(row => this.mapDBTrade(row));
   }
 
   async deleteTrade(tradeId: string): Promise<void> {
-    const sql = `DELETE FROM paper_trading_trades WHERE id = $1`;
-    await sqliteService.execute(sql, [tradeId]);
+    await invoke('db_delete_trade', { id: tradeId });
   }
 
   // ============================================================================
   // MAPPING FUNCTIONS
   // ============================================================================
 
-  private mapDBPortfolio(row: DBPortfolio): PaperTradingPortfolio {
+  private mapDBPortfolio(row: any): PaperTradingPortfolio {
     return {
       id: row.id,
       name: row.name,
@@ -539,7 +328,7 @@ export class PaperTradingDatabase {
     };
   }
 
-  private mapDBPosition(row: DBPosition): PaperTradingPosition {
+  private mapDBPosition(row: any): PaperTradingPosition {
     return {
       id: row.id,
       portfolioId: row.portfolio_id,
@@ -560,13 +349,13 @@ export class PaperTradingDatabase {
     };
   }
 
-  private mapDBOrder(row: DBOrder): PaperTradingOrder {
+  private mapDBOrder(row: any): PaperTradingOrder {
     return {
       id: row.id,
       portfolioId: row.portfolio_id,
       symbol: row.symbol,
       side: row.side,
-      type: row.type as any,
+      type: row.order_type as any,
       amount: row.quantity,
       price: row.price || undefined,
       stopPrice: row.stop_price || undefined,
@@ -576,13 +365,13 @@ export class PaperTradingDatabase {
       timestamp: new Date(row.created_at).getTime(),
       datetime: row.created_at,
       timeInForce: row.time_in_force || undefined,
-      postOnly: row.post_only === 1,
-      reduceOnly: row.reduce_only === 1,
-      trailingPercent: row.trailing_percent || undefined,
-      trailingAmount: row.trailing_amount || undefined,
-      icebergQty: row.iceberg_qty || undefined,
-      leverage: row.leverage || undefined,
-      marginMode: row.margin_mode as any,
+      postOnly: row.post_only === true || row.post_only === 1,
+      reduceOnly: row.reduce_only === true || row.reduce_only === 1,
+      trailingPercent: undefined,
+      trailingAmount: undefined,
+      icebergQty: undefined,
+      leverage: undefined,
+      marginMode: undefined,
       lastTradeTimestamp: row.filled_at ? new Date(row.filled_at).getTime() : undefined,
       remaining: row.quantity - row.filled_quantity,
       cost: (row.avg_fill_price || 0) * row.filled_quantity,
@@ -590,7 +379,7 @@ export class PaperTradingDatabase {
     } as PaperTradingOrder;
   }
 
-  private mapDBTrade(row: DBTrade): PaperTradingTrade {
+  private mapDBTrade(row: any): PaperTradingTrade {
     return {
       id: row.id,
       portfolioId: row.portfolio_id,
@@ -601,7 +390,7 @@ export class PaperTradingDatabase {
       quantity: row.quantity,
       fee: row.fee,
       feeRate: row.fee_rate,
-      isMaker: row.is_maker === 1,
+      isMaker: row.is_maker === true || row.is_maker === 1,
       timestamp: row.timestamp,
     };
   }

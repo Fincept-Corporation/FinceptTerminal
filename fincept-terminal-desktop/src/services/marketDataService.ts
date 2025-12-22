@@ -179,8 +179,23 @@ class MarketDataService {
         return await this.getEnhancedQuotes(symbols);
       }
 
-      // Try to get cached data for all symbols
-      const cachedData = await sqliteService.getCachedCategoryData(category, symbols, maxCacheAgeMinutes);
+      // Try to get cached data for each symbol
+      const cachedDataPromises = symbols.map(symbol =>
+        sqliteService.getCachedMarketData(symbol, category, maxCacheAgeMinutes)
+      );
+      const cachedDataResults = await Promise.all(cachedDataPromises);
+
+      const cachedData = new Map<string, QuoteData & { seven_day?: number; thirty_day?: number }>();
+      symbols.forEach((symbol, index) => {
+        const cached = cachedDataResults[index];
+        if (cached) {
+          try {
+            cachedData.set(symbol, JSON.parse(cached));
+          } catch (e) {
+            // Invalid cached data, will fetch fresh
+          }
+        }
+      });
 
       // Identify which symbols need fresh data
       const symbolsNeedingFetch = symbols.filter(symbol => !cachedData.has(symbol));
@@ -198,7 +213,7 @@ class MarketDataService {
       // Cache the fresh data
       await Promise.all(
         freshQuotes.map(quote =>
-          sqliteService.saveMarketDataCache(quote.symbol, category, quote)
+          sqliteService.saveMarketDataCache(quote.symbol, category, JSON.stringify(quote))
         )
       );
 

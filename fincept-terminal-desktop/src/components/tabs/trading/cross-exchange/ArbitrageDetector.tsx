@@ -1,10 +1,30 @@
 /**
  * ArbitrageDetector - Real-time arbitrage opportunity detection across exchanges
+ * Bloomberg Terminal Style
  */
 
 import React from 'react';
 import { Zap, RefreshCw, Loader, TrendingUp, Clock, AlertTriangle, ExternalLink } from 'lucide-react';
 import { useArbitrageDetection } from '../hooks/useCrossExchange';
+
+// Bloomberg Professional Color Palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
+};
 
 export function ArbitrageDetector() {
   const { opportunities, isScanning, lastScanTime, scan } = useArbitrageDetection();
@@ -26,36 +46,86 @@ export function ArbitrageDetector() {
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded p-6">
+    <div style={{
+      backgroundColor: BLOOMBERG.PANEL_BG,
+      border: `1px solid ${BLOOMBERG.BORDER}`,
+      borderRadius: '4px',
+      padding: '16px',
+      height: '100%',
+      overflow: 'auto'
+    }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Zap className="w-5 h-5 text-yellow-500" />
-          <span className="text-lg font-semibold text-white">Arbitrage Opportunities</span>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: '16px',
+        paddingBottom: '12px',
+        borderBottom: `1px solid ${BLOOMBERG.BORDER}`
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Zap style={{ width: 18, height: 18, color: BLOOMBERG.YELLOW }} />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: BLOOMBERG.WHITE, letterSpacing: '0.5px' }}>
+            ARBITRAGE OPPORTUNITIES
+          </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           {lastScanTime && (
-            <div className="flex items-center gap-1 text-xs text-gray-500">
-              <Clock className="w-3 h-3" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: BLOOMBERG.MUTED }}>
+              <Clock style={{ width: 12, height: 12 }} />
               {formatTime(lastScanTime)}
             </div>
           )}
           <button
             onClick={scan}
             disabled={isScanning}
-            className="px-3 py-1 text-xs text-yellow-400 hover:text-yellow-300 border border-yellow-500/30 hover:border-yellow-400/50 rounded transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              padding: '6px 12px',
+              fontSize: '10px',
+              color: isScanning ? BLOOMBERG.MUTED : BLOOMBERG.YELLOW,
+              backgroundColor: 'transparent',
+              border: `1px solid ${isScanning ? BLOOMBERG.BORDER : BLOOMBERG.BORDER}`,
+              borderRadius: '2px',
+              cursor: isScanning ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              opacity: isScanning ? 0.5 : 1,
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (!isScanning) {
+                e.currentTarget.style.borderColor = BLOOMBERG.YELLOW;
+                e.currentTarget.style.backgroundColor = `${BLOOMBERG.YELLOW}15`;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isScanning) {
+                e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }
+            }}
           >
-            <RefreshCw className={`w-3 h-3 ${isScanning ? 'animate-spin' : ''}`} />
-            {isScanning ? 'Scanning...' : 'Scan'}
+            <RefreshCw style={{ width: 12, height: 12, animation: isScanning ? 'spin 1s linear infinite' : 'none' }} />
+            {isScanning ? 'SCANNING...' : 'SCAN'}
           </button>
         </div>
       </div>
 
       {/* Risk Warning */}
-      <div className="mb-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-        <div className="text-xs text-yellow-400">
-          <strong>Risk Warning:</strong> Arbitrage opportunities include trading fees, withdrawal
+      <div style={{
+        marginBottom: '16px',
+        padding: '10px',
+        backgroundColor: `${BLOOMBERG.YELLOW}08`,
+        border: `1px solid ${BLOOMBERG.YELLOW}25`,
+        borderRadius: '2px',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '8px'
+      }}>
+        <AlertTriangle style={{ width: 14, height: 14, color: BLOOMBERG.YELLOW, flexShrink: 0, marginTop: '2px' }} />
+        <div style={{ fontSize: '10px', color: BLOOMBERG.YELLOW, lineHeight: '1.5' }}>
+          <strong>RISK WARNING:</strong> Arbitrage opportunities include trading fees, withdrawal
           fees, and execution risk. Always calculate net profit after all costs. Prices can change
           rapidly.
         </div>
@@ -63,133 +133,266 @@ export function ArbitrageDetector() {
 
       {/* Scanning Status */}
       {isScanning && (
-        <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded flex items-center gap-2">
-          <Loader className="w-4 h-4 text-blue-500 animate-spin" />
-          <span className="text-sm text-blue-400">Scanning for arbitrage opportunities...</span>
+        <div style={{
+          marginBottom: '12px',
+          padding: '10px',
+          backgroundColor: `${BLOOMBERG.CYAN}08`,
+          border: `1px solid ${BLOOMBERG.CYAN}25`,
+          borderRadius: '2px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <Loader style={{ width: 14, height: 14, color: BLOOMBERG.CYAN, animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: '11px', color: BLOOMBERG.CYAN }}>SCANNING FOR ARBITRAGE OPPORTUNITIES...</span>
         </div>
       )}
 
       {/* Opportunities List */}
-      <div className="space-y-3">
+      <div style={{ marginBottom: '16px' }}>
         {opportunities.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Zap className="w-12 h-12 mx-auto mb-3 text-gray-600" />
-            <div className="text-sm">No arbitrage opportunities found</div>
-            <div className="text-xs mt-1">Spread must be &gt; 0.2% to be considered viable</div>
+          <div style={{
+            textAlign: 'center',
+            padding: '40px 0',
+            color: BLOOMBERG.MUTED
+          }}>
+            <Zap style={{ width: 48, height: 48, margin: '0 auto 12px', color: BLOOMBERG.MUTED }} />
+            <div style={{ fontSize: '11px', marginBottom: '6px' }}>NO ARBITRAGE OPPORTUNITIES FOUND</div>
+            <div style={{ fontSize: '10px' }}>Spread must be &gt; 0.2% to be considered viable</div>
           </div>
         ) : (
-          opportunities.map((opp, idx) => (
-            <div
-              key={idx}
-              className="p-4 bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border-2 border-yellow-500/30 rounded hover:border-yellow-400/50 transition"
-            >
-              {/* Opportunity Header */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1 text-yellow-500">
-                    <Zap className="w-5 h-5 fill-current" />
-                    <span className="text-lg font-bold text-white">{opp.symbol}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {opportunities.map((opp, idx) => (
+              <div
+                key={idx}
+                style={{
+                  padding: '14px',
+                  background: `linear-gradient(135deg, ${BLOOMBERG.YELLOW}05, ${BLOOMBERG.ORANGE}05)`,
+                  border: `2px solid ${BLOOMBERG.YELLOW}40`,
+                  borderRadius: '2px',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = `${BLOOMBERG.YELLOW}80`;
+                  e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = `${BLOOMBERG.YELLOW}40`;
+                  e.currentTarget.style.background = `linear-gradient(135deg, ${BLOOMBERG.YELLOW}05, ${BLOOMBERG.ORANGE}05)`;
+                }}
+              >
+                {/* Opportunity Header */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: BLOOMBERG.YELLOW }}>
+                      <Zap style={{ width: 18, height: 18 }} fill="currentColor" />
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace' }}>
+                        {opp.symbol}
+                      </span>
+                    </div>
+                    <div style={{
+                      padding: '4px 10px',
+                      backgroundColor: `${BLOOMBERG.YELLOW}20`,
+                      border: `1px solid ${BLOOMBERG.YELLOW}40`,
+                      borderRadius: '2px',
+                      fontSize: '10px',
+                      color: BLOOMBERG.YELLOW,
+                      fontWeight: 700,
+                      letterSpacing: '0.5px'
+                    }}>
+                      {opp.spreadPercent.toFixed(2)}% SPREAD
+                    </div>
                   </div>
-                  <div className="px-2 py-0.5 bg-yellow-500/20 border border-yellow-500/30 rounded text-xs text-yellow-400 font-semibold">
-                    {opp.spreadPercent.toFixed(2)}% Spread
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '2px' }}>POTENTIAL PROFIT</div>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: BLOOMBERG.GREEN, fontFamily: 'monospace' }}>
+                      ${opp.potentialProfit.toFixed(2)}
+                    </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm text-gray-400">Potential Profit</div>
-                  <div className="text-xl font-bold text-green-500">
-                    ${opp.potentialProfit.toFixed(2)}
-                  </div>
-                </div>
-              </div>
 
-              {/* Trade Details */}
-              <div className="grid grid-cols-2 gap-4 mb-3">
-                {/* Buy Side */}
-                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded">
-                  <div className="text-xs text-gray-400 mb-1">BUY ON</div>
-                  <div className="text-sm font-semibold text-white capitalize mb-2">
-                    {opp.buyExchange}
+                {/* Trade Details */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                  {/* Buy Side */}
+                  <div style={{
+                    padding: '12px',
+                    backgroundColor: `${BLOOMBERG.GREEN}10`,
+                    border: `1px solid ${BLOOMBERG.GREEN}30`,
+                    borderRadius: '2px'
+                  }}>
+                    <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>
+                      BUY ON
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: BLOOMBERG.WHITE, marginBottom: '8px', textTransform: 'uppercase' }}>
+                      {opp.buyExchange}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <TrendingUp style={{ width: 16, height: 16, color: BLOOMBERG.GREEN }} />
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.GREEN, fontFamily: 'monospace' }}>
+                        ${formatPrice(opp.buyPrice)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-green-500" />
-                    <span className="text-lg font-bold text-green-500">
-                      ${formatPrice(opp.buyPrice)}
+
+                  {/* Sell Side */}
+                  <div style={{
+                    padding: '12px',
+                    backgroundColor: `${BLOOMBERG.RED}10`,
+                    border: `1px solid ${BLOOMBERG.RED}30`,
+                    borderRadius: '2px'
+                  }}>
+                    <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>
+                      SELL ON
+                    </div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: BLOOMBERG.WHITE, marginBottom: '8px', textTransform: 'uppercase' }}>
+                      {opp.sellExchange}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <TrendingUp style={{ width: 16, height: 16, color: BLOOMBERG.RED, transform: 'rotate(180deg)' }} />
+                      <span style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.RED, fontFamily: 'monospace' }}>
+                        ${formatPrice(opp.sellPrice)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Spread Info */}
+                <div style={{
+                  padding: '8px',
+                  backgroundColor: `${BLOOMBERG.DARK_BG}80`,
+                  borderRadius: '2px',
+                  marginBottom: '10px'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '10px'
+                  }}>
+                    <span style={{ color: BLOOMBERG.GRAY }}>PRICE DIFFERENCE:</span>
+                    <span style={{ color: BLOOMBERG.WHITE, fontWeight: 600, fontFamily: 'monospace' }}>
+                      ${opp.spread.toFixed(2)}
                     </span>
                   </div>
                 </div>
 
-                {/* Sell Side */}
-                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded">
-                  <div className="text-xs text-gray-400 mb-1">SELL ON</div>
-                  <div className="text-sm font-semibold text-white capitalize mb-2">
-                    {opp.sellExchange}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-red-500 rotate-180" />
-                    <span className="text-lg font-bold text-red-500">
-                      ${formatPrice(opp.sellPrice)}
-                    </span>
-                  </div>
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button style={{
+                    flex: 1,
+                    padding: '10px 14px',
+                    backgroundColor: BLOOMBERG.GREEN,
+                    color: BLOOMBERG.WHITE,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    border: 'none',
+                    borderRadius: '2px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s',
+                    letterSpacing: '0.5px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#00FF7F';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = BLOOMBERG.GREEN;
+                  }}>
+                    <TrendingUp style={{ width: 14, height: 14 }} />
+                    EXECUTE ARBITRAGE
+                  </button>
+                  <button style={{
+                    padding: '10px 14px',
+                    backgroundColor: BLOOMBERG.HEADER_BG,
+                    color: BLOOMBERG.WHITE,
+                    fontSize: '11px',
+                    border: `1px solid ${BLOOMBERG.BORDER}`,
+                    borderRadius: '2px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = BLOOMBERG.CYAN;
+                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                    e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG;
+                  }}>
+                    <ExternalLink style={{ width: 14, height: 14 }} />
+                  </button>
+                </div>
+
+                {/* Timestamp */}
+                <div style={{
+                  marginTop: '8px',
+                  fontSize: '9px',
+                  color: BLOOMBERG.MUTED,
+                  textAlign: 'center',
+                  letterSpacing: '0.5px'
+                }}>
+                  DETECTED {formatTime(opp.timestamp)}
                 </div>
               </div>
-
-              {/* Spread Info */}
-              <div className="p-2 bg-black/30 rounded mb-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-400">Price Difference:</span>
-                  <span className="text-white font-semibold">${opp.spread.toFixed(2)}</span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2">
-                <button className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded transition flex items-center justify-center gap-1">
-                  <TrendingUp className="w-4 h-4" />
-                  Execute Arbitrage
-                </button>
-                <button className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition">
-                  <ExternalLink className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Timestamp */}
-              <div className="mt-2 text-xs text-gray-500 text-center">
-                Detected {formatTime(opp.timestamp)}
-              </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
 
       {/* Info Section */}
-      <div className="mt-6 space-y-2">
-        <div className="p-3 bg-gray-800/50 border border-gray-700 rounded">
-          <div className="text-xs font-semibold text-gray-300 mb-2">How It Works</div>
-          <div className="text-xs text-gray-400 space-y-1">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{
+          padding: '10px',
+          backgroundColor: BLOOMBERG.HEADER_BG,
+          border: `1px solid ${BLOOMBERG.BORDER}`,
+          borderRadius: '2px'
+        }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.WHITE, marginBottom: '8px', letterSpacing: '0.5px' }}>
+            HOW IT WORKS
+          </div>
+          <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <div>
-              1. <strong>Buy</strong> the asset on the exchange with the lower price
+              1. <strong style={{ color: BLOOMBERG.WHITE }}>BUY</strong> the asset on the exchange with the lower price
             </div>
             <div>
-              2. <strong>Transfer</strong> the asset to the exchange with the higher price
+              2. <strong style={{ color: BLOOMBERG.WHITE }}>TRANSFER</strong> the asset to the exchange with the higher price
             </div>
             <div>
-              3. <strong>Sell</strong> the asset for profit
+              3. <strong style={{ color: BLOOMBERG.WHITE }}>SELL</strong> the asset for profit
             </div>
           </div>
         </div>
 
-        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded">
-          <div className="text-xs text-blue-400">
-            <strong>Cost Considerations:</strong> Factor in trading fees (maker/taker), withdrawal
+        <div style={{
+          padding: '10px',
+          backgroundColor: `${BLOOMBERG.CYAN}08`,
+          border: `1px solid ${BLOOMBERG.CYAN}25`,
+          borderRadius: '2px'
+        }}>
+          <div style={{ fontSize: '10px', color: BLOOMBERG.CYAN, lineHeight: '1.5' }}>
+            <strong>COST CONSIDERATIONS:</strong> Factor in trading fees (maker/taker), withdrawal
             fees, network fees, and execution time. The spread must exceed total costs for
             profitable arbitrage.
           </div>
         </div>
 
-        <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded">
-          <div className="text-xs text-purple-400">
-            <strong>Auto-Scan:</strong> Opportunities are automatically scanned every 10 seconds.
-            Click "Scan" to manually refresh.
+        <div style={{
+          padding: '10px',
+          backgroundColor: `${BLOOMBERG.PURPLE}08`,
+          border: `1px solid ${BLOOMBERG.PURPLE}25`,
+          borderRadius: '2px'
+        }}>
+          <div style={{ fontSize: '10px', color: BLOOMBERG.PURPLE, lineHeight: '1.5' }}>
+            <strong>AUTO-SCAN:</strong> Opportunities are automatically scanned every 10 seconds.
+            Click "SCAN" to manually refresh.
           </div>
         </div>
       </div>

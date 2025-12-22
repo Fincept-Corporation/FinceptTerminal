@@ -15,6 +15,7 @@ mod data_sources;
 mod commands;
 mod utils;
 mod setup;
+mod database;
 // mod finscript; // TODO: Implement FinScript module
 
 // MCP Server Process with communication channels
@@ -355,12 +356,17 @@ fn execute_python_script(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize high-performance Rust SQLite database
+    if let Err(e) = tokio::runtime::Runtime::new().unwrap().block_on(database::initialize()) {
+        eprintln!("Failed to initialize database: {}", e);
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_cors_fetch::init())
-        .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(MCPState {
@@ -1097,7 +1103,82 @@ pub fn run() {
             commands::alpha_arena::get_alpha_leaderboard,
             commands::alpha_arena::get_alpha_model_decisions,
             commands::alpha_arena::stop_alpha_competition,
-            commands::alpha_arena::run_alpha_cycle
+            commands::alpha_arena::run_alpha_cycle,
+            // High-Performance Rust SQLite Database Commands
+            commands::database::db_save_setting,
+            commands::database::db_get_setting,
+            commands::database::db_get_all_settings,
+            commands::database::db_save_credential,
+            commands::database::db_get_credentials,
+            commands::database::db_get_credential_by_service,
+            commands::database::db_delete_credential,
+            commands::database::db_get_llm_configs,
+            commands::database::db_save_llm_config,
+            commands::database::db_get_llm_global_settings,
+            commands::database::db_save_llm_global_settings,
+            commands::database::db_create_chat_session,
+            commands::database::db_get_chat_sessions,
+            commands::database::db_add_chat_message,
+            commands::database::db_get_chat_messages,
+            commands::database::db_delete_chat_session,
+            commands::database::db_save_data_source,
+            commands::database::db_get_all_data_sources,
+            commands::database::db_delete_data_source,
+            commands::database::db_add_mcp_server,
+            commands::database::db_get_mcp_servers,
+            commands::database::db_delete_mcp_server,
+            commands::database::db_save_backtesting_provider,
+            commands::database::db_get_backtesting_providers,
+            commands::database::db_save_backtesting_strategy,
+            commands::database::db_get_backtesting_strategies,
+            commands::database::db_save_backtest_run,
+            commands::database::db_get_backtest_runs,
+            commands::database::db_save_recorded_context,
+            commands::database::db_get_recorded_contexts,
+            commands::database::db_delete_recorded_context,
+            commands::database::db_create_watchlist,
+            commands::database::db_get_watchlists,
+            commands::database::db_add_watchlist_stock,
+            commands::database::db_get_watchlist_stocks,
+            commands::database::db_remove_watchlist_stock,
+            commands::database::db_delete_watchlist,
+            commands::database::db_save_market_data_cache,
+            commands::database::db_get_cached_market_data,
+            commands::database::db_clear_market_data_cache,
+            commands::database::db_create_portfolio,
+            commands::database::db_get_portfolio,
+            commands::database::db_list_portfolios,
+            commands::database::db_update_portfolio_balance,
+            commands::database::db_delete_portfolio,
+            commands::database::db_create_position,
+            commands::database::db_get_position,
+            commands::database::db_get_position_by_symbol,
+            commands::database::db_get_position_by_symbol_and_side,
+            commands::database::db_get_portfolio_positions,
+            commands::database::db_update_position,
+            commands::database::db_delete_position,
+            commands::database::db_create_order,
+            commands::database::db_get_order,
+            commands::database::db_get_pending_orders,
+            commands::database::db_get_portfolio_orders,
+            commands::database::db_update_order,
+            commands::database::db_delete_order,
+            commands::database::db_create_trade,
+            commands::database::db_get_trade,
+            commands::database::db_get_order_trades,
+            commands::database::db_get_portfolio_trades,
+            commands::database::db_delete_trade,
+            commands::database::db_create_note,
+            commands::database::db_get_all_notes,
+            commands::database::db_update_note,
+            commands::database::db_delete_note,
+            commands::database::db_search_notes,
+            commands::database::db_get_note_templates,
+            commands::database::db_add_or_update_excel_file,
+            commands::database::db_get_recent_excel_files,
+            commands::database::db_create_excel_snapshot,
+            commands::database::db_get_excel_snapshots,
+            commands::database::db_delete_excel_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

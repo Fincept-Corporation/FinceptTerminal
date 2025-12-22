@@ -331,7 +331,7 @@ export const CompetitionDashboard: React.FC<CompetitionDashboardProps> = ({
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                   <Calendar size={10} />
-                  Created: {formatDate(comp.created_at)}
+                  Created: {formatDate(comp.created_at || new Date().toISOString())}
                 </div>
                 {comp.started_at && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>

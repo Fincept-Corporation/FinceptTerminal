@@ -1,7 +1,7 @@
 // Watchlist Service - Manages watchlists and stock tracking for Fincept Terminal
-// Handles watchlist CRUD, stock management, and live market data integration
+// Now using high-performance Rust SQLite backend via Tauri commands
 
-import Database from '@tauri-apps/plugin-sql';
+import { invoke } from '@tauri-apps/api/core';
 import { marketDataService, QuoteData } from './marketDataService';
 import { watchlistLogger } from './loggerService';
 
@@ -37,36 +37,7 @@ export interface WatchlistWithStocks {
 // ==================== WATCHLIST SERVICE CLASS ====================
 
 class WatchlistService {
-  private db: Database | null = null;
-  private dbPath = 'sqlite:fincept_terminal.db';
-  private isInitialized = false;
-
-  /**
-   * Initialize database connection
-   */
-  async initialize(): Promise<void> {
-    if (this.isInitialized && this.db) {
-      return;
-    }
-
-    try {
-      this.db = await Database.load(this.dbPath);
-      this.isInitialized = true;
-      watchlistLogger.info('Initialized successfully');
-    } catch (error) {
-      watchlistLogger.error('Initialization failed:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Ensure database is initialized
-   */
-  private ensureInitialized(): void {
-    if (!this.db || !this.isInitialized) {
-      throw new Error('WatchlistService not initialized. Call initialize() first.');
-    }
-  }
+  // No database initialization needed - Rust backend handles it
 
   // ==================== WATCHLIST CRUD ====================
 
@@ -74,81 +45,42 @@ class WatchlistService {
    * Create a new watchlist
    */
   async createWatchlist(name: string, description?: string, color: string = '#FFA500'): Promise<Watchlist> {
-    this.ensureInitialized();
-
-    const id = crypto.randomUUID();
-    await this.db!.execute(
-      `INSERT INTO watchlists (id, name, description, color)
-       VALUES ($1, $2, $3, $4)`,
-      [id, name, description || null, color]
-    );
-
-    const result = await this.db!.select<Watchlist[]>(
-      'SELECT * FROM watchlists WHERE id = $1',
-      [id]
-    );
-
-    watchlistLogger.info(`Created watchlist: ${name}`, { id });
-    return result[0];
+    try {
+      const watchlist = await invoke<Watchlist>('db_create_watchlist', {
+        name,
+        description: description || null,
+        color
+      });
+      watchlistLogger.info(`Created watchlist: ${name}`, { id: watchlist.id });
+      return watchlist;
+    } catch (error) {
+      watchlistLogger.error('Failed to create watchlist:', error);
+      throw error;
+    }
   }
 
   /**
    * Get all watchlists
    */
   async getWatchlists(): Promise<Watchlist[]> {
-    this.ensureInitialized();
-
-    const watchlists = await this.db!.select<Watchlist[]>(
-      'SELECT * FROM watchlists ORDER BY created_at DESC'
-    );
-
-    return watchlists;
+    try {
+      return await invoke<Watchlist[]>('db_get_watchlists');
+    } catch (error) {
+      watchlistLogger.error('Failed to get watchlists:', error);
+      throw error;
+    }
   }
 
   /**
    * Get watchlist by ID
    */
   async getWatchlist(watchlistId: string): Promise<Watchlist | null> {
-    this.ensureInitialized();
-
-    const result = await this.db!.select<Watchlist[]>(
-      'SELECT * FROM watchlists WHERE id = $1',
-      [watchlistId]
-    );
-
-    return result.length > 0 ? result[0] : null;
-  }
-
-  /**
-   * Update watchlist
-   */
-  async updateWatchlist(watchlistId: string, updates: Partial<Omit<Watchlist, 'id' | 'created_at' | 'updated_at'>>): Promise<void> {
-    this.ensureInitialized();
-
-    const sets: string[] = [];
-    const values: any[] = [];
-
-    if (updates.name !== undefined) {
-      sets.push('name = $' + (values.length + 1));
-      values.push(updates.name);
-    }
-    if (updates.description !== undefined) {
-      sets.push('description = $' + (values.length + 1));
-      values.push(updates.description);
-    }
-    if (updates.color !== undefined) {
-      sets.push('color = $' + (values.length + 1));
-      values.push(updates.color);
-    }
-
-    if (sets.length > 0) {
-      sets.push("updated_at = datetime('now')");
-      values.push(watchlistId);
-
-      await this.db!.execute(
-        `UPDATE watchlists SET ${sets.join(', ')} WHERE id = $${values.length}`,
-        values
-      );
+    try {
+      const watchlists = await this.getWatchlists();
+      return watchlists.find(w => w.id === watchlistId) || null;
+    } catch (error) {
+      watchlistLogger.error('Failed to get watchlist:', error);
+      return null;
     }
   }
 
@@ -156,10 +88,13 @@ class WatchlistService {
    * Delete watchlist (cascades to stocks)
    */
   async deleteWatchlist(watchlistId: string): Promise<void> {
-    this.ensureInitialized();
-
-    await this.db!.execute('DELETE FROM watchlists WHERE id = $1', [watchlistId]);
-    watchlistLogger.info(`Deleted watchlist: ${watchlistId}`);
+    try {
+      await invoke('db_delete_watchlist', { watchlistId });
+      watchlistLogger.info(`Deleted watchlist: ${watchlistId}`);
+    } catch (error) {
+      watchlistLogger.error('Failed to delete watchlist:', error);
+      throw error;
+    }
   }
 
   // ==================== STOCK MANAGEMENT ====================
@@ -168,78 +103,52 @@ class WatchlistService {
    * Add stock to watchlist
    */
   async addStock(watchlistId: string, symbol: string, notes?: string): Promise<WatchlistStock> {
-    this.ensureInitialized();
-
-    // Check if stock already exists in watchlist
-    const existing = await this.db!.select<WatchlistStock[]>(
-      'SELECT * FROM watchlist_stocks WHERE watchlist_id = $1 AND symbol = $2',
-      [watchlistId, symbol]
-    );
-
-    if (existing.length > 0) {
-      throw new Error(`Stock ${symbol} already exists in watchlist`);
+    try {
+      const stock = await invoke<WatchlistStock>('db_add_watchlist_stock', {
+        watchlistId,
+        symbol: symbol.toUpperCase(),
+        notes: notes || null
+      });
+      watchlistLogger.info(`Added stock ${symbol} to watchlist`, { watchlistId });
+      return stock;
+    } catch (error) {
+      watchlistLogger.error('Failed to add stock:', error);
+      throw error;
     }
-
-    const id = crypto.randomUUID();
-    await this.db!.execute(
-      `INSERT INTO watchlist_stocks (id, watchlist_id, symbol, notes)
-       VALUES ($1, $2, $3, $4)`,
-      [id, watchlistId, symbol.toUpperCase(), notes || null]
-    );
-
-    const result = await this.db!.select<WatchlistStock[]>(
-      'SELECT * FROM watchlist_stocks WHERE id = $1',
-      [id]
-    );
-
-    watchlistLogger.info(`Added stock ${symbol} to watchlist`, { watchlistId });
-    return result[0];
   }
 
   /**
    * Remove stock from watchlist
    */
   async removeStock(watchlistId: string, symbol: string): Promise<void> {
-    this.ensureInitialized();
-
-    await this.db!.execute(
-      'DELETE FROM watchlist_stocks WHERE watchlist_id = $1 AND symbol = $2',
-      [watchlistId, symbol.toUpperCase()]
-    );
-
-    watchlistLogger.info(`Removed stock ${symbol} from watchlist`, { watchlistId });
-  }
-
-  /**
-   * Update stock notes
-   */
-  async updateStockNotes(watchlistId: string, symbol: string, notes: string): Promise<void> {
-    this.ensureInitialized();
-
-    await this.db!.execute(
-      'UPDATE watchlist_stocks SET notes = $1 WHERE watchlist_id = $2 AND symbol = $3',
-      [notes, watchlistId, symbol.toUpperCase()]
-    );
+    try {
+      await invoke('db_remove_watchlist_stock', {
+        watchlistId,
+        symbol: symbol.toUpperCase()
+      });
+      watchlistLogger.info(`Removed stock ${symbol} from watchlist`, { watchlistId });
+    } catch (error) {
+      watchlistLogger.error('Failed to remove stock:', error);
+      throw error;
+    }
   }
 
   /**
    * Get all stocks in a watchlist
    */
   async getWatchlistStocks(watchlistId: string): Promise<WatchlistStock[]> {
-    this.ensureInitialized();
-
-    return await this.db!.select<WatchlistStock[]>(
-      'SELECT * FROM watchlist_stocks WHERE watchlist_id = $1 ORDER BY added_at DESC',
-      [watchlistId]
-    );
+    try {
+      return await invoke<WatchlistStock[]>('db_get_watchlist_stocks', { watchlistId });
+    } catch (error) {
+      watchlistLogger.error('Failed to get watchlist stocks:', error);
+      throw error;
+    }
   }
 
   /**
    * Get watchlist stocks with live market quotes (with 10-min cache)
    */
   async getWatchlistStocksWithQuotes(watchlistId: string): Promise<WatchlistStockWithQuote[]> {
-    this.ensureInitialized();
-
     const stocks = await this.getWatchlistStocks(watchlistId);
 
     if (stocks.length === 0) {
@@ -270,8 +179,6 @@ class WatchlistService {
    * Get complete watchlist with stocks and quotes
    */
   async getWatchlistWithStocks(watchlistId: string): Promise<WatchlistWithStocks | null> {
-    this.ensureInitialized();
-
     const watchlist = await this.getWatchlist(watchlistId);
     if (!watchlist) {
       return null;
@@ -290,8 +197,6 @@ class WatchlistService {
    * Get all watchlists with stock counts
    */
   async getWatchlistsWithCounts(): Promise<Array<Watchlist & { stock_count: number }>> {
-    this.ensureInitialized();
-
     const watchlists = await this.getWatchlists();
 
     const withCounts = await Promise.all(
@@ -316,20 +221,21 @@ class WatchlistService {
     gainers: WatchlistStockWithQuote[];
     losers: WatchlistStockWithQuote[];
   }> {
-    this.ensureInitialized();
-
-    // Get all unique symbols from all watchlists
-    const allStocks = await this.db!.select<{ symbol: string }[]>(
-      'SELECT DISTINCT symbol FROM watchlist_stocks'
+    // Get all watchlists and their stocks
+    const watchlists = await this.getWatchlists();
+    const allStocksArrays = await Promise.all(
+      watchlists.map(w => this.getWatchlistStocks(w.id))
     );
 
-    if (allStocks.length === 0) {
+    const allStocks = allStocksArrays.flat();
+    const uniqueSymbols = [...new Set(allStocks.map(s => s.symbol))];
+
+    if (uniqueSymbols.length === 0) {
       return { gainers: [], losers: [] };
     }
 
-    const symbols = allStocks.map(s => s.symbol);
     const quotes = await marketDataService.getEnhancedQuotesWithCache(
-      symbols,
+      uniqueSymbols,
       'market_movers',
       10 // 10-minute cache
     );
@@ -360,19 +266,21 @@ class WatchlistService {
    * Get volume leaders from all watchlists (with 10-min cache)
    */
   async getVolumeLeaders(limit: number = 5): Promise<WatchlistStockWithQuote[]> {
-    this.ensureInitialized();
-
-    const allStocks = await this.db!.select<{ symbol: string }[]>(
-      'SELECT DISTINCT symbol FROM watchlist_stocks'
+    // Get all watchlists and their stocks
+    const watchlists = await this.getWatchlists();
+    const allStocksArrays = await Promise.all(
+      watchlists.map(w => this.getWatchlistStocks(w.id))
     );
 
-    if (allStocks.length === 0) {
+    const allStocks = allStocksArrays.flat();
+    const uniqueSymbols = [...new Set(allStocks.map(s => s.symbol))];
+
+    if (uniqueSymbols.length === 0) {
       return [];
     }
 
-    const symbols = allStocks.map(s => s.symbol);
     const quotes = await marketDataService.getEnhancedQuotesWithCache(
-      symbols,
+      uniqueSymbols,
       'volume_leaders',
       10 // 10-minute cache
     );
@@ -420,10 +328,10 @@ class WatchlistService {
   // ==================== UTILITY ====================
 
   /**
-   * Check if service is ready
+   * Check if service is ready (always ready with Rust backend)
    */
   isReady(): boolean {
-    return this.isInitialized && this.db !== null;
+    return true;
   }
 
   /**
@@ -431,9 +339,17 @@ class WatchlistService {
    */
   getStatus(): { initialized: boolean; ready: boolean } {
     return {
-      initialized: this.isInitialized,
-      ready: this.isReady()
+      initialized: true,
+      ready: true
     };
+  }
+
+  /**
+   * Initialize - kept for compatibility but not needed with Rust backend
+   */
+  async initialize(): Promise<void> {
+    // Rust backend auto-initializes on app startup
+    watchlistLogger.info('Using Rust SQLite backend');
   }
 }
 

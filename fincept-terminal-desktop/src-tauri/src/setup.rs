@@ -1,7 +1,7 @@
 // setup.rs - First-time setup for Python and Bun installation
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::Command;
 use tauri::{AppHandle, Emitter, Manager};
 
 // Windows-specific imports to hide console windows
@@ -35,16 +35,22 @@ const BUN_VERSION: &str = "1.1.0";
 
 // Optimized builds (require AVX2 - modern CPUs from ~2013+)
 const BUN_WINDOWS_X64_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-windows-x64.zip";
+#[cfg(target_os = "macos")]
 const BUN_MACOS_X64_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-x64.zip";
+#[cfg(target_os = "linux")]
 const BUN_LINUX_X64_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-linux-x64.zip";
 
 // Baseline builds (work on all CPUs, slightly slower)
 const BUN_WINDOWS_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-windows-x64-baseline.zip";
+#[cfg(target_os = "macos")]
 const BUN_MACOS_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-x64-baseline.zip";
+#[cfg(target_os = "linux")]
 const BUN_LINUX_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-linux-x64-baseline.zip";
 
 // ARM builds (always optimized for their architecture)
+#[cfg(target_os = "macos")]
 const BUN_MACOS_ARM_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-aarch64.zip";
+#[cfg(target_os = "linux")]
 const BUN_LINUX_ARM_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-linux-aarch64.zip";
 
 /// Detect if CPU supports AVX2 (required for optimized Bun builds)

@@ -48,14 +48,15 @@ export const AlphaArenaChart: React.FC<AlphaArenaChartProps> = ({
     const cycleMap = new Map<number, any>();
 
     snapshots.forEach(snap => {
-      if (!cycleMap.has(snap.cycle_number)) {
-        cycleMap.set(snap.cycle_number, {
-          cycle: snap.cycle_number,
+      const cycleNum = snap.cycle_number ?? 0;
+      if (!cycleMap.has(cycleNum)) {
+        cycleMap.set(cycleNum, {
+          cycle: cycleNum,
           timestamp: snap.timestamp,
         });
       }
 
-      const cycleData = cycleMap.get(snap.cycle_number)!;
+      const cycleData = cycleMap.get(cycleNum)!;
       cycleData[snap.model_name] = snap.portfolio_value;
     });
 

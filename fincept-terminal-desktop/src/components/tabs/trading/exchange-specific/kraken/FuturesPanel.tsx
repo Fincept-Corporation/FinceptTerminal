@@ -1,10 +1,30 @@
 /**
  * FuturesPanel - Kraken futures trading interface
+ * Bloomberg Terminal Style
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { TrendingUp, Activity, AlertTriangle, ExternalLink, Loader } from 'lucide-react';
 import { useBrokerContext } from '../../../../../contexts/BrokerContext';
+
+// Bloomberg Professional Color Palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  PURPLE: '#9D4EDD',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
+};
 
 interface FuturesMarket {
   symbol: string;
@@ -26,7 +46,6 @@ export function FuturesPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch futures markets on mount
   useEffect(() => {
     if (activeBroker === 'kraken') {
       fetchFuturesMarkets();
@@ -37,56 +56,11 @@ export function FuturesPanel() {
     setIsLoading(true);
     setError(null);
     try {
-      // Mock futures data (in production, fetch from Kraken Futures API)
       const mockMarkets: FuturesMarket[] = [
-        {
-          symbol: 'PF_BTCUSD',
-          baseAsset: 'BTC',
-          quoteAsset: 'USD',
-          price: 43250.5,
-          change24h: 2.35,
-          volume24h: 1234567890,
-          openInterest: 567890000,
-          fundingRate: 0.0001,
-          nextFunding: '4h 23m',
-          maxLeverage: 50,
-        },
-        {
-          symbol: 'PF_ETHUSD',
-          baseAsset: 'ETH',
-          quoteAsset: 'USD',
-          price: 2345.67,
-          change24h: -1.23,
-          volume24h: 456789012,
-          openInterest: 234567000,
-          fundingRate: 0.00005,
-          nextFunding: '4h 23m',
-          maxLeverage: 50,
-        },
-        {
-          symbol: 'PF_SOLUSD',
-          baseAsset: 'SOL',
-          quoteAsset: 'USD',
-          price: 98.45,
-          change24h: 5.67,
-          volume24h: 123456789,
-          openInterest: 45678900,
-          fundingRate: 0.00015,
-          nextFunding: '4h 23m',
-          maxLeverage: 25,
-        },
-        {
-          symbol: 'PF_XRPUSD',
-          baseAsset: 'XRP',
-          quoteAsset: 'USD',
-          price: 0.5234,
-          change24h: 3.45,
-          volume24h: 89012345,
-          openInterest: 23456789,
-          fundingRate: -0.00002,
-          nextFunding: '4h 23m',
-          maxLeverage: 20,
-        },
+        { symbol: 'PF_BTCUSD', baseAsset: 'BTC', quoteAsset: 'USD', price: 43250.5, change24h: 2.35, volume24h: 1234567890, openInterest: 567890000, fundingRate: 0.0001, nextFunding: '4h 23m', maxLeverage: 50 },
+        { symbol: 'PF_ETHUSD', baseAsset: 'ETH', quoteAsset: 'USD', price: 2345.67, change24h: -1.23, volume24h: 456789012, openInterest: 234567000, fundingRate: 0.00005, nextFunding: '4h 23m', maxLeverage: 50 },
+        { symbol: 'PF_SOLUSD', baseAsset: 'SOL', quoteAsset: 'USD', price: 98.45, change24h: 5.67, volume24h: 123456789, openInterest: 45678900, fundingRate: 0.00015, nextFunding: '4h 23m', maxLeverage: 25 },
+        { symbol: 'PF_XRPUSD', baseAsset: 'XRP', quoteAsset: 'USD', price: 0.5234, change24h: 3.45, volume24h: 89012345, openInterest: 23456789, fundingRate: -0.00002, nextFunding: '4h 23m', maxLeverage: 20 },
       ];
 
       setFuturesMarkets(mockMarkets);
@@ -102,10 +76,7 @@ export function FuturesPanel() {
   }, [activeAdapter, selectedMarket]);
 
   const formatNumber = (num: number, decimals: number = 2): string => {
-    return num.toLocaleString('en-US', {
-      minimumFractionDigits: decimals,
-      maximumFractionDigits: decimals,
-    });
+    return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   };
 
   const formatLargeNumber = (num: number): string => {
@@ -121,218 +92,182 @@ export function FuturesPanel() {
 
   if (isLoading) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded p-6">
-        <div className="flex items-center justify-center py-8">
-          <Loader className="w-6 h-6 text-blue-500 animate-spin" />
+      <div style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '4px', padding: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0' }}>
+          <Loader style={{ width: 24, height: 24, color: BLOOMBERG.BLUE, animation: 'spin 1s linear infinite' }} />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded p-6">
+    <div style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '4px', padding: '16px', height: '100%', overflow: 'auto' }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <Activity className="w-5 h-5 text-purple-500" />
-          <span className="text-lg font-semibold text-white">Kraken Futures</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', paddingBottom: '12px', borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Activity style={{ width: 18, height: 18, color: BLOOMBERG.PURPLE }} />
+          <span style={{ fontSize: '13px', fontWeight: 600, color: BLOOMBERG.WHITE, letterSpacing: '0.5px' }}>KRAKEN FUTURES</span>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={fetchFuturesMarkets}
-            className="px-3 py-1 text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-400/50 rounded transition"
-          >
-            Refresh
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button onClick={fetchFuturesMarkets}
+            style={{ padding: '6px 12px', fontSize: '10px', color: BLOOMBERG.CYAN, backgroundColor: 'transparent', border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px', cursor: 'pointer', transition: 'all 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.CYAN; e.currentTarget.style.backgroundColor = `${BLOOMBERG.CYAN}15`; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; e.currentTarget.style.backgroundColor = 'transparent'; }}>
+            REFRESH
           </button>
-          <a
-            href="https://futures.kraken.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1 text-xs text-gray-400 hover:text-gray-300 border border-gray-700 hover:border-gray-600 rounded transition flex items-center gap-1"
-          >
-            <ExternalLink className="w-3 h-3" />
-            Kraken Futures
+          <a href="https://futures.kraken.com" target="_blank" rel="noopener noreferrer"
+            style={{ padding: '6px 12px', fontSize: '10px', color: BLOOMBERG.GRAY, backgroundColor: 'transparent', border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.2s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.MUTED; e.currentTarget.style.color = BLOOMBERG.WHITE; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = BLOOMBERG.BORDER; e.currentTarget.style.color = BLOOMBERG.GRAY; }}>
+            <ExternalLink style={{ width: 12, height: 12 }} />
+            KRAKEN FUTURES
           </a>
         </div>
       </div>
 
       {/* Warning Banner */}
-      <div className="mb-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-yellow-500 flex-shrink-0 mt-0.5" />
-        <div className="text-xs text-yellow-400">
-          <strong>Futures Trading Risk Warning:</strong> Futures trading involves high risk and
-          leverage. Only trade with funds you can afford to lose. Requires separate Kraken Futures
-          account.
+      <div style={{ marginBottom: '16px', padding: '10px', backgroundColor: `${BLOOMBERG.YELLOW}08`, border: `1px solid ${BLOOMBERG.YELLOW}25`, borderRadius: '2px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+        <AlertTriangle style={{ width: 14, height: 14, color: BLOOMBERG.YELLOW, flexShrink: 0, marginTop: '2px' }} />
+        <div style={{ fontSize: '10px', color: BLOOMBERG.YELLOW, lineHeight: '1.5' }}>
+          <strong>FUTURES TRADING RISK WARNING:</strong> Futures trading involves high risk and leverage. Only trade with funds you can afford to lose. Requires separate Kraken Futures account.
         </div>
       </div>
 
       {/* Markets Grid */}
       {futuresMarkets.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <Activity className="w-12 h-12 mx-auto mb-3 text-gray-600" />
-          <div className="text-sm">No futures markets available</div>
+        <div style={{ textAlign: 'center', padding: '40px 0', color: BLOOMBERG.MUTED }}>
+          <Activity style={{ width: 48, height: 48, margin: '0 auto 12px', color: BLOOMBERG.MUTED }} />
+          <div style={{ fontSize: '11px' }}>NO FUTURES MARKETS AVAILABLE</div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <>
           {/* Market Selector */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '16px' }}>
             {futuresMarkets.map((market) => (
-              <button
-                key={market.symbol}
-                onClick={() => setSelectedMarket(market)}
-                className={`p-3 rounded border-2 transition ${
-                  selectedMarket?.symbol === market.symbol
-                    ? 'border-purple-500 bg-purple-500/10'
-                    : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
-                }`}
-              >
-                <div className="text-left">
-                  <div className="text-white font-semibold mb-1">{market.baseAsset}/USD</div>
-                  <div className="text-sm text-gray-400">${formatNumber(market.price)}</div>
-                  <div
-                    className={`text-xs font-semibold ${
-                      market.change24h >= 0 ? 'text-green-500' : 'text-red-500'
-                    }`}
-                  >
-                    {market.change24h >= 0 ? '+' : ''}
-                    {market.change24h.toFixed(2)}%
-                  </div>
+              <div key={market.symbol} onClick={() => setSelectedMarket(market)}
+                style={{ padding: '10px', borderRadius: '2px', border: `2px solid ${selectedMarket?.symbol === market.symbol ? BLOOMBERG.PURPLE : BLOOMBERG.BORDER}`, backgroundColor: selectedMarket?.symbol === market.symbol ? `${BLOOMBERG.PURPLE}10` : BLOOMBERG.HEADER_BG, cursor: 'pointer', transition: 'all 0.2s' }}
+                onMouseEnter={(e) => { if (selectedMarket?.symbol !== market.symbol) e.currentTarget.style.borderColor = BLOOMBERG.MUTED; }}
+                onMouseLeave={(e) => { if (selectedMarket?.symbol !== market.symbol) e.currentTarget.style.borderColor = BLOOMBERG.BORDER; }}>
+                <div style={{ marginBottom: '4px', color: BLOOMBERG.WHITE, fontWeight: 700, fontSize: '11px', fontFamily: 'monospace' }}>{market.baseAsset}/USD</div>
+                <div style={{ fontSize: '11px', color: BLOOMBERG.GRAY, marginBottom: '2px', fontFamily: 'monospace' }}>${formatNumber(market.price)}</div>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: market.change24h >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+                  {market.change24h >= 0 ? '+' : ''}{market.change24h.toFixed(2)}%
                 </div>
-              </button>
+              </div>
             ))}
           </div>
 
           {/* Selected Market Details */}
           {selectedMarket && (
-            <div className="border-t border-gray-800 pt-6 space-y-4">
+            <div style={{ borderTop: `1px solid ${BLOOMBERG.BORDER}`, paddingTop: '16px' }}>
               {/* Market Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '16px' }}>
                 {/* Price */}
-                <div className="p-4 bg-gray-800/50 border border-gray-700 rounded">
-                  <div className="text-xs text-gray-400 mb-1">Mark Price</div>
-                  <div className="text-2xl font-bold text-white">
+                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>MARK PRICE</div>
+                  <div style={{ fontSize: '18px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace', marginBottom: '4px' }}>
                     ${formatNumber(selectedMarket.price)}
                   </div>
-                  <div
-                    className={`text-sm font-semibold ${
-                      selectedMarket.change24h >= 0 ? 'text-green-500' : 'text-red-500'
-                    }`}
-                  >
-                    {selectedMarket.change24h >= 0 ? '+' : ''}
-                    {selectedMarket.change24h.toFixed(2)}% 24h
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: selectedMarket.change24h >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+                    {selectedMarket.change24h >= 0 ? '+' : ''}{selectedMarket.change24h.toFixed(2)}% 24h
                   </div>
                 </div>
 
                 {/* Volume */}
-                <div className="p-4 bg-gray-800/50 border border-gray-700 rounded">
-                  <div className="text-xs text-gray-400 mb-1">24h Volume</div>
-                  <div className="text-lg font-bold text-white">
+                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>24H VOLUME</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace', marginBottom: '2px' }}>
                     {formatLargeNumber(selectedMarket.volume24h)}
                   </div>
-                  <div className="text-xs text-gray-500">Trading Volume</div>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>TRADING VOLUME</div>
                 </div>
 
                 {/* Open Interest */}
-                <div className="p-4 bg-gray-800/50 border border-gray-700 rounded">
-                  <div className="text-xs text-gray-400 mb-1">Open Interest</div>
-                  <div className="text-lg font-bold text-white">
+                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>OPEN INTEREST</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace', marginBottom: '2px' }}>
                     {formatLargeNumber(selectedMarket.openInterest)}
                   </div>
-                  <div className="text-xs text-gray-500">Total Positions</div>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>TOTAL POSITIONS</div>
                 </div>
 
                 {/* Funding Rate */}
-                <div className="p-4 bg-gray-800/50 border border-gray-700 rounded">
-                  <div className="text-xs text-gray-400 mb-1">Funding Rate</div>
-                  <div
-                    className={`text-lg font-bold ${
-                      selectedMarket.fundingRate >= 0 ? 'text-green-500' : 'text-red-500'
-                    }`}
-                  >
+                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>FUNDING RATE</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: selectedMarket.fundingRate >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED, fontFamily: 'monospace', marginBottom: '2px' }}>
                     {(selectedMarket.fundingRate * 100).toFixed(4)}%
                   </div>
-                  <div className="text-xs text-gray-500">Every 8 hours</div>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>EVERY 8 HOURS</div>
                 </div>
 
                 {/* Next Funding */}
-                <div className="p-4 bg-gray-800/50 border border-gray-700 rounded">
-                  <div className="text-xs text-gray-400 mb-1">Next Funding</div>
-                  <div className="text-lg font-bold text-white">{selectedMarket.nextFunding}</div>
-                  <div className="text-xs text-gray-500">Countdown</div>
+                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>NEXT FUNDING</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace', marginBottom: '2px' }}>
+                    {selectedMarket.nextFunding}
+                  </div>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>COUNTDOWN</div>
                 </div>
 
                 {/* Max Leverage */}
-                <div className="p-4 bg-gray-800/50 border border-gray-700 rounded">
-                  <div className="text-xs text-gray-400 mb-1">Max Leverage</div>
-                  <div className="text-lg font-bold text-orange-500">
+                <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px' }}>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '6px', letterSpacing: '0.5px' }}>MAX LEVERAGE</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.ORANGE, fontFamily: 'monospace', marginBottom: '2px' }}>
                     {selectedMarket.maxLeverage}x
                   </div>
-                  <div className="text-xs text-gray-500">Available</div>
+                  <div style={{ fontSize: '10px', color: BLOOMBERG.MUTED }}>AVAILABLE</div>
                 </div>
               </div>
 
               {/* Contract Details */}
-              <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded">
-                <div className="text-sm font-semibold text-blue-400 mb-2">Contract Details</div>
-                <div className="grid grid-cols-2 gap-3 text-xs">
+              <div style={{ padding: '12px', backgroundColor: `${BLOOMBERG.CYAN}08`, border: `1px solid ${BLOOMBERG.CYAN}25`, borderRadius: '2px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: BLOOMBERG.CYAN, marginBottom: '8px', letterSpacing: '0.5px' }}>CONTRACT DETAILS</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '10px' }}>
                   <div>
-                    <span className="text-gray-400">Contract Type:</span>
-                    <span className="text-white ml-2">Perpetual</span>
+                    <span style={{ color: BLOOMBERG.GRAY }}>CONTRACT TYPE:</span>
+                    <span style={{ color: BLOOMBERG.WHITE, marginLeft: '8px', fontWeight: 600 }}>Perpetual</span>
                   </div>
                   <div>
-                    <span className="text-gray-400">Settlement:</span>
-                    <span className="text-white ml-2">USD</span>
+                    <span style={{ color: BLOOMBERG.GRAY }}>SETTLEMENT:</span>
+                    <span style={{ color: BLOOMBERG.WHITE, marginLeft: '8px', fontWeight: 600 }}>USD</span>
                   </div>
                   <div>
-                    <span className="text-gray-400">Contract Size:</span>
-                    <span className="text-white ml-2">1 {selectedMarket.baseAsset}</span>
+                    <span style={{ color: BLOOMBERG.GRAY }}>CONTRACT SIZE:</span>
+                    <span style={{ color: BLOOMBERG.WHITE, marginLeft: '8px', fontWeight: 600 }}>1 {selectedMarket.baseAsset}</span>
                   </div>
                   <div>
-                    <span className="text-gray-400">Min Order:</span>
-                    <span className="text-white ml-2">0.0001 {selectedMarket.baseAsset}</span>
+                    <span style={{ color: BLOOMBERG.GRAY }}>MIN ORDER:</span>
+                    <span style={{ color: BLOOMBERG.WHITE, marginLeft: '8px', fontWeight: 600 }}>0.0001 {selectedMarket.baseAsset}</span>
                   </div>
                 </div>
               </div>
 
               {/* Trading Info */}
-              <div className="p-4 bg-gray-800/30 border border-gray-700 rounded">
-                <div className="text-xs text-gray-400 space-y-2">
-                  <div>
-                    <strong className="text-gray-300">How to trade:</strong> Futures trading on
-                    Kraken requires a separate Kraken Futures account. Visit{' '}
-                    <a
-                      href="https://futures.kraken.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:text-blue-300 underline"
-                    >
-                      futures.kraken.com
-                    </a>{' '}
+              <div style={{ padding: '12px', backgroundColor: BLOOMBERG.HEADER_BG, border: `1px solid ${BLOOMBERG.BORDER}`, borderRadius: '2px', marginBottom: '12px' }}>
+                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, lineHeight: '1.6' }}>
+                  <div style={{ marginBottom: '8px' }}>
+                    <strong style={{ color: BLOOMBERG.WHITE }}>HOW TO TRADE:</strong> Futures trading on Kraken requires a separate Kraken Futures account. Visit{' '}
+                    <a href="https://futures.kraken.com" target="_blank" rel="noopener noreferrer"
+                      style={{ color: BLOOMBERG.CYAN, textDecoration: 'underline' }}>futures.kraken.com</a>{' '}
                     to create an account and start trading.
                   </div>
                   <div>
-                    <strong className="text-gray-300">API Integration:</strong> To trade futures
-                    directly from this terminal, configure Kraken Futures API credentials in
-                    Settings.
+                    <strong style={{ color: BLOOMBERG.WHITE }}>API INTEGRATION:</strong> To trade futures directly from this terminal, configure Kraken Futures API credentials in Settings.
                   </div>
                 </div>
               </div>
 
               {/* Action Button */}
-              <div className="flex gap-3">
-                <a
-                  href={`https://futures.kraken.com/trade/${selectedMarket.symbol}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded transition flex items-center justify-center gap-2"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Trade on Kraken Futures
-                </a>
-              </div>
+              <a href={`https://futures.kraken.com/trade/${selectedMarket.symbol}`} target="_blank" rel="noopener noreferrer"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px 16px', backgroundColor: BLOOMBERG.PURPLE, color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 700, border: 'none', borderRadius: '2px', textDecoration: 'none', transition: 'all 0.2s', letterSpacing: '0.5px' }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#B565FF'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = BLOOMBERG.PURPLE; }}>
+                <ExternalLink style={{ width: 14, height: 14 }} />
+                TRADE ON KRAKEN FUTURES
+              </a>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

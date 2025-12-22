@@ -331,12 +331,13 @@ export default function BacktestingTab() {
         // Save to database
         await sqliteService.saveBacktestRun({
           id: result.id,
-          strategy_id: undefined,
+          strategy_id: '',
           provider_name: activeProvider,
           config: JSON.stringify(config),
           results: JSON.stringify(result),
           status: result.status,
           performance_metrics: JSON.stringify(result.performance),
+          created_at: new Date().toISOString(),
           error_message: result.error,
         });
 
