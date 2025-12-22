@@ -1,0 +1,43 @@
+{
+    "title": "DATA SOURCES",
+    "header": {
+        "available": "AVAILABLE SOURCES",
+        "connected": "CONNECTED",
+        "addNew": "ADD SOURCE",
+        "refresh": "REFRESH"
+    },
+    "categories": {
+        "market": "Market Data",
+        "economic": "Economic Data",
+        "alternative": "Alternative Data",
+        "news": "News & Sentiment",
+        "fundamental": "Fundamental Data"
+    },
+    "status": {
+        "connected": "Connected",
+        "disconnected": "Disconnected",
+        "error": "Error",
+        "pending": "Pending"
+    },
+    "actions": {
+        "connect": "Connect",
+        "disconnect": "Disconnect",
+        "configure": "Configure",
+        "test": "Test Connection",
+        "delete": "Remove"
+    },
+    "form": {
+        "apiKey": "API Key",
+        "endpoint": "Endpoint URL",
+        "username": "Username",
+        "password": "Password",
+        "save": "Save",
+        "cancel": "Cancel"
+    },
+    "messages": {
+        "connectionSuccess": "Successfully connected to data source",
+        "connectionFailed": "Failed to connect to data source",
+        "noSources": "No data sources configured",
+        "loading": "Loading data sources..."
+    }
+}

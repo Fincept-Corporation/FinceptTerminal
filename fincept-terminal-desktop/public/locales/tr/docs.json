@@ -1,0 +1,26 @@
+{
+    "title": "FINCEPT DOKÜMANTASYON TERMİNALİ",
+    "header": {
+        "sections": "BÖLÜMLER",
+        "topics": "KONULAR",
+        "ready": "HAZIR"
+    },
+    "search": {
+        "placeholder": "Dokümantasyon ara...",
+        "clear": "TEMİZLE"
+    },
+    "navigation": "NAVİGASYON",
+    "codeExample": "KOD ÖRNEĞİ",
+    "content": {
+        "title": "FINCEPT TERMİNAL DOKÜMANTASYONU",
+        "description": "Navigasyon panelinden konu seçin.",
+        "topicsAvailable": "konu mevcut",
+        "selectTopic": "Konu seçin"
+    },
+    "status": {
+        "version": "Fincept Terminal Dokümantasyonu v3.0",
+        "sections": "Bölümler",
+        "topics": "Konular",
+        "current": "Mevcut"
+    }
+}

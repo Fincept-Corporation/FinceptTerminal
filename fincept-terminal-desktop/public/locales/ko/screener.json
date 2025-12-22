@@ -1,0 +1,56 @@
+{
+    "title": "종목 스크리너",
+    "header": {
+        "filters": "필터",
+        "results": "결과",
+        "saved": "저장된 스크린",
+        "presets": "프리셋"
+    },
+    "filters": {
+        "add": "필터 추가",
+        "clear": "전체 삭제",
+        "reset": "초기화",
+        "apply": "필터 적용"
+    },
+    "criteria": {
+        "marketCap": "시가총액",
+        "price": "가격",
+        "volume": "거래량",
+        "pe": "PER",
+        "eps": "EPS",
+        "dividend": "배당수익률",
+        "beta": "베타",
+        "sector": "섹터",
+        "industry": "산업",
+        "country": "국가",
+        "exchange": "거래소"
+    },
+    "operators": {
+        "equals": "같음",
+        "greater": "이상",
+        "less": "이하",
+        "between": "사이",
+        "contains": "포함"
+    },
+    "results": {
+        "symbol": "종목코드",
+        "name": "종목명",
+        "price": "가격",
+        "change": "변동",
+        "volume": "거래량",
+        "marketCap": "시총",
+        "matches": "개 종목"
+    },
+    "actions": {
+        "save": "스크린 저장",
+        "load": "스크린 불러오기",
+        "export": "내보내기",
+        "addToWatchlist": "관심목록 추가"
+    },
+    "messages": {
+        "loading": "스크리닝 중...",
+        "noResults": "결과 없음",
+        "saved": "저장됨",
+        "applied": "필터 적용됨"
+    }
+}

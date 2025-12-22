@@ -1,0 +1,35 @@
+{
+    "title": "مدير محفظة FINCEPT",
+    "header": {
+        "live": "مباشر",
+        "updating": "جاري التحديث",
+        "newPortfolio": "محفظة جديدة",
+        "refresh": "تحديث",
+        "exportCsv": "تصدير CSV"
+    },
+    "summary": {
+        "totalValue": "القيمة الإجمالية",
+        "dayPnl": "ربح/خسارة اليوم",
+        "totalPnl": "إجمالي الربح/الخسارة",
+        "positions": "المراكز"
+    },
+    "views": {
+        "positions": "المراكز",
+        "addAsset": "إضافة أصل",
+        "sellAsset": "بيع أصل",
+        "analytics": "التحليلات",
+        "history": "السجل"
+    },
+    "sidebar": {
+        "portfolios": "المحافظ",
+        "loading": "جاري التحميل...",
+        "noPortfolios": "لا توجد محافظ بعد."
+    },
+    "modals": {
+        "createNew": "إنشاء محفظة جديدة",
+        "cancel": "إلغاء",
+        "create": "إنشاء",
+        "add": "إضافة",
+        "sell": "بيع"
+    }
+}

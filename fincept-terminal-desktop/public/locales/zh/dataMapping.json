@@ -1,0 +1,52 @@
+{
+    "title": "数据映射",
+    "header": {
+        "mappings": "映射",
+        "templates": "模板",
+        "create": "新建",
+        "refresh": "刷新"
+    },
+    "views": {
+        "list": "映射列表",
+        "create": "创建映射",
+        "templates": "模板"
+    },
+    "list": {
+        "name": "名称",
+        "source": "源",
+        "destination": "目标",
+        "status": "状态",
+        "lastRun": "上次运行",
+        "actions": "操作"
+    },
+    "status": {
+        "active": "活跃",
+        "inactive": "非活跃",
+        "error": "错误",
+        "running": "运行中"
+    },
+    "actions": {
+        "edit": "编辑",
+        "delete": "删除",
+        "run": "运行",
+        "duplicate": "复制",
+        "export": "导出"
+    },
+    "create": {
+        "title": "创建数据映射",
+        "name": "映射名称",
+        "description": "描述",
+        "sourceApi": "源API",
+        "destApi": "目标API",
+        "fieldMapping": "字段映射",
+        "save": "保存",
+        "cancel": "取消"
+    },
+    "messages": {
+        "saved": "映射已保存",
+        "deleted": "映射已删除",
+        "runSuccess": "映射执行成功",
+        "error": "发生错误",
+        "noMappings": "无映射配置"
+    }
+}

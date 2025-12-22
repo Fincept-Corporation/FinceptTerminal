@@ -1,0 +1,27 @@
+{
+    "title": "自选股",
+    "header": {
+        "myWatchlists": "我的自选股",
+        "create": "创建",
+        "import": "导入",
+        "export": "导出"
+    },
+    "actions": {
+        "add": "添加标的",
+        "remove": "移除",
+        "edit": "编辑",
+        "delete": "删除"
+    },
+    "symbol": {
+        "price": "价格",
+        "change": "涨跌",
+        "volume": "成交量",
+        "marketCap": "市值"
+    },
+    "messages": {
+        "created": "自选股已创建",
+        "deleted": "自选股已删除",
+        "noWatchlists": "暂无自选股",
+        "loading": "加载中..."
+    }
+}

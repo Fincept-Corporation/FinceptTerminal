@@ -1,0 +1,27 @@
+{
+    "title": "قائمة المراقبة",
+    "header": {
+        "myWatchlists": "قوائمي",
+        "create": "إنشاء",
+        "import": "استيراد",
+        "export": "تصدير"
+    },
+    "actions": {
+        "add": "إضافة رمز",
+        "remove": "إزالة",
+        "edit": "تحرير",
+        "delete": "حذف"
+    },
+    "symbol": {
+        "price": "السعر",
+        "change": "التغيير",
+        "volume": "الحجم",
+        "marketCap": "القيمة السوقية"
+    },
+    "messages": {
+        "created": "تم إنشاء القائمة",
+        "deleted": "تم حذف القائمة",
+        "noWatchlists": "لا توجد قوائم",
+        "loading": "جاري التحميل..."
+    }
+}

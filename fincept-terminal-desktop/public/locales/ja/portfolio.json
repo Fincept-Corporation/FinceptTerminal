@@ -1,0 +1,36 @@
+{
+    "title": "FINCEPTポートフォリオマネージャー",
+    "header": {
+        "live": "ライブ",
+        "updating": "更新中",
+        "newPortfolio": "新規ポートフォリオ",
+        "refresh": "更新",
+        "exportCsv": "CSV出力"
+    },
+    "summary": {
+        "totalValue": "総額",
+        "dayPnl": "当日損益",
+        "totalPnl": "累計損益",
+        "positions": "ポジション"
+    },
+    "views": {
+        "positions": "ポジション",
+        "addAsset": "資産追加",
+        "sellAsset": "資産売却",
+        "analytics": "分析",
+        "history": "履歴",
+        "performance": "パフォーマンス"
+    },
+    "sidebar": {
+        "portfolios": "ポートフォリオ",
+        "loading": "読み込み中...",
+        "noPortfolios": "ポートフォリオなし"
+    },
+    "modals": {
+        "createNew": "新規作成",
+        "cancel": "キャンセル",
+        "create": "作成",
+        "add": "追加",
+        "sell": "売却"
+    }
+}

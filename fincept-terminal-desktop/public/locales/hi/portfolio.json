@@ -1,0 +1,36 @@
+{
+    "title": "FINCEPT पोर्टफोलियो मैनेजर",
+    "header": {
+        "live": "लाइव",
+        "updating": "अपडेट हो रहा है",
+        "newPortfolio": "नया पोर्टफोलियो",
+        "refresh": "रिफ्रेश",
+        "exportCsv": "CSV निर्यात"
+    },
+    "summary": {
+        "totalValue": "कुल मूल्य",
+        "dayPnl": "दैनिक P&L",
+        "totalPnl": "कुल P&L",
+        "positions": "पोजीशन"
+    },
+    "views": {
+        "positions": "पोजीशन",
+        "addAsset": "एसेट जोड़ें",
+        "sellAsset": "एसेट बेचें",
+        "analytics": "एनालिटिक्स",
+        "history": "इतिहास",
+        "performance": "प्रदर्शन"
+    },
+    "sidebar": {
+        "portfolios": "पोर्टफोलियो",
+        "loading": "पोर्टफोलियो लोड हो रहे हैं...",
+        "noPortfolios": "अभी कोई पोर्टफोलियो नहीं।"
+    },
+    "modals": {
+        "createNew": "नया पोर्टफोलियो बनाएं",
+        "cancel": "रद्द करें",
+        "create": "बनाएं",
+        "add": "जोड़ें",
+        "sell": "बेचें"
+    }
+}

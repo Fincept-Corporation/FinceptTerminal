@@ -1,0 +1,27 @@
+{
+    "title": "LISTA DE ACOMPANHAMENTO",
+    "header": {
+        "myWatchlists": "MINHAS LISTAS",
+        "create": "CRIAR",
+        "import": "IMPORTAR",
+        "export": "EXPORTAR"
+    },
+    "actions": {
+        "add": "Adicionar Símbolo",
+        "remove": "Remover",
+        "edit": "Editar",
+        "delete": "Excluir"
+    },
+    "symbol": {
+        "price": "Preço",
+        "change": "Variação",
+        "volume": "Volume",
+        "marketCap": "Cap. de Mercado"
+    },
+    "messages": {
+        "created": "Lista criada",
+        "deleted": "Lista excluída",
+        "noWatchlists": "Sem listas",
+        "loading": "Carregando..."
+    }
+}

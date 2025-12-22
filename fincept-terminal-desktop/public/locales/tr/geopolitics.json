@@ -1,0 +1,59 @@
+{
+    "title": "JEOPOLİTİK",
+    "header": {
+        "overview": "GENEL BAKIŞ",
+        "regions": "BÖLGELER",
+        "analysis": "ANALİZ",
+        "alerts": "UYARILAR"
+    },
+    "regions": {
+        "global": "Küresel",
+        "northAmerica": "Kuzey Amerika",
+        "europe": "Avrupa",
+        "asia": "Asya-Pasifik",
+        "middleEast": "Orta Doğu",
+        "africa": "Afrika",
+        "latam": "Latin Amerika"
+    },
+    "categories": {
+        "conflict": "Çatışmalar",
+        "sanctions": "Yaptırımlar",
+        "trade": "Ticari İlişkiler",
+        "diplomacy": "Diplomasi",
+        "elections": "Seçimler",
+        "policy": "Politika Değişiklikleri"
+    },
+    "risk": {
+        "level": "Risk Seviyesi",
+        "high": "Yüksek",
+        "medium": "Orta",
+        "low": "Düşük",
+        "critical": "Kritik",
+        "stable": "Stabil"
+    },
+    "impact": {
+        "economic": "Ekonomik Etki",
+        "market": "Piyasa Etkisi",
+        "trade": "Ticari Etki",
+        "currency": "Döviz Etkisi"
+    },
+    "timeline": {
+        "latest": "En Son",
+        "thisWeek": "Bu Hafta",
+        "thisMonth": "Bu Ay",
+        "upcoming": "Yaklaşan"
+    },
+    "actions": {
+        "subscribe": "Abone Ol",
+        "export": "Dışa Aktar",
+        "share": "Paylaş",
+        "setAlert": "Uyarı Ayarla",
+        "filter": "Filtrele"
+    },
+    "messages": {
+        "loading": "Veri yükleniyor...",
+        "noEvents": "Olay yok",
+        "updated": "Güncellendi",
+        "breaking": "Son Dakika"
+    }
+}

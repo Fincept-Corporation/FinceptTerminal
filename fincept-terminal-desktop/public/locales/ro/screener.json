@@ -1,0 +1,56 @@
+{
+    "title": "SCREENER ACȚIUNI",
+    "header": {
+        "filters": "FILTRE",
+        "results": "REZULTATE",
+        "saved": "SALVATE",
+        "presets": "PRESETĂRI"
+    },
+    "filters": {
+        "add": "Adaugă filtru",
+        "clear": "Șterge tot",
+        "reset": "Resetează",
+        "apply": "Aplică filtre"
+    },
+    "criteria": {
+        "marketCap": "Capitalizare",
+        "price": "Preț",
+        "volume": "Volum",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Randament dividend",
+        "beta": "Beta",
+        "sector": "Sector",
+        "industry": "Industrie",
+        "country": "Țară",
+        "exchange": "Bursă"
+    },
+    "operators": {
+        "equals": "Egal cu",
+        "greater": "Mai mare decât",
+        "less": "Mai mic decât",
+        "between": "Între",
+        "contains": "Conține"
+    },
+    "results": {
+        "symbol": "Simbol",
+        "name": "Nume",
+        "price": "Preț",
+        "change": "Schimbare",
+        "volume": "Volum",
+        "marketCap": "Cap.",
+        "matches": "rezultate"
+    },
+    "actions": {
+        "save": "Salvează screen",
+        "load": "Încarcă screen",
+        "export": "Exportă",
+        "addToWatchlist": "Adaugă la listă"
+    },
+    "messages": {
+        "loading": "Se caută...",
+        "noResults": "Fără rezultate",
+        "saved": "Salvat",
+        "applied": "Filtre aplicate"
+    }
+}

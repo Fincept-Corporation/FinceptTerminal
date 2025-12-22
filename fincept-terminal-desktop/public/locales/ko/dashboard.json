@@ -1,30 +1,43 @@
 {
-  "welcome": "Welcome to Fincept Terminal",
-  "tabs": {
-    "dashboard": "Dashboard",
-    "markets": "Markets",
-    "news": "News",
-    "watchlist": "Watchlist",
-    "portfolio": "Portfolio",
-    "analytics": "Analytics",
-    "economics": "Economics",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Economic Calendar",
-    "geopolitics": "Geopolitics",
-    "maritime": "Maritime",
-    "options": "Options",
-    "equityResearch": "Equity Research",
-    "screener": "Screener",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Docs",
-    "nodeEditor": "Node Editor",
-    "codeEditor": "Code Editor",
-    "forum": "Forum",
-    "marketplace": "Marketplace",
-    "profile": "Profile",
-    "support": "Support",
-    "settings": "Settings"
+  "header": {
+    "title": "맞춤형 대시보드",
+    "live": "실시간",
+    "widgets": "위젯"
+  },
+  "widgets": {
+    "loading": "로딩 중...",
+    "error": "오류",
+    "configure": "설정",
+    "refresh": "새로고침",
+    "remove": "제거",
+    "globalIndices": "글로벌 지수 - 상위 12",
+    "forex": "외환 쌍",
+    "crypto": "암호화폐",
+    "commodities": "원자재",
+    "bonds": "채권",
+    "etfs": "ETF",
+    "news": "뉴스",
+    "forum": "포럼",
+    "watchlist": "관심목록",
+    "maritime": "해운",
+    "index": "지수",
+    "symbol": "심볼",
+    "name": "이름",
+    "price": "가격",
+    "change": "변동",
+    "percentChange": "변동률",
+    "high": "고가",
+    "low": "저가",
+    "noIndexData": "지수 데이터 없음",
+    "noData": "데이터 없음"
+  },
+  "buttons": {
+    "addWidget": "위젯 추가",
+    "saveLayout": "레이아웃 저장",
+    "reset": "초기화"
+  },
+  "empty": {
+    "noWidgets": "대시보드에 위젯 없음",
+    "addFirst": "첫 위젯 추가"
   }
 }

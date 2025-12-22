@@ -1,0 +1,30 @@
+{
+    "title": "TIN TỨC CHUYÊN NGHIỆP FINCEPT TERMINAL",
+    "header": {
+        "liveFeed": "FEED TRỰC TIẾP",
+        "live": "TRỰC TIẾP",
+        "refresh": "LÀM MỚI",
+        "updating": "ĐANG CẬP NHẬT...",
+        "alerts": "CẢNH BÁO",
+        "sources": "NGUỒN",
+        "status": "TRẠNG THÁI",
+        "demoMode": "CHẾ ĐỘ DEMO",
+        "articles": "BÀI VIẾT",
+        "activeSources": "NGUỒN HOẠT ĐỘNG"
+    },
+    "sentiment": {
+        "bullish": "TĂNG GIÁ",
+        "bearish": "GIẢM GIÁ",
+        "neutral": "TRUNG LẬP"
+    },
+    "autoRefresh": {
+        "title": "KHOẢNG TỰ ĐỘNG LÀM MỚI",
+        "minute": "phút",
+        "minutes": "phút"
+    },
+    "messages": {
+        "loading": "Đang tải tin tức...",
+        "loadingFeeds": "Đang tải feed...",
+        "breaking": "NÓNG"
+    }
+}

@@ -1,0 +1,46 @@
+{
+    "title": "AI चैट सहायक",
+    "header": {
+        "newChat": "नई चैट",
+        "history": "इतिहास",
+        "settings": "सेटिंग्स"
+    },
+    "input": {
+        "placeholder": "स्टॉक, बाजार, विश्लेषण के बारे में पूछें...",
+        "send": "भेजें",
+        "voice": "आवाज"
+    },
+    "messages": {
+        "thinking": "सोच रहा है...",
+        "typing": "AI टाइप कर रहा है...",
+        "error": "अनुरोध प्रोसेस करने में त्रुटि",
+        "welcome": "आज आपकी वित्तीय विश्लेषण में कैसे मदद करूं?"
+    },
+    "suggestions": {
+        "title": "सुझाए गए प्रश्न",
+        "stockAnalysis": "स्टॉक प्रदर्शन विश्लेषण",
+        "marketTrends": "वर्तमान बाजार रुझान?",
+        "portfolioAdvice": "पोर्टफोलियो अनुकूलन सुझाव"
+    },
+    "history": {
+        "title": "चैट इतिहास",
+        "today": "आज",
+        "yesterday": "कल",
+        "thisWeek": "इस सप्ताह",
+        "older": "पुराने",
+        "clear": "इतिहास साफ करें"
+    },
+    "actions": {
+        "copy": "कॉपी",
+        "regenerate": "पुनः उत्पन्न",
+        "like": "पसंद",
+        "dislike": "नापसंद",
+        "share": "शेयर"
+    },
+    "models": {
+        "select": "मॉडल चुनें",
+        "gpt4": "GPT-4",
+        "claude": "Claude",
+        "gemini": "Gemini"
+    }
+}

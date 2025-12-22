@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "マーケット",
-    "subtitle": "リアルタイム市場データと分析"
+  "navigation": {
+    "dashboard": "ダッシュボード",
+    "markets": "マーケット",
+    "news": "ニュース",
+    "portfolio": "ポートフォリオ",
+    "backtesting": "バックテスト",
+    "watchlist": "ウォッチリスト",
+    "research": "リサーチ",
+    "screener": "スクリーナー",
+    "trading": "トレーディング",
+    "chat": "AIチャット",
+    "agents": "エージェント",
+    "settings": "設定",
+    "profile": "プロフィール",
+    "forum": "フォーラム",
+    "help": "ヘルプ",
+    "logout": "ログアウト"
   },
-  "news": {
-    "title": "金融ニュース",
-    "subtitle": "最新の市場ニュースとアップデート"
+  "functionKeys": {
+    "f1": "ダッシュ",
+    "f2": "マーケット",
+    "f3": "ニュース",
+    "f4": "ポート",
+    "f5": "バックテスト",
+    "f6": "ウォッチ",
+    "f7": "リサーチ",
+    "f8": "スクリーン",
+    "f9": "トレード",
+    "f10": "AI",
+    "f11": "フル",
+    "f12": "プロフ"
   },
-  "portfolio": {
-    "title": "ポートフォリオ",
-    "subtitle": "投資を追跡・分析"
+  "status": {
+    "connected": "接続済み",
+    "disconnected": "切断済み",
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "ready": "準備完了"
   },
-  "analytics": {
-    "title": "分析",
-    "subtitle": "高度な金融分析ツール"
-  },
-  "chat": {
-    "title": "AI アシスタント",
-    "subtitle": "AI 金融アシスタントとチャット",
-    "placeholder": "市場、トレード、金融について質問してください...",
-    "send": "送信"
+  "labels": {
+    "moreTabs": "ツールバーメニューに追加タブ",
+    "enterCommand": "コマンドを入力",
+    "search": "検索"
   }
 }

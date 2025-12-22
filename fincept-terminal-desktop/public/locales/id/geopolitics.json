@@ -1,0 +1,59 @@
+{
+    "title": "GEOPOLITIK",
+    "header": {
+        "overview": "RINGKASAN",
+        "regions": "WILAYAH",
+        "analysis": "ANALISIS",
+        "alerts": "PERINGATAN"
+    },
+    "regions": {
+        "global": "Global",
+        "northAmerica": "Amerika Utara",
+        "europe": "Eropa",
+        "asia": "Asia Pasifik",
+        "middleEast": "Timur Tengah",
+        "africa": "Afrika",
+        "latam": "Amerika Latin"
+    },
+    "categories": {
+        "conflict": "Konflik",
+        "sanctions": "Sanksi",
+        "trade": "Hubungan Dagang",
+        "diplomacy": "Diplomasi",
+        "elections": "Pemilu",
+        "policy": "Perubahan Kebijakan"
+    },
+    "risk": {
+        "level": "Tingkat Risiko",
+        "high": "Tinggi",
+        "medium": "Sedang",
+        "low": "Rendah",
+        "critical": "Kritis",
+        "stable": "Stabil"
+    },
+    "impact": {
+        "economic": "Dampak Ekonomi",
+        "market": "Dampak Pasar",
+        "trade": "Dampak Perdagangan",
+        "currency": "Dampak Mata Uang"
+    },
+    "timeline": {
+        "latest": "Terbaru",
+        "thisWeek": "Minggu Ini",
+        "thisMonth": "Bulan Ini",
+        "upcoming": "Mendatang"
+    },
+    "actions": {
+        "subscribe": "Berlangganan",
+        "export": "Ekspor",
+        "share": "Bagikan",
+        "setAlert": "Atur Peringatan",
+        "filter": "Filter"
+    },
+    "messages": {
+        "loading": "Memuat data...",
+        "noEvents": "Tidak ada peristiwa",
+        "updated": "Diperbarui",
+        "breaking": "Berita Terkini"
+    }
+}

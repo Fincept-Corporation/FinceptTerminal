@@ -1,0 +1,27 @@
+{
+    "title": "BEOBACHTUNGSLISTE",
+    "header": {
+        "myWatchlists": "MEINE LISTEN",
+        "create": "ERSTELLEN",
+        "import": "IMPORTIEREN",
+        "export": "EXPORTIEREN"
+    },
+    "actions": {
+        "add": "Symbol hinzufügen",
+        "remove": "Entfernen",
+        "edit": "Bearbeiten",
+        "delete": "Löschen"
+    },
+    "symbol": {
+        "price": "Preis",
+        "change": "Änderung",
+        "volume": "Volumen",
+        "marketCap": "Marktkapitalisierung"
+    },
+    "messages": {
+        "created": "Liste erstellt",
+        "deleted": "Liste gelöscht",
+        "noWatchlists": "Keine Listen vorhanden",
+        "loading": "Laden..."
+    }
+}

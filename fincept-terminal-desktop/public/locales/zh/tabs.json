@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "市场",
-    "subtitle": "实时市场数据和分析"
+  "navigation": {
+    "dashboard": "仪表板",
+    "markets": "市场",
+    "news": "新闻",
+    "portfolio": "投资组合",
+    "backtesting": "回测",
+    "watchlist": "关注列表",
+    "research": "研究",
+    "screener": "筛选器",
+    "trading": "交易",
+    "chat": "AI聊天",
+    "agents": "代理",
+    "settings": "设置",
+    "profile": "个人资料",
+    "forum": "论坛",
+    "help": "帮助",
+    "logout": "登出"
   },
-  "news": {
-    "title": "金融新闻",
-    "subtitle": "最新市场新闻和更新"
+  "functionKeys": {
+    "f1": "仪表",
+    "f2": "市场",
+    "f3": "新闻",
+    "f4": "组合",
+    "f5": "回测",
+    "f6": "关注",
+    "f7": "研究",
+    "f8": "筛选",
+    "f9": "交易",
+    "f10": "AI",
+    "f11": "全屏",
+    "f12": "资料"
   },
-  "portfolio": {
-    "title": "投资组合",
-    "subtitle": "跟踪和分析您的投资"
+  "status": {
+    "connected": "已连接",
+    "disconnected": "已断开",
+    "loading": "加载中...",
+    "error": "错误",
+    "ready": "就绪"
   },
-  "analytics": {
-    "title": "分析",
-    "subtitle": "高级金融分析工具"
-  },
-  "chat": {
-    "title": "AI 助手",
-    "subtitle": "与您的AI金融助手聊天",
-    "placeholder": "询问我有关市场、交易或金融的任何问题...",
-    "send": "发送"
+  "labels": {
+    "moreTabs": "工具栏菜单中有更多标签",
+    "enterCommand": "输入命令",
+    "search": "搜索"
   }
 }

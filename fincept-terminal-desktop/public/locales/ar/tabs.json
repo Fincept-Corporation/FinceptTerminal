@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "navigation": {
+    "dashboard": "لوحة القيادة",
+    "markets": "الأسواق",
+    "news": "الأخبار",
+    "portfolio": "المحفظة",
+    "backtesting": "الاختبار الخلفي",
+    "watchlist": "قائمة المراقبة",
+    "research": "البحث",
+    "screener": "الفرز",
+    "trading": "التداول",
+    "chat": "الذكاء الاصطناعي",
+    "agents": "الوكلاء",
+    "settings": "الإعدادات",
+    "profile": "الملف الشخصي",
+    "forum": "المنتدى",
+    "help": "المساعدة",
+    "logout": "تسجيل الخروج"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "functionKeys": {
+    "f1": "لوحة",
+    "f2": "أسواق",
+    "f3": "أخبار",
+    "f4": "محفظة",
+    "f5": "اختبار",
+    "f6": "مراقبة",
+    "f7": "بحث",
+    "f8": "فرز",
+    "f9": "تداول",
+    "f10": "ذكاء",
+    "f11": "كامل",
+    "f12": "ملف"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "status": {
+    "connected": "متصل",
+    "disconnected": "غير متصل",
+    "loading": "جاري التحميل...",
+    "error": "خطأ",
+    "ready": "جاهز"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
-  },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "المزيد من علامات التبويب في قوائم الأدوات",
+    "enterCommand": "أدخل الأمر",
+    "search": "بحث"
   }
 }

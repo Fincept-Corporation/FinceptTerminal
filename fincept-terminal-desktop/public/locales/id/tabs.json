@@ -1,24 +1,46 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "navigation": {
+    "dashboard": "Dasbor",
+    "markets": "Pasar",
+    "news": "Berita",
+    "portfolio": "Portofolio",
+    "backtesting": "Backtesting",
+    "watchlist": "Daftar Pantau",
+    "research": "Riset",
+    "screener": "Screener",
+    "trading": "Trading",
+    "chat": "Obrolan AI",
+    "agents": "Agen",
+    "settings": "Pengaturan",
+    "profile": "Profil",
+    "forum": "Forum",
+    "help": "Bantuan",
+    "logout": "Keluar"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "functionKeys": {
+    "f1": "DASBOR",
+    "f2": "PASAR",
+    "f3": "BERITA",
+    "f4": "PORT",
+    "f5": "BKTEST",
+    "f6": "PANTAU",
+    "f7": "RISET",
+    "f8": "SCRN",
+    "f9": "TRADE",
+    "f10": "AI",
+    "f11": "PENUH",
+    "f12": "PROFIL"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "status": {
+    "connected": "Terhubung",
+    "disconnected": "Terputus",
+    "loading": "Memuat...",
+    "error": "Error",
+    "ready": "Siap"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
-  },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Tab lainnya di menu toolbar",
+    "enterCommand": "Masukkan Perintah",
+    "search": "Cari"
   }
 }

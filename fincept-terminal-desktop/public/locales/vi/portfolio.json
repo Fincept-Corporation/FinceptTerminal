@@ -1,0 +1,28 @@
+{
+    "title": "QUẢN LÝ DANH MỤC FINCEPT",
+    "header": {
+        "live": "TRỰC TIẾP",
+        "updating": "ĐANG CẬP NHẬT",
+        "newPortfolio": "DANH MỤC MỚI",
+        "refresh": "LÀM MỚI",
+        "exportCsv": "XUẤT CSV"
+    },
+    "summary": {
+        "totalValue": "TỔNG GIÁ TRỊ",
+        "dayPnl": "L/L NGÀY",
+        "totalPnl": "TỔNG L/L",
+        "positions": "VỊ THẾ"
+    },
+    "sidebar": {
+        "portfolios": "DANH MỤC",
+        "loading": "Đang tải...",
+        "noPortfolios": "Chưa có danh mục nào."
+    },
+    "modals": {
+        "createNew": "TẠO DANH MỤC MỚI",
+        "cancel": "HỦY",
+        "create": "TẠO",
+        "add": "THÊM",
+        "sell": "BÁN"
+    }
+}

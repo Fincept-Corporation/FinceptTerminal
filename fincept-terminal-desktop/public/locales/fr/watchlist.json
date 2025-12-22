@@ -1,0 +1,27 @@
+{
+    "title": "LISTE DE SURVEILLANCE",
+    "header": {
+        "myWatchlists": "MES LISTES",
+        "create": "CRÉER",
+        "import": "IMPORTER",
+        "export": "EXPORTER"
+    },
+    "actions": {
+        "add": "Ajouter un symbole",
+        "remove": "Supprimer",
+        "edit": "Modifier",
+        "delete": "Effacer"
+    },
+    "symbol": {
+        "price": "Prix",
+        "change": "Variation",
+        "volume": "Volume",
+        "marketCap": "Capitalisation"
+    },
+    "messages": {
+        "created": "Liste créée",
+        "deleted": "Liste supprimée",
+        "noWatchlists": "Aucune liste",
+        "loading": "Chargement..."
+    }
+}

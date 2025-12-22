@@ -1,0 +1,46 @@
+{
+    "title": "AI 对话助手",
+    "header": {
+        "newChat": "新对话",
+        "history": "历史",
+        "settings": "设置"
+    },
+    "input": {
+        "placeholder": "询问股票、市场、分析...",
+        "send": "发送",
+        "voice": "语音"
+    },
+    "messages": {
+        "thinking": "思考中...",
+        "typing": "AI 正在输入...",
+        "error": "处理请求时出错",
+        "welcome": "今天有什么可以帮助您的金融分析?"
+    },
+    "suggestions": {
+        "title": "推荐问题",
+        "stockAnalysis": "分析股票表现",
+        "marketTrends": "当前市场趋势?",
+        "portfolioAdvice": "投资组合优化建议"
+    },
+    "history": {
+        "title": "对话历史",
+        "today": "今天",
+        "yesterday": "昨天",
+        "thisWeek": "本周",
+        "older": "更早",
+        "clear": "清空历史"
+    },
+    "actions": {
+        "copy": "复制",
+        "regenerate": "重新生成",
+        "like": "点赞",
+        "dislike": "反对",
+        "share": "分享"
+    },
+    "models": {
+        "select": "选择模型",
+        "gpt4": "GPT-4",
+        "claude": "Claude",
+        "gemini": "Gemini"
+    }
+}

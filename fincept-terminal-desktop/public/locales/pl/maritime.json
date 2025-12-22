@@ -1,0 +1,66 @@
+{
+    "title": "MORSKI",
+    "header": {
+        "overview": "PRZEGLĄD",
+        "tracking": "ŚLEDZENIE",
+        "ports": "PORTY",
+        "routes": "TRASY"
+    },
+    "vessels": {
+        "type": "Typ statku",
+        "cargo": "Towarowy",
+        "tanker": "Tankowiec",
+        "container": "Kontenerowiec",
+        "bulk": "Masowiec",
+        "passenger": "Pasażerski",
+        "status": "Status"
+    },
+    "tracking": {
+        "position": "Pozycja",
+        "speed": "Prędkość",
+        "heading": "Kurs",
+        "destination": "Cel",
+        "eta": "Przybliżony czas",
+        "lastUpdate": "Ostatnia aktualizacja"
+    },
+    "ports": {
+        "name": "Nazwa portu",
+        "country": "Kraj",
+        "arrivals": "Przyjazdy",
+        "departures": "Odjazdy",
+        "congestion": "Zatłoczenie",
+        "waitTime": "Czas oczekiwania"
+    },
+    "routes": {
+        "origin": "Początek",
+        "destination": "Cel",
+        "distance": "Odległość",
+        "transitTime": "Czas tranzytu",
+        "riskLevel": "Poziom ryzyka"
+    },
+    "status": {
+        "anchored": "Na kotwicy",
+        "underway": "W drodze",
+        "moored": "Zacumowany",
+        "atPort": "W porcie",
+        "drifting": "Dryfujący"
+    },
+    "metrics": {
+        "dwt": "Nośność",
+        "teu": "TEU",
+        "draft": "Zanurzenie",
+        "length": "Długość",
+        "speed": "Prędkość (węzły)"
+    },
+    "actions": {
+        "track": "Śledź statek",
+        "setAlert": "Ustaw alert",
+        "export": "Eksportuj",
+        "filter": "Filtruj"
+    },
+    "messages": {
+        "loading": "Ładowanie danych...",
+        "noVessels": "Brak statków",
+        "updated": "Zaktualizowano"
+    }
+}

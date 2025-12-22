@@ -1,0 +1,52 @@
+{
+    "title": "MAPEO DE DATOS",
+    "header": {
+        "mappings": "MAPEOS",
+        "templates": "PLANTILLAS",
+        "create": "CREAR NUEVO",
+        "refresh": "ACTUALIZAR"
+    },
+    "views": {
+        "list": "Lista de mapeos",
+        "create": "Crear mapeo",
+        "templates": "Plantillas"
+    },
+    "list": {
+        "name": "Nombre",
+        "source": "Origen",
+        "destination": "Destino",
+        "status": "Estado",
+        "lastRun": "Última ejecución",
+        "actions": "Acciones"
+    },
+    "status": {
+        "active": "Activo",
+        "inactive": "Inactivo",
+        "error": "Error",
+        "running": "Ejecutando"
+    },
+    "actions": {
+        "edit": "Editar",
+        "delete": "Eliminar",
+        "run": "Ejecutar",
+        "duplicate": "Duplicar",
+        "export": "Exportar"
+    },
+    "create": {
+        "title": "Crear mapeo",
+        "name": "Nombre del mapeo",
+        "description": "Descripción",
+        "sourceApi": "API origen",
+        "destApi": "API destino",
+        "fieldMapping": "Mapeo de campos",
+        "save": "Guardar",
+        "cancel": "Cancelar"
+    },
+    "messages": {
+        "saved": "Guardado",
+        "deleted": "Eliminado",
+        "runSuccess": "Ejecutado con éxito",
+        "error": "Error",
+        "noMappings": "Sin mapeos"
+    }
+}

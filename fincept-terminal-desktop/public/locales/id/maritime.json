@@ -1,0 +1,66 @@
+{
+    "title": "MARITIM",
+    "header": {
+        "overview": "RINGKASAN",
+        "tracking": "PELACAKAN",
+        "ports": "PELABUHAN",
+        "routes": "RUTE"
+    },
+    "vessels": {
+        "type": "Jenis Kapal",
+        "cargo": "Kargo",
+        "tanker": "Tanker",
+        "container": "Kontainer",
+        "bulk": "Curah",
+        "passenger": "Penumpang",
+        "status": "Status"
+    },
+    "tracking": {
+        "position": "Posisi",
+        "speed": "Kecepatan",
+        "heading": "Arah",
+        "destination": "Tujuan",
+        "eta": "Perkiraan Tiba",
+        "lastUpdate": "Pembaruan Terakhir"
+    },
+    "ports": {
+        "name": "Nama Pelabuhan",
+        "country": "Negara",
+        "arrivals": "Kedatangan",
+        "departures": "Keberangkatan",
+        "congestion": "Kemacetan",
+        "waitTime": "Waktu Tunggu"
+    },
+    "routes": {
+        "origin": "Asal",
+        "destination": "Tujuan",
+        "distance": "Jarak",
+        "transitTime": "Waktu Transit",
+        "riskLevel": "Tingkat Risiko"
+    },
+    "status": {
+        "anchored": "Berlabuh",
+        "underway": "Dalam Perjalanan",
+        "moored": "Tambat",
+        "atPort": "Di Pelabuhan",
+        "drifting": "Hanyut"
+    },
+    "metrics": {
+        "dwt": "DWT",
+        "teu": "TEU",
+        "draft": "Draft",
+        "length": "Panjang",
+        "speed": "Kecepatan (Knot)"
+    },
+    "actions": {
+        "track": "Lacak Kapal",
+        "setAlert": "Atur Peringatan",
+        "export": "Ekspor",
+        "filter": "Filter"
+    },
+    "messages": {
+        "loading": "Memuat data maritim...",
+        "noVessels": "Tidak ada kapal",
+        "updated": "Diperbarui"
+    }
+}

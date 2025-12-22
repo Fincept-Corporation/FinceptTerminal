@@ -1,0 +1,46 @@
+{
+    "title": "ЧАТ-АСИСТЕНТ ШІ",
+    "header": {
+        "newChat": "НОВИЙ ЧАТ",
+        "history": "ІСТОРІЯ",
+        "settings": "НАЛАШТУВАННЯ"
+    },
+    "input": {
+        "placeholder": "Запитайте про акції, ринки...",
+        "send": "Надіслати",
+        "voice": "Голос"
+    },
+    "messages": {
+        "thinking": "Думаю...",
+        "typing": "ШІ друкує...",
+        "error": "Помилка обробки",
+        "welcome": "Як я можу допомогти з фінансовим аналізом?"
+    },
+    "suggestions": {
+        "title": "Рекомендовані питання",
+        "stockAnalysis": "Аналіз акцій",
+        "marketTrends": "Поточні ринкові тренди?",
+        "portfolioAdvice": "Оптимізація портфеля"
+    },
+    "history": {
+        "title": "Історія чату",
+        "today": "Сьогодні",
+        "yesterday": "Вчора",
+        "thisWeek": "Цього тижня",
+        "older": "Раніше",
+        "clear": "Очистити історію"
+    },
+    "actions": {
+        "copy": "Копіювати",
+        "regenerate": "Перегенерувати",
+        "like": "Подобається",
+        "dislike": "Не подобається",
+        "share": "Поділитися"
+    },
+    "models": {
+        "select": "Вибрати модель",
+        "gpt4": "GPT-4",
+        "claude": "Claude",
+        "gemini": "Gemini"
+    }
+}

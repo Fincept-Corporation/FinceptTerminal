@@ -1,0 +1,21 @@
+{
+    "title": "İZLEME LİSTESİ",
+    "header": {
+        "myWatchlists": "LİSTELERİM",
+        "create": "OLUŞTUR",
+        "import": "İÇE AKTAR",
+        "export": "DIŞA AKTAR"
+    },
+    "actions": {
+        "add": "Sembol Ekle",
+        "remove": "Kaldır",
+        "edit": "Düzenle",
+        "delete": "Sil"
+    },
+    "messages": {
+        "created": "Liste oluşturuldu",
+        "deleted": "Liste silindi",
+        "noWatchlists": "Liste yok",
+        "loading": "Yükleniyor..."
+    }
+}

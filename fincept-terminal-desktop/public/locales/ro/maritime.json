@@ -1,0 +1,66 @@
+{
+    "title": "MARITIM",
+    "header": {
+        "overview": "PREZENTARE",
+        "tracking": "URMĂRIRE",
+        "ports": "PORTURI",
+        "routes": "RUTE"
+    },
+    "vessels": {
+        "type": "Tip navă",
+        "cargo": "Cargo",
+        "tanker": "Petrolier",
+        "container": "Portcontainer",
+        "bulk": "Vrachier",
+        "passenger": "Pasageri",
+        "status": "Status"
+    },
+    "tracking": {
+        "position": "Poziție",
+        "speed": "Viteză",
+        "heading": "Direcție",
+        "destination": "Destinație",
+        "eta": "Sosire estimată",
+        "lastUpdate": "Ultima actualizare"
+    },
+    "ports": {
+        "name": "Nume port",
+        "country": "Țară",
+        "arrivals": "Sosiri",
+        "departures": "Plecări",
+        "congestion": "Aglomerație",
+        "waitTime": "Timp de așteptare"
+    },
+    "routes": {
+        "origin": "Origine",
+        "destination": "Destinație",
+        "distance": "Distanță",
+        "transitTime": "Timp de tranzit",
+        "riskLevel": "Nivel de risc"
+    },
+    "status": {
+        "anchored": "Ancorat",
+        "underway": "În mișcare",
+        "moored": "Acostat",
+        "atPort": "În port",
+        "drifting": "În derivă"
+    },
+    "metrics": {
+        "dwt": "Tonaj",
+        "teu": "TEU",
+        "draft": "Pescaj",
+        "length": "Lungime",
+        "speed": "Viteză (noduri)"
+    },
+    "actions": {
+        "track": "Urmărește nava",
+        "setAlert": "Setează alertă",
+        "export": "Exportă",
+        "filter": "Filtrează"
+    },
+    "messages": {
+        "loading": "Se încarcă datele...",
+        "noVessels": "Fără nave",
+        "updated": "Actualizat"
+    }
+}

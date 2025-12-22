@@ -1,0 +1,25 @@
+{
+    "title": "HANDEL",
+    "header": {
+        "orders": "ZLECENIA",
+        "positions": "POZYCJE",
+        "history": "HISTORIA",
+        "settings": "USTAWIENIA",
+        "terminal": "TERMINAL FINCEPT",
+        "selectBroker": "WYBIERZ BROKERA",
+        "paper": "DEMO",
+        "live": "NA ŻYWO"
+    },
+    "actions": {
+        "buy": "KUP",
+        "sell": "SPRZEDAJ",
+        "cancel": "Anuluj",
+        "close": "Zamknij",
+        "closeAll": "Zamknij wszystkie"
+    },
+    "messages": {
+        "orderPlaced": "Zlecenie złożone",
+        "orderFailed": "Zlecenie nieudane",
+        "noPositions": "Brak otwartych pozycji"
+    }
+}

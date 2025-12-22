@@ -1,0 +1,26 @@
+{
+    "title": "ТЕРМИНАЛ ДОКУМЕНТАЦИИ FINCEPT",
+    "header": {
+        "sections": "РАЗДЕЛЫ",
+        "topics": "ТЕМЫ",
+        "ready": "ГОТОВО"
+    },
+    "search": {
+        "placeholder": "Поиск документации...",
+        "clear": "ОЧИСТИТЬ"
+    },
+    "navigation": "НАВИГАЦИЯ",
+    "codeExample": "ПРИМЕР КОДА",
+    "content": {
+        "title": "ДОКУМЕНТАЦИЯ ТЕРМИНАЛА FINCEPT",
+        "description": "Выберите тему из панели навигации.",
+        "topicsAvailable": "тем доступно",
+        "selectTopic": "Выберите тему"
+    },
+    "status": {
+        "version": "Документация Терминала Fincept v3.0",
+        "sections": "Разделы",
+        "topics": "Темы",
+        "current": "Текущий"
+    }
+}

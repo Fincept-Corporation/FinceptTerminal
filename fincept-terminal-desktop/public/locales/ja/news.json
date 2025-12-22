@@ -1,0 +1,30 @@
+{
+    "title": "FINCEPTターミナルプロフェッショナルニュース",
+    "header": {
+        "liveFeed": "ライブフィード",
+        "live": "ライブ",
+        "refresh": "更新",
+        "updating": "更新中...",
+        "alerts": "アラート",
+        "sources": "ソース",
+        "status": "ステータス",
+        "demoMode": "デモモード",
+        "articles": "記事",
+        "activeSources": "アクティブソース"
+    },
+    "sentiment": {
+        "bullish": "強気",
+        "bearish": "弱気",
+        "neutral": "中立"
+    },
+    "autoRefresh": {
+        "title": "自動更新間隔",
+        "minute": "分",
+        "minutes": "分"
+    },
+    "messages": {
+        "loading": "ニュース読み込み中...",
+        "loadingFeeds": "ニュースフィード読み込み中...",
+        "breaking": "速報"
+    }
+}

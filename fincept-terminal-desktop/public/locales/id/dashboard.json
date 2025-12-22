@@ -1,30 +1,43 @@
 {
-  "welcome": "Welcome to Fincept Terminal",
-  "tabs": {
-    "dashboard": "Dashboard",
-    "markets": "Markets",
-    "news": "News",
-    "watchlist": "Watchlist",
-    "portfolio": "Portfolio",
-    "analytics": "Analytics",
-    "economics": "Economics",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Economic Calendar",
-    "geopolitics": "Geopolitics",
-    "maritime": "Maritime",
-    "options": "Options",
-    "equityResearch": "Equity Research",
-    "screener": "Screener",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Docs",
-    "nodeEditor": "Node Editor",
-    "codeEditor": "Code Editor",
-    "forum": "Forum",
-    "marketplace": "Marketplace",
-    "profile": "Profile",
-    "support": "Support",
-    "settings": "Settings"
+  "header": {
+    "title": "DASBOR YANG DAPAT DISESUAIKAN",
+    "live": "LANGSUNG",
+    "widgets": "WIDGET"
+  },
+  "widgets": {
+    "loading": "Memuat...",
+    "error": "Kesalahan",
+    "configure": "Konfigurasi",
+    "refresh": "Segarkan",
+    "remove": "Hapus",
+    "globalIndices": "INDEKS GLOBAL - TOP 12",
+    "forex": "PASANGAN FOREX",
+    "crypto": "KRIPTO",
+    "commodities": "KOMODITAS",
+    "bonds": "OBLIGASI",
+    "etfs": "ETF",
+    "news": "BERITA",
+    "forum": "FORUM",
+    "watchlist": "DAFTAR PANTAU",
+    "maritime": "MARITIM",
+    "index": "INDEKS",
+    "symbol": "SIMBOL",
+    "name": "NAMA",
+    "price": "HARGA",
+    "change": "UBAH",
+    "percentChange": "%UBAH",
+    "high": "TINGGI",
+    "low": "RENDAH",
+    "noIndexData": "Tidak ada data indeks",
+    "noData": "Tidak ada data"
+  },
+  "buttons": {
+    "addWidget": "TAMBAH WIDGET",
+    "saveLayout": "SIMPAN TATA LETAK",
+    "reset": "RESET"
+  },
+  "empty": {
+    "noWidgets": "Tidak ada widget di dasbor",
+    "addFirst": "TAMBAHKAN WIDGET PERTAMA ANDA"
   }
 }

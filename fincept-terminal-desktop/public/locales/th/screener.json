@@ -1,0 +1,56 @@
+{
+    "title": "ตัวกรอง",
+    "header": {
+        "filters": "ตัวกรอง",
+        "results": "ผลลัพธ์",
+        "saved": "บันทึกไว้",
+        "presets": "พรีเซ็ต"
+    },
+    "filters": {
+        "add": "เพิ่มตัวกรอง",
+        "clear": "ล้างทั้งหมด",
+        "reset": "รีเซ็ต",
+        "apply": "ใช้ตัวกรอง"
+    },
+    "criteria": {
+        "marketCap": "มูลค่าตลาด",
+        "price": "ราคา",
+        "volume": "ปริมาณ",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "เงินปันผล",
+        "beta": "เบต้า",
+        "sector": "กลุ่ม",
+        "industry": "อุตสาหกรรม",
+        "country": "ประเทศ",
+        "exchange": "ตลาด"
+    },
+    "operators": {
+        "equals": "เท่ากับ",
+        "greater": "มากกว่า",
+        "less": "น้อยกว่า",
+        "between": "ระหว่าง",
+        "contains": "ประกอบด้วย"
+    },
+    "results": {
+        "symbol": "สัญลักษณ์",
+        "name": "ชื่อ",
+        "price": "ราคา",
+        "change": "เปลี่ยนแปลง",
+        "volume": "ปริมาณ",
+        "marketCap": "มูลค่า",
+        "matches": "รายการ"
+    },
+    "actions": {
+        "save": "บันทึก",
+        "load": "โหลด",
+        "export": "ส่งออก",
+        "addToWatchlist": "เพิ่มในรายการ"
+    },
+    "messages": {
+        "loading": "กำลังกรอง...",
+        "noResults": "ไม่พบผลลัพธ์",
+        "saved": "บันทึกแล้ว",
+        "applied": "ใช้ตัวกรองแล้ว"
+    }
+}

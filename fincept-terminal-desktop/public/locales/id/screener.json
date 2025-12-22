@@ -1,0 +1,56 @@
+{
+    "title": "SCREENER SAHAM",
+    "header": {
+        "filters": "FILTER",
+        "results": "HASIL",
+        "saved": "TERSIMPAN",
+        "presets": "PRESET"
+    },
+    "filters": {
+        "add": "Tambah Filter",
+        "clear": "Hapus Semua",
+        "reset": "Reset",
+        "apply": "Terapkan Filter"
+    },
+    "criteria": {
+        "marketCap": "Kapitalisasi",
+        "price": "Harga",
+        "volume": "Volume",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Dividen",
+        "beta": "Beta",
+        "sector": "Sektor",
+        "industry": "Industri",
+        "country": "Negara",
+        "exchange": "Bursa"
+    },
+    "operators": {
+        "equals": "Sama dengan",
+        "greater": "Lebih dari",
+        "less": "Kurang dari",
+        "between": "Antara",
+        "contains": "Mengandung"
+    },
+    "results": {
+        "symbol": "Simbol",
+        "name": "Nama",
+        "price": "Harga",
+        "change": "Perubahan",
+        "volume": "Volume",
+        "marketCap": "Kap.",
+        "matches": "hasil"
+    },
+    "actions": {
+        "save": "Simpan Screen",
+        "load": "Muat Screen",
+        "export": "Ekspor",
+        "addToWatchlist": "Tambah ke Daftar"
+    },
+    "messages": {
+        "loading": "Menyaring...",
+        "noResults": "Tidak ada hasil",
+        "saved": "Tersimpan",
+        "applied": "Filter diterapkan"
+    }
+}

@@ -1,0 +1,61 @@
+{
+    "title": "ฟอรัม FINCEPT",
+    "header": {
+        "trending": "มาแรง",
+        "new": "ใหม่",
+        "following": "ติดตาม",
+        "myPosts": "โพสต์ของฉัน"
+    },
+    "categories": {
+        "all": "ทุกหัวข้อ",
+        "stocks": "หุ้น",
+        "options": "ออปชั่น",
+        "crypto": "คริปโต",
+        "forex": "ฟอเร็กซ์",
+        "strategies": "กลยุทธ์",
+        "general": "ทั่วไป"
+    },
+    "post": {
+        "create": "สร้างโพสต์",
+        "reply": "ตอบกลับ",
+        "edit": "แก้ไข",
+        "delete": "ลบ",
+        "share": "แชร์",
+        "report": "รายงาน",
+        "save": "บันทึก"
+    },
+    "form": {
+        "title": "หัวข้อ",
+        "content": "เนื้อหา",
+        "tags": "แท็ก",
+        "category": "หมวดหมู่",
+        "submit": "โพสต์",
+        "cancel": "ยกเลิก",
+        "preview": "ดูตัวอย่าง"
+    },
+    "engagement": {
+        "likes": "ถูกใจ",
+        "comments": "ความคิดเห็น",
+        "views": "ดู",
+        "shares": "แชร์"
+    },
+    "user": {
+        "posts": "โพสต์",
+        "followers": "ผู้ติดตาม",
+        "following": "กำลังติดตาม",
+        "reputation": "ชื่อเสียง",
+        "joined": "เข้าร่วม"
+    },
+    "sort": {
+        "newest": "ใหม่สุด",
+        "popular": "ยอดนิยม",
+        "mostCommented": "คอมเมนต์มาก",
+        "topRated": "คะแนนสูง"
+    },
+    "messages": {
+        "loading": "กำลังโหลด...",
+        "noPosts": "ไม่มีโพสต์",
+        "postSuccess": "โพสต์สำเร็จ",
+        "deleteConfirm": "ลบโพสต์นี้?"
+    }
+}

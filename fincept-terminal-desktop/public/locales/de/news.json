@@ -1,0 +1,30 @@
+{
+    "title": "FINCEPT TERMINAL PROFESSIONELLE NACHRICHTEN",
+    "header": {
+        "liveFeed": "LIVE FEED",
+        "live": "LIVE",
+        "refresh": "AKTUALISIEREN",
+        "updating": "AKTUALISIERE...",
+        "alerts": "WARNUNGEN",
+        "sources": "QUELLEN",
+        "status": "STATUS",
+        "demoMode": "DEMO-MODUS",
+        "articles": "ARTIKEL",
+        "activeSources": "AKTIVE QUELLEN"
+    },
+    "sentiment": {
+        "bullish": "BULLISCH",
+        "bearish": "BÄRISCH",
+        "neutral": "NEUTRAL"
+    },
+    "autoRefresh": {
+        "title": "AUTO-AKTUALISIERUNGSINTERVALL",
+        "minute": "Minute",
+        "minutes": "Minuten"
+    },
+    "messages": {
+        "loading": "Nachrichten laden...",
+        "loadingFeeds": "News-Feeds laden...",
+        "breaking": "EILMELDUNG"
+    }
+}

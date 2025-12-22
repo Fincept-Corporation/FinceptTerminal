@@ -1,0 +1,43 @@
+{
+    "title": "データソース",
+    "header": {
+        "available": "利用可能なソース",
+        "connected": "接続済み",
+        "addNew": "ソース追加",
+        "refresh": "更新"
+    },
+    "categories": {
+        "market": "市場データ",
+        "economic": "経済データ",
+        "alternative": "オルタナティブデータ",
+        "news": "ニュース＆センチメント",
+        "fundamental": "ファンダメンタルデータ"
+    },
+    "status": {
+        "connected": "接続済み",
+        "disconnected": "切断",
+        "error": "エラー",
+        "pending": "保留中"
+    },
+    "actions": {
+        "connect": "接続",
+        "disconnect": "切断",
+        "configure": "設定",
+        "test": "接続テスト",
+        "delete": "削除"
+    },
+    "form": {
+        "apiKey": "APIキー",
+        "endpoint": "エンドポイントURL",
+        "username": "ユーザー名",
+        "password": "パスワード",
+        "save": "保存",
+        "cancel": "キャンセル"
+    },
+    "messages": {
+        "connectionSuccess": "データソースに接続しました",
+        "connectionFailed": "接続に失敗しました",
+        "noSources": "データソースが設定されていません",
+        "loading": "データソースを読み込み中..."
+    }
+}

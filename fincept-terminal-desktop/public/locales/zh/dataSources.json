@@ -1,0 +1,43 @@
+{
+    "title": "数据源",
+    "header": {
+        "available": "可用源",
+        "connected": "已连接",
+        "addNew": "添加源",
+        "refresh": "刷新"
+    },
+    "categories": {
+        "market": "市场数据",
+        "economic": "经济数据",
+        "alternative": "另类数据",
+        "news": "新闻与情绪",
+        "fundamental": "基本面数据"
+    },
+    "status": {
+        "connected": "已连接",
+        "disconnected": "已断开",
+        "error": "错误",
+        "pending": "待处理"
+    },
+    "actions": {
+        "connect": "连接",
+        "disconnect": "断开",
+        "configure": "配置",
+        "test": "测试连接",
+        "delete": "删除"
+    },
+    "form": {
+        "apiKey": "API密钥",
+        "endpoint": "端点URL",
+        "username": "用户名",
+        "password": "密码",
+        "save": "保存",
+        "cancel": "取消"
+    },
+    "messages": {
+        "connectionSuccess": "成功连接到数据源",
+        "connectionFailed": "连接数据源失败",
+        "noSources": "未配置数据源",
+        "loading": "加载数据源中..."
+    }
+}

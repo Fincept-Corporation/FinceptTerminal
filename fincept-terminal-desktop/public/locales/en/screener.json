@@ -1,0 +1,56 @@
+{
+    "title": "STOCK SCREENER",
+    "header": {
+        "filters": "FILTERS",
+        "results": "RESULTS",
+        "saved": "SAVED SCREENS",
+        "presets": "PRESETS"
+    },
+    "filters": {
+        "add": "Add Filter",
+        "clear": "Clear All",
+        "reset": "Reset",
+        "apply": "Apply Filters"
+    },
+    "criteria": {
+        "marketCap": "Market Cap",
+        "price": "Price",
+        "volume": "Volume",
+        "pe": "P/E Ratio",
+        "eps": "EPS",
+        "dividend": "Dividend Yield",
+        "beta": "Beta",
+        "sector": "Sector",
+        "industry": "Industry",
+        "country": "Country",
+        "exchange": "Exchange"
+    },
+    "operators": {
+        "equals": "Equals",
+        "greater": "Greater than",
+        "less": "Less than",
+        "between": "Between",
+        "contains": "Contains"
+    },
+    "results": {
+        "symbol": "Symbol",
+        "name": "Name",
+        "price": "Price",
+        "change": "Change",
+        "volume": "Volume",
+        "marketCap": "Market Cap",
+        "matches": "matches found"
+    },
+    "actions": {
+        "save": "Save Screen",
+        "load": "Load Screen",
+        "export": "Export Results",
+        "addToWatchlist": "Add to Watchlist"
+    },
+    "messages": {
+        "loading": "Screening stocks...",
+        "noResults": "No stocks match your criteria",
+        "saved": "Screen saved successfully",
+        "applied": "Filters applied"
+    }
+}

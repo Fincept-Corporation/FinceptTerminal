@@ -1,30 +1,43 @@
 {
-  "welcome": "Welcome to Fincept Terminal",
-  "tabs": {
-    "dashboard": "Dashboard",
-    "markets": "Markets",
-    "news": "News",
-    "watchlist": "Watchlist",
-    "portfolio": "Portfolio",
-    "analytics": "Analytics",
-    "economics": "Economics",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Economic Calendar",
-    "geopolitics": "Geopolitics",
-    "maritime": "Maritime",
-    "options": "Options",
-    "equityResearch": "Equity Research",
-    "screener": "Screener",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Docs",
-    "nodeEditor": "Node Editor",
-    "codeEditor": "Code Editor",
-    "forum": "Forum",
-    "marketplace": "Marketplace",
-    "profile": "Profile",
-    "support": "Support",
-    "settings": "Settings"
+  "header": {
+    "title": "PAINEL PERSONALIZÁVEL",
+    "live": "AO VIVO",
+    "widgets": "WIDGETS"
+  },
+  "widgets": {
+    "loading": "Carregando...",
+    "error": "Erro",
+    "configure": "Configurar",
+    "refresh": "Atualizar",
+    "remove": "Remover",
+    "globalIndices": "ÍNDICES GLOBAIS - TOP 12",
+    "forex": "PARES FOREX",
+    "crypto": "CRIPTOMOEDAS",
+    "commodities": "COMMODITIES",
+    "bonds": "TÍTULOS",
+    "etfs": "ETFs",
+    "news": "NOTÍCIAS",
+    "forum": "FÓRUM",
+    "watchlist": "LISTA DE ACOMPANHAMENTO",
+    "maritime": "MARÍTIMO",
+    "index": "ÍNDICE",
+    "symbol": "SÍMBOLO",
+    "name": "NOME",
+    "price": "PREÇO",
+    "change": "VAR",
+    "percentChange": "%VAR",
+    "high": "MÁXIMO",
+    "low": "MÍNIMO",
+    "noIndexData": "Sem dados de índices",
+    "noData": "Sem dados"
+  },
+  "buttons": {
+    "addWidget": "ADICIONAR WIDGET",
+    "saveLayout": "SALVAR LAYOUT",
+    "reset": "REINICIAR"
+  },
+  "empty": {
+    "noWidgets": "Sem widgets no painel",
+    "addFirst": "ADICIONE SEU PRIMEIRO WIDGET"
   }
 }

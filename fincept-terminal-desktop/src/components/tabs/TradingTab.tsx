@@ -19,8 +19,12 @@ import { OrdersTable, ClosedOrders } from './trading/core/OrderManager';
 import { TradingChart, DepthChart, VolumeProfile } from './trading/charts';
 import { AccountStats, FeesDisplay, MarginPanel } from './trading/core/AccountInfo';
 import { PortfolioAggregator, ArbitrageDetector } from './trading/cross-exchange';
+import { TimezoneSelector } from '../common/TimezoneSelector';
+import { AIAgentsPanel } from './trading/ai-agents/AIAgentsPanel';
+import { ModelChatPanel } from './trading/ai-agents/ModelChatPanel';
+import { LeaderboardPanel } from './trading/ai-agents/LeaderboardPanel';
 import type { OrderRequest } from '../../types/trading';
-import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 interface OrderBookLevel {
   price: number;
@@ -76,6 +80,7 @@ const BLOOMBERG = {
 };
 
 export function TradingTab() {
+  const { t } = useTranslation('trading');
   const {
     activeBroker,
     availableBrokers,
@@ -105,8 +110,8 @@ export function TradingTab() {
   const [showSymbolDropdown, setShowSymbolDropdown] = useState(false);
   const [showBrokerDropdown, setShowBrokerDropdown] = useState(false);
   const [selectedView, setSelectedView] = useState<'chart' | 'depth' | 'trades'>('chart');
-  const [rightPanelView, setRightPanelView] = useState<'orderbook' | 'volume'>('orderbook');
-  const [leftSidebarView, setLeftSidebarView] = useState<'watchlist'>('watchlist');
+  const [rightPanelView, setRightPanelView] = useState<'orderbook' | 'volume' | 'modelchat'>('orderbook');
+  const [leftSidebarView, setLeftSidebarView] = useState<'watchlist' | 'ai-agents' | 'leaderboard'>('watchlist');
 
   // Paper trading state
   const [positions, setPositions] = useState<Position[]>([]);
@@ -254,7 +259,7 @@ export function TradingTab() {
     activeBroker ? `${activeBroker}.trade.${selectedSymbol}` : null
   );
 
-  // Update ticker data and position prices
+  // Update ticker data
   useEffect(() => {
     if (tickerMessage && tickerMessage.data) {
       const data = tickerMessage.data;
@@ -269,42 +274,6 @@ export function TradingTab() {
               last: data.last,
             });
           }
-
-          // Update position prices in real-time AND in database
-          setPositions(prev => prev.map(p => {
-            if (p.symbol === selectedSymbol && data.last) {
-              const currentPrice = data.last;
-              const unrealizedPnl = p.side === 'long'
-                ? (currentPrice - p.entryPrice) * p.quantity
-                : (p.entryPrice - currentPrice) * p.quantity;
-              const pnlPercent = ((unrealizedPnl / (p.entryPrice * p.quantity)) * 100);
-
-              // Update DB asynchronously
-              (async () => {
-                try {
-                  const db = (await import('../../paper-trading/PaperTradingDatabase')).paperTradingDatabase;
-                  const dbPositions = await db.getPortfolioPositions(
-                    (paperAdapter as any).paperConfig.portfolioId,
-                    'open'
-                  );
-                  const dbPos = dbPositions.find(pos => pos.symbol === selectedSymbol);
-                  if (dbPos) {
-                    await db.updatePosition(dbPos.id, { currentPrice, unrealizedPnl });
-                  }
-                } catch (err) {
-                  console.error('Failed to update position price in DB:', err);
-                }
-              })();
-
-              return {
-                ...p,
-                currentPrice,
-                unrealizedPnl,
-                pnlPercent
-              };
-            }
-            return p;
-          }));
         }
       }
     }
@@ -376,18 +345,13 @@ export function TradingTab() {
       if (tradingMode !== 'paper' || !paperAdapter) return;
 
       try {
-        const [balanceData, positionsData, ordersData, tradesData] = await Promise.all([
-          paperAdapter.fetchBalance(),
-          paperAdapter.fetchPositions(),
-          paperAdapter.fetchOpenOrders(),
-          paperAdapter.fetchMyTrades(undefined, undefined, 50)
-        ]);
-
+        const balanceData = await paperAdapter.fetchBalance();
         const usdBalance = (balanceData.free as any)?.USD || 0;
         const totalEquity = (balanceData.total as any)?.USD || 0;
         setBalance(usdBalance);
         setEquity(totalEquity);
 
+        const positionsData = await paperAdapter.fetchPositions();
         const mappedPositions: Position[] = positionsData.map((p: any) => ({
           symbol: p.symbol,
           side: p.side,
@@ -400,6 +364,7 @@ export function TradingTab() {
         }));
         setPositions(mappedPositions);
 
+        const ordersData = await paperAdapter.fetchOpenOrders();
         const mappedOrders: Order[] = ordersData.map((o: any) => ({
           id: o.id,
           symbol: o.symbol,
@@ -412,6 +377,7 @@ export function TradingTab() {
         }));
         setOrders(mappedOrders);
 
+        const tradesData = await paperAdapter.fetchMyTrades(undefined, undefined, 50);
         setTrades(tradesData);
 
         if (typeof (paperAdapter as any).getStatistics === 'function') {
@@ -424,7 +390,7 @@ export function TradingTab() {
     };
 
     loadPaperTradingData();
-    const interval = setInterval(loadPaperTradingData, 500);
+    const interval = setInterval(loadPaperTradingData, 2000);
     return () => clearInterval(interval);
   }, [tradingMode, paperAdapter]);
 
@@ -504,15 +470,9 @@ export function TradingTab() {
 
   // Handle order cancellation
   const handleCancelOrder = useCallback(async (orderId: string, symbol: string) => {
-    if (!paperAdapter) {
-      console.error('[TradingTab] Paper adapter not available for cancellation');
-      return;
-    }
+    if (!paperAdapter) return;
     try {
-      console.log(`[TradingTab] Canceling order ${orderId} for ${symbol}`);
       await paperAdapter.cancelOrder(orderId, symbol);
-
-      // Refresh orders list
       const ordersData = await paperAdapter.fetchOpenOrders();
       const mappedOrders: Order[] = ordersData.map((o: any) => ({
         id: o.id,
@@ -525,11 +485,8 @@ export function TradingTab() {
         createdAt: o.datetime,
       }));
       setOrders(mappedOrders);
-
-      console.log(`[TradingTab] Order ${orderId} canceled successfully`);
     } catch (error) {
-      console.error('[TradingTab] Cancel failed:', error);
-      alert(`Failed to cancel order: ${(error as Error).message}`);
+      console.error('Cancel failed:', error);
     }
   }, [paperAdapter]);
 
@@ -617,7 +574,7 @@ export function TradingTab() {
               letterSpacing: '0.5px',
               textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
             }}>
-              FINCEPT TERMINAL
+              {t('header.terminal')}
             </span>
           </div>
 
@@ -644,7 +601,7 @@ export function TradingTab() {
               onMouseLeave={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
             >
               <Globe size={12} />
-              {activeBroker?.toUpperCase() || 'SELECT BROKER'}
+              {activeBroker?.toUpperCase() || t('header.selectBroker')}
               <ChevronDown size={10} />
             </button>
 
@@ -722,7 +679,7 @@ export function TradingTab() {
                 transition: 'all 0.2s'
               }}
             >
-              PAPER
+              {t('header.paper')}
             </button>
             <button
               onClick={() => setTradingMode('live')}
@@ -737,7 +694,7 @@ export function TradingTab() {
                 transition: 'all 0.2s'
               }}
             >
-              LIVE
+              {t('header.live')}
             </button>
           </div>
         </div>
@@ -759,10 +716,7 @@ export function TradingTab() {
 
           <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: BLOOMBERG.CYAN }}>
-            <Clock size={12} />
-            {currentTime.toLocaleTimeString('en-US', { hour12: false })}
-          </div>
+          <TimezoneSelector compact />
 
           <button
             onClick={() => setShowSettings(!showSettings)}
@@ -1015,111 +969,190 @@ export function TradingTab() {
           flexDirection: 'column',
           overflow: 'hidden'
         }}>
-          {/* Header */}
+          {/* Toggle Header */}
           <div style={{
-            padding: '8px 12px',
+            padding: '6px',
             backgroundColor: BLOOMBERG.HEADER_BG,
             borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-            fontSize: '10px',
-            fontWeight: 700,
-            color: BLOOMBERG.ORANGE,
-            letterSpacing: '0.5px'
+            display: 'flex',
+            gap: '4px'
           }}>
-            WATCHLIST
+            <button
+              onClick={() => setLeftSidebarView('watchlist')}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                backgroundColor: leftSidebarView === 'watchlist' ? BLOOMBERG.ORANGE : 'transparent',
+                border: 'none',
+                color: leftSidebarView === 'watchlist' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                cursor: 'pointer',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s',
+                borderRadius: '2px'
+              }}
+            >
+              WATCH
+            </button>
+            <button
+              onClick={() => setLeftSidebarView('ai-agents')}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                backgroundColor: leftSidebarView === 'ai-agents' ? BLOOMBERG.ORANGE : 'transparent',
+                border: 'none',
+                color: leftSidebarView === 'ai-agents' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                cursor: 'pointer',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s',
+                borderRadius: '2px'
+              }}
+            >
+              AGENTS
+            </button>
+            <button
+              onClick={() => setLeftSidebarView('leaderboard')}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                backgroundColor: leftSidebarView === 'leaderboard' ? BLOOMBERG.ORANGE : 'transparent',
+                border: 'none',
+                color: leftSidebarView === 'leaderboard' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY,
+                cursor: 'pointer',
+                fontSize: '9px',
+                fontWeight: 700,
+                letterSpacing: '0.5px',
+                transition: 'all 0.2s',
+                borderRadius: '2px'
+              }}
+            >
+              LEADER
+            </button>
           </div>
 
           {/* Content */}
-          <div style={{
-            flex: 1,
-            overflow: 'auto',
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '0',
-            alignContent: 'start'
-          }}>
-            {watchlist.map((symbol, idx) => (
-              <div
-                key={symbol}
-                onClick={() => setSelectedSymbol(symbol)}
-                style={{
-                  padding: '8px 10px',
-                  cursor: 'pointer',
-                  backgroundColor: selectedSymbol === symbol ? `${BLOOMBERG.ORANGE}15` : 'transparent',
-                  borderLeft: selectedSymbol === symbol ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
-                  borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                  borderRight: idx % 2 === 0 ? `1px solid ${BLOOMBERG.BORDER}` : 'none',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedSymbol !== symbol) {
-                    e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (selectedSymbol !== symbol) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                {/* Flex container: Ticker on left, Price/Change on right */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}>
-                  {/* Left side: Ticker symbol */}
-                  <div style={{
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    color: selectedSymbol === symbol ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {symbol.replace('/USD', '')}
-                  </div>
-
-                  {/* Right side: Price and Change */}
-                  {watchlistPrices[symbol] ? (
+          <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {leftSidebarView === 'watchlist' && (
+              <div style={{
+                flex: 1,
+                overflow: 'auto',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '0',
+                alignContent: 'start'
+              }}>
+                {watchlist.map((symbol, idx) => (
+                  <div
+                    key={symbol}
+                    onClick={() => setSelectedSymbol(symbol)}
+                    style={{
+                      padding: '8px 10px',
+                      cursor: 'pointer',
+                      backgroundColor: selectedSymbol === symbol ? `${BLOOMBERG.ORANGE}15` : 'transparent',
+                      borderLeft: selectedSymbol === symbol ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
+                      borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+                      borderRight: idx % 2 === 0 ? `1px solid ${BLOOMBERG.BORDER}` : 'none',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedSymbol !== symbol) {
+                        e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedSymbol !== symbol) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                      }
+                    }}
+                  >
+                    {/* Flex container: Ticker on left, Price/Change on right */}
                     <div style={{
                       display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-end',
-                      gap: '2px'
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '8px'
                     }}>
+                      {/* Left side: Ticker symbol */}
                       <div style={{
-                        fontSize: '10px',
-                        color: BLOOMBERG.WHITE,
-                        fontFamily: 'monospace',
-                        fontWeight: 600
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: selectedSymbol === symbol ? BLOOMBERG.ORANGE : BLOOMBERG.WHITE,
+                        whiteSpace: 'nowrap'
                       }}>
-                        ${watchlistPrices[symbol].price >= 1000
-                          ? watchlistPrices[symbol].price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                          : watchlistPrices[symbol].price >= 1
-                          ? watchlistPrices[symbol].price.toFixed(2)
-                          : watchlistPrices[symbol].price.toFixed(4)
-                        }
+                        {symbol.replace('/USD', '')}
                       </div>
-                      <div style={{
-                        fontSize: '9px',
-                        color: watchlistPrices[symbol].change >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
-                        fontFamily: 'monospace',
-                        fontWeight: 700
-                      }}>
-                        {watchlistPrices[symbol].change >= 0 ? '▲' : '▼'} {Math.abs(watchlistPrices[symbol].change).toFixed(2)}%
-                      </div>
+
+                      {/* Right side: Price and Change */}
+                      {watchlistPrices[symbol] ? (
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'flex-end',
+                          gap: '2px'
+                        }}>
+                          <div style={{
+                            fontSize: '10px',
+                            color: BLOOMBERG.WHITE,
+                            fontFamily: 'monospace',
+                            fontWeight: 600
+                          }}>
+                            ${watchlistPrices[symbol].price >= 1000
+                              ? watchlistPrices[symbol].price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : watchlistPrices[symbol].price >= 1
+                                ? watchlistPrices[symbol].price.toFixed(2)
+                                : watchlistPrices[symbol].price.toFixed(4)
+                            }
+                          </div>
+                          <div style={{
+                            fontSize: '9px',
+                            color: watchlistPrices[symbol].change >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                            fontFamily: 'monospace',
+                            fontWeight: 700
+                          }}>
+                            {watchlistPrices[symbol].change >= 0 ? '▲' : '▼'} {Math.abs(watchlistPrices[symbol].change).toFixed(2)}%
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{
+                          fontSize: '9px',
+                          color: BLOOMBERG.GRAY,
+                          fontFamily: 'monospace'
+                        }}>
+                          ...
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div style={{
-                      fontSize: '9px',
-                      color: BLOOMBERG.GRAY,
-                      fontFamily: 'monospace'
-                    }}>
-                      ...
-                    </div>
-                  )}
-                </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+
+            {leftSidebarView === 'ai-agents' && (
+              <div style={{ flex: 1, overflow: 'auto' }}>
+                <AIAgentsPanel
+                  selectedSymbol={selectedSymbol}
+                  portfolioData={{
+                    positions: positions.map(p => ({
+                      symbol: p.symbol,
+                      quantity: p.quantity,
+                      entry_price: p.entryPrice,
+                      current_price: p.currentPrice,
+                      value: p.positionValue
+                    })),
+                    total_value: equity
+                  }}
+                />
+              </div>
+            )}
+
+            {leftSidebarView === 'leaderboard' && (
+              <div style={{ flex: 1, overflow: 'hidden' }}>
+                <LeaderboardPanel refreshInterval={10000} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -1306,157 +1339,157 @@ export function TradingTab() {
                 {/* Positions Tab */}
                 {activeBottomTab === 'positions' && <PositionsTable />}
 
-              {/* Orders Tab */}
-              {activeBottomTab === 'orders' && <OrdersTable />}
+                {/* Orders Tab */}
+                {activeBottomTab === 'orders' && <OrdersTable />}
 
-              {/* History Tab (Closed Orders) */}
-              {activeBottomTab === 'history' && <ClosedOrders />}
+                {/* History Tab (Closed Orders) */}
+                {activeBottomTab === 'history' && <ClosedOrders />}
 
-              {/* Trades Tab */}
-              {activeBottomTab === 'trades' && (
-                trades.length === 0 ? (
-                  <div style={{ padding: '40px', textAlign: 'center', color: BLOOMBERG.GRAY, fontSize: '11px' }}>
-                    No trade history
-                  </div>
-                ) : (
-                  <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
-                        <th style={{ padding: '8px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 600 }}>TIME</th>
-                        <th style={{ padding: '8px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 600 }}>SYMBOL</th>
-                        <th style={{ padding: '8px', textAlign: 'center', color: BLOOMBERG.GRAY, fontWeight: 600 }}>SIDE</th>
-                        <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>QTY</th>
-                        <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>PRICE</th>
-                        <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>VALUE</th>
-                        <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>FEE</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {trades.map((trade, idx) => (
-                        <tr key={idx} style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}40` }}>
-                          <td style={{ padding: '8px', color: BLOOMBERG.GRAY, fontSize: '9px' }}>
-                            {new Date(trade.timestamp).toLocaleTimeString()}
-                          </td>
-                          <td style={{ padding: '8px', color: BLOOMBERG.WHITE }}>{trade.symbol}</td>
-                          <td style={{ padding: '8px', textAlign: 'center' }}>
-                            <span style={{
-                              padding: '2px 8px',
-                              backgroundColor: trade.side === 'buy' ? `${BLOOMBERG.GREEN}20` : `${BLOOMBERG.RED}20`,
-                              color: trade.side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
-                              fontSize: '9px',
-                              fontWeight: 700
-                            }}>
-                              {trade.side.toUpperCase()}
-                            </span>
-                          </td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.WHITE }}>
-                            {trade.amount?.toFixed(4) || '0.0000'}
-                          </td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.YELLOW }}>
-                            ${trade.price?.toFixed(2) || '0.00'}
-                          </td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.CYAN }}>
-                            ${trade.cost?.toFixed(2) || '0.00'}
-                          </td>
-                          <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.RED }}>
-                            ${trade.fee?.cost?.toFixed(2) || '0.00'}
-                          </td>
+                {/* Trades Tab */}
+                {activeBottomTab === 'trades' && (
+                  trades.length === 0 ? (
+                    <div style={{ padding: '40px', textAlign: 'center', color: BLOOMBERG.GRAY, fontSize: '11px' }}>
+                      No trade history
+                    </div>
+                  ) : (
+                    <table style={{ width: '100%', fontSize: '10px', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}` }}>
+                          <th style={{ padding: '8px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 600 }}>TIME</th>
+                          <th style={{ padding: '8px', textAlign: 'left', color: BLOOMBERG.GRAY, fontWeight: 600 }}>SYMBOL</th>
+                          <th style={{ padding: '8px', textAlign: 'center', color: BLOOMBERG.GRAY, fontWeight: 600 }}>SIDE</th>
+                          <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>QTY</th>
+                          <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>PRICE</th>
+                          <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>VALUE</th>
+                          <th style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.GRAY, fontWeight: 600 }}>FEE</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )
-              )}
+                      </thead>
+                      <tbody>
+                        {trades.map((trade, idx) => (
+                          <tr key={idx} style={{ borderBottom: `1px solid ${BLOOMBERG.BORDER}40` }}>
+                            <td style={{ padding: '8px', color: BLOOMBERG.GRAY, fontSize: '9px' }}>
+                              {new Date(trade.timestamp).toLocaleTimeString()}
+                            </td>
+                            <td style={{ padding: '8px', color: BLOOMBERG.WHITE }}>{trade.symbol}</td>
+                            <td style={{ padding: '8px', textAlign: 'center' }}>
+                              <span style={{
+                                padding: '2px 8px',
+                                backgroundColor: trade.side === 'buy' ? `${BLOOMBERG.GREEN}20` : `${BLOOMBERG.RED}20`,
+                                color: trade.side === 'buy' ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                                fontSize: '9px',
+                                fontWeight: 700
+                              }}>
+                                {trade.side.toUpperCase()}
+                              </span>
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.WHITE }}>
+                              {trade.amount?.toFixed(4) || '0.0000'}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.YELLOW }}>
+                              ${trade.price?.toFixed(2) || '0.00'}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.CYAN }}>
+                              ${trade.cost?.toFixed(2) || '0.00'}
+                            </td>
+                            <td style={{ padding: '8px', textAlign: 'right', color: BLOOMBERG.RED }}>
+                              ${trade.fee?.cost?.toFixed(2) || '0.00'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )
+                )}
 
-              {/* Stats Tab */}
-              {activeBottomTab === 'stats' && (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 300px',
-                  gap: '12px',
-                  padding: '12px',
-                  height: '100%',
-                  overflow: 'hidden'
-                }}>
-                  {/* Left: Account Statistics */}
-                  <div style={{ height: '100%', overflow: 'auto' }}>
-                    <AccountStats />
-                  </div>
-
-                  {/* Right: Fees & Margin */}
+                {/* Stats Tab */}
+                {activeBottomTab === 'stats' && (
                   <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 300px',
                     gap: '12px',
+                    padding: '12px',
                     height: '100%',
-                    overflow: 'auto'
+                    overflow: 'hidden'
                   }}>
-                    <FeesDisplay />
-                    <MarginPanel />
-                  </div>
-                </div>
-              )}
+                    {/* Left: Account Statistics */}
+                    <div style={{ height: '100%', overflow: 'auto' }}>
+                      <AccountStats />
+                    </div>
 
-              {/* Features Tab - Exchange-Specific Features */}
-              {activeBottomTab === 'features' && (
-                <div style={{ padding: '16px', overflow: 'auto' }}>
-                  {/* Kraken-Specific Features */}
-                  {activeBroker === 'kraken' && (
+                    {/* Right: Fees & Margin */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                      height: '100%',
+                      overflow: 'auto'
+                    }}>
+                      <FeesDisplay />
+                      <MarginPanel />
+                    </div>
+                  </div>
+                )}
+
+                {/* Features Tab - Exchange-Specific Features */}
+                {activeBottomTab === 'features' && (
+                  <div style={{ padding: '16px', overflow: 'auto' }}>
+                    {/* Kraken-Specific Features */}
+                    {activeBroker === 'kraken' && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <StakingPanel />
+                        <FuturesPanel />
+                      </div>
+                    )}
+
+                    {/* HyperLiquid - Already shown in order form area */}
+                    {activeBroker === 'hyperliquid' && (
+                      <div style={{
+                        padding: '40px',
+                        textAlign: 'center',
+                        color: BLOOMBERG.GRAY,
+                        backgroundColor: BLOOMBERG.PANEL_BG,
+                        border: `1px solid ${BLOOMBERG.BORDER}`,
+                        borderRadius: '4px'
+                      }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                          HyperLiquid Features
+                        </div>
+                        <div style={{ fontSize: '11px' }}>
+                          HyperLiquid-specific features (Vault Manager, Leverage Control) are available in the order form panel on the right.
+                        </div>
+                      </div>
+                    )}
+
+                    {/* No exchange-specific features */}
+                    {activeBroker !== 'kraken' && activeBroker !== 'hyperliquid' && (
+                      <div style={{
+                        padding: '40px',
+                        textAlign: 'center',
+                        color: BLOOMBERG.GRAY,
+                        backgroundColor: BLOOMBERG.PANEL_BG,
+                        border: `1px solid ${BLOOMBERG.BORDER}`,
+                        borderRadius: '4px'
+                      }}>
+                        <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
+                          No Exchange-Specific Features
+                        </div>
+                        <div style={{ fontSize: '11px' }}>
+                          The selected exchange does not have additional features available in this panel.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Cross-Exchange Tab - Multi-Exchange Portfolio & Arbitrage */}
+                {activeBottomTab === 'cross-exchange' && (
+                  <div style={{ padding: '16px', overflow: 'auto' }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                      <StakingPanel />
-                      <FuturesPanel />
+                      <PortfolioAggregator />
+                      <ArbitrageDetector />
                     </div>
-                  )}
-
-                  {/* HyperLiquid - Already shown in order form area */}
-                  {activeBroker === 'hyperliquid' && (
-                    <div style={{
-                      padding: '40px',
-                      textAlign: 'center',
-                      color: BLOOMBERG.GRAY,
-                      backgroundColor: BLOOMBERG.PANEL_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
-                      borderRadius: '4px'
-                    }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
-                        HyperLiquid Features
-                      </div>
-                      <div style={{ fontSize: '11px' }}>
-                        HyperLiquid-specific features (Vault Manager, Leverage Control) are available in the order form panel on the right.
-                      </div>
-                    </div>
-                  )}
-
-                  {/* No exchange-specific features */}
-                  {activeBroker !== 'kraken' && activeBroker !== 'hyperliquid' && (
-                    <div style={{
-                      padding: '40px',
-                      textAlign: 'center',
-                      color: BLOOMBERG.GRAY,
-                      backgroundColor: BLOOMBERG.PANEL_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
-                      borderRadius: '4px'
-                    }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px' }}>
-                        No Exchange-Specific Features
-                      </div>
-                      <div style={{ fontSize: '11px' }}>
-                        The selected exchange does not have additional features available in this panel.
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Cross-Exchange Tab - Multi-Exchange Portfolio & Arbitrage */}
-              {activeBottomTab === 'cross-exchange' && (
-                <div style={{ padding: '16px', overflow: 'auto' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <PortfolioAggregator />
-                    <ArbitrageDetector />
                   </div>
-                </div>
-              )}
+                )}
               </div>
             )}
           </div>
@@ -1552,7 +1585,7 @@ export function TradingTab() {
               alignItems: 'center'
             }}>
               <div style={{ display: 'flex', gap: '8px' }}>
-                {['orderbook', 'volume'].map((view) => (
+                {['orderbook', 'volume', 'modelchat'].map((view) => (
                   <button
                     key={view}
                     onClick={() => setRightPanelView(view as any)}
@@ -1583,104 +1616,108 @@ export function TradingTab() {
                   <div style={{ marginBottom: '12px' }}>
                     <div style={{ color: BLOOMBERG.RED, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
                       ASKS ({orderBook.asks.length})
-                </div>
-                <table style={{ width: '100%', fontSize: '10px' }}>
-                  <tbody>
-                    {orderBook.asks.slice(0, 12).reverse().map((ask, idx) => {
-                      const depth = (ask.size / Math.max(...orderBook.asks.map(a => a.size))) * 100;
-                      return (
-                        <tr key={idx} style={{ position: 'relative' }}>
-                          <td style={{
-                            padding: '2px 4px',
-                            color: BLOOMBERG.RED,
-                            position: 'relative',
-                            zIndex: 1
-                          }}>
-                            <div style={{
-                              position: 'absolute',
-                              right: 0,
-                              top: 0,
-                              bottom: 0,
-                              width: `${depth}%`,
-                              backgroundColor: `${BLOOMBERG.RED}15`,
-                              zIndex: -1
-                            }} />
-                            ${ask.price.toFixed(2)}
-                          </td>
-                          <td style={{ padding: '2px 4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>
-                            {ask.size.toFixed(4)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                    </div>
+                    <table style={{ width: '100%', fontSize: '10px' }}>
+                      <tbody>
+                        {orderBook.asks.slice(0, 12).reverse().map((ask, idx) => {
+                          const depth = (ask.size / Math.max(...orderBook.asks.map(a => a.size))) * 100;
+                          return (
+                            <tr key={idx} style={{ position: 'relative' }}>
+                              <td style={{
+                                padding: '2px 4px',
+                                color: BLOOMBERG.RED,
+                                position: 'relative',
+                                zIndex: 1
+                              }}>
+                                <div style={{
+                                  position: 'absolute',
+                                  right: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: `${depth}%`,
+                                  backgroundColor: `${BLOOMBERG.RED}15`,
+                                  zIndex: -1
+                                }} />
+                                ${ask.price.toFixed(2)}
+                              </td>
+                              <td style={{ padding: '2px 4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>
+                                {ask.size.toFixed(4)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-              <div style={{
-                height: '1px',
-                backgroundColor: BLOOMBERG.BORDER,
-                margin: '8px 0',
-                position: 'relative'
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  backgroundColor: BLOOMBERG.PANEL_BG,
-                  padding: '0 8px',
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  color: BLOOMBERG.YELLOW
-                }}>
-                  ${currentPrice.toFixed(2)}
-                </div>
-              </div>
+                  <div style={{
+                    height: '1px',
+                    backgroundColor: BLOOMBERG.BORDER,
+                    margin: '8px 0',
+                    position: 'relative'
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      left: '50%',
+                      top: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      backgroundColor: BLOOMBERG.PANEL_BG,
+                      padding: '0 8px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: BLOOMBERG.YELLOW
+                    }}>
+                      ${currentPrice.toFixed(2)}
+                    </div>
+                  </div>
 
-              <div>
-                <div style={{ color: BLOOMBERG.GREEN, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
-                  BIDS ({orderBook.bids.length})
-                </div>
-                <table style={{ width: '100%', fontSize: '10px' }}>
-                  <tbody>
-                    {orderBook.bids.slice(0, 12).map((bid, idx) => {
-                      const depth = (bid.size / Math.max(...orderBook.bids.map(b => b.size))) * 100;
-                      return (
-                        <tr key={idx} style={{ position: 'relative' }}>
-                          <td style={{
-                            padding: '2px 4px',
-                            color: BLOOMBERG.GREEN,
-                            position: 'relative',
-                            zIndex: 1
-                          }}>
-                            <div style={{
-                              position: 'absolute',
-                              right: 0,
-                              top: 0,
-                              bottom: 0,
-                              width: `${depth}%`,
-                              backgroundColor: `${BLOOMBERG.GREEN}15`,
-                              zIndex: -1
-                            }} />
-                            ${bid.price.toFixed(2)}
-                          </td>
-                          <td style={{ padding: '2px 4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>
-                            {bid.size.toFixed(4)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
+                  <div>
+                    <div style={{ color: BLOOMBERG.GREEN, fontSize: '9px', fontWeight: 700, marginBottom: '4px' }}>
+                      BIDS ({orderBook.bids.length})
+                    </div>
+                    <table style={{ width: '100%', fontSize: '10px' }}>
+                      <tbody>
+                        {orderBook.bids.slice(0, 12).map((bid, idx) => {
+                          const depth = (bid.size / Math.max(...orderBook.bids.map(b => b.size))) * 100;
+                          return (
+                            <tr key={idx} style={{ position: 'relative' }}>
+                              <td style={{
+                                padding: '2px 4px',
+                                color: BLOOMBERG.GREEN,
+                                position: 'relative',
+                                zIndex: 1
+                              }}>
+                                <div style={{
+                                  position: 'absolute',
+                                  right: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: `${depth}%`,
+                                  backgroundColor: `${BLOOMBERG.GREEN}15`,
+                                  zIndex: -1
+                                }} />
+                                ${bid.price.toFixed(2)}
+                              </td>
+                              <td style={{ padding: '2px 4px', textAlign: 'right', color: BLOOMBERG.GRAY }}>
+                                {bid.size.toFixed(4)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
 
-          {rightPanelView === 'volume' && (
-            <VolumeProfile symbol={selectedSymbol} height={550} />
-          )}
-        </div>
+              {rightPanelView === 'volume' && (
+                <VolumeProfile symbol={selectedSymbol} height={550} />
+              )}
+
+              {rightPanelView === 'modelchat' && (
+                <ModelChatPanel refreshInterval={5000} />
+              )}
+            </div>
             <div style={{
               padding: '4px 8px',
               backgroundColor: BLOOMBERG.HEADER_BG,
@@ -1695,25 +1732,28 @@ export function TradingTab() {
       </div>
 
       {/* ========== STATUS BAR ========== */}
-      <TabFooter
-        tabName="TRADING PLATFORM"
-        leftInfo={[
-          { label: 'Professional Trading', color: BLOOMBERG.GRAY },
-        ]}
-        statusInfo={
-          <span>
-            Broker: <span style={{ color: BLOOMBERG.ORANGE }}>{activeBroker?.toUpperCase() || 'NONE'}</span> |
-            Mode: <span style={{ color: tradingMode === 'paper' ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
-              {tradingMode.toUpperCase()}
-            </span> |
-            Status: <span style={{ color: activeAdapter?.isConnected() ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
-              {activeAdapter?.isConnected() ? 'CONNECTED' : 'DISCONNECTED'}
-            </span>
+      <div style={{
+        borderTop: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: BLOOMBERG.HEADER_BG,
+        padding: '4px 12px',
+        fontSize: '9px',
+        color: BLOOMBERG.GRAY,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexShrink: 0
+      }}>
+        <span>Fincept Terminal v3.0.12 | Professional Trading Platform</span>
+        <span>
+          Broker: <span style={{ color: BLOOMBERG.ORANGE }}>{activeBroker?.toUpperCase() || 'NONE'}</span> |
+          Mode: <span style={{ color: tradingMode === 'paper' ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+            {tradingMode.toUpperCase()}
+          </span> |
+          Status: <span style={{ color: activeAdapter?.isConnected() ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+            {activeAdapter?.isConnected() ? 'CONNECTED' : 'DISCONNECTED'}
           </span>
-        }
-        backgroundColor={BLOOMBERG.HEADER_BG}
-        borderColor={BLOOMBERG.BORDER}
-      />
+        </span>
+      </div>
     </div>
   );
 }

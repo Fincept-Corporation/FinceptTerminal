@@ -1,0 +1,56 @@
+{
+    "title": "BỘ LỌC CỔ PHIẾU",
+    "header": {
+        "filters": "BỘ LỌC",
+        "results": "KẾT QUẢ",
+        "saved": "ĐÃ LƯU",
+        "presets": "MẪU"
+    },
+    "filters": {
+        "add": "Thêm bộ lọc",
+        "clear": "Xóa tất cả",
+        "reset": "Đặt lại",
+        "apply": "Áp dụng"
+    },
+    "criteria": {
+        "marketCap": "Vốn hóa",
+        "price": "Giá",
+        "volume": "Khối lượng",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Cổ tức",
+        "beta": "Beta",
+        "sector": "Ngành",
+        "industry": "Lĩnh vực",
+        "country": "Quốc gia",
+        "exchange": "Sàn"
+    },
+    "operators": {
+        "equals": "Bằng",
+        "greater": "Lớn hơn",
+        "less": "Nhỏ hơn",
+        "between": "Giữa",
+        "contains": "Chứa"
+    },
+    "results": {
+        "symbol": "Mã",
+        "name": "Tên",
+        "price": "Giá",
+        "change": "Thay đổi",
+        "volume": "KL",
+        "marketCap": "Vốn hóa",
+        "matches": "kết quả"
+    },
+    "actions": {
+        "save": "Lưu bộ lọc",
+        "load": "Tải bộ lọc",
+        "export": "Xuất",
+        "addToWatchlist": "Thêm vào danh sách"
+    },
+    "messages": {
+        "loading": "Đang lọc...",
+        "noResults": "Không có kết quả",
+        "saved": "Đã lưu",
+        "applied": "Đã áp dụng"
+    }
+}

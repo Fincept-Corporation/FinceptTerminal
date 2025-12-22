@@ -1,0 +1,59 @@
+{
+    "title": "अर्थशास्त्र",
+    "header": {
+        "overview": "अवलोकन",
+        "indicators": "संकेतक",
+        "calendar": "कैलेंडर",
+        "countries": "देश"
+    },
+    "indicators": {
+        "gdp": "जीडीपी",
+        "inflation": "मुद्रास्फीति",
+        "unemployment": "बेरोजगारी",
+        "interestRate": "ब्याज दर",
+        "tradeBalance": "व्यापार संतुलन",
+        "consumerConfidence": "उपभोक्ता विश्वास",
+        "pmi": "पीएमआई",
+        "cpi": "सीपीआई"
+    },
+    "calendar": {
+        "date": "तारीख",
+        "event": "घटना",
+        "actual": "वास्तविक",
+        "forecast": "पूर्वानुमान",
+        "previous": "पिछला",
+        "impact": "प्रभाव"
+    },
+    "impact": {
+        "high": "उच्च",
+        "medium": "मध्यम",
+        "low": "निम्न"
+    },
+    "trends": {
+        "rising": "बढ़ रहा है",
+        "falling": "गिर रहा है",
+        "stable": "स्थिर",
+        "yoy": "साल-दर-साल",
+        "mom": "माह-दर-माह",
+        "qoq": "तिमाही-दर-तिमाही"
+    },
+    "regions": {
+        "global": "वैश्विक",
+        "northAmerica": "उत्तरी अमेरिका",
+        "europe": "यूरोप",
+        "asia": "एशिया प्रशांत",
+        "latam": "लैटिन अमेरिका",
+        "mena": "मेना"
+    },
+    "actions": {
+        "compare": "देशों की तुलना",
+        "export": "डेटा निर्यात",
+        "subscribe": "अपडेट सब्सक्राइब",
+        "filter": "घटनाएं फ़िल्टर"
+    },
+    "messages": {
+        "loading": "आर्थिक डेटा लोड हो रहा है...",
+        "noEvents": "कोई घटना निर्धारित नहीं",
+        "updated": "अंतिम अपडेट"
+    }
+}

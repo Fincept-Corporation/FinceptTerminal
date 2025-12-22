@@ -1,0 +1,52 @@
+{
+    "title": "МАППІНГ ДАНИХ",
+    "header": {
+        "mappings": "МАППІНГИ",
+        "templates": "ШАБЛОНИ",
+        "create": "СТВОРИТИ",
+        "refresh": "ОНОВИТИ"
+    },
+    "views": {
+        "list": "Список маппінгів",
+        "create": "Створити маппінг",
+        "templates": "Шаблони"
+    },
+    "list": {
+        "name": "Назва",
+        "source": "Джерело",
+        "destination": "Призначення",
+        "status": "Статус",
+        "lastRun": "Останній запуск",
+        "actions": "Дії"
+    },
+    "status": {
+        "active": "Активний",
+        "inactive": "Неактивний",
+        "error": "Помилка",
+        "running": "Виконується"
+    },
+    "actions": {
+        "edit": "Редагувати",
+        "delete": "Видалити",
+        "run": "Запустити",
+        "duplicate": "Дублювати",
+        "export": "Експорт"
+    },
+    "create": {
+        "title": "Створити маппінг",
+        "name": "Назва",
+        "description": "Опис",
+        "sourceApi": "API джерела",
+        "destApi": "API призначення",
+        "fieldMapping": "Маппінг полів",
+        "save": "Зберегти",
+        "cancel": "Скасувати"
+    },
+    "messages": {
+        "saved": "Збережено",
+        "deleted": "Видалено",
+        "runSuccess": "Виконано",
+        "error": "Помилка",
+        "noMappings": "Немає маппінгів"
+    }
+}

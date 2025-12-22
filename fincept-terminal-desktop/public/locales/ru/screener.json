@@ -1,0 +1,56 @@
+{
+    "title": "СКРИНЕР АКЦИЙ",
+    "header": {
+        "filters": "ФИЛЬТРЫ",
+        "results": "РЕЗУЛЬТАТЫ",
+        "saved": "СОХРАНЕННЫЕ",
+        "presets": "ПРЕСЕТЫ"
+    },
+    "filters": {
+        "add": "Добавить фильтр",
+        "clear": "Очистить все",
+        "reset": "Сбросить",
+        "apply": "Применить фильтры"
+    },
+    "criteria": {
+        "marketCap": "Капитализация",
+        "price": "Цена",
+        "volume": "Объем",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Дивидендная доходность",
+        "beta": "Бета",
+        "sector": "Сектор",
+        "industry": "Отрасль",
+        "country": "Страна",
+        "exchange": "Биржа"
+    },
+    "operators": {
+        "equals": "Равно",
+        "greater": "Больше",
+        "less": "Меньше",
+        "between": "Между",
+        "contains": "Содержит"
+    },
+    "results": {
+        "symbol": "Тикер",
+        "name": "Название",
+        "price": "Цена",
+        "change": "Изменение",
+        "volume": "Объем",
+        "marketCap": "Капитализация",
+        "matches": "результатов"
+    },
+    "actions": {
+        "save": "Сохранить скрин",
+        "load": "Загрузить скрин",
+        "export": "Экспорт",
+        "addToWatchlist": "В список"
+    },
+    "messages": {
+        "loading": "Скрининг...",
+        "noResults": "Нет результатов",
+        "saved": "Сохранено",
+        "applied": "Фильтры применены"
+    }
+}

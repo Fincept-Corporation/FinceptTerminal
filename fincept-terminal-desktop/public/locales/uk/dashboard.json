@@ -1,30 +1,43 @@
 {
-  "welcome": "Welcome to Fincept Terminal",
-  "tabs": {
-    "dashboard": "Dashboard",
-    "markets": "Markets",
-    "news": "News",
-    "watchlist": "Watchlist",
-    "portfolio": "Portfolio",
-    "analytics": "Analytics",
-    "economics": "Economics",
-    "dbnomics": "DBnomics",
-    "economicCalendar": "Economic Calendar",
-    "geopolitics": "Geopolitics",
-    "maritime": "Maritime",
-    "options": "Options",
-    "equityResearch": "Equity Research",
-    "screener": "Screener",
-    "kraken": "Kraken",
-    "polygon": "Polygon.io",
-    "chat": "Chat",
-    "docs": "Docs",
-    "nodeEditor": "Node Editor",
-    "codeEditor": "Code Editor",
-    "forum": "Forum",
-    "marketplace": "Marketplace",
-    "profile": "Profile",
-    "support": "Support",
-    "settings": "Settings"
+  "header": {
+    "title": "НАЛАШТОВУВАНА ПАНЕЛЬ",
+    "live": "НАЖИВО",
+    "widgets": "ВІДЖЕТИ"
+  },
+  "widgets": {
+    "loading": "Завантаження...",
+    "error": "Помилка",
+    "configure": "Налаштувати",
+    "refresh": "Оновити",
+    "remove": "Видалити",
+    "globalIndices": "ГЛОБАЛЬНІ ІНДЕКСИ - ТОП 12",
+    "forex": "ВАЛЮТНІ ПАРИ",
+    "crypto": "КРИПТОВАЛЮТИ",
+    "commodities": "СИРОВИНА",
+    "bonds": "ОБЛІГАЦІЇ",
+    "etfs": "ETF",
+    "news": "НОВИНИ",
+    "forum": "ФОРУМ",
+    "watchlist": "СПИСОК СПОСТЕРЕЖЕННЯ",
+    "maritime": "МОРСЬКИЙ",
+    "index": "ІНДЕКС",
+    "symbol": "СИМВОЛ",
+    "name": "НАЗВА",
+    "price": "ЦІНА",
+    "change": "ЗМ",
+    "percentChange": "%ЗМ",
+    "high": "МАКС",
+    "low": "МІН",
+    "noIndexData": "Немає даних індексів",
+    "noData": "Немає даних"
+  },
+  "buttons": {
+    "addWidget": "ДОДАТИ ВІДЖЕТ",
+    "saveLayout": "ЗБЕРЕГТИ МАКЕТ",
+    "reset": "СКИНУТИ"
+  },
+  "empty": {
+    "noWidgets": "Немає віджетів на панелі",
+    "addFirst": "ДОДАЙТЕ ПЕРШИЙ ВІДЖЕТ"
   }
 }

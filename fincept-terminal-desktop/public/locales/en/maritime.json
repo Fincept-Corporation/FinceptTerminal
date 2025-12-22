@@ -1,0 +1,66 @@
+{
+    "title": "MARITIME",
+    "header": {
+        "overview": "OVERVIEW",
+        "tracking": "TRACKING",
+        "ports": "PORTS",
+        "routes": "ROUTES"
+    },
+    "vessels": {
+        "type": "Vessel Type",
+        "cargo": "Cargo",
+        "tanker": "Tanker",
+        "container": "Container",
+        "bulk": "Bulk Carrier",
+        "passenger": "Passenger",
+        "status": "Status"
+    },
+    "tracking": {
+        "position": "Position",
+        "speed": "Speed",
+        "heading": "Heading",
+        "destination": "Destination",
+        "eta": "ETA",
+        "lastUpdate": "Last Update"
+    },
+    "ports": {
+        "name": "Port Name",
+        "country": "Country",
+        "arrivals": "Arrivals",
+        "departures": "Departures",
+        "congestion": "Congestion",
+        "waitTime": "Wait Time"
+    },
+    "routes": {
+        "origin": "Origin",
+        "destination": "Destination",
+        "distance": "Distance",
+        "transitTime": "Transit Time",
+        "riskLevel": "Risk Level"
+    },
+    "status": {
+        "anchored": "Anchored",
+        "underway": "Underway",
+        "moored": "Moored",
+        "atPort": "At Port",
+        "drifting": "Drifting"
+    },
+    "metrics": {
+        "dwt": "DWT",
+        "teu": "TEU",
+        "draft": "Draft",
+        "length": "Length",
+        "speed": "Speed (knots)"
+    },
+    "actions": {
+        "track": "Track Vessel",
+        "setAlert": "Set Alert",
+        "export": "Export",
+        "filter": "Filter"
+    },
+    "messages": {
+        "loading": "Loading maritime data...",
+        "noVessels": "No vessels found",
+        "updated": "Last updated"
+    }
+}

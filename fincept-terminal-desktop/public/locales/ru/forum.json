@@ -1,0 +1,61 @@
+{
+    "title": "ФОРУМ FINCEPT",
+    "header": {
+        "trending": "ТРЕНДЫ",
+        "new": "НОВОЕ",
+        "following": "ПОДПИСКИ",
+        "myPosts": "МОИ ПОСТЫ"
+    },
+    "categories": {
+        "all": "Все темы",
+        "stocks": "Акции",
+        "options": "Опционы",
+        "crypto": "Крипто",
+        "forex": "Форекс",
+        "strategies": "Стратегии",
+        "general": "Общее"
+    },
+    "post": {
+        "create": "Создать пост",
+        "reply": "Ответить",
+        "edit": "Редактировать",
+        "delete": "Удалить",
+        "share": "Поделиться",
+        "report": "Пожаловаться",
+        "save": "Сохранить"
+    },
+    "form": {
+        "title": "Заголовок",
+        "content": "Содержание",
+        "tags": "Теги",
+        "category": "Категория",
+        "submit": "Опубликовать",
+        "cancel": "Отмена",
+        "preview": "Предпросмотр"
+    },
+    "engagement": {
+        "likes": "Лайки",
+        "comments": "Комментарии",
+        "views": "Просмотры",
+        "shares": "Репосты"
+    },
+    "user": {
+        "posts": "Посты",
+        "followers": "Подписчики",
+        "following": "Подписки",
+        "reputation": "Репутация",
+        "joined": "Присоединился"
+    },
+    "sort": {
+        "newest": "Новейшие",
+        "popular": "Популярные",
+        "mostCommented": "Обсуждаемые",
+        "topRated": "Лучшие"
+    },
+    "messages": {
+        "loading": "Загрузка...",
+        "noPosts": "Нет постов",
+        "postSuccess": "Опубликовано",
+        "deleteConfirm": "Удалить этот пост?"
+    }
+}

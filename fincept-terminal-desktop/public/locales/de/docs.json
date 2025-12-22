@@ -1,0 +1,26 @@
+{
+    "title": "FINCEPT DOKUMENTATIONS-TERMINAL",
+    "header": {
+        "sections": "ABSCHNITTE",
+        "topics": "THEMEN",
+        "ready": "BEREIT"
+    },
+    "search": {
+        "placeholder": "Dokumentation durchsuchen...",
+        "clear": "LÖSCHEN"
+    },
+    "navigation": "NAVIGATION",
+    "codeExample": "CODE-BEISPIEL",
+    "content": {
+        "title": "FINCEPT TERMINAL DOKUMENTATION",
+        "description": "Wählen Sie ein Thema aus dem Navigationsbereich.",
+        "topicsAvailable": "Themen verfügbar",
+        "selectTopic": "Thema auswählen"
+    },
+    "status": {
+        "version": "Fincept Terminal Dokumentation v3.0",
+        "sections": "Abschnitte",
+        "topics": "Themen",
+        "current": "Aktuell"
+    }
+}

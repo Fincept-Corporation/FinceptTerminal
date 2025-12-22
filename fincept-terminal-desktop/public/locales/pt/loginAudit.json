@@ -1,0 +1,28 @@
+{
+    "title": "PAINEL DE AUDITORIA DE LOGIN",
+    "accessDenied": "Acesso de administrador necessário para ver o Painel de Auditoria",
+    "metrics": {
+        "dauToday": "DAU Hoje",
+        "mau": "MAU",
+        "successRate": "Taxa de Sucesso",
+        "failed24h": "Falhas (24h)",
+        "activeSessions": "Sessões Ativas",
+        "uniqueIps": "IPs Únicos"
+    },
+    "views": {
+        "overview": "VISÃO GERAL",
+        "eventLog": "LOG DE EVENTOS",
+        "alerts": "ALERTAS",
+        "analytics": "ANÁLISES"
+    },
+    "controls": {
+        "autoRefresh": "Atualização automática",
+        "loading": "CARREGANDO...",
+        "refresh": "ATUALIZAR"
+    },
+    "status": {
+        "admin": "Admin",
+        "updating": "ATUALIZANDO",
+        "ready": "PRONTO"
+    }
+}

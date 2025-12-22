@@ -1,0 +1,62 @@
+{
+    "title": "ইক্যুইটি রিসার্চ",
+    "header": {
+        "overview": "সারসংক্ষেপ",
+        "financials": "আর্থিক",
+        "analysis": "বিশ্লেষণ",
+        "ratings": "রেটিং"
+    },
+    "summary": {
+        "marketCap": "মার্কেট ক্যাপ",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "ডিভিডেন্ড",
+        "beta": "বিটা",
+        "52weekHigh": "৫২ সপ্তাহ সর্বোচ্চ",
+        "52weekLow": "৫২ সপ্তাহ সর্বনিম্ন",
+        "avgVolume": "গড় ভলিউম"
+    },
+    "financials": {
+        "revenue": "রাজস্ব",
+        "netIncome": "নিট আয়",
+        "grossMargin": "স্থূল মার্জিন",
+        "operatingMargin": "অপারেটিং মার্জিন",
+        "roe": "ROE",
+        "roa": "ROA",
+        "debtEquity": "ঋণ/ইক্যুইটি",
+        "currentRatio": "বর্তমান অনুপাত"
+    },
+    "analysis": {
+        "buy": "কিনুন",
+        "hold": "ধরে রাখুন",
+        "sell": "বিক্রি করুন",
+        "strongBuy": "জোরালো কেনা",
+        "strongSell": "জোরালো বিক্রি",
+        "targetPrice": "লক্ষ্য মূল্য",
+        "upside": "বৃদ্ধির সম্ভাবনা",
+        "downside": "পতনের ঝুঁকি"
+    },
+    "periods": {
+        "annual": "বার্ষিক",
+        "quarterly": "ত্রৈমাসিক",
+        "ttm": "শেষ ১২ মাস",
+        "ytd": "বছরের শুরু থেকে"
+    },
+    "sections": {
+        "incomeStatement": "আয় বিবরণী",
+        "balanceSheet": "ব্যালেন্স শীট",
+        "cashFlow": "ক্যাশ ফ্লো",
+        "keyMetrics": "মূল মেট্রিক্স"
+    },
+    "actions": {
+        "compare": "তুলনা করুন",
+        "export": "রপ্তানি",
+        "addToWatchlist": "তালিকায় যোগ করুন",
+        "setAlert": "সতর্কতা সেট করুন"
+    },
+    "messages": {
+        "loading": "লোড হচ্ছে...",
+        "noData": "কোনো ডেটা নেই",
+        "updated": "আপডেট হয়েছে"
+    }
+}

@@ -1,0 +1,52 @@
+{
+    "title": "МАППИНГ ДАННЫХ",
+    "header": {
+        "mappings": "МАППИНГИ",
+        "templates": "ШАБЛОНЫ",
+        "create": "СОЗДАТЬ",
+        "refresh": "ОБНОВИТЬ"
+    },
+    "views": {
+        "list": "Список маппингов",
+        "create": "Создать маппинг",
+        "templates": "Шаблоны"
+    },
+    "list": {
+        "name": "Имя",
+        "source": "Источник",
+        "destination": "Назначение",
+        "status": "Статус",
+        "lastRun": "Последний запуск",
+        "actions": "Действия"
+    },
+    "status": {
+        "active": "Активен",
+        "inactive": "Неактивен",
+        "error": "Ошибка",
+        "running": "Выполняется"
+    },
+    "actions": {
+        "edit": "Редактировать",
+        "delete": "Удалить",
+        "run": "Запустить",
+        "duplicate": "Дублировать",
+        "export": "Экспорт"
+    },
+    "create": {
+        "title": "Создать маппинг",
+        "name": "Название",
+        "description": "Описание",
+        "sourceApi": "API источника",
+        "destApi": "API назначения",
+        "fieldMapping": "Маппинг полей",
+        "save": "Сохранить",
+        "cancel": "Отмена"
+    },
+    "messages": {
+        "saved": "Сохранено",
+        "deleted": "Удалено",
+        "runSuccess": "Выполнено",
+        "error": "Ошибка",
+        "noMappings": "Нет маппингов"
+    }
+}

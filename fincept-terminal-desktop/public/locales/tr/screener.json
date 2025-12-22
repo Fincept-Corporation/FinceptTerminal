@@ -1,0 +1,56 @@
+{
+    "title": "HİSSE TARAMA",
+    "header": {
+        "filters": "FİLTRELER",
+        "results": "SONUÇLAR",
+        "saved": "KAYDEDLENLER",
+        "presets": "ÖN AYARLAR"
+    },
+    "filters": {
+        "add": "Filtre Ekle",
+        "clear": "Tümünü Temizle",
+        "reset": "Sıfırla",
+        "apply": "Filtreleri Uygula"
+    },
+    "criteria": {
+        "marketCap": "Piyasa Değeri",
+        "price": "Fiyat",
+        "volume": "Hacim",
+        "pe": "F/K",
+        "eps": "HBK",
+        "dividend": "Temettü Verimi",
+        "beta": "Beta",
+        "sector": "Sektör",
+        "industry": "Endüstri",
+        "country": "Ülke",
+        "exchange": "Borsa"
+    },
+    "operators": {
+        "equals": "Eşit",
+        "greater": "Büyük",
+        "less": "Küçük",
+        "between": "Arasında",
+        "contains": "İçerir"
+    },
+    "results": {
+        "symbol": "Sembol",
+        "name": "Ad",
+        "price": "Fiyat",
+        "change": "Değişim",
+        "volume": "Hacim",
+        "marketCap": "Değer",
+        "matches": "sonuç"
+    },
+    "actions": {
+        "save": "Taramayı Kaydet",
+        "load": "Taramayı Yükle",
+        "export": "Dışa Aktar",
+        "addToWatchlist": "Listeye Ekle"
+    },
+    "messages": {
+        "loading": "Taranıyor...",
+        "noResults": "Sonuç yok",
+        "saved": "Kaydedildi",
+        "applied": "Filtreler uygulandı"
+    }
+}

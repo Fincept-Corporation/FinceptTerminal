@@ -1,0 +1,44 @@
+{
+    "title": "交易",
+    "header": {
+        "orders": "订单",
+        "positions": "持仓",
+        "history": "历史",
+        "settings": "设置",
+        "terminal": "FINCEPT终端",
+        "selectBroker": "选择经纪商",
+        "paper": "模拟",
+        "live": "实盘"
+    },
+    "orderTypes": {
+        "market": "市价",
+        "limit": "限价",
+        "stop": "止损",
+        "stopLimit": "止损限价"
+    },
+    "actions": {
+        "buy": "买入",
+        "sell": "卖出",
+        "cancel": "取消",
+        "close": "平仓",
+        "closeAll": "全部平仓"
+    },
+    "form": {
+        "symbol": "标的",
+        "quantity": "数量",
+        "price": "价格",
+        "stopPrice": "止损价"
+    },
+    "position": {
+        "openPrice": "开仓价",
+        "currentPrice": "现价",
+        "pnl": "盈亏",
+        "margin": "保证金",
+        "size": "仓位"
+    },
+    "messages": {
+        "orderPlaced": "下单成功",
+        "orderFailed": "下单失败",
+        "noPositions": "无持仓"
+    }
+}

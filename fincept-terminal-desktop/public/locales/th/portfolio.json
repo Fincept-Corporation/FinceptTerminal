@@ -1,0 +1,28 @@
+{
+    "title": "ตัวจัดการพอร์ตโฟลิโอ FINCEPT",
+    "header": {
+        "live": "สด",
+        "updating": "กำลังอัปเดต",
+        "newPortfolio": "พอร์ตใหม่",
+        "refresh": "รีเฟรช",
+        "exportCsv": "ส่งออก CSV"
+    },
+    "summary": {
+        "totalValue": "มูลค่ารวม",
+        "dayPnl": "กำไร/ขาดทุนวัน",
+        "totalPnl": "กำไร/ขาดทุนรวม",
+        "positions": "ตำแหน่ง"
+    },
+    "sidebar": {
+        "portfolios": "พอร์ตโฟลิโอ",
+        "loading": "กำลังโหลด...",
+        "noPortfolios": "ยังไม่มีพอร์ตโฟลิโอ"
+    },
+    "modals": {
+        "createNew": "สร้างพอร์ตใหม่",
+        "cancel": "ยกเลิก",
+        "create": "สร้าง",
+        "add": "เพิ่ม",
+        "sell": "ขาย"
+    }
+}

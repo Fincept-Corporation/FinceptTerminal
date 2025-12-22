@@ -1,0 +1,26 @@
+{
+    "title": "PANOU AUDIT AUTENTIFICARE",
+    "accessDenied": "Necesar acces administrator",
+    "metrics": {
+        "dauToday": "DAU Astăzi",
+        "mau": "MAU",
+        "successRate": "Rata de succes",
+        "activeSessions": "Sesiuni active"
+    },
+    "views": {
+        "overview": "PREZENTARE",
+        "eventLog": "JURNAL EVENIMENTE",
+        "alerts": "ALERTE",
+        "analytics": "ANALIZE"
+    },
+    "controls": {
+        "autoRefresh": "Auto-reîmprospătare",
+        "loading": "ÎNCĂRCARE...",
+        "refresh": "REÎMPROSPĂTARE"
+    },
+    "status": {
+        "admin": "Admin",
+        "updating": "ACTUALIZARE",
+        "ready": "GATA"
+    }
+}
