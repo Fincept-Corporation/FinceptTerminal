@@ -511,6 +511,7 @@ function FinxeptTerminalContent() {
 
   const researchMenuItems = [
     { label: 'Equity Research', shortcut: 'F7', action: () => setActiveTab('research') },
+    { label: 'AI Quant Lab', action: () => setActiveTab('ai-quant-lab') },
     { label: 'Geopolitics', action: () => setActiveTab('geopolitics') },
     { label: 'Maritime Intelligence', action: () => setActiveTab('maritime') },
     { label: 'News Feed', shortcut: 'F3', action: () => setActiveTab('news') }
@@ -866,20 +867,6 @@ function FinxeptTerminalContent() {
                   title="Agent Config"
                 >
                   {t('navigation.agents')}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="ai-quant-lab"
-                  style={activeTab === 'ai-quant-lab' ? tabStyles.active : tabStyles.default}
-                  title="AI Quant Lab"
-                >
-                  {t('navigation.aiQuantLab')}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="excel"
-                  style={activeTab === 'excel' ? tabStyles.active : tabStyles.default}
-                  title="Excel Editor"
-                >
-                  {t('navigation.excel')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="settings"
