@@ -42,6 +42,7 @@ import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
 import BacktestingTab from '@/components/tabs/BacktestingTabNew';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import AgentConfigTab from '@/components/tabs/AgentConfigTab';
+import AIQuantLabTab from '@/components/tabs/ai-quant-lab/AIQuantLabTab';
 import ExcelTab from '@/components/tabs/ExcelTab';
 import { useTranslation } from 'react-i18next';
 
@@ -867,6 +868,20 @@ function FinxeptTerminalContent() {
                   {t('navigation.agents')}
                 </TabsTrigger>
                 <TabsTrigger
+                  value="ai-quant-lab"
+                  style={activeTab === 'ai-quant-lab' ? tabStyles.active : tabStyles.default}
+                  title="AI Quant Lab"
+                >
+                  {t('navigation.aiQuantLab')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="excel"
+                  style={activeTab === 'excel' ? tabStyles.active : tabStyles.default}
+                  title="Excel Editor"
+                >
+                  {t('navigation.excel')}
+                </TabsTrigger>
+                <TabsTrigger
                   value="settings"
                   style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
                   title="Settings"
@@ -1042,6 +1057,9 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="agents" className="h-full m-0 p-0">
               <AgentConfigTab />
+            </TabsContent>
+            <TabsContent value="ai-quant-lab" className="h-full m-0 p-0">
+              <AIQuantLabTab />
             </TabsContent>
             <TabsContent value="excel" className="h-full m-0 p-0">
               <ExcelTab />
