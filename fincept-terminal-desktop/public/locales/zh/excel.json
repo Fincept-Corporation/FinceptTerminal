@@ -1,0 +1,26 @@
+{
+    "title": "Excel集成",
+    "header": {
+        "import": "导入",
+        "export": "导出",
+        "preview": "预览"
+    },
+    "toolbar": {
+        "open": "打开文件",
+        "save": "保存",
+        "upload": "上传",
+        "download": "下载",
+        "refresh": "刷新"
+    },
+    "table": {
+        "sheet": "工作表",
+        "rows": "行",
+        "columns": "列"
+    },
+    "messages": {
+        "loading": "加载文件中...",
+        "imported": "文件已导入",
+        "exported": "文件已导出",
+        "error": "处理文件时出错"
+    }
+}

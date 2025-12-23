@@ -1,38 +1,75 @@
 {
     "title": "LISTA DE SEGUIMIENTO",
     "header": {
+        "title": "MONITOR DE WATCHLIST FINCEPT",
         "myWatchlists": "MIS LISTAS",
         "create": "CREAR",
         "import": "IMPORTAR",
-        "export": "EXPORTAR"
+        "export": "EXPORTAR",
+        "updating": "ACTUALIZANDO",
+        "live": "EN VIVO"
+    },
+    "sidebar": {
+        "groups": "GRUPOS DE LISTAS",
+        "new": "NUEVA",
+        "noWatchlists": "Aún no hay listas.",
+        "clickNew": "Haga clic en NUEVA para crear.",
+        "stocks": "acciones",
+        "marketMovers": "LÍDERES DEL MERCADO",
+        "gainer": "AL ALZA",
+        "loser": "A LA BAJA",
+        "volumeLeaders": "LÍDERES DE VOLUMEN"
+    },
+    "emptyState": {
+        "selectWatchlist": "Seleccione una lista o cree una nueva para comenzar"
     },
     "list": {
         "name": "Nombre",
         "symbols": "Símbolos",
         "created": "Creado",
-        "updated": "Última actualización"
+        "updated": "Última Actualización",
+        "actions": "Acciones"
     },
     "actions": {
-        "add": "Añadir Símbolo",
+        "add": "Agregar símbolo",
         "remove": "Eliminar",
         "edit": "Editar",
-        "delete": "Borrar"
+        "delete": "Eliminar",
+        "rename": "Renombrar",
+        "duplicate": "Duplicar"
+    },
+    "form": {
+        "name": "Nombre de lista",
+        "description": "Descripción",
+        "symbols": "Agregar símbolos",
+        "save": "Guardar",
+        "cancel": "Cancelar"
     },
     "symbol": {
         "price": "Precio",
         "change": "Cambio",
         "volume": "Volumen",
-        "marketCap": "Cap. de Mercado"
+        "marketCap": "Capitalización",
+        "alert": "Configurar alerta"
+    },
+    "alerts": {
+        "priceAbove": "Precio por encima",
+        "priceBelow": "Precio por debajo",
+        "changePercent": "Cambio %",
+        "volume": "Alerta de volumen"
     },
     "sort": {
-        "name": "Por Nombre",
-        "price": "Por Precio",
-        "change": "Por Cambio"
+        "name": "Por nombre",
+        "price": "Por precio",
+        "change": "Por cambio",
+        "custom": "Orden personalizado"
     },
     "messages": {
         "created": "Lista creada",
         "deleted": "Lista eliminada",
-        "noWatchlists": "Sin listas de seguimiento",
+        "symbolAdded": "Símbolo agregado",
+        "symbolRemoved": "Símbolo eliminado",
+        "noWatchlists": "Sin listas",
         "loading": "Cargando..."
     }
 }

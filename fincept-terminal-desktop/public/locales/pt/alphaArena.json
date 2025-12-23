@@ -1,0 +1,46 @@
+{
+    "title": "ALPHA ARENA",
+    "header": {
+        "competition": "COMPETIÇÃO",
+        "leaderboard": "CLASSIFICAÇÃO",
+        "decisions": "DECISÕES",
+        "cycles": "CICLOS"
+    },
+    "buttons": {
+        "start": "INICIAR",
+        "stop": "PARAR",
+        "refresh": "ATUALIZAR",
+        "create": "CRIAR COMPETIÇÃO"
+    },
+    "form": {
+        "competitionName": "Nome da competição",
+        "symbol": "Símbolo",
+        "mode": "Modo de trading",
+        "models": "Selecionar modelos",
+        "apiKeys": "Chaves API"
+    },
+    "modes": {
+        "baseline": "Base",
+        "monk": "Monk",
+        "situational": "Situacional",
+        "maxLeverage": "Alavancagem máxima"
+    },
+    "leaderboard": {
+        "rank": "Posição",
+        "model": "Modelo",
+        "pnl": "L&P",
+        "trades": "Operações",
+        "winRate": "Taxa de sucesso"
+    },
+    "status": {
+        "running": "EM EXECUÇÃO",
+        "stopped": "PARADO",
+        "waiting": "AGUARDANDO",
+        "error": "ERRO"
+    },
+    "messages": {
+        "competitionStarted": "Competição iniciada",
+        "competitionStopped": "Competição parada",
+        "noCompetition": "Sem competição ativa"
+    }
+}

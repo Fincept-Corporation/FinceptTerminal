@@ -4,6 +4,11 @@
     "live": "EN DIRECT",
     "widgets": "WIDGETS"
   },
+  "buttons": {
+    "addWidget": "AJOUTER WIDGET",
+    "saveLayout": "SAUVEGARDER",
+    "reset": "RÉINITIALISER"
+  },
   "widgets": {
     "loading": "Chargement...",
     "error": "Erreur",
@@ -28,16 +33,47 @@
     "percentChange": "%VAR",
     "high": "HAUT",
     "low": "BAS",
-    "noIndexData": "Aucune donnée d'indices disponible",
-    "noData": "Aucune donnée disponible"
+    "noIndexData": "Pas de données d'indices",
+    "noForexData": "Pas de données forex",
+    "noCryptoData": "Pas de données crypto",
+    "noCommoditiesData": "Pas de données matières premières",
+    "noNewsData": "Pas d'actualités",
+    "noForumPosts": "Pas de publications",
+    "noStocksInWatchlist": "Pas d'actions dans la liste",
+    "noWatchlistSelected": "Aucune liste sélectionnée",
+    "noData": "Pas de données",
+    "pair": "PAIRE",
+    "rate": "TAUX",
+    "commodity": "MATIÈRE PREMIÈRE",
+    "maritimeIntelligence": "⚓ RENSEIGNEMENT MARITIME",
+    "globe3D": "GLOBE 3D",
+    "vessels": "NAVIRES",
+    "routes": "ROUTES",
+    "vol24h": "VOL 24H",
+    "topTradeCorridors": "CORRIDORS COMMERCIAUX PRINCIPAUX",
+    "ships": "navires"
   },
-  "buttons": {
-    "addWidget": "AJOUTER WIDGET",
-    "saveLayout": "SAUVEGARDER DISPOSITION",
-    "reset": "RÉINITIALISER"
+  "tips": {
+    "drag": "Glissez les widgets pour réorganiser",
+    "resize": "Redimensionnez depuis le coin inférieur droit",
+    "remove": "Supprimez les widgets avec le bouton X",
+    "responsive": "Mise en page responsive - pleine largeur"
+  },
+  "loading": {
+    "title": "Initialisation du Tableau de Bord",
+    "description": "Configuration du cache pour un chargement plus rapide...",
+    "note": "Cela ne prendra qu'un moment au premier lancement"
   },
   "empty": {
-    "noWidgets": "Aucun widget sur le tableau de bord",
+    "noWidgets": "Pas de widgets sur le tableau de bord",
     "addFirst": "AJOUTEZ VOTRE PREMIER WIDGET"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Espace glisser-déposer",
+    "layout": "Mise en page",
+    "custom": "Personnalisé",
+    "empty": "Vide",
+    "active": "ACTIF",
+    "cache": "Cache: ACTIVÉ"
   }
 }

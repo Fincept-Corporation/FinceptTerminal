@@ -13,12 +13,12 @@
     "codeExample": "코드 예제",
     "content": {
         "title": "FINCEPT 터미널 문서",
-        "description": "탐색 패널에서 주제를 선택하세요.",
-        "topicsAvailable": "주제 사용 가능",
-        "selectTopic": "주제를 선택하여 시작"
+        "description": "가이드와 API 참조를 보려면 탐색 패널에서 주제를 선택하세요.",
+        "topicsAvailable": "사용 가능한 주제",
+        "selectTopic": "시작할 주제 선택"
     },
     "status": {
-        "version": "Fincept 터미널 문서 v3.0",
+        "version": "Fincept Terminal Documentation v3.0 | 전체 API 참조 및 가이드",
         "sections": "섹션",
         "topics": "주제",
         "current": "현재"

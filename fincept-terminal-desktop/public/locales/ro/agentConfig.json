@@ -1,0 +1,56 @@
+﻿{
+    "title": "CONFIGURARE AGENT",
+    "header": {
+        "agents": "AGENȚI",
+        "active": "ACTIVI",
+        "total": "TOTAL"
+    },
+    "toolbar": {
+        "refresh": "REÎMPROSPĂTEAZĂ",
+        "save": "SALVEAZĂ",
+        "saveConfig": "Salvează Configurația",
+        "run": "RULEAZĂ",
+        "test": "TESTEAZĂ",
+        "testAgent": "Testează Agentul"
+    },
+    "sidebar": {
+        "availableAgents": "AGENȚI DISPONIBILI",
+        "selectAgent": "Selectați un agent pentru configurare"
+    },
+    "config": {
+        "name": "Nume",
+        "role": "Rol",
+        "goal": "Obiectiv",
+        "description": "Descriere",
+        "llmConfig": "Configurare LLM",
+        "provider": "Furnizor",
+        "model": "Model",
+        "temperature": "Temperatură",
+        "maxTokens": "Token-uri Max",
+        "tools": "Instrumente",
+        "memory": "Activare Memorie",
+        "agenticMemory": "Activare Memorie Agentică",
+        "instructions": "Instrucțiuni",
+        "testQuery": "INTEROGARE TEST",
+        "testQueryPlaceholder": "Introduceți interogarea de test aici..."
+    },
+    "llmProviders": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "ollama": "Ollama",
+        "gemini": "Gemini"
+    },
+    "status": {
+        "ready": "Gata",
+        "running": "Rulează",
+        "error": "Eroare",
+        "configured": "Configurat"
+    },
+    "messages": {
+        "configSaved": "Configurație salvată",
+        "agentTested": "Agent testat cu succes",
+        "testFailed": "Test eșuat",
+        "loadingAgents": "Se încarcă agenții...",
+        "noAgents": "Nu s-au găsit agenți"
+    }
+}

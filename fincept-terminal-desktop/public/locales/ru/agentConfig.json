@@ -1,0 +1,56 @@
+﻿{
+    "title": "КОНФИГУРАЦИЯ АГЕНТА",
+    "header": {
+        "agents": "АГЕНТЫ",
+        "active": "АКТИВНЫЕ",
+        "total": "ВСЕГО"
+    },
+    "toolbar": {
+        "refresh": "ОБНОВИТЬ",
+        "save": "СОХРАНИТЬ",
+        "saveConfig": "Сохранить Конфигурацию",
+        "run": "ЗАПУСТИТЬ",
+        "test": "ТЕСТ",
+        "testAgent": "Тестировать Агента"
+    },
+    "sidebar": {
+        "availableAgents": "ДОСТУПНЫЕ АГЕНТЫ",
+        "selectAgent": "Выберите агента для настройки"
+    },
+    "config": {
+        "name": "Имя",
+        "role": "Роль",
+        "goal": "Цель",
+        "description": "Описание",
+        "llmConfig": "Конфигурация LLM",
+        "provider": "Провайдер",
+        "model": "Модель",
+        "temperature": "Температура",
+        "maxTokens": "Макс Токенов",
+        "tools": "Инструменты",
+        "memory": "Включить Память",
+        "agenticMemory": "Включить Агентную Память",
+        "instructions": "Инструкции",
+        "testQuery": "ТЕСТОВЫЙ ЗАПРОС",
+        "testQueryPlaceholder": "Введите тестовый запрос здесь..."
+    },
+    "llmProviders": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "ollama": "Ollama",
+        "gemini": "Gemini"
+    },
+    "status": {
+        "ready": "Готов",
+        "running": "Выполняется",
+        "error": "Ошибка",
+        "configured": "Настроен"
+    },
+    "messages": {
+        "configSaved": "Конфигурация сохранена",
+        "agentTested": "Агент успешно протестирован",
+        "testFailed": "Тест не пройден",
+        "loadingAgents": "Загрузка агентов...",
+        "noAgents": "Агенты не найдены"
+    }
+}

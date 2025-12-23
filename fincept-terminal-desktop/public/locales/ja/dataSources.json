@@ -3,19 +3,19 @@
     "header": {
         "available": "利用可能なソース",
         "connected": "接続済み",
-        "addNew": "ソース追加",
+        "addNew": "ソースを追加",
         "refresh": "更新"
     },
     "categories": {
         "market": "市場データ",
         "economic": "経済データ",
-        "alternative": "オルタナティブデータ",
-        "news": "ニュース＆センチメント",
+        "alternative": "代替データ",
+        "news": "ニュースとセンチメント",
         "fundamental": "ファンダメンタルデータ"
     },
     "status": {
         "connected": "接続済み",
-        "disconnected": "切断",
+        "disconnected": "切断済み",
         "error": "エラー",
         "pending": "保留中"
     },
@@ -35,8 +35,8 @@
         "cancel": "キャンセル"
     },
     "messages": {
-        "connectionSuccess": "データソースに接続しました",
-        "connectionFailed": "接続に失敗しました",
+        "connectionSuccess": "データソースに正常に接続",
+        "connectionFailed": "データソースへの接続に失敗",
         "noSources": "データソースが設定されていません",
         "loading": "データソースを読み込み中..."
     }

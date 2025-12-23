@@ -39,14 +39,14 @@
         "sourceApi": "ソースAPI",
         "destApi": "宛先API",
         "fieldMapping": "フィールドマッピング",
-        "save": "保存",
+        "save": "マッピング保存",
         "cancel": "キャンセル"
     },
     "messages": {
-        "saved": "保存しました",
-        "deleted": "削除しました",
-        "runSuccess": "実行成功",
-        "error": "エラー発生",
-        "noMappings": "マッピングなし"
+        "saved": "マッピングを正常に保存",
+        "deleted": "マッピングを削除",
+        "runSuccess": "マッピングを正常に実行",
+        "error": "エラーが発生",
+        "noMappings": "マッピングが設定されていません"
     }
 }

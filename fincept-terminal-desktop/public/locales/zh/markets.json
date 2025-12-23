@@ -9,11 +9,11 @@
     "name": "名称",
     "price": "价格",
     "change": "涨跌",
-    "percentChange": "涨跌幅",
+    "percentChange": "涨跌%",
     "high": "最高",
     "low": "最低",
     "loading": "加载中...",
-    "noData": "暂无数据",
+    "noData": "无数据",
     "refresh": "刷新",
     "auto": "自动",
     "on": "开",
@@ -24,5 +24,25 @@
     "connected": "已连接",
     "cache": "缓存",
     "enabled": "已启用",
-    "dataProviderInfo": "数据由 Yahoo Finance API 提供 | 实时更新"
+    "dataProviderInfo": "数据来自 Yahoo Finance API | 实时更新",
+    "header": {
+        "live": "实时",
+        "updating": "更新中",
+        "refresh": "刷新"
+    },
+    "tabs": {
+        "overview": "概览",
+        "stocks": "股票",
+        "indices": "指数",
+        "forex": "外汇",
+        "crypto": "加密货币",
+        "commodities": "商品",
+        "bonds": "债券"
+    },
+    "status": {
+        "marketOpen": "开市",
+        "marketClosed": "闭市",
+        "preMarket": "盘前",
+        "afterHours": "盘后"
+    }
 }

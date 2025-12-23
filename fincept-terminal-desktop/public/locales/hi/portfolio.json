@@ -4,13 +4,13 @@
         "live": "लाइव",
         "updating": "अपडेट हो रहा है",
         "newPortfolio": "नया पोर्टफोलियो",
-        "refresh": "रिफ्रेश",
-        "exportCsv": "CSV निर्यात"
+        "refresh": "रीफ्रेश",
+        "exportCsv": "CSV एक्सपोर्ट"
     },
     "summary": {
         "totalValue": "कुल मूल्य",
-        "dayPnl": "दैनिक P&L",
-        "totalPnl": "कुल P&L",
+        "dayPnl": "दैनिक लाभ/हानि",
+        "totalPnl": "कुल लाभ/हानि",
         "positions": "पोजीशन"
     },
     "views": {
@@ -19,18 +19,45 @@
         "sellAsset": "एसेट बेचें",
         "analytics": "एनालिटिक्स",
         "history": "इतिहास",
-        "performance": "प्रदर्शन"
+        "activeMgmt": "सक्रिय प्रबंधन",
+        "performance": "प्रदर्शन",
+        "rebalance": "रीबैलेंस",
+        "reports": "रिपोर्ट",
+        "alerts": "अलर्ट",
+        "sectors": "सेक्टर",
+        "help": "सहायता"
     },
     "sidebar": {
         "portfolios": "पोर्टफोलियो",
         "loading": "पोर्टफोलियो लोड हो रहे हैं...",
-        "noPortfolios": "अभी कोई पोर्टफोलियो नहीं।"
+        "noPortfolios": "अभी तक कोई पोर्टफोलियो नहीं।",
+        "clickCreate": "बनाने के लिए नया पोर्टफोलियो पर क्लिक करें।",
+        "owner": "मालिक",
+        "currency": "मुद्रा"
+    },
+    "content": {
+        "selectOrCreate": "शुरू करने के लिए पोर्टफोलियो चुनें या नया बनाएं",
+        "loadingData": "पोर्टफोलियो डेटा लोड हो रहा है...",
+        "comingSoon": "जल्द आ रहा है..."
     },
     "modals": {
         "createNew": "नया पोर्टफोलियो बनाएं",
+        "portfolioName": "पोर्टफोलियो नाम",
+        "owner": "मालिक",
+        "currency": "मुद्रा",
         "cancel": "रद्द करें",
         "create": "बनाएं",
+        "addAssetTitle": "पोर्टफोलियो में एसेट जोड़ें",
+        "sellAssetTitle": "एसेट बेचें",
+        "symbol": "सिम्बल",
+        "quantity": "मात्रा",
+        "price": "मूल्य",
         "add": "जोड़ें",
         "sell": "बेचें"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | yfinance इंटीग्रेशन के साथ रियल-टाइम ट्रैकिंग",
+        "lastUpdated": "अंतिम अपडेट",
+        "connected": "कनेक्टेड"
     }
 }

@@ -1,26 +1,58 @@
 {
     "title": "PANOU AUDIT AUTENTIFICARE",
-    "accessDenied": "Necesar acces administrator",
+    "accessDenied": "Acces de administrator necesar",
     "metrics": {
-        "dauToday": "DAU Astăzi",
+        "dauToday": "DAU Azi",
         "mau": "MAU",
         "successRate": "Rata de succes",
-        "activeSessions": "Sesiuni active"
+        "failed24h": "Eșuate (24h)",
+        "activeSessions": "Sesiuni active",
+        "uniqueIps": "IP-uri unice"
     },
     "views": {
         "overview": "PREZENTARE",
-        "eventLog": "JURNAL EVENIMENTE",
+        "eventLog": "LOG EVENIMENTE",
         "alerts": "ALERTE",
-        "analytics": "ANALIZE"
+        "analytics": "ANALIZĂ"
+    },
+    "activity": {
+        "recentLoginActivity": "ACTIVITATE AUTENTIFICARE RECENTĂ",
+        "securityAlerts": "ALERTE SECURITATE",
+        "noActiveAlerts": "Fără alerte active",
+        "loginEventLog": "LOG EVENIMENTE AUTENTIFICARE"
+    },
+    "table": {
+        "time": "Ora",
+        "event": "Eveniment",
+        "user": "Utilizator",
+        "ipAddress": "Adresă IP",
+        "location": "Locație",
+        "device": "Dispozitiv",
+        "details": "Detalii"
+    },
+    "alerts": {
+        "securityIncidents": "ALERTE ȘI INCIDENTE SECURITATE",
+        "noAlerts": "Fără alerte de securitate",
+        "dismiss": "RESPINGE",
+        "blockIp": "BLOCHEAZĂ IP",
+        "investigate": "INVESTIGHEAZĂ"
+    },
+    "analytics": {
+        "loginsByCountry": "AUTENTIFICĂRI PE ȚARĂ (30 zile)",
+        "failureReasons": "MOTIVE EȘEC (24h)",
+        "peakHours": "ORE DE VÂRF (UTC)",
+        "logins": "autentificări"
     },
     "controls": {
         "autoRefresh": "Auto-reîmprospătare",
-        "loading": "ÎNCĂRCARE...",
-        "refresh": "REÎMPROSPĂTARE"
+        "loading": "SE ÎNCARCĂ...",
+        "refresh": "REÎMPROSPĂTEAZĂ"
     },
     "status": {
         "admin": "Admin",
-        "updating": "ACTUALIZARE",
+        "dau": "DAU",
+        "status": "Status",
+        "updating": "SE ACTUALIZEAZĂ",
         "ready": "GATA"
     }
 }

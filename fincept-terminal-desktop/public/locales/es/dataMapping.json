@@ -7,8 +7,8 @@
         "refresh": "ACTUALIZAR"
     },
     "views": {
-        "list": "Lista de mapeos",
-        "create": "Crear mapeo",
+        "list": "Lista de Mapeos",
+        "create": "Crear Mapeo",
         "templates": "Plantillas"
     },
     "list": {
@@ -16,7 +16,7 @@
         "source": "Origen",
         "destination": "Destino",
         "status": "Estado",
-        "lastRun": "Última ejecución",
+        "lastRun": "Última Ejecución",
         "actions": "Acciones"
     },
     "status": {
@@ -33,20 +33,20 @@
         "export": "Exportar"
     },
     "create": {
-        "title": "Crear mapeo",
-        "name": "Nombre del mapeo",
+        "title": "Crear Mapeo de Datos",
+        "name": "Nombre del Mapeo",
         "description": "Descripción",
-        "sourceApi": "API origen",
-        "destApi": "API destino",
-        "fieldMapping": "Mapeo de campos",
-        "save": "Guardar",
+        "sourceApi": "API Origen",
+        "destApi": "API Destino",
+        "fieldMapping": "Mapeo de Campos",
+        "save": "Guardar Mapeo",
         "cancel": "Cancelar"
     },
     "messages": {
-        "saved": "Guardado",
-        "deleted": "Eliminado",
-        "runSuccess": "Ejecutado con éxito",
-        "error": "Error",
-        "noMappings": "Sin mapeos"
+        "saved": "Mapeo guardado exitosamente",
+        "deleted": "Mapeo eliminado",
+        "runSuccess": "Mapeo ejecutado exitosamente",
+        "error": "Ocurrió un error",
+        "noMappings": "No hay mapeos configurados"
     }
 }

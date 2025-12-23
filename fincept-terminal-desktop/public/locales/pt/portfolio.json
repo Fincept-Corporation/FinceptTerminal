@@ -1,9 +1,9 @@
 {
-    "title": "GERENCIADOR DE PORTFÓLIO FINCEPT",
+    "title": "GERENCIADOR DE CARTEIRA FINCEPT",
     "header": {
         "live": "AO VIVO",
         "updating": "ATUALIZANDO",
-        "newPortfolio": "NOVO PORTFÓLIO",
+        "newPortfolio": "NOVA CARTEIRA",
         "refresh": "ATUALIZAR",
         "exportCsv": "EXPORTAR CSV"
     },
@@ -17,19 +17,47 @@
         "positions": "POSIÇÕES",
         "addAsset": "ADICIONAR ATIVO",
         "sellAsset": "VENDER ATIVO",
-        "analytics": "ANÁLISES",
-        "history": "HISTÓRICO"
+        "analytics": "ANÁLISE",
+        "history": "HISTÓRICO",
+        "activeMgmt": "GESTÃO ATIVA",
+        "performance": "DESEMPENHO",
+        "rebalance": "REBALANCEAMENTO",
+        "reports": "RELATÓRIOS",
+        "alerts": "ALERTAS",
+        "sectors": "SETORES",
+        "help": "AJUDA"
     },
     "sidebar": {
-        "portfolios": "PORTFÓLIOS",
-        "loading": "Carregando portfólios...",
-        "noPortfolios": "Nenhum portfólio ainda."
+        "portfolios": "CARTEIRAS",
+        "loading": "Carregando carteiras...",
+        "noPortfolios": "Nenhuma carteira ainda.",
+        "clickCreate": "Clique em NOVA CARTEIRA para criar.",
+        "owner": "Proprietário",
+        "currency": "Moeda"
+    },
+    "content": {
+        "selectOrCreate": "Selecione uma carteira ou crie uma nova para começar",
+        "loadingData": "Carregando dados da carteira...",
+        "comingSoon": "visualização em breve..."
     },
     "modals": {
-        "createNew": "CRIAR NOVO PORTFÓLIO",
+        "createNew": "CRIAR NOVA CARTEIRA",
+        "portfolioName": "NOME DA CARTEIRA",
+        "owner": "PROPRIETÁRIO",
+        "currency": "MOEDA",
         "cancel": "CANCELAR",
         "create": "CRIAR",
+        "addAssetTitle": "ADICIONAR ATIVO À CARTEIRA",
+        "sellAssetTitle": "VENDER ATIVO",
+        "symbol": "SÍMBOLO",
+        "quantity": "QUANTIDADE",
+        "price": "PREÇO",
         "add": "ADICIONAR",
         "sell": "VENDER"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | Rastreamento em tempo real com integração yfinance",
+        "lastUpdated": "Última Atualização",
+        "connected": "CONECTADO"
     }
 }

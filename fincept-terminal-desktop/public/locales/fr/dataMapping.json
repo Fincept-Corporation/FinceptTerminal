@@ -3,12 +3,12 @@
     "header": {
         "mappings": "MAPPAGES",
         "templates": "MODÈLES",
-        "create": "CRÉER",
+        "create": "CRÉER NOUVEAU",
         "refresh": "ACTUALISER"
     },
     "views": {
-        "list": "Liste des mappages",
-        "create": "Créer mappage",
+        "list": "Liste des Mappages",
+        "create": "Créer Mappage",
         "templates": "Modèles"
     },
     "list": {
@@ -16,7 +16,7 @@
         "source": "Source",
         "destination": "Destination",
         "status": "Statut",
-        "lastRun": "Dernière exécution",
+        "lastRun": "Dernière Exécution",
         "actions": "Actions"
     },
     "status": {
@@ -33,20 +33,20 @@
         "export": "Exporter"
     },
     "create": {
-        "title": "Créer mappage",
-        "name": "Nom du mappage",
+        "title": "Créer Mappage de Données",
+        "name": "Nom du Mappage",
         "description": "Description",
-        "sourceApi": "API source",
-        "destApi": "API destination",
-        "fieldMapping": "Mappage de champs",
-        "save": "Enregistrer",
+        "sourceApi": "API Source",
+        "destApi": "API Destination",
+        "fieldMapping": "Mappage de Champs",
+        "save": "Enregistrer Mappage",
         "cancel": "Annuler"
     },
     "messages": {
-        "saved": "Enregistré",
-        "deleted": "Supprimé",
-        "runSuccess": "Exécuté avec succès",
-        "error": "Erreur survenue",
-        "noMappings": "Aucun mappage"
+        "saved": "Mappage enregistré avec succès",
+        "deleted": "Mappage supprimé",
+        "runSuccess": "Mappage exécuté avec succès",
+        "error": "Une erreur est survenue",
+        "noMappings": "Aucun mappage configuré"
     }
 }

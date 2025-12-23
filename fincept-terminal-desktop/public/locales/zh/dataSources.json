@@ -9,7 +9,7 @@
     "categories": {
         "market": "市场数据",
         "economic": "经济数据",
-        "alternative": "另类数据",
+        "alternative": "替代数据",
         "news": "新闻与情绪",
         "fundamental": "基本面数据"
     },
@@ -38,6 +38,6 @@
         "connectionSuccess": "成功连接到数据源",
         "connectionFailed": "连接数据源失败",
         "noSources": "未配置数据源",
-        "loading": "加载数据源中..."
+        "loading": "正在加载数据源..."
     }
 }

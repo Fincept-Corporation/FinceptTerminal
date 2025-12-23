@@ -7,8 +7,8 @@
         "refresh": "ATUALIZAR"
     },
     "views": {
-        "list": "Lista de mapeamentos",
-        "create": "Criar mapeamento",
+        "list": "Lista de Mapeamentos",
+        "create": "Criar Mapeamento",
         "templates": "Modelos"
     },
     "list": {
@@ -16,7 +16,7 @@
         "source": "Origem",
         "destination": "Destino",
         "status": "Status",
-        "lastRun": "Última execução",
+        "lastRun": "Última Execução",
         "actions": "Ações"
     },
     "status": {
@@ -33,20 +33,20 @@
         "export": "Exportar"
     },
     "create": {
-        "title": "Criar mapeamento",
-        "name": "Nome",
+        "title": "Criar Mapeamento de Dados",
+        "name": "Nome do Mapeamento",
         "description": "Descrição",
-        "sourceApi": "API origem",
-        "destApi": "API destino",
-        "fieldMapping": "Mapeamento de campos",
-        "save": "Salvar",
+        "sourceApi": "API Origem",
+        "destApi": "API Destino",
+        "fieldMapping": "Mapeamento de Campos",
+        "save": "Salvar Mapeamento",
         "cancel": "Cancelar"
     },
     "messages": {
-        "saved": "Salvo",
-        "deleted": "Excluído",
-        "runSuccess": "Executado",
-        "error": "Erro",
-        "noMappings": "Sem mapeamentos"
+        "saved": "Mapeamento salvo com sucesso",
+        "deleted": "Mapeamento excluído",
+        "runSuccess": "Mapeamento executado com sucesso",
+        "error": "Ocorreu um erro",
+        "noMappings": "Nenhum mapeamento configurado"
     }
 }

@@ -7,18 +7,33 @@
         "settings": "CONFIGURAÇÕES",
         "terminal": "TERMINAL FINCEPT",
         "selectBroker": "SELECIONAR CORRETORA",
-        "paper": "SIMULAÇÃO",
-        "live": "AO VIVO"
+        "paper": "SIMULADO",
+        "live": "REAL",
+        "watchlist": "LISTA DE INTERESSE",
+        "orderbook": "LIVRO DE OFERTAS",
+        "trades": "NEGOCIAÇÕES",
+        "stats": "ESTATÍSTICAS",
+        "features": "RECURSOS",
+        "crossExchange": "CROSS-EXCHANGE",
+        "chart": "GRÁFICO",
+        "depth": "PROFUNDIDADE",
+        "volume": "VOLUME",
+        "aiAgents": "AGENTES IA",
+        "leaderboard": "CLASSIFICAÇÃO",
+        "modelChat": "CHAT MODELO"
     },
     "orderTypes": {
         "market": "Mercado",
         "limit": "Limite",
-        "stop": "Stop"
+        "stop": "Stop",
+        "stopLimit": "Stop Limite",
+        "trailingStop": "Trailing Stop"
     },
     "actions": {
         "buy": "COMPRAR",
         "sell": "VENDER",
         "cancel": "Cancelar",
+        "modify": "Modificar",
         "close": "Fechar",
         "closeAll": "Fechar Tudo"
     },
@@ -26,18 +41,36 @@
         "symbol": "Símbolo",
         "quantity": "Quantidade",
         "price": "Preço",
-        "stopPrice": "Preço Stop"
+        "stopPrice": "Preço Stop",
+        "takeProfit": "Take Profit",
+        "stopLoss": "Stop Loss",
+        "leverage": "Alavancagem"
     },
     "position": {
         "openPrice": "Preço Abertura",
         "currentPrice": "Preço Atual",
-        "pnl": "L/P",
+        "pnl": "L&P",
+        "pnlPercent": "L&P %",
         "margin": "Margem",
         "size": "Tamanho"
+    },
+    "order": {
+        "pending": "Pendente",
+        "filled": "Executada",
+        "cancelled": "Cancelada",
+        "rejected": "Rejeitada",
+        "partial": "Parcialmente Executada"
+    },
+    "time": {
+        "gtc": "Válida Até Cancelamento",
+        "day": "Ordem do Dia",
+        "ioc": "Imediata ou Cancelar",
+        "fok": "Tudo ou Nada"
     },
     "messages": {
         "orderPlaced": "Ordem executada com sucesso",
         "orderFailed": "Ordem falhou",
+        "confirmOrder": "Confirmar esta ordem?",
         "noPositions": "Sem posições abertas"
     }
 }

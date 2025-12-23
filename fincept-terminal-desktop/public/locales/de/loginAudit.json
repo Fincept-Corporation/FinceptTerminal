@@ -1,19 +1,47 @@
 {
     "title": "LOGIN-AUDIT-DASHBOARD",
-    "accessDenied": "Admin-Zugang erforderlich für Login-Audit-Dashboard",
+    "accessDenied": "Admin-Zugang erforderlich",
     "metrics": {
         "dauToday": "DAU Heute",
         "mau": "MAU",
         "successRate": "Erfolgsrate",
         "failed24h": "Fehlgeschlagen (24h)",
         "activeSessions": "Aktive Sitzungen",
-        "uniqueIps": "Einzigartige IPs"
+        "uniqueIps": "Eindeutige IPs"
     },
     "views": {
         "overview": "ÜBERSICHT",
         "eventLog": "EREIGNISPROTOKOLL",
         "alerts": "WARNUNGEN",
-        "analytics": "ANALYSEN"
+        "analytics": "ANALYTIK"
+    },
+    "activity": {
+        "recentLoginActivity": "AKTUELLE LOGIN-AKTIVITÄT",
+        "securityAlerts": "SICHERHEITSWARNUNGEN",
+        "noActiveAlerts": "Keine aktiven Warnungen",
+        "loginEventLog": "LOGIN-EREIGNISPROTOKOLL"
+    },
+    "table": {
+        "time": "Zeit",
+        "event": "Ereignis",
+        "user": "Benutzer",
+        "ipAddress": "IP-Adresse",
+        "location": "Standort",
+        "device": "Gerät",
+        "details": "Details"
+    },
+    "alerts": {
+        "securityIncidents": "SICHERHEITSWARNUNGEN UND VORFÄLLE",
+        "noAlerts": "Keine Sicherheitswarnungen",
+        "dismiss": "VERWERFEN",
+        "blockIp": "IP BLOCKIEREN",
+        "investigate": "UNTERSUCHEN"
+    },
+    "analytics": {
+        "loginsByCountry": "LOGINS NACH LAND (30 Tage)",
+        "failureReasons": "FEHLERURSACHEN (24h)",
+        "peakHours": "SPITZENZEITEN (UTC)",
+        "logins": "Logins"
     },
     "controls": {
         "autoRefresh": "Auto-Aktualisierung",
@@ -22,7 +50,9 @@
     },
     "status": {
         "admin": "Admin",
-        "updating": "AKTUALISIERE",
+        "dau": "DAU",
+        "status": "Status",
+        "updating": "AKTUALISIERUNG",
         "ready": "BEREIT"
     }
 }

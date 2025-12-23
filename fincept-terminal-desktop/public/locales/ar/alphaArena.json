@@ -1,0 +1,46 @@
+{
+    "title": "ساحة ألفا",
+    "header": {
+        "competition": "المسابقة",
+        "leaderboard": "لوحة الصدارة",
+        "decisions": "القرارات",
+        "cycles": "الدورات"
+    },
+    "buttons": {
+        "start": "بدء",
+        "stop": "إيقاف",
+        "refresh": "تحديث",
+        "create": "إنشاء مسابقة"
+    },
+    "form": {
+        "competitionName": "اسم المسابقة",
+        "symbol": "الرمز",
+        "mode": "وضع التداول",
+        "models": "اختيار النماذج",
+        "apiKeys": "مفاتيح API"
+    },
+    "modes": {
+        "baseline": "أساسي",
+        "monk": "مونك",
+        "situational": "ظرفي",
+        "maxLeverage": "أقصى رافعة"
+    },
+    "leaderboard": {
+        "rank": "الترتيب",
+        "model": "النموذج",
+        "pnl": "الربح/الخسارة",
+        "trades": "الصفقات",
+        "winRate": "نسبة الفوز"
+    },
+    "status": {
+        "running": "قيد التشغيل",
+        "stopped": "متوقف",
+        "waiting": "في الانتظار",
+        "error": "خطأ"
+    },
+    "messages": {
+        "competitionStarted": "بدأت المسابقة",
+        "competitionStopped": "توقفت المسابقة",
+        "noCompetition": "لا توجد مسابقة نشطة"
+    }
+}

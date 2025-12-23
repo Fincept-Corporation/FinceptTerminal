@@ -1,6 +1,9 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
-    "dashboard": "Panou",
+    "dashboard": "Tablou de bord",
     "markets": "Piețe",
     "news": "Știri",
     "portfolio": "Portofoliu",
@@ -9,7 +12,7 @@
     "research": "Cercetare",
     "screener": "Screener",
     "trading": "Trading",
-    "chat": "Chat AI",
+    "chat": "AI Chat",
     "agents": "Agenți",
     "settings": "Setări",
     "profile": "Profil",
@@ -18,28 +21,28 @@
     "logout": "Deconectare"
   },
   "functionKeys": {
-    "f1": "PANOU",
-    "f2": "PIEȚE",
-    "f3": "ȘTIRI",
+    "f1": "TABL",
+    "f2": "PIET",
+    "f3": "STIR",
     "f4": "PORT",
-    "f5": "BKTEST",
-    "f6": "URMĂR",
+    "f5": "BKTS",
+    "f6": "WACH",
     "f7": "CERC",
     "f8": "SCRN",
-    "f9": "TRADE",
+    "f9": "TRDG",
     "f10": "AI",
-    "f11": "PLIN",
-    "f12": "PROFIL"
+    "f11": "FULL",
+    "f12": "PROF"
   },
   "status": {
     "connected": "Conectat",
     "disconnected": "Deconectat",
     "loading": "Se încarcă...",
     "error": "Eroare",
-    "ready": "Pregătit"
+    "ready": "Gata"
   },
   "labels": {
-    "moreTabs": "Mai multe file în meniurile barei de instrumente",
+    "moreTabs": "Mai multe file în meniurile toolbar",
     "enterCommand": "Introduceți comanda",
     "search": "Căutare"
   }

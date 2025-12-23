@@ -1,0 +1,39 @@
+{
+    "title": "Заметки",
+    "header": {
+        "notes": "Заметки",
+        "folders": "Папки",
+        "tags": "Теги"
+    },
+    "toolbar": {
+        "newNote": "Новая заметка",
+        "templates": "Шаблоны",
+        "favorites": "Избранное",
+        "filters": "Фильтры",
+        "archived": "Архив"
+    },
+    "editor": {
+        "title": "Заголовок",
+        "content": "Содержимое",
+        "tags": "Теги"
+    },
+    "buttons": {
+        "save": "Сохранить",
+        "delete": "Удалить",
+        "archive": "В архив",
+        "share": "Поделиться"
+    },
+    "messages": {
+        "saved": "Заметка сохранена",
+        "deleted": "Заметка удалена",
+        "archived": "Заметка в архиве"
+    },
+    "search": {
+        "placeholder": "Поиск заметок..."
+    },
+    "stats": {
+        "total": "Всего",
+        "archived": "В архиве",
+        "favorites": "Избранное"
+    }
+}

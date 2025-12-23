@@ -1,0 +1,39 @@
+{
+    "title": "Notas",
+    "header": {
+        "notes": "Notas",
+        "folders": "Pastas",
+        "tags": "Tags"
+    },
+    "toolbar": {
+        "newNote": "Nova nota",
+        "templates": "Modelos",
+        "favorites": "Favoritos",
+        "filters": "Filtros",
+        "archived": "Arquivadas"
+    },
+    "editor": {
+        "title": "Título",
+        "content": "Conteúdo",
+        "tags": "Tags"
+    },
+    "buttons": {
+        "save": "Salvar",
+        "delete": "Excluir",
+        "archive": "Arquivar",
+        "share": "Compartilhar"
+    },
+    "messages": {
+        "saved": "Nota salva",
+        "deleted": "Nota excluída",
+        "archived": "Nota arquivada"
+    },
+    "search": {
+        "placeholder": "Pesquisar notas..."
+    },
+    "stats": {
+        "total": "Total",
+        "archived": "Arquivadas",
+        "favorites": "Favoritos"
+    }
+}

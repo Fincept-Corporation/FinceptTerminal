@@ -1,27 +1,75 @@
 {
-    "title": "自选股",
+    "title": "自选列表",
     "header": {
-        "myWatchlists": "我的自选股",
+        "title": "FINCEPT 自选监控",
+        "myWatchlists": "我的自选",
         "create": "创建",
         "import": "导入",
-        "export": "导出"
+        "export": "导出",
+        "updating": "更新中",
+        "live": "实时"
+    },
+    "sidebar": {
+        "groups": "自选分组",
+        "new": "新建",
+        "noWatchlists": "暂无自选列表",
+        "clickNew": "点击新建创建列表",
+        "stocks": "股票",
+        "marketMovers": "市场异动",
+        "gainer": "涨幅榜",
+        "loser": "跌幅榜",
+        "volumeLeaders": "成交量榜"
+    },
+    "emptyState": {
+        "selectWatchlist": "选择一个自选列表或创建新列表开始"
+    },
+    "list": {
+        "name": "名称",
+        "symbols": "代码",
+        "created": "创建时间",
+        "updated": "最后更新",
+        "actions": "操作"
     },
     "actions": {
-        "add": "添加标的",
+        "add": "添加代码",
         "remove": "移除",
         "edit": "编辑",
-        "delete": "删除"
+        "delete": "删除",
+        "rename": "重命名",
+        "duplicate": "复制"
+    },
+    "form": {
+        "name": "列表名称",
+        "description": "描述",
+        "symbols": "添加代码",
+        "save": "保存",
+        "cancel": "取消"
     },
     "symbol": {
         "price": "价格",
         "change": "涨跌",
         "volume": "成交量",
-        "marketCap": "市值"
+        "marketCap": "市值",
+        "alert": "设置提醒"
+    },
+    "alerts": {
+        "priceAbove": "价格高于",
+        "priceBelow": "价格低于",
+        "changePercent": "涨跌幅 %",
+        "volume": "成交量提醒"
+    },
+    "sort": {
+        "name": "按名称",
+        "price": "按价格",
+        "change": "按涨跌",
+        "custom": "自定义排序"
     },
     "messages": {
-        "created": "自选股已创建",
-        "deleted": "自选股已删除",
-        "noWatchlists": "暂无自选股",
+        "created": "列表已创建",
+        "deleted": "列表已删除",
+        "symbolAdded": "代码已添加",
+        "symbolRemoved": "代码已移除",
+        "noWatchlists": "暂无自选列表",
         "loading": "加载中..."
     }
 }

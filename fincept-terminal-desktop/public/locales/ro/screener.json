@@ -1,16 +1,44 @@
 {
-    "title": "SCREENER ACȚIUNI",
+    "title": "EXPLORATOR SERII FRED",
     "header": {
+        "title": "EXPLORATOR DATE FRED",
         "filters": "FILTRE",
         "results": "REZULTATE",
-        "saved": "SALVATE",
+        "saved": "ECRANE SALVATE",
         "presets": "PRESETĂRI"
     },
+    "apiKey": {
+        "required": "CHEIE API NECESARĂ",
+        "configure": "Configurați cheia FRED API în Setări → Credențiale pentru a accesa datele economice.",
+        "getKey": "Obțineți cheia API gratuită la",
+        "addToSettings": "Adăugați la Setări → Credențiale → FRED_API_KEY",
+        "saveAndReload": "Salvați și reîncărcați această filă",
+        "tip": "Asigurați-vă că ați configurat cheia FRED API în Setări → Credențiale"
+    },
+    "form": {
+        "seriesIds": "ID-URI SERIE",
+        "startDate": "DATA ÎNCEPUT",
+        "endDate": "DATA SFÂRȘIT",
+        "quickAdd": "ADĂUGARE RAPIDĂ"
+    },
+    "buttons": {
+        "fetch": "PREIA",
+        "loading": "SE ÎNCARCĂ",
+        "browse": "RĂSFOIEȘTE SERII",
+        "done": "GATA"
+    },
+    "chart": {
+        "title": "GRAFIC SERIE TEMPORALĂ",
+        "emptyState": "Introduceți ID-uri serie și faceți clic PREIA pentru a vizualiza datele",
+        "trySuggestion": "Încercați să căutați GDP, UNRATE sau CPIAUCSL",
+        "waiting": "Vă rugăm așteptați în timp ce preluăm datele din FRED...",
+        "errorFetching": "Eroare la Preluarea Datelor"
+    },
     "filters": {
-        "add": "Adaugă filtru",
-        "clear": "Șterge tot",
+        "add": "Adaugă Filtru",
+        "clear": "Șterge Tot",
         "reset": "Resetează",
-        "apply": "Aplică filtre"
+        "apply": "Aplică Filtre"
     },
     "criteria": {
         "marketCap": "Capitalizare",
@@ -18,7 +46,7 @@
         "volume": "Volum",
         "pe": "P/E",
         "eps": "EPS",
-        "dividend": "Randament dividend",
+        "dividend": "Randament Dividend",
         "beta": "Beta",
         "sector": "Sector",
         "industry": "Industrie",
@@ -38,19 +66,19 @@
         "price": "Preț",
         "change": "Schimbare",
         "volume": "Volum",
-        "marketCap": "Cap.",
-        "matches": "rezultate"
+        "marketCap": "Capitalizare",
+        "matches": "rezultate găsite"
     },
     "actions": {
-        "save": "Salvează screen",
-        "load": "Încarcă screen",
-        "export": "Exportă",
-        "addToWatchlist": "Adaugă la listă"
+        "save": "Salvează Ecran",
+        "load": "Încarcă Ecran",
+        "export": "Exportă Rezultate",
+        "addToWatchlist": "Adaugă la Watchlist"
     },
     "messages": {
-        "loading": "Se caută...",
-        "noResults": "Fără rezultate",
-        "saved": "Salvat",
+        "loading": "Filtrare acțiuni...",
+        "noResults": "Nicio acțiune nu corespunde",
+        "saved": "Ecran salvat cu succes",
         "applied": "Filtre aplicate"
     }
 }

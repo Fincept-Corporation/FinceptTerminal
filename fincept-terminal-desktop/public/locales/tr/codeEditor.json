@@ -1,0 +1,57 @@
+{
+    "title": "KOD EDİTÖRÜ",
+    "header": {
+        "files": "DOSYALAR",
+        "terminal": "TERMİNAL",
+        "packages": "PAKETLER"
+    },
+    "toolbar": {
+        "newFile": "YENİ DOSYA",
+        "new": "YENİ",
+        "open": "AÇ",
+        "save": "KAYDET",
+        "run": "ÇALIŞTIR",
+        "running": "ÇALIŞIYOR...",
+        "runAll": "TÜMÜNÜ ÇALIŞTIR",
+        "download": "İNDİR",
+        "upload": "YÜKLE",
+        "clear": "TEMİZLE",
+        "history": "GEÇMİŞ"
+    },
+    "languages": {
+        "finscript": "FinScript",
+        "python": "Python",
+        "javascript": "JavaScript",
+        "json": "JSON"
+    },
+    "tabs": {
+        "editor": "Editör",
+        "notebook": "JUPYTER NOTEBOOK",
+        "finscript": "FINSCRIPT EDİTÖRÜ",
+        "terminal": "Terminal"
+    },
+    "terminal": {
+        "output": "Çıktı",
+        "clear": "Çıktıyı temizle",
+        "running": "Çalışıyor...",
+        "completed": "Tamamlandı"
+    },
+    "packages": {
+        "installed": "Yüklü paketler",
+        "install": "Paket yükle",
+        "uninstall": "Kaldır",
+        "clickToLoad": "Yüklemek için tıkla...",
+        "load": "PAKETLERİ YÜKLE"
+    },
+    "history": {
+        "title": "NOTEBOOK GEÇMİŞİ",
+        "loading": "Geçmiş yükleniyor...",
+        "empty": "Notebook geçmişi yok"
+    },
+    "messages": {
+        "fileSaved": "Dosya kaydedildi",
+        "fileOpened": "Dosya açıldı",
+        "executionComplete": "Çalıştırma tamamlandı",
+        "executionError": "Çalıştırma hatası"
+    }
+}

@@ -1,0 +1,95 @@
+﻿{
+    "title": "BACKTESTING-ENGINE",
+    "header": {
+        "strategy": "STRATEGIE",
+        "results": "ERGEBNISSE",
+        "trades": "TRADES"
+    },
+    "toolbar": {
+        "run": "Backtest Starten",
+        "running": "Läuft...",
+        "stop": "STOPP",
+        "reset": "ZURÜCKSETZEN",
+        "export": "ERGEBNISSE EXPORTIEREN",
+        "refresh": "Aktualisieren"
+    },
+    "config": {
+        "symbolTimeframe": "Symbol & Zeitrahmen",
+        "symbol": "Symbol",
+        "stockTicker": "Aktienticker für Backtest",
+        "startDate": "Startdatum",
+        "endDate": "Enddatum",
+        "initialCapital": "Startkapital",
+        "strategy": "Strategie",
+        "parameters": "Parameter"
+    },
+    "sections": {
+        "strategyConfig": "Strategie-Konfiguration",
+        "strategyType": "Strategietyp",
+        "strategyParams": "Strategie-Parameter",
+        "backtestResults": "Backtest-Ergebnisse",
+        "advancedSettings": "Erweiterte Einstellungen",
+        "advancedNote": "Erweiterte Optionen für Backtesting.py-Anbieter"
+    },
+    "advanced": {
+        "commission": "Provision (dezimal)",
+        "tradeOnClose": "Handel bei Schluss",
+        "hedging": "Hedging",
+        "exclusiveOrders": "Exklusive Orders",
+        "margin": "Margin"
+    },
+    "strategies": {
+        "sma": "SMA Kreuzung",
+        "rsi": "RSI-Strategie",
+        "macd": "MACD-Strategie",
+        "bollinger": "Bollinger-Bänder",
+        "custom": "Eigene Strategie"
+    },
+    "smaParams": {
+        "fastPeriod": "Schnelle Periode",
+        "slowPeriod": "Langsame Periode",
+        "fastNote": "Kurzfristiger gleitender Durchschnitt",
+        "slowNote": "Langfristiger gleitender Durchschnitt"
+    },
+    "results": {
+        "totalReturn": "Gesamtrendite",
+        "sharpeRatio": "Sharpe-Ratio",
+        "maxDrawdown": "Max. Drawdown",
+        "winRate": "Gewinnrate",
+        "totalTrades": "Gesamttrades",
+        "profitFactor": "Gewinnfaktor",
+        "configurePrompt": "Konfigurieren Sie Ihren Backtest und klicken Sie auf 'Backtest Starten' für Ergebnisse"
+    },
+    "trades": {
+        "date": "Datum",
+        "type": "Typ",
+        "price": "Preis",
+        "quantity": "Menge",
+        "pnl": "G/V"
+    },
+    "status": {
+        "ready": "Bereit",
+        "running": "Läuft...",
+        "completed": "Abgeschlossen",
+        "error": "Fehler"
+    },
+    "messages": {
+        "backtestStarted": "Backtest gestartet",
+        "backtestCompleted": "Backtest abgeschlossen",
+        "backtestError": "Backtest fehlgeschlagen"
+    },
+    "visual": {
+        "priceData": "Preisdaten",
+        "maIndicator": "MA-Indikator",
+        "condition": "Bedingung",
+        "buyOrder": "Kauforder",
+        "sellOrder": "Verkaufsorder",
+        "addBlocksPrompt": "Klicken Sie auf Blöcke zum Hinzufügen zur Strategie",
+        "remove": "Entfernen",
+        "generateCode": "Code aus Blöcken generieren"
+    },
+    "template": {
+        "strategyTemplates": "Strategievorlagen",
+        "apply": "Vorlage anwenden"
+    }
+}

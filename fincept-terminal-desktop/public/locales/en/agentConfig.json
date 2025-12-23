@@ -8,8 +8,10 @@
     "toolbar": {
         "refresh": "REFRESH",
         "save": "SAVE",
+        "saveConfig": "Save Configuration",
         "run": "RUN",
-        "test": "TEST"
+        "test": "TEST",
+        "testAgent": "Test Agent"
     },
     "sidebar": {
         "availableAgents": "AVAILABLE AGENTS",
@@ -28,7 +30,9 @@
         "tools": "Tools",
         "memory": "Enable Memory",
         "agenticMemory": "Enable Agentic Memory",
-        "instructions": "Instructions"
+        "instructions": "Instructions",
+        "testQuery": "TEST QUERY",
+        "testQueryPlaceholder": "Enter your test query here..."
     },
     "llmProviders": {
         "openai": "OpenAI",
@@ -45,6 +49,8 @@
     "messages": {
         "configSaved": "Configuration saved",
         "agentTested": "Agent tested successfully",
-        "testFailed": "Test failed"
+        "testFailed": "Test failed",
+        "loadingAgents": "Loading agents...",
+        "noAgents": "No agents found"
     }
 }

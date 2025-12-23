@@ -1,8 +1,13 @@
 {
   "header": {
     "title": "DASHBOARD PERSONALIZZABILE",
-    "live": "IN DIRETTA",
+    "live": "LIVE",
     "widgets": "WIDGET"
+  },
+  "buttons": {
+    "addWidget": "AGGIUNGI WIDGET",
+    "saveLayout": "SALVA LAYOUT",
+    "reset": "RESET"
   },
   "widgets": {
     "loading": "Caricamento...",
@@ -18,7 +23,7 @@
     "etfs": "ETF",
     "news": "NOTIZIE",
     "forum": "FORUM",
-    "watchlist": "LISTA OSSERVAZIONE",
+    "watchlist": "LISTA PREFERITI",
     "maritime": "MARITTIMO",
     "index": "INDICE",
     "symbol": "SIMBOLO",
@@ -26,18 +31,49 @@
     "price": "PREZZO",
     "change": "VAR",
     "percentChange": "%VAR",
-    "high": "MASSIMO",
-    "low": "MINIMO",
+    "high": "ALTO",
+    "low": "BASSO",
     "noIndexData": "Nessun dato indici",
-    "noData": "Nessun dato"
+    "noForexData": "Nessun dato forex",
+    "noCryptoData": "Nessun dato crypto",
+    "noCommoditiesData": "Nessun dato materie prime",
+    "noNewsData": "Nessuna notizia",
+    "noForumPosts": "Nessun post",
+    "noStocksInWatchlist": "Nessun titolo nella lista",
+    "noWatchlistSelected": "Nessuna lista selezionata",
+    "noData": "Nessun dato",
+    "pair": "COPPIA",
+    "rate": "TASSO",
+    "commodity": "MATERIA PRIMA",
+    "maritimeIntelligence": "⚓ INTELLIGENCE MARITTIMA",
+    "globe3D": "GLOBO 3D",
+    "vessels": "NAVI",
+    "routes": "ROTTE",
+    "vol24h": "VOL 24H",
+    "topTradeCorridors": "CORRIDOI COMMERCIALI PRINCIPALI",
+    "ships": "navi"
   },
-  "buttons": {
-    "addWidget": "AGGIUNGI WIDGET",
-    "saveLayout": "SALVA LAYOUT",
-    "reset": "REIMPOSTA"
+  "tips": {
+    "drag": "Trascina i widget per riorganizzare",
+    "resize": "Ridimensiona dall'angolo in basso a destra",
+    "remove": "Rimuovi widget con il pulsante X",
+    "responsive": "Layout responsivo - larghezza completa"
+  },
+  "loading": {
+    "title": "Inizializzazione Dashboard",
+    "description": "Configurazione cache database per caricamento più veloce...",
+    "note": "Questo richiederà solo un momento al primo avvio"
   },
   "empty": {
-    "noWidgets": "Nessun widget sulla dashboard",
+    "noWidgets": "Nessun widget nella dashboard",
     "addFirst": "AGGIUNGI IL TUO PRIMO WIDGET"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Spazio di lavoro drag & drop",
+    "layout": "Layout",
+    "custom": "Personalizzato",
+    "empty": "Vuoto",
+    "active": "ATTIVO",
+    "cache": "Cache: ABILITATA"
   }
 }

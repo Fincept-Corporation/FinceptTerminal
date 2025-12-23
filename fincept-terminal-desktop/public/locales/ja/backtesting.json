@@ -1,0 +1,95 @@
+﻿{
+    "title": "バックテストエンジン",
+    "header": {
+        "strategy": "戦略",
+        "results": "結果",
+        "trades": "取引"
+    },
+    "toolbar": {
+        "run": "バックテスト実行",
+        "running": "実行中...",
+        "stop": "停止",
+        "reset": "リセット",
+        "export": "結果をエクスポート",
+        "refresh": "更新"
+    },
+    "config": {
+        "symbolTimeframe": "銘柄と時間枠",
+        "symbol": "銘柄",
+        "stockTicker": "バックテスト用銘柄コード",
+        "startDate": "開始日",
+        "endDate": "終了日",
+        "initialCapital": "初期資金",
+        "strategy": "戦略",
+        "parameters": "パラメータ"
+    },
+    "sections": {
+        "strategyConfig": "戦略設定",
+        "strategyType": "戦略タイプ",
+        "strategyParams": "戦略パラメータ",
+        "backtestResults": "バックテスト結果",
+        "advancedSettings": "詳細設定",
+        "advancedNote": "Backtesting.pyプロバイダの詳細オプション"
+    },
+    "advanced": {
+        "commission": "手数料（小数）",
+        "tradeOnClose": "終値で取引",
+        "hedging": "ヘッジ",
+        "exclusiveOrders": "排他的注文",
+        "margin": "証拠金"
+    },
+    "strategies": {
+        "sma": "SMAクロス",
+        "rsi": "RSI戦略",
+        "macd": "MACD戦略",
+        "bollinger": "ボリンジャーバンド",
+        "custom": "カスタム戦略"
+    },
+    "smaParams": {
+        "fastPeriod": "短期期間",
+        "slowPeriod": "長期期間",
+        "fastNote": "短期移動平均線",
+        "slowNote": "長期移動平均線"
+    },
+    "results": {
+        "totalReturn": "総リターン",
+        "sharpeRatio": "シャープレシオ",
+        "maxDrawdown": "最大ドローダウン",
+        "winRate": "勝率",
+        "totalTrades": "総取引数",
+        "profitFactor": "プロフィットファクター",
+        "configurePrompt": "バックテストを設定し、「バックテスト実行」をクリックして結果を確認"
+    },
+    "trades": {
+        "date": "日付",
+        "type": "種類",
+        "price": "価格",
+        "quantity": "数量",
+        "pnl": "損益"
+    },
+    "status": {
+        "ready": "準備完了",
+        "running": "実行中...",
+        "completed": "完了",
+        "error": "エラー"
+    },
+    "messages": {
+        "backtestStarted": "バックテスト開始",
+        "backtestCompleted": "バックテスト完了",
+        "backtestError": "バックテスト失敗"
+    },
+    "visual": {
+        "priceData": "価格データ",
+        "maIndicator": "MA指標",
+        "condition": "条件",
+        "buyOrder": "買い注文",
+        "sellOrder": "売り注文",
+        "addBlocksPrompt": "ブロックをクリックして戦略に追加",
+        "remove": "削除",
+        "generateCode": "ブロックからコード生成"
+    },
+    "template": {
+        "strategyTemplates": "戦略テンプレート",
+        "apply": "テンプレート適用"
+    }
+}

@@ -7,11 +7,11 @@
         "refresh": "ACTUALISER"
     },
     "categories": {
-        "market": "Données de marché",
-        "economic": "Données économiques",
-        "alternative": "Données alternatives",
-        "news": "Actualités & Sentiment",
-        "fundamental": "Données fondamentales"
+        "market": "Données de Marché",
+        "economic": "Données Économiques",
+        "alternative": "Données Alternatives",
+        "news": "Actualités et Sentiment",
+        "fundamental": "Données Fondamentales"
     },
     "status": {
         "connected": "Connecté",
@@ -23,20 +23,20 @@
         "connect": "Connecter",
         "disconnect": "Déconnecter",
         "configure": "Configurer",
-        "test": "Tester connexion",
+        "test": "Tester Connexion",
         "delete": "Supprimer"
     },
     "form": {
         "apiKey": "Clé API",
-        "endpoint": "URL du point de terminaison",
+        "endpoint": "URL Endpoint",
         "username": "Nom d'utilisateur",
         "password": "Mot de passe",
         "save": "Enregistrer",
         "cancel": "Annuler"
     },
     "messages": {
-        "connectionSuccess": "Connexion réussie à la source de données",
-        "connectionFailed": "Échec de la connexion",
+        "connectionSuccess": "Connecté avec succès à la source de données",
+        "connectionFailed": "Échec de connexion à la source de données",
         "noSources": "Aucune source de données configurée",
         "loading": "Chargement des sources de données..."
     }

@@ -1,0 +1,42 @@
+{
+    "title": "支持工单",
+    "header": {
+        "tickets": "工单",
+        "new": "新建工单",
+        "status": "状态"
+    },
+    "form": {
+        "subject": "主题",
+        "description": "描述",
+        "priority": "优先级",
+        "category": "分类"
+    },
+    "priority": {
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "urgent": "紧急"
+    },
+    "status": {
+        "open": "开放",
+        "inProgress": "处理中",
+        "resolved": "已解决",
+        "closed": "已关闭"
+    },
+    "buttons": {
+        "submit": "提交",
+        "cancel": "取消",
+        "reply": "回复",
+        "close": "关闭"
+    },
+    "messages": {
+        "created": "工单已创建",
+        "updated": "工单已更新",
+        "closed": "工单已关闭",
+        "noTickets": "无工单"
+    },
+    "auth": {
+        "loginRequired": "请登录以创建工单",
+        "demoMode": "演示模式"
+    }
+}

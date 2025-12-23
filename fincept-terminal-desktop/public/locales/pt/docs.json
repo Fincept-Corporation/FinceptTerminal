@@ -12,13 +12,13 @@
     "navigation": "NAVEGAÇÃO",
     "codeExample": "EXEMPLO DE CÓDIGO",
     "content": {
-        "title": "DOCUMENTAÇÃO TERMINAL FINCEPT",
-        "description": "Selecione um tópico do painel de navegação.",
+        "title": "DOCUMENTAÇÃO DO TERMINAL FINCEPT",
+        "description": "Selecione um tópico do painel de navegação para ver guias e referência de API.",
         "topicsAvailable": "tópicos disponíveis",
-        "selectTopic": "Selecione um tópico"
+        "selectTopic": "Selecione um tópico para começar"
     },
     "status": {
-        "version": "Documentação Terminal Fincept v3.0",
+        "version": "Fincept Terminal Documentation v3.0 | Referência API Completa e Guias",
         "sections": "Seções",
         "topics": "Tópicos",
         "current": "Atual"

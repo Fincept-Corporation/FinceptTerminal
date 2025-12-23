@@ -7,8 +7,8 @@
         "refresh": "AGGIORNA"
     },
     "views": {
-        "list": "Lista mappature",
-        "create": "Crea mappatura",
+        "list": "Lista Mappature",
+        "create": "Crea Mappatura",
         "templates": "Modelli"
     },
     "list": {
@@ -16,7 +16,7 @@
         "source": "Origine",
         "destination": "Destinazione",
         "status": "Stato",
-        "lastRun": "Ultima esecuzione",
+        "lastRun": "Ultima Esecuzione",
         "actions": "Azioni"
     },
     "status": {
@@ -33,20 +33,20 @@
         "export": "Esporta"
     },
     "create": {
-        "title": "Crea mappatura",
-        "name": "Nome",
+        "title": "Crea Mappatura Dati",
+        "name": "Nome Mappatura",
         "description": "Descrizione",
-        "sourceApi": "API origine",
-        "destApi": "API destinazione",
-        "fieldMapping": "Mappatura campi",
-        "save": "Salva",
+        "sourceApi": "API Origine",
+        "destApi": "API Destinazione",
+        "fieldMapping": "Mappatura Campi",
+        "save": "Salva Mappatura",
         "cancel": "Annulla"
     },
     "messages": {
-        "saved": "Salvato",
-        "deleted": "Eliminato",
-        "runSuccess": "Eseguito",
-        "error": "Errore",
-        "noMappings": "Nessuna mappatura"
+        "saved": "Mappatura salvata con successo",
+        "deleted": "Mappatura eliminata",
+        "runSuccess": "Mappatura eseguita con successo",
+        "error": "Si è verificato un errore",
+        "noMappings": "Nessuna mappatura configurata"
     }
 }

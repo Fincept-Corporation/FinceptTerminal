@@ -1,0 +1,30 @@
+{
+    "title": "Date DBnomics",
+    "header": {
+        "search": "Caută",
+        "providers": "Furnizori",
+        "datasets": "Seturi de date"
+    },
+    "form": {
+        "provider": "Furnizor",
+        "dataset": "Set de date",
+        "series": "Serie",
+        "startDate": "Data început",
+        "endDate": "Data sfârșit"
+    },
+    "buttons": {
+        "fetch": "Preia",
+        "search": "Caută",
+        "export": "Exportă",
+        "clear": "Curăță"
+    },
+    "chart": {
+        "title": "Vizualizare date",
+        "emptyState": "Selectează o serie pentru a vedea datele"
+    },
+    "messages": {
+        "loading": "Se încarcă datele...",
+        "noData": "Nu s-au găsit date",
+        "error": "Eroare la preluare"
+    }
+}

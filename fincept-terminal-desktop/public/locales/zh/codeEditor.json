@@ -1,0 +1,57 @@
+{
+    "title": "代码编辑器",
+    "header": {
+        "files": "文件",
+        "terminal": "终端",
+        "packages": "包"
+    },
+    "toolbar": {
+        "newFile": "新建文件",
+        "new": "新建",
+        "open": "打开",
+        "save": "保存",
+        "run": "运行代码",
+        "running": "运行中...",
+        "runAll": "全部运行",
+        "download": "下载",
+        "upload": "上传",
+        "clear": "清除",
+        "history": "历史"
+    },
+    "languages": {
+        "finscript": "FinScript",
+        "python": "Python",
+        "javascript": "JavaScript",
+        "json": "JSON"
+    },
+    "tabs": {
+        "editor": "编辑器",
+        "notebook": "JUPYTER笔记本",
+        "finscript": "FINSCRIPT编辑器",
+        "terminal": "终端"
+    },
+    "terminal": {
+        "output": "输出",
+        "clear": "清除输出",
+        "running": "运行中...",
+        "completed": "已完成"
+    },
+    "packages": {
+        "installed": "已安装的包",
+        "install": "安装包",
+        "uninstall": "卸载",
+        "clickToLoad": "点击加载包...",
+        "load": "加载包"
+    },
+    "history": {
+        "title": "笔记本历史",
+        "loading": "加载历史中...",
+        "empty": "暂无笔记本历史"
+    },
+    "messages": {
+        "fileSaved": "文件已保存",
+        "fileOpened": "文件已打开",
+        "executionComplete": "执行完成",
+        "executionError": "执行错误"
+    }
+}

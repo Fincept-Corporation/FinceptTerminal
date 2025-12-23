@@ -1,0 +1,46 @@
+{
+    "title": "अल्फा एरीना",
+    "header": {
+        "competition": "प्रतियोगिता",
+        "leaderboard": "लीडरबोर्ड",
+        "decisions": "निर्णय",
+        "cycles": "साइकिल"
+    },
+    "buttons": {
+        "start": "शुरू करें",
+        "stop": "रोकें",
+        "refresh": "रिफ्रेश",
+        "create": "प्रतियोगिता बनाएं"
+    },
+    "form": {
+        "competitionName": "प्रतियोगिता का नाम",
+        "symbol": "सिंबल",
+        "mode": "ट्रेडिंग मोड",
+        "models": "मॉडल चुनें",
+        "apiKeys": "API कुंजी"
+    },
+    "modes": {
+        "baseline": "बेसलाइन",
+        "monk": "मोंक",
+        "situational": "परिस्थितिजन्य",
+        "maxLeverage": "अधिकतम लीवरेज"
+    },
+    "leaderboard": {
+        "rank": "रैंक",
+        "model": "मॉडल",
+        "pnl": "लाभ/हानि",
+        "trades": "ट्रेड",
+        "winRate": "जीत दर"
+    },
+    "status": {
+        "running": "चल रहा है",
+        "stopped": "रोका गया",
+        "waiting": "प्रतीक्षा में",
+        "error": "त्रुटि"
+    },
+    "messages": {
+        "competitionStarted": "प्रतियोगिता शुरू हो गई",
+        "competitionStopped": "प्रतियोगिता बंद हो गई",
+        "noCompetition": "कोई सक्रिय प्रतियोगिता नहीं"
+    }
+}

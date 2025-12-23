@@ -1,30 +1,77 @@
 {
-    "title": "ȘTIRI PROFESIONALE FINCEPT TERMINAL",
+    "title": "ȘTIRI PROFESIONALE TERMINAL FINCEPT",
     "header": {
-        "liveFeed": "ÎN DIRECT",
-        "live": "ÎN DIRECT",
-        "refresh": "REÎMPROSPĂTARE",
-        "updating": "ACTUALIZARE...",
+        "liveFeed": "FEED LIVE",
+        "live": "LIVE",
+        "refresh": "REÎMPROSPĂTEAZĂ",
+        "updating": "SE ACTUALIZEAZĂ...",
         "alerts": "ALERTE",
         "sources": "SURSE",
-        "status": "STARE",
+        "topics": "SUBIECTE",
+        "status": "STATUS",
         "demoMode": "MOD DEMO",
         "articles": "ARTICOLE",
         "activeSources": "SURSE ACTIVE"
     },
+    "categories": {
+        "all": "TOATE",
+        "markets": "PIEȚE",
+        "stocks": "Acțiuni",
+        "forex": "Forex",
+        "crypto": "CRIPTO",
+        "commodities": "Mărfuri",
+        "economy": "Economie",
+        "economic": "ECON",
+        "politics": "Politică",
+        "earnings": "CÂȘTIGURI",
+        "tech": "TECH",
+        "energy": "ENERGIE",
+        "banking": "BĂNCI",
+        "geopolitics": "GEOPO",
+        "flash": "FLASH",
+        "urgent": "URGENT"
+    },
+    "feedLabels": {
+        "primary": "FEED PRINCIPAL DE ȘTIRI",
+        "secondary": "FEED SECUNDAR DE ȘTIRI",
+        "refresh": "REÎMPROSPĂTEAZĂ"
+    },
+    "filters": {
+        "source": "Sursă",
+        "region": "Regiune",
+        "timeframe": "Timp"
+    },
+    "timeframes": {
+        "1h": "1 Oră",
+        "24h": "24 Ore",
+        "1w": "1 Săptămână",
+        "1m": "1 Lună"
+    },
+    "article": {
+        "readMore": "Citește Mai Mult",
+        "source": "Sursă",
+        "published": "Publicat",
+        "relatedStocks": "Acțiuni Conexe",
+        "sentiment": "Sentiment",
+        "impact": "Impact"
+    },
     "sentiment": {
-        "bullish": "BULLISH",
-        "bearish": "BEARISH",
-        "neutral": "NEUTRU"
+        "bullish": "OPTIMIST",
+        "bearish": "PESIMIST",
+        "neutral": "NEUTRU",
+        "positive": "Pozitiv",
+        "negative": "Negativ"
     },
     "autoRefresh": {
-        "title": "INTERVAL AUTO-REÎMPROSPĂTARE",
+        "title": "INTERVAL DE REÎMPROSPĂTARE AUTOMATĂ",
         "minute": "minut",
         "minutes": "minute"
     },
     "messages": {
-        "loading": "Încărcare știri...",
-        "loadingFeeds": "Încărcare feed-uri...",
-        "breaking": "URGENT"
+        "loading": "Se încarcă știrile...",
+        "loadingFeeds": "Se încarcă fluxurile...",
+        "error": "Eroare la încărcarea știrilor",
+        "noNews": "Nu sunt disponibile știri",
+        "breaking": "BREAKING"
     }
 }

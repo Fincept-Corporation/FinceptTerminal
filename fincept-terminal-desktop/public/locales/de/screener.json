@@ -1,23 +1,51 @@
 {
-    "title": "AKTIEN-SCREENER",
+    "title": "FRED-SERIEN-BROWSER",
     "header": {
+        "title": "FRED-DATEN-EXPLORER",
         "filters": "FILTER",
         "results": "ERGEBNISSE",
-        "saved": "GESPEICHERT",
-        "presets": "VORLAGEN"
+        "saved": "GESPEICHERTE BILDSCHIRME",
+        "presets": "VOREINSTELLUNGEN"
+    },
+    "apiKey": {
+        "required": "API-SCHLÜSSEL ERFORDERLICH",
+        "configure": "Konfigurieren Sie Ihren FRED-API-Schlüssel in Einstellungen → Anmeldedaten für den Zugriff auf Wirtschaftsdaten.",
+        "getKey": "Holen Sie sich einen kostenlosen API-Schlüssel auf",
+        "addToSettings": "Hinzufügen zu Einstellungen → Anmeldedaten → FRED_API_KEY",
+        "saveAndReload": "Speichern und diesen Tab neu laden",
+        "tip": "Stellen Sie sicher, dass Sie Ihren FRED-API-Schlüssel in Einstellungen → Anmeldedaten konfiguriert haben"
+    },
+    "form": {
+        "seriesIds": "SERIEN-IDs",
+        "startDate": "STARTDATUM",
+        "endDate": "ENDDATUM",
+        "quickAdd": "SCHNELL HINZUFÜGEN"
+    },
+    "buttons": {
+        "fetch": "ABRUFEN",
+        "loading": "LÄDT",
+        "browse": "SERIEN DURCHSUCHEN",
+        "done": "FERTIG"
+    },
+    "chart": {
+        "title": "ZEITREIHENDIAGRAMM",
+        "emptyState": "Geben Sie Serien-IDs ein und klicken Sie auf ABRUFEN zur Datenvisualisierung",
+        "trySuggestion": "Suchen Sie nach GDP, UNRATE oder CPIAUCSL",
+        "waiting": "Bitte warten Sie, während wir Daten von FRED abrufen...",
+        "errorFetching": "Fehler beim Abrufen der Daten"
     },
     "filters": {
-        "add": "Filter hinzufügen",
-        "clear": "Alle löschen",
+        "add": "Filter Hinzufügen",
+        "clear": "Alle Löschen",
         "reset": "Zurücksetzen",
-        "apply": "Filter anwenden"
+        "apply": "Filter Anwenden"
     },
     "criteria": {
         "marketCap": "Marktkapitalisierung",
         "price": "Preis",
         "volume": "Volumen",
         "pe": "KGV",
-        "eps": "Gewinn/Aktie",
+        "eps": "EPS",
         "dividend": "Dividendenrendite",
         "beta": "Beta",
         "sector": "Sektor",
@@ -38,19 +66,19 @@
         "price": "Preis",
         "change": "Änderung",
         "volume": "Volumen",
-        "marketCap": "MarktKap.",
-        "matches": "Treffer"
+        "marketCap": "Marktkapitalisierung",
+        "matches": "Ergebnisse gefunden"
     },
     "actions": {
-        "save": "Screen speichern",
-        "load": "Screen laden",
-        "export": "Exportieren",
-        "addToWatchlist": "Zur Liste hinzufügen"
+        "save": "Bildschirm Speichern",
+        "load": "Bildschirm Laden",
+        "export": "Ergebnisse Exportieren",
+        "addToWatchlist": "Zur Beobachtungsliste Hinzufügen"
     },
     "messages": {
-        "loading": "Screene Aktien...",
-        "noResults": "Keine Treffer",
-        "saved": "Gespeichert",
+        "loading": "Aktien werden gefiltert...",
+        "noResults": "Keine Aktien entsprechen den Kriterien",
+        "saved": "Bildschirm erfolgreich gespeichert",
         "applied": "Filter angewendet"
     }
 }

@@ -3,41 +3,74 @@
     "header": {
         "orders": "주문",
         "positions": "포지션",
-        "history": "거래내역",
+        "history": "이력",
         "settings": "설정",
         "terminal": "FINCEPT 터미널",
         "selectBroker": "브로커 선택",
-        "paper": "모의",
-        "live": "실거래"
+        "paper": "페이퍼",
+        "live": "라이브",
+        "watchlist": "관심목록",
+        "orderbook": "호가창",
+        "trades": "거래",
+        "stats": "통계",
+        "features": "기능",
+        "crossExchange": "교차거래소",
+        "chart": "차트",
+        "depth": "호가깊이",
+        "volume": "거래량",
+        "aiAgents": "AI 에이전트",
+        "leaderboard": "리더보드",
+        "modelChat": "모델 채팅"
     },
     "orderTypes": {
         "market": "시장가",
         "limit": "지정가",
-        "stop": "스탑"
+        "stop": "스탑",
+        "stopLimit": "스탑 지정가",
+        "trailingStop": "트레일링 스탑"
     },
     "actions": {
         "buy": "매수",
         "sell": "매도",
         "cancel": "취소",
+        "modify": "수정",
         "close": "청산",
         "closeAll": "전체 청산"
     },
     "form": {
-        "symbol": "종목",
+        "symbol": "심볼",
         "quantity": "수량",
         "price": "가격",
-        "stopPrice": "스탑 가격"
+        "stopPrice": "스탑 가격",
+        "takeProfit": "익절",
+        "stopLoss": "손절",
+        "leverage": "레버리지"
     },
     "position": {
         "openPrice": "진입가",
         "currentPrice": "현재가",
         "pnl": "손익",
+        "pnlPercent": "손익 %",
         "margin": "증거금",
-        "size": "수량"
+        "size": "사이즈"
+    },
+    "order": {
+        "pending": "대기중",
+        "filled": "체결됨",
+        "cancelled": "취소됨",
+        "rejected": "거부됨",
+        "partial": "부분 체결"
+    },
+    "time": {
+        "gtc": "취소시까지 유효",
+        "day": "당일 주문",
+        "ioc": "즉시 체결 또는 취소",
+        "fok": "전량 체결 또는 취소"
     },
     "messages": {
-        "orderPlaced": "주문이 완료되었습니다",
+        "orderPlaced": "주문 성공",
         "orderFailed": "주문 실패",
-        "noPositions": "보유 포지션 없음"
+        "confirmOrder": "이 주문을 확인하시겠습니까?",
+        "noPositions": "오픈 포지션 없음"
     }
 }

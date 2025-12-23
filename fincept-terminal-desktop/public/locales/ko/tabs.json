@@ -1,4 +1,7 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
     "dashboard": "대시보드",
     "markets": "시장",
@@ -22,24 +25,24 @@
     "f2": "시장",
     "f3": "뉴스",
     "f4": "포트",
-    "f5": "백테스트",
+    "f5": "백테",
     "f6": "관심",
-    "f7": "리서치",
-    "f8": "스크린",
-    "f9": "트레이드",
+    "f7": "리서",
+    "f8": "스크",
+    "f9": "트레",
     "f10": "AI",
     "f11": "전체",
-    "f12": "프로필"
+    "f12": "프로"
   },
   "status": {
     "connected": "연결됨",
     "disconnected": "연결 끊김",
     "loading": "로딩 중...",
     "error": "오류",
-    "ready": "준비 완료"
+    "ready": "준비됨"
   },
   "labels": {
-    "moreTabs": "툴바 메뉴에 더 많은 탭",
+    "moreTabs": "도구 모음 메뉴에 더 많은 탭",
     "enterCommand": "명령 입력",
     "search": "검색"
   }

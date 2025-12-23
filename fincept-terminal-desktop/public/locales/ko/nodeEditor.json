@@ -1,0 +1,32 @@
+{
+    "title": "노드 에디터",
+    "header": {
+        "nodes": "노드",
+        "connections": "연결",
+        "canvas": "캔버스"
+    },
+    "tabs": {
+        "editor": "에디터",
+        "preview": "미리보기"
+    },
+    "toolbar": {
+        "addNode": "노드 추가",
+        "delete": "삭제",
+        "clear": "모두 지우기",
+        "run": "실행",
+        "save": "저장",
+        "load": "로드"
+    },
+    "nodes": {
+        "input": "입력",
+        "output": "출력",
+        "process": "처리",
+        "condition": "조건"
+    },
+    "messages": {
+        "saved": "그래프 저장됨",
+        "loaded": "그래프 로드됨",
+        "running": "실행 중...",
+        "completed": "완료"
+    }
+}

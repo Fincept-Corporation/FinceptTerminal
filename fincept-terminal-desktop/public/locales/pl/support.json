@@ -1,0 +1,42 @@
+{
+    "title": "Zgłoszenie wsparcia",
+    "header": {
+        "tickets": "Zgłoszenia",
+        "new": "Nowe zgłoszenie",
+        "status": "Status"
+    },
+    "form": {
+        "subject": "Temat",
+        "description": "Opis",
+        "priority": "Priorytet",
+        "category": "Kategoria"
+    },
+    "priority": {
+        "low": "Niski",
+        "medium": "Średni",
+        "high": "Wysoki",
+        "urgent": "Pilny"
+    },
+    "status": {
+        "open": "Otwarte",
+        "inProgress": "W trakcie",
+        "resolved": "Rozwiązane",
+        "closed": "Zamknięte"
+    },
+    "buttons": {
+        "submit": "Wyślij",
+        "cancel": "Anuluj",
+        "reply": "Odpowiedz",
+        "close": "Zamknij"
+    },
+    "messages": {
+        "created": "Zgłoszenie utworzone",
+        "updated": "Zgłoszenie zaktualizowane",
+        "closed": "Zgłoszenie zamknięte",
+        "noTickets": "Brak zgłoszeń"
+    },
+    "auth": {
+        "loginRequired": "Zaloguj się aby utworzyć zgłoszenie",
+        "demoMode": "Tryb demo"
+    }
+}

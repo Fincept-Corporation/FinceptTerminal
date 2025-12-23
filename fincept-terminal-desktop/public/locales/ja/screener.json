@@ -1,20 +1,48 @@
 {
-    "title": "スクリーナー",
+    "title": "FREDシリーズブラウザ",
     "header": {
+        "title": "FREDデータエクスプローラー",
         "filters": "フィルター",
         "results": "結果",
-        "saved": "保存済み",
+        "saved": "保存済み画面",
         "presets": "プリセット"
     },
+    "apiKey": {
+        "required": "APIキーが必要",
+        "configure": "経済データにアクセスするには、設定 → 認証情報でFRED APIキーを設定してください。",
+        "getKey": "無料のAPIキーを取得：",
+        "addToSettings": "設定 → 認証情報 → FRED_API_KEYに追加",
+        "saveAndReload": "保存してこのタブをリロード",
+        "tip": "設定 → 認証情報でFRED APIキーを設定していることを確認してください"
+    },
+    "form": {
+        "seriesIds": "シリーズID",
+        "startDate": "開始日",
+        "endDate": "終了日",
+        "quickAdd": "クイック追加"
+    },
+    "buttons": {
+        "fetch": "取得",
+        "loading": "読み込み中",
+        "browse": "シリーズを閲覧",
+        "done": "完了"
+    },
+    "chart": {
+        "title": "時系列チャート",
+        "emptyState": "シリーズIDを入力して取得をクリックしてデータを可視化",
+        "trySuggestion": "GDP、UNRATE、CPIAUCSLを検索してみてください",
+        "waiting": "FREDからデータを取得中...",
+        "errorFetching": "データ取得エラー"
+    },
     "filters": {
-        "add": "条件追加",
-        "clear": "全クリア",
+        "add": "フィルター追加",
+        "clear": "すべてクリア",
         "reset": "リセット",
         "apply": "フィルター適用"
     },
     "criteria": {
         "marketCap": "時価総額",
-        "price": "株価",
+        "price": "価格",
         "volume": "出来高",
         "pe": "PER",
         "eps": "EPS",
@@ -27,30 +55,30 @@
     },
     "operators": {
         "equals": "等しい",
-        "greater": "以上",
-        "less": "以下",
-        "between": "範囲",
+        "greater": "より大きい",
+        "less": "より小さい",
+        "between": "間",
         "contains": "含む"
     },
     "results": {
         "symbol": "銘柄コード",
-        "name": "銘柄名",
-        "price": "株価",
+        "name": "名前",
+        "price": "価格",
         "change": "変動",
         "volume": "出来高",
         "marketCap": "時価総額",
-        "matches": "件"
+        "matches": "件の結果"
     },
     "actions": {
-        "save": "スクリーン保存",
-        "load": "スクリーン読込",
-        "export": "エクスポート",
+        "save": "画面を保存",
+        "load": "画面を読み込み",
+        "export": "結果をエクスポート",
         "addToWatchlist": "ウォッチリストに追加"
     },
     "messages": {
-        "loading": "スクリーニング中...",
-        "noResults": "該当銘柄なし",
-        "saved": "保存しました",
-        "applied": "適用しました"
+        "loading": "銘柄をスクリーニング中...",
+        "noResults": "条件に一致する銘柄なし",
+        "saved": "画面を保存しました",
+        "applied": "フィルターを適用しました"
     }
 }

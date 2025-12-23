@@ -1,21 +1,75 @@
 {
     "title": "DANH SÁCH THEO DÕI",
     "header": {
+        "title": "MÀNG HÌNH DANH SÁCH FINCEPT",
         "myWatchlists": "DANH SÁCH CỦA TÔI",
         "create": "TẠO",
         "import": "NHẬP",
-        "export": "XUẤT"
+        "export": "XUẤT",
+        "updating": "ĐANG CẬP NHẬT",
+        "live": "TRỰC TIẾP"
+    },
+    "sidebar": {
+        "groups": "NHÓM DANH SÁCH",
+        "new": "MỚI",
+        "noWatchlists": "Chưa có danh sách nào.",
+        "clickNew": "Nhấn MỚI để tạo.",
+        "stocks": "cổ phiếu",
+        "marketMovers": "NGƯỜI DẪN ĐẦU",
+        "gainer": "TĂNG",
+        "loser": "GIẢM",
+        "volumeLeaders": "KHỐI LƯỢNG CAO NHẤT"
+    },
+    "emptyState": {
+        "selectWatchlist": "Chọn danh sách hoặc tạo mới để bắt đầu"
+    },
+    "list": {
+        "name": "Tên",
+        "symbols": "Mã",
+        "created": "Ngày tạo",
+        "updated": "Cập nhật lần cuối",
+        "actions": "Hành động"
     },
     "actions": {
         "add": "Thêm mã",
         "remove": "Xóa",
         "edit": "Sửa",
-        "delete": "Xóa"
+        "delete": "Xóa",
+        "rename": "Đổi tên",
+        "duplicate": "Nhân bản"
+    },
+    "form": {
+        "name": "Tên danh sách",
+        "description": "Mô tả",
+        "symbols": "Thêm mã",
+        "save": "Lưu",
+        "cancel": "Hủy"
+    },
+    "symbol": {
+        "price": "Giá",
+        "change": "Thay đổi",
+        "volume": "Khối lượng",
+        "marketCap": "Vốn hóa",
+        "alert": "Đặt cảnh báo"
+    },
+    "alerts": {
+        "priceAbove": "Giá trên",
+        "priceBelow": "Giá dưới",
+        "changePercent": "Thay đổi %",
+        "volume": "Cảnh báo khối lượng"
+    },
+    "sort": {
+        "name": "Theo tên",
+        "price": "Theo giá",
+        "change": "Theo thay đổi",
+        "custom": "Tùy chỉnh"
     },
     "messages": {
         "created": "Đã tạo danh sách",
         "deleted": "Đã xóa danh sách",
-        "noWatchlists": "Chưa có danh sách",
+        "symbolAdded": "Đã thêm mã",
+        "symbolRemoved": "Đã xóa mã",
+        "noWatchlists": "Không có danh sách",
         "loading": "Đang tải..."
     }
 }

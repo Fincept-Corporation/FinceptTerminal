@@ -4,14 +4,19 @@
     "live": "NA ŻYWO",
     "widgets": "WIDGETY"
   },
+  "buttons": {
+    "addWidget": "DODAJ WIDGET",
+    "saveLayout": "ZAPISZ UKŁAD",
+    "reset": "RESETUJ"
+  },
   "widgets": {
     "loading": "Ładowanie...",
     "error": "Błąd",
     "configure": "Konfiguruj",
     "refresh": "Odśwież",
     "remove": "Usuń",
-    "globalIndices": "INDEKSY GLOBALNE - TOP 12",
-    "forex": "PARY WALUTOWE",
+    "globalIndices": "GLOBALNE INDEKSY - TOP 12",
+    "forex": "PARY FOREX",
     "crypto": "KRYPTOWALUTY",
     "commodities": "SUROWCE",
     "bonds": "OBLIGACJE",
@@ -19,7 +24,7 @@
     "news": "WIADOMOŚCI",
     "forum": "FORUM",
     "watchlist": "LISTA OBSERWOWANYCH",
-    "maritime": "MORSKI",
+    "maritime": "MORSKIE",
     "index": "INDEKS",
     "symbol": "SYMBOL",
     "name": "NAZWA",
@@ -29,15 +34,46 @@
     "high": "MAX",
     "low": "MIN",
     "noIndexData": "Brak danych indeksów",
-    "noData": "Brak danych"
+    "noForexData": "Brak danych forex",
+    "noCryptoData": "Brak danych krypto",
+    "noCommoditiesData": "Brak danych surowców",
+    "noNewsData": "Brak wiadomości",
+    "noForumPosts": "Brak postów forum",
+    "noStocksInWatchlist": "Brak akcji na liście",
+    "noWatchlistSelected": "Nie wybrano listy",
+    "noData": "Brak danych",
+    "pair": "PARA",
+    "rate": "KURS",
+    "commodity": "SUROWIEC",
+    "maritimeIntelligence": "⚓ WYWIAD MORSKI",
+    "globe3D": "GLOBUS 3D",
+    "vessels": "STATKI",
+    "routes": "TRASY",
+    "vol24h": "WOL 24H",
+    "topTradeCorridors": "GŁÓWNE KORYTARZE HANDLOWE",
+    "ships": "statki"
   },
-  "buttons": {
-    "addWidget": "DODAJ WIDGET",
-    "saveLayout": "ZAPISZ UKŁAD",
-    "reset": "RESETUJ"
+  "tips": {
+    "drag": "Przeciągnij widgety aby zmienić układ",
+    "resize": "Zmień rozmiar z prawego dolnego rogu",
+    "remove": "Usuń widgety przyciskiem X",
+    "responsive": "Responsywny układ - pełna szerokość"
+  },
+  "loading": {
+    "title": "Inicjalizacja Pulpitu",
+    "description": "Konfiguracja pamięci podręcznej dla szybszego ładowania...",
+    "note": "Zajmie to tylko chwilę przy pierwszym uruchomieniu"
   },
   "empty": {
     "noWidgets": "Brak widgetów na pulpicie",
     "addFirst": "DODAJ PIERWSZY WIDGET"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Przeciągnij i upuść",
+    "layout": "Układ",
+    "custom": "Własny",
+    "empty": "Pusty",
+    "active": "AKTYWNY",
+    "cache": "Cache: WŁĄCZONY"
   }
 }

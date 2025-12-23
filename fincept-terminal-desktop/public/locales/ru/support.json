@@ -1,0 +1,42 @@
+{
+    "title": "Тикет поддержки",
+    "header": {
+        "tickets": "Тикеты",
+        "new": "Новый тикет",
+        "status": "Статус"
+    },
+    "form": {
+        "subject": "Тема",
+        "description": "Описание",
+        "priority": "Приоритет",
+        "category": "Категория"
+    },
+    "priority": {
+        "low": "Низкий",
+        "medium": "Средний",
+        "high": "Высокий",
+        "urgent": "Срочный"
+    },
+    "status": {
+        "open": "Открыт",
+        "inProgress": "В работе",
+        "resolved": "Решён",
+        "closed": "Закрыт"
+    },
+    "buttons": {
+        "submit": "Отправить",
+        "cancel": "Отмена",
+        "reply": "Ответить",
+        "close": "Закрыть"
+    },
+    "messages": {
+        "created": "Тикет создан",
+        "updated": "Тикет обновлён",
+        "closed": "Тикет закрыт",
+        "noTickets": "Нет тикетов"
+    },
+    "auth": {
+        "loginRequired": "Войдите для создания тикета",
+        "demoMode": "Демо-режим"
+    }
+}

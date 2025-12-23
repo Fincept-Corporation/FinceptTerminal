@@ -13,14 +13,14 @@
     "codeExample": "CONTOH KODE",
     "content": {
         "title": "DOKUMENTASI TERMINAL FINCEPT",
-        "description": "Pilih topik dari panel navigasi.",
+        "description": "Pilih topik dari panel navigasi untuk melihat panduan lengkap dan referensi API.",
         "topicsAvailable": "topik tersedia",
-        "selectTopic": "Pilih topik"
+        "selectTopic": "Pilih topik untuk memulai"
     },
     "status": {
-        "version": "Dokumentasi Terminal Fincept v3.0",
+        "version": "Fincept Terminal Documentation v3.0 | Referensi API Lengkap & Panduan",
         "sections": "Bagian",
         "topics": "Topik",
-        "current": "Saat Ini"
+        "current": "Saat ini"
     }
 }

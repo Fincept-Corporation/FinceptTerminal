@@ -2,20 +2,65 @@
     "title": "FINCEPT 터미널 전문 뉴스",
     "header": {
         "liveFeed": "실시간 피드",
-        "live": "실시간",
+        "live": "라이브",
         "refresh": "새로고침",
         "updating": "업데이트 중...",
         "alerts": "알림",
         "sources": "소스",
+        "topics": "토픽",
         "status": "상태",
         "demoMode": "데모 모드",
         "articles": "기사",
         "activeSources": "활성 소스"
     },
+    "categories": {
+        "all": "전체",
+        "markets": "시장",
+        "stocks": "주식",
+        "forex": "외환",
+        "crypto": "암호화폐",
+        "commodities": "원자재",
+        "economy": "경제",
+        "economic": "경제",
+        "politics": "정치",
+        "earnings": "실적",
+        "tech": "기술",
+        "energy": "에너지",
+        "banking": "은행",
+        "geopolitics": "지정학",
+        "flash": "속보",
+        "urgent": "긴급"
+    },
+    "feedLabels": {
+        "primary": "주요 뉴스 피드",
+        "secondary": "보조 뉴스 피드",
+        "refresh": "새로고침"
+    },
+    "filters": {
+        "source": "소스",
+        "region": "지역",
+        "timeframe": "기간"
+    },
+    "timeframes": {
+        "1h": "1시간",
+        "24h": "24시간",
+        "1w": "1주",
+        "1m": "1개월"
+    },
+    "article": {
+        "readMore": "더 읽기",
+        "source": "소스",
+        "published": "게시됨",
+        "relatedStocks": "관련 종목",
+        "sentiment": "심리",
+        "impact": "영향"
+    },
     "sentiment": {
-        "bullish": "강세",
-        "bearish": "약세",
-        "neutral": "중립"
+        "bullish": "상승",
+        "bearish": "하락",
+        "neutral": "중립",
+        "positive": "긍정적",
+        "negative": "부정적"
     },
     "autoRefresh": {
         "title": "자동 새로고침 간격",
@@ -24,7 +69,9 @@
     },
     "messages": {
         "loading": "뉴스 로딩 중...",
-        "loadingFeeds": "뉴스 피드 로딩 중...",
+        "loadingFeeds": "피드 로딩 중...",
+        "error": "뉴스 로딩 오류",
+        "noNews": "뉴스 없음",
         "breaking": "속보"
     }
 }

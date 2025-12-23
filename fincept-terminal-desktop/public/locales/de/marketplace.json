@@ -1,0 +1,38 @@
+{
+    "title": "MARKETPLACE",
+    "header": {
+        "browse": "Durchsuchen",
+        "myItems": "Meine Artikel",
+        "cart": "Warenkorb"
+    },
+    "categories": {
+        "all": "Alle",
+        "indicators": "Indikatoren",
+        "strategies": "Strategien",
+        "datasets": "Datensätze",
+        "tools": "Werkzeuge"
+    },
+    "buttons": {
+        "buy": "Kaufen",
+        "addToCart": "In den Warenkorb",
+        "install": "Installieren",
+        "preview": "Vorschau"
+    },
+    "product": {
+        "price": "Preis",
+        "rating": "Bewertung",
+        "downloads": "Downloads",
+        "author": "Autor",
+        "version": "Version"
+    },
+    "cart": {
+        "total": "Gesamt",
+        "checkout": "Zur Kasse",
+        "empty": "Warenkorb leer"
+    },
+    "messages": {
+        "addedToCart": "Zum Warenkorb hinzugefügt",
+        "purchased": "Gekauft",
+        "installed": "Installiert"
+    }
+}

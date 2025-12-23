@@ -6,7 +6,7 @@
     "regionalMarketsLive": "BÖLGESEL PİYASALAR - CANLI VERİ",
     "liveData": "CANLI VERİ",
     "symbol": "SEMBOL",
-    "name": "AD",
+    "name": "İSİM",
     "price": "FİYAT",
     "change": "DEĞİŞİM",
     "percentChange": "%DEĞ",
@@ -19,10 +19,30 @@
     "on": "AÇIK",
     "off": "KAPALI",
     "lastUpdate": "SON GÜNCELLEME",
-    "updating": "GÜNCELLEME",
+    "updating": "GÜNCELLENİYOR",
     "live": "CANLI",
     "connected": "Bağlı",
     "cache": "Önbellek",
     "enabled": "ETKİN",
-    "dataProviderInfo": "Yahoo Finance API'den veriler | Gerçek zamanlı güncellemeler"
+    "dataProviderInfo": "Yahoo Finance API tarafından sağlanan veriler | Gerçek zamanlı güncellemeler",
+    "header": {
+        "live": "CANLI",
+        "updating": "GÜNCELLENİYOR",
+        "refresh": "YENİLE"
+    },
+    "tabs": {
+        "overview": "Genel Bakış",
+        "stocks": "Hisseler",
+        "indices": "Endeksler",
+        "forex": "Forex",
+        "crypto": "Kripto",
+        "commodities": "Emtialar",
+        "bonds": "Tahviller"
+    },
+    "status": {
+        "marketOpen": "Piyasa Açık",
+        "marketClosed": "Piyasa Kapalı",
+        "preMarket": "Piyasa Öncesi",
+        "afterHours": "Mesai Sonrası"
+    }
 }

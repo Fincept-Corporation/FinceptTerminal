@@ -1,0 +1,33 @@
+{
+    "title": "Generador de informes",
+    "header": {
+        "templates": "Plantillas",
+        "reports": "Informes",
+        "preview": "Vista previa"
+    },
+    "toolbar": {
+        "new": "Nuevo informe",
+        "save": "Guardar",
+        "export": "Exportar",
+        "print": "Imprimir",
+        "share": "Compartir"
+    },
+    "sections": {
+        "header": "Encabezado",
+        "summary": "Resumen",
+        "charts": "Gráficos",
+        "tables": "Tablas",
+        "footer": "Pie de página"
+    },
+    "templates": {
+        "daily": "Informe diario",
+        "weekly": "Informe semanal",
+        "monthly": "Informe mensual",
+        "custom": "Personalizado"
+    },
+    "messages": {
+        "saved": "Informe guardado",
+        "exported": "Informe exportado",
+        "generating": "Generando informe..."
+    }
+}

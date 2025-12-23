@@ -1,8 +1,13 @@
 {
   "header": {
-    "title": "ÖZELLEŞTİRİLEBİLİR PANO",
+    "title": "ÖZELLEŞTİRİLEBİLİR PANEL",
     "live": "CANLI",
-    "widgets": "WİDGETLER"
+    "widgets": "WİDGETLAR"
+  },
+  "buttons": {
+    "addWidget": "WİDGET EKLE",
+    "saveLayout": "DÜZENI KAYDET",
+    "reset": "SIFIRLA"
   },
   "widgets": {
     "loading": "Yükleniyor...",
@@ -10,34 +15,65 @@
     "configure": "Yapılandır",
     "refresh": "Yenile",
     "remove": "Kaldır",
-    "globalIndices": "KÜRESEL ENDEKSLER - EN İYİ 12",
+    "globalIndices": "GLOBAL ENDEKSLER - EN İYİ 12",
     "forex": "FOREX ÇİFTLERİ",
     "crypto": "KRİPTO PARALAR",
     "commodities": "EMTİALAR",
     "bonds": "TAHVİLLER",
-    "etfs": "ETF",
+    "etfs": "ETF'ler",
     "news": "HABERLER",
     "forum": "FORUM",
     "watchlist": "İZLEME LİSTESİ",
     "maritime": "DENİZCİLİK",
     "index": "ENDEKS",
     "symbol": "SEMBOL",
-    "name": "AD",
+    "name": "İSİM",
     "price": "FİYAT",
     "change": "DEĞ",
     "percentChange": "%DEĞ",
     "high": "YÜKSEK",
     "low": "DÜŞÜK",
     "noIndexData": "Endeks verisi yok",
-    "noData": "Veri yok"
+    "noForexData": "Forex verisi yok",
+    "noCryptoData": "Kripto verisi yok",
+    "noCommoditiesData": "Emtia verisi yok",
+    "noNewsData": "Haber yok",
+    "noForumPosts": "Forum postu yok",
+    "noStocksInWatchlist": "Listede hisse yok",
+    "noWatchlistSelected": "Liste seçilmedi",
+    "noData": "Veri yok",
+    "pair": "ÇİFT",
+    "rate": "KURS",
+    "commodity": "EMTİA",
+    "maritimeIntelligence": "⚓ DENİZCİLİK İSTİHBARATI",
+    "globe3D": "3D KÜRE",
+    "vessels": "GEMİLER",
+    "routes": "ROTALAR",
+    "vol24h": "HCM 24S",
+    "topTradeCorridors": "ANA TİCARET KORİDORLARI",
+    "ships": "gemi"
   },
-  "buttons": {
-    "addWidget": "WİDGET EKLE",
-    "saveLayout": "DÜZENİ KAYDET",
-    "reset": "SIFIRLA"
+  "tips": {
+    "drag": "Widget'ları yeniden düzenlemek için sürükleyin",
+    "resize": "Sağ alt köşeden yeniden boyutlandırın",
+    "remove": "X butonu ile widget'ları kaldırın",
+    "responsive": "Duyarlı düzen - tam genişlik kullanır"
+  },
+  "loading": {
+    "title": "Panel Başlatılıyor",
+    "description": "Daha hızlı veri yükleme için veritabanı önbelleği ayarlanıyor...",
+    "note": "Bu ilk açılışta sadece bir an sürecek"
   },
   "empty": {
-    "noWidgets": "Panoda widget yok",
+    "noWidgets": "Panelde widget yok",
     "addFirst": "İLK WİDGETİNİZİ EKLEYİN"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Sürükle bırak çalışma alanı",
+    "layout": "Düzen",
+    "custom": "Özel",
+    "empty": "Boş",
+    "active": "AKTİF",
+    "cache": "Önbellek: ETKİN"
   }
 }

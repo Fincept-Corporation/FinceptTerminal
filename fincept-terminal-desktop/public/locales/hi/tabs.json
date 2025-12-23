@@ -1,4 +1,7 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
     "dashboard": "डैशबोर्ड",
     "markets": "बाजार",
@@ -6,41 +9,41 @@
     "portfolio": "पोर्टफोलियो",
     "backtesting": "बैकटेस्टिंग",
     "watchlist": "वॉचलिस्ट",
-    "research": "अनुसंधान",
+    "research": "रिसर्च",
     "screener": "स्क्रीनर",
     "trading": "ट्रेडिंग",
-    "chat": "AI चैट",
-    "agents": "एजेंट्स",
+    "chat": "AI Chat",
+    "agents": "एजेंट",
     "settings": "सेटिंग्स",
     "profile": "प्रोफ़ाइल",
-    "forum": "फोरम",
+    "forum": "फ़ोरम",
     "help": "सहायता",
     "logout": "लॉगआउट"
   },
   "functionKeys": {
     "f1": "डैश",
-    "f2": "मार्केट",
-    "f3": "न्यूज़",
+    "f2": "बाज़र",
+    "f3": "समा",
     "f4": "पोर्ट",
-    "f5": "बैकटेस्ट",
+    "f5": "बीटी",
     "f6": "वॉच",
-    "f7": "रिसर्च",
-    "f8": "स्क्रीन",
+    "f7": "रिसच",
+    "f8": "स्क्रन",
     "f9": "ट्रेड",
     "f10": "AI",
-    "f11": "फुल",
+    "f11": "फ़ुल",
     "f12": "प्रोफ"
   },
   "status": {
-    "connected": "कनेक्टेड",
-    "disconnected": "डिस्कनेक्टेड",
+    "connected": "जुड़ा हुआ",
+    "disconnected": "डिस्कनेक्ट",
     "loading": "लोड हो रहा है...",
     "error": "त्रुटि",
     "ready": "तैयार"
   },
   "labels": {
-    "moreTabs": "टूलबार मेनू में और टैब",
+    "moreTabs": "टूलबार मेन्यू में अधिक टैब",
     "enterCommand": "कमांड दर्ज करें",
-    "search": "खोजें"
+    "search": "खोज"
   }
 }

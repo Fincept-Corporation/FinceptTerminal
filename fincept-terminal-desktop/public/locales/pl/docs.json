@@ -3,7 +3,7 @@
     "header": {
         "sections": "SEKCJE",
         "topics": "TEMATY",
-        "ready": "GOTOWE"
+        "ready": "GOTOWY"
     },
     "search": {
         "placeholder": "Szukaj w dokumentacji...",
@@ -13,14 +13,14 @@
     "codeExample": "PRZYKŁAD KODU",
     "content": {
         "title": "DOKUMENTACJA TERMINALA FINCEPT",
-        "description": "Wybierz temat z panelu nawigacji.",
-        "topicsAvailable": "tematów dostępnych",
-        "selectTopic": "Wybierz temat"
+        "description": "Wybierz temat z panelu nawigacji, aby wyświetlić kompleksowe przewodniki i referencję API.",
+        "topicsAvailable": "dostępnych tematów",
+        "selectTopic": "Wybierz temat, aby rozpocząć"
     },
     "status": {
-        "version": "Dokumentacja Terminala Fincept v3.0",
+        "version": "Fincept Terminal Documentation v3.0 | Pełna referencja API i przewodniki",
         "sections": "Sekcje",
         "topics": "Tematy",
-        "current": "Bieżący"
+        "current": "Aktualny"
     }
 }

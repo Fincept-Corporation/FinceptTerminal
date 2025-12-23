@@ -1,6 +1,6 @@
 {
-    "profile": "FINCEPT终端配置文件",
-    "guestProfile": "FINCEPT终端访客配置文件",
+    "profile": "FINCEPT 终端个人资料",
+    "guestProfile": "FINCEPT 终端访客资料",
     "guestSession": "FinceptTerminal v3.0.11 | 访客会话",
     "requests": "请求",
     "remaining": "剩余",
@@ -16,7 +16,7 @@
     "todaysRequests": "今日请求",
     "status": "状态",
     "active": "活跃",
-    "upgradeToFullAccess": "升级到完全访问",
+    "upgradeToFullAccess": "升级到完整访问",
     "createAccountUnlock": "创建免费账户解锁",
     "unlimitedApiRequests": "无限API请求",
     "permanentApiKey": "永久API密钥",
@@ -24,9 +24,14 @@
     "premiumFeatures": "高级功能和工具",
     "dataMarketplace": "数据市场",
     "advancedAnalytics": "高级分析",
-    "viewPricingPlans": "查看定价计划",
+    "viewPricingPlans": "查看定价方案",
     "device": "设备",
     "updating": "更新中",
     "ready": "就绪",
-    "credits": "积分"
+    "credits": "积分",
+    "overview": "概览",
+    "usage": "使用情况",
+    "settings": "设置",
+    "pricing": "定价",
+    "logout": "退出"
 }

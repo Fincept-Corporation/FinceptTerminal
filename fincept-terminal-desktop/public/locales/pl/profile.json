@@ -28,5 +28,10 @@
     "device": "Urządzenie",
     "updating": "AKTUALIZACJA",
     "ready": "GOTOWY",
-    "credits": "ŚRODKI"
+    "credits": "ŚRODKI",
+    "overview": "PRZEGLĄD",
+    "usage": "UŻYCIE",
+    "settings": "USTAWIENIA",
+    "pricing": "CENNIK",
+    "logout": "WYLOGUJ"
 }

@@ -1,16 +1,19 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
-    "dashboard": "Panel",
+    "dashboard": "Pulpit",
     "markets": "Rynki",
     "news": "Wiadomości",
     "portfolio": "Portfel",
     "backtesting": "Backtesting",
-    "watchlist": "Obserwowane",
+    "watchlist": "Lista obserwowanych",
     "research": "Badania",
     "screener": "Skaner",
-    "trading": "Handel",
-    "chat": "Czat AI",
-    "agents": "Agenty",
+    "trading": "Trading",
+    "chat": "AI Chat",
+    "agents": "Agenci",
     "settings": "Ustawienia",
     "profile": "Profil",
     "forum": "Forum",
@@ -18,29 +21,29 @@
     "logout": "Wyloguj"
   },
   "functionKeys": {
-    "f1": "PANEL",
-    "f2": "RYNKI",
+    "f1": "PULT",
+    "f2": "RNKI",
     "f3": "NEWS",
     "f4": "PORT",
-    "f5": "BKTEST",
-    "f6": "OBS",
-    "f7": "BADANIA",
+    "f5": "BKTS",
+    "f6": "OBSW",
+    "f7": "BAD",
     "f8": "SKAN",
-    "f9": "HANDEL",
+    "f9": "TRDG",
     "f10": "AI",
-    "f11": "PEŁNY",
-    "f12": "PROFIL"
+    "f11": "FULL",
+    "f12": "PROF"
   },
   "status": {
-    "connected": "Połączony",
-    "disconnected": "Rozłączony",
+    "connected": "Połączono",
+    "disconnected": "Rozłączono",
     "loading": "Ładowanie...",
     "error": "Błąd",
     "ready": "Gotowy"
   },
   "labels": {
-    "moreTabs": "Więcej zakładek w menu narzędzi",
-    "enterCommand": "Wprowadź Polecenie",
+    "moreTabs": "Więcej kart w menu paska narzędzi",
+    "enterCommand": "Wprowadź polecenie",
     "search": "Szukaj"
   }
 }

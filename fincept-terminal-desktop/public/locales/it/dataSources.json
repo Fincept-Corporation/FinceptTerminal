@@ -10,7 +10,7 @@
         "market": "Dati di Mercato",
         "economic": "Dati Economici",
         "alternative": "Dati Alternativi",
-        "news": "Notizie",
+        "news": "Notizie e Sentiment",
         "fundamental": "Dati Fondamentali"
     },
     "status": {
@@ -23,21 +23,21 @@
         "connect": "Connetti",
         "disconnect": "Disconnetti",
         "configure": "Configura",
-        "test": "Testa",
-        "delete": "Elimina"
+        "test": "Testa Connessione",
+        "delete": "Rimuovi"
     },
     "form": {
         "apiKey": "Chiave API",
-        "endpoint": "URL",
-        "username": "Utente",
+        "endpoint": "URL Endpoint",
+        "username": "Nome utente",
         "password": "Password",
         "save": "Salva",
         "cancel": "Annulla"
     },
     "messages": {
-        "connectionSuccess": "Connesso con successo",
-        "connectionFailed": "Errore connessione",
-        "noSources": "Nessuna fonte",
-        "loading": "Caricamento..."
+        "connectionSuccess": "Connesso con successo alla fonte dati",
+        "connectionFailed": "Connessione alla fonte dati fallita",
+        "noSources": "Nessuna fonte dati configurata",
+        "loading": "Caricamento fonti dati..."
     }
 }

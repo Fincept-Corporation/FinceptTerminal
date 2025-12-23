@@ -5,9 +5,9 @@
     "widgets": "WIDGETS"
   },
   "buttons": {
-    "addWidget": "AGREGAR WIDGET",
+    "addWidget": "AÑADIR WIDGET",
     "saveLayout": "GUARDAR DISEÑO",
-    "reset": "RESTABLECER"
+    "reset": "REINICIAR"
   },
   "widgets": {
     "loading": "Cargando...",
@@ -18,7 +18,7 @@
     "globalIndices": "ÍNDICES GLOBALES - TOP 12",
     "forex": "PARES FOREX",
     "crypto": "CRIPTOMONEDAS",
-    "commodities": "COMMODITIES",
+    "commodities": "MATERIAS PRIMAS",
     "bonds": "BONOS",
     "etfs": "ETFs",
     "news": "NOTICIAS",
@@ -29,20 +29,35 @@
     "symbol": "SÍMBOLO",
     "name": "NOMBRE",
     "price": "PRECIO",
-    "change": "CAMBIO",
-    "percentChange": "%CAMBIO",
+    "change": "CAM",
+    "percentChange": "%CAM",
     "high": "ALTO",
     "low": "BAJO",
-    "noIndexData": "Sin datos de índices disponibles",
-    "noForexData": "Sin datos de forex disponibles",
-    "noCryptoData": "Sin datos de cripto disponibles",
-    "noData": "Sin datos disponibles"
+    "noIndexData": "Sin datos de índices",
+    "noForexData": "Sin datos de forex",
+    "noCryptoData": "Sin datos de cripto",
+    "noCommoditiesData": "Sin datos de materias primas",
+    "noNewsData": "Sin noticias",
+    "noForumPosts": "Sin publicaciones",
+    "noStocksInWatchlist": "Sin acciones en lista",
+    "noWatchlistSelected": "Sin lista seleccionada",
+    "noData": "Sin datos",
+    "pair": "PAR",
+    "rate": "TASA",
+    "commodity": "MATERIA PRIMA",
+    "maritimeIntelligence": "⚓ INTELIGENCIA MARÍTIMA",
+    "globe3D": "GLOBO 3D",
+    "vessels": "BUQUES",
+    "routes": "RUTAS",
+    "vol24h": "VOL 24H",
+    "topTradeCorridors": "CORREDORES COMERCIALES PRINCIPALES",
+    "ships": "barcos"
   },
   "tips": {
     "drag": "Arrastra widgets para reorganizar",
     "resize": "Redimensiona desde la esquina inferior derecha",
     "remove": "Elimina widgets con el botón X",
-    "responsive": "Diseño responsive - usa ancho completo"
+    "responsive": "Diseño responsivo - usa ancho completo"
   },
   "loading": {
     "title": "Inicializando Panel",
@@ -51,10 +66,10 @@
   },
   "empty": {
     "noWidgets": "Sin widgets en el panel",
-    "addFirst": "AGREGA TU PRIMER WIDGET"
+    "addFirst": "AÑADE TU PRIMER WIDGET"
   },
   "status": {
-    "version": "Panel Personalizable Fincept v2.0.0 | Espacio de trabajo arrastrable",
+    "version": "Fincept Customizable Dashboard v2.0.0 | Espacio de trabajo arrastrar y soltar",
     "layout": "Diseño",
     "custom": "Personalizado",
     "empty": "Vacío",

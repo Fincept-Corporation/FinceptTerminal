@@ -9,7 +9,7 @@
     },
     "summary": {
         "totalValue": "총 가치",
-        "dayPnl": "일간 손익",
+        "dayPnl": "당일 손익",
         "totalPnl": "총 손익",
         "positions": "포지션"
     },
@@ -18,18 +18,46 @@
         "addAsset": "자산 추가",
         "sellAsset": "자산 매도",
         "analytics": "분석",
-        "history": "내역"
+        "history": "내역",
+        "activeMgmt": "적극적 관리",
+        "performance": "성과",
+        "rebalance": "리밸런싱",
+        "reports": "리포트",
+        "alerts": "알림",
+        "sectors": "섹터",
+        "help": "도움말"
     },
     "sidebar": {
         "portfolios": "포트폴리오",
         "loading": "포트폴리오 로딩 중...",
-        "noPortfolios": "포트폴리오가 없습니다."
+        "noPortfolios": "아직 포트폴리오가 없습니다.",
+        "clickCreate": "새 포트폴리오 클릭하여 생성.",
+        "owner": "소유자",
+        "currency": "통화"
+    },
+    "content": {
+        "selectOrCreate": "포트폴리오를 선택하거나 새로 만들어 시작하세요",
+        "loadingData": "포트폴리오 데이터 로딩 중...",
+        "comingSoon": "곧 제공 예정..."
     },
     "modals": {
-        "createNew": "새 포트폴리오 만들기",
+        "createNew": "새 포트폴리오 생성",
+        "portfolioName": "포트폴리오 이름",
+        "owner": "소유자",
+        "currency": "통화",
         "cancel": "취소",
         "create": "생성",
+        "addAssetTitle": "포트폴리오에 자산 추가",
+        "sellAssetTitle": "자산 매도",
+        "symbol": "심볼",
+        "quantity": "수량",
+        "price": "가격",
         "add": "추가",
         "sell": "매도"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | yfinance 연동 실시간 추적",
+        "lastUpdated": "마지막 업데이트",
+        "connected": "연결됨"
     }
 }

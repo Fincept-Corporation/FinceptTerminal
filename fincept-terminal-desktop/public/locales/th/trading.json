@@ -1,25 +1,76 @@
 {
-    "title": "การซื้อขาย",
+    "title": "การเทรด",
     "header": {
-        "orders": "คำสั่ง",
-        "positions": "ตำแหน่ง",
+        "orders": "คำสั่งซื้อ",
+        "positions": "พอร์ต",
         "history": "ประวัติ",
-        "settings": "ตั้งค่า",
-        "terminal": "FINCEPT เทอร์มินัล",
+        "settings": "การตั้งค่า",
+        "terminal": "เทอร์มินัล FINCEPT",
         "selectBroker": "เลือกโบรกเกอร์",
         "paper": "จำลอง",
-        "live": "จริง"
+        "live": "จริง",
+        "watchlist": "รายการติดตาม",
+        "orderbook": "สมุดคำสั่ง",
+        "trades": "การซื้อขาย",
+        "stats": "สถิติ",
+        "features": "ฟีเจอร์",
+        "crossExchange": "ข้ามตลาด",
+        "chart": "กราฟ",
+        "depth": "ความลึก",
+        "volume": "ปริมาณ",
+        "aiAgents": "เอเจนต์ AI",
+        "leaderboard": "ลีดเดอร์บอร์ด",
+        "modelChat": "แชทโมเดล"
+    },
+    "orderTypes": {
+        "market": "ตลาด",
+        "limit": "จำกัด",
+        "stop": "หยุด",
+        "stopLimit": "หยุดจำกัด",
+        "trailingStop": "ติดตามหยุด"
     },
     "actions": {
         "buy": "ซื้อ",
         "sell": "ขาย",
         "cancel": "ยกเลิก",
+        "modify": "แก้ไข",
         "close": "ปิด",
         "closeAll": "ปิดทั้งหมด"
     },
+    "form": {
+        "symbol": "สัญลักษณ์",
+        "quantity": "จำนวน",
+        "price": "ราคา",
+        "stopPrice": "ราคาหยุด",
+        "takeProfit": "ทำกำไร",
+        "stopLoss": "หยุดขาดทุน",
+        "leverage": "เลเวอเรจ"
+    },
+    "position": {
+        "openPrice": "ราคาเปิด",
+        "currentPrice": "ราคาปัจจุบัน",
+        "pnl": "กำไร/ขาดทุน",
+        "pnlPercent": "กำไร/ขาดทุน %",
+        "margin": "มาร์จิ้น",
+        "size": "ขนาด"
+    },
+    "order": {
+        "pending": "รอดำเนินการ",
+        "filled": "สำเร็จ",
+        "cancelled": "ยกเลิก",
+        "rejected": "ปฏิเสธ",
+        "partial": "สำเร็จบางส่วน"
+    },
+    "time": {
+        "gtc": "ใช้ได้จนกว่าจะยกเลิก",
+        "day": "คำสั่งรายวัน",
+        "ioc": "ทันทีหรือยกเลิก",
+        "fok": "ทั้งหมดหรือไม่เลย"
+    },
     "messages": {
-        "orderPlaced": "ส่งคำสั่งสำเร็จ",
+        "orderPlaced": "คำสั่งสำเร็จ",
         "orderFailed": "คำสั่งล้มเหลว",
-        "noPositions": "ไม่มีตำแหน่งที่เปิด"
+        "confirmOrder": "ยืนยันคำสั่งนี้?",
+        "noPositions": "ไม่มีพอร์ตเปิด"
     }
 }

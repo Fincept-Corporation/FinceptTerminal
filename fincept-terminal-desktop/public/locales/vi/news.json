@@ -1,5 +1,5 @@
 {
-    "title": "TIN TỨC CHUYÊN NGHIỆP FINCEPT TERMINAL",
+    "title": "TIN TỨC CHUYÊN NGHIỆP TERMINAL FINCEPT",
     "header": {
         "liveFeed": "FEED TRỰC TIẾP",
         "live": "TRỰC TIẾP",
@@ -7,24 +7,71 @@
         "updating": "ĐANG CẬP NHẬT...",
         "alerts": "CẢNH BÁO",
         "sources": "NGUỒN",
+        "topics": "CHỦ ĐỀ",
         "status": "TRẠNG THÁI",
         "demoMode": "CHẾ ĐỘ DEMO",
         "articles": "BÀI VIẾT",
         "activeSources": "NGUỒN HOẠT ĐỘNG"
     },
+    "categories": {
+        "all": "TẤT CẢ",
+        "markets": "THỊ TRƯỜNG",
+        "stocks": "Cổ phiếu",
+        "forex": "Forex",
+        "crypto": "TIỀN MÃ HÓA",
+        "commodities": "Hàng hóa",
+        "economy": "Kinh tế",
+        "economic": "KINH TẾ",
+        "politics": "Chính trị",
+        "earnings": "LỢI NHUẬN",
+        "tech": "CÔNG NGHỆ",
+        "energy": "NĂNG LƯỢNG",
+        "banking": "NGÂN HÀNG",
+        "geopolitics": "ĐỊA CHÍNH TRỊ",
+        "flash": "NÓNG",
+        "urgent": "KHẨN CẤP"
+    },
+    "feedLabels": {
+        "primary": "FEED TIN TỨC CHÍNH",
+        "secondary": "FEED TIN TỨC PHỤ",
+        "refresh": "LÀM MỚI"
+    },
+    "filters": {
+        "source": "Nguồn",
+        "region": "Khu vực",
+        "timeframe": "Thời gian"
+    },
+    "timeframes": {
+        "1h": "1 Giờ",
+        "24h": "24 Giờ",
+        "1w": "1 Tuần",
+        "1m": "1 Tháng"
+    },
+    "article": {
+        "readMore": "Đọc Thêm",
+        "source": "Nguồn",
+        "published": "Đã xuất bản",
+        "relatedStocks": "Cổ Phiếu Liên Quan",
+        "sentiment": "Cảm xúc",
+        "impact": "Tác động"
+    },
     "sentiment": {
         "bullish": "TĂNG GIÁ",
         "bearish": "GIẢM GIÁ",
-        "neutral": "TRUNG LẬP"
+        "neutral": "TRUNG LẬP",
+        "positive": "Tích cực",
+        "negative": "Tiêu cực"
     },
     "autoRefresh": {
-        "title": "KHOẢNG TỰ ĐỘNG LÀM MỚI",
+        "title": "KHOẢNG CÁCH TỰ ĐỘNG CẬP NHẬT",
         "minute": "phút",
         "minutes": "phút"
     },
     "messages": {
         "loading": "Đang tải tin tức...",
-        "loadingFeeds": "Đang tải feed...",
+        "loadingFeeds": "Đang tải nguồn cấp...",
+        "error": "Lỗi tải tin tức",
+        "noNews": "Không có tin tức",
         "breaking": "NÓNG"
     }
 }

@@ -1,16 +1,44 @@
 {
-    "title": "SCREENER AZIONI",
+    "title": "BROWSER SERIE FRED",
     "header": {
+        "title": "ESPLORATORE DATI FRED",
         "filters": "FILTRI",
         "results": "RISULTATI",
-        "saved": "SALVATI",
-        "presets": "PRESET"
+        "saved": "SCHERMATE SALVATE",
+        "presets": "PREIMPOSTAZIONI"
+    },
+    "apiKey": {
+        "required": "CHIAVE API RICHIESTA",
+        "configure": "Configura la tua chiave FRED API in Impostazioni → Credenziali per accedere ai dati economici.",
+        "getKey": "Ottieni chiave API gratuita su",
+        "addToSettings": "Aggiungi a Impostazioni → Credenziali → FRED_API_KEY",
+        "saveAndReload": "Salva e ricarica questa scheda",
+        "tip": "Assicurati di aver configurato la chiave FRED API in Impostazioni → Credenziali"
+    },
+    "form": {
+        "seriesIds": "ID SERIE",
+        "startDate": "DATA INIZIO",
+        "endDate": "DATA FINE",
+        "quickAdd": "AGGIUNGI RAPIDO"
+    },
+    "buttons": {
+        "fetch": "RECUPERA",
+        "loading": "CARICAMENTO",
+        "browse": "SFOGLIA SERIE",
+        "done": "FATTO"
+    },
+    "chart": {
+        "title": "GRAFICO SERIE TEMPORALE",
+        "emptyState": "Inserisci ID serie e clicca RECUPERA per visualizzare i dati",
+        "trySuggestion": "Prova a cercare GDP, UNRATE o CPIAUCSL",
+        "waiting": "Attendere mentre recuperiamo i dati da FRED...",
+        "errorFetching": "Errore nel Recupero Dati"
     },
     "filters": {
-        "add": "Aggiungi filtro",
-        "clear": "Cancella tutto",
+        "add": "Aggiungi Filtro",
+        "clear": "Cancella Tutto",
         "reset": "Reimposta",
-        "apply": "Applica filtri"
+        "apply": "Applica Filtri"
     },
     "criteria": {
         "marketCap": "Capitalizzazione",
@@ -18,7 +46,7 @@
         "volume": "Volume",
         "pe": "P/E",
         "eps": "EPS",
-        "dividend": "Rendimento dividendo",
+        "dividend": "Rendimento Dividendo",
         "beta": "Beta",
         "sector": "Settore",
         "industry": "Industria",
@@ -38,19 +66,19 @@
         "price": "Prezzo",
         "change": "Variazione",
         "volume": "Volume",
-        "marketCap": "Cap.",
-        "matches": "risultati"
+        "marketCap": "Capitalizzazione",
+        "matches": "risultati trovati"
     },
     "actions": {
-        "save": "Salva screen",
-        "load": "Carica screen",
-        "export": "Esporta",
-        "addToWatchlist": "Aggiungi a lista"
+        "save": "Salva Schermata",
+        "load": "Carica Schermata",
+        "export": "Esporta Risultati",
+        "addToWatchlist": "Aggiungi a Watchlist"
     },
     "messages": {
-        "loading": "Ricerca...",
-        "noResults": "Nessun risultato",
-        "saved": "Salvato",
+        "loading": "Filtraggio azioni...",
+        "noResults": "Nessuna azione corrisponde ai criteri",
+        "saved": "Schermata salvata con successo",
         "applied": "Filtri applicati"
     }
 }

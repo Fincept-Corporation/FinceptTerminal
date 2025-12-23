@@ -1,0 +1,95 @@
+﻿{
+    "title": "回测引擎",
+    "header": {
+        "strategy": "策略",
+        "results": "结果",
+        "trades": "交易"
+    },
+    "toolbar": {
+        "run": "运行回测",
+        "running": "运行中...",
+        "stop": "停止",
+        "reset": "重置",
+        "export": "导出结果",
+        "refresh": "刷新"
+    },
+    "config": {
+        "symbolTimeframe": "代码和时间周期",
+        "symbol": "代码",
+        "stockTicker": "回测股票代码",
+        "startDate": "开始日期",
+        "endDate": "结束日期",
+        "initialCapital": "初始资金",
+        "strategy": "策略",
+        "parameters": "参数"
+    },
+    "sections": {
+        "strategyConfig": "策略配置",
+        "strategyType": "策略类型",
+        "strategyParams": "策略参数",
+        "backtestResults": "回测结果",
+        "advancedSettings": "高级设置",
+        "advancedNote": "Backtesting.py 提供商的高级选项"
+    },
+    "advanced": {
+        "commission": "佣金（小数）",
+        "tradeOnClose": "收盘交易",
+        "hedging": "对冲",
+        "exclusiveOrders": "独占订单",
+        "margin": "保证金"
+    },
+    "strategies": {
+        "sma": "SMA交叉",
+        "rsi": "RSI策略",
+        "macd": "MACD策略",
+        "bollinger": "布林带",
+        "custom": "自定义策略"
+    },
+    "smaParams": {
+        "fastPeriod": "快周期",
+        "slowPeriod": "慢周期",
+        "fastNote": "短期移动平均线",
+        "slowNote": "长期移动平均线"
+    },
+    "results": {
+        "totalReturn": "总收益",
+        "sharpeRatio": "夏普比率",
+        "maxDrawdown": "最大回撤",
+        "winRate": "胜率",
+        "totalTrades": "总交易数",
+        "profitFactor": "盈利因子",
+        "configurePrompt": "配置您的回测并点击"运行回测"查看结果"
+    },
+    "trades": {
+        "date": "日期",
+        "type": "类型",
+        "price": "价格",
+        "quantity": "数量",
+        "pnl": "盈亏"
+    },
+    "status": {
+        "ready": "就绪",
+        "running": "运行中...",
+        "completed": "完成",
+        "error": "错误"
+    },
+    "messages": {
+        "backtestStarted": "回测已开始",
+        "backtestCompleted": "回测完成",
+        "backtestError": "回测失败"
+    },
+    "visual": {
+        "priceData": "价格数据",
+        "maIndicator": "MA指标",
+        "condition": "条件",
+        "buyOrder": "买入订单",
+        "sellOrder": "卖出订单",
+        "addBlocksPrompt": "点击上方积木添加到策略",
+        "remove": "移除",
+        "generateCode": "从积木生成代码"
+    },
+    "template": {
+        "strategyTemplates": "策略模板",
+        "apply": "应用模板"
+    }
+}

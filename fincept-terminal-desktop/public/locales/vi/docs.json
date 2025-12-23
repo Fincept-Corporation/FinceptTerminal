@@ -13,12 +13,12 @@
     "codeExample": "VÍ DỤ MÃ",
     "content": {
         "title": "TÀI LIỆU TERMINAL FINCEPT",
-        "description": "Chọn chủ đề từ bảng điều hướng.",
+        "description": "Chọn chủ đề từ bảng điều hướng để xem hướng dẫn và tài liệu API.",
         "topicsAvailable": "chủ đề có sẵn",
-        "selectTopic": "Chọn chủ đề"
+        "selectTopic": "Chọn chủ đề để bắt đầu"
     },
     "status": {
-        "version": "Tài liệu Terminal Fincept v3.0",
+        "version": "Fincept Terminal Documentation v3.0 | Tham chiếu API đầy đủ & Hướng dẫn",
         "sections": "Phần",
         "topics": "Chủ đề",
         "current": "Hiện tại"

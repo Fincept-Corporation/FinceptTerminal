@@ -1,7 +1,7 @@
 {
     "title": "แหล่งข้อมูล",
     "header": {
-        "available": "แหล่งที่มี",
+        "available": "แหล่งที่มีอยู่",
         "connected": "เชื่อมต่อแล้ว",
         "addNew": "เพิ่มแหล่ง",
         "refresh": "รีเฟรช"
@@ -14,30 +14,30 @@
         "fundamental": "ข้อมูลพื้นฐาน"
     },
     "status": {
-        "connected": "เชื่อมต่อ",
+        "connected": "เชื่อมต่อแล้ว",
         "disconnected": "ตัดการเชื่อมต่อ",
         "error": "ข้อผิดพลาด",
         "pending": "รอดำเนินการ"
     },
     "actions": {
         "connect": "เชื่อมต่อ",
-        "disconnect": "ตัด",
+        "disconnect": "ตัดการเชื่อมต่อ",
         "configure": "กำหนดค่า",
-        "test": "ทดสอบ",
+        "test": "ทดสอบการเชื่อมต่อ",
         "delete": "ลบ"
     },
     "form": {
         "apiKey": "คีย์ API",
-        "endpoint": "URL",
+        "endpoint": "URL Endpoint",
         "username": "ชื่อผู้ใช้",
         "password": "รหัสผ่าน",
         "save": "บันทึก",
         "cancel": "ยกเลิก"
     },
     "messages": {
-        "connectionSuccess": "เชื่อมต่อสำเร็จ",
-        "connectionFailed": "เชื่อมต่อล้มเหลว",
-        "noSources": "ไม่มีแหล่งข้อมูล",
-        "loading": "กำลังโหลด..."
+        "connectionSuccess": "เชื่อมต่อแหล่งข้อมูลสำเร็จ",
+        "connectionFailed": "เชื่อมต่อแหล่งข้อมูลล้มเหลว",
+        "noSources": "ไม่มีแหล่งข้อมูลที่กำหนด",
+        "loading": "กำลังโหลดแหล่งข้อมูล..."
     }
 }

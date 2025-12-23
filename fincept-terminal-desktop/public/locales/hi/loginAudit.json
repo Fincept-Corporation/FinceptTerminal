@@ -1,13 +1,13 @@
 {
     "title": "लॉगिन ऑडिट डैशबोर्ड",
-    "accessDenied": "लॉगिन ऑडिट डैशबोर्ड देखने के लिए व्यवस्थापक पहुंच आवश्यक है",
+    "accessDenied": "एडमिन एक्सेस आवश्यक",
     "metrics": {
-        "dauToday": "आज DAU",
+        "dauToday": "DAU आज",
         "mau": "MAU",
         "successRate": "सफलता दर",
-        "failed24h": "विफल (24h)",
+        "failed24h": "विफल (24घ)",
         "activeSessions": "सक्रिय सत्र",
-        "uniqueIps": "अद्वितीय IPs"
+        "uniqueIps": "अद्वितीय IP"
     },
     "views": {
         "overview": "अवलोकन",
@@ -15,13 +15,43 @@
         "alerts": "अलर्ट",
         "analytics": "एनालिटिक्स"
     },
+    "activity": {
+        "recentLoginActivity": "हालिया लॉगिन गतिविधि",
+        "securityAlerts": "सुरक्षा अलर्ट",
+        "noActiveAlerts": "कोई सक्रिय अलर्ट नहीं",
+        "loginEventLog": "लॉगिन इवेंट लॉग"
+    },
+    "table": {
+        "time": "समय",
+        "event": "इवेंट",
+        "user": "उपयोगकर्ता",
+        "ipAddress": "IP पता",
+        "location": "स्थान",
+        "device": "डिवाइस",
+        "details": "विवरण"
+    },
+    "alerts": {
+        "securityIncidents": "सुरक्षा अलर्ट और घटनाएं",
+        "noAlerts": "कोई सुरक्षा अलर्ट नहीं",
+        "dismiss": "खारिज",
+        "blockIp": "IP ब्लॉक",
+        "investigate": "जांच"
+    },
+    "analytics": {
+        "loginsByCountry": "देश के अनुसार लॉगिन (30 दिन)",
+        "failureReasons": "विफलता के कारण (24घ)",
+        "peakHours": "पीक घंटे (UTC)",
+        "logins": "लॉगिन"
+    },
     "controls": {
-        "autoRefresh": "ऑटो-रिफ्रेश",
+        "autoRefresh": "ऑटो-रीफ्रेश",
         "loading": "लोड हो रहा है...",
-        "refresh": "रिफ्रेश"
+        "refresh": "रीफ्रेश"
     },
     "status": {
         "admin": "एडमिन",
+        "dau": "DAU",
+        "status": "स्थिति",
         "updating": "अपडेट हो रहा है",
         "ready": "तैयार"
     }

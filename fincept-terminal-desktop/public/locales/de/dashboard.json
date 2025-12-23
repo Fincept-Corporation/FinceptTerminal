@@ -4,6 +4,11 @@
     "live": "LIVE",
     "widgets": "WIDGETS"
   },
+  "buttons": {
+    "addWidget": "WIDGET HINZUFÜGEN",
+    "saveLayout": "LAYOUT SPEICHERN",
+    "reset": "ZURÜCKSETZEN"
+  },
   "widgets": {
     "loading": "Laden...",
     "error": "Fehler",
@@ -11,7 +16,7 @@
     "refresh": "Aktualisieren",
     "remove": "Entfernen",
     "globalIndices": "GLOBALE INDIZES - TOP 12",
-    "forex": "WÄHRUNGSPAARE",
+    "forex": "FOREX-PAARE",
     "crypto": "KRYPTOWÄHRUNGEN",
     "commodities": "ROHSTOFFE",
     "bonds": "ANLEIHEN",
@@ -28,16 +33,47 @@
     "percentChange": "%ÄND",
     "high": "HOCH",
     "low": "TIEF",
-    "noIndexData": "Keine Indexdaten verfügbar",
-    "noData": "Keine Daten verfügbar"
+    "noIndexData": "Keine Indexdaten",
+    "noForexData": "Keine Forex-Daten",
+    "noCryptoData": "Keine Krypto-Daten",
+    "noCommoditiesData": "Keine Rohstoffdaten",
+    "noNewsData": "Keine Nachrichten",
+    "noForumPosts": "Keine Beiträge",
+    "noStocksInWatchlist": "Keine Aktien in der Liste",
+    "noWatchlistSelected": "Keine Liste ausgewählt",
+    "noData": "Keine Daten",
+    "pair": "PAAR",
+    "rate": "KURS",
+    "commodity": "ROHSTOFF",
+    "maritimeIntelligence": "⚓ MARITIME INTELLIGENCE",
+    "globe3D": "3D-GLOBUS",
+    "vessels": "SCHIFFE",
+    "routes": "ROUTEN",
+    "vol24h": "VOL 24H",
+    "topTradeCorridors": "TOP-HANDELSKORRIDORE",
+    "ships": "Schiffe"
   },
-  "buttons": {
-    "addWidget": "WIDGET HINZUFÜGEN",
-    "saveLayout": "LAYOUT SPEICHERN",
-    "reset": "ZURÜCKSETZEN"
+  "tips": {
+    "drag": "Ziehen Sie Widgets zum Neuanordnen",
+    "resize": "Größe von unten rechts ändern",
+    "remove": "Widgets mit X-Button entfernen",
+    "responsive": "Responsives Layout - volle Breite"
+  },
+  "loading": {
+    "title": "Dashboard Initialisieren",
+    "description": "Datenbank-Cache für schnelleres Laden einrichten...",
+    "note": "Dies dauert beim ersten Start nur einen Moment"
   },
   "empty": {
     "noWidgets": "Keine Widgets im Dashboard",
     "addFirst": "ERSTES WIDGET HINZUFÜGEN"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Drag & Drop Arbeitsbereich",
+    "layout": "Layout",
+    "custom": "Benutzerdefiniert",
+    "empty": "Leer",
+    "active": "AKTIV",
+    "cache": "Cache: AKTIVIERT"
   }
 }

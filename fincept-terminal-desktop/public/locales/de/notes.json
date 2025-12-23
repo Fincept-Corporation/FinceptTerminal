@@ -1,0 +1,39 @@
+{
+    "title": "Notizen",
+    "header": {
+        "notes": "Notizen",
+        "folders": "Ordner",
+        "tags": "Tags"
+    },
+    "toolbar": {
+        "newNote": "Neue Notiz",
+        "templates": "Vorlagen",
+        "favorites": "Favoriten",
+        "filters": "Filter",
+        "archived": "Archiviert"
+    },
+    "editor": {
+        "title": "Titel",
+        "content": "Inhalt",
+        "tags": "Tags"
+    },
+    "buttons": {
+        "save": "Speichern",
+        "delete": "Löschen",
+        "archive": "Archivieren",
+        "share": "Teilen"
+    },
+    "messages": {
+        "saved": "Notiz gespeichert",
+        "deleted": "Notiz gelöscht",
+        "archived": "Notiz archiviert"
+    },
+    "search": {
+        "placeholder": "Notizen suchen..."
+    },
+    "stats": {
+        "total": "Gesamt",
+        "archived": "Archiviert",
+        "favorites": "Favoriten"
+    }
+}

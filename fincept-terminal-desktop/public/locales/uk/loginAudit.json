@@ -1,11 +1,13 @@
 {
     "title": "ПАНЕЛЬ АУДИТУ ВХОДУ",
-    "accessDenied": "Необхідний доступ адміністратора",
+    "accessDenied": "Потрібен доступ адміністратора",
     "metrics": {
-        "dauToday": "DAU сьогодні",
+        "dauToday": "DAU Сьогодні",
         "mau": "MAU",
-        "successRate": "Успішність",
-        "activeSessions": "Активні сесії"
+        "successRate": "Рівень успіху",
+        "failed24h": "Невдалі (24г)",
+        "activeSessions": "Активні сесії",
+        "uniqueIps": "Унікальні IP"
     },
     "views": {
         "overview": "ОГЛЯД",
@@ -13,13 +15,43 @@
         "alerts": "СПОВІЩЕННЯ",
         "analytics": "АНАЛІТИКА"
     },
+    "activity": {
+        "recentLoginActivity": "НЕЩОДАВНЯ АКТИВНІСТЬ ВХОДУ",
+        "securityAlerts": "СПОВІЩЕННЯ БЕЗПЕКИ",
+        "noActiveAlerts": "Немає активних сповіщень",
+        "loginEventLog": "ЖУРНАЛ ПОДІЙ ВХОДУ"
+    },
+    "table": {
+        "time": "Час",
+        "event": "Подія",
+        "user": "Користувач",
+        "ipAddress": "IP Адреса",
+        "location": "Розташування",
+        "device": "Пристрій",
+        "details": "Деталі"
+    },
+    "alerts": {
+        "securityIncidents": "СПОВІЩЕННЯ ТА ІНЦИДЕНТИ БЕЗПЕКИ",
+        "noAlerts": "Немає сповіщень безпеки",
+        "dismiss": "ВІДХИЛИТИ",
+        "blockIp": "БЛОКУВАТИ IP",
+        "investigate": "ДОСЛІДИТИ"
+    },
+    "analytics": {
+        "loginsByCountry": "ВХОДИ ЗА КРАЇНОЮ (30 днів)",
+        "failureReasons": "ПРИЧИНИ ПОМИЛОК (24г)",
+        "peakHours": "ПІКОВІ ГОДИНИ (UTC)",
+        "logins": "входи"
+    },
     "controls": {
-        "autoRefresh": "Автооновлення",
+        "autoRefresh": "Авто-оновлення",
         "loading": "ЗАВАНТАЖЕННЯ...",
         "refresh": "ОНОВИТИ"
     },
     "status": {
         "admin": "Адмін",
+        "dau": "DAU",
+        "status": "Статус",
         "updating": "ОНОВЛЕННЯ",
         "ready": "ГОТОВО"
     }

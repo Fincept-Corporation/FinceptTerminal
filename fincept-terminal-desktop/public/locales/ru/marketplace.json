@@ -1,0 +1,38 @@
+{
+    "title": "МАРКЕТПЛЕЙС",
+    "header": {
+        "browse": "Обзор",
+        "myItems": "Мои товары",
+        "cart": "Корзина"
+    },
+    "categories": {
+        "all": "Все",
+        "indicators": "Индикаторы",
+        "strategies": "Стратегии",
+        "datasets": "Наборы данных",
+        "tools": "Инструменты"
+    },
+    "buttons": {
+        "buy": "Купить",
+        "addToCart": "В корзину",
+        "install": "Установить",
+        "preview": "Просмотр"
+    },
+    "product": {
+        "price": "Цена",
+        "rating": "Рейтинг",
+        "downloads": "Загрузки",
+        "author": "Автор",
+        "version": "Версия"
+    },
+    "cart": {
+        "total": "Итого",
+        "checkout": "Оформить",
+        "empty": "Корзина пуста"
+    },
+    "messages": {
+        "addedToCart": "Добавлено в корзину",
+        "purchased": "Куплено",
+        "installed": "Установлено"
+    }
+}

@@ -1,14 +1,14 @@
 {
     "title": "РЫНКИ",
-    "marketTerminalLive": "РЫНОЧНЫЙ ТЕРМИНАЛ - ДАННЫЕ В РЕАЛЬНОМ ВРЕМЕНИ",
+    "marketTerminalLive": "ТЕРМИНАЛ РЫНКОВ - ДАННЫЕ LIVE",
     "globalMarkets": "ГЛОБАЛЬНЫЕ РЫНКИ",
     "regionalMarkets": "региональные рынки",
-    "regionalMarketsLive": "РЕГИОНАЛЬНЫЕ РЫНКИ - ДАННЫЕ В РЕАЛЬНОМ ВРЕМЕНИ",
-    "liveData": "ДАННЫЕ В РЕАЛЬНОМ ВРЕМЕНИ",
+    "regionalMarketsLive": "РЕГИОНАЛЬНЫЕ РЫНКИ - ДАННЫЕ LIVE",
+    "liveData": "ДАННЫЕ LIVE",
     "symbol": "СИМВОЛ",
     "name": "НАЗВАНИЕ",
     "price": "ЦЕНА",
-    "change": "ИЗМЕНЕНИЕ",
+    "change": "ИЗМ",
     "percentChange": "%ИЗМ",
     "high": "МАКС",
     "low": "МИН",
@@ -20,9 +20,29 @@
     "off": "ВЫКЛ",
     "lastUpdate": "ПОСЛЕДНЕЕ ОБНОВЛЕНИЕ",
     "updating": "ОБНОВЛЕНИЕ",
-    "live": "ЖИВОЙ",
-    "connected": "Подключено",
-    "cache": "Кэш",
+    "live": "LIVE",
+    "connected": "Подключен",
+    "cache": "Кеш",
     "enabled": "ВКЛЮЧЕН",
-    "dataProviderInfo": "Данные от Yahoo Finance API | Обновления в реальном времени"
+    "dataProviderInfo": "Данные от Yahoo Finance API | Обновления в реальном времени",
+    "header": {
+        "live": "LIVE",
+        "updating": "ОБНОВЛЕНИЕ",
+        "refresh": "ОБНОВИТЬ"
+    },
+    "tabs": {
+        "overview": "Обзор",
+        "stocks": "Акции",
+        "indices": "Индексы",
+        "forex": "Форекс",
+        "crypto": "Крипто",
+        "commodities": "Сырье",
+        "bonds": "Облигации"
+    },
+    "status": {
+        "marketOpen": "Рынок открыт",
+        "marketClosed": "Рынок закрыт",
+        "preMarket": "Премаркет",
+        "afterHours": "После закрытия"
+    }
 }

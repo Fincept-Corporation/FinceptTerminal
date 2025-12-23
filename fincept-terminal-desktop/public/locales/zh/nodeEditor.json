@@ -1,0 +1,32 @@
+{
+    "title": "节点编辑器",
+    "header": {
+        "nodes": "节点",
+        "connections": "连接",
+        "canvas": "画布"
+    },
+    "tabs": {
+        "editor": "编辑器",
+        "preview": "预览"
+    },
+    "toolbar": {
+        "addNode": "添加节点",
+        "delete": "删除",
+        "clear": "全部清除",
+        "run": "运行",
+        "save": "保存",
+        "load": "加载"
+    },
+    "nodes": {
+        "input": "输入",
+        "output": "输出",
+        "process": "处理",
+        "condition": "条件"
+    },
+    "messages": {
+        "saved": "图表已保存",
+        "loaded": "图表已加载",
+        "running": "运行中...",
+        "completed": "已完成"
+    }
+}

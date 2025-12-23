@@ -1,0 +1,32 @@
+{
+    "title": "Editor de nodos",
+    "header": {
+        "nodes": "Nodos",
+        "connections": "Conexiones",
+        "canvas": "Lienzo"
+    },
+    "tabs": {
+        "editor": "Editor",
+        "preview": "Vista previa"
+    },
+    "toolbar": {
+        "addNode": "Añadir nodo",
+        "delete": "Eliminar",
+        "clear": "Limpiar todo",
+        "run": "Ejecutar",
+        "save": "Guardar",
+        "load": "Cargar"
+    },
+    "nodes": {
+        "input": "Entrada",
+        "output": "Salida",
+        "process": "Proceso",
+        "condition": "Condición"
+    },
+    "messages": {
+        "saved": "Gráfico guardado",
+        "loaded": "Gráfico cargado",
+        "running": "Ejecutando...",
+        "completed": "Completado"
+    }
+}

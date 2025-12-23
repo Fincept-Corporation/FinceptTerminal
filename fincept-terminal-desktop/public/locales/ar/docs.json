@@ -1,5 +1,5 @@
 {
-    "title": "محطة توثيق فينسبت",
+    "title": "محطة توثيق Fincept",
     "header": {
         "sections": "الأقسام",
         "topics": "المواضيع",
@@ -12,13 +12,13 @@
     "navigation": "التنقل",
     "codeExample": "مثال الكود",
     "content": {
-        "title": "توثيق محطة فينسبت",
+        "title": "توثيق محطة FINCEPT",
         "description": "اختر موضوعاً من لوحة التنقل لعرض الأدلة الشاملة ومرجع API.",
         "topicsAvailable": "مواضيع متاحة",
         "selectTopic": "اختر موضوعاً للبدء"
     },
     "status": {
-        "version": "توثيق محطة فينسبت الإصدار 3.0",
+        "version": "Fincept Terminal Documentation v3.0 | مرجع API كامل وأدلة",
         "sections": "الأقسام",
         "topics": "المواضيع",
         "current": "الحالي"

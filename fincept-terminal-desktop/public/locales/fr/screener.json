@@ -1,24 +1,52 @@
 {
-    "title": "SCREENER ACTIONS",
+    "title": "EXPLORATEUR DE SÉRIES FRED",
     "header": {
+        "title": "EXPLORATEUR DE DONNÉES FRED",
         "filters": "FILTRES",
         "results": "RÉSULTATS",
-        "saved": "ENREGISTRÉS",
+        "saved": "ÉCRANS SAUVEGARDÉS",
         "presets": "PRÉRÉGLAGES"
     },
+    "apiKey": {
+        "required": "CLÉ API REQUISE",
+        "configure": "Configurez votre clé FRED API dans Paramètres → Identifiants pour accéder aux données économiques.",
+        "getKey": "Obtenez une clé API gratuite sur",
+        "addToSettings": "Ajouter à Paramètres → Identifiants → FRED_API_KEY",
+        "saveAndReload": "Enregistrer et recharger cet onglet",
+        "tip": "Assurez-vous d'avoir configuré votre clé FRED API dans Paramètres → Identifiants"
+    },
+    "form": {
+        "seriesIds": "IDs DES SÉRIES",
+        "startDate": "DATE DÉBUT",
+        "endDate": "DATE FIN",
+        "quickAdd": "AJOUT RAPIDE"
+    },
+    "buttons": {
+        "fetch": "RÉCUPÉRER",
+        "loading": "CHARGEMENT",
+        "browse": "PARCOURIR LES SÉRIES",
+        "done": "TERMINÉ"
+    },
+    "chart": {
+        "title": "GRAPHIQUE DES SÉRIES TEMPORELLES",
+        "emptyState": "Entrez les IDs de série et cliquez sur RÉCUPÉRER pour visualiser les données",
+        "trySuggestion": "Essayez de rechercher GDP, UNRATE ou CPIAUCSL",
+        "waiting": "Veuillez patienter pendant que nous récupérons les données de FRED...",
+        "errorFetching": "Erreur de Récupération des Données"
+    },
     "filters": {
-        "add": "Ajouter filtre",
-        "clear": "Tout effacer",
+        "add": "Ajouter Filtre",
+        "clear": "Tout Effacer",
         "reset": "Réinitialiser",
-        "apply": "Appliquer filtres"
+        "apply": "Appliquer Filtres"
     },
     "criteria": {
         "marketCap": "Capitalisation",
         "price": "Prix",
         "volume": "Volume",
-        "pe": "PER",
-        "eps": "BPA",
-        "dividend": "Rendement dividende",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Dividende",
         "beta": "Bêta",
         "sector": "Secteur",
         "industry": "Industrie",
@@ -38,19 +66,19 @@
         "price": "Prix",
         "change": "Variation",
         "volume": "Volume",
-        "marketCap": "Cap.",
-        "matches": "résultats"
+        "marketCap": "Capitalisation",
+        "matches": "résultats trouvés"
     },
     "actions": {
-        "save": "Enregistrer écran",
-        "load": "Charger écran",
-        "export": "Exporter",
-        "addToWatchlist": "Ajouter à la liste"
+        "save": "Sauvegarder Écran",
+        "load": "Charger Écran",
+        "export": "Exporter Résultats",
+        "addToWatchlist": "Ajouter à la Liste"
     },
     "messages": {
-        "loading": "Recherche en cours...",
-        "noResults": "Aucun résultat",
-        "saved": "Enregistré",
+        "loading": "Filtrage des actions...",
+        "noResults": "Aucune action ne correspond",
+        "saved": "Écran sauvegardé avec succès",
         "applied": "Filtres appliqués"
     }
 }

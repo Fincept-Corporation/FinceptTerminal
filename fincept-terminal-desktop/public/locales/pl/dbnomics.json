@@ -1,0 +1,30 @@
+{
+    "title": "Dane DBnomics",
+    "header": {
+        "search": "Szukaj",
+        "providers": "Dostawcy",
+        "datasets": "Zbiory danych"
+    },
+    "form": {
+        "provider": "Dostawca",
+        "dataset": "Zbiór danych",
+        "series": "Seria",
+        "startDate": "Data początkowa",
+        "endDate": "Data końcowa"
+    },
+    "buttons": {
+        "fetch": "Pobierz",
+        "search": "Szukaj",
+        "export": "Eksportuj",
+        "clear": "Wyczyść"
+    },
+    "chart": {
+        "title": "Wizualizacja danych",
+        "emptyState": "Wybierz serię aby zobaczyć dane"
+    },
+    "messages": {
+        "loading": "Ładowanie danych...",
+        "noData": "Nie znaleziono danych",
+        "error": "Błąd pobierania danych"
+    }
+}

@@ -1,45 +1,63 @@
 {
-    "title": "GESTOR DE PORTAFOLIO FINCEPT",
+    "title": "GESTOR DE CARTERA FINCEPT",
     "header": {
         "live": "EN VIVO",
         "updating": "ACTUALIZANDO",
-        "newPortfolio": "NUEVO PORTAFOLIO",
+        "newPortfolio": "NUEVA CARTERA",
         "refresh": "ACTUALIZAR",
         "exportCsv": "EXPORTAR CSV"
     },
     "summary": {
         "totalValue": "VALOR TOTAL",
-        "dayPnl": "P&L DÍA",
-        "totalPnl": "P&L TOTAL",
+        "dayPnl": "G/P DÍA",
+        "totalPnl": "G/P TOTAL",
         "positions": "POSICIONES"
     },
     "views": {
         "positions": "POSICIONES",
         "addAsset": "AÑADIR ACTIVO",
         "sellAsset": "VENDER ACTIVO",
-        "analytics": "ANALÍTICAS",
+        "analytics": "ANALÍTICA",
         "history": "HISTORIAL",
+        "activeMgmt": "GESTIÓN ACTIVA",
         "performance": "RENDIMIENTO",
-        "rebalance": "REBALANCEAR",
+        "rebalance": "REBALANCEO",
         "reports": "INFORMES",
         "alerts": "ALERTAS",
         "sectors": "SECTORES",
         "help": "AYUDA"
     },
     "sidebar": {
-        "portfolios": "PORTAFOLIOS",
-        "loading": "Cargando portafolios...",
-        "noPortfolios": "No hay portafolios aún.",
-        "clickCreate": "Haga clic en NUEVO PORTAFOLIO para crear uno."
+        "portfolios": "CARTERAS",
+        "loading": "Cargando carteras...",
+        "noPortfolios": "Aún no hay carteras.",
+        "clickCreate": "Haz clic en NUEVA CARTERA para crear una.",
+        "owner": "Propietario",
+        "currency": "Moneda"
+    },
+    "content": {
+        "selectOrCreate": "Selecciona una cartera o crea una nueva para comenzar",
+        "loadingData": "Cargando datos de cartera...",
+        "comingSoon": "vista próximamente..."
     },
     "modals": {
-        "createNew": "CREAR NUEVO PORTAFOLIO",
-        "portfolioName": "NOMBRE DEL PORTAFOLIO",
+        "createNew": "CREAR NUEVA CARTERA",
+        "portfolioName": "NOMBRE DE CARTERA",
         "owner": "PROPIETARIO",
         "currency": "MONEDA",
         "cancel": "CANCELAR",
         "create": "CREAR",
+        "addAssetTitle": "AÑADIR ACTIVO A CARTERA",
+        "sellAssetTitle": "VENDER ACTIVO",
+        "symbol": "SÍMBOLO",
+        "quantity": "CANTIDAD",
+        "price": "PRECIO",
         "add": "AÑADIR",
         "sell": "VENDER"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | Seguimiento en tiempo real con integración yfinance",
+        "lastUpdated": "Última Actualización",
+        "connected": "CONECTADO"
     }
 }

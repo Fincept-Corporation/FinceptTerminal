@@ -1,11 +1,11 @@
 {
     "title": "로그인 감사 대시보드",
-    "accessDenied": "로그인 감사 대시보드를 보려면 관리자 권한이 필요합니다",
+    "accessDenied": "관리자 접근 필요",
     "metrics": {
         "dauToday": "오늘 DAU",
         "mau": "MAU",
         "successRate": "성공률",
-        "failed24h": "실패(24h)",
+        "failed24h": "실패(24시간)",
         "activeSessions": "활성 세션",
         "uniqueIps": "고유 IP"
     },
@@ -15,6 +15,34 @@
         "alerts": "알림",
         "analytics": "분석"
     },
+    "activity": {
+        "recentLoginActivity": "최근 로그인 활동",
+        "securityAlerts": "보안 알림",
+        "noActiveAlerts": "활성 알림 없음",
+        "loginEventLog": "로그인 이벤트 로그"
+    },
+    "table": {
+        "time": "시간",
+        "event": "이벤트",
+        "user": "사용자",
+        "ipAddress": "IP 주소",
+        "location": "위치",
+        "device": "장치",
+        "details": "세부 정보"
+    },
+    "alerts": {
+        "securityIncidents": "보안 알림 및 사고",
+        "noAlerts": "보안 알림 없음",
+        "dismiss": "해제",
+        "blockIp": "IP 차단",
+        "investigate": "조사"
+    },
+    "analytics": {
+        "loginsByCountry": "국가별 로그인(30일)",
+        "failureReasons": "실패 원인(24시간)",
+        "peakHours": "피크 시간(UTC)",
+        "logins": "로그인"
+    },
     "controls": {
         "autoRefresh": "자동 새로고침",
         "loading": "로딩 중...",
@@ -22,7 +50,9 @@
     },
     "status": {
         "admin": "관리자",
+        "dau": "DAU",
+        "status": "상태",
         "updating": "업데이트 중",
-        "ready": "준비"
+        "ready": "준비됨"
     }
 }

@@ -1,0 +1,46 @@
+{
+    "title": "ALPHA ARENA",
+    "header": {
+        "competition": "KOMPETISI",
+        "leaderboard": "PAPAN PERINGKAT",
+        "decisions": "KEPUTUSAN",
+        "cycles": "SIKLUS"
+    },
+    "buttons": {
+        "start": "MULAI",
+        "stop": "BERHENTI",
+        "refresh": "SEGARKAN",
+        "create": "BUAT KOMPETISI"
+    },
+    "form": {
+        "competitionName": "Nama kompetisi",
+        "symbol": "Simbol",
+        "mode": "Mode trading",
+        "models": "Pilih model",
+        "apiKeys": "Kunci API"
+    },
+    "modes": {
+        "baseline": "Dasar",
+        "monk": "Monk",
+        "situational": "Situasional",
+        "maxLeverage": "Leverage maksimum"
+    },
+    "leaderboard": {
+        "rank": "Peringkat",
+        "model": "Model",
+        "pnl": "L/R",
+        "trades": "Perdagangan",
+        "winRate": "Tingkat kemenangan"
+    },
+    "status": {
+        "running": "BERJALAN",
+        "stopped": "BERHENTI",
+        "waiting": "MENUNGGU",
+        "error": "ERROR"
+    },
+    "messages": {
+        "competitionStarted": "Kompetisi dimulai",
+        "competitionStopped": "Kompetisi berhenti",
+        "noCompetition": "Tidak ada kompetisi aktif"
+    }
+}

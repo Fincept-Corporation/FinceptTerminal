@@ -1,0 +1,30 @@
+{
+    "title": "DBnomics Daten",
+    "header": {
+        "search": "Suchen",
+        "providers": "Anbieter",
+        "datasets": "Datensätze"
+    },
+    "form": {
+        "provider": "Anbieter",
+        "dataset": "Datensatz",
+        "series": "Serie",
+        "startDate": "Startdatum",
+        "endDate": "Enddatum"
+    },
+    "buttons": {
+        "fetch": "Abrufen",
+        "search": "Suchen",
+        "export": "Exportieren",
+        "clear": "Löschen"
+    },
+    "chart": {
+        "title": "Datenvisualisierung",
+        "emptyState": "Wählen Sie eine Serie zum Anzeigen"
+    },
+    "messages": {
+        "loading": "Daten werden geladen...",
+        "noData": "Keine Daten gefunden",
+        "error": "Fehler beim Abrufen"
+    }
+}

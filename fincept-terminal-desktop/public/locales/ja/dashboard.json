@@ -4,6 +4,11 @@
     "live": "ライブ",
     "widgets": "ウィジェット"
   },
+  "buttons": {
+    "addWidget": "ウィジェット追加",
+    "saveLayout": "レイアウト保存",
+    "reset": "リセット"
+  },
   "widgets": {
     "loading": "読み込み中...",
     "error": "エラー",
@@ -11,33 +16,64 @@
     "refresh": "更新",
     "remove": "削除",
     "globalIndices": "グローバル指数 - トップ12",
-    "forex": "通貨ペア",
+    "forex": "為替ペア",
     "crypto": "暗号通貨",
-    "commodities": "商品",
+    "commodities": "コモディティ",
     "bonds": "債券",
     "etfs": "ETF",
     "news": "ニュース",
     "forum": "フォーラム",
     "watchlist": "ウォッチリスト",
-    "maritime": "海運",
+    "maritime": "海事",
     "index": "指数",
     "symbol": "シンボル",
     "name": "名前",
     "price": "価格",
     "change": "変動",
-    "percentChange": "変動率",
+    "percentChange": "変動%",
     "high": "高値",
     "low": "安値",
     "noIndexData": "指数データなし",
-    "noData": "データなし"
+    "noForexData": "為替データなし",
+    "noCryptoData": "暗号通貨データなし",
+    "noCommoditiesData": "コモディティデータなし",
+    "noNewsData": "ニュースなし",
+    "noForumPosts": "投稿なし",
+    "noStocksInWatchlist": "ウォッチリストに銘柄なし",
+    "noWatchlistSelected": "ウォッチリスト未選択",
+    "noData": "データなし",
+    "pair": "ペア",
+    "rate": "レート",
+    "commodity": "コモディティ",
+    "maritimeIntelligence": "⚓ 海事インテリジェンス",
+    "globe3D": "3Dグローブ",
+    "vessels": "船舶",
+    "routes": "ルート",
+    "vol24h": "24時間出来高",
+    "topTradeCorridors": "主要貿易回廊",
+    "ships": "船"
   },
-  "buttons": {
-    "addWidget": "ウィジェット追加",
-    "saveLayout": "レイアウト保存",
-    "reset": "リセット"
+  "tips": {
+    "drag": "ウィジェットをドラッグして並び替え",
+    "resize": "右下からサイズ変更",
+    "remove": "Xボタンでウィジェット削除",
+    "responsive": "レスポンシブレイアウト - 全幅使用"
+  },
+  "loading": {
+    "title": "ダッシュボード初期化中",
+    "description": "高速データ読み込みのためのキャッシュ設定中...",
+    "note": "初回起動時のみ少し時間がかかります"
   },
   "empty": {
-    "noWidgets": "ダッシュボードにウィジェットがありません",
+    "noWidgets": "ダッシュボードにウィジェットなし",
     "addFirst": "最初のウィジェットを追加"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | ドラッグ&ドロップワークスペース",
+    "layout": "レイアウト",
+    "custom": "カスタム",
+    "empty": "空",
+    "active": "アクティブ",
+    "cache": "キャッシュ: 有効"
   }
 }

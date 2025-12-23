@@ -1,0 +1,33 @@
+{
+    "title": "리포트 빌더",
+    "header": {
+        "templates": "템플릿",
+        "reports": "리포트",
+        "preview": "미리보기"
+    },
+    "toolbar": {
+        "new": "새 리포트",
+        "save": "저장",
+        "export": "내보내기",
+        "print": "인쇄",
+        "share": "공유"
+    },
+    "sections": {
+        "header": "헤더",
+        "summary": "요약",
+        "charts": "차트",
+        "tables": "테이블",
+        "footer": "푸터"
+    },
+    "templates": {
+        "daily": "일일 리포트",
+        "weekly": "주간 리포트",
+        "monthly": "월간 리포트",
+        "custom": "사용자 정의"
+    },
+    "messages": {
+        "saved": "리포트 저장됨",
+        "exported": "리포트 내보냄",
+        "generating": "리포트 생성 중..."
+    }
+}

@@ -12,7 +12,7 @@
     "sessionExpires": "Сесія закінчується",
     "deviceId": "ID пристрою",
     "apiKey": "API ключ",
-    "dailyUsageStats": "СТАТИСТИКА ЩОДЕННОГО ВИКОРИСТАННЯ",
+    "dailyUsageStats": "ЩОДЕННА СТАТИСТИКА ВИКОРИСТАННЯ",
     "todaysRequests": "Запити за сьогодні",
     "status": "Статус",
     "active": "АКТИВНИЙ",
@@ -28,5 +28,10 @@
     "device": "Пристрій",
     "updating": "ОНОВЛЕННЯ",
     "ready": "ГОТОВИЙ",
-    "credits": "КРЕДИТИ"
+    "credits": "КРЕДИТИ",
+    "overview": "ОГЛЯД",
+    "usage": "ВИКОРИСТАННЯ",
+    "settings": "НАЛАШТУВАННЯ",
+    "pricing": "ЦІНИ",
+    "logout": "ВИХІД"
 }

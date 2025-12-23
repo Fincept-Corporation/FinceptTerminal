@@ -1,0 +1,33 @@
+{
+    "title": "Gerador de relatórios",
+    "header": {
+        "templates": "Modelos",
+        "reports": "Relatórios",
+        "preview": "Visualizar"
+    },
+    "toolbar": {
+        "new": "Novo relatório",
+        "save": "Salvar",
+        "export": "Exportar",
+        "print": "Imprimir",
+        "share": "Compartilhar"
+    },
+    "sections": {
+        "header": "Cabeçalho",
+        "summary": "Resumo",
+        "charts": "Gráficos",
+        "tables": "Tabelas",
+        "footer": "Rodapé"
+    },
+    "templates": {
+        "daily": "Relatório diário",
+        "weekly": "Relatório semanal",
+        "monthly": "Relatório mensal",
+        "custom": "Personalizado"
+    },
+    "messages": {
+        "saved": "Relatório salvo",
+        "exported": "Relatório exportado",
+        "generating": "Gerando relatório..."
+    }
+}

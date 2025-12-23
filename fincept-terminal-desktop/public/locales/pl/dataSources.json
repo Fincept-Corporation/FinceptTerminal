@@ -2,7 +2,7 @@
     "title": "ŹRÓDŁA DANYCH",
     "header": {
         "available": "DOSTĘPNE ŹRÓDŁA",
-        "connected": "POŁĄCZONE",
+        "connected": "POŁĄCZONO",
         "addNew": "DODAJ ŹRÓDŁO",
         "refresh": "ODŚWIEŻ"
     },
@@ -10,12 +10,12 @@
         "market": "Dane rynkowe",
         "economic": "Dane ekonomiczne",
         "alternative": "Dane alternatywne",
-        "news": "Wiadomości",
+        "news": "Wiadomości i sentyment",
         "fundamental": "Dane fundamentalne"
     },
     "status": {
-        "connected": "Połączone",
-        "disconnected": "Rozłączone",
+        "connected": "Połączono",
+        "disconnected": "Rozłączono",
         "error": "Błąd",
         "pending": "Oczekuje"
     },
@@ -23,21 +23,21 @@
         "connect": "Połącz",
         "disconnect": "Rozłącz",
         "configure": "Konfiguruj",
-        "test": "Testuj",
+        "test": "Testuj połączenie",
         "delete": "Usuń"
     },
     "form": {
         "apiKey": "Klucz API",
-        "endpoint": "URL",
-        "username": "Użytkownik",
+        "endpoint": "URL Endpoint",
+        "username": "Nazwa użytkownika",
         "password": "Hasło",
         "save": "Zapisz",
         "cancel": "Anuluj"
     },
     "messages": {
-        "connectionSuccess": "Połączono pomyślnie",
-        "connectionFailed": "Błąd połączenia",
-        "noSources": "Brak źródeł",
-        "loading": "Ładowanie..."
+        "connectionSuccess": "Pomyślnie połączono ze źródłem danych",
+        "connectionFailed": "Nie udało się połączyć ze źródłem danych",
+        "noSources": "Brak skonfigurowanych źródeł danych",
+        "loading": "Ładowanie źródeł danych..."
     }
 }

@@ -1,5 +1,5 @@
 {
-    "title": "QUẢN LÝ DANH MỤC FINCEPT",
+    "title": "QUẢN LÝ DANH MỤC ĐẦU TƯ FINCEPT",
     "header": {
         "live": "TRỰC TIẾP",
         "updating": "ĐANG CẬP NHẬT",
@@ -9,20 +9,55 @@
     },
     "summary": {
         "totalValue": "TỔNG GIÁ TRỊ",
-        "dayPnl": "L/L NGÀY",
-        "totalPnl": "TỔNG L/L",
+        "dayPnl": "LN/L NGÀY",
+        "totalPnl": "TỔNG LN/L",
         "positions": "VỊ THẾ"
+    },
+    "views": {
+        "positions": "VỊ THẾ",
+        "addAsset": "THÊM TÀI SẢN",
+        "sellAsset": "BÁN TÀI SẢN",
+        "analytics": "PHÂN TÍCH",
+        "history": "LỊCH SỬ",
+        "activeMgmt": "QUẢN LÝ CHỦ ĐỘNG",
+        "performance": "HIỆU SUẤT",
+        "rebalance": "TÁI CÂN BẰNG",
+        "reports": "BÁO CÁO",
+        "alerts": "CẢNH BÁO",
+        "sectors": "NGÀNH",
+        "help": "TRỢ GIÚP"
     },
     "sidebar": {
         "portfolios": "DANH MỤC",
-        "loading": "Đang tải...",
-        "noPortfolios": "Chưa có danh mục nào."
+        "loading": "Đang tải danh mục...",
+        "noPortfolios": "Chưa có danh mục.",
+        "clickCreate": "Nhấp DANH MỤC MỚI để tạo.",
+        "owner": "Chủ sở hữu",
+        "currency": "Tiền tệ"
+    },
+    "content": {
+        "selectOrCreate": "Chọn danh mục hoặc tạo mới để bắt đầu",
+        "loadingData": "Đang tải dữ liệu danh mục...",
+        "comingSoon": "sắp có..."
     },
     "modals": {
         "createNew": "TẠO DANH MỤC MỚI",
+        "portfolioName": "TÊN DANH MỤC",
+        "owner": "CHỦ SỞ HỮU",
+        "currency": "TIỀN TỆ",
         "cancel": "HỦY",
         "create": "TẠO",
+        "addAssetTitle": "THÊM TÀI SẢN VÀO DANH MỤC",
+        "sellAssetTitle": "BÁN TÀI SẢN",
+        "symbol": "MÃ",
+        "quantity": "SỐ LƯỢNG",
+        "price": "GIÁ",
         "add": "THÊM",
         "sell": "BÁN"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | Theo dõi thời gian thực với tích hợp yfinance",
+        "lastUpdated": "Cập Nhật Lần Cuối",
+        "connected": "ĐÃ KẾT NỐI"
     }
 }

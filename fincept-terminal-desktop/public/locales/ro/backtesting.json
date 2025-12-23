@@ -1,0 +1,95 @@
+﻿{
+    "title": "MOTOR DE BACKTESTING",
+    "header": {
+        "strategy": "STRATEGIE",
+        "results": "REZULTATE",
+        "trades": "TRANZACȚII"
+    },
+    "toolbar": {
+        "run": "Rulează Backtest",
+        "running": "Se rulează...",
+        "stop": "STOP",
+        "reset": "RESETEAZĂ",
+        "export": "EXPORTĂ REZULTATE",
+        "refresh": "Reîmprospătează"
+    },
+    "config": {
+        "symbolTimeframe": "Simbol și Interval",
+        "symbol": "Simbol",
+        "stockTicker": "Ticker pentru backtest",
+        "startDate": "Data Început",
+        "endDate": "Data Sfârșit",
+        "initialCapital": "Capital Inițial",
+        "strategy": "Strategie",
+        "parameters": "Parametri"
+    },
+    "sections": {
+        "strategyConfig": "Configurare Strategie",
+        "strategyType": "Tip Strategie",
+        "strategyParams": "Parametri Strategie",
+        "backtestResults": "Rezultate Backtest",
+        "advancedSettings": "Setări Avansate",
+        "advancedNote": "Opțiuni avansate pentru Backtesting.py"
+    },
+    "advanced": {
+        "commission": "Comision (zecimal)",
+        "tradeOnClose": "Tranzacționare la Închidere",
+        "hedging": "Hedging",
+        "exclusiveOrders": "Ordine Exclusive",
+        "margin": "Marjă"
+    },
+    "strategies": {
+        "sma": "Încrucișare SMA",
+        "rsi": "Strategie RSI",
+        "macd": "Strategie MACD",
+        "bollinger": "Benzi Bollinger",
+        "custom": "Strategie Personalizată"
+    },
+    "smaParams": {
+        "fastPeriod": "Perioadă Rapidă",
+        "slowPeriod": "Perioadă Lentă",
+        "fastNote": "Medie mobilă pe termen scurt",
+        "slowNote": "Medie mobilă pe termen lung"
+    },
+    "results": {
+        "totalReturn": "Randament Total",
+        "sharpeRatio": "Raport Sharpe",
+        "maxDrawdown": "Drawdown Maxim",
+        "winRate": "Rata de Câștig",
+        "totalTrades": "Total Tranzacții",
+        "profitFactor": "Factor de Profit",
+        "configurePrompt": "Configurați backtestul și faceți clic pe 'Rulează' pentru rezultate"
+    },
+    "trades": {
+        "date": "Data",
+        "type": "Tip",
+        "price": "Preț",
+        "quantity": "Cantitate",
+        "pnl": "P&L"
+    },
+    "status": {
+        "ready": "Gata",
+        "running": "Se rulează...",
+        "completed": "Finalizat",
+        "error": "Eroare"
+    },
+    "messages": {
+        "backtestStarted": "Backtest început",
+        "backtestCompleted": "Backtest finalizat",
+        "backtestError": "Backtest eșuat"
+    },
+    "visual": {
+        "priceData": "Date Preț",
+        "maIndicator": "Indicator MA",
+        "condition": "Condiție",
+        "buyOrder": "Ordin Cumpărare",
+        "sellOrder": "Ordin Vânzare",
+        "addBlocksPrompt": "Faceți clic pe blocuri pentru a adăuga la strategie",
+        "remove": "Elimină",
+        "generateCode": "Generează Cod din Blocuri"
+    },
+    "template": {
+        "strategyTemplates": "Șabloane Strategie",
+        "apply": "Aplică Șablon"
+    }
+}

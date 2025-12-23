@@ -1,7 +1,7 @@
 {
-    "title": "NOTICIAS PROFESIONALES DE FINCEPT TERMINAL",
+    "title": "NOTICIAS PROFESIONALES DE TERMINAL FINCEPT",
     "header": {
-        "liveFeed": "EN VIVO",
+        "liveFeed": "FEED EN VIVO",
         "live": "EN VIVO",
         "refresh": "ACTUALIZAR",
         "updating": "ACTUALIZANDO...",
@@ -16,23 +16,62 @@
     "categories": {
         "all": "TODO",
         "markets": "MERCADOS",
+        "stocks": "Acciones",
+        "forex": "Forex",
         "crypto": "CRIPTO",
+        "commodities": "Materias Primas",
+        "economy": "Economía",
         "economic": "ECON",
-        "earnings": "GANANCIAS"
+        "politics": "Política",
+        "earnings": "GANANCIAS",
+        "tech": "TECH",
+        "energy": "ENERGÍA",
+        "banking": "BANCA",
+        "geopolitics": "GEOPO",
+        "flash": "FLASH",
+        "urgent": "URGENTE"
+    },
+    "feedLabels": {
+        "primary": "FEED DE NOTICIAS PRINCIPAL",
+        "secondary": "FEED DE NOTICIAS SECUNDARIO",
+        "refresh": "ACTUALIZAR"
+    },
+    "filters": {
+        "source": "Fuente",
+        "region": "Región",
+        "timeframe": "Tiempo"
+    },
+    "timeframes": {
+        "1h": "1 Hora",
+        "24h": "24 Horas",
+        "1w": "1 Semana",
+        "1m": "1 Mes"
+    },
+    "article": {
+        "readMore": "Leer Más",
+        "source": "Fuente",
+        "published": "Publicado",
+        "relatedStocks": "Acciones Relacionadas",
+        "sentiment": "Sentimiento",
+        "impact": "Impacto"
     },
     "sentiment": {
         "bullish": "ALCISTA",
         "bearish": "BAJISTA",
-        "neutral": "NEUTRAL"
+        "neutral": "NEUTRAL",
+        "positive": "Positivo",
+        "negative": "Negativo"
     },
     "autoRefresh": {
-        "title": "INTERVALO DE AUTO-ACTUALIZACIÓN",
+        "title": "INTERVALO DE ACTUALIZACIÓN AUTOMÁTICA",
         "minute": "minuto",
         "minutes": "minutos"
     },
     "messages": {
         "loading": "Cargando noticias...",
-        "loadingFeeds": "Cargando fuentes de noticias...",
-        "breaking": "URGENTE"
+        "loadingFeeds": "Cargando feeds...",
+        "error": "Error al cargar noticias",
+        "noNews": "No hay noticias disponibles",
+        "breaking": "ÚLTIMA HORA"
     }
 }

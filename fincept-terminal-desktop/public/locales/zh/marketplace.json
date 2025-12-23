@@ -1,0 +1,38 @@
+{
+    "title": "市场",
+    "header": {
+        "browse": "浏览",
+        "myItems": "我的项目",
+        "cart": "购物车"
+    },
+    "categories": {
+        "all": "全部",
+        "indicators": "指标",
+        "strategies": "策略",
+        "datasets": "数据集",
+        "tools": "工具"
+    },
+    "buttons": {
+        "buy": "购买",
+        "addToCart": "加入购物车",
+        "install": "安装",
+        "preview": "预览"
+    },
+    "product": {
+        "price": "价格",
+        "rating": "评分",
+        "downloads": "下载量",
+        "author": "作者",
+        "version": "版本"
+    },
+    "cart": {
+        "total": "合计",
+        "checkout": "结账",
+        "empty": "购物车为空"
+    },
+    "messages": {
+        "addedToCart": "已加入购物车",
+        "purchased": "已购买",
+        "installed": "已安装"
+    }
+}

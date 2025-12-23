@@ -1,21 +1,66 @@
 {
-    "title": "ПРОФЕССИОНАЛЬНЫЕ НОВОСТИ FINCEPT TERMINAL",
+    "title": "ПРОФЕССИОНАЛЬНЫЕ НОВОСТИ ТЕРМИНАЛА FINCEPT",
     "header": {
-        "liveFeed": "ПРЯМОЙ ЭФИР",
+        "liveFeed": "ЖИВАЯ ЛЕНТА",
         "live": "ЖИВОЙ",
         "refresh": "ОБНОВИТЬ",
         "updating": "ОБНОВЛЕНИЕ...",
         "alerts": "ОПОВЕЩЕНИЯ",
         "sources": "ИСТОЧНИКИ",
+        "topics": "ТЕМЫ",
         "status": "СТАТУС",
         "demoMode": "ДЕМО РЕЖИМ",
         "articles": "СТАТЬИ",
         "activeSources": "АКТИВНЫЕ ИСТОЧНИКИ"
     },
+    "categories": {
+        "all": "ВСЕ",
+        "markets": "РЫНКИ",
+        "stocks": "Акции",
+        "forex": "Форекс",
+        "crypto": "КРИПТО",
+        "commodities": "Сырье",
+        "economy": "Экономика",
+        "economic": "ЭКОН",
+        "politics": "Политика",
+        "earnings": "ОТЧЕТЫ",
+        "tech": "ТЕХНОЛОГИИ",
+        "energy": "ЭНЕРГИЯ",
+        "banking": "БАНКИ",
+        "geopolitics": "ГЕОПОЛИТИКА",
+        "flash": "МОЛНИЯ",
+        "urgent": "СРОЧНО"
+    },
+    "feedLabels": {
+        "primary": "ОСНОВНАЯ ЛЕНТА НОВОСТЕЙ",
+        "secondary": "ДОПОЛНИТЕЛЬНАЯ ЛЕНТА НОВОСТЕЙ",
+        "refresh": "ОБНОВИТЬ"
+    },
+    "filters": {
+        "source": "Источник",
+        "region": "Регион",
+        "timeframe": "Период"
+    },
+    "timeframes": {
+        "1h": "1 Час",
+        "24h": "24 Часа",
+        "1w": "1 Неделя",
+        "1m": "1 Месяц"
+    },
+    "article": {
+        "readMore": "Читать Далее",
+        "source": "Источник",
+        "published": "Опубликовано",
+        "relatedStocks": "Связанные Акции",
+        "sentiment": "Настроение",
+        "impact": "Влияние"
+    },
     "sentiment": {
         "bullish": "БЫЧИЙ",
         "bearish": "МЕДВЕЖИЙ",
-        "neutral": "НЕЙТРАЛЬНЫЙ"
+        "neutral": "НЕЙТРАЛЬНЫЙ",
+        "positive": "Позитивный",
+        "negative": "Негативный"
     },
     "autoRefresh": {
         "title": "ИНТЕРВАЛ АВТООБНОВЛЕНИЯ",
@@ -25,6 +70,8 @@
     "messages": {
         "loading": "Загрузка новостей...",
         "loadingFeeds": "Загрузка лент...",
+        "error": "Ошибка загрузки новостей",
+        "noNews": "Нет новостей",
         "breaking": "СРОЧНО"
     }
 }

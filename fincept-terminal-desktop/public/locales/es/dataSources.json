@@ -7,11 +7,11 @@
         "refresh": "ACTUALIZAR"
     },
     "categories": {
-        "market": "Datos de mercado",
-        "economic": "Datos económicos",
-        "alternative": "Datos alternativos",
+        "market": "Datos de Mercado",
+        "economic": "Datos Económicos",
+        "alternative": "Datos Alternativos",
         "news": "Noticias y Sentimiento",
-        "fundamental": "Datos fundamentales"
+        "fundamental": "Datos Fundamentales"
     },
     "status": {
         "connected": "Conectado",
@@ -23,12 +23,12 @@
         "connect": "Conectar",
         "disconnect": "Desconectar",
         "configure": "Configurar",
-        "test": "Probar conexión",
+        "test": "Probar Conexión",
         "delete": "Eliminar"
     },
     "form": {
         "apiKey": "Clave API",
-        "endpoint": "URL del endpoint",
+        "endpoint": "URL Endpoint",
         "username": "Usuario",
         "password": "Contraseña",
         "save": "Guardar",
@@ -36,8 +36,8 @@
     },
     "messages": {
         "connectionSuccess": "Conectado exitosamente a la fuente de datos",
-        "connectionFailed": "Error al conectar",
-        "noSources": "Sin fuentes de datos configuradas",
+        "connectionFailed": "Error al conectar a la fuente de datos",
+        "noSources": "No hay fuentes de datos configuradas",
         "loading": "Cargando fuentes de datos..."
     }
 }

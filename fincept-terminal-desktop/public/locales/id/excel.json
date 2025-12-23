@@ -1,0 +1,26 @@
+{
+    "title": "Integrasi Excel",
+    "header": {
+        "import": "Impor",
+        "export": "Ekspor",
+        "preview": "Pratinjau"
+    },
+    "toolbar": {
+        "open": "Buka file",
+        "save": "Simpan",
+        "upload": "Unggah",
+        "download": "Unduh",
+        "refresh": "Segarkan"
+    },
+    "table": {
+        "sheet": "Lembar",
+        "rows": "Baris",
+        "columns": "Kolom"
+    },
+    "messages": {
+        "loading": "Memuat file...",
+        "imported": "File diimpor",
+        "exported": "File diekspor",
+        "error": "Error memproses file"
+    }
+}

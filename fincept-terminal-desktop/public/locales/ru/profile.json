@@ -12,10 +12,10 @@
     "sessionExpires": "Сессия истекает",
     "deviceId": "ID устройства",
     "apiKey": "API ключ",
-    "dailyUsageStats": "СТАТИСТИКА ЕЖЕДНЕВНОГО ИСПОЛЬЗОВАНИЯ",
+    "dailyUsageStats": "ЕЖЕДНЕВНАЯ СТАТИСТИКА ИСПОЛЬЗОВАНИЯ",
     "todaysRequests": "Запросы за сегодня",
     "status": "Статус",
-    "active": "АКТИВЕН",
+    "active": "АКТИВНЫЙ",
     "upgradeToFullAccess": "ОБНОВИТЬ ДО ПОЛНОГО ДОСТУПА",
     "createAccountUnlock": "Создайте бесплатный аккаунт для разблокировки",
     "unlimitedApiRequests": "Неограниченные API запросы",
@@ -28,5 +28,10 @@
     "device": "Устройство",
     "updating": "ОБНОВЛЕНИЕ",
     "ready": "ГОТОВ",
-    "credits": "КРЕДИТЫ"
+    "credits": "КРЕДИТЫ",
+    "overview": "ОБЗОР",
+    "usage": "ИСПОЛЬЗОВАНИЕ",
+    "settings": "НАСТРОЙКИ",
+    "pricing": "ЦЕНЫ",
+    "logout": "ВЫХОД"
 }

@@ -1,4 +1,7 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
     "dashboard": "Panel",
     "markets": "Piyasalar",
@@ -8,8 +11,8 @@
     "watchlist": "İzleme Listesi",
     "research": "Araştırma",
     "screener": "Tarayıcı",
-    "trading": "Ticaret",
-    "chat": "AI Sohbet",
+    "trading": "Trading",
+    "chat": "AI Chat",
     "agents": "Ajanlar",
     "settings": "Ayarlar",
     "profile": "Profil",
@@ -18,18 +21,18 @@
     "logout": "Çıkış"
   },
   "functionKeys": {
-    "f1": "PANEL",
-    "f2": "PİYASA",
-    "f3": "HABER",
+    "f1": "PANL",
+    "f2": "PYSA",
+    "f3": "HABR",
     "f4": "PORT",
-    "f5": "BKTEST",
+    "f5": "BKTS",
     "f6": "İZLE",
-    "f7": "ARAŞT",
+    "f7": "ARST",
     "f8": "TARA",
-    "f9": "TİC",
+    "f9": "TRDG",
     "f10": "AI",
-    "f11": "TAM",
-    "f12": "PROFİL"
+    "f11": "FULL",
+    "f12": "PROF"
   },
   "status": {
     "connected": "Bağlı",

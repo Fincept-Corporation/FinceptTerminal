@@ -1,26 +1,74 @@
 {
     "title": "قائمة المراقبة",
     "header": {
-        "myWatchlists": "قوائمي",
+        "title": "مراقب قوائم فينسبت",
+        "myWatchlists": "قوائم المراقبة",
         "create": "إنشاء",
         "import": "استيراد",
-        "export": "تصدير"
+        "export": "تصدير",
+        "updating": "تحديث",
+        "live": "مباشر"
+    },
+    "sidebar": {
+        "groups": "مجموعات القوائم",
+        "new": "جديد",
+        "noWatchlists": "لا توجد قوائم بعد.",
+        "clickNew": "انقر جديد للإنشاء.",
+        "stocks": "أسهم",
+        "marketMovers": "المحركون",
+        "gainer": "الرابحون",
+        "loser": "الخاسرون",
+        "volumeLeaders": "الأعلى حجماً"
+    },
+    "emptyState": {
+        "selectWatchlist": "اختر قائمة أو أنشئ واحدة جديدة"
+    },
+    "list": {
+        "name": "الاسم",
+        "symbols": "الرموز",
+        "created": "تاريخ الإنشاء",
+        "updated": "آخر تحديث",
+        "actions": "إجراءات"
     },
     "actions": {
         "add": "إضافة رمز",
         "remove": "إزالة",
         "edit": "تحرير",
-        "delete": "حذف"
+        "delete": "حذف",
+        "rename": "إعادة تسمية",
+        "duplicate": "نسخ"
+    },
+    "form": {
+        "name": "اسم القائمة",
+        "description": "الوصف",
+        "symbols": "إضافة رموز",
+        "save": "حفظ",
+        "cancel": "إلغاء"
     },
     "symbol": {
         "price": "السعر",
         "change": "التغيير",
         "volume": "الحجم",
-        "marketCap": "القيمة السوقية"
+        "marketCap": "القيمة السوقية",
+        "alert": "تعيين تنبيه"
+    },
+    "alerts": {
+        "priceAbove": "السعر أعلى من",
+        "priceBelow": "السعر أقل من",
+        "changePercent": "نسبة التغيير",
+        "volume": "تنبيه الحجم"
+    },
+    "sort": {
+        "name": "بالاسم",
+        "price": "بالسعر",
+        "change": "بالتغيير",
+        "custom": "ترتيب مخصص"
     },
     "messages": {
         "created": "تم إنشاء القائمة",
         "deleted": "تم حذف القائمة",
+        "symbolAdded": "تمت إضافة الرمز",
+        "symbolRemoved": "تمت إزالة الرمز",
         "noWatchlists": "لا توجد قوائم",
         "loading": "جاري التحميل..."
     }

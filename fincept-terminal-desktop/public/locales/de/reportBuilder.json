@@ -1,0 +1,33 @@
+{
+    "title": "Berichts-Generator",
+    "header": {
+        "templates": "Vorlagen",
+        "reports": "Berichte",
+        "preview": "Vorschau"
+    },
+    "toolbar": {
+        "new": "Neuer Bericht",
+        "save": "Speichern",
+        "export": "Exportieren",
+        "print": "Drucken",
+        "share": "Teilen"
+    },
+    "sections": {
+        "header": "Kopfzeile",
+        "summary": "Zusammenfassung",
+        "charts": "Diagramme",
+        "tables": "Tabellen",
+        "footer": "Fußzeile"
+    },
+    "templates": {
+        "daily": "Tagesbericht",
+        "weekly": "Wochenbericht",
+        "monthly": "Monatsbericht",
+        "custom": "Benutzerdefiniert"
+    },
+    "messages": {
+        "saved": "Bericht gespeichert",
+        "exported": "Bericht exportiert",
+        "generating": "Bericht wird erstellt..."
+    }
+}

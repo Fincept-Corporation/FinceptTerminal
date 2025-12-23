@@ -1,4 +1,7 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
     "dashboard": "Dashboard",
     "markets": "Mercati",
@@ -9,7 +12,7 @@
     "research": "Ricerca",
     "screener": "Screener",
     "trading": "Trading",
-    "chat": "Chat IA",
+    "chat": "AI Chat",
     "agents": "Agenti",
     "settings": "Impostazioni",
     "profile": "Profilo",
@@ -20,15 +23,15 @@
   "functionKeys": {
     "f1": "DASH",
     "f2": "MERC",
-    "f3": "NEWS",
+    "f3": "NOTI",
     "f4": "PORT",
-    "f5": "BKTEST",
+    "f5": "BKTS",
     "f6": "PREF",
-    "f7": "RIC",
+    "f7": "RICE",
     "f8": "SCRN",
-    "f9": "TRADE",
-    "f10": "IA",
-    "f11": "PIENO",
+    "f9": "TRDG",
+    "f10": "AI",
+    "f11": "FULL",
     "f12": "PROF"
   },
   "status": {
@@ -39,8 +42,8 @@
     "ready": "Pronto"
   },
   "labels": {
-    "moreTabs": "Altre schede nei menu della barra degli strumenti",
-    "enterCommand": "Inserisci comando",
+    "moreTabs": "Più schede nei menu della barra degli strumenti",
+    "enterCommand": "Inserisci Comando",
     "search": "Cerca"
   }
 }

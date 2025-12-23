@@ -1,19 +1,24 @@
 {
   "header": {
-    "title": "কাস্টমাইজযোগ্য ড্যাশবোর্ড",
+    "title": "কাস্টমাইজেবল ড্যাশবোর্ড",
     "live": "লাইভ",
     "widgets": "উইজেট"
+  },
+  "buttons": {
+    "addWidget": "উইজেট যোগ করুন",
+    "saveLayout": "লেআউট সংরক্ষণ করুন",
+    "reset": "রিসেট"
   },
   "widgets": {
     "loading": "লোড হচ্ছে...",
     "error": "ত্রুটি",
     "configure": "কনফিগার",
     "refresh": "রিফ্রেশ",
-    "remove": "মুছুন",
-    "globalIndices": "গ্লোবাল ইনডেক্স - টপ 12",
-    "forex": "ফরেক্স পেয়ার",
-    "crypto": "ক্রিপ্টো",
-    "commodities": "কমোডিটি",
+    "remove": "সরান",
+    "globalIndices": "বৈশ্বিক সূচক - শীর্ষ ১২",
+    "forex": "ফরেক্স জোড়া",
+    "crypto": "ক্রিপ্টোকারেন্সি",
+    "commodities": "পণ্য",
     "bonds": "বন্ড",
     "etfs": "ETF",
     "news": "সংবাদ",
@@ -21,23 +26,54 @@
     "watchlist": "ওয়াচলিস্ট",
     "maritime": "সামুদ্রিক",
     "index": "সূচক",
-    "symbol": "প্রতীক",
+    "symbol": "সিম্বল",
     "name": "নাম",
     "price": "মূল্য",
     "change": "পরিবর্তন",
     "percentChange": "%পরিবর্তন",
-    "high": "সর্বোচ্চ",
-    "low": "সর্বনিম্ন",
-    "noIndexData": "কোনো সূচক ডেটা নেই",
-    "noData": "কোনো ডেটা নেই"
+    "high": "উচ্চ",
+    "low": "নিম্ন",
+    "noIndexData": "সূচক ডেটা নেই",
+    "noForexData": "ফরেক্স ডেটা নেই",
+    "noCryptoData": "ক্রিপ্টো ডেটা নেই",
+    "noCommoditiesData": "পণ্য ডেটা নেই",
+    "noNewsData": "কোনো সংবাদ নেই",
+    "noForumPosts": "কোনো পোস্ট নেই",
+    "noStocksInWatchlist": "ওয়াচলিস্টে কোনো স্টক নেই",
+    "noWatchlistSelected": "কোনো ওয়াচলিস্ট নির্বাচিত নয়",
+    "noData": "কোনো ডেটা নেই",
+    "pair": "জোড়া",
+    "rate": "রেট",
+    "commodity": "পণ্য",
+    "maritimeIntelligence": "⚓ সামুদ্রিক গোয়েন্দা",
+    "globe3D": "3D গ্লোব",
+    "vessels": "জাহাজ",
+    "routes": "রুট",
+    "vol24h": "ভলিউম ২৪ঘ",
+    "topTradeCorridors": "শীর্ষ বাণিজ্য করিডোর",
+    "ships": "জাহাজ"
   },
-  "buttons": {
-    "addWidget": "উইজেট যোগ করুন",
-    "saveLayout": "লেআউট সংরক্ষণ",
-    "reset": "রিসেট"
+  "tips": {
+    "drag": "উইজেট টেনে সাজান",
+    "resize": "নিচের ডান কোণা থেকে আকার পরিবর্তন করুন",
+    "remove": "X বোতাম দিয়ে উইজেট সরান",
+    "responsive": "রেসপন্সিভ লেআউট - পূর্ণ প্রস্থ ব্যবহার করে"
+  },
+  "loading": {
+    "title": "ড্যাশবোর্ড শুরু হচ্ছে",
+    "description": "দ্রুত ডেটা লোডিংয়ের জন্য ক্যাশ সেটআপ করা হচ্ছে...",
+    "note": "প্রথম চালুতে এটি একটু সময় নেবে"
   },
   "empty": {
     "noWidgets": "ড্যাশবোর্ডে কোনো উইজেট নেই",
     "addFirst": "আপনার প্রথম উইজেট যোগ করুন"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | ড্র্যাগ অ্যান্ড ড্রপ ওয়ার্কস্পেস",
+    "layout": "লেআউট",
+    "custom": "কাস্টম",
+    "empty": "খালি",
+    "active": "সক্রিয়",
+    "cache": "ক্যাশ: সক্রিয়"
   }
 }

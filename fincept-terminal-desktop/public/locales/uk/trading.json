@@ -8,18 +8,69 @@
         "terminal": "ТЕРМІНАЛ FINCEPT",
         "selectBroker": "ВИБРАТИ БРОКЕРА",
         "paper": "ДЕМО",
-        "live": "РЕАЛЬНА"
+        "live": "РЕАЛ",
+        "watchlist": "СПИСОК СПОСТЕРЕЖЕННЯ",
+        "orderbook": "СТАКАН",
+        "trades": "УГОДИ",
+        "stats": "СТАТИСТИКА",
+        "features": "ФУНКЦІЇ",
+        "crossExchange": "КРОС-БІРЖА",
+        "chart": "ГРАФІК",
+        "depth": "ГЛИБИНА",
+        "volume": "ОБ'ЄМ",
+        "aiAgents": "ШІ-АГЕНТИ",
+        "leaderboard": "РЕЙТИНГ",
+        "modelChat": "ЧАТ З МОДЕЛЛЮ"
+    },
+    "orderTypes": {
+        "market": "Ринковий",
+        "limit": "Лімітний",
+        "stop": "Стоп",
+        "stopLimit": "Стоп-ліміт",
+        "trailingStop": "Трейлінг стоп"
     },
     "actions": {
         "buy": "КУПИТИ",
         "sell": "ПРОДАТИ",
         "cancel": "Скасувати",
+        "modify": "Змінити",
         "close": "Закрити",
-        "closeAll": "Закрити всі"
+        "closeAll": "Закрити все"
+    },
+    "form": {
+        "symbol": "Символ",
+        "quantity": "Кількість",
+        "price": "Ціна",
+        "stopPrice": "Стоп-ціна",
+        "takeProfit": "Тейк-профіт",
+        "stopLoss": "Стоп-лосс",
+        "leverage": "Плече"
+    },
+    "position": {
+        "openPrice": "Ціна входу",
+        "currentPrice": "Поточна ціна",
+        "pnl": "P&L",
+        "pnlPercent": "P&L %",
+        "margin": "Маржа",
+        "size": "Розмір"
+    },
+    "order": {
+        "pending": "Очікування",
+        "filled": "Виконаний",
+        "cancelled": "Скасований",
+        "rejected": "Відхилений",
+        "partial": "Частково виконаний"
+    },
+    "time": {
+        "gtc": "До скасування",
+        "day": "Денний",
+        "ioc": "Негайно або скасувати",
+        "fok": "Все або нічого"
     },
     "messages": {
         "orderPlaced": "Ордер розміщено",
         "orderFailed": "Помилка ордера",
+        "confirmOrder": "Підтвердити ордер?",
         "noPositions": "Немає відкритих позицій"
     }
 }

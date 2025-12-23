@@ -4,17 +4,29 @@
         "orders": "ÓRDENES",
         "positions": "POSICIONES",
         "history": "HISTORIAL",
-        "settings": "AJUSTES",
-        "terminal": "FINCEPT TERMINAL",
+        "settings": "CONFIGURACIÓN",
+        "terminal": "TERMINAL FINCEPT",
         "selectBroker": "SELECCIONAR BROKER",
         "paper": "PAPEL",
-        "live": "EN VIVO"
+        "live": "EN VIVO",
+        "watchlist": "LISTA DE SEGUIMIENTO",
+        "orderbook": "LIBRO DE ÓRDENES",
+        "trades": "OPERACIONES",
+        "stats": "ESTADÍSTICAS",
+        "features": "CARACTERÍSTICAS",
+        "crossExchange": "CROSS-EXCHANGE",
+        "chart": "GRÁFICO",
+        "depth": "PROFUNDIDAD",
+        "volume": "VOLUMEN",
+        "aiAgents": "AGENTES IA",
+        "leaderboard": "CLASIFICACIÓN",
+        "modelChat": "CHAT MODELO"
     },
     "orderTypes": {
         "market": "Mercado",
         "limit": "Límite",
         "stop": "Stop",
-        "stopLimit": "Stop Limit",
+        "stopLimit": "Stop Límite",
         "trailingStop": "Trailing Stop"
     },
     "actions": {
@@ -30,7 +42,7 @@
         "quantity": "Cantidad",
         "price": "Precio",
         "stopPrice": "Precio Stop",
-        "takeProfit": "Take Profit",
+        "takeProfit": "Toma de Ganancias",
         "stopLoss": "Stop Loss",
         "leverage": "Apalancamiento"
     },
@@ -42,9 +54,23 @@
         "margin": "Margen",
         "size": "Tamaño"
     },
+    "order": {
+        "pending": "Pendiente",
+        "filled": "Ejecutada",
+        "cancelled": "Cancelada",
+        "rejected": "Rechazada",
+        "partial": "Parcialmente Ejecutada"
+    },
+    "time": {
+        "gtc": "Válida Hasta Cancelar",
+        "day": "Orden del Día",
+        "ioc": "Inmediata o Cancelar",
+        "fok": "Ejecutar o Anular"
+    },
     "messages": {
-        "orderPlaced": "Orden colocada exitosamente",
+        "orderPlaced": "Orden ejecutada exitosamente",
         "orderFailed": "Orden fallida",
-        "noPositions": "No hay posiciones abiertas"
+        "confirmOrder": "¿Confirmar esta orden?",
+        "noPositions": "Sin posiciones abiertas"
     }
 }

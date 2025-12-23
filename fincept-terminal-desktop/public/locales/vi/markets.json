@@ -9,7 +9,7 @@
     "name": "TÊN",
     "price": "GIÁ",
     "change": "THAY ĐỔI",
-    "percentChange": "%ĐỔI",
+    "percentChange": "%THAY ĐỔI",
     "high": "CAO",
     "low": "THẤP",
     "loading": "Đang tải...",
@@ -22,7 +22,27 @@
     "updating": "ĐANG CẬP NHẬT",
     "live": "TRỰC TIẾP",
     "connected": "Đã kết nối",
-    "cache": "Bộ nhớ đệm",
+    "cache": "Cache",
     "enabled": "ĐÃ BẬT",
-    "dataProviderInfo": "Dữ liệu từ Yahoo Finance API | Cập nhật real-time"
+    "dataProviderInfo": "Dữ liệu từ Yahoo Finance API | Cập nhật thời gian thực",
+    "header": {
+        "live": "TRỰC TIẾP",
+        "updating": "ĐANG CẬP NHẬT",
+        "refresh": "LÀM MỚI"
+    },
+    "tabs": {
+        "overview": "Tổng quan",
+        "stocks": "Cổ phiếu",
+        "indices": "Chỉ số",
+        "forex": "Forex",
+        "crypto": "Crypto",
+        "commodities": "Hàng hóa",
+        "bonds": "Trái phiếu"
+    },
+    "status": {
+        "marketOpen": "Thị trường mở",
+        "marketClosed": "Thị trường đóng",
+        "preMarket": "Trước giờ",
+        "afterHours": "Sau giờ"
+    }
 }

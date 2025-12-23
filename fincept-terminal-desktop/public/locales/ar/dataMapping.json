@@ -39,14 +39,14 @@
         "sourceApi": "API المصدر",
         "destApi": "API الوجهة",
         "fieldMapping": "تعيين الحقول",
-        "save": "حفظ",
+        "save": "حفظ التعيين",
         "cancel": "إلغاء"
     },
     "messages": {
-        "saved": "تم الحفظ",
-        "deleted": "تم الحذف",
-        "runSuccess": "تم التنفيذ بنجاح",
+        "saved": "تم حفظ التعيين بنجاح",
+        "deleted": "تم حذف التعيين",
+        "runSuccess": "تم تنفيذ التعيين بنجاح",
         "error": "حدث خطأ",
-        "noMappings": "لا توجد تعيينات"
+        "noMappings": "لم يتم تكوين تعيينات"
     }
 }

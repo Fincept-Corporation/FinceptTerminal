@@ -1,0 +1,30 @@
+{
+    "title": "DBnomics डेटा",
+    "header": {
+        "search": "खोजें",
+        "providers": "प्रदाता",
+        "datasets": "डेटासेट"
+    },
+    "form": {
+        "provider": "प्रदाता",
+        "dataset": "डेटासेट",
+        "series": "सीरीज़",
+        "startDate": "शुरू की तारीख",
+        "endDate": "अंत की तारीख"
+    },
+    "buttons": {
+        "fetch": "फेच करें",
+        "search": "खोजें",
+        "export": "निर्यात",
+        "clear": "साफ करें"
+    },
+    "chart": {
+        "title": "डेटा विज़ुअलाइज़ेशन",
+        "emptyState": "डेटा देखने के लिए एक सीरीज़ चुनें"
+    },
+    "messages": {
+        "loading": "डेटा लोड हो रहा है...",
+        "noData": "कोई डेटा नहीं मिला",
+        "error": "डेटा लाने में त्रुटि"
+    }
+}

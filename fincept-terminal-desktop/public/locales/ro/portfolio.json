@@ -1,28 +1,63 @@
 {
     "title": "MANAGER PORTOFOLIU FINCEPT",
     "header": {
-        "live": "ÎN DIRECT",
-        "updating": "ACTUALIZARE",
+        "live": "LIVE",
+        "updating": "SE ACTUALIZEAZĂ",
         "newPortfolio": "PORTOFOLIU NOU",
-        "refresh": "REÎMPROSPĂTARE",
-        "exportCsv": "EXPORT CSV"
+        "refresh": "REÎMPROSPĂTEAZĂ",
+        "exportCsv": "EXPORTĂ CSV"
     },
     "summary": {
         "totalValue": "VALOARE TOTALĂ",
-        "dayPnl": "P/P ZI",
-        "totalPnl": "P/P TOTAL",
+        "dayPnl": "P&L ZI",
+        "totalPnl": "P&L TOTAL",
         "positions": "POZIȚII"
+    },
+    "views": {
+        "positions": "POZIȚII",
+        "addAsset": "ADAUGĂ ACTIV",
+        "sellAsset": "VINDE ACTIV",
+        "analytics": "ANALIZĂ",
+        "history": "ISTORIC",
+        "activeMgmt": "MANAGEMENT ACTIV",
+        "performance": "PERFORMANȚĂ",
+        "rebalance": "REBALANSARE",
+        "reports": "RAPOARTE",
+        "alerts": "ALERTE",
+        "sectors": "SECTOARE",
+        "help": "AJUTOR"
     },
     "sidebar": {
         "portfolios": "PORTOFOLII",
-        "loading": "Încărcare portofolii...",
-        "noPortfolios": "Fără portofolii încă."
+        "loading": "Se încarcă portofoliile...",
+        "noPortfolios": "Niciun portofoliu încă.",
+        "clickCreate": "Click PORTOFOLIU NOU pentru a crea.",
+        "owner": "Proprietar",
+        "currency": "Monedă"
+    },
+    "content": {
+        "selectOrCreate": "Selectați un portofoliu sau creați unul nou pentru a începe",
+        "loadingData": "Se încarcă datele portofoliului...",
+        "comingSoon": "vizualizare în curând..."
     },
     "modals": {
         "createNew": "CREEAZĂ PORTOFOLIU NOU",
+        "portfolioName": "NUME PORTOFOLIU",
+        "owner": "PROPRIETAR",
+        "currency": "MONEDĂ",
         "cancel": "ANULEAZĂ",
         "create": "CREEAZĂ",
+        "addAssetTitle": "ADAUGĂ ACTIV LA PORTOFOLIU",
+        "sellAssetTitle": "VINDE ACTIV",
+        "symbol": "SIMBOL",
+        "quantity": "CANTITATE",
+        "price": "PREȚ",
         "add": "ADAUGĂ",
         "sell": "VINDE"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | Urmărire în timp real cu integrare yfinance",
+        "lastUpdated": "Ultima Actualizare",
+        "connected": "CONECTAT"
     }
 }

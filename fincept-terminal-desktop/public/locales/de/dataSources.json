@@ -10,7 +10,7 @@
         "market": "Marktdaten",
         "economic": "Wirtschaftsdaten",
         "alternative": "Alternative Daten",
-        "news": "Nachrichten & Sentiment",
+        "news": "Nachrichten & Stimmung",
         "fundamental": "Fundamentaldaten"
     },
     "status": {
@@ -28,7 +28,7 @@
     },
     "form": {
         "apiKey": "API-Schlüssel",
-        "endpoint": "Endpunkt-URL",
+        "endpoint": "Endpoint-URL",
         "username": "Benutzername",
         "password": "Passwort",
         "save": "Speichern",
@@ -38,6 +38,6 @@
         "connectionSuccess": "Erfolgreich mit Datenquelle verbunden",
         "connectionFailed": "Verbindung zur Datenquelle fehlgeschlagen",
         "noSources": "Keine Datenquellen konfiguriert",
-        "loading": "Lade Datenquellen..."
+        "loading": "Datenquellen werden geladen..."
     }
 }

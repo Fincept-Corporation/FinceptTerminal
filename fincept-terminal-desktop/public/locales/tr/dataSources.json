@@ -10,34 +10,34 @@
         "market": "Piyasa Verileri",
         "economic": "Ekonomik Veriler",
         "alternative": "Alternatif Veriler",
-        "news": "Haberler",
+        "news": "Haber & Duygu",
         "fundamental": "Temel Veriler"
     },
     "status": {
         "connected": "Bağlı",
-        "disconnected": "Bağlı Değil",
+        "disconnected": "Bağlantı Kesildi",
         "error": "Hata",
-        "pending": "Beklemede"
+        "pending": "Bekliyor"
     },
     "actions": {
         "connect": "Bağlan",
-        "disconnect": "Kes",
+        "disconnect": "Bağlantıyı Kes",
         "configure": "Yapılandır",
-        "test": "Test Et",
-        "delete": "Sil"
+        "test": "Bağlantıyı Test Et",
+        "delete": "Kaldır"
     },
     "form": {
         "apiKey": "API Anahtarı",
-        "endpoint": "URL",
-        "username": "Kullanıcı",
+        "endpoint": "Endpoint URL",
+        "username": "Kullanıcı Adı",
         "password": "Şifre",
         "save": "Kaydet",
         "cancel": "İptal"
     },
     "messages": {
-        "connectionSuccess": "Başarıyla bağlandı",
-        "connectionFailed": "Bağlantı hatası",
-        "noSources": "Kaynak yok",
-        "loading": "Yükleniyor..."
+        "connectionSuccess": "Veri kaynağına başarıyla bağlandı",
+        "connectionFailed": "Veri kaynağına bağlanılamadı",
+        "noSources": "Yapılandırılmış veri kaynağı yok",
+        "loading": "Veri kaynakları yükleniyor..."
     }
 }
