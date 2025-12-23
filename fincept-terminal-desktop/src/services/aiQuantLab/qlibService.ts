@@ -86,15 +86,22 @@ class QlibService {
    * Check Qlib installation status and availability
    */
   async checkStatus(): Promise<QlibStatusResponse> {
+    console.log('[QlibService] checkStatus() called');
     try {
+      console.log('[QlibService] Invoking qlib_check_status command...');
       const result = await invoke<string>('qlib_check_status');
-      return JSON.parse(result);
+      console.log('[QlibService] Raw result:', result);
+      const parsed = JSON.parse(result);
+      console.log('[QlibService] Parsed result:', parsed);
+      return parsed;
     } catch (error) {
+      console.error('[QlibService] checkStatus error:', error);
+      console.error('[QlibService] Full error object:', JSON.stringify(error, null, 2));
       return {
         success: false,
         qlib_available: false,
         initialized: false,
-        error: error as string
+        error: String(error)
       };
     }
   }
@@ -108,13 +115,19 @@ class QlibService {
     providerUri?: string,
     region?: string
   ): Promise<QlibInitializeResponse> {
+    console.log('[QlibService] initialize() called with:', { providerUri, region });
     try {
+      console.log('[QlibService] Invoking qlib_initialize command...');
       const result = await invoke<string>('qlib_initialize', {
-        providerUri,
+        provider_uri: providerUri,
         region
       });
-      return JSON.parse(result);
+      console.log('[QlibService] Initialize raw result:', result);
+      const parsed = JSON.parse(result);
+      console.log('[QlibService] Initialize parsed result:', parsed);
+      return parsed;
     } catch (error) {
+      console.error('[QlibService] initialize error:', error);
       return {
         success: false,
         error: error as string

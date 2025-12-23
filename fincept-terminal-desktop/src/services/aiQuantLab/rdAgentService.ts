@@ -155,15 +155,22 @@ class RDAgentService {
    * Check RD-Agent installation status and availability
    */
   async checkStatus(): Promise<RDAgentStatusResponse> {
+    console.log('[RDAgentService] checkStatus() called');
     try {
+      console.log('[RDAgentService] Invoking rdagent_check_status command...');
       const result = await invoke<string>('rdagent_check_status');
-      return JSON.parse(result);
+      console.log('[RDAgentService] Raw result:', result);
+      const parsed = JSON.parse(result);
+      console.log('[RDAgentService] Parsed result:', parsed);
+      return parsed;
     } catch (error) {
+      console.error('[RDAgentService] checkStatus error:', error);
+      console.error('[RDAgentService] Full error object:', JSON.stringify(error, null, 2));
       return {
         success: false,
         rdagent_available: false,
         initialized: false,
-        error: error as string
+        error: String(error)
       };
     }
   }
@@ -172,12 +179,18 @@ class RDAgentService {
    * Initialize RD-Agent with optional configuration
    */
   async initialize(config?: any): Promise<any> {
+    console.log('[RDAgentService] initialize() called with config:', config);
     try {
+      console.log('[RDAgentService] Invoking rdagent_initialize command...');
       const result = await invoke<string>('rdagent_initialize', {
         config: config ? JSON.stringify(config) : null
       });
-      return JSON.parse(result);
+      console.log('[RDAgentService] Initialize raw result:', result);
+      const parsed = JSON.parse(result);
+      console.log('[RDAgentService] Initialize parsed result:', parsed);
+      return parsed;
     } catch (error) {
+      console.error('[RDAgentService] initialize error:', error);
       return {
         success: false,
         error: error as string

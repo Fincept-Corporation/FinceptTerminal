@@ -45,7 +45,7 @@ export abstract class BaseExchangeAdapter implements IExchangeAdapter {
       password: config.credentials?.password,
       uid: config.credentials?.uid,
       enableRateLimit: config.enableRateLimit ?? true,
-      timeout: config.timeout ?? 30000,
+      timeout: config.timeout ?? 10000, // Reduced from 30s to 10s for faster failure detection
       ...(config.sandbox && { sandbox: true }),
       ...config.options,
     });
@@ -58,13 +58,72 @@ export abstract class BaseExchangeAdapter implements IExchangeAdapter {
   // ============================================================================
 
   async connect(): Promise<void> {
-    try {
-      await this.exchange.loadMarkets();
-      this._isConnected = true;
-      this.emit('connected', { exchange: this.id });
-    } catch (error) {
-      this._isConnected = false;
-      throw this.handleError(error);
+    const maxRetries = 2;
+    const retryDelay = 2000; // 2 seconds
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[${this.id}] Connection attempt ${attempt + 1}/${maxRetries + 1}...`);
+
+        // Reduce timeout for faster failure detection
+        const originalTimeout = this.exchange.timeout;
+        this.exchange.timeout = 10000; // 10 seconds instead of 30
+
+        await this.exchange.loadMarkets();
+
+        // Restore original timeout
+        this.exchange.timeout = originalTimeout;
+
+        this._isConnected = true;
+        this.emit('connected', { exchange: this.id });
+        console.log(`[${this.id}] ✓ Connected successfully`);
+        return;
+      } catch (error: any) {
+        lastError = error;
+
+        // Check if it's a network/CORS error
+        const errorMessage = error?.message || String(error);
+        const isNetworkError =
+          errorMessage.includes('CORS') ||
+          errorMessage.includes('Network') ||
+          errorMessage.includes('fetch') ||
+          errorMessage.includes('timed out') ||
+          errorMessage.includes('Failed to fetch') ||
+          error?.name === 'TypeError';
+
+        if (isNetworkError) {
+          console.warn(`[${this.id}] Network/CORS error on attempt ${attempt + 1}:`, errorMessage);
+        } else {
+          console.warn(`[${this.id}] Connection attempt ${attempt + 1} failed:`, error);
+        }
+
+        // Don't retry on CORS errors - they won't resolve with retries
+        if (isNetworkError && errorMessage.includes('CORS')) {
+          console.error(`[${this.id}] ✗ CORS error detected - cannot connect from browser`);
+          this._isConnected = false;
+          break;
+        }
+
+        if (attempt < maxRetries) {
+          console.log(`[${this.id}] Retrying in ${retryDelay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+      }
+    }
+
+    // All retries failed
+    this._isConnected = false;
+    console.error(`[${this.id}] ✗ Failed to connect after ${maxRetries + 1} attempts`);
+
+    // Create a user-friendly error message
+    const errorMessage = lastError?.message || String(lastError);
+    if (errorMessage.includes('CORS')) {
+      throw new Error(`Cannot connect to ${this.id} due to browser security (CORS). This exchange may not support browser-based connections.`);
+    } else if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+      throw new Error(`Network error connecting to ${this.id}. Please check your internet connection or try again later.`);
+    } else {
+      throw this.handleError(lastError);
     }
   }
 
