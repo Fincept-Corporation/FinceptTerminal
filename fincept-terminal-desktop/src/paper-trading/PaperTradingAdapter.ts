@@ -271,7 +271,21 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
 
     // Update PnL with current market prices
     for (const p of positions) {
-      const currentPrice = p.currentPrice || p.entryPrice;
+      // Fetch live market price for each position
+      let currentPrice = p.currentPrice || p.entryPrice;
+      try {
+        const ticker = await this.realAdapter.fetchTicker(p.symbol);
+        if (ticker && ticker.last) {
+          currentPrice = ticker.last;
+          // Update the database with the current price
+          await paperTradingDatabase.updatePosition(p.id, {
+            currentPrice: currentPrice
+          });
+        }
+      } catch (error) {
+        console.warn(`[PaperTrading] Failed to fetch current price for ${p.symbol}, using cached price:`, error);
+      }
+
       const unrealizedPnl = p.side === 'long'
         ? (currentPrice - p.entryPrice) * p.quantity
         : (p.entryPrice - currentPrice) * p.quantity;

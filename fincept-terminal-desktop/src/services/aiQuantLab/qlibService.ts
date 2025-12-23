@@ -243,6 +243,24 @@ class QlibService {
       };
     }
   }
+
+  /**
+   * Get live predictions for instruments
+   */
+  async getLivePredictions(request: { model_id: string; instruments: string[] }): Promise<any> {
+    try {
+      const result = await invoke<string>('qlib_get_live_predictions', {
+        modelId: request.model_id,
+        instruments: request.instruments
+      });
+      return JSON.parse(result);
+    } catch (error) {
+      return {
+        success: false,
+        error: error as string
+      };
+    }
+  }
 }
 
 // Export singleton instance
