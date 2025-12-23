@@ -36,18 +36,28 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         return Err("Unsupported platform".to_string());
     };
 
-    // DEVELOPMENT MODE: Prefer system Python (has packages installed)
+    // DEVELOPMENT MODE: Use bundled Python (where packages are installed)
     #[cfg(debug_assertions)]
     {
-        use std::process::Command;
+        // Check bundled Python first (has all packages installed)
+        if python_exe.exists() {
+            let path_str = python_exe.to_string_lossy().to_string();
+            let clean_path = if path_str.starts_with(r"\\?\") {
+                PathBuf::from(&path_str[4..])
+            } else {
+                python_exe.clone()
+            };
+            return Ok(clean_path);
+        }
 
+        // Fallback to system Python if bundled not found
+        use std::process::Command;
         let system_python = if cfg!(target_os = "windows") {
             "python"
         } else {
             "python3"
         };
 
-        // Try system Python first in dev mode
         if let Ok(output) = Command::new(system_python).arg("--version").output() {
             if output.status.success() {
                 return Ok(PathBuf::from(system_python));
@@ -55,7 +65,8 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         }
     }
 
-    // PRODUCTION MODE or dev fallback: Check bundled Python
+    // PRODUCTION MODE: Check bundled Python
+    #[cfg(not(debug_assertions))]
     if python_exe.exists() {
         // Strip the \\?\ prefix that can cause issues on Windows
         let path_str = python_exe.to_string_lossy().to_string();

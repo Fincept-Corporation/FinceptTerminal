@@ -53,11 +53,17 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       console.log('[PaperTradingAdapter] Starting connection...');
       console.log('[PaperTradingAdapter] Real adapter connected:', this.realAdapter.isConnected());
 
-      // Connect to real exchange for market data
+      // Try to connect to real exchange for market data, but don't fail if it doesn't work
       if (!this.realAdapter.isConnected()) {
-        console.log('[PaperTradingAdapter] Connecting real adapter...');
-        await this.realAdapter.connect();
-        console.log('[PaperTradingAdapter] Real adapter connected successfully');
+        console.log('[PaperTradingAdapter] Attempting to connect real adapter for market data...');
+        try {
+          await this.realAdapter.connect();
+          console.log('[PaperTradingAdapter] ✓ Real adapter connected successfully');
+        } catch (error) {
+          console.warn('[PaperTradingAdapter] ⚠ Real adapter connection failed:', error);
+          console.log('[PaperTradingAdapter] Paper trading will work in offline mode (market data unavailable)');
+          // Don't throw - continue with paper adapter in offline mode
+        }
       } else {
         console.log('[PaperTradingAdapter] Real adapter already connected, skipping');
       }
@@ -67,11 +73,14 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       await this.initializePortfolio();
       console.log('[PaperTradingAdapter] Portfolio initialized');
 
-      // Start order monitoring - INCREASED FREQUENCY for better limit order execution
-      if (this.paperConfig.enableRealtimeUpdates !== false) {
+      // Start order monitoring only if real adapter is connected
+      // (Without real adapter, we can't get market prices for matching)
+      if (this.realAdapter.isConnected() && this.paperConfig.enableRealtimeUpdates !== false) {
         console.log('[PaperTradingAdapter] Starting order monitoring...');
         // Reduced from 1000ms to 200ms for more responsive limit order fills
         this.matchingEngine.startMonitoring(this.paperConfig.priceUpdateInterval || 200);
+      } else {
+        console.log('[PaperTradingAdapter] Skipping order monitoring (real adapter not connected)');
       }
 
       this._isConnected = true;
@@ -79,6 +88,7 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       this.initialized = true;
 
       console.log('[PaperTradingAdapter] ✓ Connection complete!');
+      console.log('[PaperTradingAdapter] Mode:', this.realAdapter.isConnected() ? 'ONLINE (with market data)' : 'OFFLINE (no market data)');
       this.emit('connected', { exchange: this.id });
       this.emit('authenticated', { exchange: this.id });
     } catch (error) {
