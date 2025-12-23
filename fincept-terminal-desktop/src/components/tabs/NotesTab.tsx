@@ -12,6 +12,7 @@ import { notesService, Note, NoteTemplate } from '../../services/notesService';
 import { noteReminderService } from '../../services/noteReminderService.tsx';
 import { toast } from 'sonner';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {
@@ -48,6 +49,7 @@ const SENTIMENTS = ['BULLISH', 'BEARISH', 'NEUTRAL'];
 const COLOR_CODES = ['#FF8800', '#00D66F', '#FF3B3B', '#00E5FF', '#FFD700', '#9D4EDD', '#0088FF'];
 
 export function NotesTab() {
+  const { t } = useTranslation('notes');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [notes, setNotes] = useState<Note[]>([]);
   const [filteredNotes, setFilteredNotes] = useState<Note[]>([]);
@@ -423,7 +425,7 @@ export function NotesTab() {
               letterSpacing: '0.5px',
               textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
             }}>
-              FINANCIAL NOTES
+              {t('title')}
             </span>
           </div>
 
@@ -432,13 +434,13 @@ export function NotesTab() {
           {statistics && (
             <>
               <div style={{ fontSize: '10px', color: BLOOMBERG.CYAN }}>
-                TOTAL: <span style={{ fontWeight: 700 }}>{statistics.total}</span>
+                {t('header.total')}: <span style={{ fontWeight: 700 }}>{statistics.total}</span>
               </div>
               <div style={{ fontSize: '10px', color: BLOOMBERG.YELLOW }}>
-                FAVORITES: <span style={{ fontWeight: 700 }}>{statistics.favorites}</span>
+                {t('header.favorites')}: <span style={{ fontWeight: 700 }}>{statistics.favorites}</span>
               </div>
               <div style={{ fontSize: '10px', color: BLOOMBERG.PURPLE }}>
-                WORDS: <span style={{ fontWeight: 700 }}>{statistics.totalWords.toLocaleString()}</span>
+                {t('header.words')}: <span style={{ fontWeight: 700 }}>{statistics.totalWords.toLocaleString()}</span>
               </div>
             </>
           )}
@@ -477,7 +479,7 @@ export function NotesTab() {
             }}
           >
             <RefreshCw size={12} />
-            REFRESH
+            {t('header.refresh')}
           </button>
 
           <button
@@ -518,7 +520,7 @@ export function NotesTab() {
           <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: BLOOMBERG.GRAY }} />
           <input
             type="text"
-            placeholder="Search notes, tags, tickers..."
+            placeholder={t('toolbar.search')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -553,7 +555,7 @@ export function NotesTab() {
           }}
         >
           <Plus size={14} />
-          NEW NOTE
+          {t('toolbar.newNote')}
         </button>
 
         <button
@@ -572,7 +574,7 @@ export function NotesTab() {
           }}
         >
           <BookOpen size={14} />
-          TEMPLATES
+          {t('toolbar.templates')}
         </button>
 
         <button
@@ -591,7 +593,7 @@ export function NotesTab() {
           }}
         >
           <Star size={14} fill={showFavorites ? BLOOMBERG.DARK_BG : 'none'} />
-          FAVORITES
+          {t('toolbar.favorites')}
         </button>
 
         <button
@@ -610,7 +612,7 @@ export function NotesTab() {
           }}
         >
           <Filter size={14} />
-          FILTERS
+          {t('toolbar.filters')}
         </button>
 
         <button
@@ -629,7 +631,7 @@ export function NotesTab() {
           }}
         >
           <Archive size={14} />
-          ARCHIVED
+          {t('toolbar.archived')}
         </button>
       </div>
 
@@ -1544,7 +1546,7 @@ export function NotesTab() {
           justifyContent: 'center',
           cursor: 'pointer'
         }}
-        onClick={() => setIsRightPanelMinimized(!isRightPanelMinimized)}
+          onClick={() => setIsRightPanelMinimized(!isRightPanelMinimized)}
         >
           {isRightPanelMinimized ? <ChevronRight size={14} color={BLOOMBERG.GRAY} /> : <ChevronDown size={14} color={BLOOMBERG.GRAY} />}
         </div>

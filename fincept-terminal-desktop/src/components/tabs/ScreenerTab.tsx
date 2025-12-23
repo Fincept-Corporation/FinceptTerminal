@@ -5,6 +5,7 @@ import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 import { sqliteService } from '@/services/sqliteService';
 import { invoke } from '@tauri-apps/api/core';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 interface SeriesData {
   date: string;
@@ -60,6 +61,7 @@ const POPULAR_CATEGORIES = [
 
 export default function ScreenerTab() {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const { t } = useTranslation('screener');
   const [seriesIds, setSeriesIds] = useState('GDP');
   const [startDate, setStartDate] = useState('2000-01-01');
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
@@ -77,7 +79,7 @@ export default function ScreenerTab() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [currentCategory, setCurrentCategory] = useState<number>(0);
-  const [categoryPath, setCategoryPath] = useState<{id: number, name: string}[]>([{id: 0, name: 'All Categories'}]);
+  const [categoryPath, setCategoryPath] = useState<{ id: number, name: string }[]>([{ id: 0, name: 'All Categories' }]);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [categorySeriesResults, setCategorySeriesResults] = useState<SearchResult[]>([]);
   const [categorySeriesLoading, setCategorySeriesLoading] = useState(false);
@@ -197,7 +199,7 @@ export default function ScreenerTab() {
   };
 
   // Navigate to category
-  const navigateToCategory = async (cat: {id: number, name: string}) => {
+  const navigateToCategory = async (cat: { id: number, name: string }) => {
     setCurrentCategory(cat.id);
     setCategoryPath([...categoryPath, cat]);
     setSearchQuery('');
@@ -520,7 +522,7 @@ export default function ScreenerTab() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <FolderTree size={16} color={colors.primary} />
                 <span style={{ color: colors.primary, fontSize: fontSize.heading, fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                  FRED SERIES BROWSER
+                  {t('title')}
                 </span>
               </div>
               <button
@@ -894,7 +896,7 @@ export default function ScreenerTab() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <BarChart3 size={16} color={colors.primary} />
           <span style={{ color: colors.primary, fontSize: fontSize.heading, fontWeight: 'bold', letterSpacing: '0.5px' }}>
-            FRED DATA EXPLORER
+            {t('header.title')}
           </span>
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
@@ -1001,7 +1003,7 @@ export default function ScreenerTab() {
           <AlertCircle size={20} color={colors.warning} style={{ flexShrink: 0, marginTop: '2px' }} />
           <div style={{ flex: 1 }}>
             <p style={{ color: colors.warning, fontSize: fontSize.body, fontWeight: 'bold', marginBottom: '6px' }}>
-              API KEY REQUIRED
+              {t('apiKey.required')}
             </p>
             <p style={{ color: colors.text, fontSize: fontSize.small, lineHeight: '1.5', marginBottom: '8px' }}>
               Configure your FRED API key in <strong>Settings → Credentials</strong> to access economic data.
@@ -1039,7 +1041,7 @@ export default function ScreenerTab() {
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: '10px', marginBottom: '10px' }}>
           <div>
             <label style={{ color: colors.textMuted, fontSize: fontSize.tiny, display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-              SERIES IDs
+              {t('form.seriesIds')}
             </label>
             <input
               type="text"
@@ -1127,7 +1129,7 @@ export default function ScreenerTab() {
             onMouseLeave={(e) => !loading && (e.currentTarget.style.opacity = '1')}
           >
             {loading ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
-            {loading ? 'LOADING' : 'FETCH'}
+            {loading ? t('buttons.loading') : t('buttons.fetch')}
           </button>
         </div>
 
@@ -1135,7 +1137,7 @@ export default function ScreenerTab() {
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px' }}>
           <div style={{ flex: 1 }}>
             <label style={{ color: colors.textMuted, fontSize: fontSize.tiny, marginBottom: '6px', display: 'block', fontWeight: 'bold' }}>
-              QUICK ADD
+              {t('form.quickAdd')}
             </label>
             <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
               {POPULAR_SERIES.map(series => (
@@ -1194,7 +1196,7 @@ export default function ScreenerTab() {
             onMouseLeave={(e) => apiKeyConfigured && (e.currentTarget.style.opacity = '1')}
           >
             <FolderTree size={12} />
-            BROWSE SERIES
+            {t('buttons.browse')}
           </button>
         </div>
       </div>
@@ -1214,7 +1216,7 @@ export default function ScreenerTab() {
             flexDirection: 'column'
           }}>
             <h3 style={{ color: colors.primary, fontSize: fontSize.body, fontWeight: 'bold', marginBottom: '10px', letterSpacing: '0.5px' }}>
-              TIME SERIES CHART
+              {t('chart.title')}
             </h3>
 
             {loading && (
@@ -1277,8 +1279,8 @@ export default function ScreenerTab() {
                 gap: '10px'
               }}>
                 <TrendingUp size={48} color={colors.textMuted} opacity={0.3} />
-                <p style={{ color: colors.text }}>Enter series IDs and click FETCH to visualize data</p>
-                <p style={{ fontSize: fontSize.small, color: colors.textMuted }}>Try searching for GDP, UNRATE, or CPIAUCSL</p>
+                <p style={{ color: colors.text }}>{t('chart.emptyState')}</p>
+                <p style={{ fontSize: fontSize.small, color: colors.textMuted }}>{t('chart.trySuggestion')}</p>
               </div>
             )}
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import GridLayout, { Layout } from 'react-grid-layout';
 import { Plus, RotateCcw, Save } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { sqliteService } from '../../services/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
 import {
@@ -109,7 +110,8 @@ interface DashboardTabProps {
 }
 
 const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
-  const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const { colors, fontSize, fontFamily, fontStyle, fontWeight } = useTerminalTheme();
+  const { t } = useTranslation('dashboard');
   const [widgets, setWidgets] = useState<WidgetInstance[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -369,13 +371,13 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         `}</style>
         <div style={{ textAlign: 'center', maxWidth: '500px' }}>
           <h3 style={{ color: '#ea580c', fontSize: '18px', marginBottom: '10px' }}>
-            Initializing Dashboard
+            {t('loading.title')}
           </h3>
           <p style={{ color: '#a3a3a3', fontSize: '13px', lineHeight: '1.5' }}>
-            Setting up database cache for faster data loading...
+            {t('loading.description')}
           </p>
           <p style={{ color: '#787878', fontSize: '11px', marginTop: '10px' }}>
-            This will only take a moment on first launch
+            {t('loading.note')}
           </p>
         </div>
       </div>
@@ -463,11 +465,11 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: fontSize.subheading }}>
-              CUSTOMIZABLE DASHBOARD
+              {t('header.title')}
             </span>
             <span style={{ color: colors.text }}>|</span>
             <span style={{ color: colors.secondary, fontSize: fontSize.small }}>
-              ● LIVE
+              ● {t('header.live')}
             </span>
             <span style={{ color: colors.text }}>|</span>
             <span style={{ color: colors.warning, fontSize: fontSize.body }}>
@@ -475,7 +477,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             </span>
             <span style={{ color: colors.text }}>|</span>
             <span style={{ color: colors.textMuted, fontSize: fontSize.small }}>
-              WIDGETS: {widgets.length}
+              {t('header.widgets')}: {widgets.length}
             </span>
           </div>
 
@@ -497,7 +499,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
               }}
             >
               <Plus size={12} />
-              ADD WIDGET
+              {t('buttons.addWidget')}
             </button>
             <button
               onClick={saveLayout}
@@ -516,7 +518,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
               }}
             >
               <Save size={12} />
-              SAVE LAYOUT
+              {t('buttons.saveLayout')}
             </button>
             <button
               onClick={resetLayout}
@@ -535,7 +537,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
               }}
             >
               <RotateCcw size={12} />
-              RESET
+              {t('buttons.reset')}
             </button>
           </div>
         </div>
@@ -551,10 +553,10 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', gap: '16px' }}>
-          <span>💡 <span style={{ color: colors.text }}>Drag widgets to rearrange</span></span>
-          <span>🔧 <span style={{ color: colors.text }}>Resize from bottom-right corner</span></span>
-          <span>✖️ <span style={{ color: colors.text }}>Remove widgets with X button</span></span>
-          <span>📐 <span style={{ color: colors.text }}>Responsive layout - uses full width</span></span>
+          <span>💡 <span style={{ color: colors.text }}>{t('tips.drag')}</span></span>
+          <span>🔧 <span style={{ color: colors.text }}>{t('tips.resize')}</span></span>
+          <span>✖️ <span style={{ color: colors.text }}>{t('tips.remove')}</span></span>
+          <span>📐 <span style={{ color: colors.text }}>{t('tips.responsive')}</span></span>
         </div>
       </div>
 
@@ -578,7 +580,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             gap: '16px'
           }}>
             <div style={{ color: colors.textMuted, fontSize: fontSize.subheading }}>
-              No widgets on dashboard
+              {t('empty.noWidgets')}
             </div>
             <button
               onClick={() => setShowAddModal(true)}
@@ -593,7 +595,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
                 borderRadius: '4px'
               }}
             >
-              ADD YOUR FIRST WIDGET
+              {t('empty.addFirst')}
             </button>
           </div>
         ) : (
@@ -623,16 +625,16 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
       <TabFooter
         tabName="DASHBOARD"
         leftInfo={[
-          { label: 'Drag & drop workspace', color: colors.textMuted },
-          { label: `Widgets: ${widgets.length}`, color: colors.textMuted },
-          { label: `Layout: ${widgets.length > 0 ? 'Custom' : 'Empty'}`, color: colors.textMuted },
+          { label: t('status.version'), color: colors.textMuted },
+          { label: `${t('header.widgets')}: ${widgets.length}`, color: colors.textMuted },
+          { label: `${t('status.layout')}: ${widgets.length > 0 ? t('status.custom') : t('status.empty')}`, color: colors.textMuted },
         ]}
         statusInfo={
           <>
-            Status: <span style={{ color: colors.secondary }}>ACTIVE</span>
+            Status: <span style={{ color: colors.secondary }}>{t('status.active')}</span>
             {dbInitialized && (
               <span style={{ marginLeft: '8px', color: colors.secondary }}>
-                | Cache: ENABLED
+                | {t('status.cache')}
               </span>
             )}
           </>

@@ -5,6 +5,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { notebookService } from '@/services/notebookService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 interface EditorFile {
   id: string;
@@ -70,6 +71,7 @@ interface NotebookHistory {
 }
 
 export default function CodeEditorTab() {
+  const { t } = useTranslation('codeEditor');
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [editorMode, setEditorMode] = useState<'code' | 'notebook'>('code');
   const [files, setFiles] = useState<EditorFile[]>([
@@ -899,13 +901,13 @@ ${result.output}
       <div style={{ backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}`, padding: '8px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: C.ORANGE, fontWeight: 'bold', fontSize: '16px' }}>CODE EDITOR</span>
+            <span style={{ color: C.ORANGE, fontWeight: 'bold', fontSize: '16px' }}>{t('title')}</span>
             <span style={{ color: C.GRAY }}>|</span>
             <button onClick={() => setEditorMode('code')} style={{ padding: '4px 12px', backgroundColor: editorMode === 'code' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: editorMode === 'code' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-              FINSCRIPT EDITOR
+              {t('tabs.finscript')}
             </button>
             <button onClick={() => setEditorMode('notebook')} style={{ padding: '4px 12px', backgroundColor: editorMode === 'notebook' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: editorMode === 'notebook' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-              JUPYTER NOTEBOOK
+              {t('tabs.notebook')}
             </button>
             {editorMode === 'notebook' && (
               <>
@@ -918,34 +920,34 @@ ${result.output}
             {editorMode === 'code' ? (
               <>
                 <button onClick={createNewFile} style={{ padding: '6px 12px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GREEN}`, color: C.GREEN, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  <Plus size={14} style={{ display: 'inline', marginRight: '4px' }} />NEW FILE
+                  <Plus size={14} style={{ display: 'inline', marginRight: '4px' }} />{t('toolbar.newFile')}
                 </button>
                 <button onClick={saveFile} disabled={!activeFile.unsaved} style={{ padding: '6px 12px', backgroundColor: C.DARK_BG, border: `2px solid ${activeFile.unsaved ? C.YELLOW : C.GRAY}`, color: activeFile.unsaved ? C.YELLOW : C.GRAY, fontSize: '11px', fontWeight: 'bold', cursor: activeFile.unsaved ? 'pointer' : 'not-allowed', fontFamily: 'Consolas, monospace' }}>
-                  <Save size={14} style={{ display: 'inline', marginRight: '4px' }} />SAVE
+                  <Save size={14} style={{ display: 'inline', marginRight: '4px' }} />{t('toolbar.save')}
                 </button>
                 <button onClick={runCode} disabled={isRunning} style={{ padding: '6px 12px', backgroundColor: isRunning ? C.GRAY : C.GREEN, border: 'none', color: C.DARK_BG, fontSize: '11px', fontWeight: 'bold', cursor: isRunning ? 'not-allowed' : 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  <Play size={14} style={{ display: 'inline', marginRight: '4px' }} />{isRunning ? 'RUNNING...' : 'RUN CODE'}
+                  <Play size={14} style={{ display: 'inline', marginRight: '4px' }} />{isRunning ? t('toolbar.running') : t('toolbar.run')}
                 </button>
               </>
             ) : (
               <>
                 <button onClick={createNewNotebook} style={{ padding: '6px 12px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GREEN}`, color: C.GREEN, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  <Plus size={14} style={{ display: 'inline', marginRight: '4px' }} />NEW
+                  <Plus size={14} style={{ display: 'inline', marginRight: '4px' }} />{t('toolbar.new')}
                 </button>
                 <button onClick={openNotebook} style={{ padding: '6px 12px', backgroundColor: C.DARK_BG, border: `2px solid ${C.BLUE}`, color: C.BLUE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  <Upload size={14} style={{ display: 'inline', marginRight: '4px' }} />OPEN
+                  <Upload size={14} style={{ display: 'inline', marginRight: '4px' }} />{t('toolbar.open')}
                 </button>
                 <button onClick={saveNotebook} style={{ padding: '6px 12px', backgroundColor: C.DARK_BG, border: `2px solid ${C.YELLOW}`, color: C.YELLOW, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  <Save size={14} style={{ display: 'inline', marginRight: '4px' }} />SAVE
+                  <Save size={14} style={{ display: 'inline', marginRight: '4px' }} />{t('toolbar.save')}
                 </button>
                 <button onClick={executeAllCells} style={{ padding: '6px 12px', backgroundColor: C.GREEN, border: 'none', color: C.DARK_BG, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  <Play size={14} style={{ display: 'inline', marginRight: '4px' }} />RUN ALL
+                  <Play size={14} style={{ display: 'inline', marginRight: '4px' }} />{t('toolbar.runAll')}
                 </button>
                 <button onClick={() => setShowPackageManager(!showPackageManager)} style={{ padding: '6px 12px', backgroundColor: C.DARK_BG, border: `2px solid ${C.CYAN}`, color: C.CYAN, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  <Package size={14} style={{ display: 'inline', marginRight: '4px' }} />PACKAGES
+                  <Package size={14} style={{ display: 'inline', marginRight: '4px' }} />{t('header.packages')}
                 </button>
                 <button onClick={() => setShowHistory(!showHistory)} style={{ padding: '6px 12px', backgroundColor: showHistory ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.ORANGE}`, color: showHistory ? C.DARK_BG : C.ORANGE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  <History size={14} style={{ display: 'inline', marginRight: '4px' }} />HISTORY
+                  <History size={14} style={{ display: 'inline', marginRight: '4px' }} />{t('toolbar.history')}
                 </button>
               </>
             )}
@@ -995,7 +997,7 @@ ${result.output}
           <div style={{ fontSize: '11px', color: C.CYAN, marginBottom: '8px' }}>Installed Packages:</div>
           <div className="code-scroll" style={{ maxHeight: '250px', overflowY: 'auto', backgroundColor: C.EDITOR_BG, padding: '8px', fontSize: '10px' }}>
             {installedPackages.length === 0 ? (
-              <div style={{ color: C.GRAY }}>Click to load packages...</div>
+              <div style={{ color: C.GRAY }}>{t('packages.clickToLoad')}</div>
             ) : (
               installedPackages.map((pkg, idx) => (
                 <div key={idx} style={{ color: C.WHITE, marginBottom: '2px' }}>{pkg}</div>
@@ -1004,7 +1006,7 @@ ${result.output}
           </div>
           {installedPackages.length === 0 && (
             <button onClick={loadInstalledPackages} style={{ marginTop: '8px', padding: '4px 8px', backgroundColor: C.BLUE, border: 'none', color: C.WHITE, fontSize: '10px', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-              LOAD PACKAGES
+              {t('packages.load')}
             </button>
           )}
         </div>
@@ -1018,7 +1020,7 @@ ${result.output}
             <div style={{ backgroundColor: C.DARK_BG, padding: '8px 12px', borderBottom: `1px solid ${C.GRAY}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                 <History size={14} style={{ color: C.ORANGE }} />
-                <span style={{ color: C.ORANGE, fontSize: '12px', fontWeight: 'bold' }}>NOTEBOOK HISTORY</span>
+                <span style={{ color: C.ORANGE, fontSize: '12px', fontWeight: 'bold' }}>{t('history.title')}</span>
               </div>
               <div style={{ display: 'flex', gap: '4px' }}>
                 <input
@@ -1040,11 +1042,11 @@ ${result.output}
             <div className="code-scroll" style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
               {isLoadingHistory ? (
                 <div style={{ color: C.GRAY, textAlign: 'center', padding: '20px', fontSize: '11px' }}>
-                  Loading history...
+                  {t('history.loading')}
                 </div>
               ) : notebookHistory.length === 0 ? (
                 <div style={{ color: C.GRAY, textAlign: 'center', padding: '20px', fontSize: '11px' }}>
-                  No notebook history yet
+                  {t('history.empty')}
                 </div>
               ) : (
                 notebookHistory.map((entry) => (

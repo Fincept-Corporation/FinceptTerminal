@@ -1,10 +1,27 @@
 {
     "title": "WATCHLIST",
     "header": {
+        "title": "FINCEPT WATCHLIST MONITOR",
         "myWatchlists": "MY WATCHLISTS",
         "create": "CREATE",
         "import": "IMPORT",
-        "export": "EXPORT"
+        "export": "EXPORT",
+        "updating": "UPDATING",
+        "live": "LIVE"
+    },
+    "sidebar": {
+        "groups": "WATCHLIST GROUPS",
+        "new": "NEW",
+        "noWatchlists": "No watchlists yet.",
+        "clickNew": "Click NEW to create one.",
+        "stocks": "stocks",
+        "marketMovers": "MARKET MOVERS",
+        "gainer": "GAINER",
+        "loser": "LOSER",
+        "volumeLeaders": "VOLUME LEADERS"
+    },
+    "emptyState": {
+        "selectWatchlist": "Select a watchlist or create a new one to get started"
     },
     "list": {
         "name": "Name",

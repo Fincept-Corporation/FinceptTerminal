@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, RefreshCw, Settings } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export interface BaseWidgetProps {
   id: string;
@@ -29,6 +30,7 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
   error = null,
   headerColor = BLOOMBERG_ORANGE
 }) => {
+  const { t } = useTranslation('dashboard');
   return (
     <div style={{
       height: '100%',
@@ -141,7 +143,7 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
             fontSize: '10px',
             textAlign: 'center'
           }}>
-            Error: {error}
+            {t('widgets.error')}: {error}
           </div>
         ) : isLoading ? (
           <div style={{
@@ -150,7 +152,7 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
             fontSize: '10px',
             textAlign: 'center'
           }}>
-            Loading...
+            {t('widgets.loading')}
           </div>
         ) : (
           children

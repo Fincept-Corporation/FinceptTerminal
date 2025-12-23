@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { ForumApiService } from '../../../../services/forumApi';
 
@@ -33,6 +34,7 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
   limit = 5,
   onRemove
 }) => {
+  const { t } = useTranslation('dashboard');
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +95,7 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
   return (
     <BaseWidget
       id={id}
-      title={`FORUM - ${categoryName}`}
+      title={`${t('widgets.forum')} - ${categoryName}`}
       onRemove={onRemove}
       onRefresh={loadPosts}
       isLoading={loading}
@@ -125,7 +127,7 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
         ))}
         {posts.length === 0 && !loading && !error && (
           <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', textAlign: 'center', padding: '12px' }}>
-            No forum posts available
+            {t('widgets.noForumPosts')}
           </div>
         )}
       </div>

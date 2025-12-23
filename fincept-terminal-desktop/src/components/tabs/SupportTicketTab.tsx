@@ -4,10 +4,12 @@ import { SupportApiService } from '@/services/supportApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { RefreshCw, Plus, ArrowLeft, Send, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 type SupportView = 'list' | 'create' | 'details';
 
 const SupportTicketTab: React.FC = () => {
+  const { t } = useTranslation('support');
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const C = {
     ORANGE: colors.primary,
@@ -259,8 +261,8 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
     return (
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: C.DARK_BG }}>
         <div style={{ textAlign: 'center', fontFamily: 'Consolas, monospace' }}>
-          <div style={{ color: C.ORANGE, fontSize: '16px', marginBottom: '8px', fontWeight: 'bold' }}>AUTHENTICATION REQUIRED</div>
-          <div style={{ color: C.GRAY, fontSize: '12px' }}>Please login to access support tickets</div>
+          <div style={{ color: C.ORANGE, fontSize: '16px', marginBottom: '8px', fontWeight: 'bold' }}>{t('auth.required')}</div>
+          <div style={{ color: C.GRAY, fontSize: '12px' }}>{t('auth.loginMessage')}</div>
         </div>
       </div>
     );
@@ -306,20 +308,20 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: C.ORANGE, fontWeight: 'bold' }}>FINCEPT</span>
-          <span style={{ color: C.WHITE }}>SUPPORT TERMINAL</span>
+          <span style={{ color: C.WHITE }}>{t('title')}</span>
           <span style={{ color: C.GRAY }}>|</span>
           <span style={{ color: C.WHITE, fontSize: '11px' }}>
             {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: C.GRAY, fontSize: '11px' }}>TICKETS:</span>
+          <span style={{ color: C.GRAY, fontSize: '11px' }}>{t('header.tickets')}:</span>
           <span style={{ color: C.CYAN, fontSize: '11px', fontWeight: 'bold' }}>{stats.total_tickets || 0}</span>
           <span style={{ color: C.GRAY }}>|</span>
-          <span style={{ color: C.YELLOW, fontSize: '11px' }}>OPEN:</span>
+          <span style={{ color: C.YELLOW, fontSize: '11px' }}>{t('header.open')}:</span>
           <span style={{ color: C.YELLOW, fontSize: '11px', fontWeight: 'bold' }}>{stats.open_tickets || 0}</span>
           <span style={{ color: C.GRAY }}>|</span>
-          <span style={{ color: C.GREEN, fontSize: '11px' }}>RESOLVED:</span>
+          <span style={{ color: C.GREEN, fontSize: '11px' }}>{t('header.resolved')}:</span>
           <span style={{ color: C.GREEN, fontSize: '11px', fontWeight: 'bold' }}>{stats.resolved_tickets || 0}</span>
         </div>
       </div>
@@ -356,7 +358,7 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
                 }}
               >
                 <RefreshCw size={12} />
-                REFRESH
+                {t('buttons.refresh')}
               </button>
               <button
                 onClick={() => setCurrentView('create')}
@@ -374,7 +376,7 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
                 }}
               >
                 <Plus size={12} />
-                CREATE TICKET
+                {t('buttons.createTicket')}
               </button>
             </>
           )}
@@ -395,14 +397,14 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
               }}
             >
               <ArrowLeft size={12} />
-              BACK TO LIST
+              {t('buttons.backToList')}
             </button>
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ color: loading ? C.ORANGE : C.GREEN, fontSize: '14px' }}>●</span>
           <span style={{ color: loading ? C.ORANGE : C.GREEN, fontSize: '11px', fontWeight: 'bold' }}>
-            {loading ? 'UPDATING' : 'READY'}
+            {loading ? t('status.updating') : t('status.ready')}
           </span>
         </div>
       </div>
@@ -423,14 +425,14 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
               marginBottom: '8px',
               letterSpacing: '0.5px'
             }}>
-              SUPPORT TICKETS
+              {t('list.supportTickets')}
             </div>
             <div style={{ borderBottom: `1px solid ${C.GRAY}`, marginBottom: '16px' }}></div>
 
             {/* Tickets Grid */}
             {loading && tickets.length === 0 ? (
               <div style={{ color: C.GRAY, fontSize: '12px', textAlign: 'center', marginTop: '40px' }}>
-                Loading tickets...
+                {t('list.loading')}
               </div>
             ) : tickets.length > 0 ? (
               <div style={{ display: 'grid', gap: '8px' }}>
@@ -469,7 +471,7 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
                           fontSize: '9px',
                           fontWeight: 'bold'
                         }}>
-                          DEMO
+                          {t('demo.badge')}
                         </div>
                       )}
 
@@ -515,7 +517,7 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
               </div>
             ) : (
               <div style={{ color: C.GRAY, fontSize: '12px', textAlign: 'center', marginTop: '40px' }}>
-                No support tickets found. Create your first ticket to get started!
+                {t('list.noTickets')}
               </div>
             )}
           </>
@@ -531,7 +533,7 @@ This demo ticket shows you exactly how your real support tickets will appear. Fe
               marginBottom: '8px',
               letterSpacing: '0.5px'
             }}>
-              CREATE NEW TICKET
+              {t('create.title')}
             </div>
             <div style={{ borderBottom: `1px solid ${C.GRAY}`, marginBottom: '16px' }}></div>
 

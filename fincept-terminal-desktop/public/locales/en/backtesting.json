@@ -1,0 +1,55 @@
+{
+    "title": "BACKTESTING TERMINAL",
+    "header": {
+        "strategy": "STRATEGY",
+        "results": "RESULTS",
+        "trades": "TRADES"
+    },
+    "toolbar": {
+        "run": "RUN BACKTEST",
+        "stop": "STOP",
+        "reset": "RESET",
+        "export": "EXPORT RESULTS"
+    },
+    "config": {
+        "symbol": "Symbol",
+        "startDate": "Start Date",
+        "endDate": "End Date",
+        "initialCapital": "Initial Capital",
+        "strategy": "Strategy",
+        "parameters": "Parameters"
+    },
+    "strategies": {
+        "sma": "SMA Crossover",
+        "rsi": "RSI Strategy",
+        "macd": "MACD Strategy",
+        "bollinger": "Bollinger Bands",
+        "custom": "Custom Strategy"
+    },
+    "results": {
+        "totalReturn": "Total Return",
+        "sharpeRatio": "Sharpe Ratio",
+        "maxDrawdown": "Max Drawdown",
+        "winRate": "Win Rate",
+        "totalTrades": "Total Trades",
+        "profitFactor": "Profit Factor"
+    },
+    "trades": {
+        "date": "Date",
+        "type": "Type",
+        "price": "Price",
+        "quantity": "Quantity",
+        "pnl": "P&L"
+    },
+    "status": {
+        "ready": "Ready",
+        "running": "Running...",
+        "completed": "Completed",
+        "error": "Error"
+    },
+    "messages": {
+        "backtestStarted": "Backtest started",
+        "backtestCompleted": "Backtest completed",
+        "backtestError": "Backtest failed"
+    }
+}

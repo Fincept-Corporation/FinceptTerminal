@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MarketplaceApiService, Dataset } from '@/services/marketplaceApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 interface PricingTier {
   tier: string;
@@ -43,6 +44,7 @@ interface MarketProduct {
 }
 
 const MarketplaceTab: React.FC = () => {
+  const { t } = useTranslation('marketplace');
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const C = {
     ORANGE: colors.primary,
@@ -369,13 +371,13 @@ const MarketplaceTab: React.FC = () => {
       <div style={{ backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}`, padding: '8px 16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: C.ORANGE, fontWeight: 'bold', fontSize: '16px' }}>FINCEPT MARKETPLACE</span>
+            <span style={{ color: C.ORANGE, fontWeight: 'bold', fontSize: '16px' }}>{t('title')}</span>
             <span style={{ color: C.GRAY }}>|</span>
-            <span style={{ color: C.CYAN, fontSize: '12px' }}>{datasets.length} Datasets Available</span>
+            <span style={{ color: C.CYAN, fontSize: '12px' }}>{datasets.length} {t('header.datasetsAvailable')}</span>
             {currentScreen === 'BROWSE' && (
               <>
                 <span style={{ color: C.GRAY }}>|</span>
-                <span style={{ color: C.YELLOW, fontSize: '12px' }}>My Uploads: {myUploadedDatasets.length}</span>
+                <span style={{ color: C.YELLOW, fontSize: '12px' }}>{t('header.myUploads')}: {myUploadedDatasets.length}</span>
                 <span style={{ color: C.GRAY }}>|</span>
                 <button
                   onClick={() => {
@@ -385,29 +387,29 @@ const MarketplaceTab: React.FC = () => {
                   disabled={isLoading}
                   style={{ padding: '4px 8px', backgroundColor: C.DARK_BG, border: `2px solid ${C.BLUE}`, color: C.BLUE, fontSize: '10px', fontWeight: 'bold', cursor: isLoading ? 'not-allowed' : 'pointer', fontFamily: 'Consolas, monospace' }}
                 >
-                  {isLoading ? '⟳ LOADING...' : '🔄 REFRESH'}
+                  {isLoading ? t('buttons.loading') : t('buttons.refresh')}
                 </button>
               </>
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <button onClick={() => setCurrentScreen('BROWSE')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'BROWSE' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'BROWSE' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-              BROWSE
+              {t('header.browse')}
             </button>
             <button onClick={() => setCurrentScreen('UPLOAD')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'UPLOAD' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'UPLOAD' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-              📤 UPLOAD
+              📤 {t('header.upload')}
             </button>
             <button onClick={() => setCurrentScreen('MY_PURCHASES')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'MY_PURCHASES' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'MY_PURCHASES' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-              📦 MY PURCHASES
+              📦 {t('header.myPurchases')}
             </button>
             <button onClick={() => setCurrentScreen('MY_DATASETS')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'MY_DATASETS' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'MY_DATASETS' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-              📁 MY DATASETS
+              📁 {t('header.myDatasets')}
             </button>
             <button onClick={() => setCurrentScreen('ANALYTICS')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'ANALYTICS' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'ANALYTICS' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-              📊 ANALYTICS
+              📊 {t('header.analytics')}
             </button>
             <button onClick={() => setCurrentScreen('PRICING')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'PRICING' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'PRICING' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-              💰 PRICING
+              💰 {t('header.pricing')}
             </button>
             {(session?.user_info as any)?.is_admin && (
               <>
@@ -439,10 +441,10 @@ const MarketplaceTab: React.FC = () => {
                 <span style={{ fontSize: '20px' }}>🔒</span>
                 <div>
                   <div style={{ color: C.DARK_BG, fontSize: '14px', fontWeight: 'bold', marginBottom: '2px' }}>
-                    MARKETPLACE REQUIRES REGISTERED ACCOUNT
+                    {t('guest.title')}
                   </div>
                   <div style={{ color: 'rgba(0,0,0,0.8)', fontSize: '12px' }}>
-                    Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets.
+                    {t('guest.message')}
                   </div>
                 </div>
               </div>
@@ -501,40 +503,40 @@ const MarketplaceTab: React.FC = () => {
                     const status = dataset?.status || 'approved';
                     const statusColor = status === 'approved' ? C.GREEN : status === 'pending' ? C.YELLOW : C.RED;
                     return (
-                    <div key={product.id} style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${getTypeColor(product.type)}`, padding: '16px' }}>
-                      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                        <div style={{ display: 'inline-block', backgroundColor: getTypeColor(product.type), color: C.DARK_BG, padding: '4px 10px', fontSize: '10px', fontWeight: 'bold' }}>
-                          {product.type}
-                        </div>
-                        {showAllDatasets && (
-                          <div style={{ display: 'inline-block', backgroundColor: statusColor, color: C.DARK_BG, padding: '4px 10px', fontSize: '10px', fontWeight: 'bold' }}>
-                            {status.toUpperCase()}
+                      <div key={product.id} style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, borderLeft: `6px solid ${getTypeColor(product.type)}`, padding: '16px' }}>
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                          <div style={{ display: 'inline-block', backgroundColor: getTypeColor(product.type), color: C.DARK_BG, padding: '4px 10px', fontSize: '10px', fontWeight: 'bold' }}>
+                            {product.type}
                           </div>
-                        )}
+                          {showAllDatasets && (
+                            <div style={{ display: 'inline-block', backgroundColor: statusColor, color: C.DARK_BG, padding: '4px 10px', fontSize: '10px', fontWeight: 'bold' }}>
+                              {status.toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ color: C.WHITE, fontSize: '16px', fontWeight: 'bold', marginBottom: '4px' }}>{product.name}</div>
+                        <div style={{ color: C.GRAY, fontSize: '12px', marginBottom: '8px' }}>by <span style={{ color: C.CYAN }}>{product.vendor}</span></div>
+                        <div style={{ color: C.WHITE, fontSize: '13px', lineHeight: '1.5', marginBottom: '12px', minHeight: '60px' }}>{product.shortDescription}</div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px', padding: '10px', backgroundColor: 'rgba(255,255,255,0.03)', border: `1px solid ${C.GRAY}` }}>
+                          <div>
+                            <div style={{ color: C.GRAY, fontSize: '9px' }}>{t('product.rating')}</div>
+                            <div style={{ color: C.YELLOW, fontSize: '13px', fontWeight: 'bold' }}>★ {product.rating} ({product.reviews})</div>
+                          </div>
+                          <div>
+                            <div style={{ color: C.GRAY, fontSize: '9px' }}>{t('product.users')}</div>
+                            <div style={{ color: C.CYAN, fontSize: '13px', fontWeight: 'bold' }}>{product.users.toLocaleString()}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => { setSelectedProduct(product); setCurrentScreen('DETAILS'); }} style={{ flex: 1, padding: '10px', backgroundColor: C.DARK_BG, border: `2px solid ${C.BLUE}`, color: C.BLUE, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
+                            {t('buttons.viewDetails')}
+                          </button>
+                          <button onClick={() => !cartItems.includes(product.id) && setCartItems([...cartItems, product.id])} style={{ flex: 1, padding: '10px', backgroundColor: cartItems.includes(product.id) ? C.GREEN : C.DARK_BG, border: `2px solid ${C.GREEN}`, color: cartItems.includes(product.id) ? C.DARK_BG : C.GREEN, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
+                            {cartItems.includes(product.id) ? t('buttons.inCart') : t('buttons.addToCart')}
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ color: C.WHITE, fontSize: '16px', fontWeight: 'bold', marginBottom: '4px' }}>{product.name}</div>
-                      <div style={{ color: C.GRAY, fontSize: '12px', marginBottom: '8px' }}>by <span style={{ color: C.CYAN }}>{product.vendor}</span></div>
-                    <div style={{ color: C.WHITE, fontSize: '13px', lineHeight: '1.5', marginBottom: '12px', minHeight: '60px' }}>{product.shortDescription}</div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px', padding: '10px', backgroundColor: 'rgba(255,255,255,0.03)', border: `1px solid ${C.GRAY}` }}>
-                      <div>
-                        <div style={{ color: C.GRAY, fontSize: '9px' }}>RATING</div>
-                        <div style={{ color: C.YELLOW, fontSize: '13px', fontWeight: 'bold' }}>★ {product.rating} ({product.reviews})</div>
-                      </div>
-                      <div>
-                        <div style={{ color: C.GRAY, fontSize: '9px' }}>USERS</div>
-                        <div style={{ color: C.CYAN, fontSize: '13px', fontWeight: 'bold' }}>{product.users.toLocaleString()}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button onClick={() => { setSelectedProduct(product); setCurrentScreen('DETAILS'); }} style={{ flex: 1, padding: '10px', backgroundColor: C.DARK_BG, border: `2px solid ${C.BLUE}`, color: C.BLUE, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                        VIEW DETAILS
-                      </button>
-                      <button onClick={() => !cartItems.includes(product.id) && setCartItems([...cartItems, product.id])} style={{ flex: 1, padding: '10px', backgroundColor: cartItems.includes(product.id) ? C.GREEN : C.DARK_BG, border: `2px solid ${C.GREEN}`, color: cartItems.includes(product.id) ? C.DARK_BG : C.GREEN, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                        {cartItems.includes(product.id) ? '✓ IN CART' : 'ADD TO CART'}
-                      </button>
-                    </div>
-                  </div>
-                  );
+                    );
                   })}
                 </div>
               )}
@@ -546,7 +548,7 @@ const MarketplaceTab: React.FC = () => {
           <>
             <div style={{ padding: '12px', backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}` }}>
               <button onClick={() => setCurrentScreen('BROWSE')} style={{ padding: '8px 16px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GRAY}`, color: C.WHITE, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                ← BACK TO MARKETPLACE
+                ← {t('buttons.backToMarketplace')}
               </button>
             </div>
             <div className="marketplace-scroll" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#050505', padding: '20px' }}>
@@ -572,7 +574,7 @@ const MarketplaceTab: React.FC = () => {
                   </button>
                 </div>
                 <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, padding: '20px' }}>
-                  <div style={{ color: C.ORANGE, fontSize: '16px', fontWeight: 'bold', marginBottom: '12px' }}>PRODUCT DESCRIPTION</div>
+                  <div style={{ color: C.ORANGE, fontSize: '16px', fontWeight: 'bold', marginBottom: '12px' }}>{t('product.description')}</div>
                   <div style={{ color: C.WHITE, fontSize: '14px', lineHeight: '1.7' }}>{selectedProduct.shortDescription}</div>
                 </div>
               </div>
@@ -583,15 +585,15 @@ const MarketplaceTab: React.FC = () => {
         {currentScreen === 'CART' && (
           <>
             <div style={{ padding: '16px', backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}` }}>
-              <div style={{ color: C.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>SHOPPING CART ({cartItems.length} items)</div>
+              <div style={{ color: C.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>{t('cart.title')} ({cartItems.length} {t('cart.items')})</div>
             </div>
             <div className="marketplace-scroll" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#050505', padding: '20px' }}>
               <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 {cartItems.length === 0 ? (
                   <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, padding: '40px', textAlign: 'center' }}>
-                    <div style={{ color: C.GRAY, fontSize: '18px', marginBottom: '16px' }}>Your cart is empty</div>
+                    <div style={{ color: C.GRAY, fontSize: '18px', marginBottom: '16px' }}>{t('cart.empty')}</div>
                     <button onClick={() => setCurrentScreen('BROWSE')} style={{ padding: '12px 24px', backgroundColor: C.ORANGE, border: 'none', color: C.DARK_BG, fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                      BROWSE MARKETPLACE
+                      {t('header.browse')}
                     </button>
                   </div>
                 ) : (
