@@ -42,6 +42,7 @@ import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
 import BacktestingTab from '@/components/tabs/BacktestingTabNew';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import AgentConfigTab from '@/components/tabs/AgentConfigTab';
+import { useTranslation } from 'react-i18next';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -153,6 +154,7 @@ const HeaderTimeDisplay = () => {
 
 // Internal component that uses the InterfaceMode context
 function FinxeptTerminalContent() {
+  const { t } = useTranslation('tabs');
   const { session, logout } = useAuth();
   const navigation = useNavigation();
   const { mode, toggleMode } = useInterfaceMode();
@@ -790,91 +792,91 @@ function FinxeptTerminalContent() {
                   style={activeTab === 'dashboard' ? tabStyles.active : tabStyles.default}
                   title="Dashboard (F1)"
                 >
-                  Dashboard
+                  {t('navigation.dashboard')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="markets"
                   style={activeTab === 'markets' ? tabStyles.active : tabStyles.default}
                   title="Markets (F2)"
                 >
-                  Markets
+                  {t('navigation.markets')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="news"
                   style={activeTab === 'news' ? tabStyles.active : tabStyles.default}
                   title="News (F3)"
                 >
-                  News
+                  {t('navigation.news')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="portfolio"
                   style={activeTab === 'portfolio' ? tabStyles.active : tabStyles.default}
                   title="Portfolio (F4)"
                 >
-                  Portfolio
+                  {t('navigation.portfolio')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="backtesting"
                   style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
                   title="Backtesting (F5)"
                 >
-                  Backtesting
+                  {t('navigation.backtesting')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="watchlist"
                   style={activeTab === 'watchlist' ? tabStyles.active : tabStyles.default}
                   title="Watchlist (F6)"
                 >
-                  Watchlist
+                  {t('navigation.watchlist')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="research"
                   style={activeTab === 'research' ? tabStyles.active : tabStyles.default}
                   title="Equity Research (F7)"
                 >
-                  Research
+                  {t('navigation.research')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="screener"
                   style={activeTab === 'screener' ? tabStyles.active : tabStyles.default}
                   title="Screener (F8)"
                 >
-                  Screener
+                  {t('navigation.screener')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="trading"
                   style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
                   title="Trading (F9)"
                 >
-                  Trading
+                  {t('navigation.trading')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="chat"
                   style={activeTab === 'chat' ? tabStyles.active : tabStyles.default}
                   title="AI Chat (F10)"
                 >
-                  AI Chat
+                  {t('navigation.chat')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="agents"
                   style={activeTab === 'agents' ? tabStyles.active : tabStyles.default}
                   title="Agent Config"
                 >
-                  Agents
+                  {t('navigation.agents')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="settings"
                   style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
                   title="Settings"
                 >
-                  Settings
+                  {t('navigation.settings')}
                 </TabsTrigger>
                 <TabsTrigger
                   value="profile"
                   style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
                   title="Profile (F12)"
                 >
-                  Profile
+                  {t('navigation.profile')}
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -900,9 +902,9 @@ function FinxeptTerminalContent() {
           {/* Left: Branding & Status Info */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 5px', fontSize: '8px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
-            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Enter Command</span>
+            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>{t('labels.enterCommand')}</span>
             <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Search</span>
+            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>{t('labels.search')}</span>
             <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
             <HeaderTimeDisplay />
             <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
@@ -917,20 +919,20 @@ function FinxeptTerminalContent() {
 
           {/* Right: Function Keys */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F1:DASH</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F2:MKTS</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F3:NEWS</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F4:PORT</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F5:BKTEST</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F6:WATCH</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F7:RSRCH</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F8:SCRN</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F9:TRADE</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F10:AI</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F11:FULL</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F12:PROF</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F1:{t('functionKeys.f1')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F2:{t('functionKeys.f2')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F3:{t('functionKeys.f3')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F4:{t('functionKeys.f4')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F5:{t('functionKeys.f5')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F6:{t('functionKeys.f6')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F7:{t('functionKeys.f7')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F8:{t('functionKeys.f8')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F9:{t('functionKeys.f9')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F10:{t('functionKeys.f10')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F11:{t('functionKeys.f11')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F12:{t('functionKeys.f12')}</span>
             <span style={{ color: '#666', marginLeft: '4px' }}>|</span>
-            <span style={{ color: '#10b981', fontSize: '9px' }}>More tabs in toolbar menus</span>
+            <span style={{ color: '#10b981', fontSize: '9px' }}>{t('labels.moreTabs')}</span>
           </div>
         </div>
       )}

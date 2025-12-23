@@ -29,7 +29,15 @@ i18next
     },
 
     defaultNS: 'common',
-    ns: ['common', 'auth', 'dashboard', 'settings', 'tabs'],
+    ns: [
+      'common', 'auth', 'dashboard', 'settings', 'tabs',
+      'chat', 'economics', 'equityResearch', 'forum', 'geopolitics',
+      'loginAudit', 'maritime', 'markets', 'news', 'portfolio',
+      'profile', 'screener', 'trading', 'watchlist', 'dataMapping',
+      'dataSources', 'docs', 'notes', 'support', 'nodeEditor',
+      'reportBuilder', 'alphaArena', 'codeEditor', 'agentConfig',
+      'dbnomics', 'excel', 'marketplace', 'backtesting'
+    ],
 
     react: {
       useSuspense: false, // Prevent suspense issues with Tauri
