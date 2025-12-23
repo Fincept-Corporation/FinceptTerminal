@@ -1,0 +1,75 @@
+{
+    "title": "वॉचलिस्ट",
+    "header": {
+        "title": "FINCEPT वॉचलिस्ट मॉनिटर",
+        "myWatchlists": "मेरी वॉचलिस्ट",
+        "create": "बनाएं",
+        "import": "आयात",
+        "export": "निर्यात",
+        "updating": "अपडेट हो रहा है",
+        "live": "लाइव"
+    },
+    "sidebar": {
+        "groups": "वॉचलिस्ट समूह",
+        "new": "नया",
+        "noWatchlists": "अभी तक कोई वॉचलिस्ट नहीं।",
+        "clickNew": "बनाने के लिए नया क्लिक करें।",
+        "stocks": "स्टॉक",
+        "marketMovers": "मार्केट मूवर्स",
+        "gainer": "गेनर",
+        "loser": "लूज़र",
+        "volumeLeaders": "वॉल्यूम लीडर्स"
+    },
+    "emptyState": {
+        "selectWatchlist": "शुरू करने के लिए वॉचलिस्ट चुनें या नई बनाएं"
+    },
+    "list": {
+        "name": "नाम",
+        "symbols": "सिम्बल",
+        "created": "बनाया गया",
+        "updated": "अंतिम अपडेट",
+        "actions": "कार्रवाई"
+    },
+    "actions": {
+        "add": "सिम्बल जोड़ें",
+        "remove": "हटाएं",
+        "edit": "संपादित करें",
+        "delete": "हटाएं",
+        "rename": "नाम बदलें",
+        "duplicate": "डुप्लिकेट"
+    },
+    "form": {
+        "name": "वॉचलिस्ट नाम",
+        "description": "विवरण",
+        "symbols": "सिम्बल जोड़ें",
+        "save": "सहेजें",
+        "cancel": "रद्द करें"
+    },
+    "symbol": {
+        "price": "मूल्य",
+        "change": "बदलाव",
+        "volume": "वॉल्यूम",
+        "marketCap": "मार्केट कैप",
+        "alert": "अलर्ट सेट करें"
+    },
+    "alerts": {
+        "priceAbove": "मूल्य ऊपर",
+        "priceBelow": "मूल्य नीचे",
+        "changePercent": "बदलाव %",
+        "volume": "वॉल्यूम अलर्ट"
+    },
+    "sort": {
+        "name": "नाम से",
+        "price": "मूल्य से",
+        "change": "बदलाव से",
+        "custom": "कस्टम क्रम"
+    },
+    "messages": {
+        "created": "वॉचलिस्ट बनाई गई",
+        "deleted": "वॉचलिस्ट हटाई गई",
+        "symbolAdded": "सिम्बल जोड़ा गया",
+        "symbolRemoved": "सिम्बल हटाया गया",
+        "noWatchlists": "कोई वॉचलिस्ट नहीं",
+        "loading": "लोड हो रहा है..."
+    }
+}

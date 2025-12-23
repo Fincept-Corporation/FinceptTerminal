@@ -1,0 +1,26 @@
+{
+    "title": "FINCEPT ডকুমেন্টেশন টার্মিনাল",
+    "header": {
+        "sections": "বিভাগ",
+        "topics": "বিষয়",
+        "ready": "প্রস্তুত"
+    },
+    "search": {
+        "placeholder": "ডকুমেন্টেশন অনুসন্ধান...",
+        "clear": "মুছুন"
+    },
+    "navigation": "নেভিগেশন",
+    "codeExample": "কোড উদাহরণ",
+    "content": {
+        "title": "FINCEPT টার্মিনাল ডকুমেন্টেশন",
+        "description": "বিস্তারিত গাইড এবং API রেফারেন্স দেখতে নেভিগেশন প্যানেল থেকে একটি বিষয় নির্বাচন করুন।",
+        "topicsAvailable": "বিষয় উপলব্ধ",
+        "selectTopic": "শুরু করতে একটি বিষয় নির্বাচন করুন"
+    },
+    "status": {
+        "version": "Fincept Terminal Documentation v3.0 | সম্পূর্ণ API রেফারেন্স ও গাইড",
+        "sections": "বিভাগ",
+        "topics": "বিষয়",
+        "current": "বর্তমান"
+    }
+}

@@ -1,0 +1,38 @@
+{
+    "title": "মার্কেটপ্লেস",
+    "header": {
+        "browse": "ব্রাউজ",
+        "myItems": "আমার আইটেম",
+        "cart": "কার্ট"
+    },
+    "categories": {
+        "all": "সব",
+        "indicators": "ইন্ডিকেটর",
+        "strategies": "কৌশল",
+        "datasets": "ডেটাসেট",
+        "tools": "টুল"
+    },
+    "buttons": {
+        "buy": "কিনুন",
+        "addToCart": "কার্টে যোগ",
+        "install": "ইনস্টল",
+        "preview": "প্রিভিউ"
+    },
+    "product": {
+        "price": "মূল্য",
+        "rating": "রেটিং",
+        "downloads": "ডাউনলোড",
+        "author": "লেখক",
+        "version": "সংস্করণ"
+    },
+    "cart": {
+        "total": "মোট",
+        "checkout": "চেকআউট",
+        "empty": "কার্ট খালি"
+    },
+    "messages": {
+        "addedToCart": "কার্টে যোগ হয়েছে",
+        "purchased": "কেনা হয়েছে",
+        "installed": "ইনস্টল হয়েছে"
+    }
+}

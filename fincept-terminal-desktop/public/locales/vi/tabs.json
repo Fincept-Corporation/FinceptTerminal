@@ -1,24 +1,49 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "navigation": {
+    "dashboard": "Bảng điều khiển",
+    "markets": "Thị trường",
+    "news": "Tin tức",
+    "portfolio": "Danh mục",
+    "backtesting": "Backtesting",
+    "watchlist": "Theo dõi",
+    "research": "Nghiên cứu",
+    "screener": "Bộ lọc",
+    "trading": "Giao dịch",
+    "chat": "AI Chat",
+    "agents": "Đại lý",
+    "settings": "Cài đặt",
+    "profile": "Hồ sơ",
+    "forum": "Diễn đàn",
+    "help": "Trợ giúp",
+    "logout": "Đăng xuất"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "functionKeys": {
+    "f1": "BẢNG",
+    "f2": "TTNG",
+    "f3": "TIN",
+    "f4": "DMUC",
+    "f5": "BKTS",
+    "f6": "TDOI",
+    "f7": "NCUU",
+    "f8": "BLOC",
+    "f9": "GDCH",
+    "f10": "AI",
+    "f11": "FULL",
+    "f12": "PROF"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
+  "status": {
+    "connected": "Đã kết nối",
+    "disconnected": "Đã ngắt",
+    "loading": "Đang tải...",
+    "error": "Lỗi",
+    "ready": "Sẵn sàng"
   },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Thêm tab trong menu thanh công cụ",
+    "enterCommand": "Nhập lệnh",
+    "search": "Tìm kiếm"
   }
 }

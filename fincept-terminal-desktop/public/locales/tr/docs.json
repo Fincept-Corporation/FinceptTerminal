@@ -1,0 +1,26 @@
+{
+    "title": "FINCEPT DOKÜMANTASYON TERMİNALİ",
+    "header": {
+        "sections": "BÖLÜMLER",
+        "topics": "KONULAR",
+        "ready": "HAZIR"
+    },
+    "search": {
+        "placeholder": "Dokümantasyonda ara...",
+        "clear": "TEMİZLE"
+    },
+    "navigation": "NAVİGASYON",
+    "codeExample": "KOD ÖRNEĞİ",
+    "content": {
+        "title": "FINCEPT TERMİNAL DOKÜMANTASYONU",
+        "description": "Kapsamlı kılavuzlar ve API referansı için navigasyon panelinden bir konu seçin.",
+        "topicsAvailable": "mevcut konu",
+        "selectTopic": "Başlamak için bir konu seçin"
+    },
+    "status": {
+        "version": "Fincept Terminal Documentation v3.0 | Tam API Referansı & Kılavuzlar",
+        "sections": "Bölümler",
+        "topics": "Konular",
+        "current": "Mevcut"
+    }
+}

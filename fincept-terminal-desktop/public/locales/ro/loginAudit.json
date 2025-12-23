@@ -1,0 +1,58 @@
+{
+    "title": "PANOU AUDIT AUTENTIFICARE",
+    "accessDenied": "Acces de administrator necesar",
+    "metrics": {
+        "dauToday": "DAU Azi",
+        "mau": "MAU",
+        "successRate": "Rata de succes",
+        "failed24h": "Eșuate (24h)",
+        "activeSessions": "Sesiuni active",
+        "uniqueIps": "IP-uri unice"
+    },
+    "views": {
+        "overview": "PREZENTARE",
+        "eventLog": "LOG EVENIMENTE",
+        "alerts": "ALERTE",
+        "analytics": "ANALIZĂ"
+    },
+    "activity": {
+        "recentLoginActivity": "ACTIVITATE AUTENTIFICARE RECENTĂ",
+        "securityAlerts": "ALERTE SECURITATE",
+        "noActiveAlerts": "Fără alerte active",
+        "loginEventLog": "LOG EVENIMENTE AUTENTIFICARE"
+    },
+    "table": {
+        "time": "Ora",
+        "event": "Eveniment",
+        "user": "Utilizator",
+        "ipAddress": "Adresă IP",
+        "location": "Locație",
+        "device": "Dispozitiv",
+        "details": "Detalii"
+    },
+    "alerts": {
+        "securityIncidents": "ALERTE ȘI INCIDENTE SECURITATE",
+        "noAlerts": "Fără alerte de securitate",
+        "dismiss": "RESPINGE",
+        "blockIp": "BLOCHEAZĂ IP",
+        "investigate": "INVESTIGHEAZĂ"
+    },
+    "analytics": {
+        "loginsByCountry": "AUTENTIFICĂRI PE ȚARĂ (30 zile)",
+        "failureReasons": "MOTIVE EȘEC (24h)",
+        "peakHours": "ORE DE VÂRF (UTC)",
+        "logins": "autentificări"
+    },
+    "controls": {
+        "autoRefresh": "Auto-reîmprospătare",
+        "loading": "SE ÎNCARCĂ...",
+        "refresh": "REÎMPROSPĂTEAZĂ"
+    },
+    "status": {
+        "admin": "Admin",
+        "dau": "DAU",
+        "status": "Status",
+        "updating": "SE ACTUALIZEAZĂ",
+        "ready": "GATA"
+    }
+}

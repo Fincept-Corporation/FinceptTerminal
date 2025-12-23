@@ -1,0 +1,48 @@
+{
+    "title": "PİYASALAR",
+    "marketTerminalLive": "PİYASA TERMİNALİ - CANLI VERİ",
+    "globalMarkets": "KÜRESEL PİYASALAR",
+    "regionalMarkets": "bölgesel piyasalar",
+    "regionalMarketsLive": "BÖLGESEL PİYASALAR - CANLI VERİ",
+    "liveData": "CANLI VERİ",
+    "symbol": "SEMBOL",
+    "name": "İSİM",
+    "price": "FİYAT",
+    "change": "DEĞİŞİM",
+    "percentChange": "%DEĞ",
+    "high": "YÜKSEK",
+    "low": "DÜŞÜK",
+    "loading": "Yükleniyor...",
+    "noData": "Veri yok",
+    "refresh": "YENİLE",
+    "auto": "OTOMATİK",
+    "on": "AÇIK",
+    "off": "KAPALI",
+    "lastUpdate": "SON GÜNCELLEME",
+    "updating": "GÜNCELLENİYOR",
+    "live": "CANLI",
+    "connected": "Bağlı",
+    "cache": "Önbellek",
+    "enabled": "ETKİN",
+    "dataProviderInfo": "Yahoo Finance API tarafından sağlanan veriler | Gerçek zamanlı güncellemeler",
+    "header": {
+        "live": "CANLI",
+        "updating": "GÜNCELLENİYOR",
+        "refresh": "YENİLE"
+    },
+    "tabs": {
+        "overview": "Genel Bakış",
+        "stocks": "Hisseler",
+        "indices": "Endeksler",
+        "forex": "Forex",
+        "crypto": "Kripto",
+        "commodities": "Emtialar",
+        "bonds": "Tahviller"
+    },
+    "status": {
+        "marketOpen": "Piyasa Açık",
+        "marketClosed": "Piyasa Kapalı",
+        "preMarket": "Piyasa Öncesi",
+        "afterHours": "Mesai Sonrası"
+    }
+}

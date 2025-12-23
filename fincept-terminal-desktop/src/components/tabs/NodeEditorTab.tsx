@@ -48,6 +48,7 @@ import { workflowExecutor } from './node-editor/WorkflowExecutor';
 import { Workflow, workflowService } from '@/services/workflowService';
 import { nodeExecutionManager } from '@/services/nodeExecutionManager';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 // Custom Node Component
 const CustomNode = ({ data, id, selected }: any) => {
@@ -250,6 +251,7 @@ const NODE_CONFIGS = [
 ];
 
 export default function NodeEditorTab() {
+  const { t } = useTranslation('nodeEditor');
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [mcpNodeConfigs, setMcpNodeConfigs] = useState<MCPNodeConfig[]>([]);
   const [agentConfigs, setAgentConfigs] = useState<AgentMetadata[]>([]);
@@ -421,14 +423,14 @@ export default function NodeEditorTab() {
               nds.map((n) =>
                 n.id === nodeId
                   ? {
-                      ...n,
-                      data: {
-                        ...n.data,
-                        status: result.success ? 'completed' : 'error',
-                        result: result.success ? result.data : undefined,
-                        error: result.success ? undefined : result.error,
-                      },
-                    }
+                    ...n,
+                    data: {
+                      ...n.data,
+                      status: result.success ? 'completed' : 'error',
+                      result: result.success ? result.data : undefined,
+                      error: result.success ? undefined : result.error,
+                    },
+                  }
                   : n
               )
             );
@@ -448,12 +450,12 @@ export default function NodeEditorTab() {
             nds.map((n) =>
               n.id === newNode.id
                 ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      selectedLLM: provider,
-                    },
-                  }
+                  ...n,
+                  data: {
+                    ...n.data,
+                    selectedLLM: provider,
+                  },
+                }
                 : n
             )
           );
@@ -490,13 +492,13 @@ export default function NodeEditorTab() {
             nds.map((n) =>
               n.id === newNode.id
                 ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      selectedProvider: newConfig.selectedProvider,
-                      customPrompt: newConfig.customPrompt,
-                    },
-                  }
+                  ...n,
+                  data: {
+                    ...n.data,
+                    selectedProvider: newConfig.selectedProvider,
+                    customPrompt: newConfig.customPrompt,
+                  },
+                }
                 : n
             )
           );
@@ -513,12 +515,12 @@ export default function NodeEditorTab() {
             nds.map((n) =>
               n.id === newNode.id
                 ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      selectedConnectionId: connectionId,
-                    },
-                  }
+                  ...n,
+                  data: {
+                    ...n.data,
+                    selectedConnectionId: connectionId,
+                  },
+                }
                 : n
             )
           );
@@ -528,12 +530,12 @@ export default function NodeEditorTab() {
             nds.map((n) =>
               n.id === newNode.id
                 ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      query: query,
-                    },
-                  }
+                  ...n,
+                  data: {
+                    ...n.data,
+                    query: query,
+                  },
+                }
                 : n
             )
           );
@@ -562,12 +564,12 @@ export default function NodeEditorTab() {
             nds.map((n) =>
               n.id === newNode.id
                 ? {
-                    ...n,
-                    data: {
-                      ...n.data,
-                      ...params,
-                    },
-                  }
+                  ...n,
+                  data: {
+                    ...n.data,
+                    ...params,
+                  },
+                }
                 : n
             )
           );
@@ -915,7 +917,7 @@ export default function NodeEditorTab() {
               letterSpacing: '0.5px',
             }}
           >
-            NODE EDITOR
+            {t('title')}
           </span>
           <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
 
@@ -933,7 +935,7 @@ export default function NodeEditorTab() {
               fontWeight: 'bold',
             }}
           >
-            EDITOR
+            {t('tabs.editor')}
           </button>
           <button
             onClick={() => setActiveView('workflows')}
@@ -957,312 +959,281 @@ export default function NodeEditorTab() {
           <>
             <button
               onClick={() => setShowNodeMenu(!showNodeMenu)}
-          style={{
-            backgroundColor: '#ea580c',
-            color: 'white',
-            border: 'none',
-            padding: '6px 12px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            borderRadius: '3px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontWeight: 'bold',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#dc2626')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ea580c')}
-        >
-          <Plus size={14} />
-          ADD NODE
-        </button>
+              style={{
+                backgroundColor: '#ea580c',
+                color: 'white',
+                border: 'none',
+                padding: '6px 12px',
+                fontSize: '11px',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 'bold',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#dc2626')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ea580c')}
+            >
+              <Plus size={14} />
+              ADD NODE
+            </button>
 
-        <button
-          onClick={async () => {
-            if (isExecuting) {
-              alert('A workflow is already executing. Please wait for it to complete.');
-              return;
-            }
-
-            try {
-              setIsExecuting(true);
-              console.log('[NodeEditor] Starting workflow execution...');
-              await nodeExecutionManager.executeWorkflow(
-                nodes,
-                edges,
-                (nodeId, status, result) => {
-                  console.log(`[NodeEditor] Node ${nodeId} status: ${status}`, result);
-                  // Update node status
-                  setNodes((nds) =>
-                    nds.map((node) => {
-                      if (node.id === nodeId) {
-                        // For results-display nodes, update inputData
-                        if (node.type === 'results-display') {
-                          console.log('[NodeEditor] Updating results-display node:', nodeId, 'with data:', result);
-                          console.log('[NodeEditor] Status:', status);
-                          // Force update to trigger re-render
-                          const currentData = node.data as any;
-                          return {
-                            ...node,
-                            data: {
-                              ...node.data,
-                              inputData: status === 'completed' ? result : (status === 'error' ? undefined : currentData.inputData),
-                              status,
-                            },
-                          };
-                        }
-                        // For other nodes, update status and result
-                        return {
-                          ...node,
-                          data: {
-                            ...node.data,
-                            status,
-                            result: status === 'completed' ? result : undefined,
-                            error: status === 'error' ? result : undefined,
-                          },
-                        };
-                      }
-                      return node;
-                    })
-                  );
-                }
-              );
-              console.log('[NodeEditor] Workflow execution completed');
-            } catch (error: any) {
-              console.error('[NodeEditor] Workflow execution failed:', error);
-              // Don't use alert - just log the error
-            } finally {
-              setIsExecuting(false);
-            }
-          }}
-          disabled={isExecuting}
-          style={{
-            backgroundColor: 'transparent',
-            color: isExecuting ? '#737373' : '#10b981',
-            border: `1px solid ${isExecuting ? '#737373' : '#10b981'}`,
-            padding: '6px 12px',
-            fontSize: '11px',
-            cursor: isExecuting ? 'not-allowed' : 'pointer',
-            borderRadius: '3px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            opacity: isExecuting ? 0.5 : 1,
-          }}
-          onMouseEnter={(e) => {
-            if (!isExecuting) {
-              e.currentTarget.style.backgroundColor = '#10b981';
-              e.currentTarget.style.color = 'white';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isExecuting) {
-              e.currentTarget.style.backgroundColor = 'transparent';
-              e.currentTarget.style.color = '#10b981';
-            }
-          }}
-        >
-          <Play size={14} />
-          {isExecuting ? 'EXECUTING...' : 'EXECUTE'}
-        </button>
-
-        <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
-
-        {/* New Workflow Button */}
-        <button
-          onClick={() => {
-            if (window.confirm('Start a new workflow? Current work will be cleared unless saved.')) {
-              clearWorkflow();
-            }
-          }}
-          style={{
-            backgroundColor: 'transparent',
-            color: '#3b82f6',
-            border: '1px solid #3b82f6',
-            padding: '6px 12px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            borderRadius: '3px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            fontWeight: 'bold',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#3b82f6';
-            e.currentTarget.style.color = 'white';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#3b82f6';
-          }}
-          title="Start a new workflow"
-        >
-          <Plus size={14} />
-          NEW
-        </button>
-
-        {/* Quick Save for Drafts */}
-        {workflowMode === 'draft' && editingDraftId && (
-          <button
-            onClick={async () => {
-              try {
-                await workflowService.updateDraft(
-                  editingDraftId,
-                  workflowName || 'Untitled Draft',
-                  workflowDescription,
-                  nodes,
-                  edges
-                );
-                alert('Draft saved successfully!');
-              } catch (error: any) {
-                alert(`Save failed: ${error.message}`);
-              }
-            }}
-            style={{
-              backgroundColor: '#f59e0b',
-              color: 'white',
-              border: 'none',
-              padding: '6px 12px',
-              fontSize: '11px',
-              cursor: 'pointer',
-              borderRadius: '3px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              fontWeight: 'bold',
-            }}
-            title="Quick save current draft"
-          >
-            <Save size={14} />
-            SAVE DRAFT
-          </button>
-        )}
-
-        <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
-
-        <button
-          onClick={saveWorkflow}
-          style={{
-            backgroundColor: 'transparent',
-            color: '#a3a3a3',
-            border: '1px solid #404040',
-            padding: '6px 12px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            borderRadius: '3px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#2d2d2d';
-            e.currentTarget.style.color = 'white';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#a3a3a3';
-          }}
-          title="Save workflow to browser storage"
-        >
-          <Save size={14} />
-          SAVE
-        </button>
-
-        <button
-          onClick={importWorkflow}
-          style={{
-            backgroundColor: 'transparent',
-            color: '#a3a3a3',
-            border: '1px solid #404040',
-            padding: '6px 12px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            borderRadius: '3px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#2d2d2d';
-            e.currentTarget.style.color = 'white';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#a3a3a3';
-          }}
-          title="Import workflow from file"
-        >
-          <Upload size={14} />
-          IMPORT
-        </button>
-
-        <button
-          onClick={exportWorkflow}
-          style={{
-            backgroundColor: 'transparent',
-            color: '#a3a3a3',
-            border: '1px solid #404040',
-            padding: '6px 12px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            borderRadius: '3px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#2d2d2d';
-            e.currentTarget.style.color = 'white';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#a3a3a3';
-          }}
-        >
-          <Download size={14} />
-          EXPORT
-        </button>
-
-        <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
-
-        <button
-          onClick={() => {
-            if (window.confirm('Are you sure you want to clear all nodes? This cannot be undone.')) {
-              clearWorkflow();
-            }
-          }}
-          style={{
-            backgroundColor: 'transparent',
-            color: '#ef4444',
-            border: '1px solid #ef4444',
-            padding: '6px 12px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            borderRadius: '3px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#ef4444';
-            e.currentTarget.style.color = 'white';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#ef4444';
-          }}
-          title="Clear all nodes and connections"
-        >
-          <Trash2 size={14} />
-          CLEAR ALL
-        </button>
-
-        {selectedNodes.length > 0 && (
-          <>
-            <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
             <button
-              onClick={deleteSelectedNodes}
+              onClick={async () => {
+                if (isExecuting) {
+                  alert('A workflow is already executing. Please wait for it to complete.');
+                  return;
+                }
+
+                try {
+                  setIsExecuting(true);
+                  console.log('[NodeEditor] Starting workflow execution...');
+                  await nodeExecutionManager.executeWorkflow(
+                    nodes,
+                    edges,
+                    (nodeId, status, result) => {
+                      console.log(`[NodeEditor] Node ${nodeId} status: ${status}`, result);
+                      // Update node status
+                      setNodes((nds) =>
+                        nds.map((node) => {
+                          if (node.id === nodeId) {
+                            // For results-display nodes, update inputData
+                            if (node.type === 'results-display') {
+                              console.log('[NodeEditor] Updating results-display node:', nodeId, 'with data:', result);
+                              console.log('[NodeEditor] Status:', status);
+                              // Force update to trigger re-render
+                              const currentData = node.data as any;
+                              return {
+                                ...node,
+                                data: {
+                                  ...node.data,
+                                  inputData: status === 'completed' ? result : (status === 'error' ? undefined : currentData.inputData),
+                                  status,
+                                },
+                              };
+                            }
+                            // For other nodes, update status and result
+                            return {
+                              ...node,
+                              data: {
+                                ...node.data,
+                                status,
+                                result: status === 'completed' ? result : undefined,
+                                error: status === 'error' ? result : undefined,
+                              },
+                            };
+                          }
+                          return node;
+                        })
+                      );
+                    }
+                  );
+                  console.log('[NodeEditor] Workflow execution completed');
+                } catch (error: any) {
+                  console.error('[NodeEditor] Workflow execution failed:', error);
+                  // Don't use alert - just log the error
+                } finally {
+                  setIsExecuting(false);
+                }
+              }}
+              disabled={isExecuting}
+              style={{
+                backgroundColor: 'transparent',
+                color: isExecuting ? '#737373' : '#10b981',
+                border: `1px solid ${isExecuting ? '#737373' : '#10b981'}`,
+                padding: '6px 12px',
+                fontSize: '11px',
+                cursor: isExecuting ? 'not-allowed' : 'pointer',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                opacity: isExecuting ? 0.5 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!isExecuting) {
+                  e.currentTarget.style.backgroundColor = '#10b981';
+                  e.currentTarget.style.color = 'white';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isExecuting) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.color = '#10b981';
+                }
+              }}
+            >
+              <Play size={14} />
+              {isExecuting ? 'EXECUTING...' : 'EXECUTE'}
+            </button>
+
+            <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
+
+            {/* New Workflow Button */}
+            <button
+              onClick={() => {
+                if (window.confirm('Start a new workflow? Current work will be cleared unless saved.')) {
+                  clearWorkflow();
+                }
+              }}
+              style={{
+                backgroundColor: 'transparent',
+                color: '#3b82f6',
+                border: '1px solid #3b82f6',
+                padding: '6px 12px',
+                fontSize: '11px',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 'bold',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#3b82f6';
+                e.currentTarget.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#3b82f6';
+              }}
+              title="Start a new workflow"
+            >
+              <Plus size={14} />
+              NEW
+            </button>
+
+            {/* Quick Save for Drafts */}
+            {workflowMode === 'draft' && editingDraftId && (
+              <button
+                onClick={async () => {
+                  try {
+                    await workflowService.updateDraft(
+                      editingDraftId,
+                      workflowName || 'Untitled Draft',
+                      workflowDescription,
+                      nodes,
+                      edges
+                    );
+                    alert('Draft saved successfully!');
+                  } catch (error: any) {
+                    alert(`Save failed: ${error.message}`);
+                  }
+                }}
+                style={{
+                  backgroundColor: '#f59e0b',
+                  color: 'white',
+                  border: 'none',
+                  padding: '6px 12px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  borderRadius: '3px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontWeight: 'bold',
+                }}
+                title="Quick save current draft"
+              >
+                <Save size={14} />
+                SAVE DRAFT
+              </button>
+            )}
+
+            <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
+
+            <button
+              onClick={saveWorkflow}
+              style={{
+                backgroundColor: 'transparent',
+                color: '#a3a3a3',
+                border: '1px solid #404040',
+                padding: '6px 12px',
+                fontSize: '11px',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#2d2d2d';
+                e.currentTarget.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#a3a3a3';
+              }}
+              title="Save workflow to browser storage"
+            >
+              <Save size={14} />
+              SAVE
+            </button>
+
+            <button
+              onClick={importWorkflow}
+              style={{
+                backgroundColor: 'transparent',
+                color: '#a3a3a3',
+                border: '1px solid #404040',
+                padding: '6px 12px',
+                fontSize: '11px',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#2d2d2d';
+                e.currentTarget.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#a3a3a3';
+              }}
+              title="Import workflow from file"
+            >
+              <Upload size={14} />
+              IMPORT
+            </button>
+
+            <button
+              onClick={exportWorkflow}
+              style={{
+                backgroundColor: 'transparent',
+                color: '#a3a3a3',
+                border: '1px solid #404040',
+                padding: '6px 12px',
+                fontSize: '11px',
+                cursor: 'pointer',
+                borderRadius: '3px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#2d2d2d';
+                e.currentTarget.style.color = 'white';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = '#a3a3a3';
+              }}
+            >
+              <Download size={14} />
+              EXPORT
+            </button>
+
+            <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
+
+            <button
+              onClick={() => {
+                if (window.confirm('Are you sure you want to clear all nodes? This cannot be undone.')) {
+                  clearWorkflow();
+                }
+              }}
               style={{
                 backgroundColor: 'transparent',
                 color: '#ef4444',
@@ -1283,12 +1254,43 @@ export default function NodeEditorTab() {
                 e.currentTarget.style.backgroundColor = 'transparent';
                 e.currentTarget.style.color = '#ef4444';
               }}
+              title="Clear all nodes and connections"
             >
               <Trash2 size={14} />
-              DELETE ({selectedNodes.length})
+              CLEAR ALL
             </button>
-          </>
-        )}
+
+            {selectedNodes.length > 0 && (
+              <>
+                <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
+                <button
+                  onClick={deleteSelectedNodes}
+                  style={{
+                    backgroundColor: 'transparent',
+                    color: '#ef4444',
+                    border: '1px solid #ef4444',
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    borderRadius: '3px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#ef4444';
+                    e.currentTarget.style.color = 'white';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = '#ef4444';
+                  }}
+                >
+                  <Trash2 size={14} />
+                  DELETE ({selectedNodes.length})
+                </button>
+              </>
+            )}
 
             <div style={{ width: '1px', height: '20px', backgroundColor: '#404040' }}></div>
 

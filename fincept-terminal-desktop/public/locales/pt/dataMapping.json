@@ -1,0 +1,52 @@
+{
+    "title": "MAPEAMENTO DE DADOS",
+    "header": {
+        "mappings": "MAPEAMENTOS",
+        "templates": "MODELOS",
+        "create": "CRIAR NOVO",
+        "refresh": "ATUALIZAR"
+    },
+    "views": {
+        "list": "Lista de Mapeamentos",
+        "create": "Criar Mapeamento",
+        "templates": "Modelos"
+    },
+    "list": {
+        "name": "Nome",
+        "source": "Origem",
+        "destination": "Destino",
+        "status": "Status",
+        "lastRun": "Última Execução",
+        "actions": "Ações"
+    },
+    "status": {
+        "active": "Ativo",
+        "inactive": "Inativo",
+        "error": "Erro",
+        "running": "Executando"
+    },
+    "actions": {
+        "edit": "Editar",
+        "delete": "Excluir",
+        "run": "Executar",
+        "duplicate": "Duplicar",
+        "export": "Exportar"
+    },
+    "create": {
+        "title": "Criar Mapeamento de Dados",
+        "name": "Nome do Mapeamento",
+        "description": "Descrição",
+        "sourceApi": "API Origem",
+        "destApi": "API Destino",
+        "fieldMapping": "Mapeamento de Campos",
+        "save": "Salvar Mapeamento",
+        "cancel": "Cancelar"
+    },
+    "messages": {
+        "saved": "Mapeamento salvo com sucesso",
+        "deleted": "Mapeamento excluído",
+        "runSuccess": "Mapeamento executado com sucesso",
+        "error": "Ocorreu um erro",
+        "noMappings": "Nenhum mapeamento configurado"
+    }
+}

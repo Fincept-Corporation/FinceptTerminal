@@ -1,0 +1,38 @@
+{
+    "title": "マーケットプレイス",
+    "header": {
+        "browse": "閲覧",
+        "myItems": "マイアイテム",
+        "cart": "カート"
+    },
+    "categories": {
+        "all": "すべて",
+        "indicators": "インジケーター",
+        "strategies": "戦略",
+        "datasets": "データセット",
+        "tools": "ツール"
+    },
+    "buttons": {
+        "buy": "購入",
+        "addToCart": "カートに追加",
+        "install": "インストール",
+        "preview": "プレビュー"
+    },
+    "product": {
+        "price": "価格",
+        "rating": "評価",
+        "downloads": "ダウンロード数",
+        "author": "作者",
+        "version": "バージョン"
+    },
+    "cart": {
+        "total": "合計",
+        "checkout": "購入手続き",
+        "empty": "カートは空です"
+    },
+    "messages": {
+        "addedToCart": "カートに追加しました",
+        "purchased": "購入完了",
+        "installed": "インストール完了"
+    }
+}

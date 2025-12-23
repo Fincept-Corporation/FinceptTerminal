@@ -1,0 +1,26 @@
+{
+    "title": "TERMINAL DE DOCUMENTATION FINCEPT",
+    "header": {
+        "sections": "SECTIONS",
+        "topics": "SUJETS",
+        "ready": "PRÊT"
+    },
+    "search": {
+        "placeholder": "Rechercher dans la documentation...",
+        "clear": "EFFACER"
+    },
+    "navigation": "NAVIGATION",
+    "codeExample": "EXEMPLE DE CODE",
+    "content": {
+        "title": "DOCUMENTATION DU TERMINAL FINCEPT",
+        "description": "Sélectionnez un sujet dans le panneau de navigation pour voir les guides et la référence API.",
+        "topicsAvailable": "sujets disponibles",
+        "selectTopic": "Sélectionnez un sujet pour commencer"
+    },
+    "status": {
+        "version": "Fincept Terminal Documentation v3.0 | Référence API Complète et Guides",
+        "sections": "Sections",
+        "topics": "Sujets",
+        "current": "Actuel"
+    }
+}

@@ -1,0 +1,39 @@
+{
+    "title": "노트",
+    "header": {
+        "notes": "노트",
+        "folders": "폴더",
+        "tags": "태그"
+    },
+    "toolbar": {
+        "newNote": "새 노트",
+        "templates": "템플릿",
+        "favorites": "즐겨찾기",
+        "filters": "필터",
+        "archived": "보관됨"
+    },
+    "editor": {
+        "title": "제목",
+        "content": "내용",
+        "tags": "태그"
+    },
+    "buttons": {
+        "save": "저장",
+        "delete": "삭제",
+        "archive": "보관",
+        "share": "공유"
+    },
+    "messages": {
+        "saved": "노트 저장됨",
+        "deleted": "노트 삭제됨",
+        "archived": "노트 보관됨"
+    },
+    "search": {
+        "placeholder": "노트 검색..."
+    },
+    "stats": {
+        "total": "전체",
+        "archived": "보관됨",
+        "favorites": "즐겨찾기"
+    }
+}

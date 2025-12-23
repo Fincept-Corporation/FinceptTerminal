@@ -1,0 +1,63 @@
+{
+    "title": "FINCEPT PORTFÖY YÖNETİCİSİ",
+    "header": {
+        "live": "CANLI",
+        "updating": "GÜNCELLENİYOR",
+        "newPortfolio": "YENİ PORTFÖY",
+        "refresh": "YENİLE",
+        "exportCsv": "CSV DIŞA AKTAR"
+    },
+    "summary": {
+        "totalValue": "TOPLAM DEĞER",
+        "dayPnl": "GÜNLÜK K/Z",
+        "totalPnl": "TOPLAM K/Z",
+        "positions": "POZİSYONLAR"
+    },
+    "views": {
+        "positions": "POZİSYONLAR",
+        "addAsset": "VARLİK EKLE",
+        "sellAsset": "VARLIK SAT",
+        "analytics": "ANALİTİK",
+        "history": "GEÇMİŞ",
+        "activeMgmt": "AKTİF YÖNETİM",
+        "performance": "PERFORMANS",
+        "rebalance": "YENİDEN DENGELEME",
+        "reports": "RAPORLAR",
+        "alerts": "UYARILAR",
+        "sectors": "SEKTÖRLER",
+        "help": "YARDIM"
+    },
+    "sidebar": {
+        "portfolios": "PORTFÖYLER",
+        "loading": "Portföyler yükleniyor...",
+        "noPortfolios": "Henüz portföy yok.",
+        "clickCreate": "Oluşturmak için YENİ PORTFÖY'e tıklayın.",
+        "owner": "Sahip",
+        "currency": "Para Birimi"
+    },
+    "content": {
+        "selectOrCreate": "Başlamak için bir portföy seçin veya yeni oluşturun",
+        "loadingData": "Portföy verileri yükleniyor...",
+        "comingSoon": "görünüm yakında..."
+    },
+    "modals": {
+        "createNew": "YENİ PORTFÖY OLUŞTUR",
+        "portfolioName": "PORTFÖY ADI",
+        "owner": "SAHİP",
+        "currency": "PARA BİRİMİ",
+        "cancel": "İPTAL",
+        "create": "OLUŞTUR",
+        "addAssetTitle": "PORTFÖYE VARLIK EKLE",
+        "sellAssetTitle": "VARLIK SAT",
+        "symbol": "SEMBOL",
+        "quantity": "MİKTAR",
+        "price": "FİYAT",
+        "add": "EKLE",
+        "sell": "SAT"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | yfinance entegrasyonu ile gerçek zamanlı takip",
+        "lastUpdated": "Son Güncelleme",
+        "connected": "BAĞLI"
+    }
+}

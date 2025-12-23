@@ -1,0 +1,46 @@
+{
+    "title": "АЛЬФА АРЕНА",
+    "header": {
+        "competition": "ЗМАГАННЯ",
+        "leaderboard": "РЕЙТИНГ",
+        "decisions": "РІШЕННЯ",
+        "cycles": "ЦИКЛИ"
+    },
+    "buttons": {
+        "start": "СТАРТ",
+        "stop": "СТОП",
+        "refresh": "ОНОВИТИ",
+        "create": "СТВОРИТИ ЗМАГАННЯ"
+    },
+    "form": {
+        "competitionName": "Назва змагання",
+        "symbol": "Символ",
+        "mode": "Режим торгівлі",
+        "models": "Вибрати моделі",
+        "apiKeys": "API ключі"
+    },
+    "modes": {
+        "baseline": "Базовий",
+        "monk": "Монк",
+        "situational": "Ситуаційний",
+        "maxLeverage": "Макс. плече"
+    },
+    "leaderboard": {
+        "rank": "Позиція",
+        "model": "Модель",
+        "pnl": "П/З",
+        "trades": "Угоди",
+        "winRate": "Вінрейт"
+    },
+    "status": {
+        "running": "ПРАЦЮЄ",
+        "stopped": "ЗУПИНЕНО",
+        "waiting": "ОЧІКУЄ",
+        "error": "ПОМИЛКА"
+    },
+    "messages": {
+        "competitionStarted": "Змагання розпочато",
+        "competitionStopped": "Змагання зупинено",
+        "noCompetition": "Немає активних змагань"
+    }
+}

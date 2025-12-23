@@ -1,0 +1,75 @@
+{
+    "title": "LISTĂ URMĂRIRE",
+    "header": {
+        "title": "MONITOR LISTE FINCEPT",
+        "myWatchlists": "LISTELE MELE",
+        "create": "CREEAZĂ",
+        "import": "IMPORTĂ",
+        "export": "EXPORTĂ",
+        "updating": "ACTUALIZARE",
+        "live": "ÎN DIRECT"
+    },
+    "sidebar": {
+        "groups": "GRUPURI DE LISTE",
+        "new": "NOUĂ",
+        "noWatchlists": "Nicio listă încă.",
+        "clickNew": "Click NOUĂ pentru a crea.",
+        "stocks": "acțiuni",
+        "marketMovers": "LIDERI PIAȚĂ",
+        "gainer": "ÎN CREȘTERE",
+        "loser": "ÎN SCĂDERE",
+        "volumeLeaders": "LIDERI VOLUM"
+    },
+    "emptyState": {
+        "selectWatchlist": "Selectați o listă sau creați una nouă pentru a începe"
+    },
+    "list": {
+        "name": "Nume",
+        "symbols": "Simboluri",
+        "created": "Creat",
+        "updated": "Ultima actualizare",
+        "actions": "Acțiuni"
+    },
+    "actions": {
+        "add": "Adaugă simbol",
+        "remove": "Elimină",
+        "edit": "Editează",
+        "delete": "Șterge",
+        "rename": "Redenumește",
+        "duplicate": "Duplică"
+    },
+    "form": {
+        "name": "Nume listă",
+        "description": "Descriere",
+        "symbols": "Adaugă simboluri",
+        "save": "Salvează",
+        "cancel": "Anulează"
+    },
+    "symbol": {
+        "price": "Preț",
+        "change": "Schimbare",
+        "volume": "Volum",
+        "marketCap": "Capitalizare",
+        "alert": "Setează alertă"
+    },
+    "alerts": {
+        "priceAbove": "Preț peste",
+        "priceBelow": "Preț sub",
+        "changePercent": "Schimbare %",
+        "volume": "Alertă volum"
+    },
+    "sort": {
+        "name": "După nume",
+        "price": "După preț",
+        "change": "După schimbare",
+        "custom": "Ordine personalizată"
+    },
+    "messages": {
+        "created": "Listă creată",
+        "deleted": "Listă ștearsă",
+        "symbolAdded": "Simbol adăugat",
+        "symbolRemoved": "Simbol eliminat",
+        "noWatchlists": "Nicio listă",
+        "loading": "Se încarcă..."
+    }
+}

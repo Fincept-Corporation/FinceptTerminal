@@ -1,0 +1,84 @@
+{
+    "title": "NAVEGADOR DE SÉRIES FRED",
+    "header": {
+        "title": "EXPLORADOR DE DADOS FRED",
+        "filters": "FILTROS",
+        "results": "RESULTADOS",
+        "saved": "TELAS SALVAS",
+        "presets": "PRESETS"
+    },
+    "apiKey": {
+        "required": "CHAVE API NECESSÁRIA",
+        "configure": "Configure sua chave FRED API em Configurações → Credenciais para acessar dados econômicos.",
+        "getKey": "Obtenha chave API gratuita em",
+        "addToSettings": "Adicionar a Configurações → Credenciais → FRED_API_KEY",
+        "saveAndReload": "Salvar e recarregar esta aba",
+        "tip": "Certifique-se de ter configurado sua chave FRED API em Configurações → Credenciais"
+    },
+    "form": {
+        "seriesIds": "IDs DAS SÉRIES",
+        "startDate": "DATA INÍCIO",
+        "endDate": "DATA FIM",
+        "quickAdd": "ADICIONAR RÁPIDO"
+    },
+    "buttons": {
+        "fetch": "BUSCAR",
+        "loading": "CARREGANDO",
+        "browse": "EXPLORAR SÉRIES",
+        "done": "PRONTO"
+    },
+    "chart": {
+        "title": "GRÁFICO DE SÉRIE TEMPORAL",
+        "emptyState": "Digite IDs de série e clique em BUSCAR para visualizar dados",
+        "trySuggestion": "Tente buscar GDP, UNRATE ou CPIAUCSL",
+        "waiting": "Aguarde enquanto buscamos dados do FRED...",
+        "errorFetching": "Erro ao Buscar Dados"
+    },
+    "filters": {
+        "add": "Adicionar Filtro",
+        "clear": "Limpar Tudo",
+        "reset": "Resetar",
+        "apply": "Aplicar Filtros"
+    },
+    "criteria": {
+        "marketCap": "Capitalização",
+        "price": "Preço",
+        "volume": "Volume",
+        "pe": "P/L",
+        "eps": "LPA",
+        "dividend": "Dividend Yield",
+        "beta": "Beta",
+        "sector": "Setor",
+        "industry": "Indústria",
+        "country": "País",
+        "exchange": "Bolsa"
+    },
+    "operators": {
+        "equals": "Igual a",
+        "greater": "Maior que",
+        "less": "Menor que",
+        "between": "Entre",
+        "contains": "Contém"
+    },
+    "results": {
+        "symbol": "Código",
+        "name": "Nome",
+        "price": "Preço",
+        "change": "Variação",
+        "volume": "Volume",
+        "marketCap": "Capitalização",
+        "matches": "resultados encontrados"
+    },
+    "actions": {
+        "save": "Salvar Tela",
+        "load": "Carregar Tela",
+        "export": "Exportar Resultados",
+        "addToWatchlist": "Adicionar à Lista"
+    },
+    "messages": {
+        "loading": "Filtrando ações...",
+        "noResults": "Nenhuma ação corresponde aos critérios",
+        "saved": "Tela salva com sucesso",
+        "applied": "Filtros aplicados"
+    }
+}

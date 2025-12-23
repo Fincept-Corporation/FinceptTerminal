@@ -1,0 +1,63 @@
+{
+    "title": "مدير محفظة FINCEPT",
+    "header": {
+        "live": "مباشر",
+        "updating": "جاري التحديث",
+        "newPortfolio": "محفظة جديدة",
+        "refresh": "تحديث",
+        "exportCsv": "تصدير CSV"
+    },
+    "summary": {
+        "totalValue": "القيمة الإجمالية",
+        "dayPnl": "ربح/خسارة اليوم",
+        "totalPnl": "إجمالي الربح/الخسارة",
+        "positions": "المراكز"
+    },
+    "views": {
+        "positions": "المراكز",
+        "addAsset": "إضافة أصل",
+        "sellAsset": "بيع أصل",
+        "analytics": "التحليلات",
+        "history": "السجل",
+        "activeMgmt": "الإدارة النشطة",
+        "performance": "الأداء",
+        "rebalance": "إعادة التوازن",
+        "reports": "التقارير",
+        "alerts": "التنبيهات",
+        "sectors": "القطاعات",
+        "help": "المساعدة"
+    },
+    "sidebar": {
+        "portfolios": "المحافظ",
+        "loading": "جاري تحميل المحافظ...",
+        "noPortfolios": "لا توجد محافظ بعد.",
+        "clickCreate": "انقر على محفظة جديدة لإنشاء واحدة.",
+        "owner": "المالك",
+        "currency": "العملة"
+    },
+    "content": {
+        "selectOrCreate": "اختر محفظة أو أنشئ واحدة جديدة للبدء",
+        "loadingData": "جاري تحميل بيانات المحفظة...",
+        "comingSoon": "العرض قريباً..."
+    },
+    "modals": {
+        "createNew": "إنشاء محفظة جديدة",
+        "portfolioName": "اسم المحفظة",
+        "owner": "المالك",
+        "currency": "العملة",
+        "cancel": "إلغاء",
+        "create": "إنشاء",
+        "addAssetTitle": "إضافة أصل للمحفظة",
+        "sellAssetTitle": "بيع أصل",
+        "symbol": "الرمز",
+        "quantity": "الكمية",
+        "price": "السعر",
+        "add": "إضافة",
+        "sell": "بيع"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | تتبع فوري مع تكامل yfinance",
+        "lastUpdated": "آخر تحديث",
+        "connected": "متصل"
+    }
+}

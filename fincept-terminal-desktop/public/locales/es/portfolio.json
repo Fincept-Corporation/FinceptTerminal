@@ -1,0 +1,63 @@
+{
+    "title": "GESTOR DE CARTERA FINCEPT",
+    "header": {
+        "live": "EN VIVO",
+        "updating": "ACTUALIZANDO",
+        "newPortfolio": "NUEVA CARTERA",
+        "refresh": "ACTUALIZAR",
+        "exportCsv": "EXPORTAR CSV"
+    },
+    "summary": {
+        "totalValue": "VALOR TOTAL",
+        "dayPnl": "G/P DÍA",
+        "totalPnl": "G/P TOTAL",
+        "positions": "POSICIONES"
+    },
+    "views": {
+        "positions": "POSICIONES",
+        "addAsset": "AÑADIR ACTIVO",
+        "sellAsset": "VENDER ACTIVO",
+        "analytics": "ANALÍTICA",
+        "history": "HISTORIAL",
+        "activeMgmt": "GESTIÓN ACTIVA",
+        "performance": "RENDIMIENTO",
+        "rebalance": "REBALANCEO",
+        "reports": "INFORMES",
+        "alerts": "ALERTAS",
+        "sectors": "SECTORES",
+        "help": "AYUDA"
+    },
+    "sidebar": {
+        "portfolios": "CARTERAS",
+        "loading": "Cargando carteras...",
+        "noPortfolios": "Aún no hay carteras.",
+        "clickCreate": "Haz clic en NUEVA CARTERA para crear una.",
+        "owner": "Propietario",
+        "currency": "Moneda"
+    },
+    "content": {
+        "selectOrCreate": "Selecciona una cartera o crea una nueva para comenzar",
+        "loadingData": "Cargando datos de cartera...",
+        "comingSoon": "vista próximamente..."
+    },
+    "modals": {
+        "createNew": "CREAR NUEVA CARTERA",
+        "portfolioName": "NOMBRE DE CARTERA",
+        "owner": "PROPIETARIO",
+        "currency": "MONEDA",
+        "cancel": "CANCELAR",
+        "create": "CREAR",
+        "addAssetTitle": "AÑADIR ACTIVO A CARTERA",
+        "sellAssetTitle": "VENDER ACTIVO",
+        "symbol": "SÍMBOLO",
+        "quantity": "CANTIDAD",
+        "price": "PRECIO",
+        "add": "AÑADIR",
+        "sell": "VENDER"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | Seguimiento en tiempo real con integración yfinance",
+        "lastUpdated": "Última Actualización",
+        "connected": "CONECTADO"
+    }
+}

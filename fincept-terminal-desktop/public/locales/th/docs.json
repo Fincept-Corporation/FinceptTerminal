@@ -1,0 +1,26 @@
+{
+    "title": "เทอร์มินัลเอกสาร FINCEPT",
+    "header": {
+        "sections": "ส่วน",
+        "topics": "หัวข้อ",
+        "ready": "พร้อม"
+    },
+    "search": {
+        "placeholder": "ค้นหาเอกสาร...",
+        "clear": "ล้าง"
+    },
+    "navigation": "การนำทาง",
+    "codeExample": "ตัวอย่างโค้ด",
+    "content": {
+        "title": "เอกสารเทอร์มินัล FINCEPT",
+        "description": "เลือกหัวข้อจากแผงนำทางเพื่อดูคู่มือและเอกสาร API",
+        "topicsAvailable": "หัวข้อที่มี",
+        "selectTopic": "เลือกหัวข้อเพื่อเริ่มต้น"
+    },
+    "status": {
+        "version": "Fincept Terminal Documentation v3.0 | ข้อมูลอ้างอิง API และคู่มือ",
+        "sections": "ส่วน",
+        "topics": "หัวข้อ",
+        "current": "ปัจจุบัน"
+    }
+}

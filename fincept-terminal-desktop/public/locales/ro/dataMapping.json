@@ -1,0 +1,52 @@
+{
+    "title": "MAPARE DATE",
+    "header": {
+        "mappings": "MAPĂRI",
+        "templates": "ȘABLOANE",
+        "create": "CREEAZĂ NOU",
+        "refresh": "REÎMPROSPĂTEAZĂ"
+    },
+    "views": {
+        "list": "Lista Mapări",
+        "create": "Creează Mapare",
+        "templates": "Șabloane"
+    },
+    "list": {
+        "name": "Nume",
+        "source": "Sursă",
+        "destination": "Destinație",
+        "status": "Status",
+        "lastRun": "Ultima rulare",
+        "actions": "Acțiuni"
+    },
+    "status": {
+        "active": "Activ",
+        "inactive": "Inactiv",
+        "error": "Eroare",
+        "running": "Rulează"
+    },
+    "actions": {
+        "edit": "Editează",
+        "delete": "Șterge",
+        "run": "Rulează",
+        "duplicate": "Duplică",
+        "export": "Exportă"
+    },
+    "create": {
+        "title": "Creează Mapare Date",
+        "name": "Nume Mapare",
+        "description": "Descriere",
+        "sourceApi": "API Sursă",
+        "destApi": "API Destinație",
+        "fieldMapping": "Mapare Câmpuri",
+        "save": "Salvează Maparea",
+        "cancel": "Anulează"
+    },
+    "messages": {
+        "saved": "Mapare salvată cu succes",
+        "deleted": "Mapare ștearsă",
+        "runSuccess": "Mapare executată cu succes",
+        "error": "A apărut o eroare",
+        "noMappings": "Nu există mapări configurate"
+    }
+}

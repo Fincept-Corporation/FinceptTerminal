@@ -1,0 +1,95 @@
+{
+    "title": "CÔNG CỤ BACKTEST",
+    "header": {
+        "strategy": "CHIẾN LƯỢC",
+        "results": "KẾT QUẢ",
+        "trades": "GIAO DỊCH"
+    },
+    "toolbar": {
+        "run": "Chạy Backtest",
+        "running": "Đang chạy...",
+        "stop": "DỪNG",
+        "reset": "ĐẶT LẠI",
+        "export": "XUẤT KẾT QUẢ",
+        "refresh": "Làm mới"
+    },
+    "config": {
+        "symbolTimeframe": "Mã & Khung Thời Gian",
+        "symbol": "Mã",
+        "stockTicker": "Mã cổ phiếu để backtest",
+        "startDate": "Ngày Bắt Đầu",
+        "endDate": "Ngày Kết Thúc",
+        "initialCapital": "Vốn Ban Đầu",
+        "strategy": "Chiến Lược",
+        "parameters": "Tham Số"
+    },
+    "sections": {
+        "strategyConfig": "Cấu Hình Chiến Lược",
+        "strategyType": "Loại Chiến Lược",
+        "strategyParams": "Tham Số Chiến Lược",
+        "backtestResults": "Kết Quả Backtest",
+        "advancedSettings": "Cài Đặt Nâng Cao",
+        "advancedNote": "Tùy chọn nâng cao cho Backtesting.py"
+    },
+    "advanced": {
+        "commission": "Hoa Hồng (thập phân)",
+        "tradeOnClose": "Giao Dịch Khi Đóng Cửa",
+        "hedging": "Bảo Hiểm Rủi Ro",
+        "exclusiveOrders": "Lệnh Độc Quyền",
+        "margin": "Ký Quỹ"
+    },
+    "strategies": {
+        "sma": "SMA Cắt Nhau",
+        "rsi": "Chiến Lược RSI",
+        "macd": "Chiến Lược MACD",
+        "bollinger": "Dải Bollinger",
+        "custom": "Chiến Lược Tùy Chỉnh"
+    },
+    "smaParams": {
+        "fastPeriod": "Chu Kỳ Nhanh",
+        "slowPeriod": "Chu Kỳ Chậm",
+        "fastNote": "Đường trung bình ngắn hạn",
+        "slowNote": "Đường trung bình dài hạn"
+    },
+    "results": {
+        "totalReturn": "Tổng Lợi Nhuận",
+        "sharpeRatio": "Tỷ Lệ Sharpe",
+        "maxDrawdown": "Drawdown Tối Đa",
+        "winRate": "Tỷ Lệ Thắng",
+        "totalTrades": "Tổng Giao Dịch",
+        "profitFactor": "Hệ Số Lợi Nhuận",
+        "configurePrompt": "Cấu hình backtest và nhấp 'Chạy Backtest' để xem kết quả"
+    },
+    "trades": {
+        "date": "Ngày",
+        "type": "Loại",
+        "price": "Giá",
+        "quantity": "Số Lượng",
+        "pnl": "LN/L"
+    },
+    "status": {
+        "ready": "Sẵn sàng",
+        "running": "Đang chạy...",
+        "completed": "Hoàn thành",
+        "error": "Lỗi"
+    },
+    "messages": {
+        "backtestStarted": "Backtest bắt đầu",
+        "backtestCompleted": "Backtest hoàn thành",
+        "backtestError": "Backtest thất bại"
+    },
+    "visual": {
+        "priceData": "Dữ Liệu Giá",
+        "maIndicator": "Chỉ Báo MA",
+        "condition": "Điều Kiện",
+        "buyOrder": "Lệnh Mua",
+        "sellOrder": "Lệnh Bán",
+        "addBlocksPrompt": "Nhấp các khối ở trên để thêm vào chiến lược",
+        "remove": "Xóa",
+        "generateCode": "Tạo Mã Từ Khối"
+    },
+    "template": {
+        "strategyTemplates": "Mẫu Chiến Lược",
+        "apply": "Áp Dụng Mẫu"
+    }
+}

@@ -1,24 +1,49 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "navigation": {
+    "dashboard": "대시보드",
+    "markets": "시장",
+    "news": "뉴스",
+    "portfolio": "포트폴리오",
+    "backtesting": "백테스팅",
+    "watchlist": "관심목록",
+    "research": "리서치",
+    "screener": "스크리너",
+    "trading": "트레이딩",
+    "chat": "AI 채팅",
+    "agents": "에이전트",
+    "settings": "설정",
+    "profile": "프로필",
+    "forum": "포럼",
+    "help": "도움말",
+    "logout": "로그아웃"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "functionKeys": {
+    "f1": "대시",
+    "f2": "시장",
+    "f3": "뉴스",
+    "f4": "포트",
+    "f5": "백테",
+    "f6": "관심",
+    "f7": "리서",
+    "f8": "스크",
+    "f9": "트레",
+    "f10": "AI",
+    "f11": "전체",
+    "f12": "프로"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
+  "status": {
+    "connected": "연결됨",
+    "disconnected": "연결 끊김",
+    "loading": "로딩 중...",
+    "error": "오류",
+    "ready": "준비됨"
   },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "도구 모음 메뉴에 더 많은 탭",
+    "enterCommand": "명령 입력",
+    "search": "검색"
   }
 }

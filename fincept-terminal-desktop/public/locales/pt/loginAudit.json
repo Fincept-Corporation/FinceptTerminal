@@ -1,0 +1,58 @@
+{
+    "title": "PAINEL DE AUDITORIA DE LOGIN",
+    "accessDenied": "Acesso de administrador necessário",
+    "metrics": {
+        "dauToday": "DAU Hoje",
+        "mau": "MAU",
+        "successRate": "Taxa de Sucesso",
+        "failed24h": "Falhas (24h)",
+        "activeSessions": "Sessões Ativas",
+        "uniqueIps": "IPs Únicos"
+    },
+    "views": {
+        "overview": "VISÃO GERAL",
+        "eventLog": "LOG DE EVENTOS",
+        "alerts": "ALERTAS",
+        "analytics": "ANÁLISES"
+    },
+    "activity": {
+        "recentLoginActivity": "ATIVIDADE DE LOGIN RECENTE",
+        "securityAlerts": "ALERTAS DE SEGURANÇA",
+        "noActiveAlerts": "Sem alertas ativos",
+        "loginEventLog": "LOG DE EVENTOS DE LOGIN"
+    },
+    "table": {
+        "time": "Hora",
+        "event": "Evento",
+        "user": "Usuário",
+        "ipAddress": "Endereço IP",
+        "location": "Localização",
+        "device": "Dispositivo",
+        "details": "Detalhes"
+    },
+    "alerts": {
+        "securityIncidents": "ALERTAS E INCIDENTES DE SEGURANÇA",
+        "noAlerts": "Sem alertas de segurança",
+        "dismiss": "DISPENSAR",
+        "blockIp": "BLOQUEAR IP",
+        "investigate": "INVESTIGAR"
+    },
+    "analytics": {
+        "loginsByCountry": "LOGINS POR PAÍS (30 dias)",
+        "failureReasons": "RAZÕES DE FALHA (24h)",
+        "peakHours": "HORÁRIOS DE PICO (UTC)",
+        "logins": "logins"
+    },
+    "controls": {
+        "autoRefresh": "Atualização automática",
+        "loading": "CARREGANDO...",
+        "refresh": "ATUALIZAR"
+    },
+    "status": {
+        "admin": "Admin",
+        "dau": "DAU",
+        "status": "Status",
+        "updating": "ATUALIZANDO",
+        "ready": "PRONTO"
+    }
+}

@@ -1,0 +1,77 @@
+{
+    "title": "BERITA PROFESIONAL TERMINAL FINCEPT",
+    "header": {
+        "liveFeed": "FEED LANGSUNG",
+        "live": "LANGSUNG",
+        "refresh": "SEGARKAN",
+        "updating": "MEMPERBARUI...",
+        "alerts": "PERINGATAN",
+        "sources": "SUMBER",
+        "topics": "TOPIK",
+        "status": "STATUS",
+        "demoMode": "MODE DEMO",
+        "articles": "ARTIKEL",
+        "activeSources": "SUMBER AKTIF"
+    },
+    "categories": {
+        "all": "SEMUA",
+        "markets": "PASAR",
+        "stocks": "Saham",
+        "forex": "Forex",
+        "crypto": "KRIPTO",
+        "commodities": "Komoditas",
+        "economy": "Ekonomi",
+        "economic": "EKON",
+        "politics": "Politik",
+        "earnings": "PENDAPATAN",
+        "tech": "TEKNOLOGI",
+        "energy": "ENERGI",
+        "banking": "PERBANKAN",
+        "geopolitics": "GEOPO",
+        "flash": "KILAT",
+        "urgent": "MENDESAK"
+    },
+    "feedLabels": {
+        "primary": "FEED BERITA UTAMA",
+        "secondary": "FEED BERITA SEKUNDER",
+        "refresh": "SEGARKAN"
+    },
+    "filters": {
+        "source": "Sumber",
+        "region": "Wilayah",
+        "timeframe": "Waktu"
+    },
+    "timeframes": {
+        "1h": "1 Jam",
+        "24h": "24 Jam",
+        "1w": "1 Minggu",
+        "1m": "1 Bulan"
+    },
+    "article": {
+        "readMore": "Baca Selengkapnya",
+        "source": "Sumber",
+        "published": "Dipublikasikan",
+        "relatedStocks": "Saham Terkait",
+        "sentiment": "Sentimen",
+        "impact": "Dampak"
+    },
+    "sentiment": {
+        "bullish": "BULLISH",
+        "bearish": "BEARISH",
+        "neutral": "NETRAL",
+        "positive": "Positif",
+        "negative": "Negatif"
+    },
+    "autoRefresh": {
+        "title": "INTERVAL PEMBARUAN OTOMATIS",
+        "minute": "menit",
+        "minutes": "menit"
+    },
+    "messages": {
+        "loading": "Memuat berita...",
+        "loadingFeeds": "Memuat feed berita...",
+        "error": "Error memuat berita",
+        "noNews": "Tidak ada berita tersedia",
+        "breaking": "BREAKING"
+    }
+}

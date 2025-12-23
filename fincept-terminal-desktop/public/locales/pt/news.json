@@ -1,0 +1,77 @@
+{
+    "title": "NOTÍCIAS PROFISSIONAIS DO TERMINAL FINCEPT",
+    "header": {
+        "liveFeed": "FEED AO VIVO",
+        "live": "AO VIVO",
+        "refresh": "ATUALIZAR",
+        "updating": "ATUALIZANDO...",
+        "alerts": "ALERTAS",
+        "sources": "FONTES",
+        "topics": "TÓPICOS",
+        "status": "STATUS",
+        "demoMode": "MODO DEMO",
+        "articles": "ARTIGOS",
+        "activeSources": "FONTES ATIVAS"
+    },
+    "categories": {
+        "all": "TUDO",
+        "markets": "MERCADOS",
+        "stocks": "Ações",
+        "forex": "Forex",
+        "crypto": "CRIPTO",
+        "commodities": "Commodities",
+        "economy": "Economia",
+        "economic": "ECON",
+        "politics": "Política",
+        "earnings": "LUCROS",
+        "tech": "TECH",
+        "energy": "ENERGIA",
+        "banking": "BANCÁRIO",
+        "geopolitics": "GEOPO",
+        "flash": "FLASH",
+        "urgent": "URGENTE"
+    },
+    "feedLabels": {
+        "primary": "FEED DE NOTÍCIAS PRINCIPAL",
+        "secondary": "FEED DE NOTÍCIAS SECUNDÁRIO",
+        "refresh": "ATUALIZAR"
+    },
+    "filters": {
+        "source": "Fonte",
+        "region": "Região",
+        "timeframe": "Período"
+    },
+    "timeframes": {
+        "1h": "1 Hora",
+        "24h": "24 Horas",
+        "1w": "1 Semana",
+        "1m": "1 Mês"
+    },
+    "article": {
+        "readMore": "Ler Mais",
+        "source": "Fonte",
+        "published": "Publicado",
+        "relatedStocks": "Ações Relacionadas",
+        "sentiment": "Sentimento",
+        "impact": "Impacto"
+    },
+    "sentiment": {
+        "bullish": "ALTA",
+        "bearish": "BAIXA",
+        "neutral": "NEUTRO",
+        "positive": "Positivo",
+        "negative": "Negativo"
+    },
+    "autoRefresh": {
+        "title": "INTERVALO DE ATUALIZAÇÃO AUTOMÁTICA",
+        "minute": "minuto",
+        "minutes": "minutos"
+    },
+    "messages": {
+        "loading": "Carregando notícias...",
+        "loadingFeeds": "Carregando feeds...",
+        "error": "Erro ao carregar notícias",
+        "noNews": "Sem notícias disponíveis",
+        "breaking": "URGENTE"
+    }
+}

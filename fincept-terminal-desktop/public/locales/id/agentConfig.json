@@ -1,0 +1,56 @@
+﻿{
+    "title": "KONFIGURASI AGEN",
+    "header": {
+        "agents": "AGEN",
+        "active": "AKTIF",
+        "total": "TOTAL"
+    },
+    "toolbar": {
+        "refresh": "SEGARKAN",
+        "save": "SIMPAN",
+        "saveConfig": "Simpan Konfigurasi",
+        "run": "JALANKAN",
+        "test": "UJI",
+        "testAgent": "Uji Agen"
+    },
+    "sidebar": {
+        "availableAgents": "AGEN TERSEDIA",
+        "selectAgent": "Pilih agen untuk dikonfigurasi"
+    },
+    "config": {
+        "name": "Nama",
+        "role": "Peran",
+        "goal": "Tujuan",
+        "description": "Deskripsi",
+        "llmConfig": "Konfigurasi LLM",
+        "provider": "Penyedia",
+        "model": "Model",
+        "temperature": "Suhu",
+        "maxTokens": "Token Maks",
+        "tools": "Alat",
+        "memory": "Aktifkan Memori",
+        "agenticMemory": "Aktifkan Memori Agentik",
+        "instructions": "Instruksi",
+        "testQuery": "QUERY UJI",
+        "testQueryPlaceholder": "Masukkan query uji Anda di sini..."
+    },
+    "llmProviders": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "ollama": "Ollama",
+        "gemini": "Gemini"
+    },
+    "status": {
+        "ready": "Siap",
+        "running": "Berjalan",
+        "error": "Error",
+        "configured": "Terkonfigurasi"
+    },
+    "messages": {
+        "configSaved": "Konfigurasi disimpan",
+        "agentTested": "Agen berhasil diuji",
+        "testFailed": "Uji gagal",
+        "loadingAgents": "Memuat agen...",
+        "noAgents": "Tidak ada agen ditemukan"
+    }
+}

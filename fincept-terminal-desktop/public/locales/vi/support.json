@@ -1,0 +1,42 @@
+{
+    "title": "Phiếu hỗ trợ",
+    "header": {
+        "tickets": "Phiếu",
+        "new": "Phiếu mới",
+        "status": "Trạng thái"
+    },
+    "form": {
+        "subject": "Chủ đề",
+        "description": "Mô tả",
+        "priority": "Ưu tiên",
+        "category": "Danh mục"
+    },
+    "priority": {
+        "low": "Thấp",
+        "medium": "Trung bình",
+        "high": "Cao",
+        "urgent": "Khẩn cấp"
+    },
+    "status": {
+        "open": "Mở",
+        "inProgress": "Đang xử lý",
+        "resolved": "Đã giải quyết",
+        "closed": "Đã đóng"
+    },
+    "buttons": {
+        "submit": "Gửi",
+        "cancel": "Hủy",
+        "reply": "Trả lời",
+        "close": "Đóng"
+    },
+    "messages": {
+        "created": "Đã tạo phiếu",
+        "updated": "Đã cập nhật phiếu",
+        "closed": "Đã đóng phiếu",
+        "noTickets": "Không có phiếu"
+    },
+    "auth": {
+        "loginRequired": "Đăng nhập để tạo phiếu",
+        "demoMode": "Chế độ demo"
+    }
+}

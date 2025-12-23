@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Watchlist } from '../../../services/watchlistService';
 import { BLOOMBERG_COLORS } from './utils';
 import { Trash2, Plus } from 'lucide-react';
@@ -25,6 +26,7 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
   marketMovers,
   volumeLeaders
 }) => {
+  const { t } = useTranslation('watchlist');
   const { ORANGE, WHITE, GRAY, GREEN, RED, CYAN, YELLOW, DARK_BG, PANEL_BG } = BLOOMBERG_COLORS;
 
   const handleDelete = (e: React.MouseEvent, watchlistId: string) => {
@@ -52,7 +54,7 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <span>WATCHLIST GROUPS ({watchlists.length})</span>
+        <span>{t('sidebar.groups')} ({watchlists.length})</span>
         <button
           onClick={onCreateWatchlist}
           style={{
@@ -69,7 +71,7 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
           title="Create new watchlist"
         >
           <Plus size={10} />
-          NEW
+          {t('sidebar.new')}
         </button>
       </div>
       <div style={{ borderBottom: `1px solid ${GRAY}`, marginBottom: '8px' }}></div>
@@ -82,9 +84,9 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
             color: GRAY,
             fontSize: '10px'
           }}>
-            No watchlists yet.
+            {t('sidebar.noWatchlists')}
             <br />
-            Click NEW to create one.
+            {t('sidebar.clickNew')}
           </div>
         ) : (
           watchlists.map((watchlist) => (
@@ -130,7 +132,7 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
                   color: CYAN,
                   fontSize: '9px'
                 }}>
-                  {watchlist.stock_count} stocks
+                  {watchlist.stock_count} {t('sidebar.stocks')}
                 </div>
               </div>
               <button
@@ -166,7 +168,7 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
             fontWeight: 'bold',
             marginBottom: '4px'
           }}>
-            MARKET MOVERS
+            {t('sidebar.marketMovers')}
           </div>
           {marketMovers.gainers.slice(0, 3).map((item, index) => (
             <div
@@ -187,7 +189,7 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
                   marginLeft: '4px',
                   fontSize: '8px'
                 }}>
-                  [GAINER]
+                  [{t('sidebar.gainer')}]
                 </span>
               </div>
               <span style={{
@@ -217,7 +219,7 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
                   marginLeft: '4px',
                   fontSize: '8px'
                 }}>
-                  [LOSER]
+                  [{t('sidebar.loser')}]
                 </span>
               </div>
               <span style={{
@@ -244,15 +246,15 @@ const WatchlistSidebar: React.FC<WatchlistSidebarProps> = ({
             fontWeight: 'bold',
             marginBottom: '4px'
           }}>
-            VOLUME LEADERS
+            {t('sidebar.volumeLeaders')}
           </div>
           {volumeLeaders.slice(0, 4).map((item, index) => {
             const volume = item.quote?.volume || 0;
             const volumeStr = volume >= 1_000_000
               ? `${(volume / 1_000_000).toFixed(1)}M`
               : volume >= 1_000
-              ? `${(volume / 1_000).toFixed(1)}K`
-              : volume.toString();
+                ? `${(volume / 1_000).toFixed(1)}K`
+                : volume.toString();
 
             return (
               <div

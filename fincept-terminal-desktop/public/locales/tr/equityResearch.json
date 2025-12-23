@@ -1,0 +1,62 @@
+{
+    "title": "HİSSE ANALİZİ",
+    "header": {
+        "overview": "GENEL BAKIŞ",
+        "financials": "FİNANSAL",
+        "analysis": "ANALİZ",
+        "ratings": "DERECELENDİRME"
+    },
+    "summary": {
+        "marketCap": "Piyasa Değeri",
+        "pe": "F/K",
+        "eps": "HBK",
+        "dividend": "Temettü Verimi",
+        "beta": "Beta",
+        "52weekHigh": "52H Yüksek",
+        "52weekLow": "52H Düşük",
+        "avgVolume": "Ort. Hacim"
+    },
+    "financials": {
+        "revenue": "Gelir",
+        "netIncome": "Net Kar",
+        "grossMargin": "Brüt Kar Marjı",
+        "operatingMargin": "Faaliyet Kar Marjı",
+        "roe": "Özkaynak Karlılığı",
+        "roa": "Aktif Karlılığı",
+        "debtEquity": "Borç/Özkaynak",
+        "currentRatio": "Cari Oran"
+    },
+    "analysis": {
+        "buy": "Al",
+        "hold": "Tut",
+        "sell": "Sat",
+        "strongBuy": "Güçlü Al",
+        "strongSell": "Güçlü Sat",
+        "targetPrice": "Hedef Fiyat",
+        "upside": "Yükseliş Potansiyeli",
+        "downside": "Düşüş Riski"
+    },
+    "periods": {
+        "annual": "Yıllık",
+        "quarterly": "Çeyreklik",
+        "ttm": "Son 12 Ay",
+        "ytd": "Yılbaşından Beri"
+    },
+    "sections": {
+        "incomeStatement": "Gelir Tablosu",
+        "balanceSheet": "Bilanço",
+        "cashFlow": "Nakit Akışı",
+        "keyMetrics": "Temel Göstergeler"
+    },
+    "actions": {
+        "compare": "Karşılaştır",
+        "export": "Dışa Aktar",
+        "addToWatchlist": "Listeye Ekle",
+        "setAlert": "Uyarı Ayarla"
+    },
+    "messages": {
+        "loading": "Yükleniyor...",
+        "noData": "Veri yok",
+        "updated": "Güncellendi"
+    }
+}

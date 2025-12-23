@@ -1,0 +1,33 @@
+{
+    "title": "Generator rapoarte",
+    "header": {
+        "templates": "Șabloane",
+        "reports": "Rapoarte",
+        "preview": "Previzualizare"
+    },
+    "toolbar": {
+        "new": "Raport nou",
+        "save": "Salvează",
+        "export": "Exportă",
+        "print": "Tipărește",
+        "share": "Distribuie"
+    },
+    "sections": {
+        "header": "Antet",
+        "summary": "Rezumat",
+        "charts": "Grafice",
+        "tables": "Tabele",
+        "footer": "Subsol"
+    },
+    "templates": {
+        "daily": "Raport zilnic",
+        "weekly": "Raport săptămânal",
+        "monthly": "Raport lunar",
+        "custom": "Personalizat"
+    },
+    "messages": {
+        "saved": "Raport salvat",
+        "exported": "Raport exportat",
+        "generating": "Se generează raportul..."
+    }
+}

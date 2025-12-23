@@ -1,0 +1,43 @@
+{
+    "title": "데이터 소스",
+    "header": {
+        "available": "사용 가능한 소스",
+        "connected": "연결됨",
+        "addNew": "소스 추가",
+        "refresh": "새로고침"
+    },
+    "categories": {
+        "market": "시장 데이터",
+        "economic": "경제 데이터",
+        "alternative": "대체 데이터",
+        "news": "뉴스 및 감성",
+        "fundamental": "기본 데이터"
+    },
+    "status": {
+        "connected": "연결됨",
+        "disconnected": "연결 끊김",
+        "error": "오류",
+        "pending": "보류 중"
+    },
+    "actions": {
+        "connect": "연결",
+        "disconnect": "연결 해제",
+        "configure": "구성",
+        "test": "연결 테스트",
+        "delete": "제거"
+    },
+    "form": {
+        "apiKey": "API 키",
+        "endpoint": "엔드포인트 URL",
+        "username": "사용자 이름",
+        "password": "비밀번호",
+        "save": "저장",
+        "cancel": "취소"
+    },
+    "messages": {
+        "connectionSuccess": "데이터 소스에 성공적으로 연결됨",
+        "connectionFailed": "데이터 소스 연결 실패",
+        "noSources": "구성된 데이터 소스 없음",
+        "loading": "데이터 소스 로딩 중..."
+    }
+}

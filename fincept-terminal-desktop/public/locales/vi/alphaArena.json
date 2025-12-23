@@ -1,0 +1,46 @@
+{
+    "title": "ALPHA ARENA",
+    "header": {
+        "competition": "CUỘC THI",
+        "leaderboard": "BẢNG XẾP HẠNG",
+        "decisions": "QUYẾT ĐỊNH",
+        "cycles": "CHU KỲ"
+    },
+    "buttons": {
+        "start": "BẮT ĐẦU",
+        "stop": "DỪNG",
+        "refresh": "LÀM MỚI",
+        "create": "TẠO CUỘC THI"
+    },
+    "form": {
+        "competitionName": "Tên cuộc thi",
+        "symbol": "Mã",
+        "mode": "Chế độ giao dịch",
+        "models": "Chọn mô hình",
+        "apiKeys": "Khóa API"
+    },
+    "modes": {
+        "baseline": "Cơ bản",
+        "monk": "Monk",
+        "situational": "Tình huống",
+        "maxLeverage": "Đòn bẩy tối đa"
+    },
+    "leaderboard": {
+        "rank": "Hạng",
+        "model": "Mô hình",
+        "pnl": "L/L",
+        "trades": "Giao dịch",
+        "winRate": "Tỷ lệ thắng"
+    },
+    "status": {
+        "running": "ĐANG CHẠY",
+        "stopped": "ĐÃ DỪNG",
+        "waiting": "ĐANG CHỜ",
+        "error": "LỖI"
+    },
+    "messages": {
+        "competitionStarted": "Cuộc thi đã bắt đầu",
+        "competitionStopped": "Cuộc thi đã dừng",
+        "noCompetition": "Không có cuộc thi đang hoạt động"
+    }
+}

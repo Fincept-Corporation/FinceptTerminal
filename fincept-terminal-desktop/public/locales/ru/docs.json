@@ -1,0 +1,26 @@
+{
+    "title": "ТЕРМИНАЛ ДОКУМЕНТАЦИИ FINCEPT",
+    "header": {
+        "sections": "РАЗДЕЛЫ",
+        "topics": "ТЕМЫ",
+        "ready": "ГОТОВ"
+    },
+    "search": {
+        "placeholder": "Поиск в документации...",
+        "clear": "ОЧИСТИТЬ"
+    },
+    "navigation": "НАВИГАЦИЯ",
+    "codeExample": "ПРИМЕР КОДА",
+    "content": {
+        "title": "ДОКУМЕНТАЦИЯ ТЕРМИНАЛА FINCEPT",
+        "description": "Выберите тему из панели навигации для просмотра руководств и справки API.",
+        "topicsAvailable": "доступных тем",
+        "selectTopic": "Выберите тему для начала"
+    },
+    "status": {
+        "version": "Fincept Terminal Documentation v3.0 | Полный справочник API и руководства",
+        "sections": "Разделы",
+        "topics": "Темы",
+        "current": "Текущий"
+    }
+}

@@ -1,0 +1,32 @@
+{
+    "title": "Edytor węzłów",
+    "header": {
+        "nodes": "Węzły",
+        "connections": "Połączenia",
+        "canvas": "Płótno"
+    },
+    "tabs": {
+        "editor": "Edytor",
+        "preview": "Podgląd"
+    },
+    "toolbar": {
+        "addNode": "Dodaj węzeł",
+        "delete": "Usuń",
+        "clear": "Wyczyść wszystko",
+        "run": "Uruchom",
+        "save": "Zapisz",
+        "load": "Załaduj"
+    },
+    "nodes": {
+        "input": "Wejście",
+        "output": "Wyjście",
+        "process": "Proces",
+        "condition": "Warunek"
+    },
+    "messages": {
+        "saved": "Graf zapisany",
+        "loaded": "Graf załadowany",
+        "running": "Uruchamianie...",
+        "completed": "Zakończono"
+    }
+}

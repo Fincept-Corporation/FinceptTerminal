@@ -1,0 +1,77 @@
+{
+    "title": "PROFESJONALNE WIADOMOŚCI TERMINALA FINCEPT",
+    "header": {
+        "liveFeed": "NA ŻYWO",
+        "live": "LIVE",
+        "refresh": "ODŚWIEŻ",
+        "updating": "AKTUALIZACJA...",
+        "alerts": "ALERTY",
+        "sources": "ŹRÓDŁA",
+        "topics": "TEMATY",
+        "status": "STATUS",
+        "demoMode": "TRYB DEMO",
+        "articles": "ARTYKUŁY",
+        "activeSources": "AKTYWNE ŹRÓDŁA"
+    },
+    "categories": {
+        "all": "WSZYSTKO",
+        "markets": "RYNKI",
+        "stocks": "Akcje",
+        "forex": "Forex",
+        "crypto": "KRYPTO",
+        "commodities": "Surowce",
+        "economy": "Ekonomia",
+        "economic": "EKON",
+        "politics": "Polityka",
+        "earnings": "ZYSKI",
+        "tech": "TECH",
+        "energy": "ENERGIA",
+        "banking": "BANKOWOŚĆ",
+        "geopolitics": "GEOPO",
+        "flash": "FLASH",
+        "urgent": "PILNE"
+    },
+    "feedLabels": {
+        "primary": "GŁÓWNE ŹRÓDŁO WIADOMOŚCI",
+        "secondary": "DRUGIE ŹRÓDŁO WIADOMOŚCI",
+        "refresh": "ODŚWIEŻ"
+    },
+    "filters": {
+        "source": "Źródło",
+        "region": "Region",
+        "timeframe": "Czas"
+    },
+    "timeframes": {
+        "1h": "1 Godzina",
+        "24h": "24 Godziny",
+        "1w": "1 Tydzień",
+        "1m": "1 Miesiąc"
+    },
+    "article": {
+        "readMore": "Czytaj Więcej",
+        "source": "Źródło",
+        "published": "Opublikowano",
+        "relatedStocks": "Powiązane Akcje",
+        "sentiment": "Sentyment",
+        "impact": "Wpływ"
+    },
+    "sentiment": {
+        "bullish": "BYCZY",
+        "bearish": "NIEDŹWIEDZI",
+        "neutral": "NEUTRALNY",
+        "positive": "Pozytywny",
+        "negative": "Negatywny"
+    },
+    "autoRefresh": {
+        "title": "INTERWAŁ AUTOMATYCZNEGO ODŚWIEŻANIA",
+        "minute": "minuta",
+        "minutes": "minut"
+    },
+    "messages": {
+        "loading": "Ładowanie wiadomości...",
+        "loadingFeeds": "Ładowanie kanałów...",
+        "error": "Błąd ładowania wiadomości",
+        "noNews": "Brak dostępnych wiadomości",
+        "breaking": "PILNE"
+    }
+}

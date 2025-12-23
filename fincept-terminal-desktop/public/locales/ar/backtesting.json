@@ -1,0 +1,95 @@
+﻿{
+    "title": "محرك الاختبار الخلفي",
+    "header": {
+        "strategy": "الاستراتيجية",
+        "results": "النتائج",
+        "trades": "الصفقات"
+    },
+    "toolbar": {
+        "run": "تشغيل الاختبار",
+        "running": "جاري التشغيل...",
+        "stop": "إيقاف",
+        "reset": "إعادة تعيين",
+        "export": "تصدير النتائج",
+        "refresh": "تحديث"
+    },
+    "config": {
+        "symbolTimeframe": "الرمز والإطار الزمني",
+        "symbol": "الرمز",
+        "stockTicker": "رمز السهم للاختبار",
+        "startDate": "تاريخ البدء",
+        "endDate": "تاريخ الانتهاء",
+        "initialCapital": "رأس المال الأولي",
+        "strategy": "الاستراتيجية",
+        "parameters": "المعلمات"
+    },
+    "sections": {
+        "strategyConfig": "تكوين الاستراتيجية",
+        "strategyType": "نوع الاستراتيجية",
+        "strategyParams": "معلمات الاستراتيجية",
+        "backtestResults": "نتائج الاختبار الخلفي",
+        "advancedSettings": "الإعدادات المتقدمة",
+        "advancedNote": "خيارات متقدمة لمزود Backtesting.py"
+    },
+    "advanced": {
+        "commission": "العمولة (عشري)",
+        "tradeOnClose": "التداول عند الإغلاق",
+        "hedging": "التحوط",
+        "exclusiveOrders": "الأوامر الحصرية",
+        "margin": "الهامش"
+    },
+    "strategies": {
+        "sma": "تقاطع SMA",
+        "rsi": "استراتيجية RSI",
+        "macd": "استراتيجية MACD",
+        "bollinger": "نطاقات بولينجر",
+        "custom": "استراتيجية مخصصة"
+    },
+    "smaParams": {
+        "fastPeriod": "الفترة السريعة",
+        "slowPeriod": "الفترة البطيئة",
+        "fastNote": "المتوسط المتحرك قصير المدى",
+        "slowNote": "المتوسط المتحرك طويل المدى"
+    },
+    "results": {
+        "totalReturn": "العائد الإجمالي",
+        "sharpeRatio": "نسبة شارب",
+        "maxDrawdown": "أقصى انخفاض",
+        "winRate": "معدل الفوز",
+        "totalTrades": "إجمالي الصفقات",
+        "profitFactor": "عامل الربح",
+        "configurePrompt": "قم بتكوين الاختبار واضغط 'تشغيل الاختبار' لرؤية النتائج"
+    },
+    "trades": {
+        "date": "التاريخ",
+        "type": "النوع",
+        "price": "السعر",
+        "quantity": "الكمية",
+        "pnl": "الربح والخسارة"
+    },
+    "status": {
+        "ready": "جاهز",
+        "running": "جاري التشغيل...",
+        "completed": "مكتمل",
+        "error": "خطأ"
+    },
+    "messages": {
+        "backtestStarted": "بدأ الاختبار الخلفي",
+        "backtestCompleted": "اكتمل الاختبار الخلفي",
+        "backtestError": "فشل الاختبار الخلفي"
+    },
+    "visual": {
+        "priceData": "بيانات السعر",
+        "maIndicator": "مؤشر MA",
+        "condition": "الشرط",
+        "buyOrder": "أمر شراء",
+        "sellOrder": "أمر بيع",
+        "addBlocksPrompt": "انقر على الكتل أعلاه لإضافتها إلى استراتيجيتك",
+        "remove": "إزالة",
+        "generateCode": "توليد الكود من الكتل"
+    },
+    "template": {
+        "strategyTemplates": "قوالب الاستراتيجية",
+        "apply": "تطبيق القالب"
+    }
+}

@@ -1,0 +1,52 @@
+{
+    "title": "ডেটা ম্যাপিং",
+    "header": {
+        "mappings": "ম্যাপিং",
+        "templates": "টেমপ্লেট",
+        "create": "নতুন তৈরি",
+        "refresh": "রিফ্রেশ"
+    },
+    "views": {
+        "list": "ম্যাপিং তালিকা",
+        "create": "ম্যাপিং তৈরি",
+        "templates": "টেমপ্লেট"
+    },
+    "list": {
+        "name": "নাম",
+        "source": "উৎস",
+        "destination": "গন্তব্য",
+        "status": "স্থিতি",
+        "lastRun": "শেষ চালানো",
+        "actions": "ক্রিয়াকলাপ"
+    },
+    "status": {
+        "active": "সক্রিয়",
+        "inactive": "নিষ্ক্রিয়",
+        "error": "ত্রুটি",
+        "running": "চলছে"
+    },
+    "actions": {
+        "edit": "সম্পাদনা",
+        "delete": "মুছুন",
+        "run": "চালান",
+        "duplicate": "নকল",
+        "export": "এক্সপোর্ট"
+    },
+    "create": {
+        "title": "ডেটা ম্যাপিং তৈরি",
+        "name": "ম্যাপিং নাম",
+        "description": "বিবরণ",
+        "sourceApi": "উৎস API",
+        "destApi": "গন্তব্য API",
+        "fieldMapping": "ফিল্ড ম্যাপিং",
+        "save": "ম্যাপিং সংরক্ষণ",
+        "cancel": "বাতিল"
+    },
+    "messages": {
+        "saved": "ম্যাপিং সফলভাবে সংরক্ষিত",
+        "deleted": "ম্যাপিং মুছে ফেলা হয়েছে",
+        "runSuccess": "ম্যাপিং সফলভাবে সম্পন্ন",
+        "error": "ত্রুটি ঘটেছে",
+        "noMappings": "কোনো ম্যাপিং কনফিগার করা হয়নি"
+    }
+}

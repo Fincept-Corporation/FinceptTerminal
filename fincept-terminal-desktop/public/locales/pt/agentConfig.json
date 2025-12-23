@@ -1,0 +1,56 @@
+﻿{
+    "title": "CONFIGURAÇÃO DE AGENTE",
+    "header": {
+        "agents": "AGENTES",
+        "active": "ATIVOS",
+        "total": "TOTAL"
+    },
+    "toolbar": {
+        "refresh": "ATUALIZAR",
+        "save": "SALVAR",
+        "saveConfig": "Salvar Configuração",
+        "run": "EXECUTAR",
+        "test": "TESTAR",
+        "testAgent": "Testar Agente"
+    },
+    "sidebar": {
+        "availableAgents": "AGENTES DISPONÍVEIS",
+        "selectAgent": "Selecione um agente para configurar"
+    },
+    "config": {
+        "name": "Nome",
+        "role": "Função",
+        "goal": "Objetivo",
+        "description": "Descrição",
+        "llmConfig": "Configuração LLM",
+        "provider": "Provedor",
+        "model": "Modelo",
+        "temperature": "Temperatura",
+        "maxTokens": "Tokens Máx",
+        "tools": "Ferramentas",
+        "memory": "Ativar Memória",
+        "agenticMemory": "Ativar Memória Agêntica",
+        "instructions": "Instruções",
+        "testQuery": "CONSULTA DE TESTE",
+        "testQueryPlaceholder": "Digite sua consulta de teste aqui..."
+    },
+    "llmProviders": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "ollama": "Ollama",
+        "gemini": "Gemini"
+    },
+    "status": {
+        "ready": "Pronto",
+        "running": "Executando",
+        "error": "Erro",
+        "configured": "Configurado"
+    },
+    "messages": {
+        "configSaved": "Configuração salva",
+        "agentTested": "Agente testado com sucesso",
+        "testFailed": "Teste falhou",
+        "loadingAgents": "Carregando agentes...",
+        "noAgents": "Nenhum agente encontrado"
+    }
+}

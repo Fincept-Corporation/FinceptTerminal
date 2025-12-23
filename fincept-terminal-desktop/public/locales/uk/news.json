@@ -1,0 +1,77 @@
+{
+    "title": "ПРОФЕСІЙНІ НОВИНИ ТЕРМІНАЛУ FINCEPT",
+    "header": {
+        "liveFeed": "ЖИВИЙ ПОТІК",
+        "live": "НАЖИВО",
+        "refresh": "ОНОВИТИ",
+        "updating": "ОНОВЛЕННЯ...",
+        "alerts": "СПОВІЩЕННЯ",
+        "sources": "ДЖЕРЕЛА",
+        "topics": "ТЕМИ",
+        "status": "СТАТУС",
+        "demoMode": "ДЕМО РЕЖИМ",
+        "articles": "СТАТТІ",
+        "activeSources": "АКТИВНІ ДЖЕРЕЛА"
+    },
+    "categories": {
+        "all": "ВСІ",
+        "markets": "РИНКИ",
+        "stocks": "Акції",
+        "forex": "Форекс",
+        "crypto": "КРИПТО",
+        "commodities": "Сировина",
+        "economy": "Економіка",
+        "economic": "ЕКОН",
+        "politics": "Політика",
+        "earnings": "ПРИБУТКИ",
+        "tech": "ТЕХ",
+        "energy": "ЕНЕРГІЯ",
+        "banking": "БАНКІВНИЦТВО",
+        "geopolitics": "ГЕОПО",
+        "flash": "ФЛЕШ",
+        "urgent": "ТЕРМІНОВО"
+    },
+    "feedLabels": {
+        "primary": "ОСНОВНЕ ДЖЕРЕЛО НОВИН",
+        "secondary": "ДОДАТКОВЕ ДЖЕРЕЛО НОВИН",
+        "refresh": "ОНОВИТИ"
+    },
+    "filters": {
+        "source": "Джерело",
+        "region": "Регіон",
+        "timeframe": "Час"
+    },
+    "timeframes": {
+        "1h": "1 Година",
+        "24h": "24 Години",
+        "1w": "1 Тиждень",
+        "1m": "1 Місяць"
+    },
+    "article": {
+        "readMore": "Читати Далі",
+        "source": "Джерело",
+        "published": "Опубліковано",
+        "relatedStocks": "Пов'язані Акції",
+        "sentiment": "Настрій",
+        "impact": "Вплив"
+    },
+    "sentiment": {
+        "bullish": "БИЧАЧИЙ",
+        "bearish": "ВЕДМЕЖИЙ",
+        "neutral": "НЕЙТРАЛЬНИЙ",
+        "positive": "Позитивний",
+        "negative": "Негативний"
+    },
+    "autoRefresh": {
+        "title": "ІНТЕРВАЛ АВТООНОВЛЕННЯ",
+        "minute": "хвилина",
+        "minutes": "хвилин"
+    },
+    "messages": {
+        "loading": "Завантаження новин...",
+        "loadingFeeds": "Завантаження стрічок...",
+        "error": "Помилка завантаження новин",
+        "noNews": "Немає новин",
+        "breaking": "ТЕРМІНОВЕ"
+    }
+}

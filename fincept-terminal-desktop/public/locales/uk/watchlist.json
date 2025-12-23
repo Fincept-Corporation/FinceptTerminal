@@ -1,0 +1,75 @@
+{
+    "title": "СПИСОК СПОСТЕРЕЖЕННЯ",
+    "header": {
+        "title": "МОНІТОР СПИСКІВ FINCEPT",
+        "myWatchlists": "МОЇ СПИСКИ",
+        "create": "СТВОРИТИ",
+        "import": "ІМПОРТ",
+        "export": "ЕКСПОРТ",
+        "updating": "ОНОВЛЕННЯ",
+        "live": "НАЖИВО"
+    },
+    "sidebar": {
+        "groups": "ГРУПИ СПИСКІВ",
+        "new": "НОВИЙ",
+        "noWatchlists": "Ще немає списків.",
+        "clickNew": "Натисніть НОВИЙ для створення.",
+        "stocks": "акції",
+        "marketMovers": "ЛІДЕРИ РИНКУ",
+        "gainer": "ЗРОСТАЮТЬ",
+        "loser": "ПАДАЮТЬ",
+        "volumeLeaders": "ЛІДЕРИ ОБСЯГУ"
+    },
+    "emptyState": {
+        "selectWatchlist": "Виберіть список або створіть новий для початку"
+    },
+    "list": {
+        "name": "Назва",
+        "symbols": "Символи",
+        "created": "Створено",
+        "updated": "Останнє оновлення",
+        "actions": "Дії"
+    },
+    "actions": {
+        "add": "Додати символ",
+        "remove": "Видалити",
+        "edit": "Редагувати",
+        "delete": "Видалити",
+        "rename": "Перейменувати",
+        "duplicate": "Дублювати"
+    },
+    "form": {
+        "name": "Назва списку",
+        "description": "Опис",
+        "symbols": "Додати символи",
+        "save": "Зберегти",
+        "cancel": "Скасувати"
+    },
+    "symbol": {
+        "price": "Ціна",
+        "change": "Зміна",
+        "volume": "Обсяг",
+        "marketCap": "Капіталізація",
+        "alert": "Встановити сповіщення"
+    },
+    "alerts": {
+        "priceAbove": "Ціна вище",
+        "priceBelow": "Ціна нижче",
+        "changePercent": "Зміна %",
+        "volume": "Сповіщення обсягу"
+    },
+    "sort": {
+        "name": "За назвою",
+        "price": "За ціною",
+        "change": "За зміною",
+        "custom": "Власний порядок"
+    },
+    "messages": {
+        "created": "Список створено",
+        "deleted": "Список видалено",
+        "symbolAdded": "Символ додано",
+        "symbolRemoved": "Символ видалено",
+        "noWatchlists": "Немає списків",
+        "loading": "Завантаження..."
+    }
+}

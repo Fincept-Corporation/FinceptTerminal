@@ -3,9 +3,11 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { geopoliticsService } from '@/services/geopoliticsService';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 const GeopoliticsTab: React.FC = () => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const { t } = useTranslation('geopolitics');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [qrNotifications, setQrNotifications] = useState<any[]>([]);
@@ -254,7 +256,7 @@ const GeopoliticsTab: React.FC = () => {
         color: colors.text,
         fontFamily
       }}>
-        Loading geopolitical intelligence data...
+        {t('messages.loading')}
       </div>
     );
   }
@@ -281,7 +283,7 @@ const GeopoliticsTab: React.FC = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '14px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: colors.primary, fontWeight: 'bold' }}>GEOPOLITICAL INTELLIGENCE</span>
+            <span style={{ color: colors.primary, fontWeight: 'bold' }}>{t('title')} INTELLIGENCE</span>
             <span style={{ color: colors.text }}>|</span>
             <span style={{ color: colors.secondary }}>● LIVE</span>
             <span style={{ color: colors.text }}>|</span>
@@ -515,7 +517,7 @@ const GeopoliticsTab: React.FC = () => {
                 backgroundColor: expandedQR === index ? 'rgba(255,255,255,0.05)' : index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                 cursor: 'pointer'
               }}
-              onClick={() => setExpandedQR(expandedQR === index ? null : index)}
+                onClick={() => setExpandedQR(expandedQR === index ? null : index)}
               >
                 <div style={{ color: colors.text, fontWeight: 'bold' }}>
                   {notif.reporter_member?.name?.en || notif.reporter_member?.code || 'N/A'}
@@ -530,7 +532,7 @@ const GeopoliticsTab: React.FC = () => {
                     <div>Periods: {notif.covered_periods?.join(', ') || 'N/A'}</div>
                     {notif.document_url && (
                       <a href={notif.document_url} target="_blank" rel="noopener noreferrer"
-                         style={{ color: colors.info, textDecoration: 'underline' }}>
+                        style={{ color: colors.info, textDecoration: 'underline' }}>
                         View Document
                       </a>
                     )}
@@ -559,7 +561,7 @@ const GeopoliticsTab: React.FC = () => {
                 backgroundColor: expandedEPing === index ? 'rgba(255,255,255,0.05)' : index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                 cursor: 'pointer'
               }}
-              onClick={() => setExpandedEPing(expandedEPing === index ? null : index)}
+                onClick={() => setExpandedEPing(expandedEPing === index ? null : index)}
               >
                 <div style={{ color: colors.text, fontWeight: 'bold' }}>
                   {notif.documentSymbol?.trim() || 'N/A'}
@@ -587,7 +589,7 @@ const GeopoliticsTab: React.FC = () => {
                     )}
                     {notif.linkToNotification && (
                       <a href={notif.linkToNotification} target="_blank" rel="noopener noreferrer"
-                         style={{ color: colors.info, textDecoration: 'underline' }}>
+                        style={{ color: colors.info, textDecoration: 'underline' }}>
                         View Document
                       </a>
                     )}
@@ -693,7 +695,7 @@ const GeopoliticsTab: React.FC = () => {
                 backgroundColor: expandedRestriction === index ? 'rgba(255,255,255,0.05)' : index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                 cursor: 'pointer'
               }}
-              onClick={() => setExpandedRestriction(expandedRestriction === index ? null : index)}
+                onClick={() => setExpandedRestriction(expandedRestriction === index ? null : index)}
               >
                 <div style={{ color: colors.text, fontWeight: 'bold' }}>
                   {item.measure_description || 'Restriction'}
@@ -763,7 +765,7 @@ const GeopoliticsTab: React.FC = () => {
                   <div style={{ color: colors.text }}>{tfadData.single_window_available ? 'Available' : 'Not Available'}</div>
                   {tfadData.single_window_url && (
                     <a href={tfadData.single_window_url} target="_blank" rel="noopener noreferrer"
-                       style={{ color: colors.info, textDecoration: 'underline', fontSize: '9px' }}>
+                      style={{ color: colors.info, textDecoration: 'underline', fontSize: '9px' }}>
                       Visit Single Window
                     </a>
                   )}

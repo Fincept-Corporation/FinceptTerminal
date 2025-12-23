@@ -1,0 +1,32 @@
+{
+    "title": "Editor noduri",
+    "header": {
+        "nodes": "Noduri",
+        "connections": "Conexiuni",
+        "canvas": "Canvas"
+    },
+    "tabs": {
+        "editor": "Editor",
+        "preview": "Previzualizare"
+    },
+    "toolbar": {
+        "addNode": "Adaugă nod",
+        "delete": "Șterge",
+        "clear": "Curăță tot",
+        "run": "Rulează",
+        "save": "Salvează",
+        "load": "Încarcă"
+    },
+    "nodes": {
+        "input": "Intrare",
+        "output": "Ieșire",
+        "process": "Proces",
+        "condition": "Condiție"
+    },
+    "messages": {
+        "saved": "Graf salvat",
+        "loaded": "Graf încărcat",
+        "running": "Rulează...",
+        "completed": "Finalizat"
+    }
+}

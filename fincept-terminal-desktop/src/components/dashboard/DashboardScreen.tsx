@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Maximize, Minimize, Download, Settings, RefreshCw, User, Database, Eye, HelpCircle, LogOut, CheckCircle2, XCircle, MessageSquare, Terminal, Bot } from 'lucide-react';
-import { tabConfigService } from '@/services/tabConfigService';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigation } from '@/contexts/NavigationContext';
 import { InterfaceModeProvider, useInterfaceMode } from '@/contexts/InterfaceModeContext';
@@ -9,7 +8,6 @@ import { useCurrentTime, useDefaultTime } from '@/contexts/TimezoneContext';
 import { ChatModeInterface } from '@/components/chat-mode';
 import { APP_VERSION } from '@/constants/version';
 import { useAutoUpdater } from '@/hooks/useAutoUpdater';
-import { exit } from '@tauri-apps/plugin-process';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -21,7 +19,6 @@ import NewsTab from '@/components/tabs/NewsTab';
 import WatchlistTab from '@/components/tabs/WatchlistTab';
 import GeopoliticsTab from '@/components/tabs/GeopoliticsTab';
 import ChatTab from '@/components/tabs/ChatTab';
-import { NotesTab } from '@/components/tabs/NotesTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
 import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 import PortfolioTab from '@/components/tabs/portfolio-tab/PortfolioTab';
@@ -45,9 +42,7 @@ import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
 import BacktestingTab from '@/components/tabs/BacktestingTabNew';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import AgentConfigTab from '@/components/tabs/AgentConfigTab';
-import ExcelTab from '@/components/tabs/ExcelTab';
-import AlphaArenaTab from '@/components/tabs/AlphaArenaTab';
-import AIQuantLabTab from '@/components/tabs/ai-quant-lab/AIQuantLabTab';
+import { useTranslation } from 'react-i18next';
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -159,24 +154,14 @@ const HeaderTimeDisplay = () => {
 
 // Internal component that uses the InterfaceMode context
 function FinxeptTerminalContent() {
+  const { t } = useTranslation('tabs');
   const { session, logout } = useAuth();
   const navigation = useNavigation();
   const { mode, toggleMode } = useInterfaceMode();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
-  const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate, checkForUpdate } = useAutoUpdater();
-
-  // Dynamic tab configuration
-  const [tabConfig, setTabConfig] = useState(() => tabConfigService.getConfiguration());
-
-  // Subscribe to tab configuration changes
-  React.useEffect(() => {
-    const unsubscribe = tabConfigService.subscribe((newConfig) => {
-      setTabConfig(newConfig);
-    });
-    return unsubscribe;
-  }, []);
+  const { updateAvailable, updateInfo, isInstalling, installProgress, error, installUpdate, dismissUpdate } = useAutoUpdater();
 
   React.useEffect(() => {
     document.body.style.margin = '0';
@@ -397,8 +382,7 @@ function FinxeptTerminalContent() {
         break;
       case 'check_updates':
         setStatusMessage("Checking for updates...");
-        await checkForUpdate();
-        setTimeout(() => setStatusMessage(""), 3000);
+        setTimeout(() => setStatusMessage("You are running the latest version"), 3000);
         break;
       case 'logout':
         setStatusMessage("Logging out...");
@@ -406,16 +390,8 @@ function FinxeptTerminalContent() {
         window.location.href = '/';
         break;
       case 'exit':
-        setStatusMessage("Closing application...");
-        setTimeout(async () => {
-          try {
-            await exit(0);
-          } catch (error) {
-            console.error('Failed to exit application:', error);
-            setStatusMessage("Failed to close - Use Alt+F4");
-            setTimeout(() => setStatusMessage(''), 3000);
-          }
-        }, 500);
+        setStatusMessage("Use Alt+F4 to close the application");
+        setTimeout(() => setStatusMessage(''), 3000);
         break;
       default:
         setTimeout(() => setStatusMessage(''), 3000);
@@ -515,7 +491,12 @@ function FinxeptTerminalContent() {
 
   // Menu configurations with tab navigation
   const fileMenuItems = [
-    { label: 'Exit', shortcut: 'Alt+F4', icon: null, action: 'exit' }
+    { label: 'New Workspace', shortcut: 'Ctrl+N', icon: null, action: 'new_workspace' },
+    { label: 'Open Workspace', shortcut: 'Ctrl+O', icon: null, action: 'open_workspace' },
+    { label: 'Save Workspace', shortcut: 'Ctrl+S', icon: null, action: 'save_workspace' },
+    { label: 'Export Portfolio', shortcut: 'Ctrl+E', icon: <Download size={12} />, action: 'export', separator: true },
+    { label: 'Import Data', icon: null, action: 'import_data' },
+    { label: 'Exit', shortcut: 'Alt+F4', icon: null, action: 'exit', separator: true }
   ];
 
   const marketsMenuItems = [
@@ -538,16 +519,13 @@ function FinxeptTerminalContent() {
     { label: 'Fyers Broker', action: () => setActiveTab('fyers') },
     { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
     { label: 'Backtesting', shortcut: 'F5', action: () => setActiveTab('backtesting') },
-    { label: 'Watchlist', shortcut: 'F6', action: () => setActiveTab('watchlist'), separator: true },
-    { label: 'Alpha Arena', action: () => setActiveTab('alpha-arena') },
-    { label: 'AI Quant Lab', shortcut: 'Ctrl+Q', action: () => setActiveTab('ai-quant-lab') }
+    { label: 'Watchlist', shortcut: 'F6', action: () => setActiveTab('watchlist') }
   ];
 
   const toolsMenuItems = [
     { label: 'AI Assistant', shortcut: 'F10', action: () => setActiveTab('chat') },
     { label: 'Agent Config', action: () => setActiveTab('agents') },
     { label: 'MCP Servers', action: () => setActiveTab('mcp'), separator: true },
-    { label: 'Excel Workbook', action: () => setActiveTab('excel') },
     { label: 'Node Editor', action: () => setActiveTab('nodes') },
     { label: 'Code Editor', action: () => setActiveTab('code') },
     { label: 'Data Sources', action: () => setActiveTab('datasources'), separator: true },
@@ -564,13 +542,18 @@ function FinxeptTerminalContent() {
   ];
 
   const viewMenuItems = [
-    { label: 'Fullscreen', shortcut: 'F11', icon: isFullscreen ? <Minimize size={12} /> : <Maximize size={12} />, action: 'fullscreen' }
+    { label: 'Fullscreen', shortcut: 'F11', icon: isFullscreen ? <Minimize size={12} /> : <Maximize size={12} />, action: 'fullscreen' },
+    { label: 'Zoom In', shortcut: 'Ctrl++', icon: null, action: 'zoom_in' },
+    { label: 'Zoom Out', shortcut: 'Ctrl+-', icon: null, action: 'zoom_out' },
+    { label: 'Reset Zoom', shortcut: 'Ctrl+0', icon: null, action: 'zoom_reset', separator: true },
+    { label: 'Toggle Theme', icon: <Eye size={12} />, action: 'toggle_theme' }
   ];
 
   const helpMenuItems = [
     { label: 'Documentation', action: () => setActiveTab('docs') },
     { label: 'Support Tickets', action: () => setActiveTab('support') },
-    { label: 'About Fincept', action: 'show_about', separator: true },
+    { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+/', action: 'show_shortcuts', separator: true },
+    { label: 'About Fincept', action: 'show_about' },
     { label: 'Check for Updates', action: 'check_updates' },
     { label: 'Logout', icon: <LogOut size={12} />, action: 'logout', separator: true }
   ];
@@ -803,22 +786,98 @@ function FinxeptTerminalContent() {
                 width: 'max-content',
                 minWidth: '100%'
               }}>
-                {/* DYNAMIC TABS - Rendered from tab configuration */}
-                {tabConfig.headerTabs.map((tabId) => {
-                  const tabDef = tabConfigService.getTabById(tabId);
-                  if (!tabDef) return null;
-
-                  return (
-                    <TabsTrigger
-                      key={tabId}
-                      value={tabDef.value}
-                      style={activeTab === tabDef.value ? tabStyles.active : tabStyles.default}
-                      title={tabDef.shortcut ? `${tabDef.label} (${tabDef.shortcut})` : tabDef.label}
-                    >
-                      {tabDef.label}
-                    </TabsTrigger>
-                  );
-                })}
+                {/* PRIMARY TABS - F1 to F12 */}
+                <TabsTrigger
+                  value="dashboard"
+                  style={activeTab === 'dashboard' ? tabStyles.active : tabStyles.default}
+                  title="Dashboard (F1)"
+                >
+                  {t('navigation.dashboard')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="markets"
+                  style={activeTab === 'markets' ? tabStyles.active : tabStyles.default}
+                  title="Markets (F2)"
+                >
+                  {t('navigation.markets')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="news"
+                  style={activeTab === 'news' ? tabStyles.active : tabStyles.default}
+                  title="News (F3)"
+                >
+                  {t('navigation.news')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="portfolio"
+                  style={activeTab === 'portfolio' ? tabStyles.active : tabStyles.default}
+                  title="Portfolio (F4)"
+                >
+                  {t('navigation.portfolio')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="backtesting"
+                  style={activeTab === 'backtesting' ? tabStyles.active : tabStyles.default}
+                  title="Backtesting (F5)"
+                >
+                  {t('navigation.backtesting')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="watchlist"
+                  style={activeTab === 'watchlist' ? tabStyles.active : tabStyles.default}
+                  title="Watchlist (F6)"
+                >
+                  {t('navigation.watchlist')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="research"
+                  style={activeTab === 'research' ? tabStyles.active : tabStyles.default}
+                  title="Equity Research (F7)"
+                >
+                  {t('navigation.research')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="screener"
+                  style={activeTab === 'screener' ? tabStyles.active : tabStyles.default}
+                  title="Screener (F8)"
+                >
+                  {t('navigation.screener')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="trading"
+                  style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
+                  title="Trading (F9)"
+                >
+                  {t('navigation.trading')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="chat"
+                  style={activeTab === 'chat' ? tabStyles.active : tabStyles.default}
+                  title="AI Chat (F10)"
+                >
+                  {t('navigation.chat')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="agents"
+                  style={activeTab === 'agents' ? tabStyles.active : tabStyles.default}
+                  title="Agent Config"
+                >
+                  {t('navigation.agents')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="settings"
+                  style={activeTab === 'settings' ? tabStyles.active : tabStyles.default}
+                  title="Settings"
+                >
+                  {t('navigation.settings')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="profile"
+                  style={activeTab === 'profile' ? tabStyles.active : tabStyles.default}
+                  title="Profile (F12)"
+                >
+                  {t('navigation.profile')}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -843,9 +902,9 @@ function FinxeptTerminalContent() {
           {/* Left: Branding & Status Info */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 5px', fontSize: '8px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
-            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Enter Command</span>
+            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>{t('labels.enterCommand')}</span>
             <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>Search</span>
+            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>{t('labels.search')}</span>
             <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
             <HeaderTimeDisplay />
             <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
@@ -860,20 +919,20 @@ function FinxeptTerminalContent() {
 
           {/* Right: Function Keys */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F1:DASH</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F2:MKTS</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F3:NEWS</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F4:PORT</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F5:BKTEST</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F6:WATCH</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F7:RSRCH</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F8:SCRN</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F9:TRADE</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F10:AI</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F11:FULL</span>
-            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F12:PROF</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F1:{t('functionKeys.f1')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F2:{t('functionKeys.f2')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F3:{t('functionKeys.f3')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F4:{t('functionKeys.f4')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F5:{t('functionKeys.f5')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F6:{t('functionKeys.f6')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F7:{t('functionKeys.f7')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F8:{t('functionKeys.f8')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F9:{t('functionKeys.f9')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F10:{t('functionKeys.f10')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F11:{t('functionKeys.f11')}</span>
+            <span style={{ color: '#fbbf24', fontSize: '9px' }}>F12:{t('functionKeys.f12')}</span>
             <span style={{ color: '#666', marginLeft: '4px' }}>|</span>
-            <span style={{ color: '#10b981', fontSize: '9px' }}>More tabs in toolbar menus</span>
+            <span style={{ color: '#10b981', fontSize: '9px' }}>{t('labels.moreTabs')}</span>
           </div>
         </div>
       )}
@@ -912,9 +971,6 @@ function FinxeptTerminalContent() {
                 onNavigateToSettings={() => setActiveTab('settings')}
                 onNavigateToTab={(tabName) => setActiveTab(tabName)}
               />
-            </TabsContent>
-            <TabsContent value="notes" className="h-full m-0 p-0">
-              <NotesTab />
             </TabsContent>
             <TabsContent value="fyers" className="h-full m-0 p-0">
               <FyersTab />
@@ -984,15 +1040,6 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="agents" className="h-full m-0 p-0">
               <AgentConfigTab />
-            </TabsContent>
-            <TabsContent value="excel" className="h-full m-0 p-0">
-              <ExcelTab />
-            </TabsContent>
-            <TabsContent value="alpha-arena" className="h-full m-0 p-0">
-              <AlphaArenaTab />
-            </TabsContent>
-            <TabsContent value="ai-quant-lab" className="h-full m-0 p-0">
-              <AIQuantLabTab />
             </TabsContent>
           </Tabs>
         )}

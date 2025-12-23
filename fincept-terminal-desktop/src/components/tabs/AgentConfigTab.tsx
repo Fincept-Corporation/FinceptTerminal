@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { sqliteService, type LLMConfig } from '@/services/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {
@@ -69,6 +70,7 @@ interface ProviderInfo {
 }
 
 const AgentConfigTab: React.FC = () => {
+  const { t } = useTranslation('agentConfig');
   const [selectedCategory, setSelectedCategory] = useState('TraderInvestorsAgent');
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
@@ -354,7 +356,7 @@ const AgentConfigTab: React.FC = () => {
               letterSpacing: '0.5px',
               textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
             }}>
-              AGENT CONFIGURATION
+              {t('title')}
             </span>
           </div>
 
@@ -492,63 +494,63 @@ const AgentConfigTab: React.FC = () => {
                   // If only one agent or no books, show flat list
                   if (books.length <= 1 && !teamName) {
                     return agents.map((agent) => (
-                <button
-                  key={agent.id}
-                  onClick={() => setSelectedAgent(agent)}
-                  style={{
-                    width: '100%',
-                    padding: '10px',
-                    marginBottom: '6px',
-                    backgroundColor: selectedAgent?.id === agent.id ? BLOOMBERG.HOVER : 'transparent',
-                    border: `1px solid ${selectedAgent?.id === agent.id ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                    color: BLOOMBERG.WHITE,
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: '10px',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (selectedAgent?.id !== agent.id) {
-                      e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                      e.currentTarget.style.borderColor = BLOOMBERG.MUTED;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (selectedAgent?.id !== agent.id) {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                    }
-                  }}
-                >
-                  <div style={{ fontWeight: 600, color: BLOOMBERG.CYAN, marginBottom: '4px' }}>
-                    {agent.name}
-                  </div>
-                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px' }}>
-                    {agent.role}
-                  </div>
-                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                    <span style={{
-                      padding: '2px 6px',
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
-                      borderRadius: '2px',
-                      fontSize: '8px',
-                      color: BLOOMBERG.YELLOW
-                    }}>
-                      {agent.llm_config.provider}
-                    </span>
-                    <span style={{
-                      padding: '2px 6px',
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
-                      borderRadius: '2px',
-                      fontSize: '8px',
-                      color: BLOOMBERG.PURPLE
-                    }}>
-                      {agent.llm_config.model_id}
-                    </span>
-                  </div>
-                </button>
+                      <button
+                        key={agent.id}
+                        onClick={() => setSelectedAgent(agent)}
+                        style={{
+                          width: '100%',
+                          padding: '10px',
+                          marginBottom: '6px',
+                          backgroundColor: selectedAgent?.id === agent.id ? BLOOMBERG.HOVER : 'transparent',
+                          border: `1px solid ${selectedAgent?.id === agent.id ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+                          color: BLOOMBERG.WHITE,
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          fontSize: '10px',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (selectedAgent?.id !== agent.id) {
+                            e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                            e.currentTarget.style.borderColor = BLOOMBERG.MUTED;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (selectedAgent?.id !== agent.id) {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                          }
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, color: BLOOMBERG.CYAN, marginBottom: '4px' }}>
+                          {agent.name}
+                        </div>
+                        <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px' }}>
+                          {agent.role}
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          <span style={{
+                            padding: '2px 6px',
+                            backgroundColor: BLOOMBERG.DARK_BG,
+                            border: `1px solid ${BLOOMBERG.BORDER}`,
+                            borderRadius: '2px',
+                            fontSize: '8px',
+                            color: BLOOMBERG.YELLOW
+                          }}>
+                            {agent.llm_config.provider}
+                          </span>
+                          <span style={{
+                            padding: '2px 6px',
+                            backgroundColor: BLOOMBERG.DARK_BG,
+                            border: `1px solid ${BLOOMBERG.BORDER}`,
+                            borderRadius: '2px',
+                            fontSize: '8px',
+                            color: BLOOMBERG.PURPLE
+                          }}>
+                            {agent.llm_config.model_id}
+                          </span>
+                        </div>
+                      </button>
                     ));
                   }
 

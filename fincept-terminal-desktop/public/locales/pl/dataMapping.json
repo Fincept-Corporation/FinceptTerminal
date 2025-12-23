@@ -1,0 +1,52 @@
+{
+    "title": "MAPOWANIE DANYCH",
+    "header": {
+        "mappings": "MAPOWANIA",
+        "templates": "SZABLONY",
+        "create": "UTWÓRZ NOWY",
+        "refresh": "ODŚWIEŻ"
+    },
+    "views": {
+        "list": "Lista mapowań",
+        "create": "Utwórz mapowanie",
+        "templates": "Szablony"
+    },
+    "list": {
+        "name": "Nazwa",
+        "source": "Źródło",
+        "destination": "Cel",
+        "status": "Status",
+        "lastRun": "Ostatnie uruchomienie",
+        "actions": "Akcje"
+    },
+    "status": {
+        "active": "Aktywny",
+        "inactive": "Nieaktywny",
+        "error": "Błąd",
+        "running": "Uruchomiony"
+    },
+    "actions": {
+        "edit": "Edytuj",
+        "delete": "Usuń",
+        "run": "Uruchom",
+        "duplicate": "Duplikuj",
+        "export": "Eksportuj"
+    },
+    "create": {
+        "title": "Utwórz mapowanie danych",
+        "name": "Nazwa mapowania",
+        "description": "Opis",
+        "sourceApi": "API źródła",
+        "destApi": "API docelowe",
+        "fieldMapping": "Mapowanie pól",
+        "save": "Zapisz mapowanie",
+        "cancel": "Anuluj"
+    },
+    "messages": {
+        "saved": "Mapowanie pomyślnie zapisane",
+        "deleted": "Mapowanie usunięte",
+        "runSuccess": "Mapowanie pomyślnie wykonane",
+        "error": "Wystąpił błąd",
+        "noMappings": "Brak skonfigurowanych mapowań"
+    }
+}

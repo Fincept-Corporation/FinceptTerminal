@@ -37,11 +37,13 @@ import { BacktestRequest, BacktestResult } from '@/services/backtesting/interfac
 import { StrategyDefinition } from '@/services/backtesting/interfaces/IStrategyDefinition';
 import { STRATEGY_TEMPLATES, fillTemplate, type StrategyTemplate } from '@/services/backtesting/StrategyTemplates';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 type EditorMode = 'code' | 'visual' | 'template';
 
 export default function BacktestingTab() {
   const { colors } = useTerminalTheme();
+  const { t } = useTranslation('backtesting');
 
   // State
   const [editorMode, setEditorMode] = useState<EditorMode>('code');
@@ -441,7 +443,7 @@ export default function BacktestingTab() {
               letterSpacing: '0.5px',
               textShadow: '0 0 10px rgba(255, 136, 0, 0.4)'
             }}>
-              BACKTESTING TERMINAL
+              {t('title')}
             </span>
           </div>
 

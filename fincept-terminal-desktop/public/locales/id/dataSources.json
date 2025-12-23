@@ -1,0 +1,43 @@
+{
+    "title": "SUMBER DATA",
+    "header": {
+        "available": "SUMBER TERSEDIA",
+        "connected": "TERHUBUNG",
+        "addNew": "TAMBAH SUMBER",
+        "refresh": "REFRESH"
+    },
+    "categories": {
+        "market": "Data Pasar",
+        "economic": "Data Ekonomi",
+        "alternative": "Data Alternatif",
+        "news": "Berita & Sentimen",
+        "fundamental": "Data Fundamental"
+    },
+    "status": {
+        "connected": "Terhubung",
+        "disconnected": "Terputus",
+        "error": "Error",
+        "pending": "Tertunda"
+    },
+    "actions": {
+        "connect": "Hubungkan",
+        "disconnect": "Putuskan",
+        "configure": "Konfigurasi",
+        "test": "Tes Koneksi",
+        "delete": "Hapus"
+    },
+    "form": {
+        "apiKey": "Kunci API",
+        "endpoint": "URL Endpoint",
+        "username": "Username",
+        "password": "Password",
+        "save": "Simpan",
+        "cancel": "Batal"
+    },
+    "messages": {
+        "connectionSuccess": "Berhasil terhubung ke sumber data",
+        "connectionFailed": "Gagal terhubung ke sumber data",
+        "noSources": "Tidak ada sumber data yang dikonfigurasi",
+        "loading": "Memuat sumber data..."
+    }
+}

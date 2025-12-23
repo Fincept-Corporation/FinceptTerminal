@@ -1,0 +1,52 @@
+{
+    "title": "MAPPATURA DATI",
+    "header": {
+        "mappings": "MAPPATURE",
+        "templates": "MODELLI",
+        "create": "CREA NUOVO",
+        "refresh": "AGGIORNA"
+    },
+    "views": {
+        "list": "Lista Mappature",
+        "create": "Crea Mappatura",
+        "templates": "Modelli"
+    },
+    "list": {
+        "name": "Nome",
+        "source": "Origine",
+        "destination": "Destinazione",
+        "status": "Stato",
+        "lastRun": "Ultima Esecuzione",
+        "actions": "Azioni"
+    },
+    "status": {
+        "active": "Attivo",
+        "inactive": "Inattivo",
+        "error": "Errore",
+        "running": "In esecuzione"
+    },
+    "actions": {
+        "edit": "Modifica",
+        "delete": "Elimina",
+        "run": "Esegui",
+        "duplicate": "Duplica",
+        "export": "Esporta"
+    },
+    "create": {
+        "title": "Crea Mappatura Dati",
+        "name": "Nome Mappatura",
+        "description": "Descrizione",
+        "sourceApi": "API Origine",
+        "destApi": "API Destinazione",
+        "fieldMapping": "Mappatura Campi",
+        "save": "Salva Mappatura",
+        "cancel": "Annulla"
+    },
+    "messages": {
+        "saved": "Mappatura salvata con successo",
+        "deleted": "Mappatura eliminata",
+        "runSuccess": "Mappatura eseguita con successo",
+        "error": "Si è verificato un errore",
+        "noMappings": "Nessuna mappatura configurata"
+    }
+}

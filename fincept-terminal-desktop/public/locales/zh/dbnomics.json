@@ -1,0 +1,30 @@
+{
+    "title": "DBnomics数据",
+    "header": {
+        "search": "搜索",
+        "providers": "提供商",
+        "datasets": "数据集"
+    },
+    "form": {
+        "provider": "提供商",
+        "dataset": "数据集",
+        "series": "序列",
+        "startDate": "开始日期",
+        "endDate": "结束日期"
+    },
+    "buttons": {
+        "fetch": "获取",
+        "search": "搜索",
+        "export": "导出",
+        "clear": "清除"
+    },
+    "chart": {
+        "title": "数据可视化",
+        "emptyState": "选择一个序列以查看数据"
+    },
+    "messages": {
+        "loading": "加载数据中...",
+        "noData": "未找到数据",
+        "error": "获取数据时出错"
+    }
+}

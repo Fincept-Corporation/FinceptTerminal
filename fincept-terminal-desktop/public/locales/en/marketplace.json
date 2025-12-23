@@ -1,0 +1,72 @@
+{
+    "title": "FINCEPT MARKETPLACE",
+    "header": {
+        "browse": "BROWSE",
+        "myPurchases": "MY PURCHASES",
+        "upload": "UPLOAD",
+        "myDatasets": "MY DATASETS",
+        "analytics": "ANALYTICS",
+        "pricing": "PRICING",
+        "datasetsAvailable": "Datasets Available",
+        "myUploads": "My Uploads"
+    },
+    "guest": {
+        "title": "MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+        "message": "Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+    },
+    "categories": {
+        "all": "All",
+        "financial": "Financial",
+        "economic": "Economic",
+        "alternative": "Alternative",
+        "crypto": "Crypto",
+        "realEstate": "Real Estate"
+    },
+    "product": {
+        "description": "PRODUCT DESCRIPTION",
+        "price": "Price",
+        "credits": "Credits",
+        "provider": "Provider",
+        "lastUpdated": "Last Updated",
+        "dataPoints": "Data Points",
+        "format": "Format",
+        "frequency": "Frequency",
+        "rating": "RATING",
+        "users": "USERS"
+    },
+    "buttons": {
+        "purchase": "PURCHASE",
+        "download": "DOWNLOAD",
+        "preview": "PREVIEW",
+        "addToCart": "ADD TO CART",
+        "inCart": "✓ IN CART",
+        "viewDetails": "VIEW DETAILS",
+        "backToMarketplace": "BACK TO MARKETPLACE",
+        "loading": "⟳ LOADING...",
+        "refresh": "🔄 REFRESH"
+    },
+    "cart": {
+        "title": "SHOPPING CART",
+        "items": "items",
+        "empty": "Your cart is empty"
+    },
+    "pricing": {
+        "free": "FREE",
+        "premium": "PREMIUM",
+        "enterprise": "ENTERPRISE"
+    },
+    "upload": {
+        "title": "UPLOAD DATASET",
+        "name": "Dataset Name",
+        "description": "Description",
+        "category": "Category",
+        "price": "Price (Credits)",
+        "file": "Select File",
+        "submit": "SUBMIT"
+    },
+    "messages": {
+        "purchaseComplete": "Purchase complete",
+        "downloadStarted": "Download started",
+        "uploadComplete": "Upload complete"
+    }
+}

@@ -1,24 +1,49 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "navigation": {
+    "dashboard": "ড্যাশবোর্ড",
+    "markets": "বাজার",
+    "news": "সংবাদ",
+    "portfolio": "পোর্টফোলিও",
+    "backtesting": "ব্যাকটেস্টিং",
+    "watchlist": "ওয়াচলিস্ট",
+    "research": "গবেষণা",
+    "screener": "স্ক্রিনার",
+    "trading": "ট্রেডিং",
+    "chat": "AI Chat",
+    "agents": "এজেন্ট",
+    "settings": "সেটিংস",
+    "profile": "প্রোফাইল",
+    "forum": "ফোরাম",
+    "help": "সাহায্য",
+    "logout": "লগআউট"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "functionKeys": {
+    "f1": "ড্যাশ",
+    "f2": "বাজর",
+    "f3": "সংব",
+    "f4": "পোর্ট",
+    "f5": "বিটস",
+    "f6": "ওয়াচ",
+    "f7": "গবষ",
+    "f8": "স্ক্রন",
+    "f9": "ট্রডগ",
+    "f10": "AI",
+    "f11": "পূর্ণ",
+    "f12": "প্রফ"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
+  "status": {
+    "connected": "সংযুক্ত",
+    "disconnected": "সংযোগ বিচ্ছিন্ন",
+    "loading": "লোড হচ্ছে...",
+    "error": "ত্রুটি",
+    "ready": "প্রস্তুত"
   },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "টুলবার মেনুতে আরও ট্যাব",
+    "enterCommand": "কমান্ড প্রবেশ করুন",
+    "search": "অনুসন্ধান"
   }
 }

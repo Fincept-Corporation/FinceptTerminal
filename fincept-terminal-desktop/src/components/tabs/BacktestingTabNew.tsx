@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Activity, TrendingUp, Settings, Play, StopCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
 import { BacktestRequest, BacktestResult } from '@/services/backtesting/interfaces/types';
@@ -38,6 +39,7 @@ interface BacktestConfig {
 }
 
 const BacktestingTabNew: React.FC = () => {
+  const { t } = useTranslation('backtesting');
   const colors = {
     bg: '#0A0A0A',
     panel: '#1A1A1A',
@@ -287,7 +289,7 @@ const BacktestingTabNew: React.FC = () => {
     if (config.strategyType === 'sma_crossover') {
       return (
         <>
-          <FormField label="Fast Period" description="Short-term moving average">
+          <FormField label={t('smaParams.fastPeriod')} description={t('smaParams.fastNote')}>
             <input
               type="number"
               value={config.parameters.fastPeriod || 10}
@@ -307,7 +309,7 @@ const BacktestingTabNew: React.FC = () => {
             />
           </FormField>
 
-          <FormField label="Slow Period" description="Long-term moving average">
+          <FormField label={t('smaParams.slowPeriod')} description={t('smaParams.slowNote')}>
             <input
               type="number"
               value={config.parameters.slowPeriod || 20}
@@ -460,7 +462,7 @@ const BacktestingTabNew: React.FC = () => {
             letterSpacing: '0.5px',
             textShadow: `0 0 10px rgba(255, 136, 0, 0.4)`,
           }}>
-            BACKTESTING ENGINE
+            {t('title')}
           </span>
         </div>
 
@@ -540,11 +542,11 @@ const BacktestingTabNew: React.FC = () => {
             borderRadius: '6px',
             overflow: 'hidden',
           }}>
-            <SectionHeader title="Symbol & Timeframe" section="symbol" icon={<TrendingUp size={16} />} />
+            <SectionHeader title={t('config.symbolTimeframe')} section="symbol" icon={<TrendingUp size={16} />} />
 
             {expandedSections.symbol && (
               <div style={{ padding: '16px' }}>
-                <FormField label="Symbol" description="Stock ticker to backtest">
+                <FormField label={t('config.symbol')} description={t('config.stockTicker')}>
                   <input
                     type="text"
                     value={config.symbol}
@@ -565,7 +567,7 @@ const BacktestingTabNew: React.FC = () => {
                 </FormField>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <FormField label="Start Date">
+                  <FormField label={t('config.startDate')}>
                     <input
                       type="date"
                       value={config.startDate}
@@ -582,7 +584,7 @@ const BacktestingTabNew: React.FC = () => {
                     />
                   </FormField>
 
-                  <FormField label="End Date">
+                  <FormField label={t('config.endDate')}>
                     <input
                       type="date"
                       value={config.endDate}
@@ -600,7 +602,7 @@ const BacktestingTabNew: React.FC = () => {
                   </FormField>
                 </div>
 
-                <FormField label="Initial Capital">
+                <FormField label={t('config.initialCapital')}>
                   <input
                     type="number"
                     value={config.initialCapital}
@@ -627,11 +629,11 @@ const BacktestingTabNew: React.FC = () => {
             borderRadius: '6px',
             overflow: 'hidden',
           }}>
-            <SectionHeader title="Strategy Configuration" section="strategy" icon={<Settings size={16} />} />
+            <SectionHeader title={t('sections.strategyConfig')} section="strategy" icon={<Settings size={16} />} />
 
             {expandedSections.strategy && (
               <div style={{ padding: '16px' }}>
-                <FormField label="Strategy Type">
+                <FormField label={t('sections.strategyType')}>
                   <select
                     value={config.strategyType}
                     onChange={(e) => setConfig(prev => ({
@@ -668,7 +670,7 @@ const BacktestingTabNew: React.FC = () => {
             borderRadius: '6px',
             overflow: 'hidden',
           }}>
-            <SectionHeader title="Strategy Parameters" section="parameters" icon={<Settings size={16} />} />
+            <SectionHeader title={t('sections.strategyParams')} section="parameters" icon={<Settings size={16} />} />
 
             {expandedSections.parameters && (
               <div style={{ padding: '16px' }}>
@@ -684,7 +686,7 @@ const BacktestingTabNew: React.FC = () => {
             borderRadius: '6px',
             overflow: 'hidden',
           }}>
-            <SectionHeader title="Advanced Settings" section="advanced" icon={<Settings size={16} />} />
+            <SectionHeader title={t('sections.advancedSettings')} section="advanced" icon={<Settings size={16} />} />
 
             {expandedSections.advanced && (
               <div style={{ padding: '16px' }}>
@@ -774,7 +776,7 @@ const BacktestingTabNew: React.FC = () => {
             ) : (
               <>
                 <Play size={18} />
-                Run Backtest
+                {t('toolbar.run')}
               </>
             )}
           </button>
@@ -802,7 +804,7 @@ const BacktestingTabNew: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
         }}>
-          <SectionHeader title="Backtest Results" section="results" icon={<TrendingUp size={16} />} />
+          <SectionHeader title={t('sections.backtestResults')} section="results" icon={<TrendingUp size={16} />} />
 
           {expandedSections.results && (
             <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>

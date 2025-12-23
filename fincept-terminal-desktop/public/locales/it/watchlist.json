@@ -1,0 +1,75 @@
+{
+    "title": "LISTA DI CONTROLLO",
+    "header": {
+        "title": "MONITOR WATCHLIST FINCEPT",
+        "myWatchlists": "LE MIE LISTE",
+        "create": "CREA",
+        "import": "IMPORTA",
+        "export": "ESPORTA",
+        "updating": "AGGIORNAMENTO",
+        "live": "LIVE"
+    },
+    "sidebar": {
+        "groups": "GRUPPI DI LISTE",
+        "new": "NUOVA",
+        "noWatchlists": "Nessuna lista ancora.",
+        "clickNew": "Clicca NUOVA per crearne una.",
+        "stocks": "azioni",
+        "marketMovers": "LEADER DI MERCATO",
+        "gainer": "IN RIALZO",
+        "loser": "IN RIBASSO",
+        "volumeLeaders": "LEADER DI VOLUME"
+    },
+    "emptyState": {
+        "selectWatchlist": "Seleziona una lista o creane una nuova per iniziare"
+    },
+    "list": {
+        "name": "Nome",
+        "symbols": "Simboli",
+        "created": "Creato",
+        "updated": "Ultimo Aggiornamento",
+        "actions": "Azioni"
+    },
+    "actions": {
+        "add": "Aggiungi simbolo",
+        "remove": "Rimuovi",
+        "edit": "Modifica",
+        "delete": "Elimina",
+        "rename": "Rinomina",
+        "duplicate": "Duplica"
+    },
+    "form": {
+        "name": "Nome lista",
+        "description": "Descrizione",
+        "symbols": "Aggiungi simboli",
+        "save": "Salva",
+        "cancel": "Annulla"
+    },
+    "symbol": {
+        "price": "Prezzo",
+        "change": "Variazione",
+        "volume": "Volume",
+        "marketCap": "Capitalizzazione",
+        "alert": "Imposta avviso"
+    },
+    "alerts": {
+        "priceAbove": "Prezzo sopra",
+        "priceBelow": "Prezzo sotto",
+        "changePercent": "Variazione %",
+        "volume": "Avviso volume"
+    },
+    "sort": {
+        "name": "Per nome",
+        "price": "Per prezzo",
+        "change": "Per variazione",
+        "custom": "Ordine personalizzato"
+    },
+    "messages": {
+        "created": "Lista creata",
+        "deleted": "Lista eliminata",
+        "symbolAdded": "Simbolo aggiunto",
+        "symbolRemoved": "Simbolo rimosso",
+        "noWatchlists": "Nessuna lista",
+        "loading": "Caricamento..."
+    }
+}

@@ -1,0 +1,95 @@
+﻿{
+    "title": "GERİ TEST MOTORU",
+    "header": {
+        "strategy": "STRATEJİ",
+        "results": "SONUÇLAR",
+        "trades": "İŞLEMLER"
+    },
+    "toolbar": {
+        "run": "Backtest Çalıştır",
+        "running": "Çalışıyor...",
+        "stop": "DURDUR",
+        "reset": "SIFIRLA",
+        "export": "SONUÇLARI DIŞA AKTAR",
+        "refresh": "Yenile"
+    },
+    "config": {
+        "symbolTimeframe": "Sembol ve Zaman Dilimi",
+        "symbol": "Sembol",
+        "stockTicker": "Backtest için hisse sembolü",
+        "startDate": "Başlangıç Tarihi",
+        "endDate": "Bitiş Tarihi",
+        "initialCapital": "Başlangıç Sermayesi",
+        "strategy": "Strateji",
+        "parameters": "Parametreler"
+    },
+    "sections": {
+        "strategyConfig": "Strateji Yapılandırması",
+        "strategyType": "Strateji Türü",
+        "strategyParams": "Strateji Parametreleri",
+        "backtestResults": "Backtest Sonuçları",
+        "advancedSettings": "Gelişmiş Ayarlar",
+        "advancedNote": "Backtesting.py için gelişmiş seçenekler"
+    },
+    "advanced": {
+        "commission": "Komisyon (ondalık)",
+        "tradeOnClose": "Kapanışta İşlem",
+        "hedging": "Hedging",
+        "exclusiveOrders": "Özel Emirler",
+        "margin": "Teminat"
+    },
+    "strategies": {
+        "sma": "SMA Kesişimi",
+        "rsi": "RSI Stratejisi",
+        "macd": "MACD Stratejisi",
+        "bollinger": "Bollinger Bantları",
+        "custom": "Özel Strateji"
+    },
+    "smaParams": {
+        "fastPeriod": "Hızlı Periyot",
+        "slowPeriod": "Yavaş Periyot",
+        "fastNote": "Kısa vadeli hareketli ortalama",
+        "slowNote": "Uzun vadeli hareketli ortalama"
+    },
+    "results": {
+        "totalReturn": "Toplam Getiri",
+        "sharpeRatio": "Sharpe Oranı",
+        "maxDrawdown": "Maks Drawdown",
+        "winRate": "Kazanma Oranı",
+        "totalTrades": "Toplam İşlem",
+        "profitFactor": "Kâr Faktörü",
+        "configurePrompt": "Backtestinizi yapılandırın ve sonuçları görmek için 'Backtest Çalıştır'a tıklayın"
+    },
+    "trades": {
+        "date": "Tarih",
+        "type": "Tür",
+        "price": "Fiyat",
+        "quantity": "Miktar",
+        "pnl": "K/Z"
+    },
+    "status": {
+        "ready": "Hazır",
+        "running": "Çalışıyor...",
+        "completed": "Tamamlandı",
+        "error": "Hata"
+    },
+    "messages": {
+        "backtestStarted": "Backtest başladı",
+        "backtestCompleted": "Backtest tamamlandı",
+        "backtestError": "Backtest başarısız"
+    },
+    "visual": {
+        "priceData": "Fiyat Verisi",
+        "maIndicator": "MA Göstergesi",
+        "condition": "Koşul",
+        "buyOrder": "Alış Emri",
+        "sellOrder": "Satış Emri",
+        "addBlocksPrompt": "Stratejinize eklemek için yukarıdaki bloklara tıklayın",
+        "remove": "Kaldır",
+        "generateCode": "Bloklardan Kod Üret"
+    },
+    "template": {
+        "strategyTemplates": "Strateji Şablonları",
+        "apply": "Şablon Uygula"
+    }
+}

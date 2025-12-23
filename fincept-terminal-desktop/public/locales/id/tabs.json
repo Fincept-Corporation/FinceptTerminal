@@ -1,24 +1,49 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "navigation": {
+    "dashboard": "Dashboard",
+    "markets": "Pasar",
+    "news": "Berita",
+    "portfolio": "Portofolio",
+    "backtesting": "Backtesting",
+    "watchlist": "Watchlist",
+    "research": "Riset",
+    "screener": "Screener",
+    "trading": "Trading",
+    "chat": "AI Chat",
+    "agents": "Agen",
+    "settings": "Pengaturan",
+    "profile": "Profil",
+    "forum": "Forum",
+    "help": "Bantuan",
+    "logout": "Keluar"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "functionKeys": {
+    "f1": "DASH",
+    "f2": "PRSR",
+    "f3": "BRTA",
+    "f4": "PORT",
+    "f5": "BKTS",
+    "f6": "WTCH",
+    "f7": "RSRT",
+    "f8": "SCRN",
+    "f9": "TRDG",
+    "f10": "AI",
+    "f11": "FULL",
+    "f12": "PROF"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
+  "status": {
+    "connected": "Terhubung",
+    "disconnected": "Terputus",
+    "loading": "Memuat...",
+    "error": "Error",
+    "ready": "Siap"
   },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Tab lainnya di menu toolbar",
+    "enterCommand": "Masukkan Perintah",
+    "search": "Cari"
   }
 }

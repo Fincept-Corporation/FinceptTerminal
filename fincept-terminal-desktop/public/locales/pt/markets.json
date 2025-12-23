@@ -1,0 +1,48 @@
+{
+    "title": "MERCADOS",
+    "marketTerminalLive": "TERMINAL DE MERCADOS - DADOS AO VIVO",
+    "globalMarkets": "MERCADOS GLOBAIS",
+    "regionalMarkets": "mercados regionais",
+    "regionalMarketsLive": "MERCADOS REGIONAIS - DADOS AO VIVO",
+    "liveData": "DADOS AO VIVO",
+    "symbol": "SÍMBOLO",
+    "name": "NOME",
+    "price": "PREÇO",
+    "change": "VAR",
+    "percentChange": "%VAR",
+    "high": "ALTA",
+    "low": "BAIXA",
+    "loading": "Carregando...",
+    "noData": "Sem dados disponíveis",
+    "refresh": "ATUALIZAR",
+    "auto": "AUTO",
+    "on": "ON",
+    "off": "OFF",
+    "lastUpdate": "ÚLTIMA ATUALIZAÇÃO",
+    "updating": "ATUALIZANDO",
+    "live": "AO VIVO",
+    "connected": "Conectado",
+    "cache": "Cache",
+    "enabled": "ATIVADO",
+    "dataProviderInfo": "Dados de Yahoo Finance API | Atualizações em tempo real",
+    "header": {
+        "live": "AO VIVO",
+        "updating": "ATUALIZANDO",
+        "refresh": "ATUALIZAR"
+    },
+    "tabs": {
+        "overview": "Visão Geral",
+        "stocks": "Ações",
+        "indices": "Índices",
+        "forex": "Forex",
+        "crypto": "Cripto",
+        "commodities": "Commodities",
+        "bonds": "Títulos"
+    },
+    "status": {
+        "marketOpen": "Mercado Aberto",
+        "marketClosed": "Mercado Fechado",
+        "preMarket": "Pré-Mercado",
+        "afterHours": "Pós-Horário"
+    }
+}

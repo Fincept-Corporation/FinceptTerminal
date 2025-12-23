@@ -1,0 +1,66 @@
+{
+    "title": "СУДНОПЛАВСТВО",
+    "header": {
+        "overview": "ОГЛЯД",
+        "tracking": "ВІДСТЕЖЕННЯ",
+        "ports": "ПОРТИ",
+        "routes": "МАРШРУТИ"
+    },
+    "vessels": {
+        "type": "Тип судна",
+        "cargo": "Вантажне",
+        "tanker": "Танкер",
+        "container": "Контейнеровоз",
+        "bulk": "Балкер",
+        "passenger": "Пасажирське",
+        "status": "Статус"
+    },
+    "tracking": {
+        "position": "Позиція",
+        "speed": "Швидкість",
+        "heading": "Курс",
+        "destination": "Призначення",
+        "eta": "Прибуття",
+        "lastUpdate": "Оновлено"
+    },
+    "ports": {
+        "name": "Назва порту",
+        "country": "Країна",
+        "arrivals": "Прибуття",
+        "departures": "Відправлення",
+        "congestion": "Завантаженість",
+        "waitTime": "Час очікування"
+    },
+    "routes": {
+        "origin": "Відправлення",
+        "destination": "Призначення",
+        "distance": "Відстань",
+        "transitTime": "Час у дорозі",
+        "riskLevel": "Рівень ризику"
+    },
+    "status": {
+        "anchored": "На якорі",
+        "underway": "У дорозі",
+        "moored": "Пришвартовано",
+        "atPort": "У порту",
+        "drifting": "Дрейф"
+    },
+    "metrics": {
+        "dwt": "Дедвейт",
+        "teu": "TEU",
+        "draft": "Осадка",
+        "length": "Довжина",
+        "speed": "Швидкість (вузли)"
+    },
+    "actions": {
+        "track": "Відстежувати судно",
+        "setAlert": "Створити сповіщення",
+        "export": "Експорт",
+        "filter": "Фільтр"
+    },
+    "messages": {
+        "loading": "Завантаження даних...",
+        "noVessels": "Судна не знайдено",
+        "updated": "Оновлено"
+    }
+}

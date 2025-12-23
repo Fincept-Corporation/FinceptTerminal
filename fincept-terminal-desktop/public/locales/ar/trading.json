@@ -1,0 +1,76 @@
+{
+    "title": "التداول",
+    "header": {
+        "orders": "الأوامر",
+        "positions": "المراكز",
+        "history": "السجل",
+        "settings": "الإعدادات",
+        "terminal": "محطة FINCEPT",
+        "selectBroker": "اختر الوسيط",
+        "paper": "تجريبي",
+        "live": "حقيقي",
+        "watchlist": "قائمة المتابعة",
+        "orderbook": "دفتر الأوامر",
+        "trades": "الصفقات",
+        "stats": "الإحصائيات",
+        "features": "المميزات",
+        "crossExchange": "عبر البورصات",
+        "chart": "الرسم البياني",
+        "depth": "العمق",
+        "volume": "الحجم",
+        "aiAgents": "وكلاء الذكاء الاصطناعي",
+        "leaderboard": "لوحة المتصدرين",
+        "modelChat": "محادثة النموذج"
+    },
+    "orderTypes": {
+        "market": "سوق",
+        "limit": "محدد",
+        "stop": "إيقاف",
+        "stopLimit": "إيقاف محدد",
+        "trailingStop": "إيقاف متحرك"
+    },
+    "actions": {
+        "buy": "شراء",
+        "sell": "بيع",
+        "cancel": "إلغاء",
+        "modify": "تعديل",
+        "close": "إغلاق",
+        "closeAll": "إغلاق الكل"
+    },
+    "form": {
+        "symbol": "الرمز",
+        "quantity": "الكمية",
+        "price": "السعر",
+        "stopPrice": "سعر الإيقاف",
+        "takeProfit": "جني الأرباح",
+        "stopLoss": "وقف الخسارة",
+        "leverage": "الرافعة"
+    },
+    "position": {
+        "openPrice": "سعر الفتح",
+        "currentPrice": "السعر الحالي",
+        "pnl": "الربح/الخسارة",
+        "pnlPercent": "الربح/الخسارة %",
+        "margin": "الهامش",
+        "size": "الحجم"
+    },
+    "order": {
+        "pending": "معلق",
+        "filled": "منفذ",
+        "cancelled": "ملغي",
+        "rejected": "مرفوض",
+        "partial": "منفذ جزئياً"
+    },
+    "time": {
+        "gtc": "صالح حتى الإلغاء",
+        "day": "أمر يومي",
+        "ioc": "فوري أو إلغاء",
+        "fok": "الكل أو لا شيء"
+    },
+    "messages": {
+        "orderPlaced": "تم تنفيذ الأمر",
+        "orderFailed": "فشل الأمر",
+        "confirmOrder": "تأكيد هذا الأمر؟",
+        "noPositions": "لا توجد مراكز مفتوحة"
+    }
+}

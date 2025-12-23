@@ -1,0 +1,33 @@
+{
+    "title": "Générateur de rapports",
+    "header": {
+        "templates": "Modèles",
+        "reports": "Rapports",
+        "preview": "Aperçu"
+    },
+    "toolbar": {
+        "new": "Nouveau rapport",
+        "save": "Enregistrer",
+        "export": "Exporter",
+        "print": "Imprimer",
+        "share": "Partager"
+    },
+    "sections": {
+        "header": "En-tête",
+        "summary": "Résumé",
+        "charts": "Graphiques",
+        "tables": "Tableaux",
+        "footer": "Pied de page"
+    },
+    "templates": {
+        "daily": "Rapport quotidien",
+        "weekly": "Rapport hebdomadaire",
+        "monthly": "Rapport mensuel",
+        "custom": "Personnalisé"
+    },
+    "messages": {
+        "saved": "Rapport enregistré",
+        "exported": "Rapport exporté",
+        "generating": "Génération du rapport..."
+    }
+}

@@ -1,0 +1,52 @@
+{
+    "title": "PEMETAAN DATA",
+    "header": {
+        "mappings": "PEMETAAN",
+        "templates": "TEMPLATE",
+        "create": "BUAT BARU",
+        "refresh": "REFRESH"
+    },
+    "views": {
+        "list": "Daftar Pemetaan",
+        "create": "Buat Pemetaan",
+        "templates": "Template"
+    },
+    "list": {
+        "name": "Nama",
+        "source": "Sumber",
+        "destination": "Tujuan",
+        "status": "Status",
+        "lastRun": "Terakhir Dijalankan",
+        "actions": "Aksi"
+    },
+    "status": {
+        "active": "Aktif",
+        "inactive": "Tidak Aktif",
+        "error": "Error",
+        "running": "Berjalan"
+    },
+    "actions": {
+        "edit": "Edit",
+        "delete": "Hapus",
+        "run": "Jalankan",
+        "duplicate": "Duplikat",
+        "export": "Ekspor"
+    },
+    "create": {
+        "title": "Buat Pemetaan Data",
+        "name": "Nama Pemetaan",
+        "description": "Deskripsi",
+        "sourceApi": "API Sumber",
+        "destApi": "API Tujuan",
+        "fieldMapping": "Pemetaan Field",
+        "save": "Simpan Pemetaan",
+        "cancel": "Batal"
+    },
+    "messages": {
+        "saved": "Pemetaan berhasil disimpan",
+        "deleted": "Pemetaan dihapus",
+        "runSuccess": "Pemetaan berhasil dijalankan",
+        "error": "Terjadi error",
+        "noMappings": "Tidak ada pemetaan yang dikonfigurasi"
+    }
+}

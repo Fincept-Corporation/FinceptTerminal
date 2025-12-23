@@ -1,0 +1,76 @@
+{
+    "title": "トレーディング",
+    "header": {
+        "orders": "注文",
+        "positions": "ポジション",
+        "history": "履歴",
+        "settings": "設定",
+        "terminal": "FINCEPTターミナル",
+        "selectBroker": "ブローカー選択",
+        "paper": "デモ",
+        "live": "ライブ",
+        "watchlist": "ウォッチリスト",
+        "orderbook": "板情報",
+        "trades": "取引",
+        "stats": "統計",
+        "features": "機能",
+        "crossExchange": "クロス取引所",
+        "chart": "チャート",
+        "depth": "板深度",
+        "volume": "出来高",
+        "aiAgents": "AIエージェント",
+        "leaderboard": "ランキング",
+        "modelChat": "モデルチャット"
+    },
+    "orderTypes": {
+        "market": "成行",
+        "limit": "指値",
+        "stop": "逆指値",
+        "stopLimit": "逆指値指値",
+        "trailingStop": "トレーリングストップ"
+    },
+    "actions": {
+        "buy": "買い",
+        "sell": "売り",
+        "cancel": "キャンセル",
+        "modify": "変更",
+        "close": "決済",
+        "closeAll": "全決済"
+    },
+    "form": {
+        "symbol": "銘柄",
+        "quantity": "数量",
+        "price": "価格",
+        "stopPrice": "逆指値価格",
+        "takeProfit": "利益確定",
+        "stopLoss": "損切り",
+        "leverage": "レバレッジ"
+    },
+    "position": {
+        "openPrice": "建値",
+        "currentPrice": "現在価格",
+        "pnl": "損益",
+        "pnlPercent": "損益 %",
+        "margin": "証拠金",
+        "size": "サイズ"
+    },
+    "order": {
+        "pending": "保留中",
+        "filled": "約定",
+        "cancelled": "取消済",
+        "rejected": "拒否",
+        "partial": "一部約定"
+    },
+    "time": {
+        "gtc": "キャンセルまで有効",
+        "day": "当日限り",
+        "ioc": "即時約定または取消",
+        "fok": "全量約定または取消"
+    },
+    "messages": {
+        "orderPlaced": "注文成功",
+        "orderFailed": "注文失敗",
+        "confirmOrder": "この注文を確認しますか？",
+        "noPositions": "ポジションなし"
+    }
+}

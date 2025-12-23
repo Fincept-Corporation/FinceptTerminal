@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { marketDataService, QuoteData } from '../../../../services/marketDataService';
 
@@ -45,6 +46,7 @@ const INDEX_NAMES: { [key: string]: string } = {
 };
 
 export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, onRemove }) => {
+  const { t } = useTranslation('dashboard');
   const [quotes, setQuotes] = useState<QuoteData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +76,7 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
   return (
     <BaseWidget
       id={id}
-      title="GLOBAL INDICES - TOP 12"
+      title={t('widgets.globalIndices')}
       onRemove={onRemove}
       onRefresh={loadQuotes}
       isLoading={loading}
@@ -92,10 +94,10 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
           padding: '4px 0',
           marginBottom: '4px'
         }}>
-          <div>INDEX</div>
-          <div style={{ textAlign: 'right' }}>PRICE</div>
-          <div style={{ textAlign: 'right' }}>CHG</div>
-          <div style={{ textAlign: 'right' }}>%CHG</div>
+          <div>{t('widgets.index')}</div>
+          <div style={{ textAlign: 'right' }}>{t('widgets.price')}</div>
+          <div style={{ textAlign: 'right' }}>{t('widgets.change')}</div>
+          <div style={{ textAlign: 'right' }}>{t('widgets.percentChange')}</div>
         </div>
         {quotes.map((quote, index) => (
           <div
@@ -129,7 +131,7 @@ export const GlobalIndicesWidget: React.FC<GlobalIndicesWidgetProps> = ({ id, on
         ))}
         {quotes.length === 0 && !loading && !error && (
           <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', textAlign: 'center', padding: '12px' }}>
-            No indices data available
+            {t('widgets.noIndexData')}
           </div>
         )}
       </div>

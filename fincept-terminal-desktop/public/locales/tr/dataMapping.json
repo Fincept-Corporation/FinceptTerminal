@@ -1,0 +1,52 @@
+{
+    "title": "VERİ EŞLEŞTİRME",
+    "header": {
+        "mappings": "EŞLEŞTİRMELER",
+        "templates": "ŞABLONLAR",
+        "create": "YENİ OLUŞTUR",
+        "refresh": "YENİLE"
+    },
+    "views": {
+        "list": "Eşleştirme Listesi",
+        "create": "Eşleştirme Oluştur",
+        "templates": "Şablonlar"
+    },
+    "list": {
+        "name": "Ad",
+        "source": "Kaynak",
+        "destination": "Hedef",
+        "status": "Durum",
+        "lastRun": "Son Çalıştırma",
+        "actions": "Eylemler"
+    },
+    "status": {
+        "active": "Aktif",
+        "inactive": "Pasif",
+        "error": "Hata",
+        "running": "Çalışıyor"
+    },
+    "actions": {
+        "edit": "Düzenle",
+        "delete": "Sil",
+        "run": "Çalıştır",
+        "duplicate": "Kopyala",
+        "export": "Dışa Aktar"
+    },
+    "create": {
+        "title": "Veri Eşleştirmesi Oluştur",
+        "name": "Eşleştirme Adı",
+        "description": "Açıklama",
+        "sourceApi": "Kaynak API",
+        "destApi": "Hedef API",
+        "fieldMapping": "Alan Eşleştirme",
+        "save": "Eşleştirmeyi Kaydet",
+        "cancel": "İptal"
+    },
+    "messages": {
+        "saved": "Eşleştirme başarıyla kaydedildi",
+        "deleted": "Eşleştirme silindi",
+        "runSuccess": "Eşleştirme başarıyla çalıştırıldı",
+        "error": "Hata oluştu",
+        "noMappings": "Yapılandırılmış eşleştirme yok"
+    }
+}

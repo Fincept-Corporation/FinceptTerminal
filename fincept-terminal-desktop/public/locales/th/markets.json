@@ -1,0 +1,48 @@
+{
+    "title": "ตลาด",
+    "marketTerminalLive": "เทอร์มินัลตลาด - ข้อมูลสด",
+    "globalMarkets": "ตลาดโลก",
+    "regionalMarkets": "ตลาดภูมิภาค",
+    "regionalMarketsLive": "ตลาดภูมิภาค - ข้อมูลสด",
+    "liveData": "ข้อมูลสด",
+    "symbol": "สัญลักษณ์",
+    "name": "ชื่อ",
+    "price": "ราคา",
+    "change": "เปลี่ยน",
+    "percentChange": "%เปลี่ยน",
+    "high": "สูง",
+    "low": "ต่ำ",
+    "loading": "กำลังโหลด...",
+    "noData": "ไม่มีข้อมูล",
+    "refresh": "รีเฟรช",
+    "auto": "อัตโนมัติ",
+    "on": "เปิด",
+    "off": "ปิด",
+    "lastUpdate": "อัปเดตล่าสุด",
+    "updating": "กำลังอัปเดต",
+    "live": "สด",
+    "connected": "เชื่อมต่อแล้ว",
+    "cache": "แคช",
+    "enabled": "เปิดใช้",
+    "dataProviderInfo": "ข้อมูลจาก Yahoo Finance API | อัปเดตเรียลไทม์",
+    "header": {
+        "live": "สด",
+        "updating": "กำลังอัปเดต",
+        "refresh": "รีเฟรช"
+    },
+    "tabs": {
+        "overview": "ภาพรวม",
+        "stocks": "หุ้น",
+        "indices": "ดัชนี",
+        "forex": "ฟอเร็กซ์",
+        "crypto": "คริปโต",
+        "commodities": "สินค้าโภคภัณฑ์",
+        "bonds": "พันธบัตร"
+    },
+    "status": {
+        "marketOpen": "ตลาดเปิด",
+        "marketClosed": "ตลาดปิด",
+        "preMarket": "ก่อนตลาด",
+        "afterHours": "หลังปิดตลาด"
+    }
+}

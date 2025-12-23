@@ -1,0 +1,84 @@
+{
+    "title": "FRED সিরিজ ব্রাউজার",
+    "header": {
+        "title": "FRED ডেটা এক্সপ্লোরার",
+        "filters": "ফিল্টার",
+        "results": "ফলাফল",
+        "saved": "সংরক্ষিত স্ক্রিন",
+        "presets": "প্রিসেট"
+    },
+    "apiKey": {
+        "required": "API কী প্রয়োজন",
+        "configure": "অর্থনৈতিক ডেটা অ্যাক্সেস করতে সেটিংস → ক্রেডেনশিয়ালে আপনার FRED API কী কনফিগার করুন।",
+        "getKey": "বিনামূল্যে API কী পান",
+        "addToSettings": "সেটিংস → ক্রেডেনশিয়াল → FRED_API_KEY এ যোগ করুন",
+        "saveAndReload": "সংরক্ষণ করুন এবং এই ট্যাব রিলোড করুন",
+        "tip": "নিশ্চিত করুন যে আপনি সেটিংস → ক্রেডেনশিয়ালে FRED API কী কনফিগার করেছেন"
+    },
+    "form": {
+        "seriesIds": "সিরিজ আইডি",
+        "startDate": "শুরুর তারিখ",
+        "endDate": "শেষ তারিখ",
+        "quickAdd": "দ্রুত যোগ"
+    },
+    "buttons": {
+        "fetch": "ফেচ",
+        "loading": "লোড হচ্ছে",
+        "browse": "সিরিজ ব্রাউজ করুন",
+        "done": "সম্পন্ন"
+    },
+    "chart": {
+        "title": "টাইম সিরিজ চার্ট",
+        "emptyState": "ডেটা ভিজুয়ালাইজ করতে সিরিজ আইডি লিখুন এবং FETCH ক্লিক করুন",
+        "trySuggestion": "GDP, UNRATE বা CPIAUCSL খুঁজে দেখুন",
+        "waiting": "FRED থেকে ডেটা আনার সময় অপেক্ষা করুন...",
+        "errorFetching": "ডেটা আনতে ত্রুটি"
+    },
+    "filters": {
+        "add": "ফিল্টার যোগ করুন",
+        "clear": "সব মুছুন",
+        "reset": "রিসেট",
+        "apply": "ফিল্টার প্রয়োগ করুন"
+    },
+    "criteria": {
+        "marketCap": "মার্কেট ক্যাপ",
+        "price": "মূল্য",
+        "volume": "ভলিউম",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "ডিভিডেন্ড",
+        "beta": "বিটা",
+        "sector": "সেক্টর",
+        "industry": "ইন্ডাস্ট্রি",
+        "country": "দেশ",
+        "exchange": "এক্সচেঞ্জ"
+    },
+    "operators": {
+        "equals": "সমান",
+        "greater": "বেশি",
+        "less": "কম",
+        "between": "মধ্যে",
+        "contains": "রয়েছে"
+    },
+    "results": {
+        "symbol": "সিম্বল",
+        "name": "নাম",
+        "price": "মূল্য",
+        "change": "পরিবর্তন",
+        "volume": "ভলিউম",
+        "marketCap": "মার্কেট ক্যাপ",
+        "matches": "ফলাফল পাওয়া গেছে"
+    },
+    "actions": {
+        "save": "স্ক্রিন সংরক্ষণ",
+        "load": "স্ক্রিন লোড",
+        "export": "ফলাফল এক্সপোর্ট",
+        "addToWatchlist": "ওয়াচলিস্টে যোগ করুন"
+    },
+    "messages": {
+        "loading": "স্টক স্ক্রিনিং হচ্ছে...",
+        "noResults": "কোনো স্টক মেলেনি",
+        "saved": "স্ক্রিন সংরক্ষিত",
+        "applied": "ফিল্টার প্রয়োগ করা হয়েছে"
+    }
+}

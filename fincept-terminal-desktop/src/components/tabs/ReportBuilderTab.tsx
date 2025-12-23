@@ -46,6 +46,7 @@ import { llmApiService, ChatMessage as APIMessage } from '@/services/llmApi';
 import { sqliteService } from '@/services/sqliteService';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 // Bloomberg color palette
 const BLOOMBERG_COLORS = {
@@ -111,11 +112,10 @@ function SortableComponent({
     <div
       ref={setNodeRef}
       style={style}
-      className={`flex items-center justify-between p-2 mb-1 cursor-pointer transition-colors border-l-2 ${
-        isSelected
-          ? 'bg-[#2a2a2a] border-l-[#FFA500]'
-          : 'bg-transparent border-l-transparent hover:bg-[#1a1a1a]'
-      }`}
+      className={`flex items-center justify-between p-2 mb-1 cursor-pointer transition-colors border-l-2 ${isSelected
+        ? 'bg-[#2a2a2a] border-l-[#FFA500]'
+        : 'bg-transparent border-l-transparent hover:bg-[#1a1a1a]'
+        }`}
       onClick={onClick}
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -148,6 +148,7 @@ function SortableComponent({
 }
 
 const ReportBuilderTab: React.FC = () => {
+  const { t } = useTranslation('reportBuilder');
   const { colors } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [template, setTemplate] = useState<ReportTemplate>({
@@ -183,11 +184,11 @@ const ReportBuilderTab: React.FC = () => {
   const [showColorPicker, setShowColorPicker] = useState<boolean>(false);
 
   // AI Chat state
-  const [aiMessages, setAiMessages] = useState<{role: string, content: string}[]>([]);
+  const [aiMessages, setAiMessages] = useState<{ role: string, content: string }[]>([]);
   const [aiInput, setAiInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [currentProvider, setCurrentProvider] = useState('ollama');
-  const [availableModels, setAvailableModels] = useState<{id: string, name: string, provider: string}[]>([]);
+  const [availableModels, setAvailableModels] = useState<{ id: string, name: string, provider: string }[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const aiMessagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -245,9 +246,9 @@ const ReportBuilderTab: React.FC = () => {
       id: `component-${Date.now()}`,
       type,
       content: (type === 'divider' || type === 'pagebreak' || type === 'coverpage' || type === 'section' || type === 'columns') ? '' :
-               type === 'heading' ? 'New Heading' :
-               type === 'subheading' ? 'New Subheading' :
-               type === 'text' ? 'Enter text here...' : '',
+        type === 'heading' ? 'New Heading' :
+          type === 'subheading' ? 'New Subheading' :
+            type === 'text' ? 'Enter text here...' : '',
       config: {
         fontSize: type === 'heading' ? '2xl' : type === 'subheading' ? 'xl' : 'base',
         fontWeight: type === 'heading' || type === 'subheading' ? 'bold' : 'normal',
@@ -446,11 +447,10 @@ const ReportBuilderTab: React.FC = () => {
       }
 
       // Add context about the current report
-      const contextMessage = `I'm working on a report titled "${template.metadata.title}". ${
-        template.components.length > 0
-          ? `It has ${template.components.length} components including ${template.components.map(c => c.type).join(', ')}.`
-          : 'It\'s empty so far.'
-      } The report uses ${fontFamily} font at ${defaultFontSize}pt with ${pageTheme} theme.`;
+      const contextMessage = `I'm working on a report titled "${template.metadata.title}". ${template.components.length > 0
+        ? `It has ${template.components.length} components including ${template.components.map(c => c.type).join(', ')}.`
+        : 'It\'s empty so far.'
+        } The report uses ${fontFamily} font at ${defaultFontSize}pt with ${pageTheme} theme.`;
 
       const conversationHistory: APIMessage[] = [
         { role: 'system', content: `You are a professional writing assistant helping to create financial reports. ${contextMessage}` },
@@ -595,7 +595,7 @@ const ReportBuilderTab: React.FC = () => {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5" style={{ color: BLOOMBERG_COLORS.ORANGE }} />
-            <span className="font-bold text-sm" style={{ color: BLOOMBERG_COLORS.ORANGE }}>REPORT BUILDER</span>
+            <span className="font-bold text-sm" style={{ color: BLOOMBERG_COLORS.ORANGE }}>{t('title')}</span>
           </div>
           <span className="text-xs" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
             {currentTime.toLocaleTimeString()}
@@ -930,11 +930,10 @@ const ReportBuilderTab: React.FC = () => {
                               <button
                                 key={color}
                                 onClick={() => setCustomBgColor(color)}
-                                className={`w-full aspect-square rounded border-2 transition-all hover:scale-110 ${
-                                  customBgColor.toLowerCase() === color.toLowerCase()
-                                    ? 'border-[#FFA500] ring-2 ring-[#FFA500]'
-                                    : 'border-[#333333] hover:border-[#666]'
-                                }`}
+                                className={`w-full aspect-square rounded border-2 transition-all hover:scale-110 ${customBgColor.toLowerCase() === color.toLowerCase()
+                                  ? 'border-[#FFA500] ring-2 ring-[#FFA500]'
+                                  : 'border-[#333333] hover:border-[#666]'
+                                  }`}
                                 style={{ backgroundColor: color }}
                                 title={color}
                               />
@@ -1041,22 +1040,20 @@ const ReportBuilderTab: React.FC = () => {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setIsBold(!isBold)}
-                      className={`flex-1 px-3 py-2 rounded border transition-all ${
-                        isBold
-                          ? 'bg-[#FFA500] border-[#FFA500] text-black'
-                          : 'bg-[#0a0a0a] border-[#333333] text-gray-400 hover:border-[#FFA500]'
-                      }`}
+                      className={`flex-1 px-3 py-2 rounded border transition-all ${isBold
+                        ? 'bg-[#FFA500] border-[#FFA500] text-black'
+                        : 'bg-[#0a0a0a] border-[#333333] text-gray-400 hover:border-[#FFA500]'
+                        }`}
                       title="Toggle Bold"
                     >
                       <Bold size={16} className="mx-auto" />
                     </button>
                     <button
                       onClick={() => setIsItalic(!isItalic)}
-                      className={`flex-1 px-3 py-2 rounded border transition-all ${
-                        isItalic
-                          ? 'bg-[#FFA500] border-[#FFA500] text-black'
-                          : 'bg-[#0a0a0a] border-[#333333] text-gray-400 hover:border-[#FFA500]'
-                      }`}
+                      className={`flex-1 px-3 py-2 rounded border transition-all ${isItalic
+                        ? 'bg-[#FFA500] border-[#FFA500] text-black'
+                        : 'bg-[#0a0a0a] border-[#333333] text-gray-400 hover:border-[#FFA500]'
+                        }`}
                       title="Toggle Italic"
                     >
                       <Italic size={16} className="mx-auto" />
@@ -1144,9 +1141,8 @@ const ReportBuilderTab: React.FC = () => {
                     <div
                       key={component.id}
                       onClick={() => setSelectedComponent(component.id)}
-                      className={`cursor-pointer transition-all ${
-                        isSelected ? 'ring-2 ring-orange-500 ring-offset-2' : 'hover:ring-1 hover:ring-gray-300'
-                      }`}
+                      className={`cursor-pointer transition-all ${isSelected ? 'ring-2 ring-orange-500 ring-offset-2' : 'hover:ring-1 hover:ring-gray-300'
+                        }`}
                     >
                       {/* Render component based on type */}
                       {component.type === 'heading' && (
@@ -1264,9 +1260,8 @@ const ReportBuilderTab: React.FC = () => {
           <div className="flex border-b" style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
             <button
               onClick={() => setRightPanelView('properties')}
-              className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${
-                rightPanelView === 'properties' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
-              }`}
+              className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'properties' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+                }`}
               style={{ color: rightPanelView === 'properties' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}
             >
               <SettingsIcon size={14} />
@@ -1274,9 +1269,8 @@ const ReportBuilderTab: React.FC = () => {
             </button>
             <button
               onClick={() => setRightPanelView('chat')}
-              className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${
-                rightPanelView === 'chat' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
-              }`}
+              className={`flex-1 px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center gap-1 ${rightPanelView === 'chat' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+                }`}
               style={{ color: rightPanelView === 'chat' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}
             >
               <MessageSquare size={14} />
@@ -1284,9 +1278,8 @@ const ReportBuilderTab: React.FC = () => {
             </button>
             <button
               onClick={() => setRightPanelView('split')}
-              className={`px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center ${
-                rightPanelView === 'split' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
-              }`}
+              className={`px-3 py-2 text-xs font-semibold transition-colors flex items-center justify-center ${rightPanelView === 'split' ? 'bg-[#FFA500] text-black' : 'bg-transparent hover:bg-[#2a2a2a]'
+                }`}
               style={{ color: rightPanelView === 'split' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}
               title="Split View"
             >
@@ -1296,385 +1289,383 @@ const ReportBuilderTab: React.FC = () => {
 
           {/* Properties Section */}
           {(rightPanelView === 'properties' || rightPanelView === 'split') && (
-          <div className={`${rightPanelView === 'split' ? 'flex-1 border-b' : 'flex-1'} overflow-y-auto min-h-0`} style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
-            {selectedComp ? (
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold" style={{ color: BLOOMBERG_COLORS.ORANGE }}>PROPERTIES</h3>
-                  <button
-                    onClick={() => setSelectedComponent(null)}
-                    className="p-1 hover:bg-[#2a2a2a] rounded"
-                    style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                {/* Component Type */}
-                <div>
-                  <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                    Type
-                  </label>
-                  <div className="px-3 py-2 text-xs rounded bg-[#0a0a0a] capitalize">
-                    {selectedComp.type}
-                  </div>
-                </div>
-
-                {/* Content Editor */}
-                {(selectedComp.type === 'heading' || selectedComp.type === 'text' || selectedComp.type === 'code') && (
-                  <div>
-                    <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                      Content
-                    </label>
-                    <textarea
-                      value={selectedComp.content || ''}
-                      onChange={(e) => updateComponent(selectedComp.id, { content: e.target.value })}
-                      className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                      style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
-                      rows={selectedComp.type === 'code' ? 10 : 4}
-                      placeholder="Enter content..."
-                    />
-                  </div>
-                )}
-
-                {/* Alignment */}
-                {(selectedComp.type === 'heading' || selectedComp.type === 'text') && (
-                  <div>
-                    <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                      Alignment
-                    </label>
-                    <div className="flex gap-2">
-                      {['left', 'center', 'right'].map((align) => (
-                        <button
-                          key={align}
-                          onClick={() => updateComponent(selectedComp.id, {
-                            config: { ...selectedComp.config, alignment: align as any }
-                          })}
-                          className={`flex-1 px-3 py-2 text-xs rounded transition-colors capitalize ${
-                            selectedComp.config.alignment === align
-                              ? 'bg-[#FFA500] text-black'
-                              : 'bg-[#0a0a0a] hover:bg-[#2a2a2a]'
-                          }`}
-                        >
-                          {align}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Font Size */}
-                {(selectedComp.type === 'heading' || selectedComp.type === 'text') && (
-                  <div>
-                    <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                      Font Size
-                    </label>
-                    <select
-                      value={selectedComp.config.fontSize || 'base'}
-                      onChange={(e) => updateComponent(selectedComp.id, {
-                        config: { ...selectedComp.config, fontSize: e.target.value }
-                      })}
-                      className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                      style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+            <div className={`${rightPanelView === 'split' ? 'flex-1 border-b' : 'flex-1'} overflow-y-auto min-h-0`} style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
+              {selectedComp ? (
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold" style={{ color: BLOOMBERG_COLORS.ORANGE }}>PROPERTIES</h3>
+                    <button
+                      onClick={() => setSelectedComponent(null)}
+                      className="p-1 hover:bg-[#2a2a2a] rounded"
+                      style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}
                     >
-                      <option value="xs">Extra Small</option>
-                      <option value="sm">Small</option>
-                      <option value="base">Base</option>
-                      <option value="lg">Large</option>
-                      <option value="xl">Extra Large</option>
-                      <option value="2xl">2X Large</option>
-                      <option value="3xl">3X Large</option>
-                    </select>
+                      <X size={16} />
+                    </button>
                   </div>
-                )}
 
-                {/* Image Upload */}
-                {selectedComp.type === 'image' && (
-                  <div>
-                    <label className="text-xs font-semibold mb-2 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                      Image
-                    </label>
-                    {selectedComp.config.imageUrl ? (
-                      <div className="space-y-2">
-                        <div className="text-xs text-gray-400 break-all bg-[#0a0a0a] p-2 rounded">
-                          {selectedComp.config.imageUrl.split('\\').pop()}
-                        </div>
+                  <div className="space-y-4">
+                    {/* Component Type */}
+                    <div>
+                      <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                        Type
+                      </label>
+                      <div className="px-3 py-2 text-xs rounded bg-[#0a0a0a] capitalize">
+                        {selectedComp.type}
+                      </div>
+                    </div>
+
+                    {/* Content Editor */}
+                    {(selectedComp.type === 'heading' || selectedComp.type === 'text' || selectedComp.type === 'code') && (
+                      <div>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          Content
+                        </label>
+                        <textarea
+                          value={selectedComp.content || ''}
+                          onChange={(e) => updateComponent(selectedComp.id, { content: e.target.value })}
+                          className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
+                          style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                          rows={selectedComp.type === 'code' ? 10 : 4}
+                          placeholder="Enter content..."
+                        />
+                      </div>
+                    )}
+
+                    {/* Alignment */}
+                    {(selectedComp.type === 'heading' || selectedComp.type === 'text') && (
+                      <div>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          Alignment
+                        </label>
                         <div className="flex gap-2">
-                          <button
-                            onClick={handleImageUpload}
-                            className="flex-1 px-3 py-2 text-xs rounded bg-blue-600 hover:bg-blue-700 transition-colors"
-                          >
-                            Change Image
-                          </button>
-                          <button
-                            onClick={() => updateComponent(selectedComp.id, {
-                              config: { ...selectedComp.config, imageUrl: undefined }
-                            })}
-                            className="flex-1 px-3 py-2 text-xs rounded bg-red-600 hover:bg-red-700 transition-colors"
-                          >
-                            Remove
-                          </button>
+                          {['left', 'center', 'right'].map((align) => (
+                            <button
+                              key={align}
+                              onClick={() => updateComponent(selectedComp.id, {
+                                config: { ...selectedComp.config, alignment: align as any }
+                              })}
+                              className={`flex-1 px-3 py-2 text-xs rounded transition-colors capitalize ${selectedComp.config.alignment === align
+                                ? 'bg-[#FFA500] text-black'
+                                : 'bg-[#0a0a0a] hover:bg-[#2a2a2a]'
+                                }`}
+                            >
+                              {align}
+                            </button>
+                          ))}
                         </div>
                       </div>
-                    ) : (
-                      <button
-                        onClick={handleImageUpload}
-                        className="w-full px-3 py-2 text-xs rounded transition-colors flex items-center justify-center gap-2"
-                        style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE, color: BLOOMBERG_COLORS.BLACK }}
-                      >
-                        <Plus size={14} />
-                        Upload Image
-                      </button>
                     )}
-                  </div>
-                )}
 
-                {/* Table Columns */}
-                {selectedComp.type === 'table' && (
-                  <div>
-                    <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                      Columns (comma-separated)
-                    </label>
-                    <input
-                      type="text"
-                      value={(selectedComp.config.columns || []).join(', ')}
-                      onChange={(e) => updateComponent(selectedComp.id, {
-                        config: { ...selectedComp.config, columns: e.target.value.split(',').map(s => s.trim()) }
-                      })}
-                      className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                      style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
-                      placeholder="Column 1, Column 2, Column 3"
-                    />
-                  </div>
-                )}
+                    {/* Font Size */}
+                    {(selectedComp.type === 'heading' || selectedComp.type === 'text') && (
+                      <div>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          Font Size
+                        </label>
+                        <select
+                          value={selectedComp.config.fontSize || 'base'}
+                          onChange={(e) => updateComponent(selectedComp.id, {
+                            config: { ...selectedComp.config, fontSize: e.target.value }
+                          })}
+                          className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
+                          style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                        >
+                          <option value="xs">Extra Small</option>
+                          <option value="sm">Small</option>
+                          <option value="base">Base</option>
+                          <option value="lg">Large</option>
+                          <option value="xl">Extra Large</option>
+                          <option value="2xl">2X Large</option>
+                          <option value="3xl">3X Large</option>
+                        </select>
+                      </div>
+                    )}
 
-                {/* Chart Type */}
-                {selectedComp.type === 'chart' && (
-                  <div>
-                    <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                      Chart Type
-                    </label>
-                    <select
-                      value={selectedComp.config.chartType || 'bar'}
-                      onChange={(e) => updateComponent(selectedComp.id, {
-                        config: { ...selectedComp.config, chartType: e.target.value }
-                      })}
-                      className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-                      style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
-                    >
-                      <option value="bar">Bar Chart</option>
-                      <option value="line">Line Chart</option>
-                      <option value="pie">Pie Chart</option>
-                      <option value="area">Area Chart</option>
-                    </select>
-                  </div>
-                )}
+                    {/* Image Upload */}
+                    {selectedComp.type === 'image' && (
+                      <div>
+                        <label className="text-xs font-semibold mb-2 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          Image
+                        </label>
+                        {selectedComp.config.imageUrl ? (
+                          <div className="space-y-2">
+                            <div className="text-xs text-gray-400 break-all bg-[#0a0a0a] p-2 rounded">
+                              {selectedComp.config.imageUrl.split('\\').pop()}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleImageUpload}
+                                className="flex-1 px-3 py-2 text-xs rounded bg-blue-600 hover:bg-blue-700 transition-colors"
+                              >
+                                Change Image
+                              </button>
+                              <button
+                                onClick={() => updateComponent(selectedComp.id, {
+                                  config: { ...selectedComp.config, imageUrl: undefined }
+                                })}
+                                className="flex-1 px-3 py-2 text-xs rounded bg-red-600 hover:bg-red-700 transition-colors"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={handleImageUpload}
+                            className="w-full px-3 py-2 text-xs rounded transition-colors flex items-center justify-center gap-2"
+                            style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE, color: BLOOMBERG_COLORS.BLACK }}
+                          >
+                            <Plus size={14} />
+                            Upload Image
+                          </button>
+                        )}
+                      </div>
+                    )}
 
-                {/* Actions */}
-                <div className="pt-4 border-t" style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => duplicateComponent(selectedComp.id)}
-                      className="flex-1 px-3 py-2 text-xs rounded bg-[#0a0a0a] hover:bg-[#2a2a2a] transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Copy size={14} />
-                      Duplicate
-                    </button>
-                    <button
-                      onClick={() => deleteComponent(selectedComp.id)}
-                      className="flex-1 px-3 py-2 text-xs rounded bg-red-600 hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Trash2 size={14} />
-                      Delete
-                    </button>
+                    {/* Table Columns */}
+                    {selectedComp.type === 'table' && (
+                      <div>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          Columns (comma-separated)
+                        </label>
+                        <input
+                          type="text"
+                          value={(selectedComp.config.columns || []).join(', ')}
+                          onChange={(e) => updateComponent(selectedComp.id, {
+                            config: { ...selectedComp.config, columns: e.target.value.split(',').map(s => s.trim()) }
+                          })}
+                          className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
+                          style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                          placeholder="Column 1, Column 2, Column 3"
+                        />
+                      </div>
+                    )}
+
+                    {/* Chart Type */}
+                    {selectedComp.type === 'chart' && (
+                      <div>
+                        <label className="text-xs font-semibold mb-1 block" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                          Chart Type
+                        </label>
+                        <select
+                          value={selectedComp.config.chartType || 'bar'}
+                          onChange={(e) => updateComponent(selectedComp.id, {
+                            config: { ...selectedComp.config, chartType: e.target.value }
+                          })}
+                          className="w-full px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
+                          style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                        >
+                          <option value="bar">Bar Chart</option>
+                          <option value="line">Line Chart</option>
+                          <option value="pie">Pie Chart</option>
+                          <option value="area">Area Chart</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="pt-4 border-t" style={{ borderColor: BLOOMBERG_COLORS.BORDER }}>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => duplicateComponent(selectedComp.id)}
+                          className="flex-1 px-3 py-2 text-xs rounded bg-[#0a0a0a] hover:bg-[#2a2a2a] transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Copy size={14} />
+                          Duplicate
+                        </button>
+                        <button
+                          onClick={() => deleteComponent(selectedComp.id)}
+                          className="flex-1 px-3 py-2 text-xs rounded bg-red-600 hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Trash2 size={14} />
+                          Delete
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-              </div>
-            ) : (
-              <div className="p-4 text-center" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                <SettingsIcon size={32} className="mx-auto mb-2 opacity-30" />
-                <p className="text-xs">Select a component to edit properties</p>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="p-4 text-center" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                  <SettingsIcon size={32} className="mx-auto mb-2 opacity-30" />
+                  <p className="text-xs">Select a component to edit properties</p>
+                </div>
+              )}
+            </div>
           )}
 
           {/* AI Writing Assistant Section */}
           {(rightPanelView === 'chat' || rightPanelView === 'split') && (
-          <div className={`${rightPanelView === 'split' ? 'flex-1' : 'flex-1'} flex flex-col min-h-0`} style={{ backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
-        {/* AI Assistant Header */}
-        <div className="p-4 border-b border-[#333333] flex-shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Bot size={18} style={{ color: BLOOMBERG_COLORS.ORANGE }} />
-              <h3 className="text-sm font-bold" style={{ color: BLOOMBERG_COLORS.ORANGE }}>
-                AI WRITING ASSISTANT
-              </h3>
-            </div>
-            <Sparkles size={16} style={{ color: BLOOMBERG_COLORS.ORANGE }} />
-          </div>
+            <div className={`${rightPanelView === 'split' ? 'flex-1' : 'flex-1'} flex flex-col min-h-0`} style={{ backgroundColor: BLOOMBERG_COLORS.PANEL_BG }}>
+              {/* AI Assistant Header */}
+              <div className="p-4 border-b border-[#333333] flex-shrink-0">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Bot size={18} style={{ color: BLOOMBERG_COLORS.ORANGE }} />
+                    <h3 className="text-sm font-bold" style={{ color: BLOOMBERG_COLORS.ORANGE }}>
+                      AI WRITING ASSISTANT
+                    </h3>
+                  </div>
+                  <Sparkles size={16} style={{ color: BLOOMBERG_COLORS.ORANGE }} />
+                </div>
 
-          {/* Model Selector */}
-          <div className="mb-3">
-            <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-              AI Model
-            </label>
-            <select
-              value={currentProvider}
-              onChange={(e) => setCurrentProvider(e.target.value)}
-              className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-              style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
-            >
-              {availableModels.map(model => (
-                <option key={model.id} value={model.provider}>
-                  {model.name} ({model.provider})
-                </option>
-              ))}
-              {availableModels.length === 0 && (
-                <option value="ollama">Configure in Settings</option>
-              )}
-            </select>
-          </div>
+                {/* Model Selector */}
+                <div className="mb-3">
+                  <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                    AI Model
+                  </label>
+                  <select
+                    value={currentProvider}
+                    onChange={(e) => setCurrentProvider(e.target.value)}
+                    className="w-full px-2 py-1 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
+                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  >
+                    {availableModels.map(model => (
+                      <option key={model.id} value={model.provider}>
+                        {model.name} ({model.provider})
+                      </option>
+                    ))}
+                    {availableModels.length === 0 && (
+                      <option value="ollama">Configure in Settings</option>
+                    )}
+                  </select>
+                </div>
 
-          {/* Quick Actions */}
-          <div className="grid grid-cols-2 gap-1">
-            <button
-              onClick={() => handleAiQuickAction('improve')}
-              className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
-              style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
-            >
-              ✨ Improve
-            </button>
-            <button
-              onClick={() => handleAiQuickAction('expand')}
-              className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
-              style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
-            >
-              📝 Expand
-            </button>
-            <button
-              onClick={() => handleAiQuickAction('summarize')}
-              className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
-              style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
-            >
-              📋 Summary
-            </button>
-            <button
-              onClick={() => handleAiQuickAction('grammar')}
-              className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
-              style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
-            >
-              ✓ Grammar
-            </button>
-          </div>
-        </div>
+                {/* Quick Actions */}
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    onClick={() => handleAiQuickAction('improve')}
+                    className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
+                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  >
+                    ✨ Improve
+                  </button>
+                  <button
+                    onClick={() => handleAiQuickAction('expand')}
+                    className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
+                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  >
+                    📝 Expand
+                  </button>
+                  <button
+                    onClick={() => handleAiQuickAction('summarize')}
+                    className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
+                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  >
+                    📋 Summary
+                  </button>
+                  <button
+                    onClick={() => handleAiQuickAction('grammar')}
+                    className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
+                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                  >
+                    ✓ Grammar
+                  </button>
+                </div>
+              </div>
 
-        {/* AI Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-          {aiMessages.length === 0 && (
-            <div className="text-center py-8">
-              <Bot size={32} className="mx-auto mb-3" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }} />
-              <p className="text-xs" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                Ask me to help you write better reports!
-              </p>
-              <p className="text-[9px] mt-2" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                Try: "Help me write an introduction"
-              </p>
+              {/* AI Chat Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+                {aiMessages.length === 0 && (
+                  <div className="text-center py-8">
+                    <Bot size={32} className="mx-auto mb-3" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }} />
+                    <p className="text-xs" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                      Ask me to help you write better reports!
+                    </p>
+                    <p className="text-[9px] mt-2" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                      Try: "Help me write an introduction"
+                    </p>
+                  </div>
+                )}
+
+                {aiMessages.map((msg, idx) => (
+                  <div key={idx} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {msg.role === 'assistant' && (
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE }}>
+                        <Bot size={14} style={{ color: '#000' }} />
+                      </div>
+                    )}
+                    <div
+                      className={`max-w-[85%] rounded-lg p-3 ${msg.role === 'user'
+                        ? 'bg-[#FFA500] text-black'
+                        : 'bg-[#1a1a1a] border border-[#333333]'
+                        }`}
+                    >
+                      <div className="text-xs break-words" style={{ color: msg.role === 'user' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}>
+                        {msg.role === 'assistant' ? (
+                          <MarkdownRenderer content={msg.content} />
+                        ) : (
+                          msg.content
+                        )}
+                      </div>
+                    </div>
+                    {msg.role === 'user' && (
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-[#333333]">
+                        <User size={14} style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {isAiTyping && streamingContent && (
+                  <div className="flex gap-2 justify-start">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE }}>
+                      <Bot size={14} style={{ color: '#000' }} />
+                    </div>
+                    <div className="max-w-[85%] rounded-lg p-3 bg-[#1a1a1a] border border-[#333333]">
+                      <div className="text-xs break-words" style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}>
+                        <MarkdownRenderer content={streamingContent} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {isAiTyping && !streamingContent && (
+                  <div className="flex gap-2 justify-start">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE }}>
+                      <Bot size={14} style={{ color: '#000' }} />
+                    </div>
+                    <div className="max-w-[85%] rounded-lg p-3 bg-[#1a1a1a] border border-[#333333]">
+                      <div className="text-xs flex gap-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
+                        <span className="animate-bounce">●</span>
+                        <span className="animate-bounce delay-100">●</span>
+                        <span className="animate-bounce delay-200">●</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={aiMessagesEndRef} />
+              </div>
+
+              {/* AI Input */}
+              <div className="p-4 border-t border-[#333333] flex-shrink-0">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={aiInput}
+                    onChange={(e) => setAiInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAiSendMessage()}
+                    placeholder="Ask AI to help with your report..."
+                    className="flex-1 px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
+                    style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
+                    disabled={isAiTyping}
+                  />
+                  <button
+                    onClick={handleAiSendMessage}
+                    disabled={isAiTyping || !aiInput.trim()}
+                    className="px-3 py-2 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      backgroundColor: BLOOMBERG_COLORS.ORANGE,
+                      color: '#000'
+                    }}
+                  >
+                    <Send size={16} />
+                  </button>
+                </div>
+              </div>
             </div>
           )}
-
-          {aiMessages.map((msg, idx) => (
-            <div key={idx} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              {msg.role === 'assistant' && (
-                <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE }}>
-                  <Bot size={14} style={{ color: '#000' }} />
-                </div>
-              )}
-              <div
-                className={`max-w-[85%] rounded-lg p-3 ${
-                  msg.role === 'user'
-                    ? 'bg-[#FFA500] text-black'
-                    : 'bg-[#1a1a1a] border border-[#333333]'
-                }`}
-              >
-                <div className="text-xs break-words" style={{ color: msg.role === 'user' ? '#000' : BLOOMBERG_COLORS.TEXT_PRIMARY }}>
-                  {msg.role === 'assistant' ? (
-                    <MarkdownRenderer content={msg.content} />
-                  ) : (
-                    msg.content
-                  )}
-                </div>
-              </div>
-              {msg.role === 'user' && (
-                <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center bg-[#333333]">
-                  <User size={14} style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }} />
-                </div>
-              )}
-            </div>
-          ))}
-
-          {isAiTyping && streamingContent && (
-            <div className="flex gap-2 justify-start">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE }}>
-                <Bot size={14} style={{ color: '#000' }} />
-              </div>
-              <div className="max-w-[85%] rounded-lg p-3 bg-[#1a1a1a] border border-[#333333]">
-                <div className="text-xs break-words" style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}>
-                  <MarkdownRenderer content={streamingContent} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {isAiTyping && !streamingContent && (
-            <div className="flex gap-2 justify-start">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: BLOOMBERG_COLORS.ORANGE }}>
-                <Bot size={14} style={{ color: '#000' }} />
-              </div>
-              <div className="max-w-[85%] rounded-lg p-3 bg-[#1a1a1a] border border-[#333333]">
-                <div className="text-xs flex gap-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>
-                  <span className="animate-bounce">●</span>
-                  <span className="animate-bounce delay-100">●</span>
-                  <span className="animate-bounce delay-200">●</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div ref={aiMessagesEndRef} />
         </div>
-
-        {/* AI Input */}
-        <div className="p-4 border-t border-[#333333] flex-shrink-0">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={aiInput}
-              onChange={(e) => setAiInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAiSendMessage()}
-              placeholder="Ask AI to help with your report..."
-              className="flex-1 px-3 py-2 text-xs rounded bg-[#0a0a0a] border border-[#333333] focus:border-[#FFA500] outline-none"
-              style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
-              disabled={isAiTyping}
-            />
-            <button
-              onClick={handleAiSendMessage}
-              disabled={isAiTyping || !aiInput.trim()}
-              className="px-3 py-2 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                backgroundColor: BLOOMBERG_COLORS.ORANGE,
-                color: '#000'
-              }}
-            >
-              <Send size={16} />
-            </button>
-          </div>
-        </div>
-        </div>
-          )}
-      </div>
       </div>
 
       {/* Success Dialog */}

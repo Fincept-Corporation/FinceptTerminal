@@ -1,0 +1,76 @@
+{
+    "title": "TRADING",
+    "header": {
+        "orders": "ZLECENIA",
+        "positions": "POZYCJE",
+        "history": "HISTORIA",
+        "settings": "USTAWIENIA",
+        "terminal": "TERMINAL FINCEPT",
+        "selectBroker": "WYBIERZ BROKERA",
+        "paper": "DEMO",
+        "live": "NA ŻYWO",
+        "watchlist": "OBSERWOWANE",
+        "orderbook": "ARKUSZ ZLECEŃ",
+        "trades": "TRANSAKCJE",
+        "stats": "STATYSTYKI",
+        "features": "FUNKCJE",
+        "crossExchange": "CROSS-EXCHANGE",
+        "chart": "WYKRES",
+        "depth": "GŁĘBOKOŚĆ",
+        "volume": "WOLUMEN",
+        "aiAgents": "AGENCI AI",
+        "leaderboard": "RANKING",
+        "modelChat": "CZAT MODELU"
+    },
+    "orderTypes": {
+        "market": "Rynkowy",
+        "limit": "Limit",
+        "stop": "Stop",
+        "stopLimit": "Stop Limit",
+        "trailingStop": "Trailing Stop"
+    },
+    "actions": {
+        "buy": "KUP",
+        "sell": "SPRZEDAJ",
+        "cancel": "Anuluj",
+        "modify": "Modyfikuj",
+        "close": "Zamknij",
+        "closeAll": "Zamknij Wszystko"
+    },
+    "form": {
+        "symbol": "Symbol",
+        "quantity": "Ilość",
+        "price": "Cena",
+        "stopPrice": "Cena Stop",
+        "takeProfit": "Take Profit",
+        "stopLoss": "Stop Loss",
+        "leverage": "Dźwignia"
+    },
+    "position": {
+        "openPrice": "Cena Otwarcia",
+        "currentPrice": "Aktualna Cena",
+        "pnl": "Z/S",
+        "pnlPercent": "Z/S %",
+        "margin": "Depozyt",
+        "size": "Rozmiar"
+    },
+    "order": {
+        "pending": "Oczekujące",
+        "filled": "Zrealizowane",
+        "cancelled": "Anulowane",
+        "rejected": "Odrzucone",
+        "partial": "Częściowo Zrealizowane"
+    },
+    "time": {
+        "gtc": "Ważne Do Odwołania",
+        "day": "Zlecenie Dzienne",
+        "ioc": "Natychmiast lub Anuluj",
+        "fok": "Wszystko lub Nic"
+    },
+    "messages": {
+        "orderPlaced": "Zlecenie zrealizowane",
+        "orderFailed": "Zlecenie nieudane",
+        "confirmOrder": "Potwierdzić zlecenie?",
+        "noPositions": "Brak otwartych pozycji"
+    }
+}

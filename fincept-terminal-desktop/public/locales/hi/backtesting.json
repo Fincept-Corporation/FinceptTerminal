@@ -1,0 +1,95 @@
+{
+    "title": "बैकटेस्टिंग इंजन",
+    "header": {
+        "strategy": "रणनीति",
+        "results": "परिणाम",
+        "trades": "ट्रेड"
+    },
+    "toolbar": {
+        "run": "बैकटेस्ट चलाएं",
+        "running": "चल रहा है...",
+        "stop": "रोकें",
+        "reset": "रीसेट",
+        "export": "परिणाम निर्यात करें",
+        "refresh": "रीफ्रेश"
+    },
+    "config": {
+        "symbolTimeframe": "सिम्बल और टाइमफ्रेम",
+        "symbol": "सिम्बल",
+        "stockTicker": "बैकटेस्ट के लिए स्टॉक टिकर",
+        "startDate": "प्रारंभ तिथि",
+        "endDate": "अंतिम तिथि",
+        "initialCapital": "प्रारंभिक पूंजी",
+        "strategy": "रणनीति",
+        "parameters": "पैरामीटर"
+    },
+    "sections": {
+        "strategyConfig": "रणनीति कॉन्फ़िगरेशन",
+        "strategyType": "रणनीति प्रकार",
+        "strategyParams": "रणनीति पैरामीटर",
+        "backtestResults": "बैकटेस्ट परिणाम",
+        "advancedSettings": "उन्नत सेटिंग्स",
+        "advancedNote": "Backtesting.py प्रदाता के लिए उन्नत विकल्प"
+    },
+    "advanced": {
+        "commission": "कमीशन (दशमलव)",
+        "tradeOnClose": "क्लोज पर ट्रेड",
+        "hedging": "हेजिंग",
+        "exclusiveOrders": "एक्सक्लूसिव ऑर्डर",
+        "margin": "मार्जिन"
+    },
+    "strategies": {
+        "sma": "SMA क्रॉसओवर",
+        "rsi": "RSI रणनीति",
+        "macd": "MACD रणनीति",
+        "bollinger": "बोलिंगर बैंड्स",
+        "custom": "कस्टम रणनीति"
+    },
+    "smaParams": {
+        "fastPeriod": "तेज़ अवधि",
+        "slowPeriod": "धीमी अवधि",
+        "fastNote": "अल्पकालिक मूविंग एवरेज",
+        "slowNote": "दीर्घकालिक मूविंग एवरेज"
+    },
+    "results": {
+        "totalReturn": "कुल रिटर्न",
+        "sharpeRatio": "शार्प रेशियो",
+        "maxDrawdown": "अधिकतम ड्रॉडाउन",
+        "winRate": "जीत दर",
+        "totalTrades": "कुल ट्रेड",
+        "profitFactor": "लाभ फ़ैक्टर",
+        "configurePrompt": "अपना बैकटेस्ट कॉन्फ़िगर करें और परिणाम देखने के लिए 'बैकटेस्ट चलाएं' पर क्लिक करें"
+    },
+    "trades": {
+        "date": "तारीख",
+        "type": "प्रकार",
+        "price": "मूल्य",
+        "quantity": "मात्रा",
+        "pnl": "लाभ/हानि"
+    },
+    "status": {
+        "ready": "तैयार",
+        "running": "चल रहा है...",
+        "completed": "पूर्ण",
+        "error": "त्रुटि"
+    },
+    "messages": {
+        "backtestStarted": "बैकटेस्ट शुरू हुआ",
+        "backtestCompleted": "बैकटेस्ट पूर्ण",
+        "backtestError": "बैकटेस्ट विफल"
+    },
+    "visual": {
+        "priceData": "मूल्य डेटा",
+        "maIndicator": "MA संकेतक",
+        "condition": "शर्त",
+        "buyOrder": "खरीद ऑर्डर",
+        "sellOrder": "बिक्री ऑर्डर",
+        "addBlocksPrompt": "अपनी रणनीति में जोड़ने के लिए ऊपर के ब्लॉक पर क्लिक करें",
+        "remove": "हटाएं",
+        "generateCode": "ब्लॉक से कोड जनरेट करें"
+    },
+    "template": {
+        "strategyTemplates": "रणनीति टेम्पलेट",
+        "apply": "टेम्पलेट लागू करें"
+    }
+}

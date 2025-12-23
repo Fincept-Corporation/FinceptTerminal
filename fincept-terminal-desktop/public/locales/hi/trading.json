@@ -1,0 +1,76 @@
+{
+    "title": "ट्रेडिंग",
+    "header": {
+        "orders": "ऑर्डर",
+        "positions": "पोजीशन",
+        "history": "इतिहास",
+        "settings": "सेटिंग्स",
+        "terminal": "FINCEPT टर्मिनल",
+        "selectBroker": "ब्रोकर चुनें",
+        "paper": "पेपर",
+        "live": "लाइव",
+        "watchlist": "वॉचलिस्ट",
+        "orderbook": "ऑर्डरबुक",
+        "trades": "ट्रेड्स",
+        "stats": "आँकड़े",
+        "features": "फीचर्स",
+        "crossExchange": "क्रॉस-एक्सचेंज",
+        "chart": "चार्ट",
+        "depth": "गहराई",
+        "volume": "वॉल्यूम",
+        "aiAgents": "AI एजेंट्स",
+        "leaderboard": "लीडरबोर्ड",
+        "modelChat": "मॉडल चैट"
+    },
+    "orderTypes": {
+        "market": "मार्केट",
+        "limit": "लिमिट",
+        "stop": "स्टॉप",
+        "stopLimit": "स्टॉप लिमिट",
+        "trailingStop": "ट्रेलिंग स्टॉप"
+    },
+    "actions": {
+        "buy": "खरीदें",
+        "sell": "बेचें",
+        "cancel": "रद्द करें",
+        "modify": "संशोधित करें",
+        "close": "बंद करें",
+        "closeAll": "सभी बंद करें"
+    },
+    "form": {
+        "symbol": "प्रतीक",
+        "quantity": "मात्रा",
+        "price": "कीमत",
+        "stopPrice": "स्टॉप मूल्य",
+        "takeProfit": "प्रॉफिट लें",
+        "stopLoss": "स्टॉप लॉस",
+        "leverage": "लीवरेज"
+    },
+    "position": {
+        "openPrice": "ओपन प्राइस",
+        "currentPrice": "वर्तमान मूल्य",
+        "pnl": "P&L",
+        "pnlPercent": "P&L %",
+        "margin": "मार्जिन",
+        "size": "आकार"
+    },
+    "order": {
+        "pending": "लंबित",
+        "filled": "भरा हुआ",
+        "cancelled": "रद्द",
+        "rejected": "अस्वीकृत",
+        "partial": "आंशिक रूप से भरा"
+    },
+    "time": {
+        "gtc": "रद्द होने तक वैध",
+        "day": "दिन का ऑर्डर",
+        "ioc": "तुरंत या रद्द",
+        "fok": "पूर्ण या रद्द"
+    },
+    "messages": {
+        "orderPlaced": "ऑर्डर सफल",
+        "orderFailed": "ऑर्डर विफल",
+        "confirmOrder": "इस ऑर्डर की पुष्टि करें?",
+        "noPositions": "कोई खुली पोजीशन नहीं"
+    }
+}

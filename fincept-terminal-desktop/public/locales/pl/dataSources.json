@@ -1,0 +1,43 @@
+{
+    "title": "ŹRÓDŁA DANYCH",
+    "header": {
+        "available": "DOSTĘPNE ŹRÓDŁA",
+        "connected": "POŁĄCZONO",
+        "addNew": "DODAJ ŹRÓDŁO",
+        "refresh": "ODŚWIEŻ"
+    },
+    "categories": {
+        "market": "Dane rynkowe",
+        "economic": "Dane ekonomiczne",
+        "alternative": "Dane alternatywne",
+        "news": "Wiadomości i sentyment",
+        "fundamental": "Dane fundamentalne"
+    },
+    "status": {
+        "connected": "Połączono",
+        "disconnected": "Rozłączono",
+        "error": "Błąd",
+        "pending": "Oczekuje"
+    },
+    "actions": {
+        "connect": "Połącz",
+        "disconnect": "Rozłącz",
+        "configure": "Konfiguruj",
+        "test": "Testuj połączenie",
+        "delete": "Usuń"
+    },
+    "form": {
+        "apiKey": "Klucz API",
+        "endpoint": "URL Endpoint",
+        "username": "Nazwa użytkownika",
+        "password": "Hasło",
+        "save": "Zapisz",
+        "cancel": "Anuluj"
+    },
+    "messages": {
+        "connectionSuccess": "Pomyślnie połączono ze źródłem danych",
+        "connectionFailed": "Nie udało się połączyć ze źródłem danych",
+        "noSources": "Brak skonfigurowanych źródeł danych",
+        "loading": "Ładowanie źródeł danych..."
+    }
+}

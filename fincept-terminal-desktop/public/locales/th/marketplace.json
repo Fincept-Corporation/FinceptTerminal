@@ -1,0 +1,38 @@
+{
+    "title": "ตลาด",
+    "header": {
+        "browse": "เรียกดู",
+        "myItems": "รายการของฉัน",
+        "cart": "ตะกร้า"
+    },
+    "categories": {
+        "all": "ทั้งหมด",
+        "indicators": "ตัวชี้วัด",
+        "strategies": "กลยุทธ์",
+        "datasets": "ชุดข้อมูล",
+        "tools": "เครื่องมือ"
+    },
+    "buttons": {
+        "buy": "ซื้อ",
+        "addToCart": "เพิ่มในตะกร้า",
+        "install": "ติดตั้ง",
+        "preview": "ดูตัวอย่าง"
+    },
+    "product": {
+        "price": "ราคา",
+        "rating": "คะแนน",
+        "downloads": "ดาวน์โหลด",
+        "author": "ผู้เขียน",
+        "version": "เวอร์ชัน"
+    },
+    "cart": {
+        "total": "รวม",
+        "checkout": "ชำระเงิน",
+        "empty": "ตะกร้าว่าง"
+    },
+    "messages": {
+        "addedToCart": "เพิ่มในตะกร้าแล้ว",
+        "purchased": "ซื้อแล้ว",
+        "installed": "ติดตั้งแล้ว"
+    }
+}

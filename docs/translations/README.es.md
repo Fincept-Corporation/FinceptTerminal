@@ -28,7 +28,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 📊**Analítica**         | Currículo completo de CFA Nivel 1, 2, 3 en Python • Modelos DCF • Optimización de cartera • Métricas de riesgo (VaR, Sharpe)                                  | [Módulos de análisis](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/Analytics)                                                                                                                                |
 | 🤖**Agentes de IA**     | Más de 20 personas de inversionistas (Buffett, Dalio, Graham) • Estrategias de fondos de cobertura (Bridgewater, Citadel, Renaissance) • Soporte local de LLM | [Agentes de IA](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/agents)                                                                                                                                         |
-| 🌐**Acceso a datos**    | Más de 100 conectores (DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • Mapeador de API personalizado • Cero restricciones de datos                            | [Adaptadores de datos](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                           |
+| 🌐**Data Access**       | Más de 100 conectores (DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • Mapeador de API personalizado • Cero restricciones de datos                            | [Adaptadores de datos](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                           |
 | 🔗**Dominio cruzado**   | Integre la cadena de suministro → cartera • Geopolítica → capital • Marítimo → macro • Sus datos, a su manera                                                 | [Sistema de flujo de trabajo](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                              |
 | 🎨**Flujos de trabajo** | Editor de nodos visuales • Agentes Python • Herramientas MCP • Automatización sin código                                                                      | [Nodos personalizados](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[Servidores MCP](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
 | 🚢**Inteligencia**      | Seguimiento marítimo 3D • Monitoreo satelital • Marcos geopolíticos • Análisis de rutas comerciales                                                           | [Pestaña Marítima](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                                     |
@@ -61,7 +61,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 **Derivados y Riesgo**
 
 -   Precios de opciones y griegos
--   Hedging strategies
+-   Estrategias de cobertura
 -   Análisis de riesgos avanzado
 
 </td>
@@ -163,7 +163,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## 📥 Descargar
 
-**vz. 0,11**| Windows • Mac OS • Linux
+**vz. 0,11**| Windows • MacOS • Linux
 
 [![Download](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge)](https://github.com/Fincept-Corporation/FinceptTerminal/releases)[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20App-blue?style=for-the-badge&logo=microsoft)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
 
@@ -172,8 +172,14 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 ```bash
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
 cd FinceptTerminal/fincept-terminal-desktop
-npm install && npm run tauri dev
+bun install && bun run tauri:dev
 ```
+
+**Requisitos:**
+
+-   [Bien](https://bun.sh)1.0+
+-   [Óxido](https://www.rust-lang.org/)(último establo)
+-   Dependencias específicas de la plataforma (ver[documentos/GETTING_STARTED.md](docs/GETTING_STARTED.md))
 
 * * *
 
@@ -189,7 +195,7 @@ Estamos construyendo juntos el futuro del análisis financiero.
 
 **Contribuir:**Nuevos conectores de datos • Agentes de IA • Módulos de análisis • Documentación • Traducciones
 
-**¿Nuevo en el proyecto?**Comience con nuestro[Tutorial para desarrolladores](docs/DEVELOPER_WALKTHROUGH.md)para obtener una guía completa del código base.
+**New to the project?**Comience con nuestro[Tutorial para desarrolladores](docs/DEVELOPER_WALKTHROUGH.md)para obtener una guía completa del código base.
 
 [Guía contribuyente](docs/CONTRIBUTING.md)•[Tutorial para desarrolladores](docs/DEVELOPER_WALKTHROUGH.md)•[Informar error](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[Solicitar función](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 

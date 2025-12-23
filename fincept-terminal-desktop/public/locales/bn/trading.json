@@ -1,0 +1,76 @@
+{
+    "title": "ট্রেডিং",
+    "header": {
+        "orders": "অর্ডার",
+        "positions": "পজিশন",
+        "history": "ইতিহাস",
+        "settings": "সেটিংস",
+        "terminal": "FINCEPT টার্মিনাল",
+        "selectBroker": "ব্রোকার নির্বাচন করুন",
+        "paper": "পেপার",
+        "live": "লাইভ",
+        "watchlist": "ওয়াচলিস্ট",
+        "orderbook": "অর্ডারবুক",
+        "trades": "ট্রেডস",
+        "stats": "পরিসংখ্যান",
+        "features": "ফিচার্স",
+        "crossExchange": "ক্রস-এক্সচেঞ্জ",
+        "chart": "চার্ট",
+        "depth": "গভীরতা",
+        "volume": "ভলিউম",
+        "aiAgents": "AI এজেন্টস",
+        "leaderboard": "লিডারবোর্ড",
+        "modelChat": "মডেল চ্যাট"
+    },
+    "orderTypes": {
+        "market": "মার্কেট",
+        "limit": "লিমিট",
+        "stop": "স্টপ",
+        "stopLimit": "স্টপ লিমিট",
+        "trailingStop": "ট্রেইলিং স্টপ"
+    },
+    "actions": {
+        "buy": "কিনুন",
+        "sell": "বিক্রি করুন",
+        "cancel": "বাতিল",
+        "modify": "সংশোধন",
+        "close": "বন্ধ করুন",
+        "closeAll": "সব বন্ধ করুন"
+    },
+    "form": {
+        "symbol": "প্রতীক",
+        "quantity": "পরিমাণ",
+        "price": "মূল্য",
+        "stopPrice": "স্টপ মূল্য",
+        "takeProfit": "প্রফিট নিন",
+        "stopLoss": "স্টপ লস",
+        "leverage": "লিভারেজ"
+    },
+    "position": {
+        "openPrice": "ওপেন প্রাইস",
+        "currentPrice": "বর্তমান মূল্য",
+        "pnl": "P&L",
+        "pnlPercent": "P&L %",
+        "margin": "মার্জিন",
+        "size": "আকার"
+    },
+    "order": {
+        "pending": "মুলতুবি",
+        "filled": "পূর্ণ",
+        "cancelled": "বাতিল",
+        "rejected": "প্রত্যাখ্যাত",
+        "partial": "আংশিক পূর্ণ"
+    },
+    "time": {
+        "gtc": "বাতিল না হওয়া পর্যন্ত বৈধ",
+        "day": "দিনের অর্ডার",
+        "ioc": "তাত্ক্ষণিক বা বাতিল",
+        "fok": "পূর্ণ বা বাতিল"
+    },
+    "messages": {
+        "orderPlaced": "অর্ডার সফল",
+        "orderFailed": "অর্ডার ব্যর্থ",
+        "confirmOrder": "এই অর্ডার নিশ্চিত করুন?",
+        "noPositions": "কোনো খোলা পজিশন নেই"
+    }
+}

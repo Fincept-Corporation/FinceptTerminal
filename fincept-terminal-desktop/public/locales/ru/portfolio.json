@@ -1,0 +1,63 @@
+{
+    "title": "МЕНЕДЖЕР ПОРТФЕЛЯ FINCEPT",
+    "header": {
+        "live": "ЖИВОЙ",
+        "updating": "ОБНОВЛЕНИЕ",
+        "newPortfolio": "НОВЫЙ ПОРТФЕЛЬ",
+        "refresh": "ОБНОВИТЬ",
+        "exportCsv": "ЭКСПОРТ CSV"
+    },
+    "summary": {
+        "totalValue": "ОБЩАЯ СТОИМОСТЬ",
+        "dayPnl": "П/У ЗА ДЕНЬ",
+        "totalPnl": "ОБЩИЙ П/У",
+        "positions": "ПОЗИЦИИ"
+    },
+    "views": {
+        "positions": "ПОЗИЦИИ",
+        "addAsset": "ДОБАВИТЬ АКТИВ",
+        "sellAsset": "ПРОДАТЬ АКТИВ",
+        "analytics": "АНАЛИТИКА",
+        "history": "ИСТОРИЯ",
+        "activeMgmt": "АКТИВНОЕ УПРАВЛЕНИЕ",
+        "performance": "ЭФФЕКТИВНОСТЬ",
+        "rebalance": "РЕБАЛАНСИРОВКА",
+        "reports": "ОТЧЕТЫ",
+        "alerts": "ОПОВЕЩЕНИЯ",
+        "sectors": "СЕКТОРЫ",
+        "help": "ПОМОЩЬ"
+    },
+    "sidebar": {
+        "portfolios": "ПОРТФЕЛИ",
+        "loading": "Загрузка портфелей...",
+        "noPortfolios": "Портфелей пока нет.",
+        "clickCreate": "Нажмите НОВЫЙ ПОРТФЕЛЬ для создания.",
+        "owner": "Владелец",
+        "currency": "Валюта"
+    },
+    "content": {
+        "selectOrCreate": "Выберите портфель или создайте новый для начала",
+        "loadingData": "Загрузка данных портфеля...",
+        "comingSoon": "вид скоро..."
+    },
+    "modals": {
+        "createNew": "СОЗДАТЬ НОВЫЙ ПОРТФЕЛЬ",
+        "portfolioName": "НАЗВАНИЕ ПОРТФЕЛЯ",
+        "owner": "ВЛАДЕЛЕЦ",
+        "currency": "ВАЛЮТА",
+        "cancel": "ОТМЕНА",
+        "create": "СОЗДАТЬ",
+        "addAssetTitle": "ДОБАВИТЬ АКТИВ В ПОРТФЕЛЬ",
+        "sellAssetTitle": "ПРОДАТЬ АКТИВ",
+        "symbol": "СИМВОЛ",
+        "quantity": "КОЛИЧЕСТВО",
+        "price": "ЦЕНА",
+        "add": "ДОБАВИТЬ",
+        "sell": "ПРОДАТЬ"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | Отслеживание в реальном времени с интеграцией yfinance",
+        "lastUpdated": "Последнее Обновление",
+        "connected": "ПОДКЛЮЧЕН"
+    }
+}

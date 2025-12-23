@@ -1,0 +1,66 @@
+{
+    "title": "海運",
+    "header": {
+        "overview": "概要",
+        "tracking": "追跡",
+        "ports": "港湾",
+        "routes": "航路"
+    },
+    "vessels": {
+        "type": "船種",
+        "cargo": "貨物船",
+        "tanker": "タンカー",
+        "container": "コンテナ船",
+        "bulk": "バラ積み船",
+        "passenger": "旅客船",
+        "status": "状況"
+    },
+    "tracking": {
+        "position": "位置",
+        "speed": "速度",
+        "heading": "針路",
+        "destination": "目的地",
+        "eta": "到着予定",
+        "lastUpdate": "最終更新"
+    },
+    "ports": {
+        "name": "港名",
+        "country": "国",
+        "arrivals": "入港",
+        "departures": "出港",
+        "congestion": "混雑",
+        "waitTime": "待ち時間"
+    },
+    "routes": {
+        "origin": "出発地",
+        "destination": "目的地",
+        "distance": "距離",
+        "transitTime": "航海時間",
+        "riskLevel": "リスクレベル"
+    },
+    "status": {
+        "anchored": "錨泊",
+        "underway": "航行中",
+        "moored": "係留",
+        "atPort": "着岸",
+        "drifting": "漂流"
+    },
+    "metrics": {
+        "dwt": "載貨重量トン",
+        "teu": "TEU",
+        "draft": "喫水",
+        "length": "全長",
+        "speed": "速度(ノット)"
+    },
+    "actions": {
+        "track": "船舶追跡",
+        "setAlert": "アラート設定",
+        "export": "エクスポート",
+        "filter": "フィルター"
+    },
+    "messages": {
+        "loading": "海運データ読み込み中...",
+        "noVessels": "船舶が見つかりません",
+        "updated": "最終更新"
+    }
+}

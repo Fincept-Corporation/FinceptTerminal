@@ -1,0 +1,58 @@
+{
+    "title": "লগইন অডিট ড্যাশবোর্ড",
+    "accessDenied": "অ্যাডমিন অ্যাক্সেস প্রয়োজন",
+    "metrics": {
+        "dauToday": "DAU আজ",
+        "mau": "MAU",
+        "successRate": "সাফল্যের হার",
+        "failed24h": "ব্যর্থ (২৪ঘ)",
+        "activeSessions": "সক্রিয় সেশন",
+        "uniqueIps": "অনন্য IP"
+    },
+    "views": {
+        "overview": "সংক্ষিপ্ত বিবরণ",
+        "eventLog": "ইভেন্ট লগ",
+        "alerts": "সতর্কতা",
+        "analytics": "বিশ্লেষণ"
+    },
+    "activity": {
+        "recentLoginActivity": "সাম্প্রতিক লগইন কার্যকলাপ",
+        "securityAlerts": "নিরাপত্তা সতর্কতা",
+        "noActiveAlerts": "কোনো সক্রিয় সতর্কতা নেই",
+        "loginEventLog": "লগইন ইভেন্ট লগ"
+    },
+    "table": {
+        "time": "সময়",
+        "event": "ইভেন্ট",
+        "user": "ব্যবহারকারী",
+        "ipAddress": "IP ঠিকানা",
+        "location": "অবস্থান",
+        "device": "ডিভাইস",
+        "details": "বিস্তারিত"
+    },
+    "alerts": {
+        "securityIncidents": "নিরাপত্তা সতর্কতা ও ঘটনা",
+        "noAlerts": "কোনো নিরাপত্তা সতর্কতা নেই",
+        "dismiss": "বাতিল",
+        "blockIp": "IP ব্লক",
+        "investigate": "তদন্ত"
+    },
+    "analytics": {
+        "loginsByCountry": "দেশ অনুযায়ী লগইন (৩০ দিন)",
+        "failureReasons": "ব্যর্থতার কারণ (২৪ঘ)",
+        "peakHours": "শীর্ষ সময় (UTC)",
+        "logins": "লগইন"
+    },
+    "controls": {
+        "autoRefresh": "স্বয়ংক্রিয় রিফ্রেশ",
+        "loading": "লোড হচ্ছে...",
+        "refresh": "রিফ্রেশ"
+    },
+    "status": {
+        "admin": "অ্যাডমিন",
+        "dau": "DAU",
+        "status": "স্থিতি",
+        "updating": "আপডেট হচ্ছে",
+        "ready": "প্রস্তুত"
+    }
+}

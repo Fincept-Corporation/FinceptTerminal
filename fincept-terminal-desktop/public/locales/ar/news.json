@@ -1,0 +1,77 @@
+{
+    "title": "أخبار محطة FINCEPT الاحترافية",
+    "header": {
+        "liveFeed": "بث مباشر",
+        "live": "مباشر",
+        "refresh": "تحديث",
+        "updating": "جاري التحديث...",
+        "alerts": "التنبيهات",
+        "sources": "المصادر",
+        "topics": "المواضيع",
+        "status": "الحالة",
+        "demoMode": "وضع تجريبي",
+        "articles": "المقالات",
+        "activeSources": "المصادر النشطة"
+    },
+    "categories": {
+        "all": "الكل",
+        "markets": "الأسواق",
+        "stocks": "الأسهم",
+        "forex": "العملات",
+        "crypto": "العملات الرقمية",
+        "commodities": "السلع",
+        "economy": "الاقتصاد",
+        "economic": "اقتصادي",
+        "politics": "السياسة",
+        "earnings": "الأرباح",
+        "tech": "التقنية",
+        "energy": "الطاقة",
+        "banking": "البنوك",
+        "geopolitics": "الجيوسياسية",
+        "flash": "عاجل",
+        "urgent": "طارئ"
+    },
+    "feedLabels": {
+        "primary": "موجز الأخبار الأساسي",
+        "secondary": "موجز الأخبار الثانوي",
+        "refresh": "تحديث"
+    },
+    "filters": {
+        "source": "المصدر",
+        "region": "المنطقة",
+        "timeframe": "الوقت"
+    },
+    "timeframes": {
+        "1h": "ساعة واحدة",
+        "24h": "24 ساعة",
+        "1w": "أسبوع",
+        "1m": "شهر"
+    },
+    "article": {
+        "readMore": "اقرأ المزيد",
+        "source": "المصدر",
+        "published": "نُشر",
+        "relatedStocks": "الأسهم ذات الصلة",
+        "sentiment": "المشاعر",
+        "impact": "التأثير"
+    },
+    "sentiment": {
+        "bullish": "صاعد",
+        "bearish": "هابط",
+        "neutral": "محايد",
+        "positive": "إيجابي",
+        "negative": "سلبي"
+    },
+    "autoRefresh": {
+        "title": "فترة التحديث التلقائي",
+        "minute": "دقيقة",
+        "minutes": "دقائق"
+    },
+    "messages": {
+        "loading": "جاري تحميل الأخبار...",
+        "loadingFeeds": "جاري تحميل الموجزات...",
+        "error": "خطأ في تحميل الأخبار",
+        "noNews": "لا توجد أخبار متاحة",
+        "breaking": "عاجل"
+    }
+}

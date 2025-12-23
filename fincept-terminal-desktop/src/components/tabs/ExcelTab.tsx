@@ -8,6 +8,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { readFile as tauriReadFile, writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
 import { excelService, ExcelFile, ExcelSnapshot } from '@/services/excelService';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 interface SheetData {
   name: string;
@@ -15,6 +16,7 @@ interface SheetData {
 }
 
 const ExcelTab: React.FC = () => {
+  const { t } = useTranslation('excel');
   const containerRef = useRef<HTMLDivElement>(null);
   const hotInstanceRef = useRef<Handsontable | null>(null);
   const [sheets, setSheets] = useState<SheetData[]>([
@@ -356,7 +358,7 @@ const ExcelTab: React.FC = () => {
           marginRight: '12px'
         }}>
           <FileSpreadsheet size={16} />
-          <span>EXCEL WORKBOOK</span>
+          <span>{t('title')}</span>
         </div>
 
         <button
@@ -377,7 +379,7 @@ const ExcelTab: React.FC = () => {
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#404040'}
         >
           <Upload size={14} />
-          Import
+          {t('toolbar.import')}
         </button>
 
         <button
@@ -398,7 +400,7 @@ const ExcelTab: React.FC = () => {
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#404040'}
         >
           <Download size={14} />
-          Export
+          {t('toolbar.export')}
         </button>
 
         <div style={{ width: '1px', height: '20px', backgroundColor: '#525252' }}></div>
@@ -421,7 +423,7 @@ const ExcelTab: React.FC = () => {
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#404040'}
         >
           <Save size={14} />
-          Save Sheet
+          {t('toolbar.save')}
         </button>
 
         <div style={{ width: '1px', height: '20px', backgroundColor: '#525252' }}></div>
@@ -444,7 +446,7 @@ const ExcelTab: React.FC = () => {
           onMouseLeave={(e) => { if (!showHistory) e.currentTarget.style.backgroundColor = '#404040' }}
         >
           <FolderOpen size={14} />
-          History
+          {t('toolbar.history')}
         </button>
 
         <button
@@ -466,7 +468,7 @@ const ExcelTab: React.FC = () => {
           title="Create Restore Point"
         >
           <Camera size={14} />
-          Snapshot
+          {t('toolbar.snapshot')}
         </button>
 
         <button
@@ -488,7 +490,7 @@ const ExcelTab: React.FC = () => {
           title="View and restore from saved snapshots - rollback to any previous state"
         >
           <RotateCcw size={14} />
-          Restore
+          {t('toolbar.revert')}
         </button>
 
         <div style={{ flex: 1 }}></div>

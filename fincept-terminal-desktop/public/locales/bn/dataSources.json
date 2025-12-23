@@ -1,0 +1,43 @@
+{
+    "title": "ডেটা উৎস",
+    "header": {
+        "available": "উপলব্ধ উৎস",
+        "connected": "সংযুক্ত",
+        "addNew": "উৎস যোগ করুন",
+        "refresh": "রিফ্রেশ"
+    },
+    "categories": {
+        "market": "বাজার ডেটা",
+        "economic": "অর্থনৈতিক ডেটা",
+        "alternative": "বিকল্প ডেটা",
+        "news": "সংবাদ ও অনুভূতি",
+        "fundamental": "মৌলিক ডেটা"
+    },
+    "status": {
+        "connected": "সংযুক্ত",
+        "disconnected": "সংযোগ বিচ্ছিন্ন",
+        "error": "ত্রুটি",
+        "pending": "মুলতুবি"
+    },
+    "actions": {
+        "connect": "সংযোগ",
+        "disconnect": "সংযোগ বিচ্ছিন্ন",
+        "configure": "কনফিগার",
+        "test": "সংযোগ পরীক্ষা",
+        "delete": "সরান"
+    },
+    "form": {
+        "apiKey": "API কী",
+        "endpoint": "Endpoint URL",
+        "username": "ব্যবহারকারীর নাম",
+        "password": "পাসওয়ার্ড",
+        "save": "সংরক্ষণ",
+        "cancel": "বাতিল"
+    },
+    "messages": {
+        "connectionSuccess": "ডেটা উৎসে সফলভাবে সংযুক্ত",
+        "connectionFailed": "ডেটা উৎসে সংযোগ ব্যর্থ",
+        "noSources": "কোনো ডেটা উৎস কনফিগার করা হয়নি",
+        "loading": "ডেটা উৎস লোড হচ্ছে..."
+    }
+}

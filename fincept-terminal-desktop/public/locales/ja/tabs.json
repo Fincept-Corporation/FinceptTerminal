@@ -1,24 +1,49 @@
 {
-  "markets": {
-    "title": "マーケット",
-    "subtitle": "リアルタイム市場データと分析"
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
   },
-  "news": {
-    "title": "金融ニュース",
-    "subtitle": "最新の市場ニュースとアップデート"
+  "navigation": {
+    "dashboard": "ダッシュボード",
+    "markets": "マーケット",
+    "news": "ニュース",
+    "portfolio": "ポートフォリオ",
+    "backtesting": "バックテスト",
+    "watchlist": "ウォッチリスト",
+    "research": "リサーチ",
+    "screener": "スクリーナー",
+    "trading": "トレーディング",
+    "chat": "AIチャット",
+    "agents": "エージェント",
+    "settings": "設定",
+    "profile": "プロフィール",
+    "forum": "フォーラム",
+    "help": "ヘルプ",
+    "logout": "ログアウト"
   },
-  "portfolio": {
-    "title": "ポートフォリオ",
-    "subtitle": "投資を追跡・分析"
+  "functionKeys": {
+    "f1": "ダッシ",
+    "f2": "マーケ",
+    "f3": "ニュス",
+    "f4": "ポート",
+    "f5": "バック",
+    "f6": "ウォチ",
+    "f7": "リサチ",
+    "f8": "スクリ",
+    "f9": "トレド",
+    "f10": "AI",
+    "f11": "フル",
+    "f12": "プロフ"
   },
-  "analytics": {
-    "title": "分析",
-    "subtitle": "高度な金融分析ツール"
+  "status": {
+    "connected": "接続済み",
+    "disconnected": "切断済み",
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "ready": "準備完了"
   },
-  "chat": {
-    "title": "AI アシスタント",
-    "subtitle": "AI 金融アシスタントとチャット",
-    "placeholder": "市場、トレード、金融について質問してください...",
-    "send": "送信"
+  "labels": {
+    "moreTabs": "ツールバーメニューにタブを追加",
+    "enterCommand": "コマンドを入力",
+    "search": "検索"
   }
 }

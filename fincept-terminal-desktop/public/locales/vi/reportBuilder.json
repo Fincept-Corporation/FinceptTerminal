@@ -1,0 +1,33 @@
+{
+    "title": "Trình tạo báo cáo",
+    "header": {
+        "templates": "Mẫu",
+        "reports": "Báo cáo",
+        "preview": "Xem trước"
+    },
+    "toolbar": {
+        "new": "Báo cáo mới",
+        "save": "Lưu",
+        "export": "Xuất",
+        "print": "In",
+        "share": "Chia sẻ"
+    },
+    "sections": {
+        "header": "Tiêu đề",
+        "summary": "Tóm tắt",
+        "charts": "Biểu đồ",
+        "tables": "Bảng",
+        "footer": "Chân trang"
+    },
+    "templates": {
+        "daily": "Báo cáo hàng ngày",
+        "weekly": "Báo cáo hàng tuần",
+        "monthly": "Báo cáo hàng tháng",
+        "custom": "Tùy chỉnh"
+    },
+    "messages": {
+        "saved": "Đã lưu báo cáo",
+        "exported": "Đã xuất báo cáo",
+        "generating": "Đang tạo báo cáo..."
+    }
+}

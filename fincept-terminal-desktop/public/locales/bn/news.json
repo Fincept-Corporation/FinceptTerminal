@@ -1,0 +1,77 @@
+{
+    "title": "FINCEPT টার্মিনাল পেশাদার সংবাদ",
+    "header": {
+        "liveFeed": "লাইভ ফিড",
+        "live": "লাইভ",
+        "refresh": "রিফ্রেশ",
+        "updating": "আপডেট হচ্ছে...",
+        "alerts": "সতর্কতা",
+        "sources": "উৎস",
+        "topics": "বিষয়",
+        "status": "স্থিতি",
+        "demoMode": "ডেমো মোড",
+        "articles": "নিবন্ধ",
+        "activeSources": "সক্রিয় উৎস"
+    },
+    "categories": {
+        "all": "সব",
+        "markets": "বাজার",
+        "stocks": "স্টক",
+        "forex": "ফরেক্স",
+        "crypto": "ক্রিপ্টো",
+        "commodities": "পণ্য",
+        "economy": "অর্থনীতি",
+        "economic": "অর্থ",
+        "politics": "রাজনীতি",
+        "earnings": "আয়",
+        "tech": "প্রযুক্তি",
+        "energy": "শক্তি",
+        "banking": "ব্যাংকিং",
+        "geopolitics": "ভূরাজনীতি",
+        "flash": "ফ্ল্যাশ",
+        "urgent": "জরুরি"
+    },
+    "feedLabels": {
+        "primary": "প্রাথমিক সংবাদ ফিড",
+        "secondary": "মাধ্যমিক সংবাদ ফিড",
+        "refresh": "রিফ্রেশ"
+    },
+    "filters": {
+        "source": "উৎস",
+        "region": "অঞ্চল",
+        "timeframe": "সময়"
+    },
+    "timeframes": {
+        "1h": "১ ঘণ্টা",
+        "24h": "২৪ ঘণ্টা",
+        "1w": "১ সপ্তাহ",
+        "1m": "১ মাস"
+    },
+    "article": {
+        "readMore": "আরও পড়ুন",
+        "source": "উৎস",
+        "published": "প্রকাশিত",
+        "relatedStocks": "সম্পর্কিত স্টক",
+        "sentiment": "অনুভূতি",
+        "impact": "প্রভাব"
+    },
+    "sentiment": {
+        "bullish": "বুলিশ",
+        "bearish": "বিয়ারিশ",
+        "neutral": "নিরপেক্ষ",
+        "positive": "ইতিবাচক",
+        "negative": "নেতিবাচক"
+    },
+    "autoRefresh": {
+        "title": "স্বয়ংক্রিয় রিফ্রেশ বিরতি",
+        "minute": "মিনিট",
+        "minutes": "মিনিট"
+    },
+    "messages": {
+        "loading": "সংবাদ লোড হচ্ছে...",
+        "loadingFeeds": "ফিড লোড হচ্ছে...",
+        "error": "সংবাদ লোড করতে ত্রুটি",
+        "noNews": "কোনো সংবাদ নেই",
+        "breaking": "ব্রেকিং"
+    }
+}

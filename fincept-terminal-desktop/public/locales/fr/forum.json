@@ -1,0 +1,61 @@
+{
+    "title": "FORUM FINCEPT",
+    "header": {
+        "trending": "TENDANCES",
+        "new": "NOUVEAU",
+        "following": "ABONNEMENTS",
+        "myPosts": "MES PUBLICATIONS"
+    },
+    "categories": {
+        "all": "Tous les sujets",
+        "stocks": "Actions",
+        "options": "Options",
+        "crypto": "Crypto",
+        "forex": "Forex",
+        "strategies": "Stratégies",
+        "general": "Général"
+    },
+    "post": {
+        "create": "Créer une publication",
+        "reply": "Répondre",
+        "edit": "Modifier",
+        "delete": "Supprimer",
+        "share": "Partager",
+        "report": "Signaler",
+        "save": "Enregistrer"
+    },
+    "form": {
+        "title": "Titre",
+        "content": "Contenu",
+        "tags": "Tags",
+        "category": "Catégorie",
+        "submit": "Publier",
+        "cancel": "Annuler",
+        "preview": "Aperçu"
+    },
+    "engagement": {
+        "likes": "J'aime",
+        "comments": "Commentaires",
+        "views": "Vues",
+        "shares": "Partages"
+    },
+    "user": {
+        "posts": "Publications",
+        "followers": "Abonnés",
+        "following": "Abonnements",
+        "reputation": "Réputation",
+        "joined": "Inscrit"
+    },
+    "sort": {
+        "newest": "Plus récent",
+        "popular": "Plus populaire",
+        "mostCommented": "Plus commenté",
+        "topRated": "Mieux noté"
+    },
+    "messages": {
+        "loading": "Chargement...",
+        "noPosts": "Aucune publication",
+        "postSuccess": "Publié avec succès",
+        "deleteConfirm": "Supprimer cette publication?"
+    }
+}

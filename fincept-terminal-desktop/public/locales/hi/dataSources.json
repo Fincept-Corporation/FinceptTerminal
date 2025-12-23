@@ -1,0 +1,43 @@
+{
+    "title": "डेटा स्रोत",
+    "header": {
+        "available": "उपलब्ध स्रोत",
+        "connected": "जुड़ा हुआ",
+        "addNew": "स्रोत जोड़ें",
+        "refresh": "रीफ्रेश"
+    },
+    "categories": {
+        "market": "बाजार डेटा",
+        "economic": "आर्थिक डेटा",
+        "alternative": "वैकल्पिक डेटा",
+        "news": "समाचार और भावना",
+        "fundamental": "मौलिक डेटा"
+    },
+    "status": {
+        "connected": "जुड़ा हुआ",
+        "disconnected": "डिस्कनेक्ट",
+        "error": "त्रुटि",
+        "pending": "लंबित"
+    },
+    "actions": {
+        "connect": "कनेक्ट",
+        "disconnect": "डिस्कनेक्ट",
+        "configure": "कॉन्फ़िगर",
+        "test": "कनेक्शन टेस्ट",
+        "delete": "हटाएं"
+    },
+    "form": {
+        "apiKey": "API कुंजी",
+        "endpoint": "Endpoint URL",
+        "username": "उपयोगकर्ता नाम",
+        "password": "पासवर्ड",
+        "save": "सहेजें",
+        "cancel": "रद्द करें"
+    },
+    "messages": {
+        "connectionSuccess": "डेटा स्रोत से सफलतापूर्वक जुड़ा",
+        "connectionFailed": "डेटा स्रोत से जुड़ने में विफल",
+        "noSources": "कोई डेटा स्रोत कॉन्फ़िगर नहीं किया गया",
+        "loading": "डेटा स्रोत लोड हो रहे हैं..."
+    }
+}

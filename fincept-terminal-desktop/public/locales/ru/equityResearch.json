@@ -1,0 +1,62 @@
+{
+    "title": "АНАЛИЗ АКЦИЙ",
+    "header": {
+        "overview": "ОБЗОР",
+        "financials": "ФИНАНСЫ",
+        "analysis": "АНАЛИЗ",
+        "ratings": "РЕЙТИНГИ"
+    },
+    "summary": {
+        "marketCap": "Капитализация",
+        "pe": "P/E",
+        "eps": "EPS",
+        "dividend": "Дивидендная доходность",
+        "beta": "Бета",
+        "52weekHigh": "Макс. 52нед",
+        "52weekLow": "Мин. 52нед",
+        "avgVolume": "Ср. объем"
+    },
+    "financials": {
+        "revenue": "Выручка",
+        "netIncome": "Чистая прибыль",
+        "grossMargin": "Валовая маржа",
+        "operatingMargin": "Операционная маржа",
+        "roe": "ROE",
+        "roa": "ROA",
+        "debtEquity": "Долг/Капитал",
+        "currentRatio": "Коэф. ликвидности"
+    },
+    "analysis": {
+        "buy": "Покупать",
+        "hold": "Держать",
+        "sell": "Продавать",
+        "strongBuy": "Активно покупать",
+        "strongSell": "Активно продавать",
+        "targetPrice": "Целевая цена",
+        "upside": "Потенциал роста",
+        "downside": "Риск падения"
+    },
+    "periods": {
+        "annual": "Годовой",
+        "quarterly": "Квартальный",
+        "ttm": "За 12 месяцев",
+        "ytd": "С начала года"
+    },
+    "sections": {
+        "incomeStatement": "Отчет о прибылях",
+        "balanceSheet": "Баланс",
+        "cashFlow": "Денежный поток",
+        "keyMetrics": "Ключевые показатели"
+    },
+    "actions": {
+        "compare": "Сравнить",
+        "export": "Экспорт",
+        "addToWatchlist": "В список",
+        "setAlert": "Создать оповещение"
+    },
+    "messages": {
+        "loading": "Загрузка...",
+        "noData": "Нет данных",
+        "updated": "Обновлено"
+    }
+}

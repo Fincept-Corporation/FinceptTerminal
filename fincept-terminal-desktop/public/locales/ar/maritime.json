@@ -1,0 +1,66 @@
+{
+    "title": "الملاحة البحرية",
+    "header": {
+        "overview": "نظرة عامة",
+        "tracking": "التتبع",
+        "ports": "الموانئ",
+        "routes": "المسارات"
+    },
+    "vessels": {
+        "type": "نوع السفينة",
+        "cargo": "شحن",
+        "tanker": "ناقلة",
+        "container": "حاويات",
+        "bulk": "سائبة",
+        "passenger": "ركاب",
+        "status": "الحالة"
+    },
+    "tracking": {
+        "position": "الموقع",
+        "speed": "السرعة",
+        "heading": "الاتجاه",
+        "destination": "الوجهة",
+        "eta": "الوصول المتوقع",
+        "lastUpdate": "آخر تحديث"
+    },
+    "ports": {
+        "name": "اسم الميناء",
+        "country": "البلد",
+        "arrivals": "الوصول",
+        "departures": "المغادرة",
+        "congestion": "الازدحام",
+        "waitTime": "وقت الانتظار"
+    },
+    "routes": {
+        "origin": "المصدر",
+        "destination": "الوجهة",
+        "distance": "المسافة",
+        "transitTime": "وقت العبور",
+        "riskLevel": "مستوى المخاطر"
+    },
+    "status": {
+        "anchored": "راسية",
+        "underway": "في الطريق",
+        "moored": "مرسية",
+        "atPort": "في الميناء",
+        "drifting": "منجرفة"
+    },
+    "metrics": {
+        "dwt": "الحمولة الساكنة",
+        "teu": "حاوية قياسية",
+        "draft": "الغاطس",
+        "length": "الطول",
+        "speed": "السرعة (عقدة)"
+    },
+    "actions": {
+        "track": "تتبع السفينة",
+        "setAlert": "تعيين تنبيه",
+        "export": "تصدير",
+        "filter": "تصفية"
+    },
+    "messages": {
+        "loading": "جاري تحميل البيانات...",
+        "noVessels": "لا توجد سفن",
+        "updated": "آخر تحديث"
+    }
+}

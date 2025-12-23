@@ -1,0 +1,63 @@
+{
+    "title": "FINCEPT পোর্টফোলিও ম্যানেজার",
+    "header": {
+        "live": "লাইভ",
+        "updating": "আপডেট হচ্ছে",
+        "newPortfolio": "নতুন পোর্টফোলিও",
+        "refresh": "রিফ্রেশ",
+        "exportCsv": "CSV এক্সপোর্ট"
+    },
+    "summary": {
+        "totalValue": "মোট মূল্য",
+        "dayPnl": "দৈনিক লাভ/ক্ষতি",
+        "totalPnl": "মোট লাভ/ক্ষতি",
+        "positions": "পজিশন"
+    },
+    "views": {
+        "positions": "পজিশন",
+        "addAsset": "সম্পদ যোগ করুন",
+        "sellAsset": "সম্পদ বিক্রি করুন",
+        "analytics": "বিশ্লেষণ",
+        "history": "ইতিহাস",
+        "activeMgmt": "সক্রিয় ব্যবস্থাপনা",
+        "performance": "কর্মক্ষমতা",
+        "rebalance": "পুনঃসমন্বয়",
+        "reports": "রিপোর্ট",
+        "alerts": "সতর্কতা",
+        "sectors": "সেক্টর",
+        "help": "সহায়তা"
+    },
+    "sidebar": {
+        "portfolios": "পোর্টফোলিও",
+        "loading": "পোর্টফোলিও লোড হচ্ছে...",
+        "noPortfolios": "এখনও কোনো পোর্টফোলিও নেই।",
+        "clickCreate": "তৈরি করতে নতুন পোর্টফোলিও-তে ক্লিক করুন।",
+        "owner": "মালিক",
+        "currency": "মুদ্রা"
+    },
+    "content": {
+        "selectOrCreate": "শুরু করতে একটি পোর্টফোলিও নির্বাচন করুন বা নতুন তৈরি করুন",
+        "loadingData": "পোর্টফোলিও ডেটা লোড হচ্ছে...",
+        "comingSoon": "শীঘ্রই আসছে..."
+    },
+    "modals": {
+        "createNew": "নতুন পোর্টফোলিও তৈরি করুন",
+        "portfolioName": "পোর্টফোলিও নাম",
+        "owner": "মালিক",
+        "currency": "মুদ্রা",
+        "cancel": "বাতিল",
+        "create": "তৈরি করুন",
+        "addAssetTitle": "পোর্টফোলিওতে সম্পদ যোগ করুন",
+        "sellAssetTitle": "সম্পদ বিক্রি করুন",
+        "symbol": "সিম্বল",
+        "quantity": "পরিমাণ",
+        "price": "মূল্য",
+        "add": "যোগ করুন",
+        "sell": "বিক্রি করুন"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | yfinance ইন্টিগ্রেশন সহ রিয়েল-টাইম ট্র্যাকিং",
+        "lastUpdated": "সর্বশেষ আপডেট",
+        "connected": "সংযুক্ত"
+    }
+}

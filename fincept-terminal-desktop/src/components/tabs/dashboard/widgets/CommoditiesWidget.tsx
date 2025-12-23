@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { marketDataService, QuoteData } from '../../../../services/marketDataService';
 
@@ -27,6 +28,7 @@ const COMMODITY_NAMES: { [key: string]: string } = {
 };
 
 export const CommoditiesWidget: React.FC<CommoditiesWidgetProps> = ({ id, onRemove }) => {
+  const { t } = useTranslation('dashboard');
   const [quotes, setQuotes] = useState<QuoteData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,7 +58,7 @@ export const CommoditiesWidget: React.FC<CommoditiesWidgetProps> = ({ id, onRemo
   return (
     <BaseWidget
       id={id}
-      title="COMMODITIES"
+      title={t('widgets.commodities')}
       onRemove={onRemove}
       onRefresh={loadQuotes}
       isLoading={loading}
@@ -74,10 +76,10 @@ export const CommoditiesWidget: React.FC<CommoditiesWidgetProps> = ({ id, onRemo
           padding: '4px 0',
           marginBottom: '4px'
         }}>
-          <div>COMMODITY</div>
-          <div style={{ textAlign: 'right' }}>PRICE</div>
-          <div style={{ textAlign: 'right' }}>CHG</div>
-          <div style={{ textAlign: 'right' }}>%CHG</div>
+          <div>{t('widgets.commodity')}</div>
+          <div style={{ textAlign: 'right' }}>{t('widgets.price')}</div>
+          <div style={{ textAlign: 'right' }}>{t('widgets.change')}</div>
+          <div style={{ textAlign: 'right' }}>{t('widgets.percentChange')}</div>
         </div>
         {quotes.map((quote, index) => (
           <div
@@ -111,7 +113,7 @@ export const CommoditiesWidget: React.FC<CommoditiesWidgetProps> = ({ id, onRemo
         ))}
         {quotes.length === 0 && !loading && !error && (
           <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', textAlign: 'center', padding: '12px' }}>
-            No commodities data available
+            {t('widgets.noCommoditiesData')}
           </div>
         )}
       </div>

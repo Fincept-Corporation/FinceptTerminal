@@ -1,0 +1,46 @@
+{
+    "title": "আলফা অ্যারেনা",
+    "header": {
+        "competition": "প্রতিযোগিতা",
+        "leaderboard": "লিডারবোর্ড",
+        "decisions": "সিদ্ধান্ত",
+        "cycles": "চক্র"
+    },
+    "buttons": {
+        "start": "শুরু",
+        "stop": "থামুন",
+        "refresh": "রিফ্রেশ",
+        "create": "প্রতিযোগিতা তৈরি"
+    },
+    "form": {
+        "competitionName": "প্রতিযোগিতার নাম",
+        "symbol": "সিম্বল",
+        "mode": "ট্রেডিং মোড",
+        "models": "মডেল নির্বাচন",
+        "apiKeys": "API কী"
+    },
+    "modes": {
+        "baseline": "বেসলাইন",
+        "monk": "মঙ্ক",
+        "situational": "পরিস্থিতিগত",
+        "maxLeverage": "সর্বোচ্চ লিভারেজ"
+    },
+    "leaderboard": {
+        "rank": "র‍্যাঙ্ক",
+        "model": "মডেল",
+        "pnl": "লাভ/ক্ষতি",
+        "trades": "ট্রেড",
+        "winRate": "জয়ের হার"
+    },
+    "status": {
+        "running": "চলছে",
+        "stopped": "থামানো হয়েছে",
+        "waiting": "অপেক্ষা করছে",
+        "error": "ত্রুটি"
+    },
+    "messages": {
+        "competitionStarted": "প্রতিযোগিতা শুরু হয়েছে",
+        "competitionStopped": "প্রতিযোগিতা বন্ধ হয়েছে",
+        "noCompetition": "কোনো সক্রিয় প্রতিযোগিতা নেই"
+    }
+}

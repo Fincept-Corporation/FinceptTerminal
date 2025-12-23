@@ -1,0 +1,77 @@
+{
+    "title": "FINCEPTターミナルプロフェッショナルニュース",
+    "header": {
+        "liveFeed": "ライブフィード",
+        "live": "ライブ",
+        "refresh": "更新",
+        "updating": "更新中...",
+        "alerts": "アラート",
+        "sources": "ソース",
+        "topics": "トピック",
+        "status": "ステータス",
+        "demoMode": "デモモード",
+        "articles": "記事",
+        "activeSources": "アクティブソース"
+    },
+    "categories": {
+        "all": "すべて",
+        "markets": "マーケット",
+        "stocks": "株式",
+        "forex": "為替",
+        "crypto": "暗号通貨",
+        "commodities": "コモディティ",
+        "economy": "経済",
+        "economic": "経済",
+        "politics": "政治",
+        "earnings": "決算",
+        "tech": "テック",
+        "energy": "エネルギー",
+        "banking": "銀行",
+        "geopolitics": "地政学",
+        "flash": "速報",
+        "urgent": "緊急"
+    },
+    "feedLabels": {
+        "primary": "プライマリニュースフィード",
+        "secondary": "セカンダリニュースフィード",
+        "refresh": "更新"
+    },
+    "filters": {
+        "source": "ソース",
+        "region": "地域",
+        "timeframe": "期間"
+    },
+    "timeframes": {
+        "1h": "1時間",
+        "24h": "24時間",
+        "1w": "1週間",
+        "1m": "1ヶ月"
+    },
+    "article": {
+        "readMore": "続きを読む",
+        "source": "ソース",
+        "published": "公開日",
+        "relatedStocks": "関連銘柄",
+        "sentiment": "センチメント",
+        "impact": "影響"
+    },
+    "sentiment": {
+        "bullish": "強気",
+        "bearish": "弱気",
+        "neutral": "中立",
+        "positive": "ポジティブ",
+        "negative": "ネガティブ"
+    },
+    "autoRefresh": {
+        "title": "自動更新間隔",
+        "minute": "分",
+        "minutes": "分"
+    },
+    "messages": {
+        "loading": "ニュースを読み込み中...",
+        "loadingFeeds": "フィードを読み込み中...",
+        "error": "ニュースの読み込みエラー",
+        "noNews": "ニュースがありません",
+        "breaking": "速報"
+    }
+}

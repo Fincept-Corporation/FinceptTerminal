@@ -1,0 +1,59 @@
+{
+    "title": "অর্থনীতি",
+    "header": {
+        "overview": "সারসংক্ষেপ",
+        "indicators": "সূচক",
+        "calendar": "ক্যালেন্ডার",
+        "countries": "দেশ"
+    },
+    "indicators": {
+        "gdp": "জিডিপি",
+        "inflation": "মুদ্রাস্ফীতি",
+        "unemployment": "বেকারত্ব",
+        "interestRate": "সুদের হার",
+        "tradeBalance": "বাণিজ্য ভারসাম্য",
+        "consumerConfidence": "ভোক্তা আস্থা",
+        "pmi": "পিএমআই",
+        "cpi": "সিপিআই"
+    },
+    "calendar": {
+        "date": "তারিখ",
+        "event": "ঘটনা",
+        "actual": "প্রকৃত",
+        "forecast": "পূর্বাভাস",
+        "previous": "পূর্ববর্তী",
+        "impact": "প্রভাব"
+    },
+    "impact": {
+        "high": "উচ্চ",
+        "medium": "মধ্যম",
+        "low": "নিম্ন"
+    },
+    "trends": {
+        "rising": "বৃদ্ধি",
+        "falling": "পতন",
+        "stable": "স্থিতিশীল",
+        "yoy": "বছর/বছর",
+        "mom": "মাস/মাস",
+        "qoq": "ত্রৈমাসিক"
+    },
+    "regions": {
+        "global": "বিশ্ব",
+        "northAmerica": "উত্তর আমেরিকা",
+        "europe": "ইউরোপ",
+        "asia": "এশিয়া প্রশান্ত",
+        "latam": "ল্যাটিন আমেরিকা",
+        "mena": "মেনা"
+    },
+    "actions": {
+        "compare": "দেশ তুলনা",
+        "export": "ডেটা রপ্তানি",
+        "subscribe": "সাবস্ক্রাইব",
+        "filter": "ফিল্টার ঘটনা"
+    },
+    "messages": {
+        "loading": "ডেটা লোড হচ্ছে...",
+        "noEvents": "কোনো ঘটনা নেই",
+        "updated": "আপডেট হয়েছে"
+    }
+}

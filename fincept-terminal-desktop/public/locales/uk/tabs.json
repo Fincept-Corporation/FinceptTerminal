@@ -1,24 +1,49 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "navigation": {
+    "dashboard": "Панель",
+    "markets": "Ринки",
+    "news": "Новини",
+    "portfolio": "Портфель",
+    "backtesting": "Бектестинг",
+    "watchlist": "Список спостереження",
+    "research": "Дослідження",
+    "screener": "Скринер",
+    "trading": "Трейдинг",
+    "chat": "AI Chat",
+    "agents": "Агенти",
+    "settings": "Налаштування",
+    "profile": "Профіль",
+    "forum": "Форум",
+    "help": "Допомога",
+    "logout": "Вихід"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "functionKeys": {
+    "f1": "ПАНЛ",
+    "f2": "РНКИ",
+    "f3": "НВНИ",
+    "f4": "ПРТФ",
+    "f5": "БКТС",
+    "f6": "СПСН",
+    "f7": "ДСЛД",
+    "f8": "СКРН",
+    "f9": "ТРДГ",
+    "f10": "AI",
+    "f11": "ПОВН",
+    "f12": "ПРФЛ"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
+  "status": {
+    "connected": "Підключено",
+    "disconnected": "Відключено",
+    "loading": "Завантаження...",
+    "error": "Помилка",
+    "ready": "Готово"
   },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Більше вкладок у меню панелі інструментів",
+    "enterCommand": "Введіть команду",
+    "search": "Пошук"
   }
 }

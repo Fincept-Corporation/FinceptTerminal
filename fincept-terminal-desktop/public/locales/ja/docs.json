@@ -1,0 +1,26 @@
+{
+  "title": "FINCEPTドキュメント端末",
+  "header": {
+    "sections": "セクション",
+    "topics": "トピック",
+    "ready": "準備完了"
+  },
+  "search": {
+    "placeholder": "ドキュメント検索...",
+    "clear": "クリア"
+  },
+  "navigation": "ナビゲーション",
+  "codeExample": "コード例",
+  "content": {
+    "title": "FINCEPTターミナルドキュメント",
+    "description": "ナビゲーションパネルからトピックを選択してガイドとAPIリファレンスを表示。",
+    "topicsAvailable": "利用可能なトピック",
+    "selectTopic": "開始するトピックを選択"
+  },
+  "status": {
+    "version": "Fincept Terminal Documentation v3.0 | 完全なAPIリファレンスとガイド",
+    "sections": "セクション",
+    "topics": "トピック",
+    "current": "現在"
+  }
+}

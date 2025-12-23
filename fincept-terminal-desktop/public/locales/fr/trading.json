@@ -1,0 +1,76 @@
+{
+    "title": "TRADING",
+    "header": {
+        "orders": "ORDRES",
+        "positions": "POSITIONS",
+        "history": "HISTORIQUE",
+        "settings": "PARAMÈTRES",
+        "terminal": "TERMINAL FINCEPT",
+        "selectBroker": "SÉLECTIONNER COURTIER",
+        "paper": "PAPIER",
+        "live": "RÉEL",
+        "watchlist": "LISTE DE SUIVI",
+        "orderbook": "CARNET D'ORDRES",
+        "trades": "TRANSACTIONS",
+        "stats": "STATISTIQUES",
+        "features": "FONCTIONNALITÉS",
+        "crossExchange": "MULTI-PLATEFORME",
+        "chart": "GRAPHIQUE",
+        "depth": "PROFONDEUR",
+        "volume": "VOLUME",
+        "aiAgents": "AGENTS IA",
+        "leaderboard": "CLASSEMENT",
+        "modelChat": "CHAT MODÈLE"
+    },
+    "orderTypes": {
+        "market": "Au marché",
+        "limit": "Limite",
+        "stop": "Stop",
+        "stopLimit": "Stop Limite",
+        "trailingStop": "Stop Suiveur"
+    },
+    "actions": {
+        "buy": "ACHETER",
+        "sell": "VENDRE",
+        "cancel": "Annuler",
+        "modify": "Modifier",
+        "close": "Fermer",
+        "closeAll": "Tout Fermer"
+    },
+    "form": {
+        "symbol": "Symbole",
+        "quantity": "Quantité",
+        "price": "Prix",
+        "stopPrice": "Prix Stop",
+        "takeProfit": "Objectif de Profit",
+        "stopLoss": "Stop Loss",
+        "leverage": "Effet de Levier"
+    },
+    "position": {
+        "openPrice": "Prix d'Ouverture",
+        "currentPrice": "Prix Actuel",
+        "pnl": "P&L",
+        "pnlPercent": "P&L %",
+        "margin": "Marge",
+        "size": "Taille"
+    },
+    "order": {
+        "pending": "En attente",
+        "filled": "Exécuté",
+        "cancelled": "Annulé",
+        "rejected": "Rejeté",
+        "partial": "Partiellement Exécuté"
+    },
+    "time": {
+        "gtc": "Valable Jusqu'à Annulation",
+        "day": "Ordre du Jour",
+        "ioc": "Immédiat ou Annuler",
+        "fok": "Tout ou Rien"
+    },
+    "messages": {
+        "orderPlaced": "Ordre exécuté avec succès",
+        "orderFailed": "Échec de l'ordre",
+        "confirmOrder": "Confirmer cet ordre ?",
+        "noPositions": "Aucune position ouverte"
+    }
+}

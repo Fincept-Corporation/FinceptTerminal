@@ -1,0 +1,58 @@
+{
+    "title": "PANEL DE AUDITORÍA DE INICIO DE SESIÓN",
+    "accessDenied": "Acceso de administrador requerido",
+    "metrics": {
+        "dauToday": "DAU Hoy",
+        "mau": "MAU",
+        "successRate": "Tasa de Éxito",
+        "failed24h": "Fallidos (24h)",
+        "activeSessions": "Sesiones Activas",
+        "uniqueIps": "IPs Únicas"
+    },
+    "views": {
+        "overview": "RESUMEN",
+        "eventLog": "REGISTRO DE EVENTOS",
+        "alerts": "ALERTAS",
+        "analytics": "ANALÍTICAS"
+    },
+    "activity": {
+        "recentLoginActivity": "ACTIVIDAD DE INICIO DE SESIÓN RECIENTE",
+        "securityAlerts": "ALERTAS DE SEGURIDAD",
+        "noActiveAlerts": "Sin alertas activas",
+        "loginEventLog": "REGISTRO DE EVENTOS DE INICIO"
+    },
+    "table": {
+        "time": "Hora",
+        "event": "Evento",
+        "user": "Usuario",
+        "ipAddress": "Dirección IP",
+        "location": "Ubicación",
+        "device": "Dispositivo",
+        "details": "Detalles"
+    },
+    "alerts": {
+        "securityIncidents": "ALERTAS E INCIDENTES DE SEGURIDAD",
+        "noAlerts": "Sin alertas de seguridad",
+        "dismiss": "DESCARTAR",
+        "blockIp": "BLOQUEAR IP",
+        "investigate": "INVESTIGAR"
+    },
+    "analytics": {
+        "loginsByCountry": "INICIOS POR PAÍS (30 días)",
+        "failureReasons": "RAZONES DE FALLO (24h)",
+        "peakHours": "HORAS PICO (UTC)",
+        "logins": "inicios"
+    },
+    "controls": {
+        "autoRefresh": "Auto-actualizar",
+        "loading": "CARGANDO...",
+        "refresh": "ACTUALIZAR"
+    },
+    "status": {
+        "admin": "Admin",
+        "dau": "DAU",
+        "status": "Estado",
+        "updating": "ACTUALIZANDO",
+        "ready": "LISTO"
+    }
+}

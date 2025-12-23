@@ -1,0 +1,58 @@
+{
+    "title": "ログイン監査ダッシュボード",
+    "accessDenied": "管理者アクセスが必要",
+    "metrics": {
+        "dauToday": "本日のDAU",
+        "mau": "MAU",
+        "successRate": "成功率",
+        "failed24h": "失敗(24時間)",
+        "activeSessions": "アクティブセッション",
+        "uniqueIps": "ユニークIP"
+    },
+    "views": {
+        "overview": "概要",
+        "eventLog": "イベントログ",
+        "alerts": "アラート",
+        "analytics": "分析"
+    },
+    "activity": {
+        "recentLoginActivity": "最近のログイン活動",
+        "securityAlerts": "セキュリティアラート",
+        "noActiveAlerts": "アクティブなアラートなし",
+        "loginEventLog": "ログインイベントログ"
+    },
+    "table": {
+        "time": "時間",
+        "event": "イベント",
+        "user": "ユーザー",
+        "ipAddress": "IPアドレス",
+        "location": "場所",
+        "device": "デバイス",
+        "details": "詳細"
+    },
+    "alerts": {
+        "securityIncidents": "セキュリティアラートとインシデント",
+        "noAlerts": "セキュリティアラートなし",
+        "dismiss": "却下",
+        "blockIp": "IPブロック",
+        "investigate": "調査"
+    },
+    "analytics": {
+        "loginsByCountry": "国別ログイン(30日)",
+        "failureReasons": "失敗理由(24時間)",
+        "peakHours": "ピーク時間(UTC)",
+        "logins": "ログイン"
+    },
+    "controls": {
+        "autoRefresh": "自動更新",
+        "loading": "読み込み中...",
+        "refresh": "更新"
+    },
+    "status": {
+        "admin": "管理者",
+        "dau": "DAU",
+        "status": "ステータス",
+        "updating": "更新中",
+        "ready": "準備完了"
+    }
+}

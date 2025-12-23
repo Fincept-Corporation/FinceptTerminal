@@ -1,0 +1,84 @@
+{
+    "title": "FRED-SERIEN-BROWSER",
+    "header": {
+        "title": "FRED-DATEN-EXPLORER",
+        "filters": "FILTER",
+        "results": "ERGEBNISSE",
+        "saved": "GESPEICHERTE BILDSCHIRME",
+        "presets": "VOREINSTELLUNGEN"
+    },
+    "apiKey": {
+        "required": "API-SCHLÜSSEL ERFORDERLICH",
+        "configure": "Konfigurieren Sie Ihren FRED-API-Schlüssel in Einstellungen → Anmeldedaten für den Zugriff auf Wirtschaftsdaten.",
+        "getKey": "Holen Sie sich einen kostenlosen API-Schlüssel auf",
+        "addToSettings": "Hinzufügen zu Einstellungen → Anmeldedaten → FRED_API_KEY",
+        "saveAndReload": "Speichern und diesen Tab neu laden",
+        "tip": "Stellen Sie sicher, dass Sie Ihren FRED-API-Schlüssel in Einstellungen → Anmeldedaten konfiguriert haben"
+    },
+    "form": {
+        "seriesIds": "SERIEN-IDs",
+        "startDate": "STARTDATUM",
+        "endDate": "ENDDATUM",
+        "quickAdd": "SCHNELL HINZUFÜGEN"
+    },
+    "buttons": {
+        "fetch": "ABRUFEN",
+        "loading": "LÄDT",
+        "browse": "SERIEN DURCHSUCHEN",
+        "done": "FERTIG"
+    },
+    "chart": {
+        "title": "ZEITREIHENDIAGRAMM",
+        "emptyState": "Geben Sie Serien-IDs ein und klicken Sie auf ABRUFEN zur Datenvisualisierung",
+        "trySuggestion": "Suchen Sie nach GDP, UNRATE oder CPIAUCSL",
+        "waiting": "Bitte warten Sie, während wir Daten von FRED abrufen...",
+        "errorFetching": "Fehler beim Abrufen der Daten"
+    },
+    "filters": {
+        "add": "Filter Hinzufügen",
+        "clear": "Alle Löschen",
+        "reset": "Zurücksetzen",
+        "apply": "Filter Anwenden"
+    },
+    "criteria": {
+        "marketCap": "Marktkapitalisierung",
+        "price": "Preis",
+        "volume": "Volumen",
+        "pe": "KGV",
+        "eps": "EPS",
+        "dividend": "Dividendenrendite",
+        "beta": "Beta",
+        "sector": "Sektor",
+        "industry": "Branche",
+        "country": "Land",
+        "exchange": "Börse"
+    },
+    "operators": {
+        "equals": "Gleich",
+        "greater": "Größer als",
+        "less": "Kleiner als",
+        "between": "Zwischen",
+        "contains": "Enthält"
+    },
+    "results": {
+        "symbol": "Symbol",
+        "name": "Name",
+        "price": "Preis",
+        "change": "Änderung",
+        "volume": "Volumen",
+        "marketCap": "Marktkapitalisierung",
+        "matches": "Ergebnisse gefunden"
+    },
+    "actions": {
+        "save": "Bildschirm Speichern",
+        "load": "Bildschirm Laden",
+        "export": "Ergebnisse Exportieren",
+        "addToWatchlist": "Zur Beobachtungsliste Hinzufügen"
+    },
+    "messages": {
+        "loading": "Aktien werden gefiltert...",
+        "noResults": "Keine Aktien entsprechen den Kriterien",
+        "saved": "Bildschirm erfolgreich gespeichert",
+        "applied": "Filter angewendet"
+    }
+}

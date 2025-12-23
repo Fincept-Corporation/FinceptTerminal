@@ -1,0 +1,26 @@
+{
+    "title": "محطة توثيق Fincept",
+    "header": {
+        "sections": "الأقسام",
+        "topics": "المواضيع",
+        "ready": "جاهز"
+    },
+    "search": {
+        "placeholder": "البحث في التوثيق...",
+        "clear": "مسح"
+    },
+    "navigation": "التنقل",
+    "codeExample": "مثال الكود",
+    "content": {
+        "title": "توثيق محطة FINCEPT",
+        "description": "اختر موضوعاً من لوحة التنقل لعرض الأدلة الشاملة ومرجع API.",
+        "topicsAvailable": "مواضيع متاحة",
+        "selectTopic": "اختر موضوعاً للبدء"
+    },
+    "status": {
+        "version": "Fincept Terminal Documentation v3.0 | مرجع API كامل وأدلة",
+        "sections": "الأقسام",
+        "topics": "المواضيع",
+        "current": "الحالي"
+    }
+}

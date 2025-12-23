@@ -1,24 +1,49 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "navigation": {
+    "dashboard": "Pulpit",
+    "markets": "Rynki",
+    "news": "Wiadomości",
+    "portfolio": "Portfel",
+    "backtesting": "Backtesting",
+    "watchlist": "Lista obserwowanych",
+    "research": "Badania",
+    "screener": "Skaner",
+    "trading": "Trading",
+    "chat": "AI Chat",
+    "agents": "Agenci",
+    "settings": "Ustawienia",
+    "profile": "Profil",
+    "forum": "Forum",
+    "help": "Pomoc",
+    "logout": "Wyloguj"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "functionKeys": {
+    "f1": "PULT",
+    "f2": "RNKI",
+    "f3": "NEWS",
+    "f4": "PORT",
+    "f5": "BKTS",
+    "f6": "OBSW",
+    "f7": "BAD",
+    "f8": "SKAN",
+    "f9": "TRDG",
+    "f10": "AI",
+    "f11": "FULL",
+    "f12": "PROF"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
+  "status": {
+    "connected": "Połączono",
+    "disconnected": "Rozłączono",
+    "loading": "Ładowanie...",
+    "error": "Błąd",
+    "ready": "Gotowy"
   },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Więcej kart w menu paska narzędzi",
+    "enterCommand": "Wprowadź polecenie",
+    "search": "Szukaj"
   }
 }

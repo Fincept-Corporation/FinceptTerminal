@@ -1,0 +1,56 @@
+﻿{
+    "title": "エージェント設定",
+    "header": {
+        "agents": "エージェント",
+        "active": "アクティブ",
+        "total": "合計"
+    },
+    "toolbar": {
+        "refresh": "更新",
+        "save": "保存",
+        "saveConfig": "設定を保存",
+        "run": "実行",
+        "test": "テスト",
+        "testAgent": "エージェントをテスト"
+    },
+    "sidebar": {
+        "availableAgents": "利用可能なエージェント",
+        "selectAgent": "設定するエージェントを選択"
+    },
+    "config": {
+        "name": "名前",
+        "role": "役割",
+        "goal": "目標",
+        "description": "説明",
+        "llmConfig": "LLM設定",
+        "provider": "プロバイダー",
+        "model": "モデル",
+        "temperature": "温度",
+        "maxTokens": "最大トークン",
+        "tools": "ツール",
+        "memory": "メモリを有効化",
+        "agenticMemory": "エージェンティックメモリを有効化",
+        "instructions": "指示",
+        "testQuery": "テストクエリ",
+        "testQueryPlaceholder": "テストクエリをここに入力..."
+    },
+    "llmProviders": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "ollama": "Ollama",
+        "gemini": "Gemini"
+    },
+    "status": {
+        "ready": "準備完了",
+        "running": "実行中",
+        "error": "エラー",
+        "configured": "設定済み"
+    },
+    "messages": {
+        "configSaved": "設定を保存しました",
+        "agentTested": "エージェントのテストに成功",
+        "testFailed": "テスト失敗",
+        "loadingAgents": "エージェントを読み込み中...",
+        "noAgents": "エージェントが見つかりません"
+    }
+}

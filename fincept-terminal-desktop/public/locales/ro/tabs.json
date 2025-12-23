@@ -1,24 +1,49 @@
 {
-  "markets": {
-    "title": "Markets",
-    "subtitle": "Real-time market data and analysis"
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
   },
-  "news": {
-    "title": "Financial News",
-    "subtitle": "Latest market news and updates"
+  "navigation": {
+    "dashboard": "Tablou de bord",
+    "markets": "Piețe",
+    "news": "Știri",
+    "portfolio": "Portofoliu",
+    "backtesting": "Backtesting",
+    "watchlist": "Listă urmărire",
+    "research": "Cercetare",
+    "screener": "Screener",
+    "trading": "Trading",
+    "chat": "AI Chat",
+    "agents": "Agenți",
+    "settings": "Setări",
+    "profile": "Profil",
+    "forum": "Forum",
+    "help": "Ajutor",
+    "logout": "Deconectare"
   },
-  "portfolio": {
-    "title": "Portfolio",
-    "subtitle": "Track and analyze your investments"
+  "functionKeys": {
+    "f1": "TABL",
+    "f2": "PIET",
+    "f3": "STIR",
+    "f4": "PORT",
+    "f5": "BKTS",
+    "f6": "WACH",
+    "f7": "CERC",
+    "f8": "SCRN",
+    "f9": "TRDG",
+    "f10": "AI",
+    "f11": "FULL",
+    "f12": "PROF"
   },
-  "analytics": {
-    "title": "Analytics",
-    "subtitle": "Advanced financial analytics tools"
+  "status": {
+    "connected": "Conectat",
+    "disconnected": "Deconectat",
+    "loading": "Se încarcă...",
+    "error": "Eroare",
+    "ready": "Gata"
   },
-  "chat": {
-    "title": "AI Assistant",
-    "subtitle": "Chat with your AI financial assistant",
-    "placeholder": "Ask me anything about markets, trading, or finance...",
-    "send": "Send"
+  "labels": {
+    "moreTabs": "Mai multe file în meniurile toolbar",
+    "enterCommand": "Introduceți comanda",
+    "search": "Căutare"
   }
 }

@@ -1,0 +1,48 @@
+{
+    "title": "बाजार",
+    "marketTerminalLive": "बाजार टर्मिनल - लाइव डेटा",
+    "globalMarkets": "वैश्विक बाजार",
+    "regionalMarkets": "क्षेत्रीय बाजार",
+    "regionalMarketsLive": "क्षेत्रीय बाजार - लाइव डेटा",
+    "liveData": "लाइव डेटा",
+    "symbol": "सिम्बल",
+    "name": "नाम",
+    "price": "मूल्य",
+    "change": "बदलाव",
+    "percentChange": "%बदलाव",
+    "high": "उच्च",
+    "low": "निम्न",
+    "loading": "लोड हो रहा है...",
+    "noData": "कोई डेटा नहीं",
+    "refresh": "रीफ्रेश",
+    "auto": "ऑटो",
+    "on": "चालू",
+    "off": "बंद",
+    "lastUpdate": "अंतिम अपडेट",
+    "updating": "अपडेट हो रहा है",
+    "live": "लाइव",
+    "connected": "कनेक्टेड",
+    "cache": "कैश",
+    "enabled": "सक्षम",
+    "dataProviderInfo": "Yahoo Finance API से डेटा | रियल-टाइम अपडेट",
+    "header": {
+        "live": "लाइव",
+        "updating": "अपडेट हो रहा है",
+        "refresh": "रीफ्रेश"
+    },
+    "tabs": {
+        "overview": "अवलोकन",
+        "stocks": "स्टॉक",
+        "indices": "सूचकांक",
+        "forex": "फ़ॉरेक्स",
+        "crypto": "क्रिप्टो",
+        "commodities": "कमोडिटीज़",
+        "bonds": "बॉन्ड"
+    },
+    "status": {
+        "marketOpen": "बाजार खुला",
+        "marketClosed": "बाजार बंद",
+        "preMarket": "प्री-मार्केट",
+        "afterHours": "आफ्टर आवर्स"
+    }
+}

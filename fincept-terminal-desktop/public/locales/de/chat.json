@@ -1,0 +1,46 @@
+{
+    "title": "KI-CHAT-ASSISTENT",
+    "header": {
+        "newChat": "NEUER CHAT",
+        "history": "VERLAUF",
+        "settings": "EINSTELLUNGEN"
+    },
+    "input": {
+        "placeholder": "Fragen zu Aktien, Märkten, Analysen...",
+        "send": "Senden",
+        "voice": "Sprache"
+    },
+    "messages": {
+        "thinking": "Denke nach...",
+        "typing": "KI tippt...",
+        "error": "Fehler bei der Verarbeitung",
+        "welcome": "Wie kann ich Ihnen bei der Finanzanalyse helfen?"
+    },
+    "suggestions": {
+        "title": "Vorgeschlagene Fragen",
+        "stockAnalysis": "Aktienperformance analysieren",
+        "marketTrends": "Aktuelle Markttrends?",
+        "portfolioAdvice": "Portfolio-Optimierung"
+    },
+    "history": {
+        "title": "Chat-Verlauf",
+        "today": "Heute",
+        "yesterday": "Gestern",
+        "thisWeek": "Diese Woche",
+        "older": "Älter",
+        "clear": "Verlauf löschen"
+    },
+    "actions": {
+        "copy": "Kopieren",
+        "regenerate": "Neu generieren",
+        "like": "Gefällt mir",
+        "dislike": "Gefällt nicht",
+        "share": "Teilen"
+    },
+    "models": {
+        "select": "Modell wählen",
+        "gpt4": "GPT-4",
+        "claude": "Claude",
+        "gemini": "Gemini"
+    }
+}

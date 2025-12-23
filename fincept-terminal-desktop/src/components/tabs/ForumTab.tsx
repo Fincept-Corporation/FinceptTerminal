@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ForumApiService, ForumPost as APIForumPost, ForumCategory, ForumStats, ForumComment as APIForumComment } from '../../services/forumApi';
 import { sqliteService } from '../../services/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 interface ForumPost {
   id: string;
@@ -42,6 +43,7 @@ interface ForumUser {
 
 const ForumTab: React.FC = () => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const { t } = useTranslation('forum');
   const { session } = useAuth();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeCategory, setActiveCategory] = useState('ALL');
@@ -675,655 +677,655 @@ const ForumTab: React.FC = () => {
   const CreatePostModal = React.useMemo(() => {
     if (!showCreatePost) return null;
     return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.85)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `2px solid ${BLOOMBERG_ORANGE}`,
-        padding: '16px',
-        width: '600px',
-        maxHeight: '80vh',
-        overflow: 'auto'
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
       }}>
-        <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
-          CREATE NEW POST
-        </div>
-        <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
-
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>
-            Title: <span style={{ color: newPostTitle.length < 5 ? BLOOMBERG_RED : BLOOMBERG_GREEN }}>
-              ({newPostTitle.length}/500 chars - min 5)
-            </span>
+        <div style={{
+          backgroundColor: BLOOMBERG_PANEL_BG,
+          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          padding: '16px',
+          width: '600px',
+          maxHeight: '80vh',
+          overflow: 'auto'
+        }}>
+          <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
+            CREATE NEW POST
           </div>
-          <input
-            type="text"
-            value={newPostTitle}
-            onChange={(e) => setNewPostTitle(e.target.value)}
-            maxLength={500}
-            style={{
-              width: '100%',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${newPostTitle.length > 0 && newPostTitle.length < 5 ? BLOOMBERG_RED : BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
-              padding: '6px',
-              fontSize: '12px',
-              fontFamily: 'Consolas, monospace'
-            }}
-            placeholder="Enter post title (minimum 5 characters)..."
-          />
-        </div>
+          <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>
-            Content: <span style={{ color: newPostContent.length < 10 ? BLOOMBERG_RED : BLOOMBERG_GREEN }}>
-              ({newPostContent.length}/10000 chars - min 10)
-            </span>
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>
+              Title: <span style={{ color: newPostTitle.length < 5 ? BLOOMBERG_RED : BLOOMBERG_GREEN }}>
+                ({newPostTitle.length}/500 chars - min 5)
+              </span>
+            </div>
+            <input
+              type="text"
+              value={newPostTitle}
+              onChange={(e) => setNewPostTitle(e.target.value)}
+              maxLength={500}
+              style={{
+                width: '100%',
+                backgroundColor: BLOOMBERG_DARK_BG,
+                border: `1px solid ${newPostTitle.length > 0 && newPostTitle.length < 5 ? BLOOMBERG_RED : BLOOMBERG_GRAY}`,
+                color: BLOOMBERG_WHITE,
+                padding: '6px',
+                fontSize: '12px',
+                fontFamily: 'Consolas, monospace'
+              }}
+              placeholder="Enter post title (minimum 5 characters)..."
+            />
           </div>
-          <textarea
-            value={newPostContent}
-            onChange={(e) => setNewPostContent(e.target.value)}
-            maxLength={10000}
-            rows={10}
-            style={{
-              width: '100%',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${newPostContent.length > 0 && newPostContent.length < 10 ? BLOOMBERG_RED : BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
-              padding: '6px',
-              fontSize: '11px',
-              fontFamily: 'Consolas, monospace',
-              resize: 'vertical'
-            }}
-            placeholder="Enter post content (minimum 10 characters)... Use #tags for topics"
-          />
-        </div>
 
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button
-            onClick={() => setShowCreatePost(false)}
-            style={{
-              backgroundColor: BLOOMBERG_GRAY,
-              color: BLOOMBERG_DARK_BG,
-              border: 'none',
-              padding: '6px 16px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            CANCEL
-          </button>
-          <button
-            onClick={handleCreatePost}
-            style={{
-              backgroundColor: BLOOMBERG_ORANGE,
-              color: BLOOMBERG_DARK_BG,
-              border: 'none',
-              padding: '6px 16px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            CREATE POST
-          </button>
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>
+              Content: <span style={{ color: newPostContent.length < 10 ? BLOOMBERG_RED : BLOOMBERG_GREEN }}>
+                ({newPostContent.length}/10000 chars - min 10)
+              </span>
+            </div>
+            <textarea
+              value={newPostContent}
+              onChange={(e) => setNewPostContent(e.target.value)}
+              maxLength={10000}
+              rows={10}
+              style={{
+                width: '100%',
+                backgroundColor: BLOOMBERG_DARK_BG,
+                border: `1px solid ${newPostContent.length > 0 && newPostContent.length < 10 ? BLOOMBERG_RED : BLOOMBERG_GRAY}`,
+                color: BLOOMBERG_WHITE,
+                padding: '6px',
+                fontSize: '11px',
+                fontFamily: 'Consolas, monospace',
+                resize: 'vertical'
+              }}
+              placeholder="Enter post content (minimum 10 characters)... Use #tags for topics"
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setShowCreatePost(false)}
+              style={{
+                backgroundColor: BLOOMBERG_GRAY,
+                color: BLOOMBERG_DARK_BG,
+                border: 'none',
+                padding: '6px 16px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              CANCEL
+            </button>
+            <button
+              onClick={handleCreatePost}
+              style={{
+                backgroundColor: BLOOMBERG_ORANGE,
+                color: BLOOMBERG_DARK_BG,
+                border: 'none',
+                padding: '6px 16px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              CREATE POST
+            </button>
+          </div>
         </div>
       </div>
-    </div>
     );
   }, [showCreatePost, newPostTitle, newPostContent, handleCreatePost, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_DARK_BG, BLOOMBERG_WHITE, BLOOMBERG_RED, BLOOMBERG_GREEN, BLOOMBERG_PANEL_BG]);
 
   const PostDetailModal = React.useMemo(() => {
     if (!showPostDetail || !selectedPost) return null;
     return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.85)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `2px solid ${BLOOMBERG_ORANGE}`,
-        padding: '16px',
-        width: '800px',
-        maxHeight: '80vh',
-        overflow: 'auto'
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
       }}>
-        {selectedPost && (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold' }}>
-                POST DETAILS
-              </div>
-              <button
-                onClick={() => setShowPostDetail(false)}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
-                  color: BLOOMBERG_WHITE,
-                  padding: '2px 8px',
-                  fontSize: '10px',
-                  cursor: 'pointer'
-                }}
-              >
-                CLOSE [X]
-              </button>
-            </div>
-            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
-
-            {/* Post content */}
-            <div style={{ marginBottom: '16px' }}>
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '8px', fontSize: '10px' }}>
-                <span style={{ color: BLOOMBERG_CYAN }}>@{selectedPost.author}</span>
-                <span style={{ color: BLOOMBERG_GRAY }}>•</span>
-                <span style={{ color: BLOOMBERG_BLUE }}>[{selectedPost.category}]</span>
-                <span style={{ color: getSentimentColor(selectedPost.sentiment) }}>{selectedPost.sentiment}</span>
-              </div>
-
-              <div style={{ color: BLOOMBERG_WHITE, fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>
-                {selectedPost.title}
-              </div>
-
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '11px', lineHeight: '1.5', marginBottom: '8px', whiteSpace: 'pre-wrap' }}>
-                {selectedPost.content}
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px', fontSize: '10px', marginBottom: '8px' }}>
+        <div style={{
+          backgroundColor: BLOOMBERG_PANEL_BG,
+          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          padding: '16px',
+          width: '800px',
+          maxHeight: '80vh',
+          overflow: 'auto'
+        }}>
+          {selectedPost && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold' }}>
+                  POST DETAILS
+                </div>
                 <button
-                  onClick={() => handleVotePost(selectedPost.id, 'up')}
+                  onClick={() => setShowPostDetail(false)}
                   style={{
                     backgroundColor: 'transparent',
-                    border: `1px solid ${BLOOMBERG_GREEN}`,
-                    color: BLOOMBERG_GREEN,
-                    padding: '4px 12px',
-                    fontSize: '10px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ▲ UPVOTE ({selectedPost.likes})
-                </button>
-                <button
-                  onClick={() => handleVotePost(selectedPost.id, 'down')}
-                  style={{
-                    backgroundColor: 'transparent',
-                    border: `1px solid ${BLOOMBERG_RED}`,
-                    color: BLOOMBERG_RED,
-                    padding: '4px 12px',
-                    fontSize: '10px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  ▼ DOWNVOTE ({selectedPost.dislikes})
-                </button>
-              </div>
-            </div>
-
-            <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, paddingTop: '12px', marginBottom: '12px' }}>
-              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
-                COMMENTS ({postComments.length})
-              </div>
-
-              {/* Add comment form */}
-              <div style={{ marginBottom: '12px' }}>
-                <textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  maxLength={2000}
-                  rows={3}
-                  style={{
-                    width: '100%',
-                    backgroundColor: BLOOMBERG_DARK_BG,
                     border: `1px solid ${BLOOMBERG_GRAY}`,
                     color: BLOOMBERG_WHITE,
-                    padding: '6px',
-                    fontSize: '11px',
-                    fontFamily: 'Consolas, monospace',
-                    marginBottom: '4px'
-                  }}
-                  placeholder="Add a comment..."
-                />
-                <button
-                  onClick={handleAddComment}
-                  style={{
-                    backgroundColor: BLOOMBERG_ORANGE,
-                    color: BLOOMBERG_DARK_BG,
-                    border: 'none',
-                    padding: '4px 12px',
+                    padding: '2px 8px',
                     fontSize: '10px',
-                    fontWeight: 'bold',
                     cursor: 'pointer'
                   }}
                 >
-                  POST COMMENT
+                  CLOSE [X]
                 </button>
               </div>
+              <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
 
-              {/* Comments list */}
-              {postComments.map((comment, index) => (
-                <div key={comment.id} style={{
-                  backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                  padding: '8px',
-                  marginBottom: '6px',
-                  borderLeft: `2px solid ${BLOOMBERG_BLUE}`
-                }}>
-                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '4px', fontSize: '9px' }}>
-                    <span style={{ color: BLOOMBERG_CYAN }}>@{comment.author}</span>
-                    <span style={{ color: BLOOMBERG_GRAY }}>•</span>
-                    <span style={{ color: BLOOMBERG_GRAY }}>{comment.time}</span>
-                  </div>
-
-                  <div style={{ color: BLOOMBERG_WHITE, fontSize: '10px', marginBottom: '4px', whiteSpace: 'pre-wrap' }}>
-                    {comment.content}
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', fontSize: '9px' }}>
-                    <button
-                      onClick={() => handleVoteComment(comment.id, 'up')}
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        color: BLOOMBERG_GREEN,
-                        cursor: 'pointer',
-                        fontSize: '9px'
-                      }}
-                    >
-                      ▲ {comment.likes}
-                    </button>
-                    <button
-                      onClick={() => handleVoteComment(comment.id, 'down')}
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        color: BLOOMBERG_RED,
-                        cursor: 'pointer',
-                        fontSize: '9px'
-                      }}
-                    >
-                      ▼ {comment.dislikes}
-                    </button>
-                  </div>
+              {/* Post content */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '8px', fontSize: '10px' }}>
+                  <span style={{ color: BLOOMBERG_CYAN }}>@{selectedPost.author}</span>
+                  <span style={{ color: BLOOMBERG_GRAY }}>•</span>
+                  <span style={{ color: BLOOMBERG_BLUE }}>[{selectedPost.category}]</span>
+                  <span style={{ color: getSentimentColor(selectedPost.sentiment) }}>{selectedPost.sentiment}</span>
                 </div>
-              ))}
-            </div>
-          </>
-        )}
+
+                <div style={{ color: BLOOMBERG_WHITE, fontSize: '13px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  {selectedPost.title}
+                </div>
+
+                <div style={{ color: BLOOMBERG_GRAY, fontSize: '11px', lineHeight: '1.5', marginBottom: '8px', whiteSpace: 'pre-wrap' }}>
+                  {selectedPost.content}
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', fontSize: '10px', marginBottom: '8px' }}>
+                  <button
+                    onClick={() => handleVotePost(selectedPost.id, 'up')}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: `1px solid ${BLOOMBERG_GREEN}`,
+                      color: BLOOMBERG_GREEN,
+                      padding: '4px 12px',
+                      fontSize: '10px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ▲ UPVOTE ({selectedPost.likes})
+                  </button>
+                  <button
+                    onClick={() => handleVotePost(selectedPost.id, 'down')}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: `1px solid ${BLOOMBERG_RED}`,
+                      color: BLOOMBERG_RED,
+                      padding: '4px 12px',
+                      fontSize: '10px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ▼ DOWNVOTE ({selectedPost.dislikes})
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ borderTop: `1px solid ${BLOOMBERG_GRAY}`, paddingTop: '12px', marginBottom: '12px' }}>
+                <div style={{ color: BLOOMBERG_YELLOW, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  COMMENTS ({postComments.length})
+                </div>
+
+                {/* Add comment form */}
+                <div style={{ marginBottom: '12px' }}>
+                  <textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    maxLength={2000}
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      backgroundColor: BLOOMBERG_DARK_BG,
+                      border: `1px solid ${BLOOMBERG_GRAY}`,
+                      color: BLOOMBERG_WHITE,
+                      padding: '6px',
+                      fontSize: '11px',
+                      fontFamily: 'Consolas, monospace',
+                      marginBottom: '4px'
+                    }}
+                    placeholder="Add a comment..."
+                  />
+                  <button
+                    onClick={handleAddComment}
+                    style={{
+                      backgroundColor: BLOOMBERG_ORANGE,
+                      color: BLOOMBERG_DARK_BG,
+                      border: 'none',
+                      padding: '4px 12px',
+                      fontSize: '10px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    POST COMMENT
+                  </button>
+                </div>
+
+                {/* Comments list */}
+                {postComments.map((comment, index) => (
+                  <div key={comment.id} style={{
+                    backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                    padding: '8px',
+                    marginBottom: '6px',
+                    borderLeft: `2px solid ${BLOOMBERG_BLUE}`
+                  }}>
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '4px', fontSize: '9px' }}>
+                      <span style={{ color: BLOOMBERG_CYAN }}>@{comment.author}</span>
+                      <span style={{ color: BLOOMBERG_GRAY }}>•</span>
+                      <span style={{ color: BLOOMBERG_GRAY }}>{comment.time}</span>
+                    </div>
+
+                    <div style={{ color: BLOOMBERG_WHITE, fontSize: '10px', marginBottom: '4px', whiteSpace: 'pre-wrap' }}>
+                      {comment.content}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', fontSize: '9px' }}>
+                      <button
+                        onClick={() => handleVoteComment(comment.id, 'up')}
+                        style={{
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          color: BLOOMBERG_GREEN,
+                          cursor: 'pointer',
+                          fontSize: '9px'
+                        }}
+                      >
+                        ▲ {comment.likes}
+                      </button>
+                      <button
+                        onClick={() => handleVoteComment(comment.id, 'down')}
+                        style={{
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          color: BLOOMBERG_RED,
+                          cursor: 'pointer',
+                          fontSize: '9px'
+                        }}
+                      >
+                        ▼ {comment.dislikes}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </div>
     );
   }, [showPostDetail, selectedPost, postComments, newComment, handleAddComment, handleVotePost, handleVoteComment, getSentimentColor, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_WHITE, BLOOMBERG_DARK_BG, BLOOMBERG_PANEL_BG, BLOOMBERG_CYAN, BLOOMBERG_BLUE, BLOOMBERG_GREEN, BLOOMBERG_RED, BLOOMBERG_YELLOW]);
 
   const SearchModal = React.useMemo(() => {
     if (!showSearch) return null;
     return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.85)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `2px solid ${BLOOMBERG_ORANGE}`,
-        padding: '16px',
-        width: '700px',
-        maxHeight: '80vh',
-        overflow: 'auto'
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
       }}>
-        <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
-          SEARCH FORUM
-        </div>
-        <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
-
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            style={{
-              flex: 1,
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
-              padding: '8px',
-              fontSize: '12px',
-              fontFamily: 'Consolas, monospace'
-            }}
-            placeholder="Search posts and comments..."
-          />
-          <button
-            onClick={handleSearch}
-            style={{
-              backgroundColor: BLOOMBERG_ORANGE,
-              color: BLOOMBERG_DARK_BG,
-              border: 'none',
-              padding: '8px 16px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            SEARCH
-          </button>
-          <button
-            onClick={() => {
-              setShowSearch(false);
-              setSearchResults([]);
-              setSearchQuery('');
-            }}
-            style={{
-              backgroundColor: BLOOMBERG_GRAY,
-              color: BLOOMBERG_DARK_BG,
-              border: 'none',
-              padding: '8px 16px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            CLOSE
-          </button>
-        </div>
-
-        {isLoading && (
-          <div style={{ color: BLOOMBERG_YELLOW, textAlign: 'center', padding: '20px' }}>
-            SEARCHING...
+        <div style={{
+          backgroundColor: BLOOMBERG_PANEL_BG,
+          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          padding: '16px',
+          width: '700px',
+          maxHeight: '80vh',
+          overflow: 'auto'
+        }}>
+          <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
+            SEARCH FORUM
           </div>
-        )}
+          <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
 
-        {searchResults.length > 0 && (
-          <div>
-            <div style={{ color: BLOOMBERG_YELLOW, fontSize: '11px', marginBottom: '8px' }}>
-              FOUND {searchResults.length} RESULTS
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              style={{
+                flex: 1,
+                backgroundColor: BLOOMBERG_DARK_BG,
+                border: `1px solid ${BLOOMBERG_GRAY}`,
+                color: BLOOMBERG_WHITE,
+                padding: '8px',
+                fontSize: '12px',
+                fontFamily: 'Consolas, monospace'
+              }}
+              placeholder="Search posts and comments..."
+            />
+            <button
+              onClick={handleSearch}
+              style={{
+                backgroundColor: BLOOMBERG_ORANGE,
+                color: BLOOMBERG_DARK_BG,
+                border: 'none',
+                padding: '8px 16px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              SEARCH
+            </button>
+            <button
+              onClick={() => {
+                setShowSearch(false);
+                setSearchResults([]);
+                setSearchQuery('');
+              }}
+              style={{
+                backgroundColor: BLOOMBERG_GRAY,
+                color: BLOOMBERG_DARK_BG,
+                border: 'none',
+                padding: '8px 16px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              CLOSE
+            </button>
+          </div>
+
+          {isLoading && (
+            <div style={{ color: BLOOMBERG_YELLOW, textAlign: 'center', padding: '20px' }}>
+              SEARCHING...
             </div>
-            {searchResults.map((post, index) => (
-              <div
-                key={post.id}
-                onClick={() => {
-                  setShowSearch(false);
-                  handleViewPost(post);
-                }}
-                style={{
-                  backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                  padding: '8px',
-                  marginBottom: '6px',
-                  borderLeft: `3px solid ${getPriorityColor(post.priority)}`,
-                  cursor: 'pointer'
-                }}
-              >
-                <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-                  {post.title}
-                </div>
-                <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', marginBottom: '4px' }}>
-                  {post.content.substring(0, 150)}...
-                </div>
-                <div style={{ display: 'flex', gap: '8px', fontSize: '9px' }}>
-                  <span style={{ color: BLOOMBERG_CYAN }}>@{post.author}</span>
-                  <span style={{ color: BLOOMBERG_BLUE }}>[{post.category}]</span>
-                  <span style={{ color: BLOOMBERG_GREEN }}>👍 {post.likes}</span>
-                </div>
+          )}
+
+          {searchResults.length > 0 && (
+            <div>
+              <div style={{ color: BLOOMBERG_YELLOW, fontSize: '11px', marginBottom: '8px' }}>
+                FOUND {searchResults.length} RESULTS
               </div>
-            ))}
-          </div>
-        )}
+              {searchResults.map((post, index) => (
+                <div
+                  key={post.id}
+                  onClick={() => {
+                    setShowSearch(false);
+                    handleViewPost(post);
+                  }}
+                  style={{
+                    backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                    padding: '8px',
+                    marginBottom: '6px',
+                    borderLeft: `3px solid ${getPriorityColor(post.priority)}`,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+                    {post.title}
+                  </div>
+                  <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', marginBottom: '4px' }}>
+                    {post.content.substring(0, 150)}...
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', fontSize: '9px' }}>
+                    <span style={{ color: BLOOMBERG_CYAN }}>@{post.author}</span>
+                    <span style={{ color: BLOOMBERG_BLUE }}>[{post.category}]</span>
+                    <span style={{ color: BLOOMBERG_GREEN }}>👍 {post.likes}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
     );
   }, [showSearch, searchQuery, searchResults, isLoading, handleSearch, handleViewPost, getPriorityColor, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_DARK_BG, BLOOMBERG_WHITE, BLOOMBERG_PANEL_BG, BLOOMBERG_YELLOW, BLOOMBERG_CYAN, BLOOMBERG_BLUE, BLOOMBERG_GREEN]);
 
   const ProfileModal = React.useMemo(() => {
     if (!showProfile || !userProfile) return null;
     return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.85)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `2px solid ${BLOOMBERG_ORANGE}`,
-        padding: '16px',
-        width: '600px',
-        maxHeight: '80vh',
-        overflow: 'auto'
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
       }}>
-        {userProfile && (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold' }}>
-                FORUM PROFILE
-              </div>
-              <button
-                onClick={() => {
-                  setShowProfile(false);
-                  setUserProfile(null);
-                }}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: `1px solid ${BLOOMBERG_GRAY}`,
-                  color: BLOOMBERG_WHITE,
-                  padding: '2px 8px',
-                  fontSize: '10px',
-                  cursor: 'pointer'
-                }}
-              >
-                CLOSE [X]
-              </button>
-            </div>
-            <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
-
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ color: BLOOMBERG_CYAN, fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>
-                @{userProfile.username}
-              </div>
-              <div style={{ color: BLOOMBERG_WHITE, fontSize: '12px', marginBottom: '4px' }}>
-                {userProfile.display_name || 'No display name set'}
-              </div>
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '11px', marginBottom: '12px', fontStyle: 'italic' }}>
-                {userProfile.bio || 'No bio available'}
-              </div>
-
-              <div style={{ display: 'flex', gap: '16px', fontSize: '11px', marginBottom: '12px' }}>
-                <div>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Posts: </span>
-                  <span style={{ color: BLOOMBERG_WHITE }}>{userProfile.post_count || 0}</span>
+        <div style={{
+          backgroundColor: BLOOMBERG_PANEL_BG,
+          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          padding: '16px',
+          width: '600px',
+          maxHeight: '80vh',
+          overflow: 'auto'
+        }}>
+          {userProfile && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold' }}>
+                  FORUM PROFILE
                 </div>
-                <div>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Comments: </span>
-                  <span style={{ color: BLOOMBERG_WHITE }}>{userProfile.comment_count || 0}</span>
-                </div>
-                <div>
-                  <span style={{ color: BLOOMBERG_GRAY }}>Reputation: </span>
-                  <span style={{ color: BLOOMBERG_GREEN }}>{userProfile.reputation || 0}</span>
-                </div>
-              </div>
-
-              {userProfile.signature && (
-                <div style={{
-                  backgroundColor: 'rgba(255,255,255,0.02)',
-                  padding: '8px',
-                  marginBottom: '12px',
-                  borderLeft: `2px solid ${BLOOMBERG_YELLOW}`
-                }}>
-                  <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', marginBottom: '4px' }}>SIGNATURE:</div>
-                  <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', fontStyle: 'italic' }}>
-                    {userProfile.signature}
-                  </div>
-                </div>
-              )}
-
-              {!selectedUsername && (
                 <button
                   onClick={() => {
                     setShowProfile(false);
-                    setShowEditProfile(true);
+                    setUserProfile(null);
                   }}
                   style={{
-                    backgroundColor: BLOOMBERG_ORANGE,
-                    color: BLOOMBERG_DARK_BG,
-                    border: 'none',
-                    padding: '6px 16px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
+                    backgroundColor: 'transparent',
+                    border: `1px solid ${BLOOMBERG_GRAY}`,
+                    color: BLOOMBERG_WHITE,
+                    padding: '2px 8px',
+                    fontSize: '10px',
                     cursor: 'pointer'
                   }}
                 >
-                  EDIT PROFILE
+                  CLOSE [X]
                 </button>
-              )}
-            </div>
-          </>
-        )}
+              </div>
+              <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <div style={{ color: BLOOMBERG_CYAN, fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>
+                  @{userProfile.username}
+                </div>
+                <div style={{ color: BLOOMBERG_WHITE, fontSize: '12px', marginBottom: '4px' }}>
+                  {userProfile.display_name || 'No display name set'}
+                </div>
+                <div style={{ color: BLOOMBERG_GRAY, fontSize: '11px', marginBottom: '12px', fontStyle: 'italic' }}>
+                  {userProfile.bio || 'No bio available'}
+                </div>
+
+                <div style={{ display: 'flex', gap: '16px', fontSize: '11px', marginBottom: '12px' }}>
+                  <div>
+                    <span style={{ color: BLOOMBERG_GRAY }}>Posts: </span>
+                    <span style={{ color: BLOOMBERG_WHITE }}>{userProfile.post_count || 0}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: BLOOMBERG_GRAY }}>Comments: </span>
+                    <span style={{ color: BLOOMBERG_WHITE }}>{userProfile.comment_count || 0}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: BLOOMBERG_GRAY }}>Reputation: </span>
+                    <span style={{ color: BLOOMBERG_GREEN }}>{userProfile.reputation || 0}</span>
+                  </div>
+                </div>
+
+                {userProfile.signature && (
+                  <div style={{
+                    backgroundColor: 'rgba(255,255,255,0.02)',
+                    padding: '8px',
+                    marginBottom: '12px',
+                    borderLeft: `2px solid ${BLOOMBERG_YELLOW}`
+                  }}>
+                    <div style={{ color: BLOOMBERG_YELLOW, fontSize: '10px', marginBottom: '4px' }}>SIGNATURE:</div>
+                    <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', fontStyle: 'italic' }}>
+                      {userProfile.signature}
+                    </div>
+                  </div>
+                )}
+
+                {!selectedUsername && (
+                  <button
+                    onClick={() => {
+                      setShowProfile(false);
+                      setShowEditProfile(true);
+                    }}
+                    style={{
+                      backgroundColor: BLOOMBERG_ORANGE,
+                      color: BLOOMBERG_DARK_BG,
+                      border: 'none',
+                      padding: '6px 16px',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    EDIT PROFILE
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </div>
     );
   }, [showProfile, userProfile, selectedUsername, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_WHITE, BLOOMBERG_DARK_BG, BLOOMBERG_PANEL_BG, BLOOMBERG_CYAN, BLOOMBERG_GREEN, BLOOMBERG_YELLOW]);
 
   const EditProfileModal = React.useMemo(() => {
     if (!showEditProfile) return null;
     return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.85)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
       <div style={{
-        backgroundColor: BLOOMBERG_PANEL_BG,
-        border: `2px solid ${BLOOMBERG_ORANGE}`,
-        padding: '16px',
-        width: '600px',
-        maxHeight: '80vh',
-        overflow: 'auto'
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
       }}>
-        <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
-          EDIT PROFILE
-        </div>
-        <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
+        <div style={{
+          backgroundColor: BLOOMBERG_PANEL_BG,
+          border: `2px solid ${BLOOMBERG_ORANGE}`,
+          padding: '16px',
+          width: '600px',
+          maxHeight: '80vh',
+          overflow: 'auto'
+        }}>
+          <div style={{ color: BLOOMBERG_ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>
+            EDIT PROFILE
+          </div>
+          <div style={{ borderBottom: `1px solid ${BLOOMBERG_GRAY}`, marginBottom: '12px' }}></div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>Display Name:</div>
-          <input
-            type="text"
-            value={profileEdit.display_name}
-            onChange={(e) => setProfileEdit({ ...profileEdit, display_name: e.target.value })}
-            style={{
-              width: '100%',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
-              padding: '6px',
-              fontSize: '12px',
-              fontFamily: 'Consolas, monospace'
-            }}
-          />
-        </div>
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>Display Name:</div>
+            <input
+              type="text"
+              value={profileEdit.display_name}
+              onChange={(e) => setProfileEdit({ ...profileEdit, display_name: e.target.value })}
+              style={{
+                width: '100%',
+                backgroundColor: BLOOMBERG_DARK_BG,
+                border: `1px solid ${BLOOMBERG_GRAY}`,
+                color: BLOOMBERG_WHITE,
+                padding: '6px',
+                fontSize: '12px',
+                fontFamily: 'Consolas, monospace'
+              }}
+            />
+          </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>Bio:</div>
-          <textarea
-            value={profileEdit.bio}
-            onChange={(e) => setProfileEdit({ ...profileEdit, bio: e.target.value })}
-            rows={4}
-            style={{
-              width: '100%',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
-              padding: '6px',
-              fontSize: '11px',
-              fontFamily: 'Consolas, monospace'
-            }}
-          />
-        </div>
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>Bio:</div>
+            <textarea
+              value={profileEdit.bio}
+              onChange={(e) => setProfileEdit({ ...profileEdit, bio: e.target.value })}
+              rows={4}
+              style={{
+                width: '100%',
+                backgroundColor: BLOOMBERG_DARK_BG,
+                border: `1px solid ${BLOOMBERG_GRAY}`,
+                color: BLOOMBERG_WHITE,
+                padding: '6px',
+                fontSize: '11px',
+                fontFamily: 'Consolas, monospace'
+              }}
+            />
+          </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>Signature:</div>
-          <input
-            type="text"
-            value={profileEdit.signature}
-            onChange={(e) => setProfileEdit({ ...profileEdit, signature: e.target.value })}
-            style={{
-              width: '100%',
-              backgroundColor: BLOOMBERG_DARK_BG,
-              border: `1px solid ${BLOOMBERG_GRAY}`,
-              color: BLOOMBERG_WHITE,
-              padding: '6px',
-              fontSize: '12px',
-              fontFamily: 'Consolas, monospace'
-            }}
-          />
-        </div>
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ color: BLOOMBERG_WHITE, fontSize: '11px', marginBottom: '4px' }}>Signature:</div>
+            <input
+              type="text"
+              value={profileEdit.signature}
+              onChange={(e) => setProfileEdit({ ...profileEdit, signature: e.target.value })}
+              style={{
+                width: '100%',
+                backgroundColor: BLOOMBERG_DARK_BG,
+                border: `1px solid ${BLOOMBERG_GRAY}`,
+                color: BLOOMBERG_WHITE,
+                padding: '6px',
+                fontSize: '12px',
+                fontFamily: 'Consolas, monospace'
+              }}
+            />
+          </div>
 
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button
-            onClick={() => setShowEditProfile(false)}
-            style={{
-              backgroundColor: BLOOMBERG_GRAY,
-              color: BLOOMBERG_DARK_BG,
-              border: 'none',
-              padding: '6px 16px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            CANCEL
-          </button>
-          <button
-            onClick={handleUpdateProfile}
-            style={{
-              backgroundColor: BLOOMBERG_ORANGE,
-              color: BLOOMBERG_DARK_BG,
-              border: 'none',
-              padding: '6px 16px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            SAVE CHANGES
-          </button>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setShowEditProfile(false)}
+              style={{
+                backgroundColor: BLOOMBERG_GRAY,
+                color: BLOOMBERG_DARK_BG,
+                border: 'none',
+                padding: '6px 16px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              CANCEL
+            </button>
+            <button
+              onClick={handleUpdateProfile}
+              style={{
+                backgroundColor: BLOOMBERG_ORANGE,
+                color: BLOOMBERG_DARK_BG,
+                border: 'none',
+                padding: '6px 16px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              SAVE CHANGES
+            </button>
+          </div>
         </div>
       </div>
-    </div>
     );
   }, [showEditProfile, profileEdit, handleUpdateProfile, BLOOMBERG_ORANGE, BLOOMBERG_GRAY, BLOOMBERG_DARK_BG, BLOOMBERG_WHITE, BLOOMBERG_PANEL_BG]);
 
@@ -1347,7 +1349,7 @@ const ForumTab: React.FC = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>FINCEPT GLOBAL FORUM</span>
+            <span style={{ color: BLOOMBERG_ORANGE, fontWeight: 'bold' }}>{t('title')}</span>
             <span style={{ color: BLOOMBERG_WHITE }}>|</span>
             <span style={{ color: BLOOMBERG_GREEN }}>● LIVE</span>
             <span style={{ color: BLOOMBERG_WHITE }}>|</span>
@@ -1377,7 +1379,7 @@ const ForumTab: React.FC = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>
-          <span style={{ color: BLOOMBERG_GRAY }}>TRENDING:</span>
+          <span style={{ color: BLOOMBERG_GRAY }}>{t('header.trending')}:</span>
           {trendingTopics.slice(0, 5).map((topic, i) => (
             <span key={i} style={{ color: i % 2 === 0 ? BLOOMBERG_RED : i % 3 === 0 ? BLOOMBERG_CYAN : BLOOMBERG_PURPLE }}>
               {topic.topic.replace('#', '').toUpperCase()}

@@ -1,0 +1,57 @@
+{
+    "title": "EDITOR KODE",
+    "header": {
+        "files": "FILE",
+        "terminal": "TERMINAL",
+        "packages": "PAKET"
+    },
+    "toolbar": {
+        "newFile": "FILE BARU",
+        "new": "BARU",
+        "open": "BUKA",
+        "save": "SIMPAN",
+        "run": "JALANKAN",
+        "running": "MENJALANKAN...",
+        "runAll": "JALANKAN SEMUA",
+        "download": "UNDUH",
+        "upload": "UNGGAH",
+        "clear": "HAPUS",
+        "history": "RIWAYAT"
+    },
+    "languages": {
+        "finscript": "FinScript",
+        "python": "Python",
+        "javascript": "JavaScript",
+        "json": "JSON"
+    },
+    "tabs": {
+        "editor": "Editor",
+        "notebook": "JUPYTER NOTEBOOK",
+        "finscript": "EDITOR FINSCRIPT",
+        "terminal": "Terminal"
+    },
+    "terminal": {
+        "output": "Output",
+        "clear": "Hapus output",
+        "running": "Menjalankan...",
+        "completed": "Selesai"
+    },
+    "packages": {
+        "installed": "Paket terinstal",
+        "install": "Instal paket",
+        "uninstall": "Hapus",
+        "clickToLoad": "Klik untuk memuat...",
+        "load": "MUAT PAKET"
+    },
+    "history": {
+        "title": "RIWAYAT NOTEBOOK",
+        "loading": "Memuat riwayat...",
+        "empty": "Tidak ada riwayat notebook"
+    },
+    "messages": {
+        "fileSaved": "File disimpan",
+        "fileOpened": "File dibuka",
+        "executionComplete": "Eksekusi selesai",
+        "executionError": "Error eksekusi"
+    }
+}

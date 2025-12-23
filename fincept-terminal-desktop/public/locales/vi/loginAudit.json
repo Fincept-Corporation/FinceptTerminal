@@ -1,0 +1,58 @@
+{
+    "title": "BẢNG ĐIỀU KHIỂN KIỂM TOÁN ĐĂNG NHẬP",
+    "accessDenied": "Cần quyền quản trị viên",
+    "metrics": {
+        "dauToday": "DAU Hôm nay",
+        "mau": "MAU",
+        "successRate": "Tỷ lệ thành công",
+        "failed24h": "Thất bại (24g)",
+        "activeSessions": "Phiên hoạt động",
+        "uniqueIps": "IP duy nhất"
+    },
+    "views": {
+        "overview": "TỔNG QUAN",
+        "eventLog": "NHẬT KÝ SỰ KIỆN",
+        "alerts": "CẢNH BÁO",
+        "analytics": "PHÂN TÍCH"
+    },
+    "activity": {
+        "recentLoginActivity": "HOẠT ĐỘNG ĐĂNG NHẬP GẦN ĐÂY",
+        "securityAlerts": "CẢNH BÁO BẢO MẬT",
+        "noActiveAlerts": "Không có cảnh báo",
+        "loginEventLog": "NHẬT KÝ SỰ KIỆN ĐĂNG NHẬP"
+    },
+    "table": {
+        "time": "Thời gian",
+        "event": "Sự kiện",
+        "user": "Người dùng",
+        "ipAddress": "Địa chỉ IP",
+        "location": "Vị trí",
+        "device": "Thiết bị",
+        "details": "Chi tiết"
+    },
+    "alerts": {
+        "securityIncidents": "CẢNH BÁO VÀ SỰ CỐ BẢO MẬT",
+        "noAlerts": "Không có cảnh báo bảo mật",
+        "dismiss": "BỎ QUA",
+        "blockIp": "CHẶN IP",
+        "investigate": "ĐIỀU TRA"
+    },
+    "analytics": {
+        "loginsByCountry": "ĐĂNG NHẬP THEO QUỐC GIA (30 ngày)",
+        "failureReasons": "LÝ DO THẤT BẠI (24g)",
+        "peakHours": "GIỜ CAO ĐIỂM (UTC)",
+        "logins": "đăng nhập"
+    },
+    "controls": {
+        "autoRefresh": "Tự động làm mới",
+        "loading": "ĐANG TẢI...",
+        "refresh": "LÀM MỚI"
+    },
+    "status": {
+        "admin": "Quản trị",
+        "dau": "DAU",
+        "status": "Trạng thái",
+        "updating": "ĐANG CẬP NHẬT",
+        "ready": "SẴN SÀNG"
+    }
+}

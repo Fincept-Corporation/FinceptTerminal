@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { RefreshCw, Download, Plus, Minus, Trash2 } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 interface Provider {
   code: string;
@@ -34,6 +35,7 @@ interface DataPoint {
 type ChartType = 'line' | 'bar' | 'area' | 'scatter' | 'candlestick';
 
 export default function DBnomicsTab() {
+  const { t } = useTranslation('dbnomics');
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const BASE_URL = 'https://api.db.nomics.world/v22';
   const COLORS = [colors.primary, colors.info, colors.secondary, colors.warning, colors.purple, colors.purple, colors.accent, colors.primary];
@@ -472,18 +474,18 @@ export default function DBnomicsTab() {
       `}</style>
       {/* Header */}
       <div style={{ padding: '8px 12px', borderBottom: '1px solid colors.textMuted', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <span style={{ color: colors.primary, fontWeight: 'bold' }}>DBNOMICS TERMINAL</span>
+        <span style={{ color: colors.primary, fontWeight: 'bold' }}>{t('title')}</span>
         <span style={{ color: colors.secondary, fontSize: '10px' }}>● {status}</span>
         <span style={{ color: colors.warning, fontSize: '10px' }}>Providers: {providers.length}</span>
         <div style={{ flex: 1 }}></div>
         <button onClick={loadProviders} disabled={loading} style={{ padding: '3px 10px', backgroundColor: '#2a2a2a', color: colors.text, border: '1px solid colors.textMuted', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
-          LOAD
+          {t('toolbar.fetch')}
         </button>
         <button onClick={() => currentData && loadSeriesData(currentData.series_id, currentData.series_name)} disabled={!currentData} style={{ padding: '3px 10px', backgroundColor: '#2a2a2a', color: colors.text, border: '1px solid colors.textMuted', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
-          <RefreshCw size={10} style={{ display: 'inline', marginRight: '4px' }} />REFRESH
+          <RefreshCw size={10} style={{ display: 'inline', marginRight: '4px' }} />{t('toolbar.refresh')}
         </button>
         <button onClick={exportData} disabled={!currentData} style={{ padding: '3px 10px', backgroundColor: '#2a2a2a', color: colors.text, border: '1px solid colors.textMuted', cursor: !currentData ? 'not-allowed' : 'pointer', fontSize: '9px' }}>
-          <Download size={10} style={{ display: 'inline', marginRight: '4px' }} />EXPORT
+          <Download size={10} style={{ display: 'inline', marginRight: '4px' }} />{t('toolbar.export')}
         </button>
       </div>
 

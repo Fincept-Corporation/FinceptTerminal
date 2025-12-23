@@ -15,9 +15,11 @@ import AddStockModal from './watchlist/AddStockModal';
 import RecordingControlPanel from '../common/RecordingControlPanel';
 import { getBloombergColors, SortCriteria, sortStocks, getNextWatchlistColor } from './watchlist/utils';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const WatchlistTab: React.FC = () => {
   const { colors: themeColors } = useTerminalTheme();
+  const { t } = useTranslation('watchlist');
   const BLOOMBERG_COLORS = getBloombergColors();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [watchlists, setWatchlists] = useState<Array<Watchlist & { stock_count: number }>>([]);
@@ -322,11 +324,11 @@ const WatchlistTab: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ color: ORANGE, fontWeight: 'bold', fontSize: '14px' }}>
-              FINCEPT WATCHLIST MONITOR
+              FINCEPT {t('title')} MONITOR
             </span>
             <span style={{ color: WHITE }}>|</span>
             <span style={{ color: refreshing ? ORANGE : GREEN, fontSize: '10px' }}>
-              ● {refreshing ? 'UPDATING' : 'LIVE'}
+              ● {refreshing ? t('header.updating') : t('header.live')}
             </span>
             <span style={{ color: WHITE }}>|</span>
             <span style={{ color: CYAN, fontSize: '11px' }}>
@@ -358,7 +360,7 @@ const WatchlistTab: React.FC = () => {
               }}
             >
               <RefreshCw size={12} />
-              REFRESH
+              {t('header.export').replace('EXPORT', 'REFRESH')}
             </button>
             <button
               onClick={handleExportCSV}
@@ -378,7 +380,7 @@ const WatchlistTab: React.FC = () => {
               }}
             >
               <Download size={12} />
-              EXPORT CSV
+              {t('header.export')} CSV
             </button>
           </div>
         </div>
@@ -386,12 +388,12 @@ const WatchlistTab: React.FC = () => {
         {/* Summary Bar */}
         {selectedWatchlist && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '11px', marginTop: '8px' }}>
-            <span style={{ color: GRAY }}>WATCHLIST:</span>
+            <span style={{ color: GRAY }}>{t('title')}:</span>
             <span style={{ color: YELLOW, fontWeight: 'bold' }}>
               {selectedWatchlist.name}
             </span>
             <span style={{ color: WHITE }}>|</span>
-            <span style={{ color: GRAY }}>STOCKS:</span>
+            <span style={{ color: GRAY }}>{t('list.symbols')}:</span>
             <span style={{ color: CYAN }}>{stocks.length}</span>
           </div>
         )}
@@ -414,10 +416,10 @@ const WatchlistTab: React.FC = () => {
             { key: "F6", label: "TICKER", action: () => setSortBy('TICKER') },
             { key: "F7", label: "PRICE", action: () => setSortBy('PRICE') },
             { key: "F8", label: "VOLUME", action: () => setSortBy('VOLUME') },
-            { key: "F9", label: "UNUSED", action: () => {} },
-            { key: "F10", label: "UNUSED", action: () => {} },
-            { key: "F11", label: "UNUSED", action: () => {} },
-            { key: "F12", label: "HELP", action: () => {} }
+            { key: "F9", label: "UNUSED", action: () => { } },
+            { key: "F10", label: "UNUSED", action: () => { } },
+            { key: "F11", label: "UNUSED", action: () => { } },
+            { key: "F12", label: "HELP", action: () => { } }
           ].map(item => (
             <button
               key={item.key}
@@ -477,7 +479,7 @@ const WatchlistTab: React.FC = () => {
             gap: '16px'
           }}>
             <div style={{ color: GRAY, fontSize: '14px' }}>
-              Select a watchlist or create a new one to get started
+              {t('emptyState.selectWatchlist')}
             </div>
           </div>
         ) : (

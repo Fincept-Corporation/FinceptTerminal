@@ -1,0 +1,58 @@
+{
+    "title": "لوحة تدقيق تسجيل الدخول",
+    "accessDenied": "يتطلب صلاحية المسؤول لعرض لوحة التدقيق",
+    "metrics": {
+        "dauToday": "DAU اليوم",
+        "mau": "MAU",
+        "successRate": "معدل النجاح",
+        "failed24h": "فشل (24 س)",
+        "activeSessions": "الجلسات النشطة",
+        "uniqueIps": "IPs فريدة"
+    },
+    "views": {
+        "overview": "نظرة عامة",
+        "eventLog": "سجل الأحداث",
+        "alerts": "التنبيهات",
+        "analytics": "التحليلات"
+    },
+    "activity": {
+        "recentLoginActivity": "نشاط تسجيل الدخول الأخير",
+        "securityAlerts": "تنبيهات الأمان",
+        "noActiveAlerts": "لا توجد تنبيهات نشطة",
+        "loginEventLog": "سجل أحداث تسجيل الدخول"
+    },
+    "table": {
+        "time": "الوقت",
+        "event": "الحدث",
+        "user": "المستخدم",
+        "ipAddress": "عنوان IP",
+        "location": "الموقع",
+        "device": "الجهاز",
+        "details": "التفاصيل"
+    },
+    "alerts": {
+        "securityIncidents": "تنبيهات وحوادث أمنية",
+        "noAlerts": "لا توجد تنبيهات أمنية حالياً",
+        "dismiss": "رفض",
+        "blockIp": "حظر IP",
+        "investigate": "تحقيق"
+    },
+    "analytics": {
+        "loginsByCountry": "تسجيلات الدخول حسب البلد (30 يوم)",
+        "failureReasons": "أسباب الفشل (24 س)",
+        "peakHours": "ساعات الذروة (UTC)",
+        "logins": "تسجيلات"
+    },
+    "controls": {
+        "autoRefresh": "تحديث تلقائي",
+        "loading": "جاري التحميل...",
+        "refresh": "تحديث"
+    },
+    "status": {
+        "admin": "مسؤول",
+        "dau": "DAU",
+        "status": "الحالة",
+        "updating": "جاري التحديث",
+        "ready": "جاهز"
+    }
+}

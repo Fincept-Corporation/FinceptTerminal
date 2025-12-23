@@ -1,0 +1,52 @@
+{
+    "title": "データマッピング",
+    "header": {
+        "mappings": "マッピング",
+        "templates": "テンプレート",
+        "create": "新規作成",
+        "refresh": "更新"
+    },
+    "views": {
+        "list": "マッピング一覧",
+        "create": "マッピング作成",
+        "templates": "テンプレート"
+    },
+    "list": {
+        "name": "名前",
+        "source": "ソース",
+        "destination": "宛先",
+        "status": "ステータス",
+        "lastRun": "最終実行",
+        "actions": "アクション"
+    },
+    "status": {
+        "active": "アクティブ",
+        "inactive": "非アクティブ",
+        "error": "エラー",
+        "running": "実行中"
+    },
+    "actions": {
+        "edit": "編集",
+        "delete": "削除",
+        "run": "実行",
+        "duplicate": "複製",
+        "export": "エクスポート"
+    },
+    "create": {
+        "title": "データマッピング作成",
+        "name": "マッピング名",
+        "description": "説明",
+        "sourceApi": "ソースAPI",
+        "destApi": "宛先API",
+        "fieldMapping": "フィールドマッピング",
+        "save": "マッピング保存",
+        "cancel": "キャンセル"
+    },
+    "messages": {
+        "saved": "マッピングを正常に保存",
+        "deleted": "マッピングを削除",
+        "runSuccess": "マッピングを正常に実行",
+        "error": "エラーが発生",
+        "noMappings": "マッピングが設定されていません"
+    }
+}

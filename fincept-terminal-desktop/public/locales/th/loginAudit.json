@@ -1,0 +1,58 @@
+{
+    "title": "แดชบอร์ดตรวจสอบการเข้าสู่ระบบ",
+    "accessDenied": "ต้องการสิทธิ์แอดมิน",
+    "metrics": {
+        "dauToday": "DAU วันนี้",
+        "mau": "MAU",
+        "successRate": "อัตราสำเร็จ",
+        "failed24h": "ล้มเหลว (24ชม)",
+        "activeSessions": "เซสชันที่ใช้งาน",
+        "uniqueIps": "IP ที่ไม่ซ้ำ"
+    },
+    "views": {
+        "overview": "ภาพรวม",
+        "eventLog": "บันทึกเหตุการณ์",
+        "alerts": "แจ้งเตือน",
+        "analytics": "วิเคราะห์"
+    },
+    "activity": {
+        "recentLoginActivity": "กิจกรรมเข้าสู่ระบบล่าสุด",
+        "securityAlerts": "แจ้งเตือนความปลอดภัย",
+        "noActiveAlerts": "ไม่มีการแจ้งเตือน",
+        "loginEventLog": "บันทึกการเข้าสู่ระบบ"
+    },
+    "table": {
+        "time": "เวลา",
+        "event": "เหตุการณ์",
+        "user": "ผู้ใช้",
+        "ipAddress": "ที่อยู่ IP",
+        "location": "สถานที่",
+        "device": "อุปกรณ์",
+        "details": "รายละเอียด"
+    },
+    "alerts": {
+        "securityIncidents": "แจ้งเตือนและเหตุการณ์ความปลอดภัย",
+        "noAlerts": "ไม่มีการแจ้งเตือนความปลอดภัย",
+        "dismiss": "ปิด",
+        "blockIp": "บล็อก IP",
+        "investigate": "สอบสวน"
+    },
+    "analytics": {
+        "loginsByCountry": "เข้าสู่ระบบตามประเทศ (30 วัน)",
+        "failureReasons": "สาเหตุล้มเหลว (24ชม)",
+        "peakHours": "ชั่วโมงสูงสุด (UTC)",
+        "logins": "เข้าสู่ระบบ"
+    },
+    "controls": {
+        "autoRefresh": "รีเฟรชอัตโนมัติ",
+        "loading": "กำลังโหลด...",
+        "refresh": "รีเฟรช"
+    },
+    "status": {
+        "admin": "แอดมิน",
+        "dau": "DAU",
+        "status": "สถานะ",
+        "updating": "กำลังอัปเดต",
+        "ready": "พร้อม"
+    }
+}

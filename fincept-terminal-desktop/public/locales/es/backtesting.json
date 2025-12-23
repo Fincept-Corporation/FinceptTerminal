@@ -1,0 +1,95 @@
+{
+    "title": "MOTOR DE BACKTESTING",
+    "header": {
+        "strategy": "ESTRATEGIA",
+        "results": "RESULTADOS",
+        "trades": "OPERACIONES"
+    },
+    "toolbar": {
+        "run": "Ejecutar Backtest",
+        "running": "Ejecutando...",
+        "stop": "DETENER",
+        "reset": "REINICIAR",
+        "export": "EXPORTAR RESULTADOS",
+        "refresh": "Actualizar"
+    },
+    "config": {
+        "symbolTimeframe": "Símbolo y Marco Temporal",
+        "symbol": "Símbolo",
+        "stockTicker": "Ticker de acción para backtest",
+        "startDate": "Fecha Inicio",
+        "endDate": "Fecha Fin",
+        "initialCapital": "Capital Inicial",
+        "strategy": "Estrategia",
+        "parameters": "Parámetros"
+    },
+    "sections": {
+        "strategyConfig": "Configuración de Estrategia",
+        "strategyType": "Tipo de Estrategia",
+        "strategyParams": "Parámetros de Estrategia",
+        "backtestResults": "Resultados del Backtest",
+        "advancedSettings": "Configuración Avanzada",
+        "advancedNote": "Opciones avanzadas para el proveedor Backtesting.py"
+    },
+    "advanced": {
+        "commission": "Comisión (decimal)",
+        "tradeOnClose": "Operar al Cierre",
+        "hedging": "Cobertura",
+        "exclusiveOrders": "Órdenes Exclusivas",
+        "margin": "Margen"
+    },
+    "strategies": {
+        "sma": "Cruce SMA",
+        "rsi": "Estrategia RSI",
+        "macd": "Estrategia MACD",
+        "bollinger": "Bandas de Bollinger",
+        "custom": "Estrategia Personalizada"
+    },
+    "smaParams": {
+        "fastPeriod": "Período Rápido",
+        "slowPeriod": "Período Lento",
+        "fastNote": "Media móvil a corto plazo",
+        "slowNote": "Media móvil a largo plazo"
+    },
+    "results": {
+        "totalReturn": "Retorno Total",
+        "sharpeRatio": "Ratio de Sharpe",
+        "maxDrawdown": "Drawdown Máximo",
+        "winRate": "Tasa de Acierto",
+        "totalTrades": "Total Operaciones",
+        "profitFactor": "Factor de Beneficio",
+        "configurePrompt": "Configure su backtest y haga clic en 'Ejecutar Backtest' para ver resultados"
+    },
+    "trades": {
+        "date": "Fecha",
+        "type": "Tipo",
+        "price": "Precio",
+        "quantity": "Cantidad",
+        "pnl": "G/P"
+    },
+    "status": {
+        "ready": "Listo",
+        "running": "Ejecutando...",
+        "completed": "Completado",
+        "error": "Error"
+    },
+    "messages": {
+        "backtestStarted": "Backtest iniciado",
+        "backtestCompleted": "Backtest completado",
+        "backtestError": "Backtest fallido"
+    },
+    "visual": {
+        "priceData": "Datos de Precio",
+        "maIndicator": "Indicador MA",
+        "condition": "Condición",
+        "buyOrder": "Orden de Compra",
+        "sellOrder": "Orden de Venta",
+        "addBlocksPrompt": "Haga clic en los bloques para agregar a su estrategia",
+        "remove": "Eliminar",
+        "generateCode": "Generar Código desde Bloques"
+    },
+    "template": {
+        "strategyTemplates": "Plantillas de Estrategia",
+        "apply": "Aplicar Plantilla"
+    }
+}

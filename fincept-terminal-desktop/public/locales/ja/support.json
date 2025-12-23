@@ -1,0 +1,42 @@
+{
+    "title": "サポートチケット",
+    "header": {
+        "tickets": "チケット",
+        "new": "新規チケット",
+        "status": "ステータス"
+    },
+    "form": {
+        "subject": "件名",
+        "description": "説明",
+        "priority": "優先度",
+        "category": "カテゴリ"
+    },
+    "priority": {
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "urgent": "緊急"
+    },
+    "status": {
+        "open": "オープン",
+        "inProgress": "対応中",
+        "resolved": "解決済み",
+        "closed": "クローズ"
+    },
+    "buttons": {
+        "submit": "送信",
+        "cancel": "キャンセル",
+        "reply": "返信",
+        "close": "閉じる"
+    },
+    "messages": {
+        "created": "チケットを作成しました",
+        "updated": "チケットを更新しました",
+        "closed": "チケットをクローズしました",
+        "noTickets": "チケットなし"
+    },
+    "auth": {
+        "loginRequired": "ログインしてチケットを作成",
+        "demoMode": "デモモード"
+    }
+}

@@ -1,0 +1,61 @@
+{
+    "title": "DIỄN ĐÀN FINCEPT",
+    "header": {
+        "trending": "XU HƯỚNG",
+        "new": "MỚI",
+        "following": "ĐANG THEO DÕI",
+        "myPosts": "BÀI VIẾT CỦA TÔI"
+    },
+    "categories": {
+        "all": "Tất cả chủ đề",
+        "stocks": "Cổ phiếu",
+        "options": "Quyền chọn",
+        "crypto": "Tiền mã hóa",
+        "forex": "Ngoại hối",
+        "strategies": "Chiến lược",
+        "general": "Chung"
+    },
+    "post": {
+        "create": "Tạo bài viết",
+        "reply": "Trả lời",
+        "edit": "Chỉnh sửa",
+        "delete": "Xóa",
+        "share": "Chia sẻ",
+        "report": "Báo cáo",
+        "save": "Lưu"
+    },
+    "form": {
+        "title": "Tiêu đề",
+        "content": "Nội dung",
+        "tags": "Thẻ",
+        "category": "Danh mục",
+        "submit": "Đăng",
+        "cancel": "Hủy",
+        "preview": "Xem trước"
+    },
+    "engagement": {
+        "likes": "Thích",
+        "comments": "Bình luận",
+        "views": "Lượt xem",
+        "shares": "Chia sẻ"
+    },
+    "user": {
+        "posts": "Bài viết",
+        "followers": "Người theo dõi",
+        "following": "Đang theo dõi",
+        "reputation": "Uy tín",
+        "joined": "Tham gia"
+    },
+    "sort": {
+        "newest": "Mới nhất",
+        "popular": "Phổ biến nhất",
+        "mostCommented": "Bình luận nhiều",
+        "topRated": "Đánh giá cao"
+    },
+    "messages": {
+        "loading": "Đang tải...",
+        "noPosts": "Không có bài viết",
+        "postSuccess": "Đăng thành công",
+        "deleteConfirm": "Xóa bài viết này?"
+    }
+}

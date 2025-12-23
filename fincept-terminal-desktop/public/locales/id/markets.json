@@ -1,0 +1,48 @@
+{
+    "title": "PASAR",
+    "marketTerminalLive": "TERMINAL PASAR - DATA LANGSUNG",
+    "globalMarkets": "PASAR GLOBAL",
+    "regionalMarkets": "pasar regional",
+    "regionalMarketsLive": "PASAR REGIONAL - DATA LANGSUNG",
+    "liveData": "DATA LANGSUNG",
+    "symbol": "SIMBOL",
+    "name": "NAMA",
+    "price": "HARGA",
+    "change": "UBAH",
+    "percentChange": "%UBH",
+    "high": "TINGGI",
+    "low": "RENDAH",
+    "loading": "Memuat...",
+    "noData": "Tidak ada data tersedia",
+    "refresh": "SEGARKAN",
+    "auto": "OTOMATIS",
+    "on": "AKTIF",
+    "off": "MATI",
+    "lastUpdate": "UPDATE TERAKHIR",
+    "updating": "MEMPERBARUI",
+    "live": "LANGSUNG",
+    "connected": "Terhubung",
+    "cache": "Cache",
+    "enabled": "DIAKTIFKAN",
+    "dataProviderInfo": "Data disediakan oleh Yahoo Finance API | Pembaruan real-time",
+    "header": {
+        "live": "LANGSUNG",
+        "updating": "MEMPERBARUI",
+        "refresh": "SEGARKAN"
+    },
+    "tabs": {
+        "overview": "Ikhtisar",
+        "stocks": "Saham",
+        "indices": "Indeks",
+        "forex": "Forex",
+        "crypto": "Kripto",
+        "commodities": "Komoditas",
+        "bonds": "Obligasi"
+    },
+    "status": {
+        "marketOpen": "Pasar Buka",
+        "marketClosed": "Pasar Tutup",
+        "preMarket": "Pra-Pasar",
+        "afterHours": "Setelah Jam Kerja"
+    }
+}

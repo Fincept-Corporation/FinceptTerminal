@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Plus,
   Search,
@@ -23,6 +24,7 @@ import { useDataSources } from '../../../contexts/DataSourceContext';
 import { TabFooter } from '@/components/common/TabFooter';
 
 export default function DataSourcesTab() {
+  const { t } = useTranslation('dataSources');
   const {
     connections,
     addConnection,
@@ -490,10 +492,10 @@ export default function DataSourcesTab() {
                                   connection.status === 'connected'
                                     ? '#10b981'
                                     : connection.status === 'error'
-                                    ? '#ef4444'
-                                    : connection.status === 'testing'
-                                    ? '#f59e0b'
-                                    : '#737373',
+                                      ? '#ef4444'
+                                      : connection.status === 'testing'
+                                        ? '#f59e0b'
+                                        : '#737373',
                               }}
                             >
                               {connection.status === 'connected' && <Check size={12} />}

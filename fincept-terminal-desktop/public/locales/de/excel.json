@@ -1,0 +1,26 @@
+{
+    "title": "Excel-Integration",
+    "header": {
+        "import": "Importieren",
+        "export": "Exportieren",
+        "preview": "Vorschau"
+    },
+    "toolbar": {
+        "open": "Datei öffnen",
+        "save": "Speichern",
+        "upload": "Hochladen",
+        "download": "Herunterladen",
+        "refresh": "Aktualisieren"
+    },
+    "table": {
+        "sheet": "Blatt",
+        "rows": "Zeilen",
+        "columns": "Spalten"
+    },
+    "messages": {
+        "loading": "Datei wird geladen...",
+        "imported": "Datei importiert",
+        "exported": "Datei exportiert",
+        "error": "Fehler bei der Verarbeitung"
+    }
+}

@@ -1,0 +1,56 @@
+﻿{
+    "title": "AJAN YAPILANDIRMASI",
+    "header": {
+        "agents": "AJANLAR",
+        "active": "AKTİF",
+        "total": "TOPLAM"
+    },
+    "toolbar": {
+        "refresh": "YENİLE",
+        "save": "KAYDET",
+        "saveConfig": "Yapılandırmayı Kaydet",
+        "run": "ÇALIŞTIR",
+        "test": "TEST",
+        "testAgent": "Ajanı Test Et"
+    },
+    "sidebar": {
+        "availableAgents": "MEVCUT AJANLAR",
+        "selectAgent": "Yapılandırmak için bir ajan seçin"
+    },
+    "config": {
+        "name": "İsim",
+        "role": "Rol",
+        "goal": "Hedef",
+        "description": "Açıklama",
+        "llmConfig": "LLM Yapılandırması",
+        "provider": "Sağlayıcı",
+        "model": "Model",
+        "temperature": "Sıcaklık",
+        "maxTokens": "Maks Token",
+        "tools": "Araçlar",
+        "memory": "Belleği Etkinleştir",
+        "agenticMemory": "Agentic Belleği Etkinleştir",
+        "instructions": "Talimatlar",
+        "testQuery": "TEST SORGUSU",
+        "testQueryPlaceholder": "Test sorgunuzu buraya girin..."
+    },
+    "llmProviders": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "ollama": "Ollama",
+        "gemini": "Gemini"
+    },
+    "status": {
+        "ready": "Hazır",
+        "running": "Çalışıyor",
+        "error": "Hata",
+        "configured": "Yapılandırıldı"
+    },
+    "messages": {
+        "configSaved": "Yapılandırma kaydedildi",
+        "agentTested": "Ajan başarıyla test edildi",
+        "testFailed": "Test başarısız",
+        "loadingAgents": "Ajanlar yükleniyor...",
+        "noAgents": "Ajan bulunamadı"
+    }
+}

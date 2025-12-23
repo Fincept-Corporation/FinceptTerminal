@@ -1,0 +1,42 @@
+{
+    "title": "Ticket de soporte",
+    "header": {
+        "tickets": "Tickets",
+        "new": "Nuevo ticket",
+        "status": "Estado"
+    },
+    "form": {
+        "subject": "Asunto",
+        "description": "Descripción",
+        "priority": "Prioridad",
+        "category": "Categoría"
+    },
+    "priority": {
+        "low": "Baja",
+        "medium": "Media",
+        "high": "Alta",
+        "urgent": "Urgente"
+    },
+    "status": {
+        "open": "Abierto",
+        "inProgress": "En progreso",
+        "resolved": "Resuelto",
+        "closed": "Cerrado"
+    },
+    "buttons": {
+        "submit": "Enviar",
+        "cancel": "Cancelar",
+        "reply": "Responder",
+        "close": "Cerrar"
+    },
+    "messages": {
+        "created": "Ticket creado",
+        "updated": "Ticket actualizado",
+        "closed": "Ticket cerrado",
+        "noTickets": "Sin tickets"
+    },
+    "auth": {
+        "loginRequired": "Inicie sesión para crear tickets",
+        "demoMode": "Modo demo"
+    }
+}

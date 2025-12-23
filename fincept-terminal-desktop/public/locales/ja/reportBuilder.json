@@ -1,0 +1,33 @@
+{
+    "title": "レポートビルダー",
+    "header": {
+        "templates": "テンプレート",
+        "reports": "レポート",
+        "preview": "プレビュー"
+    },
+    "toolbar": {
+        "new": "新規レポート",
+        "save": "保存",
+        "export": "エクスポート",
+        "print": "印刷",
+        "share": "共有"
+    },
+    "sections": {
+        "header": "ヘッダー",
+        "summary": "サマリー",
+        "charts": "チャート",
+        "tables": "テーブル",
+        "footer": "フッター"
+    },
+    "templates": {
+        "daily": "日次レポート",
+        "weekly": "週次レポート",
+        "monthly": "月次レポート",
+        "custom": "カスタム"
+    },
+    "messages": {
+        "saved": "レポートを保存しました",
+        "exported": "レポートをエクスポートしました",
+        "generating": "レポートを生成中..."
+    }
+}

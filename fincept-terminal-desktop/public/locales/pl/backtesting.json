@@ -1,0 +1,95 @@
+﻿{
+    "title": "SILNIK BACKTESTINGU",
+    "header": {
+        "strategy": "STRATEGIA",
+        "results": "WYNIKI",
+        "trades": "TRANSAKCJE"
+    },
+    "toolbar": {
+        "run": "Uruchom Backtest",
+        "running": "Trwa...",
+        "stop": "STOP",
+        "reset": "RESET",
+        "export": "EKSPORTUJ WYNIKI",
+        "refresh": "Odśwież"
+    },
+    "config": {
+        "symbolTimeframe": "Symbol i Interwał",
+        "symbol": "Symbol",
+        "stockTicker": "Ticker akcji do backtestingu",
+        "startDate": "Data Początkowa",
+        "endDate": "Data Końcowa",
+        "initialCapital": "Kapitał Początkowy",
+        "strategy": "Strategia",
+        "parameters": "Parametry"
+    },
+    "sections": {
+        "strategyConfig": "Konfiguracja Strategii",
+        "strategyType": "Typ Strategii",
+        "strategyParams": "Parametry Strategii",
+        "backtestResults": "Wyniki Backtestingu",
+        "advancedSettings": "Ustawienia Zaawansowane",
+        "advancedNote": "Opcje zaawansowane dla dostawcy Backtesting.py"
+    },
+    "advanced": {
+        "commission": "Prowizja (ułamek)",
+        "tradeOnClose": "Handel na Zamknięciu",
+        "hedging": "Hedging",
+        "exclusiveOrders": "Zlecenia Wyłączne",
+        "margin": "Depozyt"
+    },
+    "strategies": {
+        "sma": "Przecięcie SMA",
+        "rsi": "Strategia RSI",
+        "macd": "Strategia MACD",
+        "bollinger": "Wstęgi Bollingera",
+        "custom": "Strategia Własna"
+    },
+    "smaParams": {
+        "fastPeriod": "Szybki Okres",
+        "slowPeriod": "Wolny Okres",
+        "fastNote": "Krótkoterminowa średnia krocząca",
+        "slowNote": "Długoterminowa średnia krocząca"
+    },
+    "results": {
+        "totalReturn": "Całkowity Zwrot",
+        "sharpeRatio": "Współczynnik Sharpe'a",
+        "maxDrawdown": "Maksymalny Drawdown",
+        "winRate": "Wskaźnik Wygranych",
+        "totalTrades": "Liczba Transakcji",
+        "profitFactor": "Czynnik Zysku",
+        "configurePrompt": "Skonfiguruj backtest i kliknij 'Uruchom Backtest' aby zobaczyć wyniki"
+    },
+    "trades": {
+        "date": "Data",
+        "type": "Typ",
+        "price": "Cena",
+        "quantity": "Ilość",
+        "pnl": "Z/S"
+    },
+    "status": {
+        "ready": "Gotowy",
+        "running": "Trwa...",
+        "completed": "Zakończony",
+        "error": "Błąd"
+    },
+    "messages": {
+        "backtestStarted": "Backtest rozpoczęty",
+        "backtestCompleted": "Backtest ukończony",
+        "backtestError": "Błąd backtestingu"
+    },
+    "visual": {
+        "priceData": "Dane Cenowe",
+        "maIndicator": "Wskaźnik MA",
+        "condition": "Warunek",
+        "buyOrder": "Zlecenie Kupna",
+        "sellOrder": "Zlecenie Sprzedaży",
+        "addBlocksPrompt": "Kliknij bloki powyżej aby dodać do strategii",
+        "remove": "Usuń",
+        "generateCode": "Generuj Kod z Bloków"
+    },
+    "template": {
+        "strategyTemplates": "Szablony Strategii",
+        "apply": "Zastosuj Szablon"
+    }
+}

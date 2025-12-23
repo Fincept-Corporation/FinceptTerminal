@@ -1,0 +1,39 @@
+{
+    "title": "Notițe",
+    "header": {
+        "notes": "Notițe",
+        "folders": "Foldere",
+        "tags": "Etichete"
+    },
+    "toolbar": {
+        "newNote": "Notiță nouă",
+        "templates": "Șabloane",
+        "favorites": "Favorite",
+        "filters": "Filtre",
+        "archived": "Arhivate"
+    },
+    "editor": {
+        "title": "Titlu",
+        "content": "Conținut",
+        "tags": "Etichete"
+    },
+    "buttons": {
+        "save": "Salvează",
+        "delete": "Șterge",
+        "archive": "Arhivează",
+        "share": "Distribuie"
+    },
+    "messages": {
+        "saved": "Notiță salvată",
+        "deleted": "Notiță ștearsă",
+        "archived": "Notiță arhivată"
+    },
+    "search": {
+        "placeholder": "Caută notițe..."
+    },
+    "stats": {
+        "total": "Total",
+        "archived": "Arhivate",
+        "favorites": "Favorite"
+    }
+}

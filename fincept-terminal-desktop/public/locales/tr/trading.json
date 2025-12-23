@@ -1,0 +1,76 @@
+{
+    "title": "İŞLEM",
+    "header": {
+        "orders": "EMİRLER",
+        "positions": "POZİSYONLAR",
+        "history": "GEÇMİŞ",
+        "settings": "AYARLAR",
+        "terminal": "FINCEPT TERMİNAL",
+        "selectBroker": "ARACI KURUM SEÇ",
+        "paper": "DEMO",
+        "live": "CANLI",
+        "watchlist": "İZLEME LİSTESİ",
+        "orderbook": "EMİR DEFTERİ",
+        "trades": "İŞLEMLER",
+        "stats": "İSTATİSTİKLER",
+        "features": "ÖZELLİKLER",
+        "crossExchange": "ÇAPRAZ BORSA",
+        "chart": "GRAFİK",
+        "depth": "DERİNLİK",
+        "volume": "HACİM",
+        "aiAgents": "YAPAY ZEKA AJANLARI",
+        "leaderboard": "LİDER TABLOSU",
+        "modelChat": "MODEL SOHBET"
+    },
+    "orderTypes": {
+        "market": "Piyasa",
+        "limit": "Limit",
+        "stop": "Stop",
+        "stopLimit": "Stop Limit",
+        "trailingStop": "Takip Eden Stop"
+    },
+    "actions": {
+        "buy": "AL",
+        "sell": "SAT",
+        "cancel": "İptal",
+        "modify": "Değiştir",
+        "close": "Kapat",
+        "closeAll": "Tümünü Kapat"
+    },
+    "form": {
+        "symbol": "Sembol",
+        "quantity": "Miktar",
+        "price": "Fiyat",
+        "stopPrice": "Stop Fiyat",
+        "takeProfit": "Kar Al",
+        "stopLoss": "Zarar Durdur",
+        "leverage": "Kaldıraç"
+    },
+    "position": {
+        "openPrice": "Açılış Fiyatı",
+        "currentPrice": "Güncel Fiyat",
+        "pnl": "K/Z",
+        "pnlPercent": "K/Z %",
+        "margin": "Teminat",
+        "size": "Boyut"
+    },
+    "order": {
+        "pending": "Beklemede",
+        "filled": "Gerçekleşti",
+        "cancelled": "İptal Edildi",
+        "rejected": "Reddedildi",
+        "partial": "Kısmen Gerçekleşti"
+    },
+    "time": {
+        "gtc": "İptale Kadar Geçerli",
+        "day": "Günlük Emir",
+        "ioc": "Hemen ya da İptal",
+        "fok": "Ya Hep ya Hiç"
+    },
+    "messages": {
+        "orderPlaced": "Emir gerçekleşti",
+        "orderFailed": "Emir başarısız",
+        "confirmOrder": "Bu emri onayla?",
+        "noPositions": "Açık pozisyon yok"
+    }
+}

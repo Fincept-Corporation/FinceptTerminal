@@ -1,0 +1,42 @@
+{
+    "title": "Тікет підтримки",
+    "header": {
+        "tickets": "Тікети",
+        "new": "Новий тікет",
+        "status": "Статус"
+    },
+    "form": {
+        "subject": "Тема",
+        "description": "Опис",
+        "priority": "Пріоритет",
+        "category": "Категорія"
+    },
+    "priority": {
+        "low": "Низький",
+        "medium": "Середній",
+        "high": "Високий",
+        "urgent": "Терміновий"
+    },
+    "status": {
+        "open": "Відкритий",
+        "inProgress": "В роботі",
+        "resolved": "Вирішено",
+        "closed": "Закритий"
+    },
+    "buttons": {
+        "submit": "Надіслати",
+        "cancel": "Скасувати",
+        "reply": "Відповісти",
+        "close": "Закрити"
+    },
+    "messages": {
+        "created": "Тікет створено",
+        "updated": "Тікет оновлено",
+        "closed": "Тікет закрито",
+        "noTickets": "Немає тікетів"
+    },
+    "auth": {
+        "loginRequired": "Увійдіть для створення тікету",
+        "demoMode": "Демо-режим"
+    }
+}
