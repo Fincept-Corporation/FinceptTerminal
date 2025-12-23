@@ -1068,13 +1068,17 @@ def main():
             result = service.initialize(config)
 
         elif command == "check_status":
+            # RD-Agent doesn't need persistent state - if it's available, consider it initialized
+            # (It's a library, not a stateful service like Qlib)
+            rdagent_initialized = RD_AGENT_AVAILABLE
+
             result = {
                 "success": True,
                 "rdagent_available": RD_AGENT_AVAILABLE,
                 "factor_loop_available": FACTOR_LOOP_AVAILABLE,
                 "model_loop_available": MODEL_LOOP_AVAILABLE,
                 "experiment_available": EXPERIMENT_AVAILABLE,
-                "initialized": service.initialized
+                "initialized": rdagent_initialized
             }
 
         elif command == "get_capabilities":

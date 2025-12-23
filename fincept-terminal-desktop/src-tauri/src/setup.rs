@@ -42,14 +42,17 @@ const BUN_LINUX_X64_URL: &str = "https://github.com/oven-sh/bun/releases/downloa
 
 // Baseline builds (work on all CPUs, slightly slower)
 const BUN_WINDOWS_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-windows-x64-baseline.zip";
+
 #[cfg(target_os = "macos")]
-const BUN_MACOS_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-x64-baseline.zip";
+const BUN_DARWIN_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-x64-baseline.zip";
+
 #[cfg(target_os = "linux")]
 const BUN_LINUX_X64_BASELINE_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-linux-x64-baseline.zip";
 
 // ARM builds (always optimized for their architecture)
 #[cfg(target_os = "macos")]
-const BUN_MACOS_ARM_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-aarch64.zip";
+const BUN_DARWIN_ARM_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-darwin-aarch64.zip";
+
 #[cfg(target_os = "linux")]
 const BUN_LINUX_ARM_URL: &str = "https://github.com/oven-sh/bun/releases/download/bun-v1.1.0/bun-linux-aarch64.zip";
 
@@ -938,7 +941,7 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
             if cfg!(target_arch = "aarch64") {
                 // ARM Macs always use optimized build
                 emit_progress(app, "bun", 5, "Downloading Bun for Apple Silicon...", false);
-                BUN_MACOS_ARM_URL
+                BUN_DARWIN_ARM_URL
             } else {
                 // Intel Macs - check for AVX2
                 if cpu_supports_avx2() {
@@ -946,7 +949,7 @@ async fn install_bun(app: &AppHandle) -> Result<(), String> {
                     BUN_MACOS_X64_URL
                 } else {
                     emit_progress(app, "bun", 5, "Downloading baseline Bun for compatibility...", false);
-                    BUN_MACOS_X64_BASELINE_URL
+                    BUN_DARWIN_X64_BASELINE_URL
                 }
             }
         } else {
