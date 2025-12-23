@@ -28,5 +28,10 @@
     "device": "Perangkat",
     "updating": "MEMPERBARUI",
     "ready": "SIAP",
-    "credits": "KREDIT"
+    "credits": "KREDIT",
+    "overview": "RINGKASAN",
+    "usage": "PENGGUNAAN",
+    "settings": "PENGATURAN",
+    "pricing": "HARGA",
+    "logout": "KELUAR"
 }

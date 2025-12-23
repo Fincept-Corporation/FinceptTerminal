@@ -8,7 +8,7 @@
     "symbol": "สัญลักษณ์",
     "name": "ชื่อ",
     "price": "ราคา",
-    "change": "เปลี่ยนแปลง",
+    "change": "เปลี่ยน",
     "percentChange": "%เปลี่ยน",
     "high": "สูง",
     "low": "ต่ำ",
@@ -24,5 +24,25 @@
     "connected": "เชื่อมต่อแล้ว",
     "cache": "แคช",
     "enabled": "เปิดใช้",
-    "dataProviderInfo": "ข้อมูลจาก Yahoo Finance API | อัปเดตเรียลไทม์"
+    "dataProviderInfo": "ข้อมูลจาก Yahoo Finance API | อัปเดตเรียลไทม์",
+    "header": {
+        "live": "สด",
+        "updating": "กำลังอัปเดต",
+        "refresh": "รีเฟรช"
+    },
+    "tabs": {
+        "overview": "ภาพรวม",
+        "stocks": "หุ้น",
+        "indices": "ดัชนี",
+        "forex": "ฟอเร็กซ์",
+        "crypto": "คริปโต",
+        "commodities": "สินค้าโภคภัณฑ์",
+        "bonds": "พันธบัตร"
+    },
+    "status": {
+        "marketOpen": "ตลาดเปิด",
+        "marketClosed": "ตลาดปิด",
+        "preMarket": "ก่อนตลาด",
+        "afterHours": "หลังปิดตลาด"
+    }
 }

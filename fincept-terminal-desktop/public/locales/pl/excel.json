@@ -1,0 +1,26 @@
+{
+    "title": "Integracja Excel",
+    "header": {
+        "import": "Importuj",
+        "export": "Eksportuj",
+        "preview": "Podgląd"
+    },
+    "toolbar": {
+        "open": "Otwórz plik",
+        "save": "Zapisz",
+        "upload": "Wyślij",
+        "download": "Pobierz",
+        "refresh": "Odśwież"
+    },
+    "table": {
+        "sheet": "Arkusz",
+        "rows": "Wiersze",
+        "columns": "Kolumny"
+    },
+    "messages": {
+        "loading": "Ładowanie pliku...",
+        "imported": "Plik zaimportowany",
+        "exported": "Plik wyeksportowany",
+        "error": "Błąd przetwarzania"
+    }
+}

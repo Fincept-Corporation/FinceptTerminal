@@ -1,8 +1,8 @@
 {
-    "title": "FINCEPT PORTFOLIO MANAGER",
+    "title": "FINCEPT PORTFOLIO-MANAGER",
     "header": {
         "live": "LIVE",
-        "updating": "AKTUALISIERE",
+        "updating": "AKTUALISIERUNG",
         "newPortfolio": "NEUES PORTFOLIO",
         "refresh": "AKTUALISIEREN",
         "exportCsv": "CSV EXPORTIEREN"
@@ -17,19 +17,47 @@
         "positions": "POSITIONEN",
         "addAsset": "ANLAGE HINZUFÜGEN",
         "sellAsset": "ANLAGE VERKAUFEN",
-        "analytics": "ANALYSEN",
-        "history": "HISTORIE"
+        "analytics": "ANALYTIK",
+        "history": "VERLAUF",
+        "activeMgmt": "AKTIVES MANAGEMENT",
+        "performance": "PERFORMANCE",
+        "rebalance": "REBALANCING",
+        "reports": "BERICHTE",
+        "alerts": "WARNUNGEN",
+        "sectors": "SEKTOREN",
+        "help": "HILFE"
     },
     "sidebar": {
         "portfolios": "PORTFOLIOS",
         "loading": "Portfolios werden geladen...",
-        "noPortfolios": "Noch keine Portfolios vorhanden."
+        "noPortfolios": "Noch keine Portfolios.",
+        "clickCreate": "Klicken Sie auf NEUES PORTFOLIO zum Erstellen.",
+        "owner": "Eigentümer",
+        "currency": "Währung"
+    },
+    "content": {
+        "selectOrCreate": "Wählen Sie ein Portfolio oder erstellen Sie ein neues zum Starten",
+        "loadingData": "Portfolio-Daten werden geladen...",
+        "comingSoon": "Ansicht kommt bald..."
     },
     "modals": {
         "createNew": "NEUES PORTFOLIO ERSTELLEN",
+        "portfolioName": "PORTFOLIO-NAME",
+        "owner": "EIGENTÜMER",
+        "currency": "WÄHRUNG",
         "cancel": "ABBRECHEN",
         "create": "ERSTELLEN",
+        "addAssetTitle": "ANLAGE ZUM PORTFOLIO HINZUFÜGEN",
+        "sellAssetTitle": "ANLAGE VERKAUFEN",
+        "symbol": "SYMBOL",
+        "quantity": "MENGE",
+        "price": "PREIS",
         "add": "HINZUFÜGEN",
         "sell": "VERKAUFEN"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | Echtzeit-Tracking mit yfinance-Integration",
+        "lastUpdated": "Zuletzt Aktualisiert",
+        "connected": "VERBUNDEN"
     }
 }

@@ -1,21 +1,21 @@
 {
     "title": "বাজার",
-    "marketTerminalLive": "মার্কেট টার্মিনাল - লাইভ ডেটা",
-    "globalMarkets": "বিশ্ববাজার",
+    "marketTerminalLive": "বাজার টার্মিনাল - লাইভ ডেটা",
+    "globalMarkets": "বিশ্ব বাজার",
     "regionalMarkets": "আঞ্চলিক বাজার",
     "regionalMarketsLive": "আঞ্চলিক বাজার - লাইভ ডেটা",
     "liveData": "লাইভ ডেটা",
-    "symbol": "প্রতীক",
+    "symbol": "সিম্বল",
     "name": "নাম",
     "price": "মূল্য",
     "change": "পরিবর্তন",
     "percentChange": "%পরিবর্তন",
-    "high": "সর্বোচ্চ",
-    "low": "সর্বনিম্ন",
+    "high": "উচ্চ",
+    "low": "নিম্ন",
     "loading": "লোড হচ্ছে...",
     "noData": "কোনো ডেটা নেই",
     "refresh": "রিফ্রেশ",
-    "auto": "অটো",
+    "auto": "স্বয়ংক্রিয়",
     "on": "চালু",
     "off": "বন্ধ",
     "lastUpdate": "শেষ আপডেট",
@@ -24,5 +24,25 @@
     "connected": "সংযুক্ত",
     "cache": "ক্যাশ",
     "enabled": "সক্রিয়",
-    "dataProviderInfo": "Yahoo Finance API থেকে ডেটা | রিয়েল-টাইম আপডেট"
+    "dataProviderInfo": "Yahoo Finance API থেকে ডেটা | রিয়েল-টাইম আপডেট",
+    "header": {
+        "live": "লাইভ",
+        "updating": "আপডেট হচ্ছে",
+        "refresh": "রিফ্রেশ"
+    },
+    "tabs": {
+        "overview": "সংক্ষিপ্ত বিবরণ",
+        "stocks": "স্টক",
+        "indices": "সূচক",
+        "forex": "ফরেক্স",
+        "crypto": "ক্রিপ্টো",
+        "commodities": "পণ্য",
+        "bonds": "বন্ড"
+    },
+    "status": {
+        "marketOpen": "বাজার খোলা",
+        "marketClosed": "বাজার বন্ধ",
+        "preMarket": "প্রি-মার্কেট",
+        "afterHours": "আফটার আওয়ার্স"
+    }
 }

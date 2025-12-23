@@ -1,0 +1,95 @@
+﻿{
+    "title": "ДВИЖОК БЕКТЕСТИНГА",
+    "header": {
+        "strategy": "СТРАТЕГИЯ",
+        "results": "РЕЗУЛЬТАТЫ",
+        "trades": "СДЕЛКИ"
+    },
+    "toolbar": {
+        "run": "Запустить Бектест",
+        "running": "Выполняется...",
+        "stop": "СТОП",
+        "reset": "СБРОС",
+        "export": "ЭКСПОРТ РЕЗУЛЬТАТОВ",
+        "refresh": "Обновить"
+    },
+    "config": {
+        "symbolTimeframe": "Символ и Таймфрейм",
+        "symbol": "Символ",
+        "stockTicker": "Тикер акции для бектеста",
+        "startDate": "Дата Начала",
+        "endDate": "Дата Окончания",
+        "initialCapital": "Начальный Капитал",
+        "strategy": "Стратегия",
+        "parameters": "Параметры"
+    },
+    "sections": {
+        "strategyConfig": "Настройка Стратегии",
+        "strategyType": "Тип Стратегии",
+        "strategyParams": "Параметры Стратегии",
+        "backtestResults": "Результаты Бектеста",
+        "advancedSettings": "Расширенные Настройки",
+        "advancedNote": "Расширенные опции для провайдера Backtesting.py"
+    },
+    "advanced": {
+        "commission": "Комиссия (десят.)",
+        "tradeOnClose": "Торговля на Закрытии",
+        "hedging": "Хеджирование",
+        "exclusiveOrders": "Эксклюзивные Ордера",
+        "margin": "Маржа"
+    },
+    "strategies": {
+        "sma": "Пересечение SMA",
+        "rsi": "Стратегия RSI",
+        "macd": "Стратегия MACD",
+        "bollinger": "Полосы Боллинджера",
+        "custom": "Пользовательская Стратегия"
+    },
+    "smaParams": {
+        "fastPeriod": "Быстрый Период",
+        "slowPeriod": "Медленный Период",
+        "fastNote": "Краткосрочная скользящая средняя",
+        "slowNote": "Долгосрочная скользящая средняя"
+    },
+    "results": {
+        "totalReturn": "Общая Доходность",
+        "sharpeRatio": "Коэффициент Шарпа",
+        "maxDrawdown": "Макс. Просадка",
+        "winRate": "Процент Побед",
+        "totalTrades": "Всего Сделок",
+        "profitFactor": "Фактор Прибыли",
+        "configurePrompt": "Настройте бектест и нажмите 'Запустить' для просмотра результатов"
+    },
+    "trades": {
+        "date": "Дата",
+        "type": "Тип",
+        "price": "Цена",
+        "quantity": "Количество",
+        "pnl": "П/У"
+    },
+    "status": {
+        "ready": "Готов",
+        "running": "Выполняется...",
+        "completed": "Завершено",
+        "error": "Ошибка"
+    },
+    "messages": {
+        "backtestStarted": "Бектест запущен",
+        "backtestCompleted": "Бектест завершен",
+        "backtestError": "Ошибка бектеста"
+    },
+    "visual": {
+        "priceData": "Ценовые Данные",
+        "maIndicator": "Индикатор MA",
+        "condition": "Условие",
+        "buyOrder": "Ордер на Покупку",
+        "sellOrder": "Ордер на Продажу",
+        "addBlocksPrompt": "Нажмите на блоки для добавления в стратегию",
+        "remove": "Удалить",
+        "generateCode": "Генерировать Код из Блоков"
+    },
+    "template": {
+        "strategyTemplates": "Шаблоны Стратегий",
+        "apply": "Применить Шаблон"
+    }
+}

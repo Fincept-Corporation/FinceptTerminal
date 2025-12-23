@@ -1,0 +1,42 @@
+{
+    "title": "Destek Bileti",
+    "header": {
+        "tickets": "Biletler",
+        "new": "Yeni bilet",
+        "status": "Durum"
+    },
+    "form": {
+        "subject": "Konu",
+        "description": "Açıklama",
+        "priority": "Öncelik",
+        "category": "Kategori"
+    },
+    "priority": {
+        "low": "Düşük",
+        "medium": "Orta",
+        "high": "Yüksek",
+        "urgent": "Acil"
+    },
+    "status": {
+        "open": "Açık",
+        "inProgress": "İşlemde",
+        "resolved": "Çözüldü",
+        "closed": "Kapalı"
+    },
+    "buttons": {
+        "submit": "Gönder",
+        "cancel": "İptal",
+        "reply": "Yanıtla",
+        "close": "Kapat"
+    },
+    "messages": {
+        "created": "Bilet oluşturuldu",
+        "updated": "Bilet güncellendi",
+        "closed": "Bilet kapatıldı",
+        "noTickets": "Bilet yok"
+    },
+    "auth": {
+        "loginRequired": "Bilet oluşturmak için giriş yapın",
+        "demoMode": "Demo modu"
+    }
+}

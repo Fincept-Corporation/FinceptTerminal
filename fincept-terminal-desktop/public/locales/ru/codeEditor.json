@@ -1,0 +1,57 @@
+{
+    "title": "РЕДАКТОР КОДА",
+    "header": {
+        "files": "ФАЙЛЫ",
+        "terminal": "ТЕРМИНАЛ",
+        "packages": "ПАКЕТЫ"
+    },
+    "toolbar": {
+        "newFile": "НОВЫЙ ФАЙЛ",
+        "new": "НОВЫЙ",
+        "open": "ОТКРЫТЬ",
+        "save": "СОХРАНИТЬ",
+        "run": "ВЫПОЛНИТЬ",
+        "running": "ВЫПОЛНЯЕТСЯ...",
+        "runAll": "ВЫПОЛНИТЬ ВСЁ",
+        "download": "СКАЧАТЬ",
+        "upload": "ЗАГРУЗИТЬ",
+        "clear": "ОЧИСТИТЬ",
+        "history": "ИСТОРИЯ"
+    },
+    "languages": {
+        "finscript": "FinScript",
+        "python": "Python",
+        "javascript": "JavaScript",
+        "json": "JSON"
+    },
+    "tabs": {
+        "editor": "Редактор",
+        "notebook": "JUPYTER NOTEBOOK",
+        "finscript": "РЕДАКТОР FINSCRIPT",
+        "terminal": "Терминал"
+    },
+    "terminal": {
+        "output": "Вывод",
+        "clear": "Очистить вывод",
+        "running": "Выполняется...",
+        "completed": "Завершено"
+    },
+    "packages": {
+        "installed": "Установленные пакеты",
+        "install": "Установить пакет",
+        "uninstall": "Удалить",
+        "clickToLoad": "Нажмите для загрузки...",
+        "load": "ЗАГРУЗИТЬ ПАКЕТЫ"
+    },
+    "history": {
+        "title": "ИСТОРИЯ НОУТБУКОВ",
+        "loading": "Загрузка истории...",
+        "empty": "История ноутбуков пуста"
+    },
+    "messages": {
+        "fileSaved": "Файл сохранён",
+        "fileOpened": "Файл открыт",
+        "executionComplete": "Выполнение завершено",
+        "executionError": "Ошибка выполнения"
+    }
+}

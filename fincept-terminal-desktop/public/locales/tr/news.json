@@ -7,15 +7,60 @@
         "updating": "GÜNCELLENİYOR...",
         "alerts": "UYARILAR",
         "sources": "KAYNAKLAR",
+        "topics": "KONULAR",
         "status": "DURUM",
         "demoMode": "DEMO MODU",
         "articles": "MAKALELER",
         "activeSources": "AKTİF KAYNAKLAR"
     },
+    "categories": {
+        "all": "TÜMÜ",
+        "markets": "PİYASALAR",
+        "stocks": "Hisseler",
+        "forex": "Forex",
+        "crypto": "KRİPTO",
+        "commodities": "Emtialar",
+        "economy": "Ekonomi",
+        "economic": "EKON",
+        "politics": "Politika",
+        "earnings": "KAZANÇLAR",
+        "tech": "TEKNOLOJİ",
+        "energy": "ENERJİ",
+        "banking": "BANKACILIK",
+        "geopolitics": "JEOPOLİTİK",
+        "flash": "HABER",
+        "urgent": "ACİL"
+    },
+    "feedLabels": {
+        "primary": "BİRİNCİL HABER KAYNAĞI",
+        "secondary": "İKİNCİL HABER KAYNAĞI",
+        "refresh": "YENİLE"
+    },
+    "filters": {
+        "source": "Kaynak",
+        "region": "Bölge",
+        "timeframe": "Zaman"
+    },
+    "timeframes": {
+        "1h": "1 Saat",
+        "24h": "24 Saat",
+        "1w": "1 Hafta",
+        "1m": "1 Ay"
+    },
+    "article": {
+        "readMore": "Devamını Oku",
+        "source": "Kaynak",
+        "published": "Yayınlandı",
+        "relatedStocks": "İlgili Hisseler",
+        "sentiment": "Duyarlılık",
+        "impact": "Etki"
+    },
     "sentiment": {
-        "bullish": "YÜKSELİŞ",
+        "bullish": "YÜKSELIŞ",
         "bearish": "DÜŞÜŞ",
-        "neutral": "NÖTR"
+        "neutral": "TARAFSIZ",
+        "positive": "Pozitif",
+        "negative": "Negatif"
     },
     "autoRefresh": {
         "title": "OTOMATİK YENİLEME ARALIĞI",
@@ -24,7 +69,9 @@
     },
     "messages": {
         "loading": "Haberler yükleniyor...",
-        "loadingFeeds": "Akışlar yükleniyor...",
+        "loadingFeeds": "Haber akışları yükleniyor...",
+        "error": "Haberler yüklenirken hata",
+        "noNews": "Haber bulunamadı",
         "breaking": "SON DAKİKA"
     }
 }

@@ -4,6 +4,11 @@
     "live": "AO VIVO",
     "widgets": "WIDGETS"
   },
+  "buttons": {
+    "addWidget": "ADICIONAR WIDGET",
+    "saveLayout": "SALVAR LAYOUT",
+    "reset": "REINICIAR"
+  },
   "widgets": {
     "loading": "Carregando...",
     "error": "Erro",
@@ -26,18 +31,49 @@
     "price": "PREÇO",
     "change": "VAR",
     "percentChange": "%VAR",
-    "high": "MÁXIMO",
-    "low": "MÍNIMO",
+    "high": "ALTA",
+    "low": "BAIXA",
     "noIndexData": "Sem dados de índices",
-    "noData": "Sem dados"
+    "noForexData": "Sem dados de forex",
+    "noCryptoData": "Sem dados de cripto",
+    "noCommoditiesData": "Sem dados de commodities",
+    "noNewsData": "Sem notícias",
+    "noForumPosts": "Sem publicações",
+    "noStocksInWatchlist": "Sem ações na lista",
+    "noWatchlistSelected": "Nenhuma lista selecionada",
+    "noData": "Sem dados",
+    "pair": "PAR",
+    "rate": "TAXA",
+    "commodity": "COMMODITY",
+    "maritimeIntelligence": "⚓ INTELIGÊNCIA MARÍTIMA",
+    "globe3D": "GLOBO 3D",
+    "vessels": "NAVIOS",
+    "routes": "ROTAS",
+    "vol24h": "VOL 24H",
+    "topTradeCorridors": "PRINCIPAIS CORREDORES COMERCIAIS",
+    "ships": "navios"
   },
-  "buttons": {
-    "addWidget": "ADICIONAR WIDGET",
-    "saveLayout": "SALVAR LAYOUT",
-    "reset": "REINICIAR"
+  "tips": {
+    "drag": "Arraste widgets para reorganizar",
+    "resize": "Redimensione do canto inferior direito",
+    "remove": "Remova widgets com o botão X",
+    "responsive": "Layout responsivo - largura total"
+  },
+  "loading": {
+    "title": "Inicializando Painel",
+    "description": "Configurando cache do banco de dados para carregamento mais rápido...",
+    "note": "Isso levará apenas um momento na primeira inicialização"
   },
   "empty": {
     "noWidgets": "Sem widgets no painel",
     "addFirst": "ADICIONE SEU PRIMEIRO WIDGET"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Espaço de trabalho arrastar e soltar",
+    "layout": "Layout",
+    "custom": "Personalizado",
+    "empty": "Vazio",
+    "active": "ATIVO",
+    "cache": "Cache: ATIVADO"
   }
 }

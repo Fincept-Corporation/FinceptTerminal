@@ -1,0 +1,39 @@
+{
+    "title": "नोट्स",
+    "header": {
+        "notes": "नोट्स",
+        "folders": "फोल्डर",
+        "tags": "टैग"
+    },
+    "toolbar": {
+        "newNote": "नया नोट",
+        "templates": "टेम्पलेट",
+        "favorites": "पसंदीदा",
+        "filters": "फिल्टर",
+        "archived": "आर्काइव किए गए"
+    },
+    "editor": {
+        "title": "शीर्षक",
+        "content": "सामग्री",
+        "tags": "टैग"
+    },
+    "buttons": {
+        "save": "सहेजें",
+        "delete": "हटाएं",
+        "archive": "आर्काइव",
+        "share": "शेयर करें"
+    },
+    "messages": {
+        "saved": "नोट सहेजा गया",
+        "deleted": "नोट हटाया गया",
+        "archived": "नोट आर्काइव हुआ"
+    },
+    "search": {
+        "placeholder": "नोट्स खोजें..."
+    },
+    "stats": {
+        "total": "कुल",
+        "archived": "आर्काइव किए गए",
+        "favorites": "पसंदीदा"
+    }
+}

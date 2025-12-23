@@ -1,4 +1,7 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
     "dashboard": "Dashboard",
     "markets": "Märkte",
@@ -8,8 +11,8 @@
     "watchlist": "Watchlist",
     "research": "Forschung",
     "screener": "Screener",
-    "trading": "Handel",
-    "chat": "KI-Chat",
+    "trading": "Trading",
+    "chat": "AI Chat",
     "agents": "Agenten",
     "settings": "Einstellungen",
     "profile": "Profil",
@@ -19,17 +22,17 @@
   },
   "functionKeys": {
     "f1": "DASH",
-    "f2": "MÄRKTE",
+    "f2": "MRKT",
     "f3": "NEWS",
     "f4": "PORT",
-    "f5": "BKTEST",
-    "f6": "WATCH",
-    "f7": "FORSCH",
+    "f5": "BKTS",
+    "f6": "WTCH",
+    "f7": "FORS",
     "f8": "SCRN",
-    "f9": "HANDEL",
-    "f10": "KI",
+    "f9": "TRDG",
+    "f10": "AI",
     "f11": "VOLL",
-    "f12": "PROFIL"
+    "f12": "PROF"
   },
   "status": {
     "connected": "Verbunden",
@@ -41,6 +44,6 @@
   "labels": {
     "moreTabs": "Weitere Tabs in Toolbar-Menüs",
     "enterCommand": "Befehl eingeben",
-    "search": "Suchen"
+    "search": "Suche"
   }
 }

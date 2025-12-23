@@ -1,11 +1,14 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
     "dashboard": "仪表板",
     "markets": "市场",
     "news": "新闻",
     "portfolio": "投资组合",
     "backtesting": "回测",
-    "watchlist": "关注列表",
+    "watchlist": "自选股",
     "research": "研究",
     "screener": "筛选器",
     "trading": "交易",
@@ -23,7 +26,7 @@
     "f3": "新闻",
     "f4": "组合",
     "f5": "回测",
-    "f6": "关注",
+    "f6": "自选",
     "f7": "研究",
     "f8": "筛选",
     "f9": "交易",
@@ -39,7 +42,7 @@
     "ready": "就绪"
   },
   "labels": {
-    "moreTabs": "工具栏菜单中有更多标签",
+    "moreTabs": "工具栏菜单中更多标签页",
     "enterCommand": "输入命令",
     "search": "搜索"
   }

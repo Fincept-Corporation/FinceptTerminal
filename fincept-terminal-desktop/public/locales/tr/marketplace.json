@@ -1,0 +1,38 @@
+{
+    "title": "MARKETPLACE",
+    "header": {
+        "browse": "Gözat",
+        "myItems": "Öğelerim",
+        "cart": "Sepet"
+    },
+    "categories": {
+        "all": "Tümü",
+        "indicators": "Göstergeler",
+        "strategies": "Stratejiler",
+        "datasets": "Veri setleri",
+        "tools": "Araçlar"
+    },
+    "buttons": {
+        "buy": "Satın al",
+        "addToCart": "Sepete ekle",
+        "install": "Yükle",
+        "preview": "Önizleme"
+    },
+    "product": {
+        "price": "Fiyat",
+        "rating": "Puan",
+        "downloads": "İndirmeler",
+        "author": "Yazar",
+        "version": "Sürüm"
+    },
+    "cart": {
+        "total": "Toplam",
+        "checkout": "Ödeme",
+        "empty": "Sepet boş"
+    },
+    "messages": {
+        "addedToCart": "Sepete eklendi",
+        "purchased": "Satın alındı",
+        "installed": "Yüklendi"
+    }
+}

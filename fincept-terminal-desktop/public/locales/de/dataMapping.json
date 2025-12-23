@@ -1,5 +1,5 @@
 {
-    "title": "DATEN-MAPPING",
+    "title": "DATENMAPPING",
     "header": {
         "mappings": "MAPPINGS",
         "templates": "VORLAGEN",
@@ -16,7 +16,7 @@
         "source": "Quelle",
         "destination": "Ziel",
         "status": "Status",
-        "lastRun": "Letzter Lauf",
+        "lastRun": "Letzte Ausführung",
         "actions": "Aktionen"
     },
     "status": {
@@ -33,20 +33,20 @@
         "export": "Exportieren"
     },
     "create": {
-        "title": "Daten-Mapping erstellen",
+        "title": "Datenmapping erstellen",
         "name": "Mapping-Name",
         "description": "Beschreibung",
         "sourceApi": "Quell-API",
         "destApi": "Ziel-API",
         "fieldMapping": "Feld-Mapping",
-        "save": "Speichern",
+        "save": "Mapping speichern",
         "cancel": "Abbrechen"
     },
     "messages": {
-        "saved": "Gespeichert",
-        "deleted": "Gelöscht",
-        "runSuccess": "Erfolgreich ausgeführt",
-        "error": "Fehler aufgetreten",
-        "noMappings": "Keine Mappings"
+        "saved": "Mapping erfolgreich gespeichert",
+        "deleted": "Mapping gelöscht",
+        "runSuccess": "Mapping erfolgreich ausgeführt",
+        "error": "Ein Fehler ist aufgetreten",
+        "noMappings": "Keine Mappings konfiguriert"
     }
 }

@@ -6,19 +6,19 @@
         "ready": "ГОТОВО"
     },
     "search": {
-        "placeholder": "Пошук документації...",
+        "placeholder": "Пошук у документації...",
         "clear": "ОЧИСТИТИ"
     },
     "navigation": "НАВІГАЦІЯ",
     "codeExample": "ПРИКЛАД КОДУ",
     "content": {
         "title": "ДОКУМЕНТАЦІЯ ТЕРМІНАЛУ FINCEPT",
-        "description": "Виберіть тему з панелі навігації.",
-        "topicsAvailable": "тем доступно",
-        "selectTopic": "Виберіть тему"
+        "description": "Виберіть тему з панелі навігації для перегляду посібників та довідника API.",
+        "topicsAvailable": "доступних тем",
+        "selectTopic": "Виберіть тему для початку"
     },
     "status": {
-        "version": "Документація Терміналу Fincept v3.0",
+        "version": "Fincept Terminal Documentation v3.0 | Повний довідник API та посібники",
         "sections": "Розділи",
         "topics": "Теми",
         "current": "Поточний"

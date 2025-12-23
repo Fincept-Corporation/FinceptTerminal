@@ -1,15 +1,18 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
     "dashboard": "Painel",
     "markets": "Mercados",
     "news": "Notícias",
     "portfolio": "Portfólio",
     "backtesting": "Backtesting",
-    "watchlist": "Lista de Observação",
+    "watchlist": "Lista de Acompanhamento",
     "research": "Pesquisa",
     "screener": "Screener",
     "trading": "Trading",
-    "chat": "Chat IA",
+    "chat": "AI Chat",
     "agents": "Agentes",
     "settings": "Configurações",
     "profile": "Perfil",
@@ -18,18 +21,18 @@
     "logout": "Sair"
   },
   "functionKeys": {
-    "f1": "PAINEL",
+    "f1": "PANL",
     "f2": "MERC",
-    "f3": "NEWS",
+    "f3": "NOTI",
     "f4": "PORT",
-    "f5": "BKTEST",
-    "f6": "OBS",
+    "f5": "BKTS",
+    "f6": "ACOM",
     "f7": "PESQ",
     "f8": "SCRN",
-    "f9": "TRADE",
-    "f10": "IA",
-    "f11": "COMP",
-    "f12": "PERFIL"
+    "f9": "TRDG",
+    "f10": "AI",
+    "f11": "FULL",
+    "f12": "PERF"
   },
   "status": {
     "connected": "Conectado",
@@ -39,8 +42,8 @@
     "ready": "Pronto"
   },
   "labels": {
-    "moreTabs": "Mais abas nos menus de ferramentas",
-    "enterCommand": "Digite comando",
+    "moreTabs": "Mais abas nos menus da barra de ferramentas",
+    "enterCommand": "Inserir Comando",
     "search": "Pesquisar"
   }
 }

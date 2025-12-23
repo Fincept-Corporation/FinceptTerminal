@@ -1,10 +1,38 @@
 {
-    "title": "SCREENER SAHAM",
+    "title": "PENJELAJAH SERI FRED",
     "header": {
+        "title": "PENJELAJAH DATA FRED",
         "filters": "FILTER",
         "results": "HASIL",
-        "saved": "TERSIMPAN",
+        "saved": "LAYAR TERSIMPAN",
         "presets": "PRESET"
+    },
+    "apiKey": {
+        "required": "KUNCI API DIPERLUKAN",
+        "configure": "Konfigurasikan kunci FRED API Anda di Pengaturan → Kredensial untuk mengakses data ekonomi.",
+        "getKey": "Dapatkan kunci API gratis di",
+        "addToSettings": "Tambahkan ke Pengaturan → Kredensial → FRED_API_KEY",
+        "saveAndReload": "Simpan dan muat ulang tab ini",
+        "tip": "Pastikan Anda telah mengonfigurasi kunci FRED API Anda di Pengaturan → Kredensial"
+    },
+    "form": {
+        "seriesIds": "ID SERI",
+        "startDate": "TANGGAL MULAI",
+        "endDate": "TANGGAL AKHIR",
+        "quickAdd": "TAMBAH CEPAT"
+    },
+    "buttons": {
+        "fetch": "AMBIL",
+        "loading": "MEMUAT",
+        "browse": "JELAJAHI SERI",
+        "done": "SELESAI"
+    },
+    "chart": {
+        "title": "GRAFIK DERET WAKTU",
+        "emptyState": "Masukkan ID seri dan klik AMBIL untuk memvisualisasikan data",
+        "trySuggestion": "Coba cari GDP, UNRATE, atau CPIAUCSL",
+        "waiting": "Mohon tunggu sementara kami mengambil data dari FRED...",
+        "errorFetching": "Error Mengambil Data"
     },
     "filters": {
         "add": "Tambah Filter",
@@ -13,12 +41,12 @@
         "apply": "Terapkan Filter"
     },
     "criteria": {
-        "marketCap": "Kapitalisasi",
+        "marketCap": "Kapitalisasi Pasar",
         "price": "Harga",
         "volume": "Volume",
         "pe": "P/E",
         "eps": "EPS",
-        "dividend": "Dividen",
+        "dividend": "Hasil Dividen",
         "beta": "Beta",
         "sector": "Sektor",
         "industry": "Industri",
@@ -38,19 +66,19 @@
         "price": "Harga",
         "change": "Perubahan",
         "volume": "Volume",
-        "marketCap": "Kap.",
-        "matches": "hasil"
+        "marketCap": "Kapitalisasi",
+        "matches": "hasil ditemukan"
     },
     "actions": {
-        "save": "Simpan Screen",
-        "load": "Muat Screen",
-        "export": "Ekspor",
-        "addToWatchlist": "Tambah ke Daftar"
+        "save": "Simpan Layar",
+        "load": "Muat Layar",
+        "export": "Ekspor Hasil",
+        "addToWatchlist": "Tambah ke Watchlist"
     },
     "messages": {
-        "loading": "Menyaring...",
-        "noResults": "Tidak ada hasil",
-        "saved": "Tersimpan",
+        "loading": "Menyaring saham...",
+        "noResults": "Tidak ada saham yang cocok",
+        "saved": "Layar berhasil disimpan",
         "applied": "Filter diterapkan"
     }
 }

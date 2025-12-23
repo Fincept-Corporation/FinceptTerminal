@@ -7,7 +7,7 @@
         "refresh": "LÀM MỚI"
     },
     "views": {
-        "list": "Danh sách",
+        "list": "Danh sách ánh xạ",
         "create": "Tạo ánh xạ",
         "templates": "Mẫu"
     },
@@ -17,7 +17,7 @@
         "destination": "Đích",
         "status": "Trạng thái",
         "lastRun": "Lần chạy cuối",
-        "actions": "Hành động"
+        "actions": "Thao tác"
     },
     "status": {
         "active": "Hoạt động",
@@ -33,20 +33,20 @@
         "export": "Xuất"
     },
     "create": {
-        "title": "Tạo ánh xạ",
-        "name": "Tên",
+        "title": "Tạo ánh xạ dữ liệu",
+        "name": "Tên ánh xạ",
         "description": "Mô tả",
         "sourceApi": "API nguồn",
         "destApi": "API đích",
         "fieldMapping": "Ánh xạ trường",
-        "save": "Lưu",
+        "save": "Lưu ánh xạ",
         "cancel": "Hủy"
     },
     "messages": {
-        "saved": "Đã lưu",
-        "deleted": "Đã xóa",
-        "runSuccess": "Thành công",
-        "error": "Lỗi",
-        "noMappings": "Không có ánh xạ"
+        "saved": "Đã lưu ánh xạ thành công",
+        "deleted": "Đã xóa ánh xạ",
+        "runSuccess": "Chạy ánh xạ thành công",
+        "error": "Đã xảy ra lỗi",
+        "noMappings": "Không có ánh xạ nào được cấu hình"
     }
 }

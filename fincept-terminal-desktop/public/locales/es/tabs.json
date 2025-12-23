@@ -1,35 +1,38 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
     "dashboard": "Panel",
     "markets": "Mercados",
     "news": "Noticias",
-    "portfolio": "Cartera",
+    "portfolio": "Portafolio",
     "backtesting": "Backtesting",
-    "watchlist": "Lista de seguimiento",
+    "watchlist": "Lista de Seguimiento",
     "research": "Investigación",
     "screener": "Screener",
     "trading": "Trading",
-    "chat": "Chat IA",
+    "chat": "AI Chat",
     "agents": "Agentes",
     "settings": "Configuración",
     "profile": "Perfil",
     "forum": "Foro",
     "help": "Ayuda",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar Sesión"
   },
   "functionKeys": {
-    "f1": "PANEL",
+    "f1": "PANL",
     "f2": "MERC",
-    "f3": "NEWS",
-    "f4": "CART",
-    "f5": "BKTEST",
-    "f6": "SEGUIR",
-    "f7": "INVEST",
+    "f3": "NOTI",
+    "f4": "PORT",
+    "f5": "BKTS",
+    "f6": "SEGU",
+    "f7": "INVS",
     "f8": "SCRN",
-    "f9": "TRADE",
-    "f10": "IA",
-    "f11": "COMP",
-    "f12": "PERFIL"
+    "f9": "TRDG",
+    "f10": "AI",
+    "f11": "FULL",
+    "f12": "PERF"
   },
   "status": {
     "connected": "Conectado",
@@ -40,7 +43,7 @@
   },
   "labels": {
     "moreTabs": "Más pestañas en menús de herramientas",
-    "enterCommand": "Ingrese comando",
+    "enterCommand": "Ingresar Comando",
     "search": "Buscar"
   }
 }

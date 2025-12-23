@@ -1,0 +1,30 @@
+{
+    "title": "بيانات DBnomics",
+    "header": {
+        "search": "بحث",
+        "providers": "المزودون",
+        "datasets": "مجموعات البيانات"
+    },
+    "form": {
+        "provider": "المزود",
+        "dataset": "مجموعة البيانات",
+        "series": "السلسلة",
+        "startDate": "تاريخ البدء",
+        "endDate": "تاريخ الانتهاء"
+    },
+    "buttons": {
+        "fetch": "جلب",
+        "search": "بحث",
+        "export": "تصدير",
+        "clear": "مسح"
+    },
+    "chart": {
+        "title": "تصور البيانات",
+        "emptyState": "اختر سلسلة لعرض البيانات"
+    },
+    "messages": {
+        "loading": "جاري تحميل البيانات...",
+        "noData": "لم يتم العثور على بيانات",
+        "error": "خطأ في جلب البيانات"
+    }
+}

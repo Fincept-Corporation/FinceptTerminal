@@ -8,29 +8,69 @@
         "terminal": "ТЕРМИНАЛ FINCEPT",
         "selectBroker": "ВЫБРАТЬ БРОКЕРА",
         "paper": "ДЕМО",
-        "live": "ЖИВАЯ"
+        "live": "РЕАЛ",
+        "watchlist": "СПИСОК НАБЛЮДЕНИЯ",
+        "orderbook": "СТАКАН",
+        "trades": "СДЕЛКИ",
+        "stats": "СТАТИСТИКА",
+        "features": "ФУНКЦИИ",
+        "crossExchange": "КРОСС-БИРЖА",
+        "chart": "ГРАФИК",
+        "depth": "ГЛУБИНА",
+        "volume": "ОБЪЕМ",
+        "aiAgents": "ИИ-АГЕНТЫ",
+        "leaderboard": "РЕЙТИНГ",
+        "modelChat": "ЧАТ С МОДЕЛЬЮ"
     },
     "orderTypes": {
-        "market": "Рыночный",
+        "market": "По рынку",
         "limit": "Лимитный",
-        "stop": "Стоп"
+        "stop": "Стоп",
+        "stopLimit": "Стоп-лимит",
+        "trailingStop": "Трейлинг стоп"
     },
     "actions": {
         "buy": "КУПИТЬ",
         "sell": "ПРОДАТЬ",
         "cancel": "Отменить",
+        "modify": "Изменить",
         "close": "Закрыть",
         "closeAll": "Закрыть все"
+    },
+    "form": {
+        "symbol": "Символ",
+        "quantity": "Количество",
+        "price": "Цена",
+        "stopPrice": "Стоп-цена",
+        "takeProfit": "Тейк-профит",
+        "stopLoss": "Стоп-лосс",
+        "leverage": "Плечо"
     },
     "position": {
         "openPrice": "Цена входа",
         "currentPrice": "Текущая цена",
-        "pnl": "П/У",
-        "margin": "Маржа"
+        "pnl": "P&L",
+        "pnlPercent": "P&L %",
+        "margin": "Маржа",
+        "size": "Размер"
+    },
+    "order": {
+        "pending": "Ожидание",
+        "filled": "Исполнен",
+        "cancelled": "Отменен",
+        "rejected": "Отклонен",
+        "partial": "Частично исполнен"
+    },
+    "time": {
+        "gtc": "До отмены",
+        "day": "Дневной",
+        "ioc": "Немедленно или отменить",
+        "fok": "Все или ничего"
     },
     "messages": {
         "orderPlaced": "Ордер размещен",
-        "orderFailed": "Ордер не выполнен",
+        "orderFailed": "Ошибка ордера",
+        "confirmOrder": "Подтвердить ордер?",
         "noPositions": "Нет открытых позиций"
     }
 }

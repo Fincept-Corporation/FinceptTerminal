@@ -1,43 +1,79 @@
 {
   "header": {
-    "title": "DASBOR YANG DAPAT DISESUAIKAN",
+    "title": "DASHBOARD YANG DAPAT DISESUAIKAN",
     "live": "LANGSUNG",
     "widgets": "WIDGET"
   },
+  "buttons": {
+    "addWidget": "TAMBAH WIDGET",
+    "saveLayout": "SIMPAN LAYOUT",
+    "reset": "RESET"
+  },
   "widgets": {
     "loading": "Memuat...",
-    "error": "Kesalahan",
+    "error": "Error",
     "configure": "Konfigurasi",
     "refresh": "Segarkan",
     "remove": "Hapus",
     "globalIndices": "INDEKS GLOBAL - TOP 12",
     "forex": "PASANGAN FOREX",
-    "crypto": "KRIPTO",
+    "crypto": "CRYPTOCURRENCY",
     "commodities": "KOMODITAS",
     "bonds": "OBLIGASI",
     "etfs": "ETF",
     "news": "BERITA",
     "forum": "FORUM",
-    "watchlist": "DAFTAR PANTAU",
+    "watchlist": "WATCHLIST",
     "maritime": "MARITIM",
     "index": "INDEKS",
     "symbol": "SIMBOL",
     "name": "NAMA",
     "price": "HARGA",
-    "change": "UBAH",
-    "percentChange": "%UBAH",
+    "change": "CHG",
+    "percentChange": "%CHG",
     "high": "TINGGI",
     "low": "RENDAH",
     "noIndexData": "Tidak ada data indeks",
-    "noData": "Tidak ada data"
+    "noForexData": "Tidak ada data forex",
+    "noCryptoData": "Tidak ada data kripto",
+    "noCommoditiesData": "Tidak ada data komoditas",
+    "noNewsData": "Tidak ada berita",
+    "noForumPosts": "Tidak ada post forum",
+    "noStocksInWatchlist": "Tidak ada saham di watchlist",
+    "noWatchlistSelected": "Tidak ada watchlist dipilih",
+    "noData": "Tidak ada data",
+    "pair": "PASANGAN",
+    "rate": "KURS",
+    "commodity": "KOMODITAS",
+    "maritimeIntelligence": "⚓ INTELIJEN MARITIM",
+    "globe3D": "GLOBE 3D",
+    "vessels": "KAPAL",
+    "routes": "RUTE",
+    "vol24h": "VOL 24J",
+    "topTradeCorridors": "KORIDOR PERDAGANGAN UTAMA",
+    "ships": "kapal"
   },
-  "buttons": {
-    "addWidget": "TAMBAH WIDGET",
-    "saveLayout": "SIMPAN TATA LETAK",
-    "reset": "RESET"
+  "tips": {
+    "drag": "Seret widget untuk mengatur ulang",
+    "resize": "Ubah ukuran dari sudut kanan bawah",
+    "remove": "Hapus widget dengan tombol X",
+    "responsive": "Layout responsif - menggunakan lebar penuh"
+  },
+  "loading": {
+    "title": "Menginisialisasi Dashboard",
+    "description": "Menyiapkan cache database untuk pemuatan data lebih cepat...",
+    "note": "Ini hanya membutuhkan waktu sebentar saat peluncuran pertama"
   },
   "empty": {
-    "noWidgets": "Tidak ada widget di dasbor",
-    "addFirst": "TAMBAHKAN WIDGET PERTAMA ANDA"
+    "noWidgets": "Tidak ada widget di dashboard",
+    "addFirst": "TAMBAH WIDGET PERTAMA ANDA"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Workspace seret & lepas",
+    "layout": "Layout",
+    "custom": "Kustom",
+    "empty": "Kosong",
+    "active": "AKTIF",
+    "cache": "Cache: AKTIF"
   }
 }

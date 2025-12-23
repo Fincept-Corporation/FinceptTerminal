@@ -3,7 +3,7 @@
     "header": {
         "mappings": "MAPOWANIA",
         "templates": "SZABLONY",
-        "create": "UTWÓRZ",
+        "create": "UTWÓRZ NOWY",
         "refresh": "ODŚWIEŻ"
     },
     "views": {
@@ -20,10 +20,10 @@
         "actions": "Akcje"
     },
     "status": {
-        "active": "Aktywne",
-        "inactive": "Nieaktywne",
+        "active": "Aktywny",
+        "inactive": "Nieaktywny",
         "error": "Błąd",
-        "running": "Działa"
+        "running": "Uruchomiony"
     },
     "actions": {
         "edit": "Edytuj",
@@ -33,20 +33,20 @@
         "export": "Eksportuj"
     },
     "create": {
-        "title": "Utwórz mapowanie",
-        "name": "Nazwa",
+        "title": "Utwórz mapowanie danych",
+        "name": "Nazwa mapowania",
         "description": "Opis",
         "sourceApi": "API źródła",
-        "destApi": "API celu",
+        "destApi": "API docelowe",
         "fieldMapping": "Mapowanie pól",
-        "save": "Zapisz",
+        "save": "Zapisz mapowanie",
         "cancel": "Anuluj"
     },
     "messages": {
-        "saved": "Zapisano",
-        "deleted": "Usunięto",
-        "runSuccess": "Wykonano",
-        "error": "Błąd",
-        "noMappings": "Brak mapowań"
+        "saved": "Mapowanie pomyślnie zapisane",
+        "deleted": "Mapowanie usunięte",
+        "runSuccess": "Mapowanie pomyślnie wykonane",
+        "error": "Wystąpił błąd",
+        "noMappings": "Brak skonfigurowanych mapowań"
     }
 }

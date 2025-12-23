@@ -1,0 +1,38 @@
+{
+    "title": "MARKETPLACE",
+    "header": {
+        "browse": "Jelajahi",
+        "myItems": "Item saya",
+        "cart": "Keranjang"
+    },
+    "categories": {
+        "all": "Semua",
+        "indicators": "Indikator",
+        "strategies": "Strategi",
+        "datasets": "Dataset",
+        "tools": "Alat"
+    },
+    "buttons": {
+        "buy": "Beli",
+        "addToCart": "Tambah ke keranjang",
+        "install": "Instal",
+        "preview": "Pratinjau"
+    },
+    "product": {
+        "price": "Harga",
+        "rating": "Rating",
+        "downloads": "Unduhan",
+        "author": "Penulis",
+        "version": "Versi"
+    },
+    "cart": {
+        "total": "Total",
+        "checkout": "Checkout",
+        "empty": "Keranjang kosong"
+    },
+    "messages": {
+        "addedToCart": "Ditambahkan ke keranjang",
+        "purchased": "Dibeli",
+        "installed": "Terinstal"
+    }
+}

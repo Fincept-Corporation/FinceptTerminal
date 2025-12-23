@@ -1,28 +1,48 @@
 {
     "title": "MERCATI",
-    "marketTerminalLive": "TERMINALE DI MERCATO - DATI IN DIRETTA",
+    "marketTerminalLive": "TERMINALE MERCATI - DATI LIVE",
     "globalMarkets": "MERCATI GLOBALI",
     "regionalMarkets": "mercati regionali",
-    "regionalMarketsLive": "MERCATI REGIONALI - DATI IN DIRETTA",
-    "liveData": "DATI IN DIRETTA",
+    "regionalMarketsLive": "MERCATI REGIONALI - DATI LIVE",
+    "liveData": "DATI LIVE",
     "symbol": "SIMBOLO",
     "name": "NOME",
     "price": "PREZZO",
-    "change": "VARIAZIONE",
+    "change": "VAR",
     "percentChange": "%VAR",
-    "high": "MASSIMO",
-    "low": "MINIMO",
+    "high": "ALTO",
+    "low": "BASSO",
     "loading": "Caricamento...",
     "noData": "Nessun dato disponibile",
     "refresh": "AGGIORNA",
     "auto": "AUTO",
-    "on": "ATTIVO",
-    "off": "DISATTIVO",
+    "on": "ON",
+    "off": "OFF",
     "lastUpdate": "ULTIMO AGGIORNAMENTO",
     "updating": "AGGIORNAMENTO",
-    "live": "IN DIRETTA",
+    "live": "LIVE",
     "connected": "Connesso",
     "cache": "Cache",
     "enabled": "ABILITATO",
-    "dataProviderInfo": "Dati da Yahoo Finance API | Aggiornamenti in tempo reale"
+    "dataProviderInfo": "Dati da Yahoo Finance API | Aggiornamenti in tempo reale",
+    "header": {
+        "live": "LIVE",
+        "updating": "AGGIORNAMENTO",
+        "refresh": "AGGIORNA"
+    },
+    "tabs": {
+        "overview": "Panoramica",
+        "stocks": "Azioni",
+        "indices": "Indici",
+        "forex": "Forex",
+        "crypto": "Crypto",
+        "commodities": "Materie Prime",
+        "bonds": "Obbligazioni"
+    },
+    "status": {
+        "marketOpen": "Mercato Aperto",
+        "marketClosed": "Mercato Chiuso",
+        "preMarket": "Pre-Mercato",
+        "afterHours": "Dopo Orario"
+    }
 }

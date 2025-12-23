@@ -7,11 +7,11 @@
         "refresh": "LÀM MỚI"
     },
     "categories": {
-        "market": "Dữ liệu Thị trường",
-        "economic": "Dữ liệu Kinh tế",
-        "alternative": "Dữ liệu Thay thế",
-        "news": "Tin tức & Tâm lý",
-        "fundamental": "Dữ liệu Cơ bản"
+        "market": "Dữ liệu thị trường",
+        "economic": "Dữ liệu kinh tế",
+        "alternative": "Dữ liệu thay thế",
+        "news": "Tin tức & Cảm xúc",
+        "fundamental": "Dữ liệu cơ bản"
     },
     "status": {
         "connected": "Đã kết nối",
@@ -21,23 +21,23 @@
     },
     "actions": {
         "connect": "Kết nối",
-        "disconnect": "Ngắt",
+        "disconnect": "Ngắt kết nối",
         "configure": "Cấu hình",
-        "test": "Kiểm tra",
+        "test": "Kiểm tra kết nối",
         "delete": "Xóa"
     },
     "form": {
         "apiKey": "Khóa API",
-        "endpoint": "URL",
+        "endpoint": "URL Endpoint",
         "username": "Tên người dùng",
         "password": "Mật khẩu",
         "save": "Lưu",
         "cancel": "Hủy"
     },
     "messages": {
-        "connectionSuccess": "Kết nối thành công",
-        "connectionFailed": "Kết nối thất bại",
-        "noSources": "Không có nguồn",
-        "loading": "Đang tải..."
+        "connectionSuccess": "Kết nối nguồn dữ liệu thành công",
+        "connectionFailed": "Không thể kết nối nguồn dữ liệu",
+        "noSources": "Không có nguồn dữ liệu nào được cấu hình",
+        "loading": "Đang tải nguồn dữ liệu..."
     }
 }

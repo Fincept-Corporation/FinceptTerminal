@@ -1,0 +1,42 @@
+{
+    "title": "Tiket Dukungan",
+    "header": {
+        "tickets": "Tiket",
+        "new": "Tiket baru",
+        "status": "Status"
+    },
+    "form": {
+        "subject": "Subjek",
+        "description": "Deskripsi",
+        "priority": "Prioritas",
+        "category": "Kategori"
+    },
+    "priority": {
+        "low": "Rendah",
+        "medium": "Sedang",
+        "high": "Tinggi",
+        "urgent": "Mendesak"
+    },
+    "status": {
+        "open": "Terbuka",
+        "inProgress": "Dalam proses",
+        "resolved": "Diselesaikan",
+        "closed": "Ditutup"
+    },
+    "buttons": {
+        "submit": "Kirim",
+        "cancel": "Batal",
+        "reply": "Balas",
+        "close": "Tutup"
+    },
+    "messages": {
+        "created": "Tiket dibuat",
+        "updated": "Tiket diperbarui",
+        "closed": "Tiket ditutup",
+        "noTickets": "Tidak ada tiket"
+    },
+    "auth": {
+        "loginRequired": "Login untuk membuat tiket",
+        "demoMode": "Mode demo"
+    }
+}

@@ -2,7 +2,12 @@
   "header": {
     "title": "BẢNG ĐIỀU KHIỂN TÙY CHỈNH",
     "live": "TRỰC TIẾP",
-    "widgets": "TIỆN ÍCH"
+    "widgets": "WIDGET"
+  },
+  "buttons": {
+    "addWidget": "THÊM WIDGET",
+    "saveLayout": "LƯU BỐ CỤC",
+    "reset": "ĐẶT LẠI"
   },
   "widgets": {
     "loading": "Đang tải...",
@@ -11,14 +16,14 @@
     "refresh": "Làm mới",
     "remove": "Xóa",
     "globalIndices": "CHỈ SỐ TOÀN CẦU - TOP 12",
-    "forex": "CẶP NGOẠI HỐI",
+    "forex": "CẶP TIỀN TỆ",
     "crypto": "TIỀN MÃ HÓA",
     "commodities": "HÀNG HÓA",
     "bonds": "TRÁI PHIẾU",
     "etfs": "ETF",
     "news": "TIN TỨC",
     "forum": "DIỄN ĐÀN",
-    "watchlist": "DANH SÁCH THEO DÕI",
+    "watchlist": "THEO DÕI",
     "maritime": "HÀNG HẢI",
     "index": "CHỈ SỐ",
     "symbol": "MÃ",
@@ -29,15 +34,46 @@
     "high": "CAO",
     "low": "THẤP",
     "noIndexData": "Không có dữ liệu chỉ số",
-    "noData": "Không có dữ liệu"
+    "noForexData": "Không có dữ liệu forex",
+    "noCryptoData": "Không có dữ liệu crypto",
+    "noCommoditiesData": "Không có dữ liệu hàng hóa",
+    "noNewsData": "Không có tin tức",
+    "noForumPosts": "Không có bài viết",
+    "noStocksInWatchlist": "Không có cổ phiếu trong danh sách",
+    "noWatchlistSelected": "Chưa chọn danh sách",
+    "noData": "Không có dữ liệu",
+    "pair": "CẶP",
+    "rate": "TỶ GIÁ",
+    "commodity": "HÀNG HÓA",
+    "maritimeIntelligence": "⚓ THÔNG TIN HÀNG HẢI",
+    "globe3D": "QUẢN CẦU 3D",
+    "vessels": "TÀU",
+    "routes": "TUYẾN",
+    "vol24h": "KHỐI LƯỢNG 24G",
+    "topTradeCorridors": "HÀNH LANG THƯƠNG MẠI CHÍNH",
+    "ships": "tàu"
   },
-  "buttons": {
-    "addWidget": "THÊM TIỆN ÍCH",
-    "saveLayout": "LƯU BỐ CỤC",
-    "reset": "ĐẶT LẠI"
+  "tips": {
+    "drag": "Kéo widget để sắp xếp lại",
+    "resize": "Thay đổi kích thước từ góc dưới bên phải",
+    "remove": "Xóa widget bằng nút X",
+    "responsive": "Bố cục đáp ứng - sử dụng toàn bộ chiều rộng"
+  },
+  "loading": {
+    "title": "Khởi tạo Bảng điều khiển",
+    "description": "Thiết lập bộ nhớ đệm cơ sở dữ liệu để tải dữ liệu nhanh hơn...",
+    "note": "Chỉ mất một chút thời gian khi khởi động lần đầu"
   },
   "empty": {
-    "noWidgets": "Không có tiện ích trên bảng điều khiển",
-    "addFirst": "THÊM TIỆN ÍCH ĐẦU TIÊN"
+    "noWidgets": "Không có widget trên bảng điều khiển",
+    "addFirst": "THÊM WIDGET ĐẦU TIÊN"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Không gian làm việc kéo thả",
+    "layout": "Bố cục",
+    "custom": "Tùy chỉnh",
+    "empty": "Trống",
+    "active": "HOẠT ĐỘNG",
+    "cache": "Cache: BẬT"
   }
 }

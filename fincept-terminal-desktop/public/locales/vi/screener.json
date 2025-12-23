@@ -1,28 +1,56 @@
 {
-    "title": "BỘ LỌC CỔ PHIẾU",
+    "title": "TRÌNH DUYỆT CHUỖI FRED",
     "header": {
+        "title": "KHÁM PHÁ DỮ LIỆU FRED",
         "filters": "BỘ LỌC",
         "results": "KẾT QUẢ",
-        "saved": "ĐÃ LƯU",
-        "presets": "MẪU"
+        "saved": "MÀN HÌNH ĐÃ LƯU",
+        "presets": "CÀI ĐẶT SẴN"
+    },
+    "apiKey": {
+        "required": "CẦN KHÓA API",
+        "configure": "Cấu hình khóa FRED API của bạn trong Cài đặt → Thông tin xác thực để truy cập dữ liệu kinh tế.",
+        "getKey": "Lấy khóa API miễn phí tại",
+        "addToSettings": "Thêm vào Cài đặt → Thông tin xác thực → FRED_API_KEY",
+        "saveAndReload": "Lưu và tải lại tab này",
+        "tip": "Đảm bảo bạn đã cấu hình khóa FRED API trong Cài đặt → Thông tin xác thực"
+    },
+    "form": {
+        "seriesIds": "MÃ CHUỖI",
+        "startDate": "NGÀY BẮT ĐẦU",
+        "endDate": "NGÀY KẾT THÚC",
+        "quickAdd": "THÊM NHANH"
+    },
+    "buttons": {
+        "fetch": "LẤY",
+        "loading": "ĐANG TẢI",
+        "browse": "DUYỆT CHUỖI",
+        "done": "XONG"
+    },
+    "chart": {
+        "title": "BIỂU ĐỒ CHUỖI THỜI GIAN",
+        "emptyState": "Nhập mã chuỗi và nhấp LẤY để trực quan hóa dữ liệu",
+        "trySuggestion": "Thử tìm GDP, UNRATE hoặc CPIAUCSL",
+        "waiting": "Vui lòng đợi trong khi chúng tôi lấy dữ liệu từ FRED...",
+        "errorFetching": "Lỗi Lấy Dữ Liệu"
     },
     "filters": {
-        "add": "Thêm bộ lọc",
-        "clear": "Xóa tất cả",
-        "reset": "Đặt lại",
-        "apply": "Áp dụng"
+        "add": "Thêm Bộ Lọc",
+        "clear": "Xóa Tất Cả",
+        "reset": "Đặt Lại",
+        "apply": "Áp Dụng Bộ Lọc"
     },
     "criteria": {
-        "marketCap": "Vốn hóa",
+        "marketCap": "Vốn Hóa",
         "price": "Giá",
-        "volume": "Khối lượng",
+        "volume": "Khối Lượng",
         "pe": "P/E",
         "eps": "EPS",
-        "dividend": "Cổ tức",
+        "dividend": "Cổ Tức",
         "beta": "Beta",
         "sector": "Ngành",
-        "industry": "Lĩnh vực",
-        "country": "Quốc gia",
+        "industry": "Lĩnh Vực",
+        "country": "Quốc Gia",
         "exchange": "Sàn"
     },
     "operators": {
@@ -36,21 +64,21 @@
         "symbol": "Mã",
         "name": "Tên",
         "price": "Giá",
-        "change": "Thay đổi",
-        "volume": "KL",
-        "marketCap": "Vốn hóa",
+        "change": "Thay Đổi",
+        "volume": "Khối Lượng",
+        "marketCap": "Vốn Hóa",
         "matches": "kết quả"
     },
     "actions": {
-        "save": "Lưu bộ lọc",
-        "load": "Tải bộ lọc",
-        "export": "Xuất",
-        "addToWatchlist": "Thêm vào danh sách"
+        "save": "Lưu Màn Hình",
+        "load": "Tải Màn Hình",
+        "export": "Xuất Kết Quả",
+        "addToWatchlist": "Thêm vào Danh Sách"
     },
     "messages": {
-        "loading": "Đang lọc...",
-        "noResults": "Không có kết quả",
-        "saved": "Đã lưu",
-        "applied": "Đã áp dụng"
+        "loading": "Đang lọc cổ phiếu...",
+        "noResults": "Không có cổ phiếu phù hợp",
+        "saved": "Đã lưu thành công",
+        "applied": "Đã áp dụng bộ lọc"
     }
 }

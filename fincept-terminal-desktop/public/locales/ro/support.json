@@ -1,0 +1,42 @@
+{
+    "title": "Tichet suport",
+    "header": {
+        "tickets": "Tichete",
+        "new": "Tichet nou",
+        "status": "Status"
+    },
+    "form": {
+        "subject": "Subiect",
+        "description": "Descriere",
+        "priority": "Prioritate",
+        "category": "Categorie"
+    },
+    "priority": {
+        "low": "Scăzută",
+        "medium": "Medie",
+        "high": "Ridicată",
+        "urgent": "Urgentă"
+    },
+    "status": {
+        "open": "Deschis",
+        "inProgress": "În curs",
+        "resolved": "Rezolvat",
+        "closed": "Închis"
+    },
+    "buttons": {
+        "submit": "Trimite",
+        "cancel": "Anulează",
+        "reply": "Răspunde",
+        "close": "Închide"
+    },
+    "messages": {
+        "created": "Tichet creat",
+        "updated": "Tichet actualizat",
+        "closed": "Tichet închis",
+        "noTickets": "Niciun tichet"
+    },
+    "auth": {
+        "loginRequired": "Conectează-te pentru a crea tichet",
+        "demoMode": "Mod demo"
+    }
+}

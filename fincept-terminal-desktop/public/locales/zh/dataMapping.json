@@ -39,14 +39,14 @@
         "sourceApi": "源API",
         "destApi": "目标API",
         "fieldMapping": "字段映射",
-        "save": "保存",
+        "save": "保存映射",
         "cancel": "取消"
     },
     "messages": {
-        "saved": "映射已保存",
+        "saved": "映射保存成功",
         "deleted": "映射已删除",
         "runSuccess": "映射执行成功",
         "error": "发生错误",
-        "noMappings": "无映射配置"
+        "noMappings": "未配置映射"
     }
 }

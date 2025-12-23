@@ -2,51 +2,78 @@
   "header": {
     "title": "कस्टमाइज़ेबल डैशबोर्ड",
     "live": "लाइव",
-    "widgets": "विजेट्स"
+    "widgets": "विजेट"
   },
   "buttons": {
     "addWidget": "विजेट जोड़ें",
-    "saveLayout": "लेआउट सेव करें",
+    "saveLayout": "लेआउट सहेजें",
     "reset": "रीसेट"
   },
   "widgets": {
     "loading": "लोड हो रहा है...",
     "error": "त्रुटि",
     "configure": "कॉन्फ़िगर करें",
-    "refresh": "रिफ्रेश",
+    "refresh": "रीफ्रेश",
     "remove": "हटाएं",
-    "globalIndices": "ग्लोबल इंडेक्स - टॉप 12",
-    "forex": "फॉरेक्स पेयर्स",
+    "globalIndices": "वैश्विक सूचकांक - शीर्ष 12",
+    "forex": "फ़ॉरेक्स जोड़े",
     "crypto": "क्रिप्टोकरेंसी",
-    "commodities": "कमोडिटीज",
-    "bonds": "बॉन्ड्स",
-    "etfs": "ETFs",
+    "commodities": "कमोडिटीज़",
+    "bonds": "बॉन्ड",
+    "etfs": "ETF",
     "news": "समाचार",
     "forum": "फोरम",
     "watchlist": "वॉचलिस्ट",
-    "maritime": "मैरीटाइम",
-    "index": "इंडेक्स",
-    "symbol": "सिंबल",
+    "maritime": "समुद्री",
+    "index": "सूचकांक",
+    "symbol": "सिम्बल",
     "name": "नाम",
     "price": "मूल्य",
     "change": "बदलाव",
     "percentChange": "%बदलाव",
     "high": "उच्च",
     "low": "निम्न",
-    "noIndexData": "कोई इंडेक्स डेटा उपलब्ध नहीं",
-    "noData": "कोई डेटा उपलब्ध नहीं"
+    "noIndexData": "कोई सूचकांक डेटा नहीं",
+    "noForexData": "कोई फ़ॉरेक्स डेटा नहीं",
+    "noCryptoData": "कोई क्रिप्टो डेटा नहीं",
+    "noCommoditiesData": "कोई कमोडिटी डेटा नहीं",
+    "noNewsData": "कोई समाचार नहीं",
+    "noForumPosts": "कोई पोस्ट नहीं",
+    "noStocksInWatchlist": "वॉचलिस्ट में कोई स्टॉक नहीं",
+    "noWatchlistSelected": "कोई वॉचलिस्ट नहीं चुनी",
+    "noData": "कोई डेटा नहीं",
+    "pair": "जोड़ा",
+    "rate": "दर",
+    "commodity": "कमोडिटी",
+    "maritimeIntelligence": "⚓ समुद्री खुफिया",
+    "globe3D": "3D ग्लोब",
+    "vessels": "जहाज",
+    "routes": "मार्ग",
+    "vol24h": "वॉल्यूम 24घ",
+    "topTradeCorridors": "शीर्ष व्यापार गलियारे",
+    "ships": "जहाज"
   },
   "tips": {
-    "drag": "पुनर्व्यवस्थित करने के लिए विजेट खींचें",
-    "resize": "नीचे-दाएं कोने से आकार बदलें",
-    "remove": "X बटन से विजेट हटाएं"
+    "drag": "विजेट को पुनर्व्यवस्थित करने के लिए खींचें",
+    "resize": "निचले-दाएं कोने से आकार बदलें",
+    "remove": "X बटन से विजेट हटाएं",
+    "responsive": "रेस्पॉन्सिव लेआउट - पूर्ण चौड़ाई का उपयोग करता है"
   },
   "loading": {
-    "title": "डैशबोर्ड शुरू हो रहा है",
-    "description": "तेज़ डेटा लोडिंग के लिए डेटाबेस कैश सेटअप हो रहा है..."
+    "title": "डैशबोर्ड आरंभ हो रहा है",
+    "description": "तेज़ डेटा लोडिंग के लिए कैश सेट अप हो रहा है...",
+    "note": "पहले लॉन्च पर यह एक पल लेगा"
   },
   "empty": {
     "noWidgets": "डैशबोर्ड पर कोई विजेट नहीं",
     "addFirst": "अपना पहला विजेट जोड़ें"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | ड्रैग एंड ड्रॉप वर्कस्पेस",
+    "layout": "लेआउट",
+    "custom": "कस्टम",
+    "empty": "खाली",
+    "active": "सक्रिय",
+    "cache": "कैश: सक्षम"
   }
 }

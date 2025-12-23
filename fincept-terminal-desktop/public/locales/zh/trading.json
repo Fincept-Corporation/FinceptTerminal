@@ -5,40 +5,72 @@
         "positions": "持仓",
         "history": "历史",
         "settings": "设置",
-        "terminal": "FINCEPT终端",
+        "terminal": "FINCEPT 终端",
         "selectBroker": "选择经纪商",
         "paper": "模拟",
-        "live": "实盘"
+        "live": "实盘",
+        "watchlist": "自选列表",
+        "orderbook": "订单簿",
+        "trades": "成交",
+        "stats": "统计",
+        "features": "功能",
+        "crossExchange": "跨交易所",
+        "chart": "图表",
+        "depth": "深度",
+        "volume": "成交量",
+        "aiAgents": "AI代理",
+        "leaderboard": "排行榜",
+        "modelChat": "模型对话"
     },
     "orderTypes": {
         "market": "市价",
         "limit": "限价",
         "stop": "止损",
-        "stopLimit": "止损限价"
+        "stopLimit": "止损限价",
+        "trailingStop": "追踪止损"
     },
     "actions": {
         "buy": "买入",
         "sell": "卖出",
         "cancel": "取消",
+        "modify": "修改",
         "close": "平仓",
         "closeAll": "全部平仓"
     },
     "form": {
-        "symbol": "标的",
+        "symbol": "交易对",
         "quantity": "数量",
         "price": "价格",
-        "stopPrice": "止损价"
+        "stopPrice": "止损价",
+        "takeProfit": "止盈",
+        "stopLoss": "止损",
+        "leverage": "杠杆"
     },
     "position": {
         "openPrice": "开仓价",
-        "currentPrice": "现价",
+        "currentPrice": "当前价",
         "pnl": "盈亏",
+        "pnlPercent": "盈亏 %",
         "margin": "保证金",
         "size": "仓位"
     },
+    "order": {
+        "pending": "待处理",
+        "filled": "已成交",
+        "cancelled": "已取消",
+        "rejected": "已拒绝",
+        "partial": "部分成交"
+    },
+    "time": {
+        "gtc": "撤销前有效",
+        "day": "当日有效",
+        "ioc": "立即成交或取消",
+        "fok": "全部成交或取消"
+    },
     "messages": {
-        "orderPlaced": "下单成功",
-        "orderFailed": "下单失败",
+        "orderPlaced": "订单成功",
+        "orderFailed": "订单失败",
+        "confirmOrder": "确认此订单？",
         "noPositions": "无持仓"
     }
 }

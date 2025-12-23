@@ -1,6 +1,6 @@
 {
     "title": "MERCADOS",
-    "marketTerminalLive": "TERMINAL DE MERCADO - DATOS EN VIVO",
+    "marketTerminalLive": "TERMINAL DE MERCADOS - DATOS EN VIVO",
     "globalMarkets": "MERCADOS GLOBALES",
     "regionalMarkets": "mercados regionales",
     "regionalMarketsLive": "MERCADOS REGIONALES - DATOS EN VIVO",
@@ -8,23 +8,23 @@
     "symbol": "SÍMBOLO",
     "name": "NOMBRE",
     "price": "PRECIO",
-    "change": "CAMBIO",
-    "percentChange": "%CAMBIO",
-    "high": "MÁXIMO",
-    "low": "MÍNIMO",
+    "change": "CAM",
+    "percentChange": "%CAM",
+    "high": "ALTO",
+    "low": "BAJO",
     "loading": "Cargando...",
     "noData": "Sin datos disponibles",
     "refresh": "ACTUALIZAR",
     "auto": "AUTO",
-    "on": "ACTIVO",
-    "off": "INACTIVO",
+    "on": "ON",
+    "off": "OFF",
     "lastUpdate": "ÚLTIMA ACTUALIZACIÓN",
     "updating": "ACTUALIZANDO",
     "live": "EN VIVO",
     "connected": "Conectado",
     "cache": "Caché",
     "enabled": "HABILITADO",
-    "dataProviderInfo": "Datos proporcionados por Yahoo Finance API | Actualizaciones en tiempo real",
+    "dataProviderInfo": "Datos de Yahoo Finance API | Actualizaciones en tiempo real",
     "header": {
         "live": "EN VIVO",
         "updating": "ACTUALIZANDO",
@@ -36,13 +36,13 @@
         "indices": "Índices",
         "forex": "Forex",
         "crypto": "Cripto",
-        "commodities": "Commodities",
+        "commodities": "Materias Primas",
         "bonds": "Bonos"
     },
     "status": {
         "marketOpen": "Mercado Abierto",
         "marketClosed": "Mercado Cerrado",
         "preMarket": "Pre-Mercado",
-        "afterHours": "Fuera de Horario"
+        "afterHours": "Después de Horas"
     }
 }

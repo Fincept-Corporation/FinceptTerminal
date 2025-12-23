@@ -1,17 +1,47 @@
 {
-    "title": "DASHBOARD AUDIT ACCESSI",
+    "title": "PANNELLO AUDIT LOGIN",
     "accessDenied": "Accesso amministratore richiesto",
     "metrics": {
         "dauToday": "DAU Oggi",
         "mau": "MAU",
-        "successRate": "Tasso di successo",
-        "activeSessions": "Sessioni attive"
+        "successRate": "Tasso di Successo",
+        "failed24h": "Falliti (24h)",
+        "activeSessions": "Sessioni Attive",
+        "uniqueIps": "IP Unici"
     },
     "views": {
         "overview": "PANORAMICA",
         "eventLog": "LOG EVENTI",
         "alerts": "AVVISI",
-        "analytics": "ANALISI"
+        "analytics": "ANALITICHE"
+    },
+    "activity": {
+        "recentLoginActivity": "ATTIVITÀ LOGIN RECENTE",
+        "securityAlerts": "AVVISI DI SICUREZZA",
+        "noActiveAlerts": "Nessun avviso attivo",
+        "loginEventLog": "LOG EVENTI LOGIN"
+    },
+    "table": {
+        "time": "Ora",
+        "event": "Evento",
+        "user": "Utente",
+        "ipAddress": "Indirizzo IP",
+        "location": "Posizione",
+        "device": "Dispositivo",
+        "details": "Dettagli"
+    },
+    "alerts": {
+        "securityIncidents": "AVVISI E INCIDENTI DI SICUREZZA",
+        "noAlerts": "Nessun avviso di sicurezza",
+        "dismiss": "IGNORA",
+        "blockIp": "BLOCCA IP",
+        "investigate": "INDAGA"
+    },
+    "analytics": {
+        "loginsByCountry": "LOGIN PER PAESE (30 giorni)",
+        "failureReasons": "MOTIVI FALLIMENTO (24h)",
+        "peakHours": "ORE DI PUNTA (UTC)",
+        "logins": "login"
     },
     "controls": {
         "autoRefresh": "Aggiornamento automatico",
@@ -20,6 +50,8 @@
     },
     "status": {
         "admin": "Admin",
+        "dau": "DAU",
+        "status": "Stato",
         "updating": "AGGIORNAMENTO",
         "ready": "PRONTO"
     }

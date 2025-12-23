@@ -1,10 +1,38 @@
 {
-    "title": "HİSSE TARAMA",
+    "title": "FRED SERİ TARAYICISI",
     "header": {
+        "title": "FRED VERİ ARAŞTIRMACISI",
         "filters": "FİLTRELER",
         "results": "SONUÇLAR",
-        "saved": "KAYDEDLENLER",
+        "saved": "KAYITLI EKRANLAR",
         "presets": "ÖN AYARLAR"
+    },
+    "apiKey": {
+        "required": "API ANAHTARI GEREKLİ",
+        "configure": "Ekonomik verilere erişmek için Ayarlar → Kimlik Bilgileri'nde FRED API anahtarınızı yapılandırın.",
+        "getKey": "Ücretsiz API anahtarı alın:",
+        "addToSettings": "Ayarlar → Kimlik Bilgileri → FRED_API_KEY'e ekleyin",
+        "saveAndReload": "Kaydedin ve bu sekmeyi yeniden yükleyin",
+        "tip": "Ayarlar → Kimlik Bilgileri'nde FRED API anahtarınızı yapılandırdığınızdan emin olun"
+    },
+    "form": {
+        "seriesIds": "SERİ ID'LERİ",
+        "startDate": "BAŞLANGIÇ TARİHİ",
+        "endDate": "BİTİŞ TARİHİ",
+        "quickAdd": "HIZLI EKLE"
+    },
+    "buttons": {
+        "fetch": "GETİR",
+        "loading": "YÜKLENİYOR",
+        "browse": "SERİLERE GÖZE AT",
+        "done": "TAMAM"
+    },
+    "chart": {
+        "title": "ZAMAN SERİSİ GRAFİĞİ",
+        "emptyState": "Verileri görselleştirmek için seri ID'lerini girin ve GETİR'e tıklayın",
+        "trySuggestion": "GDP, UNRATE veya CPIAUCSL aramayı deneyin",
+        "waiting": "FRED'den veri alınırken lütfen bekleyin...",
+        "errorFetching": "Veri Alma Hatası"
     },
     "filters": {
         "add": "Filtre Ekle",
@@ -38,19 +66,19 @@
         "price": "Fiyat",
         "change": "Değişim",
         "volume": "Hacim",
-        "marketCap": "Değer",
-        "matches": "sonuç"
+        "marketCap": "Piyasa Değeri",
+        "matches": "eşleşme bulundu"
     },
     "actions": {
-        "save": "Taramayı Kaydet",
-        "load": "Taramayı Yükle",
-        "export": "Dışa Aktar",
-        "addToWatchlist": "Listeye Ekle"
+        "save": "Ekranı Kaydet",
+        "load": "Ekranı Yükle",
+        "export": "Sonuçları Dışa Aktar",
+        "addToWatchlist": "İzleme Listesine Ekle"
     },
     "messages": {
-        "loading": "Taranıyor...",
-        "noResults": "Sonuç yok",
-        "saved": "Kaydedildi",
+        "loading": "Hisseler taranıyor...",
+        "noResults": "Kriterlere uyan hisse yok",
+        "saved": "Ekran başarıyla kaydedildi",
         "applied": "Filtreler uygulandı"
     }
 }

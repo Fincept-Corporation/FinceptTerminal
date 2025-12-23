@@ -1,6 +1,6 @@
 {
     "title": "PANEL DE AUDITORÍA DE INICIO DE SESIÓN",
-    "accessDenied": "Se requiere acceso de administrador para ver el Panel de Auditoría de Inicio de Sesión",
+    "accessDenied": "Acceso de administrador requerido",
     "metrics": {
         "dauToday": "DAU Hoy",
         "mau": "MAU",
@@ -18,7 +18,8 @@
     "activity": {
         "recentLoginActivity": "ACTIVIDAD DE INICIO DE SESIÓN RECIENTE",
         "securityAlerts": "ALERTAS DE SEGURIDAD",
-        "noActiveAlerts": "Sin alertas activas"
+        "noActiveAlerts": "Sin alertas activas",
+        "loginEventLog": "REGISTRO DE EVENTOS DE INICIO"
     },
     "table": {
         "time": "Hora",
@@ -26,7 +27,21 @@
         "user": "Usuario",
         "ipAddress": "Dirección IP",
         "location": "Ubicación",
-        "device": "Dispositivo"
+        "device": "Dispositivo",
+        "details": "Detalles"
+    },
+    "alerts": {
+        "securityIncidents": "ALERTAS E INCIDENTES DE SEGURIDAD",
+        "noAlerts": "Sin alertas de seguridad",
+        "dismiss": "DESCARTAR",
+        "blockIp": "BLOQUEAR IP",
+        "investigate": "INVESTIGAR"
+    },
+    "analytics": {
+        "loginsByCountry": "INICIOS POR PAÍS (30 días)",
+        "failureReasons": "RAZONES DE FALLO (24h)",
+        "peakHours": "HORAS PICO (UTC)",
+        "logins": "inicios"
     },
     "controls": {
         "autoRefresh": "Auto-actualizar",
@@ -34,7 +49,9 @@
         "refresh": "ACTUALIZAR"
     },
     "status": {
-        "admin": "Administrador",
+        "admin": "Admin",
+        "dau": "DAU",
+        "status": "Estado",
         "updating": "ACTUALIZANDO",
         "ready": "LISTO"
     }

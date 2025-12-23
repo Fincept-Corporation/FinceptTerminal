@@ -1,6 +1,6 @@
 {
     "title": "MARCHÉS",
-    "marketTerminalLive": "TERMINAL DE MARCHÉ - DONNÉES EN DIRECT",
+    "marketTerminalLive": "TERMINAL DES MARCHÉS - DONNÉES EN DIRECT",
     "globalMarkets": "MARCHÉS MONDIAUX",
     "regionalMarkets": "marchés régionaux",
     "regionalMarketsLive": "MARCHÉS RÉGIONAUX - DONNÉES EN DIRECT",
@@ -8,7 +8,7 @@
     "symbol": "SYMBOLE",
     "name": "NOM",
     "price": "PRIX",
-    "change": "VARIATION",
+    "change": "VAR",
     "percentChange": "%VAR",
     "high": "HAUT",
     "low": "BAS",
@@ -16,13 +16,33 @@
     "noData": "Aucune donnée disponible",
     "refresh": "ACTUALISER",
     "auto": "AUTO",
-    "on": "ACTIVÉ",
-    "off": "DÉSACTIVÉ",
+    "on": "ON",
+    "off": "OFF",
     "lastUpdate": "DERNIÈRE MISE À JOUR",
     "updating": "MISE À JOUR",
     "live": "EN DIRECT",
     "connected": "Connecté",
     "cache": "Cache",
     "enabled": "ACTIVÉ",
-    "dataProviderInfo": "Données fournies par Yahoo Finance API | Mises à jour en temps réel"
+    "dataProviderInfo": "Données de Yahoo Finance API | Mises à jour en temps réel",
+    "header": {
+        "live": "EN DIRECT",
+        "updating": "MISE À JOUR",
+        "refresh": "ACTUALISER"
+    },
+    "tabs": {
+        "overview": "Aperçu",
+        "stocks": "Actions",
+        "indices": "Indices",
+        "forex": "Forex",
+        "crypto": "Crypto",
+        "commodities": "Matières Premières",
+        "bonds": "Obligations"
+    },
+    "status": {
+        "marketOpen": "Marché Ouvert",
+        "marketClosed": "Marché Fermé",
+        "preMarket": "Pré-Marché",
+        "afterHours": "Après les Heures"
+    }
 }

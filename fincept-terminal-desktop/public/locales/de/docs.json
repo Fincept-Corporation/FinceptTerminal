@@ -13,12 +13,12 @@
     "codeExample": "CODE-BEISPIEL",
     "content": {
         "title": "FINCEPT TERMINAL DOKUMENTATION",
-        "description": "Wählen Sie ein Thema aus dem Navigationsbereich.",
+        "description": "Wählen Sie ein Thema aus dem Navigationspanel, um Anleitungen und API-Referenz anzuzeigen.",
         "topicsAvailable": "Themen verfügbar",
-        "selectTopic": "Thema auswählen"
+        "selectTopic": "Wählen Sie ein Thema zum Starten"
     },
     "status": {
-        "version": "Fincept Terminal Dokumentation v3.0",
+        "version": "Fincept Terminal Documentation v3.0 | Vollständige API-Referenz & Anleitungen",
         "sections": "Abschnitte",
         "topics": "Themen",
         "current": "Aktuell"

@@ -1,6 +1,9 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
-    "dashboard": "لوحة القيادة",
+    "dashboard": "لوحة المعلومات",
     "markets": "الأسواق",
     "news": "الأخبار",
     "portfolio": "المحفظة",
@@ -39,7 +42,7 @@
     "ready": "جاهز"
   },
   "labels": {
-    "moreTabs": "المزيد من علامات التبويب في قوائم الأدوات",
+    "moreTabs": "المزيد من علامات التبويب في قوائم شريط الأدوات",
     "enterCommand": "أدخل الأمر",
     "search": "بحث"
   }

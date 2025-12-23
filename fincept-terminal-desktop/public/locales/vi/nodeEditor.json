@@ -1,0 +1,32 @@
+{
+    "title": "Trình soạn Node",
+    "header": {
+        "nodes": "Node",
+        "connections": "Kết nối",
+        "canvas": "Canvas"
+    },
+    "tabs": {
+        "editor": "Trình soạn",
+        "preview": "Xem trước"
+    },
+    "toolbar": {
+        "addNode": "Thêm node",
+        "delete": "Xóa",
+        "clear": "Xóa tất cả",
+        "run": "Chạy",
+        "save": "Lưu",
+        "load": "Tải"
+    },
+    "nodes": {
+        "input": "Đầu vào",
+        "output": "Đầu ra",
+        "process": "Xử lý",
+        "condition": "Điều kiện"
+    },
+    "messages": {
+        "saved": "Đã lưu đồ thị",
+        "loaded": "Đã tải đồ thị",
+        "running": "Đang chạy...",
+        "completed": "Hoàn thành"
+    }
+}

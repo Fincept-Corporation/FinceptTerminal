@@ -1,0 +1,39 @@
+{
+    "title": "Нотатки",
+    "header": {
+        "notes": "Нотатки",
+        "folders": "Папки",
+        "tags": "Теги"
+    },
+    "toolbar": {
+        "newNote": "Нова нотатка",
+        "templates": "Шаблони",
+        "favorites": "Обране",
+        "filters": "Фільтри",
+        "archived": "Архів"
+    },
+    "editor": {
+        "title": "Заголовок",
+        "content": "Вміст",
+        "tags": "Теги"
+    },
+    "buttons": {
+        "save": "Зберегти",
+        "delete": "Видалити",
+        "archive": "В архів",
+        "share": "Поділитися"
+    },
+    "messages": {
+        "saved": "Нотатку збережено",
+        "deleted": "Нотатку видалено",
+        "archived": "Нотатку архівовано"
+    },
+    "search": {
+        "placeholder": "Пошук нотаток..."
+    },
+    "stats": {
+        "total": "Всього",
+        "archived": "В архіві",
+        "favorites": "Обране"
+    }
+}

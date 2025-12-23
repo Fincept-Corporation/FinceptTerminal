@@ -10,34 +10,34 @@
         "market": "Ринкові дані",
         "economic": "Економічні дані",
         "alternative": "Альтернативні дані",
-        "news": "Новини",
+        "news": "Новини та настрій",
         "fundamental": "Фундаментальні дані"
     },
     "status": {
         "connected": "Підключено",
         "disconnected": "Відключено",
         "error": "Помилка",
-        "pending": "Очікування"
+        "pending": "Очікується"
     },
     "actions": {
         "connect": "Підключити",
         "disconnect": "Відключити",
         "configure": "Налаштувати",
-        "test": "Тест",
+        "test": "Тест підключення",
         "delete": "Видалити"
     },
     "form": {
-        "apiKey": "API ключ",
-        "endpoint": "URL",
-        "username": "Користувач",
+        "apiKey": "API Ключ",
+        "endpoint": "URL Endpoint",
+        "username": "Ім'я користувача",
         "password": "Пароль",
         "save": "Зберегти",
         "cancel": "Скасувати"
     },
     "messages": {
-        "connectionSuccess": "Успішно підключено",
-        "connectionFailed": "Помилка підключення",
-        "noSources": "Немає джерел",
-        "loading": "Завантаження..."
+        "connectionSuccess": "Успішно підключено до джерела даних",
+        "connectionFailed": "Не вдалося підключити до джерела даних",
+        "noSources": "Немає налаштованих джерел даних",
+        "loading": "Завантаження джерел даних..."
     }
 }

@@ -1,0 +1,33 @@
+{
+    "title": "منشئ التقارير",
+    "header": {
+        "templates": "قوالب",
+        "reports": "تقارير",
+        "preview": "معاينة"
+    },
+    "toolbar": {
+        "new": "تقرير جديد",
+        "save": "حفظ",
+        "export": "تصدير",
+        "print": "طباعة",
+        "share": "مشاركة"
+    },
+    "sections": {
+        "header": "الرأس",
+        "summary": "الملخص",
+        "charts": "الرسوم البيانية",
+        "tables": "الجداول",
+        "footer": "التذييل"
+    },
+    "templates": {
+        "daily": "تقرير يومي",
+        "weekly": "تقرير أسبوعي",
+        "monthly": "تقرير شهري",
+        "custom": "مخصص"
+    },
+    "messages": {
+        "saved": "تم حفظ التقرير",
+        "exported": "تم تصدير التقرير",
+        "generating": "جاري إنشاء التقرير..."
+    }
+}

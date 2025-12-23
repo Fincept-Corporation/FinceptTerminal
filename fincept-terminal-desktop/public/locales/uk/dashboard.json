@@ -1,8 +1,13 @@
 {
   "header": {
-    "title": "НАЛАШТОВУВАНА ПАНЕЛЬ",
+    "title": "НАСТРОЮВАНА ПАНЕЛЬ",
     "live": "НАЖИВО",
     "widgets": "ВІДЖЕТИ"
+  },
+  "buttons": {
+    "addWidget": "ДОДАТИ ВІДЖЕТ",
+    "saveLayout": "ЗБЕРЕГТИ МАКЕТ",
+    "reset": "СКИНУТИ"
   },
   "widgets": {
     "loading": "Завантаження...",
@@ -10,8 +15,8 @@
     "configure": "Налаштувати",
     "refresh": "Оновити",
     "remove": "Видалити",
-    "globalIndices": "ГЛОБАЛЬНІ ІНДЕКСИ - ТОП 12",
-    "forex": "ВАЛЮТНІ ПАРИ",
+    "globalIndices": "СВІТОВІ ІНДЕКСИ - ТОП 12",
+    "forex": "ПАРИ FOREX",
     "crypto": "КРИПТОВАЛЮТИ",
     "commodities": "СИРОВИНА",
     "bonds": "ОБЛІГАЦІЇ",
@@ -29,15 +34,46 @@
     "high": "МАКС",
     "low": "МІН",
     "noIndexData": "Немає даних індексів",
-    "noData": "Немає даних"
+    "noForexData": "Немає даних forex",
+    "noCryptoData": "Немає даних крипто",
+    "noCommoditiesData": "Немає даних сировини",
+    "noNewsData": "Немає новин",
+    "noForumPosts": "Немає постів",
+    "noStocksInWatchlist": "Немає акцій у списку",
+    "noWatchlistSelected": "Список не вибрано",
+    "noData": "Немає даних",
+    "pair": "ПАРА",
+    "rate": "КУРС",
+    "commodity": "СИРОВИНА",
+    "maritimeIntelligence": "⚓ МОРСЬКА РОЗВІДКА",
+    "globe3D": "3D ГЛОБУС",
+    "vessels": "СУДНА",
+    "routes": "МАРШРУТИ",
+    "vol24h": "ОБ'ЄМ 24Г",
+    "topTradeCorridors": "ОСНОВНІ ТОРГОВІ КОРИДОРИ",
+    "ships": "судна"
   },
-  "buttons": {
-    "addWidget": "ДОДАТИ ВІДЖЕТ",
-    "saveLayout": "ЗБЕРЕГТИ МАКЕТ",
-    "reset": "СКИНУТИ"
+  "tips": {
+    "drag": "Перетягніть віджети для перестановки",
+    "resize": "Змінюйте розмір з правого нижнього кута",
+    "remove": "Видаляйте віджети кнопкою X",
+    "responsive": "Адаптивний макет - повна ширина"
+  },
+  "loading": {
+    "title": "Ініціалізація Панелі",
+    "description": "Налаштування кешу бази даних для швидшого завантаження...",
+    "note": "Це займе мить лише при першому запуску"
   },
   "empty": {
     "noWidgets": "Немає віджетів на панелі",
     "addFirst": "ДОДАЙТЕ ПЕРШИЙ ВІДЖЕТ"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Робоча область перетягування",
+    "layout": "Макет",
+    "custom": "Власний",
+    "empty": "Порожній",
+    "active": "АКТИВНИЙ",
+    "cache": "Кеш: УВІМКНЕНО"
   }
 }

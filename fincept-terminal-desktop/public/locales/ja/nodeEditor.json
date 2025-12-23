@@ -1,0 +1,32 @@
+{
+    "title": "ノードエディタ",
+    "header": {
+        "nodes": "ノード",
+        "connections": "接続",
+        "canvas": "キャンバス"
+    },
+    "tabs": {
+        "editor": "エディタ",
+        "preview": "プレビュー"
+    },
+    "toolbar": {
+        "addNode": "ノード追加",
+        "delete": "削除",
+        "clear": "全削除",
+        "run": "実行",
+        "save": "保存",
+        "load": "読込"
+    },
+    "nodes": {
+        "input": "入力",
+        "output": "出力",
+        "process": "処理",
+        "condition": "条件"
+    },
+    "messages": {
+        "saved": "グラフを保存しました",
+        "loaded": "グラフを読み込みました",
+        "running": "実行中...",
+        "completed": "完了"
+    }
+}

@@ -1,9 +1,9 @@
 {
-    "title": "फिनसेप्ट टर्मिनल प्रोफेशनल न्यूज़",
+    "title": "FINCEPT टर्मिनल प्रोफेशनल न्यूज़",
     "header": {
-        "liveFeed": "लाइव फीड",
+        "liveFeed": "लाइव फ़ीड",
         "live": "लाइव",
-        "refresh": "रिफ्रेश",
+        "refresh": "रीफ्रेश",
         "updating": "अपडेट हो रहा है...",
         "alerts": "अलर्ट",
         "sources": "स्रोत",
@@ -15,23 +15,63 @@
     },
     "categories": {
         "all": "सभी",
-        "markets": "बाजार",
+        "markets": "बाज़ार",
+        "stocks": "स्टॉक",
+        "forex": "फ़ॉरेक्स",
         "crypto": "क्रिप्टो",
-        "earnings": "कमाई"
+        "commodities": "कमोडिटीज़",
+        "economy": "अर्थव्यवस्था",
+        "economic": "आर्थिक",
+        "politics": "राजनीति",
+        "earnings": "कमाई",
+        "tech": "टेक",
+        "energy": "ऊर्जा",
+        "banking": "बैंकिंग",
+        "geopolitics": "जियोपॉलिटिक्स",
+        "flash": "फ़्लैश",
+        "urgent": "ज़रूरी"
+    },
+    "feedLabels": {
+        "primary": "प्राथमिक न्यूज़ फ़ीड",
+        "secondary": "द्वितीयक न्यूज़ फ़ीड",
+        "refresh": "रीफ्रेश"
+    },
+    "filters": {
+        "source": "स्रोत",
+        "region": "क्षेत्र",
+        "timeframe": "समय"
+    },
+    "timeframes": {
+        "1h": "1 घंटा",
+        "24h": "24 घंटे",
+        "1w": "1 सप्ताह",
+        "1m": "1 महीना"
+    },
+    "article": {
+        "readMore": "और पढ़ें",
+        "source": "स्रोत",
+        "published": "प्रकाशित",
+        "relatedStocks": "संबंधित स्टॉक",
+        "sentiment": "भावना",
+        "impact": "प्रभाव"
     },
     "sentiment": {
-        "bullish": "तेजी",
-        "bearish": "मंदी",
-        "neutral": "तटस्थ"
+        "bullish": "बुलिश",
+        "bearish": "बियरिश",
+        "neutral": "तटस्थ",
+        "positive": "सकारात्मक",
+        "negative": "नकारात्मक"
     },
     "autoRefresh": {
-        "title": "ऑटो-रिफ्रेश अंतराल",
+        "title": "ऑटो-रीफ्रेश अंतराल",
         "minute": "मिनट",
         "minutes": "मिनट"
     },
     "messages": {
         "loading": "समाचार लोड हो रहे हैं...",
-        "loadingFeeds": "न्यूज़ फीड लोड हो रही हैं...",
+        "loadingFeeds": "फ़ीड लोड हो रहे हैं...",
+        "error": "समाचार लोड करने में त्रुटि",
+        "noNews": "कोई समाचार उपलब्ध नहीं",
         "breaking": "ब्रेकिंग"
     }
 }

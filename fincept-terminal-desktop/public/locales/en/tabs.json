@@ -1,4 +1,7 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
     "dashboard": "Dashboard",
     "markets": "Markets",

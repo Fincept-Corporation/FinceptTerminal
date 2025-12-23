@@ -1,0 +1,42 @@
+{
+    "title": "تذكرة الدعم",
+    "header": {
+        "tickets": "التذاكر",
+        "new": "تذكرة جديدة",
+        "status": "الحالة"
+    },
+    "form": {
+        "subject": "الموضوع",
+        "description": "الوصف",
+        "priority": "الأولوية",
+        "category": "الفئة"
+    },
+    "priority": {
+        "low": "منخفضة",
+        "medium": "متوسطة",
+        "high": "عالية",
+        "urgent": "عاجلة"
+    },
+    "status": {
+        "open": "مفتوحة",
+        "inProgress": "قيد التنفيذ",
+        "resolved": "تم الحل",
+        "closed": "مغلقة"
+    },
+    "buttons": {
+        "submit": "إرسال",
+        "cancel": "إلغاء",
+        "reply": "رد",
+        "close": "إغلاق"
+    },
+    "messages": {
+        "created": "تم إنشاء التذكرة",
+        "updated": "تم تحديث التذكرة",
+        "closed": "تم إغلاق التذكرة",
+        "noTickets": "لا توجد تذاكر"
+    },
+    "auth": {
+        "loginRequired": "سجل الدخول لإنشاء تذكرة",
+        "demoMode": "الوضع التجريبي"
+    }
+}

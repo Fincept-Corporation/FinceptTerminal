@@ -1,5 +1,5 @@
 {
-    "title": "FINCEPT投资组合管理器",
+    "title": "FINCEPT 投资组合管理器",
     "header": {
         "live": "实时",
         "updating": "更新中",
@@ -19,18 +19,45 @@
         "sellAsset": "卖出资产",
         "analytics": "分析",
         "history": "历史",
-        "performance": "业绩"
+        "activeMgmt": "主动管理",
+        "performance": "业绩",
+        "rebalance": "再平衡",
+        "reports": "报告",
+        "alerts": "提醒",
+        "sectors": "板块",
+        "help": "帮助"
     },
     "sidebar": {
         "portfolios": "投资组合",
-        "loading": "加载中...",
-        "noPortfolios": "暂无投资组合。"
+        "loading": "加载组合...",
+        "noPortfolios": "暂无组合。",
+        "clickCreate": "点击新建组合创建一个。",
+        "owner": "所有者",
+        "currency": "货币"
+    },
+    "content": {
+        "selectOrCreate": "选择组合或创建新组合开始",
+        "loadingData": "加载组合数据...",
+        "comingSoon": "即将推出..."
     },
     "modals": {
         "createNew": "创建新组合",
+        "portfolioName": "组合名称",
+        "owner": "所有者",
+        "currency": "货币",
         "cancel": "取消",
         "create": "创建",
+        "addAssetTitle": "添加资产到组合",
+        "sellAssetTitle": "卖出资产",
+        "symbol": "代码",
+        "quantity": "数量",
+        "price": "价格",
         "add": "添加",
         "sell": "卖出"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | yfinance集成实时追踪",
+        "lastUpdated": "最后更新",
+        "connected": "已连接"
     }
 }

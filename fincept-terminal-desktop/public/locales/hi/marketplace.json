@@ -1,0 +1,38 @@
+{
+    "title": "मार्केटप्लेस",
+    "header": {
+        "browse": "ब्राउज़ करें",
+        "myItems": "मेरे आइटम",
+        "cart": "कार्ट"
+    },
+    "categories": {
+        "all": "सभी",
+        "indicators": "इंडिकेटर",
+        "strategies": "रणनीतियां",
+        "datasets": "डेटासेट",
+        "tools": "टूल्स"
+    },
+    "buttons": {
+        "buy": "खरीदें",
+        "addToCart": "कार्ट में जोड़ें",
+        "install": "इंस्टॉल करें",
+        "preview": "प्रीव्यू"
+    },
+    "product": {
+        "price": "कीमत",
+        "rating": "रेटिंग",
+        "downloads": "डाउनलोड",
+        "author": "लेखक",
+        "version": "संस्करण"
+    },
+    "cart": {
+        "total": "कुल",
+        "checkout": "चेकआउट",
+        "empty": "कार्ट खाली है"
+    },
+    "messages": {
+        "addedToCart": "कार्ट में जोड़ा गया",
+        "purchased": "खरीदा गया",
+        "installed": "इंस्टॉल किया गया"
+    }
+}

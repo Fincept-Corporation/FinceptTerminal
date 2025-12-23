@@ -1,14 +1,14 @@
 {
     "title": "РИНКИ",
-    "marketTerminalLive": "РИНКОВИЙ ТЕРМІНАЛ - ДАНІ В РЕАЛЬНОМУ ЧАСІ",
+    "marketTerminalLive": "ТЕРМІНАЛ РИНКІВ - ДАНІ НАЖИВО",
     "globalMarkets": "ГЛОБАЛЬНІ РИНКИ",
     "regionalMarkets": "регіональні ринки",
-    "regionalMarketsLive": "РЕГІОНАЛЬНІ РИНКИ - ДАНІ В РЕАЛЬНОМУ ЧАСІ",
-    "liveData": "ДАНІ В РЕАЛЬНОМУ ЧАСІ",
+    "regionalMarketsLive": "РЕГІОНАЛЬНІ РИНКИ - ДАНІ НАЖИВО",
+    "liveData": "ДАНІ НАЖИВО",
     "symbol": "СИМВОЛ",
     "name": "НАЗВА",
     "price": "ЦІНА",
-    "change": "ЗМІНА",
+    "change": "ЗМ",
     "percentChange": "%ЗМ",
     "high": "МАКС",
     "low": "МІН",
@@ -24,5 +24,25 @@
     "connected": "Підключено",
     "cache": "Кеш",
     "enabled": "УВІМКНЕНО",
-    "dataProviderInfo": "Дані від Yahoo Finance API | Оновлення в реальному часі"
+    "dataProviderInfo": "Дані від Yahoo Finance API | Оновлення в реальному часі",
+    "header": {
+        "live": "НАЖИВО",
+        "updating": "ОНОВЛЕННЯ",
+        "refresh": "ОНОВИТИ"
+    },
+    "tabs": {
+        "overview": "Огляд",
+        "stocks": "Акції",
+        "indices": "Індекси",
+        "forex": "Форекс",
+        "crypto": "Крипто",
+        "commodities": "Сировина",
+        "bonds": "Облігації"
+    },
+    "status": {
+        "marketOpen": "Ринок відкритий",
+        "marketClosed": "Ринок закритий",
+        "preMarket": "До відкриття",
+        "afterHours": "Після закриття"
+    }
 }

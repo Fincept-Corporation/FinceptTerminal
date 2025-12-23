@@ -1,0 +1,57 @@
+{
+    "title": "محرر الكود",
+    "header": {
+        "files": "الملفات",
+        "terminal": "الطرفية",
+        "packages": "الحزم"
+    },
+    "toolbar": {
+        "newFile": "ملف جديد",
+        "new": "جديد",
+        "open": "فتح",
+        "save": "حفظ",
+        "run": "تشغيل الكود",
+        "running": "جاري التشغيل...",
+        "runAll": "تشغيل الكل",
+        "download": "تنزيل",
+        "upload": "رفع",
+        "clear": "مسح",
+        "history": "السجل"
+    },
+    "languages": {
+        "finscript": "FinScript",
+        "python": "بايثون",
+        "javascript": "جافاسكريبت",
+        "json": "JSON"
+    },
+    "tabs": {
+        "editor": "المحرر",
+        "notebook": "دفتر جوبيتر",
+        "finscript": "محرر فينسكريبت",
+        "terminal": "الطرفية"
+    },
+    "terminal": {
+        "output": "المخرجات",
+        "clear": "مسح المخرجات",
+        "running": "جاري التشغيل...",
+        "completed": "اكتمل"
+    },
+    "packages": {
+        "installed": "الحزم المثبتة",
+        "install": "تثبيت حزمة",
+        "uninstall": "إلغاء التثبيت",
+        "clickToLoad": "انقر للتحميل...",
+        "load": "تحميل الحزم"
+    },
+    "history": {
+        "title": "سجل الدفاتر",
+        "loading": "جاري تحميل السجل...",
+        "empty": "لا يوجد سجل دفاتر"
+    },
+    "messages": {
+        "fileSaved": "تم حفظ الملف",
+        "fileOpened": "تم فتح الملف",
+        "executionComplete": "اكتمل التنفيذ",
+        "executionError": "خطأ في التنفيذ"
+    }
+}

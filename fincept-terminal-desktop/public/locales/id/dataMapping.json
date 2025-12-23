@@ -21,7 +21,7 @@
     },
     "status": {
         "active": "Aktif",
-        "inactive": "Nonaktif",
+        "inactive": "Tidak Aktif",
         "error": "Error",
         "running": "Berjalan"
     },
@@ -33,20 +33,20 @@
         "export": "Ekspor"
     },
     "create": {
-        "title": "Buat Pemetaan",
-        "name": "Nama",
+        "title": "Buat Pemetaan Data",
+        "name": "Nama Pemetaan",
         "description": "Deskripsi",
         "sourceApi": "API Sumber",
         "destApi": "API Tujuan",
         "fieldMapping": "Pemetaan Field",
-        "save": "Simpan",
+        "save": "Simpan Pemetaan",
         "cancel": "Batal"
     },
     "messages": {
-        "saved": "Tersimpan",
-        "deleted": "Terhapus",
-        "runSuccess": "Berhasil",
-        "error": "Error",
-        "noMappings": "Tidak ada pemetaan"
+        "saved": "Pemetaan berhasil disimpan",
+        "deleted": "Pemetaan dihapus",
+        "runSuccess": "Pemetaan berhasil dijalankan",
+        "error": "Terjadi error",
+        "noMappings": "Tidak ada pemetaan yang dikonfigurasi"
     }
 }

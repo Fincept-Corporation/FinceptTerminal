@@ -1,0 +1,32 @@
+{
+    "title": "Düğüm Editörü",
+    "header": {
+        "nodes": "Düğümler",
+        "connections": "Bağlantılar",
+        "canvas": "Tuval"
+    },
+    "tabs": {
+        "editor": "Editör",
+        "preview": "Önizleme"
+    },
+    "toolbar": {
+        "addNode": "Düğüm ekle",
+        "delete": "Sil",
+        "clear": "Tümünü temizle",
+        "run": "Çalıştır",
+        "save": "Kaydet",
+        "load": "Yükle"
+    },
+    "nodes": {
+        "input": "Giriş",
+        "output": "Çıkış",
+        "process": "İşlem",
+        "condition": "Koşul"
+    },
+    "messages": {
+        "saved": "Grafik kaydedildi",
+        "loaded": "Grafik yüklendi",
+        "running": "Çalışıyor...",
+        "completed": "Tamamlandı"
+    }
+}

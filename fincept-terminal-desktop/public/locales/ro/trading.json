@@ -8,18 +8,69 @@
         "terminal": "TERMINAL FINCEPT",
         "selectBroker": "SELECTEAZĂ BROKER",
         "paper": "SIMULARE",
-        "live": "REAL"
+        "live": "REAL",
+        "watchlist": "LISTĂ URMĂRIRE",
+        "orderbook": "CARTE ORDINE",
+        "trades": "TRANZACȚII",
+        "stats": "STATISTICI",
+        "features": "FUNCȚII",
+        "crossExchange": "CROSS-EXCHANGE",
+        "chart": "GRAFIC",
+        "depth": "ADÂNCIME",
+        "volume": "VOLUM",
+        "aiAgents": "AGENȚI IA",
+        "leaderboard": "CLASAMENT",
+        "modelChat": "CHAT MODEL"
+    },
+    "orderTypes": {
+        "market": "Piață",
+        "limit": "Limită",
+        "stop": "Stop",
+        "stopLimit": "Stop Limită",
+        "trailingStop": "Trailing Stop"
     },
     "actions": {
         "buy": "CUMPĂRĂ",
         "sell": "VINDE",
         "cancel": "Anulează",
+        "modify": "Modifică",
         "close": "Închide",
-        "closeAll": "Închide tot"
+        "closeAll": "Închide Tot"
+    },
+    "form": {
+        "symbol": "Simbol",
+        "quantity": "Cantitate",
+        "price": "Preț",
+        "stopPrice": "Preț Stop",
+        "takeProfit": "Take Profit",
+        "stopLoss": "Stop Loss",
+        "leverage": "Levier"
+    },
+    "position": {
+        "openPrice": "Preț Deschidere",
+        "currentPrice": "Preț Actual",
+        "pnl": "P&L",
+        "pnlPercent": "P&L %",
+        "margin": "Marjă",
+        "size": "Mărime"
+    },
+    "order": {
+        "pending": "În așteptare",
+        "filled": "Executat",
+        "cancelled": "Anulat",
+        "rejected": "Respins",
+        "partial": "Parțial Executat"
+    },
+    "time": {
+        "gtc": "Valabil Până la Anulare",
+        "day": "Ordin Zilnic",
+        "ioc": "Imediat sau Anulează",
+        "fok": "Tot sau Nimic"
     },
     "messages": {
-        "orderPlaced": "Ordin plasat",
+        "orderPlaced": "Ordin executat",
         "orderFailed": "Ordin eșuat",
-        "noPositions": "Fără poziții deschise"
+        "confirmOrder": "Confirmați acest ordin?",
+        "noPositions": "Nicio poziție deschisă"
     }
 }

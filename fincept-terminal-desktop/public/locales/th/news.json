@@ -1,30 +1,77 @@
 {
-    "title": "ข่าวมืออาชีพ FINCEPT TERMINAL",
+    "title": "ข่าวมืออาชีพเทอร์มินัล FINCEPT",
     "header": {
         "liveFeed": "ฟีดสด",
         "live": "สด",
         "refresh": "รีเฟรช",
         "updating": "กำลังอัปเดต...",
         "alerts": "การแจ้งเตือน",
-        "sources": "แหล่งข้อมูล",
+        "sources": "แหล่งข่าว",
+        "topics": "หัวข้อ",
         "status": "สถานะ",
         "demoMode": "โหมดสาธิต",
         "articles": "บทความ",
-        "activeSources": "แหล่งที่ใช้งาน"
+        "activeSources": "แหล่งข่าวที่ใช้งาน"
+    },
+    "categories": {
+        "all": "ทั้งหมด",
+        "markets": "ตลาด",
+        "stocks": "หุ้น",
+        "forex": "ฟอเร็กซ์",
+        "crypto": "คริปโต",
+        "commodities": "สินค้าโภคภัณฑ์",
+        "economy": "เศรษฐกิจ",
+        "economic": "เศรษฐกิจ",
+        "politics": "การเมือง",
+        "earnings": "รายได้",
+        "tech": "เทคโนโลยี",
+        "energy": "พลังงาน",
+        "banking": "ธนาคาร",
+        "geopolitics": "ภูมิรัฐศาสตร์",
+        "flash": "ด่วน",
+        "urgent": "เร่งด่วน"
+    },
+    "feedLabels": {
+        "primary": "ฟีดข่าวหลัก",
+        "secondary": "ฟีดข่าวรอง",
+        "refresh": "รีเฟรช"
+    },
+    "filters": {
+        "source": "แหล่งข่าว",
+        "region": "ภูมิภาค",
+        "timeframe": "เวลา"
+    },
+    "timeframes": {
+        "1h": "1 ชั่วโมง",
+        "24h": "24 ชั่วโมง",
+        "1w": "1 สัปดาห์",
+        "1m": "1 เดือน"
+    },
+    "article": {
+        "readMore": "อ่านเพิ่มเติม",
+        "source": "แหล่งข่าว",
+        "published": "เผยแพร่",
+        "relatedStocks": "หุ้นที่เกี่ยวข้อง",
+        "sentiment": "ความรู้สึก",
+        "impact": "ผลกระทบ"
     },
     "sentiment": {
         "bullish": "ขาขึ้น",
         "bearish": "ขาลง",
-        "neutral": "เป็นกลาง"
+        "neutral": "เป็นกลาง",
+        "positive": "บวก",
+        "negative": "ลบ"
     },
     "autoRefresh": {
-        "title": "ช่วงรีเฟรชอัตโนมัติ",
+        "title": "ช่วงเวลาอัปเดตอัตโนมัติ",
         "minute": "นาที",
         "minutes": "นาที"
     },
     "messages": {
         "loading": "กำลังโหลดข่าว...",
-        "loadingFeeds": "กำลังโหลดฟีด...",
+        "loadingFeeds": "กำลังโหลดฟีดข่าว...",
+        "error": "เกิดข้อผิดพลาดในการโหลดข่าว",
+        "noNews": "ไม่มีข่าว",
         "breaking": "ด่วน"
     }
 }

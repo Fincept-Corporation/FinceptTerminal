@@ -1,0 +1,33 @@
+{
+    "title": "Generatore report",
+    "header": {
+        "templates": "Modelli",
+        "reports": "Report",
+        "preview": "Anteprima"
+    },
+    "toolbar": {
+        "new": "Nuovo report",
+        "save": "Salva",
+        "export": "Esporta",
+        "print": "Stampa",
+        "share": "Condividi"
+    },
+    "sections": {
+        "header": "Intestazione",
+        "summary": "Riepilogo",
+        "charts": "Grafici",
+        "tables": "Tabelle",
+        "footer": "Piè di pagina"
+    },
+    "templates": {
+        "daily": "Report giornaliero",
+        "weekly": "Report settimanale",
+        "monthly": "Report mensile",
+        "custom": "Personalizzato"
+    },
+    "messages": {
+        "saved": "Report salvato",
+        "exported": "Report esportato",
+        "generating": "Generazione report..."
+    }
+}

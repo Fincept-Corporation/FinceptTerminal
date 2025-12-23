@@ -1,0 +1,38 @@
+{
+    "title": "CHỢ",
+    "header": {
+        "browse": "Duyệt",
+        "myItems": "Mục của tôi",
+        "cart": "Giỏ hàng"
+    },
+    "categories": {
+        "all": "Tất cả",
+        "indicators": "Chỉ báo",
+        "strategies": "Chiến lược",
+        "datasets": "Bộ dữ liệu",
+        "tools": "Công cụ"
+    },
+    "buttons": {
+        "buy": "Mua",
+        "addToCart": "Thêm vào giỏ",
+        "install": "Cài đặt",
+        "preview": "Xem trước"
+    },
+    "product": {
+        "price": "Giá",
+        "rating": "Đánh giá",
+        "downloads": "Lượt tải",
+        "author": "Tác giả",
+        "version": "Phiên bản"
+    },
+    "cart": {
+        "total": "Tổng",
+        "checkout": "Thanh toán",
+        "empty": "Giỏ trống"
+    },
+    "messages": {
+        "addedToCart": "Đã thêm vào giỏ",
+        "purchased": "Đã mua",
+        "installed": "Đã cài đặt"
+    }
+}

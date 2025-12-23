@@ -17,7 +17,7 @@
         "connected": "Terhubung",
         "disconnected": "Terputus",
         "error": "Error",
-        "pending": "Menunggu"
+        "pending": "Tertunda"
     },
     "actions": {
         "connect": "Hubungkan",
@@ -29,15 +29,15 @@
     "form": {
         "apiKey": "Kunci API",
         "endpoint": "URL Endpoint",
-        "username": "Nama Pengguna",
-        "password": "Kata Sandi",
+        "username": "Username",
+        "password": "Password",
         "save": "Simpan",
         "cancel": "Batal"
     },
     "messages": {
-        "connectionSuccess": "Berhasil terhubung",
-        "connectionFailed": "Gagal terhubung",
-        "noSources": "Tidak ada sumber",
-        "loading": "Memuat sumber..."
+        "connectionSuccess": "Berhasil terhubung ke sumber data",
+        "connectionFailed": "Gagal terhubung ke sumber data",
+        "noSources": "Tidak ada sumber data yang dikonfigurasi",
+        "loading": "Memuat sumber data..."
     }
 }

@@ -1,0 +1,42 @@
+{
+    "title": "ตั๋วสนับสนุน",
+    "header": {
+        "tickets": "ตั๋ว",
+        "new": "ตั๋วใหม่",
+        "status": "สถานะ"
+    },
+    "form": {
+        "subject": "หัวข้อ",
+        "description": "คำอธิบาย",
+        "priority": "ความสำคัญ",
+        "category": "หมวดหมู่"
+    },
+    "priority": {
+        "low": "ต่ำ",
+        "medium": "ปานกลาง",
+        "high": "สูง",
+        "urgent": "เร่งด่วน"
+    },
+    "status": {
+        "open": "เปิด",
+        "inProgress": "กำลังดำเนินการ",
+        "resolved": "แก้ไขแล้ว",
+        "closed": "ปิด"
+    },
+    "buttons": {
+        "submit": "ส่ง",
+        "cancel": "ยกเลิก",
+        "reply": "ตอบกลับ",
+        "close": "ปิด"
+    },
+    "messages": {
+        "created": "สร้างตั๋วแล้ว",
+        "updated": "อัปเดตตั๋วแล้ว",
+        "closed": "ปิดตั๋วแล้ว",
+        "noTickets": "ไม่มีตั๋ว"
+    },
+    "auth": {
+        "loginRequired": "เข้าสู่ระบบเพื่อสร้างตั๋ว",
+        "demoMode": "โหมดทดลอง"
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "title": "Integração Excel",
+    "header": {
+        "import": "Importar",
+        "export": "Exportar",
+        "preview": "Visualizar"
+    },
+    "toolbar": {
+        "open": "Abrir arquivo",
+        "save": "Salvar",
+        "upload": "Carregar",
+        "download": "Baixar",
+        "refresh": "Atualizar"
+    },
+    "table": {
+        "sheet": "Planilha",
+        "rows": "Linhas",
+        "columns": "Colunas"
+    },
+    "messages": {
+        "loading": "Carregando arquivo...",
+        "imported": "Arquivo importado",
+        "exported": "Arquivo exportado",
+        "error": "Erro ao processar arquivo"
+    }
+}

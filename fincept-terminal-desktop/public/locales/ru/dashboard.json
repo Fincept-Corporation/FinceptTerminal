@@ -4,6 +4,11 @@
     "live": "ЖИВОЙ",
     "widgets": "ВИДЖЕТЫ"
   },
+  "buttons": {
+    "addWidget": "ДОБАВИТЬ ВИДЖЕТ",
+    "saveLayout": "СОХРАНИТЬ МАКЕТ",
+    "reset": "СБРОС"
+  },
   "widgets": {
     "loading": "Загрузка...",
     "error": "Ошибка",
@@ -11,9 +16,9 @@
     "refresh": "Обновить",
     "remove": "Удалить",
     "globalIndices": "ГЛОБАЛЬНЫЕ ИНДЕКСЫ - ТОП 12",
-    "forex": "ВАЛЮТНЫЕ ПАРЫ",
+    "forex": "ПАРЫ FOREX",
     "crypto": "КРИПТОВАЛЮТЫ",
-    "commodities": "СЫРЬЁ",
+    "commodities": "СЫРЬЕ",
     "bonds": "ОБЛИГАЦИИ",
     "etfs": "ETF",
     "news": "НОВОСТИ",
@@ -29,15 +34,46 @@
     "high": "МАКС",
     "low": "МИН",
     "noIndexData": "Нет данных индексов",
-    "noData": "Нет данных"
+    "noForexData": "Нет данных forex",
+    "noCryptoData": "Нет данных крипто",
+    "noCommoditiesData": "Нет данных сырья",
+    "noNewsData": "Нет новостей",
+    "noForumPosts": "Нет постов",
+    "noStocksInWatchlist": "Нет акций в списке",
+    "noWatchlistSelected": "Список не выбран",
+    "noData": "Нет данных",
+    "pair": "ПАРА",
+    "rate": "КУРС",
+    "commodity": "СЫРЬЕ",
+    "maritimeIntelligence": "⚓ МОРСКАЯ РАЗВЕДКА",
+    "globe3D": "3D ГЛОБУС",
+    "vessels": "СУДА",
+    "routes": "МАРШРУТЫ",
+    "vol24h": "ОБЪЕМ 24Ч",
+    "topTradeCorridors": "ОСНОВНЫЕ ТОРГОВЫЕ КОРИДОРЫ",
+    "ships": "суда"
   },
-  "buttons": {
-    "addWidget": "ДОБАВИТЬ ВИДЖЕТ",
-    "saveLayout": "СОХРАНИТЬ МАКЕТ",
-    "reset": "СБРОСИТЬ"
+  "tips": {
+    "drag": "Перетащите виджеты для перестановки",
+    "resize": "Измените размер из нижнего правого угла",
+    "remove": "Удалите виджеты кнопкой X",
+    "responsive": "Адаптивный макет - полная ширина"
+  },
+  "loading": {
+    "title": "Инициализация Панели",
+    "description": "Настройка кеша базы данных для быстрой загрузки...",
+    "note": "Это займет мгновение при первом запуске"
   },
   "empty": {
     "noWidgets": "Нет виджетов на панели",
     "addFirst": "ДОБАВЬТЕ ПЕРВЫЙ ВИДЖЕТ"
+  },
+  "status": {
+    "version": "Fincept Customizable Dashboard v2.0.0 | Перетаскивание рабочего пространства",
+    "layout": "Макет",
+    "custom": "Пользовательский",
+    "empty": "Пусто",
+    "active": "АКТИВЕН",
+    "cache": "Кеш: ВКЛЮЧЕН"
   }
 }

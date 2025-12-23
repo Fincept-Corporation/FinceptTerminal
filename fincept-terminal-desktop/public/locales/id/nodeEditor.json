@@ -1,0 +1,32 @@
+{
+    "title": "Editor Node",
+    "header": {
+        "nodes": "Node",
+        "connections": "Koneksi",
+        "canvas": "Kanvas"
+    },
+    "tabs": {
+        "editor": "Editor",
+        "preview": "Pratinjau"
+    },
+    "toolbar": {
+        "addNode": "Tambah node",
+        "delete": "Hapus",
+        "clear": "Hapus semua",
+        "run": "Jalankan",
+        "save": "Simpan",
+        "load": "Muat"
+    },
+    "nodes": {
+        "input": "Input",
+        "output": "Output",
+        "process": "Proses",
+        "condition": "Kondisi"
+    },
+    "messages": {
+        "saved": "Grafik disimpan",
+        "loaded": "Grafik dimuat",
+        "running": "Menjalankan...",
+        "completed": "Selesai"
+    }
+}

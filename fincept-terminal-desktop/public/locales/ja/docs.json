@@ -1,5 +1,5 @@
 {
-  "title": "FINCEPT ドキュメントターミナル",
+  "title": "FINCEPTドキュメント端末",
   "header": {
     "sections": "セクション",
     "topics": "トピック",
@@ -12,13 +12,13 @@
   "navigation": "ナビゲーション",
   "codeExample": "コード例",
   "content": {
-    "title": "FINCEPT ターミナルドキュメント",
-    "description": "ナビゲーションパネルからトピックを選択して詳細ガイドとAPIリファレンスを表示。",
-    "topicsAvailable": "トピック利用可能",
-    "selectTopic": "トピックを選択して開始"
+    "title": "FINCEPTターミナルドキュメント",
+    "description": "ナビゲーションパネルからトピックを選択してガイドとAPIリファレンスを表示。",
+    "topicsAvailable": "利用可能なトピック",
+    "selectTopic": "開始するトピックを選択"
   },
   "status": {
-    "version": "Fincept ターミナルドキュメント v3.0",
+    "version": "Fincept Terminal Documentation v3.0 | 完全なAPIリファレンスとガイド",
     "sections": "セクション",
     "topics": "トピック",
     "current": "現在"

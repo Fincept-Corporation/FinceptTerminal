@@ -7,19 +7,70 @@
         "settings": "IMPOSTAZIONI",
         "terminal": "TERMINALE FINCEPT",
         "selectBroker": "SELEZIONA BROKER",
-        "paper": "DEMO",
-        "live": "REALE"
+        "paper": "SIMULAZIONE",
+        "live": "REALE",
+        "watchlist": "WATCHLIST",
+        "orderbook": "LIBRO ORDINI",
+        "trades": "OPERAZIONI",
+        "stats": "STATISTICHE",
+        "features": "FUNZIONALITÀ",
+        "crossExchange": "CROSS-EXCHANGE",
+        "chart": "GRAFICO",
+        "depth": "PROFONDITÀ",
+        "volume": "VOLUME",
+        "aiAgents": "AGENTI IA",
+        "leaderboard": "CLASSIFICA",
+        "modelChat": "CHAT MODELLO"
+    },
+    "orderTypes": {
+        "market": "Mercato",
+        "limit": "Limite",
+        "stop": "Stop",
+        "stopLimit": "Stop Limite",
+        "trailingStop": "Trailing Stop"
     },
     "actions": {
-        "buy": "COMPRA",
+        "buy": "ACQUISTA",
         "sell": "VENDI",
         "cancel": "Annulla",
+        "modify": "Modifica",
         "close": "Chiudi",
-        "closeAll": "Chiudi tutto"
+        "closeAll": "Chiudi Tutto"
+    },
+    "form": {
+        "symbol": "Simbolo",
+        "quantity": "Quantità",
+        "price": "Prezzo",
+        "stopPrice": "Prezzo Stop",
+        "takeProfit": "Take Profit",
+        "stopLoss": "Stop Loss",
+        "leverage": "Leva"
+    },
+    "position": {
+        "openPrice": "Prezzo Apertura",
+        "currentPrice": "Prezzo Attuale",
+        "pnl": "P&L",
+        "pnlPercent": "P&L %",
+        "margin": "Margine",
+        "size": "Dimensione"
+    },
+    "order": {
+        "pending": "In attesa",
+        "filled": "Eseguito",
+        "cancelled": "Annullato",
+        "rejected": "Rifiutato",
+        "partial": "Parzialmente Eseguito"
+    },
+    "time": {
+        "gtc": "Valido Fino a Revoca",
+        "day": "Ordine Giornaliero",
+        "ioc": "Immediato o Annulla",
+        "fok": "Tutto o Niente"
     },
     "messages": {
-        "orderPlaced": "Ordine effettuato",
+        "orderPlaced": "Ordine eseguito",
         "orderFailed": "Ordine fallito",
+        "confirmOrder": "Confermare questo ordine?",
         "noPositions": "Nessuna posizione aperta"
     }
 }

@@ -1,0 +1,38 @@
+{
+    "title": "السوق",
+    "header": {
+        "browse": "تصفح",
+        "myItems": "عناصري",
+        "cart": "السلة"
+    },
+    "categories": {
+        "all": "الكل",
+        "indicators": "المؤشرات",
+        "strategies": "الاستراتيجيات",
+        "datasets": "مجموعات البيانات",
+        "tools": "الأدوات"
+    },
+    "buttons": {
+        "buy": "شراء",
+        "addToCart": "أضف للسلة",
+        "install": "تثبيت",
+        "preview": "معاينة"
+    },
+    "product": {
+        "price": "السعر",
+        "rating": "التقييم",
+        "downloads": "التنزيلات",
+        "author": "المؤلف",
+        "version": "الإصدار"
+    },
+    "cart": {
+        "total": "المجموع",
+        "checkout": "الدفع",
+        "empty": "السلة فارغة"
+    },
+    "messages": {
+        "addedToCart": "تمت الإضافة للسلة",
+        "purchased": "تم الشراء",
+        "installed": "تم التثبيت"
+    }
+}

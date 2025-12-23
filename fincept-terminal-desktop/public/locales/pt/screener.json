@@ -1,24 +1,52 @@
 {
-    "title": "FILTRO DE AÇÕES",
+    "title": "NAVEGADOR DE SÉRIES FRED",
     "header": {
+        "title": "EXPLORADOR DE DADOS FRED",
         "filters": "FILTROS",
         "results": "RESULTADOS",
-        "saved": "SALVOS",
-        "presets": "PREDEFINIÇÕES"
+        "saved": "TELAS SALVAS",
+        "presets": "PRESETS"
+    },
+    "apiKey": {
+        "required": "CHAVE API NECESSÁRIA",
+        "configure": "Configure sua chave FRED API em Configurações → Credenciais para acessar dados econômicos.",
+        "getKey": "Obtenha chave API gratuita em",
+        "addToSettings": "Adicionar a Configurações → Credenciais → FRED_API_KEY",
+        "saveAndReload": "Salvar e recarregar esta aba",
+        "tip": "Certifique-se de ter configurado sua chave FRED API em Configurações → Credenciais"
+    },
+    "form": {
+        "seriesIds": "IDs DAS SÉRIES",
+        "startDate": "DATA INÍCIO",
+        "endDate": "DATA FIM",
+        "quickAdd": "ADICIONAR RÁPIDO"
+    },
+    "buttons": {
+        "fetch": "BUSCAR",
+        "loading": "CARREGANDO",
+        "browse": "EXPLORAR SÉRIES",
+        "done": "PRONTO"
+    },
+    "chart": {
+        "title": "GRÁFICO DE SÉRIE TEMPORAL",
+        "emptyState": "Digite IDs de série e clique em BUSCAR para visualizar dados",
+        "trySuggestion": "Tente buscar GDP, UNRATE ou CPIAUCSL",
+        "waiting": "Aguarde enquanto buscamos dados do FRED...",
+        "errorFetching": "Erro ao Buscar Dados"
     },
     "filters": {
-        "add": "Adicionar filtro",
-        "clear": "Limpar tudo",
-        "reset": "Redefinir",
-        "apply": "Aplicar filtros"
+        "add": "Adicionar Filtro",
+        "clear": "Limpar Tudo",
+        "reset": "Resetar",
+        "apply": "Aplicar Filtros"
     },
     "criteria": {
-        "marketCap": "Valor de mercado",
+        "marketCap": "Capitalização",
         "price": "Preço",
         "volume": "Volume",
         "pe": "P/L",
         "eps": "LPA",
-        "dividend": "Dividend yield",
+        "dividend": "Dividend Yield",
         "beta": "Beta",
         "sector": "Setor",
         "industry": "Indústria",
@@ -33,24 +61,24 @@
         "contains": "Contém"
     },
     "results": {
-        "symbol": "Símbolo",
+        "symbol": "Código",
         "name": "Nome",
         "price": "Preço",
         "change": "Variação",
         "volume": "Volume",
-        "marketCap": "Valor",
-        "matches": "resultados"
+        "marketCap": "Capitalização",
+        "matches": "resultados encontrados"
     },
     "actions": {
-        "save": "Salvar filtro",
-        "load": "Carregar filtro",
-        "export": "Exportar",
-        "addToWatchlist": "Adicionar à lista"
+        "save": "Salvar Tela",
+        "load": "Carregar Tela",
+        "export": "Exportar Resultados",
+        "addToWatchlist": "Adicionar à Lista"
     },
     "messages": {
         "loading": "Filtrando ações...",
-        "noResults": "Sem resultados",
-        "saved": "Salvo",
+        "noResults": "Nenhuma ação corresponde aos critérios",
+        "saved": "Tela salva com sucesso",
         "applied": "Filtros aplicados"
     }
 }

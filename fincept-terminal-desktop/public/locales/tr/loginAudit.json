@@ -2,16 +2,46 @@
     "title": "GİRİŞ DENETİM PANELİ",
     "accessDenied": "Yönetici erişimi gerekli",
     "metrics": {
-        "dauToday": "Bugün DAU",
+        "dauToday": "DAU Bugün",
         "mau": "MAU",
         "successRate": "Başarı Oranı",
-        "activeSessions": "Aktif Oturumlar"
+        "failed24h": "Başarısız (24s)",
+        "activeSessions": "Aktif Oturumlar",
+        "uniqueIps": "Benzersiz IP'ler"
     },
     "views": {
         "overview": "GENEL BAKIŞ",
         "eventLog": "OLAY GÜNLÜĞÜ",
         "alerts": "UYARILAR",
-        "analytics": "ANALİZ"
+        "analytics": "ANALİTİK"
+    },
+    "activity": {
+        "recentLoginActivity": "SON GİRİŞ AKTİVİTESİ",
+        "securityAlerts": "GÜVENLİK UYARILARI",
+        "noActiveAlerts": "Aktif uyarı yok",
+        "loginEventLog": "GİRİŞ OLAY GÜNLÜĞÜ"
+    },
+    "table": {
+        "time": "Zaman",
+        "event": "Olay",
+        "user": "Kullanıcı",
+        "ipAddress": "IP Adresi",
+        "location": "Konum",
+        "device": "Cihaz",
+        "details": "Detaylar"
+    },
+    "alerts": {
+        "securityIncidents": "GÜVENLİK UYARI VE OLAYLARI",
+        "noAlerts": "Güvenlik uyarısı yok",
+        "dismiss": "KAPAT",
+        "blockIp": "IP ENGELLE",
+        "investigate": "ARAŞTIR"
+    },
+    "analytics": {
+        "loginsByCountry": "ÜLKEYE GÖRE GİRİŞLER (30 gün)",
+        "failureReasons": "HATA NEDENLERİ (24s)",
+        "peakHours": "ZİRVE SAATLERİ (UTC)",
+        "logins": "giriş"
     },
     "controls": {
         "autoRefresh": "Otomatik yenile",
@@ -20,6 +50,8 @@
     },
     "status": {
         "admin": "Yönetici",
+        "dau": "DAU",
+        "status": "Durum",
         "updating": "GÜNCELLENİYOR",
         "ready": "HAZIR"
     }

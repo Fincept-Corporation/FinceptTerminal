@@ -5,12 +5,12 @@
         "updating": "更新中",
         "newPortfolio": "新規ポートフォリオ",
         "refresh": "更新",
-        "exportCsv": "CSV出力"
+        "exportCsv": "CSVエクスポート"
     },
     "summary": {
-        "totalValue": "総額",
+        "totalValue": "総価値",
         "dayPnl": "当日損益",
-        "totalPnl": "累計損益",
+        "totalPnl": "総損益",
         "positions": "ポジション"
     },
     "views": {
@@ -19,18 +19,45 @@
         "sellAsset": "資産売却",
         "analytics": "分析",
         "history": "履歴",
-        "performance": "パフォーマンス"
+        "activeMgmt": "アクティブ運用",
+        "performance": "パフォーマンス",
+        "rebalance": "リバランス",
+        "reports": "レポート",
+        "alerts": "アラート",
+        "sectors": "セクター",
+        "help": "ヘルプ"
     },
     "sidebar": {
         "portfolios": "ポートフォリオ",
-        "loading": "読み込み中...",
-        "noPortfolios": "ポートフォリオなし"
+        "loading": "ポートフォリオを読み込み中...",
+        "noPortfolios": "ポートフォリオがありません。",
+        "clickCreate": "新規ポートフォリオをクリックして作成。",
+        "owner": "オーナー",
+        "currency": "通貨"
+    },
+    "content": {
+        "selectOrCreate": "ポートフォリオを選択または新規作成して開始",
+        "loadingData": "ポートフォリオデータを読み込み中...",
+        "comingSoon": "近日公開..."
     },
     "modals": {
-        "createNew": "新規作成",
+        "createNew": "新規ポートフォリオ作成",
+        "portfolioName": "ポートフォリオ名",
+        "owner": "オーナー",
+        "currency": "通貨",
         "cancel": "キャンセル",
         "create": "作成",
+        "addAssetTitle": "ポートフォリオに資産追加",
+        "sellAssetTitle": "資産売却",
+        "symbol": "シンボル",
+        "quantity": "数量",
+        "price": "価格",
         "add": "追加",
         "sell": "売却"
+    },
+    "status": {
+        "version": "Fincept Portfolio Manager v2.1.0 | yfinance統合によるリアルタイム追跡",
+        "lastUpdated": "最終更新",
+        "connected": "接続済み"
     }
 }

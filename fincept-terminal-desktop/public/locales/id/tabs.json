@@ -1,15 +1,18 @@
 {
+  "header": {
+    "title": "FINCEPT PROFESSIONAL"
+  },
   "navigation": {
-    "dashboard": "Dasbor",
+    "dashboard": "Dashboard",
     "markets": "Pasar",
     "news": "Berita",
     "portfolio": "Portofolio",
     "backtesting": "Backtesting",
-    "watchlist": "Daftar Pantau",
+    "watchlist": "Watchlist",
     "research": "Riset",
     "screener": "Screener",
     "trading": "Trading",
-    "chat": "Obrolan AI",
+    "chat": "AI Chat",
     "agents": "Agen",
     "settings": "Pengaturan",
     "profile": "Profil",
@@ -18,18 +21,18 @@
     "logout": "Keluar"
   },
   "functionKeys": {
-    "f1": "DASBOR",
-    "f2": "PASAR",
-    "f3": "BERITA",
+    "f1": "DASH",
+    "f2": "PRSR",
+    "f3": "BRTA",
     "f4": "PORT",
-    "f5": "BKTEST",
-    "f6": "PANTAU",
-    "f7": "RISET",
+    "f5": "BKTS",
+    "f6": "WTCH",
+    "f7": "RSRT",
     "f8": "SCRN",
-    "f9": "TRADE",
+    "f9": "TRDG",
     "f10": "AI",
-    "f11": "PENUH",
-    "f12": "PROFIL"
+    "f11": "FULL",
+    "f12": "PROF"
   },
   "status": {
     "connected": "Terhubung",

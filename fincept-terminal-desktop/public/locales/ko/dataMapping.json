@@ -33,20 +33,20 @@
         "export": "내보내기"
     },
     "create": {
-        "title": "매핑 생성",
+        "title": "데이터 매핑 생성",
         "name": "매핑 이름",
         "description": "설명",
         "sourceApi": "소스 API",
         "destApi": "대상 API",
         "fieldMapping": "필드 매핑",
-        "save": "저장",
+        "save": "매핑 저장",
         "cancel": "취소"
     },
     "messages": {
-        "saved": "저장됨",
-        "deleted": "삭제됨",
-        "runSuccess": "실행 성공",
+        "saved": "매핑이 성공적으로 저장됨",
+        "deleted": "매핑 삭제됨",
+        "runSuccess": "매핑이 성공적으로 실행됨",
         "error": "오류 발생",
-        "noMappings": "매핑 없음"
+        "noMappings": "구성된 매핑 없음"
     }
 }

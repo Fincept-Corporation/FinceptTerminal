@@ -1,0 +1,56 @@
+﻿{
+    "title": "CẤU HÌNH AGENT",
+    "header": {
+        "agents": "AGENT",
+        "active": "HOẠT ĐỘNG",
+        "total": "TỔNG"
+    },
+    "toolbar": {
+        "refresh": "LÀM MỚI",
+        "save": "LƯU",
+        "saveConfig": "Lưu Cấu Hình",
+        "run": "CHẠY",
+        "test": "THỬ NGHIỆM",
+        "testAgent": "Thử Nghiệm Agent"
+    },
+    "sidebar": {
+        "availableAgents": "AGENT CÓ SẴN",
+        "selectAgent": "Chọn agent để cấu hình"
+    },
+    "config": {
+        "name": "Tên",
+        "role": "Vai trò",
+        "goal": "Mục tiêu",
+        "description": "Mô tả",
+        "llmConfig": "Cấu Hình LLM",
+        "provider": "Nhà cung cấp",
+        "model": "Mô hình",
+        "temperature": "Nhiệt độ",
+        "maxTokens": "Token Tối Đa",
+        "tools": "Công cụ",
+        "memory": "Bật Bộ Nhớ",
+        "agenticMemory": "Bật Bộ Nhớ Agenttic",
+        "instructions": "Hướng dẫn",
+        "testQuery": "TRUY VẤN THỬ NGHIỆM",
+        "testQueryPlaceholder": "Nhập truy vấn thử nghiệm tại đây..."
+    },
+    "llmProviders": {
+        "openai": "OpenAI",
+        "anthropic": "Anthropic",
+        "ollama": "Ollama",
+        "gemini": "Gemini"
+    },
+    "status": {
+        "ready": "Sẵn sàng",
+        "running": "Đang chạy",
+        "error": "Lỗi",
+        "configured": "Đã cấu hình"
+    },
+    "messages": {
+        "configSaved": "Đã lưu cấu hình",
+        "agentTested": "Agent được thử nghiệm thành công",
+        "testFailed": "Thử nghiệm thất bại",
+        "loadingAgents": "Đang tải agent...",
+        "noAgents": "Không tìm thấy agent"
+    }
+}

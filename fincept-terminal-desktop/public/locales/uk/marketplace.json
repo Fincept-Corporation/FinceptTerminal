@@ -1,0 +1,38 @@
+{
+    "title": "МАРКЕТПЛЕЙС",
+    "header": {
+        "browse": "Переглянути",
+        "myItems": "Мої товари",
+        "cart": "Кошик"
+    },
+    "categories": {
+        "all": "Всі",
+        "indicators": "Індикатори",
+        "strategies": "Стратегії",
+        "datasets": "Набори даних",
+        "tools": "Інструменти"
+    },
+    "buttons": {
+        "buy": "Купити",
+        "addToCart": "До кошика",
+        "install": "Встановити",
+        "preview": "Перегляд"
+    },
+    "product": {
+        "price": "Ціна",
+        "rating": "Рейтинг",
+        "downloads": "Завантаження",
+        "author": "Автор",
+        "version": "Версія"
+    },
+    "cart": {
+        "total": "Всього",
+        "checkout": "Оформити",
+        "empty": "Кошик порожній"
+    },
+    "messages": {
+        "addedToCart": "Додано до кошика",
+        "purchased": "Куплено",
+        "installed": "Встановлено"
+    }
+}

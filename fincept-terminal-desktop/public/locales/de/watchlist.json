@@ -1,27 +1,75 @@
 {
     "title": "BEOBACHTUNGSLISTE",
     "header": {
+        "title": "FINCEPT BEOBACHTUNGSLISTEN-MONITOR",
         "myWatchlists": "MEINE LISTEN",
         "create": "ERSTELLEN",
         "import": "IMPORTIEREN",
-        "export": "EXPORTIEREN"
+        "export": "EXPORTIEREN",
+        "updating": "AKTUALISIERUNG",
+        "live": "LIVE"
+    },
+    "sidebar": {
+        "groups": "LISTENGRUPPEN",
+        "new": "NEU",
+        "noWatchlists": "Noch keine Listen vorhanden.",
+        "clickNew": "Klicken Sie NEU zum Erstellen.",
+        "stocks": "Aktien",
+        "marketMovers": "MARKTFÜHRER",
+        "gainer": "GEWINNER",
+        "loser": "VERLIERER",
+        "volumeLeaders": "VOLUMEN-LEADER"
+    },
+    "emptyState": {
+        "selectWatchlist": "Wählen Sie eine Liste oder erstellen Sie eine neue zum Starten"
+    },
+    "list": {
+        "name": "Name",
+        "symbols": "Symbole",
+        "created": "Erstellt",
+        "updated": "Letzte Aktualisierung",
+        "actions": "Aktionen"
     },
     "actions": {
         "add": "Symbol hinzufügen",
         "remove": "Entfernen",
         "edit": "Bearbeiten",
-        "delete": "Löschen"
+        "delete": "Löschen",
+        "rename": "Umbenennen",
+        "duplicate": "Duplizieren"
+    },
+    "form": {
+        "name": "Listenname",
+        "description": "Beschreibung",
+        "symbols": "Symbole hinzufügen",
+        "save": "Speichern",
+        "cancel": "Abbrechen"
     },
     "symbol": {
         "price": "Preis",
         "change": "Änderung",
         "volume": "Volumen",
-        "marketCap": "Marktkapitalisierung"
+        "marketCap": "Marktkapitalisierung",
+        "alert": "Alarm setzen"
+    },
+    "alerts": {
+        "priceAbove": "Preis über",
+        "priceBelow": "Preis unter",
+        "changePercent": "Änderung %",
+        "volume": "Volumen-Alarm"
+    },
+    "sort": {
+        "name": "Nach Name",
+        "price": "Nach Preis",
+        "change": "Nach Änderung",
+        "custom": "Eigene Reihenfolge"
     },
     "messages": {
         "created": "Liste erstellt",
         "deleted": "Liste gelöscht",
-        "noWatchlists": "Keine Listen vorhanden",
+        "symbolAdded": "Symbol hinzugefügt",
+        "symbolRemoved": "Symbol entfernt",
+        "noWatchlists": "Keine Listen",
         "loading": "Laden..."
     }
 }

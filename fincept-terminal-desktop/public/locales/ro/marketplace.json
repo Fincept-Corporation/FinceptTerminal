@@ -1,0 +1,38 @@
+{
+    "title": "MARKETPLACE",
+    "header": {
+        "browse": "Răsfoiește",
+        "myItems": "Articolele mele",
+        "cart": "Coș"
+    },
+    "categories": {
+        "all": "Toate",
+        "indicators": "Indicatori",
+        "strategies": "Strategii",
+        "datasets": "Seturi de date",
+        "tools": "Unelte"
+    },
+    "buttons": {
+        "buy": "Cumpără",
+        "addToCart": "Adaugă în coș",
+        "install": "Instalează",
+        "preview": "Previzualizare"
+    },
+    "product": {
+        "price": "Preț",
+        "rating": "Rating",
+        "downloads": "Descărcări",
+        "author": "Autor",
+        "version": "Versiune"
+    },
+    "cart": {
+        "total": "Total",
+        "checkout": "Finalizează",
+        "empty": "Coș gol"
+    },
+    "messages": {
+        "addedToCart": "Adăugat în coș",
+        "purchased": "Cumpărat",
+        "installed": "Instalat"
+    }
+}

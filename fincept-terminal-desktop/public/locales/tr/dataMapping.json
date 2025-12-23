@@ -1,14 +1,14 @@
 {
-    "title": "VERİ EŞLEMESİ",
+    "title": "VERİ EŞLEŞTİRME",
     "header": {
-        "mappings": "EŞLEMELER",
+        "mappings": "EŞLEŞTİRMELER",
         "templates": "ŞABLONLAR",
         "create": "YENİ OLUŞTUR",
         "refresh": "YENİLE"
     },
     "views": {
-        "list": "Eşleme Listesi",
-        "create": "Eşleme Oluştur",
+        "list": "Eşleştirme Listesi",
+        "create": "Eşleştirme Oluştur",
         "templates": "Şablonlar"
     },
     "list": {
@@ -16,8 +16,8 @@
         "source": "Kaynak",
         "destination": "Hedef",
         "status": "Durum",
-        "lastRun": "Son Çalışma",
-        "actions": "İşlemler"
+        "lastRun": "Son Çalıştırma",
+        "actions": "Eylemler"
     },
     "status": {
         "active": "Aktif",
@@ -29,24 +29,24 @@
         "edit": "Düzenle",
         "delete": "Sil",
         "run": "Çalıştır",
-        "duplicate": "Çoğalt",
+        "duplicate": "Kopyala",
         "export": "Dışa Aktar"
     },
     "create": {
-        "title": "Eşleme Oluştur",
-        "name": "Ad",
+        "title": "Veri Eşleştirmesi Oluştur",
+        "name": "Eşleştirme Adı",
         "description": "Açıklama",
         "sourceApi": "Kaynak API",
         "destApi": "Hedef API",
-        "fieldMapping": "Alan Eşleme",
-        "save": "Kaydet",
+        "fieldMapping": "Alan Eşleştirme",
+        "save": "Eşleştirmeyi Kaydet",
         "cancel": "İptal"
     },
     "messages": {
-        "saved": "Kaydedildi",
-        "deleted": "Silindi",
-        "runSuccess": "Başarılı",
-        "error": "Hata",
-        "noMappings": "Eşleme yok"
+        "saved": "Eşleştirme başarıyla kaydedildi",
+        "deleted": "Eşleştirme silindi",
+        "runSuccess": "Eşleştirme başarıyla çalıştırıldı",
+        "error": "Hata oluştu",
+        "noMappings": "Yapılandırılmış eşleştirme yok"
     }
 }
