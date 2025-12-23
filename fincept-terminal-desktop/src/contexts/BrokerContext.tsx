@@ -199,8 +199,14 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         const newRealAdapter = createBrokerAdapter(activeBroker);
 
         console.log(`[BrokerContext] Connecting ${activeBroker} real adapter...`);
-        await newRealAdapter.connect();
-        console.log(`[BrokerContext] ✓ ${activeBroker} real adapter connected (status: ${newRealAdapter.isConnected() ? 'CONNECTED' : 'NOT CONNECTED'})`);
+        try {
+          await newRealAdapter.connect();
+          console.log(`[BrokerContext] ✓ ${activeBroker} real adapter connected (status: ${newRealAdapter.isConnected() ? 'CONNECTED' : 'NOT CONNECTED'})`);
+        } catch (connectError) {
+          console.error(`[BrokerContext] ⚠ Failed to connect ${activeBroker} real adapter:`, connectError);
+          console.log(`[BrokerContext] Continuing with disconnected adapter (market data will be unavailable)`);
+          // Don't throw - allow the app to continue with a disconnected adapter
+        }
 
         setRealAdapter(newRealAdapter);
 
@@ -263,27 +269,32 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
           manager.setProviderConfig(activeBroker, config);
 
           console.log(`[BrokerContext] Connecting WebSocket for ${activeBroker}...`);
-          await manager.connect(activeBroker);
+          try {
+            await manager.connect(activeBroker);
 
-          // Wait for WebSocket to actually OPEN (not just connect call to finish)
-          let wsStatus = manager.getStatus(activeBroker);
-          let waitCount = 0;
-          const maxWait = 20; // 10 seconds max
+            // Wait for WebSocket to actually OPEN (not just connect call to finish)
+            let wsStatus = manager.getStatus(activeBroker);
+            let waitCount = 0;
+            const maxWait = 20; // 10 seconds max
 
-          while (wsStatus !== ConnectionStatus.CONNECTED && waitCount < maxWait) {
-            console.log(`[BrokerContext] Waiting for WebSocket... (${waitCount + 1}/${maxWait}) - Status: ${wsStatus}`);
-            await new Promise(resolve => setTimeout(resolve, 500));
-            wsStatus = manager.getStatus(activeBroker);
-            waitCount++;
+            while (wsStatus !== ConnectionStatus.CONNECTED && waitCount < maxWait) {
+              console.log(`[BrokerContext] Waiting for WebSocket... (${waitCount + 1}/${maxWait}) - Status: ${wsStatus}`);
+              await new Promise(resolve => setTimeout(resolve, 500));
+              wsStatus = manager.getStatus(activeBroker);
+              waitCount++;
+            }
+
+            console.log(`[BrokerContext] ✓ ${activeBroker} WebSocket status: ${wsStatus}`);
+          } catch (wsError) {
+            console.error(`[BrokerContext] ⚠ WebSocket connection failed:`, wsError);
+            console.log(`[BrokerContext] Continuing without WebSocket (real-time updates unavailable)`);
           }
-
-          console.log(`[BrokerContext] ✓ ${activeBroker} WebSocket status: ${wsStatus}`);
 
           console.log(`[BrokerContext] ========================================`);
           console.log(`[BrokerContext] ${activeBroker} initialization complete!`);
           console.log(`[BrokerContext] Real Adapter: ${newRealAdapter.isConnected() ? '✓ CONNECTED' : '✗ NOT CONNECTED'}`);
           console.log(`[BrokerContext] Paper Adapter: ${newPaperAdapter.isConnected() ? '✓ CONNECTED' : '✗ NOT CONNECTED'}`);
-          console.log(`[BrokerContext] WebSocket: ${wsStatus}`);
+          console.log(`[BrokerContext] WebSocket: ${manager.getStatus(activeBroker)}`);
           console.log(`[BrokerContext] ========================================`);
         } else {
           console.warn(`[BrokerContext] No WebSocket config found for ${activeBroker}!`);
@@ -304,7 +315,10 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       }
     };
 
-    initializeAdapters();
+    // Call async function and catch any unhandled errors
+    initializeAdapters().catch(err => {
+      console.error('[BrokerContext] Unhandled error in initializeAdapters:', err);
+    });
 
     // Cleanup only when broker actually changes (not on tab change)
     return () => {

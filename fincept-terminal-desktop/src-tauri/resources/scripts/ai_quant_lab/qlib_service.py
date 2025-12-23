@@ -216,11 +216,21 @@ class QlibService:
             # Expand user path
             provider_uri = os.path.expanduser(provider_uri)
 
-            # Initialize Qlib
-            qlib.init(provider_uri=provider_uri, region=region)
-            self.initialized = True
-            self.provider_uri = provider_uri
-            self.region = region
+            # Check if data exists
+            data_exists = os.path.exists(provider_uri)
+
+            # Initialize Qlib (will work without data for model inspection)
+            try:
+                qlib.init(provider_uri=provider_uri, region=region)
+                self.initialized = True
+                self.provider_uri = provider_uri
+                self.region = region
+            except Exception as init_error:
+                # If data missing, initialize without provider (limited functionality)
+                qlib.init(provider_uri=None, region=region)
+                self.initialized = True
+                self.provider_uri = None
+                self.region = region
 
             # Setup experiment manager if config provided
             if exp_manager_config:
@@ -228,10 +238,11 @@ class QlibService:
 
             return {
                 "success": True,
-                "message": "Qlib initialized successfully",
-                "provider_uri": provider_uri,
+                "message": "Qlib initialized successfully" if data_exists else "Qlib initialized (no data - download required for full functionality)",
+                "provider_uri": self.provider_uri,
                 "region": region,
                 "version": qlib.__version__,
+                "data_available": data_exists,
                 "models_available": sum(MODELS_AVAILABLE.values()),
                 "handlers_available": list(HANDLERS_AVAILABLE.keys()),
                 "backtest_available": BACKTEST_AVAILABLE if 'BACKTEST_AVAILABLE' in dir() else False
@@ -1161,10 +1172,23 @@ def main():
             result = service.initialize(provider_uri, region)
 
         elif command == "check_status":
+            # Check if Qlib data exists (indicates it's been initialized at least once)
+            qlib_initialized = False
+            if QLIB_AVAILABLE:
+                try:
+                    # Check if default Qlib data directory exists
+                    default_data_path = os.path.expanduser("~/.qlib/qlib_data/cn_data")
+                    us_data_path = os.path.expanduser("~/.qlib/qlib_data/us_data")
+
+                    # If either data path exists, consider Qlib initialized
+                    qlib_initialized = os.path.exists(default_data_path) or os.path.exists(us_data_path)
+                except:
+                    pass
+
             result = {
                 "success": True,
                 "qlib_available": QLIB_AVAILABLE,
-                "initialized": service.initialized,
+                "initialized": qlib_initialized,
                 "version": qlib.__version__ if QLIB_AVAILABLE else None,
                 "models_available": MODELS_AVAILABLE,
                 "handlers_available": list(HANDLERS_AVAILABLE.keys()),
