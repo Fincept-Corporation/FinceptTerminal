@@ -5,6 +5,7 @@ import { createChart, CandlestickSeries, HistogramSeries, LineSeries, BarSeries 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Area } from 'recharts';
 import { ProChartWithToolkit } from './trading/charts/ProChartWithToolkit';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 const COLORS = {
   ORANGE: '#FFA500',
@@ -437,14 +438,14 @@ const IndicatorBox: React.FC<{
       boxShadow: '0 1px 3px rgba(0, 0, 0, 0.3)',
       transition: 'all 0.2s ease',
     }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.borderColor = color;
-      e.currentTarget.style.boxShadow = `0 4px 12px rgba(0, 0, 0, 0.5)`;
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.borderColor = COLORS.BORDER;
-      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.3)';
-    }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = color;
+        e.currentTarget.style.boxShadow = `0 4px 12px rgba(0, 0, 0, 0.5)`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = COLORS.BORDER;
+        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.3)';
+      }}
     >
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -732,6 +733,7 @@ const IndicatorBox: React.FC<{
 
 const EquityResearchTab: React.FC = () => {
   const { colors, fontSize: themeFontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const { t } = useTranslation('equityResearch');
   const [searchSymbol, setSearchSymbol] = useState('');
   const [currentSymbol, setCurrentSymbol] = useState('AAPL');
   const [stockInfo, setStockInfo] = useState<StockInfo | null>(null);
@@ -1317,7 +1319,7 @@ const EquityResearchTab: React.FC = () => {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: COLORS.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>EQUITY RESEARCH TERMINAL</span>
+            <span style={{ color: COLORS.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>{t('title')} TERMINAL</span>
             <span style={{ color: COLORS.GRAY }}>|</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <input
@@ -1890,398 +1892,398 @@ const EquityResearchTab: React.FC = () => {
                 </div>
               </div>
             ) : (
-          <div style={{ padding: '0' }}>
-            {/* Controls Panel */}
-            <div style={{
-              backgroundColor: COLORS.PANEL_BG,
-              border: `1px solid ${COLORS.BORDER}`,
-              padding: '10px 12px',
-              marginBottom: '8px',
-              display: 'flex',
-              gap: '20px',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: COLORS.GRAY, fontSize: `${fontSize}px` }}>FONT SIZE:</span>
-                <button
-                  onClick={() => setFontSize(Math.max(10, fontSize - 1))}
-                  style={{
-                    backgroundColor: COLORS.DARK_BG,
-                    border: `1px solid ${COLORS.BORDER}`,
-                    color: COLORS.WHITE,
-                    padding: '4px 8px',
-                    fontSize: `${fontSize}px`,
-                    cursor: 'pointer',
-                  }}
-                >
-                  -
-                </button>
-                <span style={{ color: COLORS.ORANGE, fontSize: `${fontSize}px`, fontWeight: 'bold', minWidth: '30px', textAlign: 'center' }}>{fontSize}px</span>
-                <button
-                  onClick={() => setFontSize(Math.min(20, fontSize + 1))}
-                  style={{
-                    backgroundColor: COLORS.DARK_BG,
-                    border: `1px solid ${COLORS.BORDER}`,
-                    color: COLORS.WHITE,
-                    padding: '4px 8px',
-                    fontSize: `${fontSize}px`,
-                    cursor: 'pointer',
-                  }}
-                >
-                  +
-                </button>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: COLORS.GRAY, fontSize: `${fontSize}px` }}>SHOW YEARS:</span>
-                {[2, 3, 4, 5].map((count) => (
-                  <button
-                    key={count}
-                    onClick={() => setShowYearsCount(count)}
-                    style={{
-                      backgroundColor: showYearsCount === count ? COLORS.ORANGE : COLORS.DARK_BG,
-                      border: `1px solid ${COLORS.BORDER}`,
-                      color: showYearsCount === count ? COLORS.DARK_BG : COLORS.WHITE,
-                      padding: '4px 10px',
-                      fontSize: `${fontSize - 1}px`,
-                      cursor: 'pointer',
-                      fontWeight: showYearsCount === count ? 'bold' : 'normal',
-                    }}
-                  >
-                    {count}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ color: COLORS.GRAY, fontSize: `${fontSize}px` }}>SELECT METRICS:</span>
-                <button
-                  onClick={() => {
-                    const allMetrics = getAllMetrics();
-                    setSelectedMetrics(selectedMetrics.length === allMetrics.length ? [] : allMetrics);
-                  }}
-                  style={{
-                    backgroundColor: COLORS.BLUE,
-                    border: 'none',
-                    color: COLORS.WHITE,
-                    padding: '4px 10px',
-                    fontSize: `${fontSize - 1}px`,
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                  }}
-                >
-                  {selectedMetrics.length === getAllMetrics().length ? 'DESELECT ALL' : 'SELECT ALL'}
-                </button>
-              </div>
-            </div>
-
-            {/* Metric Selector */}
-            <div style={{
-              backgroundColor: COLORS.PANEL_BG,
-              border: `1px solid ${COLORS.BORDER}`,
-              padding: '12px',
-              marginBottom: '8px',
-            }}>
-              <div style={{ color: COLORS.CYAN, fontSize: `${fontSize + 2}px`, fontWeight: 'bold', marginBottom: '10px' }}>
-                SELECT METRICS TO COMPARE
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {getAllMetrics().map((metric) => (
-                  <button
-                    key={metric}
-                    onClick={() => toggleMetric(metric)}
-                    style={{
-                      backgroundColor: selectedMetrics.includes(metric) ? COLORS.GREEN : COLORS.DARK_BG,
-                      border: `1px solid ${selectedMetrics.includes(metric) ? COLORS.GREEN : COLORS.BORDER}`,
-                      color: selectedMetrics.includes(metric) ? COLORS.DARK_BG : COLORS.WHITE,
-                      padding: '6px 12px',
-                      fontSize: `${fontSize - 1}px`,
-                      cursor: 'pointer',
-                      fontWeight: selectedMetrics.includes(metric) ? 'bold' : 'normal',
-                      borderRadius: '3px',
-                    }}
-                  >
-                    {metric}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Financial Comparison Charts - 3 Charts in a Row */}
-            <div style={{
-              backgroundColor: COLORS.PANEL_BG,
-              border: `1px solid ${COLORS.BORDER}`,
-              padding: '12px',
-              marginBottom: '8px',
-            }}>
-              <div style={{ color: COLORS.ORANGE, fontSize: `${fontSize + 3}px`, fontWeight: 'bold', marginBottom: '12px' }}>
-                FINANCIAL TRENDS COMPARISON (in Billions $)
-              </div>
-
-              {/* Chart Controls */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                {/* Chart 1 Selector */}
-                <div>
-                  <div style={{ color: COLORS.CYAN, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px' }}>
-                    CHART 1 METRICS:
+              <div style={{ padding: '0' }}>
+                {/* Controls Panel */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '10px 12px',
+                  marginBottom: '8px',
+                  display: 'flex',
+                  gap: '20px',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: COLORS.GRAY, fontSize: `${fontSize}px` }}>FONT SIZE:</span>
+                    <button
+                      onClick={() => setFontSize(Math.max(10, fontSize - 1))}
+                      style={{
+                        backgroundColor: COLORS.DARK_BG,
+                        border: `1px solid ${COLORS.BORDER}`,
+                        color: COLORS.WHITE,
+                        padding: '4px 8px',
+                        fontSize: `${fontSize}px`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      -
+                    </button>
+                    <span style={{ color: COLORS.ORANGE, fontSize: `${fontSize}px`, fontWeight: 'bold', minWidth: '30px', textAlign: 'center' }}>{fontSize}px</span>
+                    <button
+                      onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+                      style={{
+                        backgroundColor: COLORS.DARK_BG,
+                        border: `1px solid ${COLORS.BORDER}`,
+                        color: COLORS.WHITE,
+                        padding: '4px 8px',
+                        fontSize: `${fontSize}px`,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      +
+                    </button>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {getAllMetrics().slice(0, 8).map((metric) => (
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: COLORS.GRAY, fontSize: `${fontSize}px` }}>SHOW YEARS:</span>
+                    {[2, 3, 4, 5].map((count) => (
                       <button
-                        key={metric}
-                        onClick={() => {
-                          setChart1Metrics(prev =>
-                            prev.includes(metric)
-                              ? prev.filter(m => m !== metric)
-                              : [...prev, metric]
-                          );
-                        }}
+                        key={count}
+                        onClick={() => setShowYearsCount(count)}
                         style={{
-                          backgroundColor: chart1Metrics.includes(metric) ? COLORS.GREEN : COLORS.DARK_BG,
-                          border: `1px solid ${chart1Metrics.includes(metric) ? COLORS.GREEN : COLORS.BORDER}`,
-                          color: chart1Metrics.includes(metric) ? COLORS.DARK_BG : COLORS.WHITE,
-                          padding: '3px 6px',
-                          fontSize: `${fontSize - 3}px`,
+                          backgroundColor: showYearsCount === count ? COLORS.ORANGE : COLORS.DARK_BG,
+                          border: `1px solid ${COLORS.BORDER}`,
+                          color: showYearsCount === count ? COLORS.DARK_BG : COLORS.WHITE,
+                          padding: '4px 10px',
+                          fontSize: `${fontSize - 1}px`,
                           cursor: 'pointer',
-                          fontWeight: chart1Metrics.includes(metric) ? 'bold' : 'normal',
+                          fontWeight: showYearsCount === count ? 'bold' : 'normal',
                         }}
                       >
-                        {metric.substring(0, 15)}
+                        {count}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: COLORS.GRAY, fontSize: `${fontSize}px` }}>SELECT METRICS:</span>
+                    <button
+                      onClick={() => {
+                        const allMetrics = getAllMetrics();
+                        setSelectedMetrics(selectedMetrics.length === allMetrics.length ? [] : allMetrics);
+                      }}
+                      style={{
+                        backgroundColor: COLORS.BLUE,
+                        border: 'none',
+                        color: COLORS.WHITE,
+                        padding: '4px 10px',
+                        fontSize: `${fontSize - 1}px`,
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                      }}
+                    >
+                      {selectedMetrics.length === getAllMetrics().length ? 'DESELECT ALL' : 'SELECT ALL'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Metric Selector */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '12px',
+                  marginBottom: '8px',
+                }}>
+                  <div style={{ color: COLORS.CYAN, fontSize: `${fontSize + 2}px`, fontWeight: 'bold', marginBottom: '10px' }}>
+                    SELECT METRICS TO COMPARE
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {getAllMetrics().map((metric) => (
+                      <button
+                        key={metric}
+                        onClick={() => toggleMetric(metric)}
+                        style={{
+                          backgroundColor: selectedMetrics.includes(metric) ? COLORS.GREEN : COLORS.DARK_BG,
+                          border: `1px solid ${selectedMetrics.includes(metric) ? COLORS.GREEN : COLORS.BORDER}`,
+                          color: selectedMetrics.includes(metric) ? COLORS.DARK_BG : COLORS.WHITE,
+                          padding: '6px 12px',
+                          fontSize: `${fontSize - 1}px`,
+                          cursor: 'pointer',
+                          fontWeight: selectedMetrics.includes(metric) ? 'bold' : 'normal',
+                          borderRadius: '3px',
+                        }}
+                      >
+                        {metric}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Chart 2 Selector */}
-                <div>
-                  <div style={{ color: COLORS.CYAN, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px' }}>
-                    CHART 2 METRICS:
+                {/* Financial Comparison Charts - 3 Charts in a Row */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '12px',
+                  marginBottom: '8px',
+                }}>
+                  <div style={{ color: COLORS.ORANGE, fontSize: `${fontSize + 3}px`, fontWeight: 'bold', marginBottom: '12px' }}>
+                    FINANCIAL TRENDS COMPARISON (in Billions $)
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {getAllMetrics().slice(0, 8).map((metric) => (
-                      <button
-                        key={metric}
-                        onClick={() => {
-                          setChart2Metrics(prev =>
-                            prev.includes(metric)
-                              ? prev.filter(m => m !== metric)
-                              : [...prev, metric]
-                          );
-                        }}
-                        style={{
-                          backgroundColor: chart2Metrics.includes(metric) ? COLORS.ORANGE : COLORS.DARK_BG,
-                          border: `1px solid ${chart2Metrics.includes(metric) ? COLORS.ORANGE : COLORS.BORDER}`,
-                          color: chart2Metrics.includes(metric) ? COLORS.DARK_BG : COLORS.WHITE,
-                          padding: '3px 6px',
-                          fontSize: `${fontSize - 3}px`,
-                          cursor: 'pointer',
-                          fontWeight: chart2Metrics.includes(metric) ? 'bold' : 'normal',
-                        }}
-                      >
-                        {metric.substring(0, 15)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Chart 3 Selector */}
-                <div>
-                  <div style={{ color: COLORS.CYAN, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px' }}>
-                    CHART 3 METRICS:
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {getAllMetrics().slice(0, 8).map((metric) => (
-                      <button
-                        key={metric}
-                        onClick={() => {
-                          setChart3Metrics(prev =>
-                            prev.includes(metric)
-                              ? prev.filter(m => m !== metric)
-                              : [...prev, metric]
-                          );
-                        }}
-                        style={{
-                          backgroundColor: chart3Metrics.includes(metric) ? COLORS.MAGENTA : COLORS.DARK_BG,
-                          border: `1px solid ${chart3Metrics.includes(metric) ? COLORS.MAGENTA : COLORS.BORDER}`,
-                          color: chart3Metrics.includes(metric) ? COLORS.DARK_BG : COLORS.WHITE,
-                          padding: '3px 6px',
-                          fontSize: `${fontSize - 3}px`,
-                          cursor: 'pointer',
-                          fontWeight: chart3Metrics.includes(metric) ? 'bold' : 'normal',
-                        }}
-                      >
-                        {metric.substring(0, 15)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* 3 Charts Side by Side */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                <div>
-                  <div style={{ color: COLORS.GREEN, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px', textAlign: 'center' }}>
-                    {chart1Metrics.join(', ') || 'Select metrics'}
-                  </div>
-                  <div ref={financialChart1Ref} style={{ backgroundColor: COLORS.DARK_BG }} />
-                </div>
-                <div>
-                  <div style={{ color: COLORS.ORANGE, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px', textAlign: 'center' }}>
-                    {chart2Metrics.join(', ') || 'Select metrics'}
-                  </div>
-                  <div ref={financialChart2Ref} style={{ backgroundColor: COLORS.DARK_BG }} />
-                </div>
-                <div>
-                  <div style={{ color: COLORS.MAGENTA, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px', textAlign: 'center' }}>
-                    {chart3Metrics.join(', ') || 'Select metrics'}
-                  </div>
-                  <div ref={financialChart3Ref} style={{ backgroundColor: COLORS.DARK_BG }} />
-                </div>
-              </div>
-            </div>
-
-            {/* Financial Comparison Table */}
-            <div style={{
-              backgroundColor: COLORS.PANEL_BG,
-              border: `1px solid ${COLORS.BORDER}`,
-              padding: '12px',
-              marginBottom: '8px',
-            }}>
-              <div style={{ color: COLORS.CYAN, fontSize: `${fontSize + 3}px`, fontWeight: 'bold', marginBottom: '12px' }}>
-                YEAR-OVER-YEAR COMPARISON ({selectedMetrics.length} Metrics)
-              </div>
-
-              {selectedMetrics.length === 0 ? (
-                <div style={{ color: COLORS.YELLOW, fontSize: `${fontSize + 1}px`, textAlign: 'center', padding: '20px' }}>
-                  Please select at least one metric to compare
-                </div>
-              ) : (
-                <div style={{ overflowX: 'auto' }} className="custom-scrollbar">
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: `${fontSize}px` }}>
-                    <thead>
-                      <tr style={{ borderBottom: `2px solid ${COLORS.BORDER}` }}>
-                        <th style={{ textAlign: 'left', padding: '10px', color: COLORS.GRAY, fontSize: `${fontSize + 1}px` }}>METRIC</th>
-                        {Object.keys(financials.income_statement).slice(0, showYearsCount).map((period) => (
-                          <th key={period} style={{ textAlign: 'right', padding: '10px', color: COLORS.ORANGE, fontSize: `${fontSize + 1}px` }}>
-                            {getYearFromPeriod(period)}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedMetrics.map((metric, idx) => {
-                        const periods = Object.keys(financials.income_statement).slice(0, showYearsCount);
-                        return (
-                          <tr key={metric} style={{ borderBottom: `1px solid ${COLORS.BORDER}20` }}>
-                            <td style={{ padding: '10px', color: COLORS.WHITE, fontWeight: 'bold', fontSize: `${fontSize}px` }}>{metric}</td>
-                            {periods.map((period) => {
-                              const value = financials.income_statement[period][metric];
-                              return (
-                                <td key={period} style={{ textAlign: 'right', padding: '10px', color: COLORS.CYAN, fontSize: `${fontSize}px` }}>
-                                  {value ? (metric.includes('EPS') ? `$${formatNumber(value)}` : formatLargeNumber(value)) : 'N/A'}
-                                </td>
+                  {/* Chart Controls */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                    {/* Chart 1 Selector */}
+                    <div>
+                      <div style={{ color: COLORS.CYAN, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px' }}>
+                        CHART 1 METRICS:
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {getAllMetrics().slice(0, 8).map((metric) => (
+                          <button
+                            key={metric}
+                            onClick={() => {
+                              setChart1Metrics(prev =>
+                                prev.includes(metric)
+                                  ? prev.filter(m => m !== metric)
+                                  : [...prev, metric]
                               );
-                            })}
+                            }}
+                            style={{
+                              backgroundColor: chart1Metrics.includes(metric) ? COLORS.GREEN : COLORS.DARK_BG,
+                              border: `1px solid ${chart1Metrics.includes(metric) ? COLORS.GREEN : COLORS.BORDER}`,
+                              color: chart1Metrics.includes(metric) ? COLORS.DARK_BG : COLORS.WHITE,
+                              padding: '3px 6px',
+                              fontSize: `${fontSize - 3}px`,
+                              cursor: 'pointer',
+                              fontWeight: chart1Metrics.includes(metric) ? 'bold' : 'normal',
+                            }}
+                          >
+                            {metric.substring(0, 15)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Chart 2 Selector */}
+                    <div>
+                      <div style={{ color: COLORS.CYAN, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px' }}>
+                        CHART 2 METRICS:
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {getAllMetrics().slice(0, 8).map((metric) => (
+                          <button
+                            key={metric}
+                            onClick={() => {
+                              setChart2Metrics(prev =>
+                                prev.includes(metric)
+                                  ? prev.filter(m => m !== metric)
+                                  : [...prev, metric]
+                              );
+                            }}
+                            style={{
+                              backgroundColor: chart2Metrics.includes(metric) ? COLORS.ORANGE : COLORS.DARK_BG,
+                              border: `1px solid ${chart2Metrics.includes(metric) ? COLORS.ORANGE : COLORS.BORDER}`,
+                              color: chart2Metrics.includes(metric) ? COLORS.DARK_BG : COLORS.WHITE,
+                              padding: '3px 6px',
+                              fontSize: `${fontSize - 3}px`,
+                              cursor: 'pointer',
+                              fontWeight: chart2Metrics.includes(metric) ? 'bold' : 'normal',
+                            }}
+                          >
+                            {metric.substring(0, 15)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Chart 3 Selector */}
+                    <div>
+                      <div style={{ color: COLORS.CYAN, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px' }}>
+                        CHART 3 METRICS:
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                        {getAllMetrics().slice(0, 8).map((metric) => (
+                          <button
+                            key={metric}
+                            onClick={() => {
+                              setChart3Metrics(prev =>
+                                prev.includes(metric)
+                                  ? prev.filter(m => m !== metric)
+                                  : [...prev, metric]
+                              );
+                            }}
+                            style={{
+                              backgroundColor: chart3Metrics.includes(metric) ? COLORS.MAGENTA : COLORS.DARK_BG,
+                              border: `1px solid ${chart3Metrics.includes(metric) ? COLORS.MAGENTA : COLORS.BORDER}`,
+                              color: chart3Metrics.includes(metric) ? COLORS.DARK_BG : COLORS.WHITE,
+                              padding: '3px 6px',
+                              fontSize: `${fontSize - 3}px`,
+                              cursor: 'pointer',
+                              fontWeight: chart3Metrics.includes(metric) ? 'bold' : 'normal',
+                            }}
+                          >
+                            {metric.substring(0, 15)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3 Charts Side by Side */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <div style={{ color: COLORS.GREEN, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px', textAlign: 'center' }}>
+                        {chart1Metrics.join(', ') || 'Select metrics'}
+                      </div>
+                      <div ref={financialChart1Ref} style={{ backgroundColor: COLORS.DARK_BG }} />
+                    </div>
+                    <div>
+                      <div style={{ color: COLORS.ORANGE, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px', textAlign: 'center' }}>
+                        {chart2Metrics.join(', ') || 'Select metrics'}
+                      </div>
+                      <div ref={financialChart2Ref} style={{ backgroundColor: COLORS.DARK_BG }} />
+                    </div>
+                    <div>
+                      <div style={{ color: COLORS.MAGENTA, fontSize: `${fontSize}px`, fontWeight: 'bold', marginBottom: '6px', textAlign: 'center' }}>
+                        {chart3Metrics.join(', ') || 'Select metrics'}
+                      </div>
+                      <div ref={financialChart3Ref} style={{ backgroundColor: COLORS.DARK_BG }} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Comparison Table */}
+                <div style={{
+                  backgroundColor: COLORS.PANEL_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  padding: '12px',
+                  marginBottom: '8px',
+                }}>
+                  <div style={{ color: COLORS.CYAN, fontSize: `${fontSize + 3}px`, fontWeight: 'bold', marginBottom: '12px' }}>
+                    YEAR-OVER-YEAR COMPARISON ({selectedMetrics.length} Metrics)
+                  </div>
+
+                  {selectedMetrics.length === 0 ? (
+                    <div style={{ color: COLORS.YELLOW, fontSize: `${fontSize + 1}px`, textAlign: 'center', padding: '20px' }}>
+                      Please select at least one metric to compare
+                    </div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }} className="custom-scrollbar">
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: `${fontSize}px` }}>
+                        <thead>
+                          <tr style={{ borderBottom: `2px solid ${COLORS.BORDER}` }}>
+                            <th style={{ textAlign: 'left', padding: '10px', color: COLORS.GRAY, fontSize: `${fontSize + 1}px` }}>METRIC</th>
+                            {Object.keys(financials.income_statement).slice(0, showYearsCount).map((period) => (
+                              <th key={period} style={{ textAlign: 'right', padding: '10px', color: COLORS.ORANGE, fontSize: `${fontSize + 1}px` }}>
+                                {getYearFromPeriod(period)}
+                              </th>
+                            ))}
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            {/* Detailed Financial Statements */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
-              {/* Income Statement */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.GREEN, fontSize: `${fontSize + 2}px`, fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  INCOME STATEMENT (Latest)
-                </div>
-                <div style={{ fontSize: `${fontSize}px`, maxHeight: '500px', overflow: 'auto' }} className="custom-scrollbar">
-                  {Object.keys(financials.income_statement).length > 0 ? (
-                    <>
-                      {Object.entries(Object.values(financials.income_statement)[0] || {}).map(([metric, _], idx) => {
-                        const latestPeriod = Object.keys(financials.income_statement)[0];
-                        const value = financials.income_statement[latestPeriod][metric];
-                        return (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', paddingBottom: '6px', borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
-                            <span style={{ color: COLORS.GRAY, fontSize: `${fontSize - 1}px`, maxWidth: '60%' }}>{metric}:</span>
-                            <span style={{ color: COLORS.CYAN, fontSize: `${fontSize}px` }}>{formatLargeNumber(value)}</span>
-                          </div>
-                        );
-                      })}
-                    </>
-                  ) : (
-                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '20px', fontSize: `${fontSize}px` }}>No data available</div>
+                        </thead>
+                        <tbody>
+                          {selectedMetrics.map((metric, idx) => {
+                            const periods = Object.keys(financials.income_statement).slice(0, showYearsCount);
+                            return (
+                              <tr key={metric} style={{ borderBottom: `1px solid ${COLORS.BORDER}20` }}>
+                                <td style={{ padding: '10px', color: COLORS.WHITE, fontWeight: 'bold', fontSize: `${fontSize}px` }}>{metric}</td>
+                                {periods.map((period) => {
+                                  const value = financials.income_statement[period][metric];
+                                  return (
+                                    <td key={period} style={{ textAlign: 'right', padding: '10px', color: COLORS.CYAN, fontSize: `${fontSize}px` }}>
+                                      {value ? (metric.includes('EPS') ? `$${formatNumber(value)}` : formatLargeNumber(value)) : 'N/A'}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
-              </div>
 
-              {/* Balance Sheet */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.YELLOW, fontSize: `${fontSize + 2}px`, fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  BALANCE SHEET (Latest)
-                </div>
-                <div style={{ fontSize: `${fontSize}px`, maxHeight: '500px', overflow: 'auto' }} className="custom-scrollbar">
-                  {Object.keys(financials.balance_sheet).length > 0 ? (
-                    <>
-                      {Object.entries(Object.values(financials.balance_sheet)[0] || {}).map(([metric, _], idx) => {
-                        const latestPeriod = Object.keys(financials.balance_sheet)[0];
-                        const value = financials.balance_sheet[latestPeriod][metric];
-                        return (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', paddingBottom: '6px', borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
-                            <span style={{ color: COLORS.GRAY, fontSize: `${fontSize - 1}px`, maxWidth: '60%' }}>{metric}:</span>
-                            <span style={{ color: COLORS.CYAN, fontSize: `${fontSize}px` }}>{formatLargeNumber(value)}</span>
-                          </div>
-                        );
-                      })}
-                    </>
-                  ) : (
-                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '20px', fontSize: `${fontSize}px` }}>No data available</div>
-                  )}
-                </div>
-              </div>
+                {/* Detailed Financial Statements */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                  {/* Income Statement */}
+                  <div style={{
+                    backgroundColor: COLORS.PANEL_BG,
+                    border: `1px solid ${COLORS.BORDER}`,
+                    padding: '8px',
+                  }}>
+                    <div style={{ color: COLORS.GREEN, fontSize: `${fontSize + 2}px`, fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                      INCOME STATEMENT (Latest)
+                    </div>
+                    <div style={{ fontSize: `${fontSize}px`, maxHeight: '500px', overflow: 'auto' }} className="custom-scrollbar">
+                      {Object.keys(financials.income_statement).length > 0 ? (
+                        <>
+                          {Object.entries(Object.values(financials.income_statement)[0] || {}).map(([metric, _], idx) => {
+                            const latestPeriod = Object.keys(financials.income_statement)[0];
+                            const value = financials.income_statement[latestPeriod][metric];
+                            return (
+                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', paddingBottom: '6px', borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+                                <span style={{ color: COLORS.GRAY, fontSize: `${fontSize - 1}px`, maxWidth: '60%' }}>{metric}:</span>
+                                <span style={{ color: COLORS.CYAN, fontSize: `${fontSize}px` }}>{formatLargeNumber(value)}</span>
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '20px', fontSize: `${fontSize}px` }}>No data available</div>
+                      )}
+                    </div>
+                  </div>
 
-              {/* Cash Flow */}
-              <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '8px',
-              }}>
-                <div style={{ color: COLORS.CYAN, fontSize: `${fontSize + 2}px`, fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
-                  CASH FLOW STATEMENT (Latest)
-                </div>
-                <div style={{ fontSize: `${fontSize}px`, maxHeight: '500px', overflow: 'auto' }} className="custom-scrollbar">
-                  {Object.keys(financials.cash_flow).length > 0 ? (
-                    <>
-                      {Object.entries(Object.values(financials.cash_flow)[0] || {}).map(([metric, _], idx) => {
-                        const latestPeriod = Object.keys(financials.cash_flow)[0];
-                        const value = financials.cash_flow[latestPeriod][metric];
-                        return (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', paddingBottom: '6px', borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
-                            <span style={{ color: COLORS.GRAY, fontSize: `${fontSize - 1}px`, maxWidth: '60%' }}>{metric}:</span>
-                            <span style={{ color: COLORS.CYAN, fontSize: `${fontSize}px` }}>{formatLargeNumber(value)}</span>
-                          </div>
-                        );
-                      })}
-                    </>
-                  ) : (
-                    <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '20px', fontSize: `${fontSize}px` }}>No data available</div>
-                  )}
+                  {/* Balance Sheet */}
+                  <div style={{
+                    backgroundColor: COLORS.PANEL_BG,
+                    border: `1px solid ${COLORS.BORDER}`,
+                    padding: '8px',
+                  }}>
+                    <div style={{ color: COLORS.YELLOW, fontSize: `${fontSize + 2}px`, fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                      BALANCE SHEET (Latest)
+                    </div>
+                    <div style={{ fontSize: `${fontSize}px`, maxHeight: '500px', overflow: 'auto' }} className="custom-scrollbar">
+                      {Object.keys(financials.balance_sheet).length > 0 ? (
+                        <>
+                          {Object.entries(Object.values(financials.balance_sheet)[0] || {}).map(([metric, _], idx) => {
+                            const latestPeriod = Object.keys(financials.balance_sheet)[0];
+                            const value = financials.balance_sheet[latestPeriod][metric];
+                            return (
+                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', paddingBottom: '6px', borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+                                <span style={{ color: COLORS.GRAY, fontSize: `${fontSize - 1}px`, maxWidth: '60%' }}>{metric}:</span>
+                                <span style={{ color: COLORS.CYAN, fontSize: `${fontSize}px` }}>{formatLargeNumber(value)}</span>
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '20px', fontSize: `${fontSize}px` }}>No data available</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Cash Flow */}
+                  <div style={{
+                    backgroundColor: COLORS.PANEL_BG,
+                    border: `1px solid ${COLORS.BORDER}`,
+                    padding: '8px',
+                  }}>
+                    <div style={{ color: COLORS.CYAN, fontSize: `${fontSize + 2}px`, fontWeight: 'bold', marginBottom: '8px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '4px' }}>
+                      CASH FLOW STATEMENT (Latest)
+                    </div>
+                    <div style={{ fontSize: `${fontSize}px`, maxHeight: '500px', overflow: 'auto' }} className="custom-scrollbar">
+                      {Object.keys(financials.cash_flow).length > 0 ? (
+                        <>
+                          {Object.entries(Object.values(financials.cash_flow)[0] || {}).map(([metric, _], idx) => {
+                            const latestPeriod = Object.keys(financials.cash_flow)[0];
+                            const value = financials.cash_flow[latestPeriod][metric];
+                            return (
+                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', paddingBottom: '6px', borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+                                <span style={{ color: COLORS.GRAY, fontSize: `${fontSize - 1}px`, maxWidth: '60%' }}>{metric}:</span>
+                                <span style={{ color: COLORS.CYAN, fontSize: `${fontSize}px` }}>{formatLargeNumber(value)}</span>
+                              </div>
+                            );
+                          })}
+                        </>
+                      ) : (
+                        <div style={{ color: COLORS.GRAY, textAlign: 'center', padding: '20px', fontSize: `${fontSize}px` }}>No data available</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
             )}
           </div>
         )}

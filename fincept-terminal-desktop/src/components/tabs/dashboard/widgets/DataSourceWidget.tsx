@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { useDataSource } from '@/hooks/useDataSource';
 import { Database, Wifi, AlertCircle } from 'lucide-react';
@@ -22,6 +23,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
   displayName,
   onRemove
 }) => {
+  const { t } = useTranslation('dashboard');
   const { data, error, loading, connected, source, refresh } = useDataSource(alias);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
@@ -99,7 +101,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           gap: '8px'
         }}>
           <div style={{ color: BLOOMBERG_ORANGE, fontSize: '10px' }}>
-            Loading data source...
+            {t('widgets.loading')}
           </div>
         </div>
       );
@@ -118,7 +120,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           fontSize: '10px'
         }}>
           <Database size={24} />
-          <div>No data available yet</div>
+          <div>{t('widgets.noData')}</div>
           {source?.type === 'rest_api' && (
             <button
               onClick={refresh}

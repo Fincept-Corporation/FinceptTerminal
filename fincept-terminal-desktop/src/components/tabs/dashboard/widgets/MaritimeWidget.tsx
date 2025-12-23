@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 
 const BLOOMBERG_WHITE = '#FFFFFF';
@@ -30,6 +31,7 @@ const TRADE_ROUTES: TradeRoute[] = [
 ];
 
 export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, onNavigate }) => {
+  const { t } = useTranslation('dashboard');
   const [intelligence, setIntelligence] = useState({
     active_vessels: 1247,
     monitored_routes: 48,
@@ -208,7 +210,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
   return (
     <BaseWidget
       id={id}
-      title="⚓ MARITIME INTELLIGENCE"
+      title={t('widgets.maritimeIntelligence')}
       onRemove={onRemove}
       headerColor={BLOOMBERG_CYAN}
     >
@@ -245,7 +247,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
             fontWeight: 'bold',
             borderRadius: '2px'
           }}>
-            3D GLOBE
+            {t('widgets.globe3D')}
           </div>
         </div>
 
@@ -261,19 +263,19 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
             borderBottom: `1px solid ${BLOOMBERG_GRAY}`
           }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '6px' }}>VESSELS</div>
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '6px' }}>{t('widgets.vessels')}</div>
               <div style={{ color: BLOOMBERG_CYAN, fontWeight: 'bold', fontSize: '10px' }}>
                 {intelligence.active_vessels}
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '6px' }}>ROUTES</div>
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '6px' }}>{t('widgets.routes')}</div>
               <div style={{ color: BLOOMBERG_CYAN, fontWeight: 'bold', fontSize: '10px' }}>
                 {intelligence.monitored_routes}
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: BLOOMBERG_GRAY, fontSize: '6px' }}>VOL 24H</div>
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '6px' }}>{t('widgets.vol24h')}</div>
               <div style={{ color: BLOOMBERG_GREEN, fontWeight: 'bold', fontSize: '10px' }}>
                 {intelligence.trade_volume}
               </div>
@@ -282,7 +284,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
 
           {/* Top Trade Routes */}
           <div style={{ color: BLOOMBERG_CYAN, fontSize: '7px', fontWeight: 'bold', marginBottom: '3px' }}>
-            TOP TRADE CORRIDORS
+            {t('widgets.topTradeCorridors')}
           </div>
           {TRADE_ROUTES.map((route, idx) => (
             <div
@@ -315,7 +317,7 @@ export const MaritimeWidget: React.FC<MaritimeWidgetProps> = ({ id, onRemove, on
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '6px' }}>
                 <span style={{ color: BLOOMBERG_GRAY }}>{route.value}</span>
-                <span style={{ color: BLOOMBERG_CYAN }}>{route.vessels} ships</span>
+                <span style={{ color: BLOOMBERG_CYAN }}>{route.vessels} {t('widgets.ships')}</span>
               </div>
             </div>
           ))}

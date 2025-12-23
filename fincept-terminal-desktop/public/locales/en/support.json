@@ -1,0 +1,71 @@
+{
+    "title": "FINCEPT SUPPORT TERMINAL",
+    "header": {
+        "tickets": "TICKETS",
+        "open": "OPEN",
+        "resolved": "RESOLVED"
+    },
+    "buttons": {
+        "refresh": "REFRESH",
+        "createTicket": "CREATE TICKET",
+        "backToList": "BACK TO LIST",
+        "close": "CLOSE",
+        "reopen": "REOPEN",
+        "send": "SEND"
+    },
+    "list": {
+        "supportTickets": "SUPPORT TICKETS",
+        "noTickets": "No support tickets found. Create your first ticket to get started!",
+        "loading": "Loading tickets..."
+    },
+    "create": {
+        "title": "CREATE NEW TICKET",
+        "subject": "SUBJECT",
+        "subjectPlaceholder": "Brief description of your issue",
+        "category": "CATEGORY",
+        "priority": "PRIORITY",
+        "description": "DESCRIPTION",
+        "descriptionPlaceholder": "Provide detailed information about your issue...",
+        "creating": "CREATING...",
+        "createTicket": "CREATE TICKET"
+    },
+    "categories": {
+        "technical": "Technical Issue",
+        "billing": "Billing",
+        "feature": "Feature Request",
+        "bug": "Bug Report",
+        "account": "Account",
+        "other": "Other"
+    },
+    "priorities": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+    },
+    "details": {
+        "ticketDetails": "TICKET DETAILS",
+        "status": "Status",
+        "priority": "Priority",
+        "category": "Category",
+        "created": "Created",
+        "messages": "MESSAGES",
+        "addMessage": "Add a message..."
+    },
+    "status": {
+        "open": "OPEN",
+        "inProgress": "IN PROGRESS",
+        "resolved": "RESOLVED",
+        "closed": "CLOSED",
+        "pending": "PENDING",
+        "ready": "READY",
+        "updating": "UPDATING"
+    },
+    "demo": {
+        "badge": "DEMO",
+        "message": "DEMO TICKET - This shows you how the support system works. Create your own ticket to get real support!"
+    },
+    "auth": {
+        "required": "AUTHENTICATION REQUIRED",
+        "loginMessage": "Please login to access support tickets"
+    }
+}

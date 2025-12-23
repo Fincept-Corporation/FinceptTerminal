@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { fetchNewsWithCache, NewsArticle } from '../../../../services/newsService';
 
@@ -22,6 +23,7 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
   limit = 5,
   onRemove
 }) => {
+  const { t } = useTranslation('dashboard');
   const [news, setNews] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export const NewsWidget: React.FC<NewsWidgetProps> = ({
   return (
     <BaseWidget
       id={id}
-      title={`NEWS - ${category}`}
+      title={`${t('widgets.news')} - ${category}`}
       onRemove={onRemove}
       onRefresh={loadNews}
       isLoading={loading}

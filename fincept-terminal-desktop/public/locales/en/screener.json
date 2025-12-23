@@ -1,10 +1,38 @@
 {
-    "title": "STOCK SCREENER",
+    "title": "FRED SERIES BROWSER",
     "header": {
+        "title": "FRED DATA EXPLORER",
         "filters": "FILTERS",
         "results": "RESULTS",
         "saved": "SAVED SCREENS",
         "presets": "PRESETS"
+    },
+    "apiKey": {
+        "required": "API KEY REQUIRED",
+        "configure": "Configure your FRED API key in Settings → Credentials to access economic data.",
+        "getKey": "Get free API key at",
+        "addToSettings": "Add to Settings → Credentials → FRED_API_KEY",
+        "saveAndReload": "Save and reload this tab",
+        "tip": "Make sure you've configured your FRED API key in Settings → Credentials"
+    },
+    "form": {
+        "seriesIds": "SERIES IDs",
+        "startDate": "START DATE",
+        "endDate": "END DATE",
+        "quickAdd": "QUICK ADD"
+    },
+    "buttons": {
+        "fetch": "FETCH",
+        "loading": "LOADING",
+        "browse": "BROWSE SERIES",
+        "done": "DONE"
+    },
+    "chart": {
+        "title": "TIME SERIES CHART",
+        "emptyState": "Enter series IDs and click FETCH to visualize data",
+        "trySuggestion": "Try searching for GDP, UNRATE, or CPIAUCSL",
+        "waiting": "Please wait while we fetch data from FRED...",
+        "errorFetching": "Error Fetching Data"
     },
     "filters": {
         "add": "Add Filter",

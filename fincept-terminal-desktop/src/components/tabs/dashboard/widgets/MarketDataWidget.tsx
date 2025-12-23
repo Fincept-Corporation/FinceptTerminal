@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
 import { marketDataService, QuoteData } from '../../../../services/marketDataService';
 
@@ -20,6 +21,7 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
   tickers = ['^GSPC', '^IXIC', '^DJI', '^RUT'],
   onRemove
 }) => {
+  const { t } = useTranslation('dashboard');
   const [quotes, setQuotes] = useState<QuoteData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,10 +74,10 @@ export const MarketDataWidget: React.FC<MarketDataWidgetProps> = ({
           padding: '4px 0',
           marginBottom: '4px'
         }}>
-          <div>SYMBOL</div>
-          <div style={{ textAlign: 'right' }}>PRICE</div>
-          <div style={{ textAlign: 'right' }}>CHG</div>
-          <div style={{ textAlign: 'right' }}>%CHG</div>
+          <div>{t('widgets.symbol')}</div>
+          <div style={{ textAlign: 'right' }}>{t('widgets.price')}</div>
+          <div style={{ textAlign: 'right' }}>{t('widgets.change')}</div>
+          <div style={{ textAlign: 'right' }}>{t('widgets.percentChange')}</div>
         </div>
         {quotes.map((quote, index) => (
           <div

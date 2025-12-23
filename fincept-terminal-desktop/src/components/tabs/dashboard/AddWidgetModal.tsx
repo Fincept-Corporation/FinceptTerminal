@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { WidgetType, DEFAULT_WIDGET_CONFIGS } from './widgets';
 import { watchlistService } from '../../../services/watchlistService';
 import { getAllDataSources } from '../../../services/dataSourceRegistry';
@@ -32,6 +33,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
   const [selectedWatchlist, setSelectedWatchlist] = useState('');
   const [forumCategory, setForumCategory] = useState('Trending');
   const [selectedDataSource, setSelectedDataSource] = useState('');
+  const { t } = useTranslation('dashboard');
 
   useEffect(() => {
     if (isOpen && selectedType === 'watchlist') {
@@ -79,8 +81,8 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
         const tickers = marketCategory === 'Indices'
           ? ['^GSPC', '^IXIC', '^DJI', '^RUT']
           : marketCategory === 'Tech'
-          ? ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']
-          : ['GC=F', 'CL=F', 'SI=F'];
+            ? ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']
+            : ['GC=F', 'CL=F', 'SI=F'];
         config = { marketCategory, marketTickers: tickers };
         break;
       case 'watchlist':
@@ -144,7 +146,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
             fontSize: '14px',
             fontWeight: 'bold'
           }}>
-            ADD WIDGET
+            {t('buttons.addWidget')}
           </div>
           <button
             onClick={onClose}
@@ -350,7 +352,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
                 borderRadius: '2px'
               }}
             >
-              ADD WIDGET
+              {t('buttons.addWidget')}
             </button>
           </div>
         </div>

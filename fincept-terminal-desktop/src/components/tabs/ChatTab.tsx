@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { Settings, Trash2, Bot, User, Clock, Send, Plus, Search, Edit2, Check, X } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { useTranslation } from 'react-i18next';
 import { llmApiService, ChatMessage as APIMessage } from '../../services/llmApi';
 import { sqliteService, ChatSession, ChatMessage, RecordedContext } from '../../services/sqliteService';
 import { llmConfigService } from '../../services/llmConfig';
@@ -18,6 +19,7 @@ interface ChatTabProps {
 
 const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab }) => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const { t } = useTranslation('chat');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentSessionUuid, setCurrentSessionUuid] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -393,52 +395,52 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       // Call LLM API with tools if available
       const response = mcpTools.length > 0
         ? await llmApiService.chatWithTools(
-            userContent,
-            conversationHistory,
-            mcpTools,
-            (chunk: string, done: boolean) => {
-              if (!done) {
-                streamedContentRef.current += chunk;
-                flushSync(() => {
-                  setStreamingContent(prev => prev + chunk);
-                });
-              } else {
-                flushSync(() => {
-                  setIsTyping(false);
-                  setStreamingContent('');
-                  setSystemStatus('STATUS: READY');
-                });
-              }
-            },
-            (toolName: string, args: any, result?: any) => {
-              // Tool call callback - don't show in UI, only in console
-              if (!result) {
-                console.log(`[Tool Call] ${toolName}`, args);
-                setSystemStatus(`STATUS: Fetching data...`);
-              } else {
-                console.log(`[Tool Result] ${toolName}`, result);
-                setSystemStatus(`STATUS: Processing response...`);
-              }
+          userContent,
+          conversationHistory,
+          mcpTools,
+          (chunk: string, done: boolean) => {
+            if (!done) {
+              streamedContentRef.current += chunk;
+              flushSync(() => {
+                setStreamingContent(prev => prev + chunk);
+              });
+            } else {
+              flushSync(() => {
+                setIsTyping(false);
+                setStreamingContent('');
+                setSystemStatus('STATUS: READY');
+              });
             }
-          )
+          },
+          (toolName: string, args: any, result?: any) => {
+            // Tool call callback - don't show in UI, only in console
+            if (!result) {
+              console.log(`[Tool Call] ${toolName}`, args);
+              setSystemStatus(`STATUS: Fetching data...`);
+            } else {
+              console.log(`[Tool Result] ${toolName}`, result);
+              setSystemStatus(`STATUS: Processing response...`);
+            }
+          }
+        )
         : await llmApiService.chat(
-            userContent,
-            conversationHistory,
-            (chunk: string, done: boolean) => {
-              if (!done) {
-                streamedContentRef.current += chunk;
-                flushSync(() => {
-                  setStreamingContent(prev => prev + chunk);
-                });
-              } else {
-                flushSync(() => {
-                  setIsTyping(false);
-                  setStreamingContent('');
-                  setSystemStatus('STATUS: READY');
-                });
-              }
+          userContent,
+          conversationHistory,
+          (chunk: string, done: boolean) => {
+            if (!done) {
+              streamedContentRef.current += chunk;
+              flushSync(() => {
+                setStreamingContent(prev => prev + chunk);
+              });
+            } else {
+              flushSync(() => {
+                setIsTyping(false);
+                setStreamingContent('');
+                setSystemStatus('STATUS: READY');
+              });
             }
-          );
+          }
+        );
 
       if (response.error) {
         const errorMessage = await sqliteService.addChatMessage({
@@ -491,8 +493,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   // Filter sessions by search query (searches in both title and message content)
   const filteredSessions = searchQuery
     ? sessions.filter(session =>
-        session.title.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      session.title.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : sessions;
 
   const formatTime = (date: Date | string | undefined) => {
@@ -545,7 +547,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       <div style={{ textAlign: 'center', padding: '24px' }}>
         <Bot size={48} color={colors.primary} style={{ marginBottom: '16px' }} />
         <div style={{ color: colors.primary, fontSize: '20px', fontWeight: 'bold', marginBottom: '8px' }}>
-          FINCEPT AI ASSISTANT
+          {t('title')}
         </div>
         <div style={{ color: colors.text, fontSize: '14px', marginBottom: '16px' }}>
           Financial Intelligence System
@@ -566,7 +568,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             cursor: 'pointer'
           }}
         >
-          START NEW CHAT
+          {t('header.newChat')}
         </button>
       </div>
     </div>
@@ -648,7 +650,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
             <Bot size={12} color={colors.primary} />
             <span style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold' }}>
-              AI TYPING...
+              {t('messages.typing')}
             </span>
           </div>
           <div style={{
@@ -710,7 +712,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '12px' }}>FINCEPT AI</span>
+          <span style={{ color: colors.primary, fontWeight: 'bold', fontSize: '12px' }}>{t('title')}</span>
           <span style={{ color: colors.textMuted }}>|</span>
           <span style={{ color: colors.warning, fontSize: '10px' }}>
             {currentProvider.toUpperCase()}
@@ -736,7 +738,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             }}
           >
             <Settings size={12} />
-            CONFIG
+            {t('header.settings')}
           </button>
           <button
             onClick={createNewSession}
@@ -754,7 +756,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
             }}
           >
             <Plus size={12} />
-            NEW
+            {t('header.newChat')}
           </button>
         </div>
       </div>
@@ -789,7 +791,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   }}
                   title="Delete all sessions"
                 >
-                  DELETE ALL
+                  {t('history.clear').replace('History', 'All').toUpperCase()}
                 </button>
               )}
             </div>
@@ -800,7 +802,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
               <input
                 id="session-search"
                 type="text"
-                placeholder="Search chats..."
+                placeholder={t('input.placeholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 style={{
@@ -1001,7 +1003,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 {isTyping && !streamingContent && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.textMuted, fontSize: '11px' }}>
                     <Bot size={12} />
-                    <span>AI is thinking...</span>
+                    <span>{t('messages.thinking')}</span>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -1021,7 +1023,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                     handleSendMessage();
                   }
                 }}
-                placeholder="Type your message... (Shift+Enter for new line)"
+                placeholder={t('input.placeholder')}
                 style={{
                   flex: 1,
                   backgroundColor: colors.background,
@@ -1051,7 +1053,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 }}
               >
                 <Send size={12} />
-                SEND
+                {t('input.send')}
               </button>
             </div>
             <div style={{ color: colors.textMuted, fontSize: '9px', marginTop: '4px' }}>

@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, Play, Square, TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 // Bloomberg color palette
 const COLORS = {
@@ -46,6 +47,7 @@ interface ModelDecision {
 }
 
 const AlphaArenaTab: React.FC = () => {
+  const { t } = useTranslation('alphaArena');
   const [competitionId, setCompetitionId] = useState<string>('');
   const [isRunning, setIsRunning] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -305,10 +307,10 @@ const AlphaArenaTab: React.FC = () => {
           <Trophy size={24} color={COLORS.ORANGE} />
           <div>
             <div style={{ fontSize: '18px', fontWeight: 700, color: COLORS.ORANGE }}>
-              ALPHA ARENA
+              {t('title')}
             </div>
             <div style={{ fontSize: '10px', color: COLORS.GRAY }}>
-              Live AI Trading Competition
+              {t('header.competition')}
             </div>
           </div>
         </div>
@@ -327,7 +329,7 @@ const AlphaArenaTab: React.FC = () => {
                 cursor: 'pointer'
               }}
             >
-              NEW COMPETITION
+              {t('buttons.create')}
             </button>
           ) : (
             <>

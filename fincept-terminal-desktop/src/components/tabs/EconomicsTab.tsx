@@ -4,6 +4,7 @@ import { RefreshCw, Download, Globe, TrendingUp, BarChart3, PieChart } from 'luc
 import { invoke } from '@tauri-apps/api/core';
 import bisDataService from '@/services/bisDataService';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 interface Indicator {
   code: string;
@@ -37,6 +38,7 @@ interface ProfileData {
 
 export default function EconomicsTab() {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const { t } = useTranslation('economics');
   const [dataSource, setDataSource] = useState<'econdb' | 'bis'>('econdb');
   const [view, setView] = useState<'indicator' | 'profile' | 'countries'>('indicator');
   const [loading, setLoading] = useState(false);
@@ -395,7 +397,7 @@ export default function EconomicsTab() {
     <div style={{ width: '100%', height: '100%', backgroundColor: 'colors.background', color: '#d4d4d4', fontFamily: 'Consolas, monospace', fontSize: '11px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '8px 12px', borderBottom: '1px solid #404040', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-        <span style={{ color: '#ea580c', fontWeight: 'bold' }}>ECONOMICS - {dataSource.toUpperCase()}</span>
+        <span style={{ color: '#ea580c', fontWeight: 'bold' }}>{t('title')} - {dataSource.toUpperCase()}</span>
         <span style={{ color: '#10b981', fontSize: '10px' }}>● {status}</span>
         <div style={{ flex: 1 }}></div>
 
@@ -432,13 +434,13 @@ export default function EconomicsTab() {
         </div>
 
         <button onClick={() => setView('indicator')} style={{ padding: '4px 10px', backgroundColor: view === 'indicator' ? '#ea580c' : '#2d2d2d', color: 'colors.text', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
-          <BarChart3 size={10} style={{ display: 'inline', marginRight: '4px' }} />INDICATOR
+          <BarChart3 size={10} style={{ display: 'inline', marginRight: '4px' }} />{t('header.indicators')}
         </button>
         <button onClick={() => setView('profile')} style={{ padding: '4px 10px', backgroundColor: view === 'profile' ? '#ea580c' : '#2d2d2d', color: 'colors.text', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
-          <PieChart size={10} style={{ display: 'inline', marginRight: '4px' }} />PROFILE
+          <PieChart size={10} style={{ display: 'inline', marginRight: '4px' }} />{t('header.overview')}
         </button>
         <button onClick={() => setView('countries')} style={{ padding: '4px 10px', backgroundColor: view === 'countries' ? '#ea580c' : '#2d2d2d', color: 'colors.text', border: 'none', cursor: 'pointer', fontSize: '9px' }}>
-          <Globe size={10} style={{ display: 'inline', marginRight: '4px' }} />COUNTRIES
+          <Globe size={10} style={{ display: 'inline', marginRight: '4px' }} />{t('header.countries')}
         </button>
       </div>
 

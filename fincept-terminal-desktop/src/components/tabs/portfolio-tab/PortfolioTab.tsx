@@ -16,9 +16,11 @@ import { usePortfolioOperations } from './hooks/usePortfolioOperations';
 import { getBloombergColors, formatCurrency, formatPercent } from './portfolio/utils';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TimezoneSelector } from '../../common/TimezoneSelector';
+import { useTranslation } from 'react-i18next';
 
 const PortfolioTab: React.FC = () => {
   const { colors: themeColors } = useTerminalTheme();
+  const { t } = useTranslation('portfolio');
   const BLOOMBERG_COLORS = getBloombergColors();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedView, setSelectedView] = useState('POSITIONS');
@@ -156,11 +158,11 @@ const PortfolioTab: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ color: ORANGE, fontWeight: 'bold', fontSize: '14px' }}>
-              FINCEPT PORTFOLIO MANAGER
+              {t('title')}
             </span>
             <span style={{ color: WHITE }}>|</span>
             <span style={{ color: refreshing ? ORANGE : GREEN, fontSize: '10px' }}>
-              ● {refreshing ? 'UPDATING' : 'LIVE'}
+              ● {refreshing ? t('header.updating') : t('header.live')}
             </span>
             <span style={{ color: WHITE }}>|</span>
             <TimezoneSelector compact />
@@ -183,7 +185,7 @@ const PortfolioTab: React.FC = () => {
               }}
             >
               <Plus size={12} />
-              NEW PORTFOLIO
+              {t('header.newPortfolio')}
             </button>
             <button
               onClick={refreshPortfolioData}
@@ -203,7 +205,7 @@ const PortfolioTab: React.FC = () => {
               }}
             >
               <RefreshCw size={12} />
-              REFRESH
+              {t('header.refresh')}
             </button>
             <button
               onClick={exportToCSV}
@@ -223,7 +225,7 @@ const PortfolioTab: React.FC = () => {
               }}
             >
               <Download size={12} />
-              EXPORT CSV
+              {t('header.exportCsv')}
             </button>
           </div>
         </div>
@@ -231,12 +233,12 @@ const PortfolioTab: React.FC = () => {
         {/* Portfolio Summary Bar */}
         {portfolioSummary && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '11px', marginTop: '8px' }}>
-            <span style={{ color: GRAY }}>TOTAL VALUE:</span>
+            <span style={{ color: GRAY }}>{t('summary.totalValue')}:</span>
             <span style={{ color: YELLOW, fontWeight: 'bold' }}>
               {formatCurrency(portfolioSummary.total_market_value, currency)}
             </span>
             <span style={{ color: WHITE }}>|</span>
-            <span style={{ color: GRAY }}>DAY P&L:</span>
+            <span style={{ color: GRAY }}>{t('summary.dayPnl')}:</span>
             <span style={{
               color: portfolioSummary.total_day_change >= 0 ? GREEN : RED,
               fontWeight: 'bold'
@@ -244,7 +246,7 @@ const PortfolioTab: React.FC = () => {
               {formatCurrency(portfolioSummary.total_day_change, currency)} ({formatPercent(portfolioSummary.total_day_change_percent)})
             </span>
             <span style={{ color: WHITE }}>|</span>
-            <span style={{ color: GRAY }}>TOTAL P&L:</span>
+            <span style={{ color: GRAY }}>{t('summary.totalPnl')}:</span>
             <span style={{
               color: portfolioSummary.total_unrealized_pnl >= 0 ? GREEN : RED,
               fontWeight: 'bold'
@@ -252,7 +254,7 @@ const PortfolioTab: React.FC = () => {
               {formatCurrency(portfolioSummary.total_unrealized_pnl, currency)} ({formatPercent(portfolioSummary.total_unrealized_pnl_percent)})
             </span>
             <span style={{ color: WHITE }}>|</span>
-            <span style={{ color: GRAY }}>POSITIONS:</span>
+            <span style={{ color: GRAY }}>{t('summary.positions')}:</span>
             <span style={{ color: CYAN }}>{portfolioSummary.total_positions}</span>
           </div>
         )}

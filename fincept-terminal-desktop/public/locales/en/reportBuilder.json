@@ -1,0 +1,74 @@
+{
+    "title": "REPORT BUILDER",
+    "header": {
+        "load": "Load",
+        "save": "Save",
+        "saving": "Saving...",
+        "exportPdf": "Export PDF",
+        "generating": "Generating..."
+    },
+    "components": {
+        "addComponents": "ADD COMPONENTS",
+        "heading": "Heading",
+        "text": "Text",
+        "chart": "Chart",
+        "table": "Table",
+        "image": "Image",
+        "codeBlock": "Code Block",
+        "divider": "Divider"
+    },
+    "layout": {
+        "title": "LAYOUT",
+        "section": "Section",
+        "columns": "Columns",
+        "cover": "Cover",
+        "break": "Break"
+    },
+    "settings": {
+        "title": "SETTINGS",
+        "pageTheme": "Page Theme",
+        "backgroundColor": "Background Color",
+        "showPicker": "Show Picker",
+        "hidePicker": "Hide Picker",
+        "fontFamily": "Font Family",
+        "fontSize": "Default Font Size"
+    },
+    "themes": {
+        "classicWhite": "Classic White",
+        "minimalGrid": "Minimal Grid",
+        "geometricTriangles": "Geometric Triangles",
+        "diagonalPattern": "Diagonal Pattern",
+        "modernGradient": "Modern Gradient (Dark)",
+        "professionalGradient": "Professional Gradient (Dark)"
+    },
+    "componentList": {
+        "title": "COMPONENT LIST",
+        "noComponents": "No components added yet"
+    },
+    "properties": {
+        "title": "PROPERTIES",
+        "noSelection": "Select a component to edit properties"
+    },
+    "aiAssistant": {
+        "title": "AI ASSISTANT",
+        "placeholder": "Ask AI for help with your report...",
+        "quickActions": {
+            "improve": "Improve",
+            "expand": "Expand",
+            "summarize": "Summarize",
+            "grammar": "Grammar"
+        }
+    },
+    "preview": {
+        "title": "PREVIEW"
+    },
+    "messages": {
+        "templateSaved": "Template saved successfully",
+        "templateLoaded": "Template loaded successfully",
+        "componentAdded": "component added",
+        "componentDeleted": "Component deleted",
+        "componentDuplicated": "Component duplicated",
+        "pdfGenerated": "PDF generated successfully",
+        "imageUploaded": "Image uploaded"
+    }
+}

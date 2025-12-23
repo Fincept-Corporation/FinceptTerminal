@@ -660,13 +660,13 @@ export default function SettingsTab() {
         <div style={{ width: '220px', borderRight: '1px solid #1a1a1a', background: colors.panel, flexShrink: 0 }}>
           <div style={{ padding: '16px 0' }}>
             {[
-              { id: 'credentials', icon: Lock, label: t('sections.credentials') },
-              { id: 'llm', icon: Bot, label: t('sections.llm') },
-              { id: 'dataConnections', icon: Database, label: t('sections.dataConnections') },
-              { id: 'backtesting', icon: Activity, label: t('sections.backtesting') },
-              { id: 'terminalConfig', icon: SettingsIcon, label: t('sections.terminalConfig') },
-              { id: 'terminal', icon: Terminal, label: t('sections.terminal') },
-              { id: 'language', icon: Globe, label: t('sections.language') }
+              { id: 'credentials', icon: Lock, label: t('sidebar.credentials') },
+              { id: 'llm', icon: Bot, label: t('sidebar.llm') },
+              { id: 'dataConnections', icon: Database, label: t('sidebar.dataSources') },
+              { id: 'backtesting', icon: Activity, label: t('sidebar.backtesting') },
+              { id: 'terminalConfig', icon: SettingsIcon, label: t('sidebar.tabLayout') },
+              { id: 'terminal', icon: Terminal, label: t('sidebar.appearance') },
+              { id: 'language', icon: Globe, label: t('sidebar.language') }
             ].map((item) => (
               <div
                 key={item.id}

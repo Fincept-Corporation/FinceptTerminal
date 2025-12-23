@@ -8,8 +8,10 @@ import { contextRecorderService } from '../../services/contextRecorderService';
 import TickerEditModal from './TickerEditModal';
 import RecordingControlPanel from '../common/RecordingControlPanel';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 
 const MarketsTab: React.FC = () => {
+  const { t } = useTranslation('markets');
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -273,12 +275,12 @@ const MarketsTab: React.FC = () => {
         fontWeight: 'bold',
         borderBottom: `1px solid ${colors.textMuted}`
       }}>
-        <div>SYMBOL</div>
-        <div style={{ textAlign: 'right' }}>PRICE</div>
-        <div style={{ textAlign: 'right' }}>CHANGE</div>
-        <div style={{ textAlign: 'right' }}>%CHG</div>
-        <div style={{ textAlign: 'right' }}>HIGH</div>
-        <div style={{ textAlign: 'right' }}>LOW</div>
+        <div>{t('symbol')}</div>
+        <div style={{ textAlign: 'right' }}>{t('price')}</div>
+        <div style={{ textAlign: 'right' }}>{t('change')}</div>
+        <div style={{ textAlign: 'right' }}>{t('percentChange')}</div>
+        <div style={{ textAlign: 'right' }}>{t('high')}</div>
+        <div style={{ textAlign: 'right' }}>{t('low')}</div>
       </div>
 
       {/* Data Rows */}
@@ -290,7 +292,7 @@ const MarketsTab: React.FC = () => {
             textAlign: 'center',
             padding: '16px'
           }}>
-            {isUpdating ? 'Loading...' : 'No data available'}
+            {isUpdating ? t('loading') : t('noData')}
           </div>
         ) : (
           quotes.map((quote, index) => (
@@ -380,11 +382,11 @@ const MarketsTab: React.FC = () => {
           fontWeight: 'bold',
           borderBottom: `1px solid ${colors.textMuted}`
         }}>
-          <div>SYMBOL</div>
-          <div>NAME</div>
-          <div style={{ textAlign: 'right' }}>PRICE</div>
-          <div style={{ textAlign: 'right' }}>CHANGE</div>
-          <div style={{ textAlign: 'right' }}>%CHG</div>
+          <div>{t('symbol')}</div>
+          <div>{t('name')}</div>
+          <div style={{ textAlign: 'right' }}>{t('price')}</div>
+          <div style={{ textAlign: 'right' }}>{t('change')}</div>
+          <div style={{ textAlign: 'right' }}>{t('percentChange')}</div>
         </div>
 
         {/* Data Rows */}
@@ -396,7 +398,7 @@ const MarketsTab: React.FC = () => {
               textAlign: 'center',
               padding: '16px'
             }}>
-              {isUpdating ? 'Loading...' : 'No data available'}
+              {isUpdating ? t('loading') : t('noData')}
             </div>
           ) : (
             quotes.map((quote, index) => {
@@ -477,7 +479,7 @@ const MarketsTab: React.FC = () => {
         flexShrink: 0
       }}>
         <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT</span>
-        <span style={{ color: colors.text }}>MARKET TERMINAL - LIVE DATA</span>
+        <span style={{ color: colors.text }}>{t('marketTerminalLive')}</span>
         <span style={{ color: colors.textMuted }}>|</span>
         <span style={{ color: colors.text, fontSize: '11px' }}>
           {currentTime.toISOString().replace('T', ' ').substring(0, 19)}
@@ -510,7 +512,7 @@ const MarketsTab: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            REFRESH
+            {t('refresh')}
           </button>
           <button
             onClick={() => setAutoUpdate(!autoUpdate)}
@@ -524,7 +526,7 @@ const MarketsTab: React.FC = () => {
               cursor: 'pointer'
             }}
           >
-            AUTO {autoUpdate ? 'ON' : 'OFF'}
+            {t('auto')} {autoUpdate ? t('on') : t('off')}
           </button>
           <select
             value={updateInterval}
@@ -544,14 +546,14 @@ const MarketsTab: React.FC = () => {
             <option value={3600000}>1 hour</option>
           </select>
           <span style={{ color: colors.textMuted }}>|</span>
-          <span style={{ color: colors.textMuted, fontSize: '11px' }}>LAST UPDATE:</span>
+          <span style={{ color: colors.textMuted, fontSize: '11px' }}>{t('lastUpdate')}:</span>
           <span style={{ color: colors.text, fontSize: '11px' }}>
             {lastUpdate.toTimeString().substring(0, 8)}
           </span>
           <span style={{ color: colors.textMuted }}>|</span>
           <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '14px' }}>●</span>
           <span style={{ color: isUpdating ? colors.primary : colors.secondary, fontSize: '11px', fontWeight: 'bold' }}>
-            {isUpdating ? 'UPDATING' : 'LIVE'}
+            {isUpdating ? t('updating') : t('live')}
           </span>
         </div>
         <RecordingControlPanel
@@ -577,7 +579,7 @@ const MarketsTab: React.FC = () => {
           marginBottom: '8px',
           letterSpacing: '0.5px'
         }}>
-          GLOBAL MARKETS
+          {t('globalMarkets')}
         </div>
         <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }}></div>
 
@@ -601,7 +603,7 @@ const MarketsTab: React.FC = () => {
           marginTop: '16px',
           letterSpacing: '0.5px'
         }}>
-          REGIONAL MARKETS - LIVE DATA
+          {t('regionalMarketsLive')}
         </div>
         <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '16px' }}></div>
 
