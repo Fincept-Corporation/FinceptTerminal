@@ -1,5 +1,6 @@
 // Portfolio Analytics commands
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 use serde_json::Value;
 
 /// Calculate portfolio metrics
@@ -22,7 +23,8 @@ pub async fn calculate_portfolio_metrics(
         args.push(rfr.to_string());
     }
 
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_analytics.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_analytics.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Optimize portfolio weights
@@ -45,7 +47,8 @@ pub async fn optimize_portfolio(
         args.push(rfr.to_string());
     }
 
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_analytics.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_analytics.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Generate efficient frontier
@@ -68,7 +71,8 @@ pub async fn generate_efficient_frontier(
         args.push(rfr.to_string());
     }
 
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_analytics.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_analytics.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get portfolio analytics overview
@@ -117,7 +121,8 @@ pub async fn calculate_risk_metrics(
     if let Some(w) = weights {
         args.push(w);
     }
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Generate asset allocation plan
@@ -134,7 +139,8 @@ pub async fn generate_asset_allocation(
         risk_tolerance,
         years_to_retirement.to_string(),
     ];
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Calculate retirement planning
@@ -153,7 +159,8 @@ pub async fn calculate_retirement_plan(
         current_savings.to_string(),
         annual_contribution.to_string(),
     ];
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Analyze behavioral biases
@@ -163,7 +170,8 @@ pub async fn analyze_behavioral_biases(
     portfolio_data: String,
 ) -> Result<String, String> {
     let args = vec!["behavioral_analysis".to_string(), portfolio_data];
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Analyze ETF costs
@@ -174,7 +182,8 @@ pub async fn analyze_etf_costs(
     expense_ratios: String,
 ) -> Result<String, String> {
     let args = vec!["etf_analysis".to_string(), symbols, expense_ratios];
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // ============================================================================
@@ -199,7 +208,8 @@ pub async fn calculate_active_value_added(
         args.push(weights);
     }
 
-    execute_python_command(&app, "Analytics/portfolioManagement/active_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/active_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Calculate information ratio analysis
@@ -215,7 +225,8 @@ pub async fn calculate_active_information_ratio(
         benchmark_returns,
     ];
 
-    execute_python_command(&app, "Analytics/portfolioManagement/active_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/active_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Calculate tracking risk analysis
@@ -231,7 +242,8 @@ pub async fn calculate_active_tracking_risk(
         benchmark_returns,
     ];
 
-    execute_python_command(&app, "Analytics/portfolioManagement/active_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/active_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Comprehensive active management analysis
@@ -247,7 +259,8 @@ pub async fn comprehensive_active_analysis(
         benchmark_data,
     ];
 
-    execute_python_command(&app, "Analytics/portfolioManagement/active_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/active_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Manager selection analysis
@@ -258,7 +271,8 @@ pub async fn analyze_manager_selection(
 ) -> Result<String, String> {
     let args = vec!["manager_selection".to_string(), manager_candidates];
 
-    execute_python_command(&app, "Analytics/portfolioManagement/active_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/active_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // ============================================================================
@@ -285,7 +299,8 @@ pub async fn comprehensive_risk_analysis(
         args.push(pv.to_string());
     }
 
-    execute_python_command(&app, "Analytics/portfolioManagement/risk_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/risk_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // ============================================================================
@@ -307,7 +322,8 @@ pub async fn strategic_asset_allocation(
         time_horizon.to_string(),
     ];
 
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_planning.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_planning.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Retirement planning calculator
@@ -327,7 +343,8 @@ pub async fn calculate_retirement_planning(
         annual_contribution.to_string(),
     ];
 
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_planning.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_planning.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // ============================================================================
@@ -349,7 +366,8 @@ pub async fn comprehensive_economics_analysis(
         args.push("{}".to_string());
     }
 
-    execute_python_command(&app, "Analytics/portfolioManagement/economics_markets.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/economics_markets.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Business cycle analysis
@@ -360,7 +378,8 @@ pub async fn analyze_business_cycle(
 ) -> Result<String, String> {
     let args = vec!["business_cycle_analysis".to_string(), cycle_phase];
 
-    execute_python_command(&app, "Analytics/portfolioManagement/economics_markets.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/economics_markets.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Equity risk premium analysis
@@ -380,5 +399,6 @@ pub async fn analyze_equity_risk_premium(
         }
     }
 
-    execute_python_command(&app, "Analytics/portfolioManagement/economics_markets.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/economics_markets.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }

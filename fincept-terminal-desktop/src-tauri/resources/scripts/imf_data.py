@@ -568,9 +568,12 @@ class IMFDataWrapper:
             return {"error": IMFError("comprehensive_economic_data", str(e)).to_dict()}
 
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """Main function for CLI interface"""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps({
             "error": "Usage: python imf_data.py <command> [args...]",
             "commands": [
@@ -582,38 +585,38 @@ def main():
         }))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
     wrapper = IMFDataWrapper()
 
     try:
         if command == "economic_indicators":
-            countries = sys.argv[2] if len(sys.argv) > 2 else None
-            symbols = sys.argv[3] if len(sys.argv) > 3 else None
-            frequency = sys.argv[4] if len(sys.argv) > 4 else "quarter"
-            start_date = sys.argv[5] if len(sys.argv) > 5 else None
-            end_date = sys.argv[6] if len(sys.argv) > 6 else None
-            sector = sys.argv[7] if len(sys.argv) > 7 else "monetary_authorities"
+            countries = args[1] if len(args) + 1 > 2 else None
+            symbols = args[2] if len(args) + 1 > 3 else None
+            frequency = args[3] if len(args) + 1 > 4 else "quarter"
+            start_date = args[4] if len(args) + 1 > 5 else None
+            end_date = sys.argv[6] if len(args) + 1 > 6 else None
+            sector = sys.argv[7] if len(args) + 1 > 7 else "monetary_authorities"
 
             result = wrapper.get_economic_indicators(countries, symbols, frequency, start_date, end_date, sector)
 
         elif command == "direction_of_trade":
-            countries = sys.argv[2] if len(sys.argv) > 2 else None
-            counterparts = sys.argv[3] if len(sys.argv) > 3 else None
-            direction = sys.argv[4] if len(sys.argv) > 4 else "all"
-            frequency = sys.argv[5] if len(sys.argv) > 5 else "quarter"
-            start_date = sys.argv[6] if len(sys.argv) > 6 else None
-            end_date = sys.argv[7] if len(sys.argv) > 7 else None
+            countries = args[1] if len(args) + 1 > 2 else None
+            counterparts = args[2] if len(args) + 1 > 3 else None
+            direction = args[3] if len(args) + 1 > 4 else "all"
+            frequency = args[4] if len(args) + 1 > 5 else "quarter"
+            start_date = sys.argv[6] if len(args) + 1 > 6 else None
+            end_date = sys.argv[7] if len(args) + 1 > 7 else None
 
             result = wrapper.get_direction_of_trade(countries, counterparts, direction, frequency, start_date, end_date)
 
         elif command == "available_indicators":
-            query = sys.argv[2] if len(sys.argv) > 2 else None
+            query = args[1] if len(args) + 1 > 2 else None
             result = wrapper.get_available_indicators(query)
 
         elif command == "comprehensive_economic_data":
-            country = sys.argv[2] if len(sys.argv) > 2 else None
-            start_date = sys.argv[3] if len(sys.argv) > 3 else None
-            end_date = sys.argv[4] if len(sys.argv) > 4 else None
+            country = args[1] if len(args) + 1 > 2 else None
+            start_date = args[2] if len(args) + 1 > 3 else None
+            end_date = args[3] if len(args) + 1 > 4 else None
 
             result = wrapper.get_comprehensive_economic_data(country, start_date, end_date)
 

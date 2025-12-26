@@ -1,4 +1,5 @@
-use crate::utils::python::{execute_python_command, get_script_path};
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 use tauri::AppHandle;
 
 /// Fetch company news using GNews
@@ -92,7 +93,7 @@ async fn execute_news_command(app: AppHandle, args: Vec<String>) -> Result<Strin
         ));
     }
 
-    match execute_python_command(&app, script_name, &args) {
+    match python_runtime::execute_python_script(&script_path, args) {
         Ok(output) => {
             if output.contains("\"success\":false") || output.contains("\"error\"") {
                 return Err(output);

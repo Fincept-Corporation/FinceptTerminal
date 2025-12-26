@@ -31,34 +31,42 @@ async fn execute_python_alpha_command(args: &[&str]) -> Result<Value, String> {
     eprintln!("[Alpha Arena] Executing Python script: {:?}", script_path);
     eprintln!("[Alpha Arena] Args: {:?}", args);
 
-    // Clone args for the blocking task
-    let script_path_clone = script_path.clone();
     let args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
+    // Try PyO3 first, fallback to subprocess
     // Execute in a blocking thread to avoid blocking the async runtime
-    // This allows the UI to remain responsive during long-running operations
-    let result = tokio::task::spawn_blocking(move || {
-        Command::new("python")
-            .env("PYTHONDONTWRITEBYTECODE", "1")  // Prevent .pyc file creation
-            .arg(&script_path_clone)
-            .args(&args_owned)
-            .output()
+    let script_path_clone = script_path.clone();
+    let args_clone = args_owned.clone();
+
+    let stdout = tokio::task::spawn_blocking(move || {
+        // Try PyO3 execution
+        match crate::python_runtime::execute_python_script(&script_path_clone, args_clone.clone()) {
+            Ok(output) => Ok(output),
+            Err(_) => {
+                // Fallback to subprocess
+                let result = Command::new("python")
+                    .env("PYTHONDONTWRITEBYTECODE", "1")
+                    .arg(&script_path_clone)
+                    .args(&args_clone)
+                    .output()
+                    .map_err(|e| format!("Failed to execute Python: {}", e))?;
+
+                let stderr = String::from_utf8_lossy(&result.stderr);
+                if !stderr.is_empty() {
+                    eprintln!("[Alpha Arena] Python stderr: {}", stderr);
+                }
+
+                if !result.status.success() {
+                    return Err(format!("Python error: {}", stderr));
+                }
+
+                Ok(String::from_utf8_lossy(&result.stdout).to_string())
+            }
+        }
     })
     .await
-    .map_err(|e| format!("Task join error: {}", e))?
-    .map_err(|e| format!("Failed to execute Python: {}", e))?;
+    .map_err(|e| format!("Task join error: {}", e))??;
 
-    // Always log stderr for debugging
-    let stderr = String::from_utf8_lossy(&result.stderr);
-    if !stderr.is_empty() {
-        eprintln!("[Alpha Arena] Python stderr: {}", stderr);
-    }
-
-    if !result.status.success() {
-        return Err(format!("Python error: {}", stderr));
-    }
-
-    let stdout = String::from_utf8_lossy(&result.stdout);
     eprintln!("[Alpha Arena] Python stdout length: {} chars", stdout.len());
 
     // Only log first 1000 chars to avoid flooding logs

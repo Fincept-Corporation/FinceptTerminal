@@ -146,13 +146,16 @@ def get_company_treasury(coin_id: str) -> Dict[str, Any]:
     return _make_request(f"companies/public_treasury/{coin_id}")
 
 # --- 3. CLI INTERFACE (ABBREVIATED FOR BREVITY, FULL IMPLEMENTATION IS COMPLEX) ---
-def main():
+def main(args=None):
+    """Main CLI entry point."""
+    if args is None:
+        args = sys.argv[1:]
     """Main CLI entry point. This is a simplified router."""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print("Usage: python coingecko_complete_wrapper.py <command> [args...]")
         return
     
-    cmd = sys.argv[1]
+    cmd = args[0]
     args = sys.argv[2:]
     result = {}
 

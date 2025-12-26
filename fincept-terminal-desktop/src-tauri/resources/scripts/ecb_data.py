@@ -286,11 +286,14 @@ class ECBDataWrapper:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """Main function for CLI interface"""
     wrapper = ECBDataWrapper()
 
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps({
             "success": False,
             "error": "Usage: python ecb_data.py <command> [options]",
@@ -304,7 +307,7 @@ def main():
         }))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
 
     # Parse command line arguments
     args = {}
@@ -313,7 +316,7 @@ def main():
             if '=' in arg:
                 key, value = arg[2:].split('=', 1)
                 args[key] = value
-            elif i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith('--'):
+            elif i + 1 < len(args) + 1 and not sys.argv[i + 1].startswith('--'):
                 key = arg[2:]
                 value = sys.argv[i + 1]
                 args[key] = value

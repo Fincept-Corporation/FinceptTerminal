@@ -24,6 +24,7 @@ import {
 import { sqliteService, type LLMConfig } from '@/services/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {
@@ -71,6 +72,7 @@ interface ProviderInfo {
 
 const AgentConfigTab: React.FC = () => {
   const { t } = useTranslation('agentConfig');
+  const { session } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState('TraderInvestorsAgent');
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
@@ -100,20 +102,57 @@ const AgentConfigTab: React.FC = () => {
     loadAgents();
     loadProviders();
     loadLLMConfigs();
-  }, [selectedCategory]);
+  }, [selectedCategory, session]);
 
   const loadLLMConfigs = async () => {
     try {
-      const configs = await sqliteService.getLLMConfigs();
+      let configs = await sqliteService.getLLMConfigs();
+      console.log('[AgentConfigTab] Loaded LLM configs from DB:', configs);
+
+      // Always ensure Fincept config exists with session's API key
+      const userApiKey = session?.api_key || '';
+      console.log('[AgentConfigTab] Session API key:', userApiKey ? `${userApiKey.substring(0, 8)}...` : 'MISSING');
+
+      const finceptExists = configs.some(c => c.provider === 'fincept');
+
+      if (!finceptExists && userApiKey) {
+        console.log('[AgentConfigTab] Creating new Fincept config with user API key');
+        const finceptConfig = {
+          provider: 'fincept',
+          api_key: userApiKey,
+          base_url: 'https://finceptbackend.share.zrok.io/research/llm',
+          model: 'fincept-llm',
+          is_active: true,
+        };
+        await sqliteService.saveLLMConfig(finceptConfig);
+        configs = await sqliteService.getLLMConfigs();
+      } else if (finceptExists && userApiKey) {
+        // Update existing Fincept config with latest user API key
+        const finceptConfig = configs.find(c => c.provider === 'fincept');
+        console.log('[AgentConfigTab] Existing Fincept config API key:', finceptConfig?.api_key ? `${finceptConfig.api_key.substring(0, 8)}...` : 'MISSING');
+        if (finceptConfig && finceptConfig.api_key !== userApiKey) {
+          console.log('[AgentConfigTab] Updating Fincept config with new user API key');
+          finceptConfig.api_key = userApiKey;
+          await sqliteService.saveLLMConfig(finceptConfig);
+          configs = await sqliteService.getLLMConfigs();
+        }
+      }
+
       setLlmConfigs(configs);
 
-      // Build API keys map
+      // Build API keys map - always prioritize user's Fincept key
       const keys: Record<string, string> = {};
       configs.forEach(config => {
-        if (config.api_key) {
+        if (config.api_key && config.provider !== 'fincept') {
+          // Skip fincept - we'll add it from user.api_key below
           keys[`${config.provider.toUpperCase()}_API_KEY`] = config.api_key;
         }
       });
+      // Always add user's Fincept key (highest priority)
+      if (userApiKey) {
+        keys['FINCEPT_API_KEY'] = userApiKey;
+      }
+      console.log('[AgentConfigTab] Built API keys map:', Object.keys(keys));
       setApiKeys(keys);
     } catch (err) {
       console.error('Failed to load LLM configs:', err);
@@ -131,13 +170,12 @@ const AgentConfigTab: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await invoke('execute_python_agent_command', {
-        action: 'list_agents',
-        parameters: { category: selectedCategory },
-        inputs: null,
+      // New simplified command - follows yfinance pattern
+      const resultStr = await invoke<string>('list_agents', {
+        category: selectedCategory,
       });
 
-      const data = result as any;
+      const data = JSON.parse(resultStr);
       if (data.success) {
         setAgents(data.agents || []);
         setTeamName(data.team_name || null);
@@ -157,13 +195,10 @@ const AgentConfigTab: React.FC = () => {
 
   const loadProviders = async () => {
     try {
-      const result = await invoke('execute_python_agent_command', {
-        action: 'get_providers',
-        parameters: {},
-        inputs: null,
-      });
+      // New simplified command
+      const resultStr = await invoke<string>('get_agent_providers');
+      const data = JSON.parse(resultStr);
 
-      const data = result as any;
       if (data.success && data.providers) {
         setProviders(data.providers);
       }
@@ -182,17 +217,14 @@ const AgentConfigTab: React.FC = () => {
       // Parse the JSON text to validate and get updated config
       const updatedConfig = JSON.parse(jsonText);
 
-      const result = await invoke('execute_python_agent_command', {
-        action: 'update_config',
-        parameters: {
-          agent_id: selectedAgent.id,
-          category: selectedCategory,
-          updates: updatedConfig,
-        },
-        inputs: null,
+      // New simplified command
+      const resultStr = await invoke<string>('save_agent_config', {
+        category: selectedCategory,
+        agentId: selectedAgent.id,
+        configJson: JSON.stringify(updatedConfig),
       });
 
-      const data = result as any;
+      const data = JSON.parse(resultStr);
       if (data.success) {
         setSuccess('Configuration saved successfully!');
         setSelectedAgent(updatedConfig);
@@ -222,27 +254,26 @@ const AgentConfigTab: React.FC = () => {
       return;
     }
 
+    console.log('Testing agent with API keys:', apiKeys);
+    console.log('Session API key:', session?.api_key?.substring(0, 8));
+
     setLoading(true);
     setError(null);
     setTestResult(null);
     try {
-      const result = await invoke('execute_python_agent_command', {
-        action: 'execute_agent',
-        parameters: {
-          agent_id: selectedAgent.id,
-          category: selectedCategory,
-          query: testQuery,
-        },
-        inputs: {
-          api_keys: apiKeys,
-          llm_override: {
-            provider: activeLLM.provider,
-            model: activeLLM.model,
-          },
-        },
+      // New simplified command
+      const resultStr = await invoke<string>('execute_single_agent', {
+        category: selectedCategory,
+        agentId: selectedAgent.id,
+        query: testQuery,
+        llmConfigJson: JSON.stringify({
+          provider: activeLLM.provider,
+          model: activeLLM.model,
+        }),
+        apiKeysJson: JSON.stringify(apiKeys),
       });
 
-      const data = result as any;
+      const data = JSON.parse(resultStr);
       setTestResult(data);
     } catch (err: any) {
       console.error('Failed to test agent:', err);
@@ -282,23 +313,19 @@ const AgentConfigTab: React.FC = () => {
     });
 
     try {
-      const result = await invoke('execute_python_agent_command', {
-        action: 'execute_team_collaboration',
-        parameters: {
-          category: selectedCategory,
-          query: testQuery,
-          agent_ids: agentIds,  // Send only selected book's agents
-        },
-        inputs: {
-          api_keys: apiKeys,
-          llm_override: {
-            provider: activeLLM.provider,
-            model: activeLLM.model,
-          },
-        },
+      // New simplified command
+      const resultStr = await invoke<string>('execute_agent_team', {
+        category: selectedCategory,
+        query: testQuery,
+        llmConfigJson: JSON.stringify({
+          provider: activeLLM.provider,
+          model: activeLLM.model,
+        }),
+        apiKeysJson: JSON.stringify(apiKeys),
+        agentIdsJson: agentIds.length > 0 ? JSON.stringify(agentIds) : null,
       });
 
-      const data = result as any;
+      const data = JSON.parse(resultStr);
       setTestResult(data);
 
       if (!data.success) {
@@ -819,29 +846,52 @@ const AgentConfigTab: React.FC = () => {
                       <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
                         ROLE
                       </div>
-                      <div style={{
-                        padding: '8px',
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        fontSize: '11px',
-                        color: BLOOMBERG.YELLOW
-                      }}>
-                        {selectedAgent.role}
-                      </div>
+                      <input
+                        type="text"
+                        value={selectedAgent.role}
+                        onChange={(e) => {
+                          const updated = { ...selectedAgent, role: e.target.value };
+                          setSelectedAgent(updated);
+                          setJsonText(JSON.stringify(updated, null, 2));
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          backgroundColor: BLOOMBERG.DARK_BG,
+                          border: `1px solid ${BLOOMBERG.BORDER}`,
+                          fontSize: '11px',
+                          color: BLOOMBERG.YELLOW,
+                          outline: 'none',
+                          fontFamily: 'inherit'
+                        }}
+                      />
                     </div>
 
                     <div>
                       <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
                         GOAL
                       </div>
-                      <div style={{
-                        padding: '8px',
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        fontSize: '11px'
-                      }}>
-                        {selectedAgent.goal}
-                      </div>
+                      <textarea
+                        value={selectedAgent.goal}
+                        onChange={(e) => {
+                          const updated = { ...selectedAgent, goal: e.target.value };
+                          setSelectedAgent(updated);
+                          setJsonText(JSON.stringify(updated, null, 2));
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          backgroundColor: BLOOMBERG.DARK_BG,
+                          border: `1px solid ${BLOOMBERG.BORDER}`,
+                          fontSize: '11px',
+                          color: BLOOMBERG.WHITE,
+                          outline: 'none',
+                          resize: 'vertical',
+                          minHeight: '60px',
+                          fontFamily: 'inherit',
+                          lineHeight: '1.5'
+                        }}
+                      />
                     </div>
 
                     {/* LLM Config - Show ACTIVE from Settings */}
@@ -867,6 +917,10 @@ const AgentConfigTab: React.FC = () => {
                               </div>
                             );
                           }
+                          // Check apiKeys map for actual runtime API key (not DB config)
+                          const apiKeyName = `${activeLLM.provider.toUpperCase()}_API_KEY`;
+                          const hasApiKey = !!apiKeys[apiKeyName];
+
                           return (
                             <>
                               <div>
@@ -879,8 +933,8 @@ const AgentConfigTab: React.FC = () => {
                               </div>
                               <div>
                                 <span style={{ color: BLOOMBERG.GRAY }}>API Key:</span>{' '}
-                                <span style={{ color: activeLLM.api_key ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
-                                  {activeLLM.api_key ? '✓ Configured' : '✗ Missing'}
+                                <span style={{ color: hasApiKey ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
+                                  {hasApiKey ? '✓ Configured' : '✗ Missing'}
                                 </span>
                               </div>
                               <div>
@@ -1010,17 +1064,53 @@ const AgentConfigTab: React.FC = () => {
                       <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
                         INSTRUCTIONS
                       </div>
-                      <div style={{
-                        padding: '8px',
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        fontSize: '10px',
-                        maxHeight: '200px',
-                        overflow: 'auto',
-                        lineHeight: '1.5'
-                      }}>
-                        {selectedAgent.instructions}
-                      </div>
+                      <textarea
+                        value={selectedAgent.instructions}
+                        onChange={(e) => {
+                          const updated = { ...selectedAgent, instructions: e.target.value };
+                          setSelectedAgent(updated);
+                          setJsonText(JSON.stringify(updated, null, 2));
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          backgroundColor: BLOOMBERG.DARK_BG,
+                          border: `1px solid ${BLOOMBERG.BORDER}`,
+                          fontSize: '10px',
+                          color: BLOOMBERG.WHITE,
+                          outline: 'none',
+                          resize: 'vertical',
+                          minHeight: '150px',
+                          fontFamily: 'inherit',
+                          lineHeight: '1.6'
+                        }}
+                      />
+                    </div>
+
+                    {/* Save Button */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                      <button
+                        onClick={saveConfig}
+                        disabled={loading}
+                        style={{
+                          flex: 1,
+                          padding: '10px',
+                          backgroundColor: BLOOMBERG.ORANGE,
+                          border: `1px solid ${BLOOMBERG.ORANGE}`,
+                          color: BLOOMBERG.DARK_BG,
+                          cursor: loading ? 'not-allowed' : 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                          opacity: loading ? 0.6 : 1
+                        }}
+                      >
+                        <Save size={14} />
+                        {loading ? 'SAVING...' : 'SAVE CHANGES'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1191,23 +1281,31 @@ const AgentConfigTab: React.FC = () => {
                     RESPONSE
                   </div>
                   <div style={{
-                    padding: '8px',
+                    padding: '12px',
                     backgroundColor: BLOOMBERG.DARK_BG,
                     border: `1px solid ${BLOOMBERG.BORDER}`,
                     fontSize: '10px',
-                    maxHeight: '300px',
+                    maxHeight: '400px',
                     overflow: 'auto',
-                    lineHeight: '1.6',
-                    color: BLOOMBERG.WHITE
+                    lineHeight: '1.8',
+                    color: BLOOMBERG.WHITE,
+                    whiteSpace: 'pre-wrap'
                   }}>
                     <ReactMarkdown
                       components={{
-                        p: ({ node, ...props }) => <p style={{ margin: '0.5em 0' }} {...props} />,
-                        strong: ({ node, ...props }) => <strong style={{ color: BLOOMBERG.CYAN, fontWeight: 600 }} {...props} />,
-                        em: ({ node, ...props }) => <em style={{ color: BLOOMBERG.YELLOW }} {...props} />,
-                        ul: ({ node, ...props }) => <ul style={{ margin: '0.5em 0', paddingLeft: '1.5em' }} {...props} />,
-                        ol: ({ node, ...props }) => <ol style={{ margin: '0.5em 0', paddingLeft: '1.5em' }} {...props} />,
-                        li: ({ node, ...props }) => <li style={{ margin: '0.25em 0' }} {...props} />,
+                        p: ({ node, ...props }) => <p style={{ margin: '0.8em 0', lineHeight: '1.8' }} {...props} />,
+                        strong: ({ node, ...props }) => <strong style={{ color: BLOOMBERG.CYAN, fontWeight: 700 }} {...props} />,
+                        em: ({ node, ...props }) => <em style={{ color: BLOOMBERG.YELLOW, fontStyle: 'italic' }} {...props} />,
+                        ul: ({ node, ...props }) => <ul style={{ margin: '0.8em 0', paddingLeft: '2em', listStyleType: 'disc' }} {...props} />,
+                        ol: ({ node, ...props }) => <ol style={{ margin: '0.8em 0', paddingLeft: '2em', listStyleType: 'decimal' }} {...props} />,
+                        li: ({ node, ...props }) => <li style={{ margin: '0.5em 0', lineHeight: '1.8' }} {...props} />,
+                        h1: ({ node, ...props }) => <h1 style={{ color: BLOOMBERG.ORANGE, fontSize: '14px', fontWeight: 700, margin: '1em 0 0.5em' }} {...props} />,
+                        h2: ({ node, ...props }) => <h2 style={{ color: BLOOMBERG.CYAN, fontSize: '12px', fontWeight: 700, margin: '1em 0 0.5em' }} {...props} />,
+                        h3: ({ node, ...props }) => <h3 style={{ color: BLOOMBERG.YELLOW, fontSize: '11px', fontWeight: 600, margin: '0.8em 0 0.4em' }} {...props} />,
+                        code: ({ node, inline, ...props }: any) => inline
+                          ? <code style={{ backgroundColor: BLOOMBERG.HEADER_BG, padding: '2px 4px', color: BLOOMBERG.GREEN, fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px' }} {...props} />
+                          : <code style={{ display: 'block', backgroundColor: BLOOMBERG.HEADER_BG, padding: '8px', color: BLOOMBERG.GREEN, fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', margin: '0.5em 0', overflow: 'auto' }} {...props} />,
+                        blockquote: ({ node, ...props }) => <blockquote style={{ borderLeft: `3px solid ${BLOOMBERG.ORANGE}`, paddingLeft: '12px', margin: '0.8em 0', color: BLOOMBERG.GRAY, fontStyle: 'italic' }} {...props} />,
                       }}
                     >
                       {testResult.response}

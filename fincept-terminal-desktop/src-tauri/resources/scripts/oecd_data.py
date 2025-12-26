@@ -1077,8 +1077,11 @@ class OECDWrapper:
 
 # ===== CLI INTERFACE =====
 
-def main():
-    if len(sys.argv) < 2:
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
+    if len(args) + 1 < 2:
         print(json.dumps({
             "success": False,
             "error": "Usage: python oecd_data.py <command> <args>",
@@ -1108,15 +1111,15 @@ def main():
         }))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
     wrapper = OECDWrapper()
 
     try:
         if command == "gdp_real":
-            countries = sys.argv[2] if len(sys.argv) > 2 else "united_states"
-            frequency = sys.argv[3] if len(sys.argv) > 3 else "quarter"
-            start_date = sys.argv[4] if len(sys.argv) > 4 else None
-            end_date = sys.argv[5] if len(sys.argv) > 5 else None
+            countries = args[1] if len(args) + 1 > 2 else "united_states"
+            frequency = args[2] if len(args) + 1 > 3 else "quarter"
+            start_date = args[3] if len(args) + 1 > 4 else None
+            end_date = args[4] if len(args) + 1 > 5 else None
 
             result = wrapper.get_gdp_real(
                 countries=countries,
@@ -1127,13 +1130,13 @@ def main():
             print(json.dumps(result, indent=2))
 
         elif command == "cpi":
-            countries = sys.argv[2] if len(sys.argv) > 2 else "united_states"
-            expenditure = sys.argv[3] if len(sys.argv) > 3 else "total"
-            frequency = sys.argv[4] if len(sys.argv) > 4 else "monthly"
-            units = sys.argv[5] if len(sys.argv) > 5 else "index"
-            harmonized = sys.argv[6].lower() == "true" if len(sys.argv) > 6 else False
-            start_date = sys.argv[7] if len(sys.argv) > 7 else None
-            end_date = sys.argv[8] if len(sys.argv) > 8 else None
+            countries = args[1] if len(args) + 1 > 2 else "united_states"
+            expenditure = args[2] if len(args) + 1 > 3 else "total"
+            frequency = args[3] if len(args) + 1 > 4 else "monthly"
+            units = args[4] if len(args) + 1 > 5 else "index"
+            harmonized = sys.argv[6].lower() == "true" if len(args) + 1 > 6 else False
+            start_date = sys.argv[7] if len(args) + 1 > 7 else None
+            end_date = sys.argv[8] if len(args) + 1 > 8 else None
 
             result = wrapper.get_consumer_price_index(
                 countries=countries,
@@ -1147,9 +1150,9 @@ def main():
             print(json.dumps(result, indent=2))
 
         elif command == "gdp_forecast":
-            countries = sys.argv[2] if len(sys.argv) > 2 else "united_states"
-            start_date = sys.argv[3] if len(sys.argv) > 3 else None
-            end_date = sys.argv[4] if len(sys.argv) > 4 else None
+            countries = args[1] if len(args) + 1 > 2 else "united_states"
+            start_date = args[2] if len(args) + 1 > 3 else None
+            end_date = args[3] if len(args) + 1 > 4 else None
 
             result = wrapper.get_gdp_forecast(
                 countries=countries,
@@ -1159,10 +1162,10 @@ def main():
             print(json.dumps(result, indent=2))
 
         elif command == "unemployment":
-            countries = sys.argv[2] if len(sys.argv) > 2 else "united_states"
-            frequency = sys.argv[3] if len(sys.argv) > 3 else "quarter"
-            start_date = sys.argv[4] if len(sys.argv) > 4 else None
-            end_date = sys.argv[5] if len(sys.argv) > 5 else None
+            countries = args[1] if len(args) + 1 > 2 else "united_states"
+            frequency = args[2] if len(args) + 1 > 3 else "quarter"
+            start_date = args[3] if len(args) + 1 > 4 else None
+            end_date = args[4] if len(args) + 1 > 5 else None
 
             result = wrapper.get_unemployment(
                 countries=countries,
@@ -1173,9 +1176,9 @@ def main():
             print(json.dumps(result, indent=2))
 
         elif command == "economic_summary":
-            country = sys.argv[2] if len(sys.argv) > 2 else "united_states"
-            start_date = sys.argv[3] if len(sys.argv) > 3 else None
-            end_date = sys.argv[4] if len(sys.argv) > 4 else None
+            country = args[1] if len(args) + 1 > 2 else "united_states"
+            start_date = args[2] if len(args) + 1 > 3 else None
+            end_date = args[3] if len(args) + 1 > 4 else None
 
             result = wrapper.get_economic_summary(
                 country=country,
@@ -1185,10 +1188,10 @@ def main():
             print(json.dumps(result, indent=2))
 
         elif command == "interest_rates":
-            countries = sys.argv[2] if len(sys.argv) > 2 else "united_states"
-            frequency = sys.argv[3] if len(sys.argv) > 3 else "monthly"
-            start_date = sys.argv[4] if len(sys.argv) > 4 else None
-            end_date = sys.argv[5] if len(sys.argv) > 5 else None
+            countries = args[1] if len(args) + 1 > 2 else "united_states"
+            frequency = args[2] if len(args) + 1 > 3 else "monthly"
+            start_date = args[3] if len(args) + 1 > 4 else None
+            end_date = args[4] if len(args) + 1 > 5 else None
 
             result = wrapper.get_interest_rates(
                 countries=countries,
@@ -1199,10 +1202,10 @@ def main():
             print(json.dumps(result, indent=2))
 
         elif command == "trade_balance":
-            countries = sys.argv[2] if len(sys.argv) > 2 else "united_states"
-            frequency = sys.argv[3] if len(sys.argv) > 3 else "quarter"
-            start_date = sys.argv[4] if len(sys.argv) > 4 else None
-            end_date = sys.argv[5] if len(sys.argv) > 5 else None
+            countries = args[1] if len(args) + 1 > 2 else "united_states"
+            frequency = args[2] if len(args) + 1 > 3 else "quarter"
+            start_date = args[3] if len(args) + 1 > 4 else None
+            end_date = args[4] if len(args) + 1 > 5 else None
 
             result = wrapper.get_trade_balance(
                 countries=countries,

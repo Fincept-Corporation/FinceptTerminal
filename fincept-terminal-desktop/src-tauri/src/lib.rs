@@ -16,6 +16,7 @@ mod commands;
 mod utils;
 mod setup;
 mod database;
+mod python_runtime;
 // mod finscript; // TODO: Implement FinScript module
 
 // MCP Server Process with communication channels
@@ -894,6 +895,21 @@ pub fn run() {
             commands::openafrica::search_openafrica_datasets,
             commands::openafrica::get_openafrica_dataset,
             commands::openafrica::get_openafrica_country_datasets,
+            // HDX Commands
+            commands::hdx::hdx_search_datasets,
+            commands::hdx::hdx_get_dataset,
+            commands::hdx::hdx_search_conflict,
+            commands::hdx::hdx_search_humanitarian,
+            commands::hdx::hdx_search_by_country,
+            commands::hdx::hdx_search_by_organization,
+            commands::hdx::hdx_search_by_topic,
+            commands::hdx::hdx_search_by_dataseries,
+            commands::hdx::hdx_list_countries,
+            commands::hdx::hdx_list_organizations,
+            commands::hdx::hdx_list_topics,
+            commands::hdx::hdx_get_resource_url,
+            commands::hdx::hdx_advanced_search,
+            commands::hdx::hdx_test_connection,
             // Economic Calendar Commands
             commands::economic_calendar::execute_economic_calendar_command,
             commands::economic_calendar::get_economic_calendar_today,
@@ -924,6 +940,13 @@ pub fn run() {
             commands::agents::execute_python_agent,
             commands::agents::get_agent_metadata,
             commands::agents::execute_python_agent_command,
+            commands::agents::execute_agent_manager_command,
+            commands::agents::list_agents,
+            commands::agents::get_agent_config,
+            commands::agents::save_agent_config,
+            commands::agents::get_agent_providers,
+            commands::agents::execute_single_agent,
+            commands::agents::execute_agent_team,
             // Portfolio Analytics Commands
             commands::portfolio::calculate_portfolio_metrics,
             commands::portfolio::optimize_portfolio,
@@ -1021,6 +1044,16 @@ pub fn run() {
             commands::analytics::analyze_etf,
             commands::analytics::calculate_quant_metrics,
             commands::analytics::calculate_rates,
+            // FinancePy - Derivatives Pricing Commands
+            commands::financepy::financepy_create_date,
+            commands::financepy::financepy_date_range,
+            commands::financepy::financepy_bond_price,
+            commands::financepy::financepy_bond_ytm,
+            commands::financepy::financepy_equity_option_price,
+            commands::financepy::financepy_equity_option_implied_vol,
+            commands::financepy::financepy_fx_option_price,
+            commands::financepy::financepy_ibor_swap_price,
+            commands::financepy::financepy_cds_spread,
             // AI Agent Commands
             commands::ai_agents::execute_economic_agent,
             commands::ai_agents::run_capitalism_agent,
@@ -1123,6 +1156,12 @@ pub fn run() {
             commands::ai_quant_lab::rdagent_optimize_model,
             commands::ai_quant_lab::rdagent_analyze_document,
             commands::ai_quant_lab::rdagent_run_autonomous_research,
+            // High-Performance OrderBook Processing Commands
+            commands::orderbook::merge_orderbook,
+            commands::orderbook::update_orderbook_snapshot,
+            commands::orderbook::calculate_orderbook_metrics,
+            commands::orderbook::calculate_cumulative_liquidity,
+            commands::orderbook::batch_merge_orderbook,
             // High-Performance Rust SQLite Database Commands
             commands::database::db_save_setting,
             commands::database::db_get_setting,

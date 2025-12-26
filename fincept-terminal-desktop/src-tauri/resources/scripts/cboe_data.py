@@ -782,45 +782,48 @@ class CBOEDataAPI:
             return CBOEError("available_indices", str(e)).to_dict()
 
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """Main function for CLI interface"""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps(CBOEError("cli", "Usage: python cboe_data.py <command> [args...]").to_dict()))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
     api = CBOEDataAPI()
 
     # Map commands to methods
     command_map = {
-        "equity_quote": lambda: api.get_equity_quote(sys.argv[2] if len(sys.argv) > 2 else ""),
+        "equity_quote": lambda: api.get_equity_quote(args[1] if len(args) + 1 > 2 else ""),
         "equity_historical": lambda: api.get_equity_historical(
-            sys.argv[2] if len(sys.argv) > 2 else "",
-            sys.argv[3] if len(sys.argv) > 3 else "1d",
-            sys.argv[4] if len(sys.argv) > 4 else None,
-            sys.argv[5] if len(sys.argv) > 5 else None
+            args[1] if len(args) + 1 > 2 else "",
+            args[2] if len(args) + 1 > 3 else "1d",
+            args[3] if len(args) + 1 > 4 else None,
+            args[4] if len(args) + 1 > 5 else None
         ),
         "equity_search": lambda: api.search_equities(
-            sys.argv[2] if len(sys.argv) > 2 else "",
-            sys.argv[3].lower() == "true" if len(sys.argv) > 3 else False
+            args[1] if len(args) + 1 > 2 else "",
+            args[2].lower() == "true" if len(args) + 1 > 3 else False
         ),
-        "index_constituents": lambda: api.get_index_constituents(sys.argv[2] if len(sys.argv) > 2 else ""),
+        "index_constituents": lambda: api.get_index_constituents(args[1] if len(args) + 1 > 2 else ""),
         "index_historical": lambda: api.get_index_historical(
-            sys.argv[2] if len(sys.argv) > 2 else "",
-            sys.argv[3] if len(sys.argv) > 3 else "1d",
-            sys.argv[4] if len(sys.argv) > 4 else None,
-            sys.argv[5] if len(sys.argv) > 5 else None
+            args[1] if len(args) + 1 > 2 else "",
+            args[2] if len(args) + 1 > 3 else "1d",
+            args[3] if len(args) + 1 > 4 else None,
+            args[4] if len(args) + 1 > 5 else None
         ),
         "index_search": lambda: api.search_indices(
-            sys.argv[2] if len(sys.argv) > 2 else "",
-            sys.argv[3].lower() == "true" if len(sys.argv) > 3 else False
+            args[1] if len(args) + 1 > 2 else "",
+            args[2].lower() == "true" if len(args) + 1 > 3 else False
         ),
-        "index_snapshots": lambda: api.get_index_snapshots(sys.argv[2] if len(sys.argv) > 2 else "us"),
+        "index_snapshots": lambda: api.get_index_snapshots(args[1] if len(args) + 1 > 2 else "us"),
         "futures_curve": lambda: api.get_futures_curve(
-            sys.argv[2] if len(sys.argv) > 2 else "VX_EOD",
-            sys.argv[3] if len(sys.argv) > 3 else None
+            args[1] if len(args) + 1 > 2 else "VX_EOD",
+            args[2] if len(args) + 1 > 3 else None
         ),
-        "options_chains": lambda: api.get_options_chains(sys.argv[2] if len(sys.argv) > 2 else ""),
+        "options_chains": lambda: api.get_options_chains(args[1] if len(args) + 1 > 2 else ""),
         "available_indices": lambda: api.get_available_indices()
     }
 

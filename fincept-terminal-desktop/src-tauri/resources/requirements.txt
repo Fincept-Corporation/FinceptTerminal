@@ -91,6 +91,12 @@ torch>=2.0.0
 scikit-learn>=1.3.0
 scipy>=1.10.0
 
+# EdgarTools - SEC EDGAR data library
+edgartools>=5.6.0
+
+# HDX - Humanitarian Data Exchange
+# hdx-python-api>=6.3.3  # Removed - using direct CKAN API instead (no dependencies required)
+
 # Optional RD-Agent dependencies (Azure, Kaggle)
 # Uncomment if needed:
 # azure-ai-formrecognizer
@@ -105,3 +111,4 @@ scipy>=1.10.0
 # randomname
 # st-theme
 # webdriver-manager
+financepy==1.0.1

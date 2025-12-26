@@ -457,41 +457,100 @@ def calculate_all_indicators(df: pd.DataFrame,
         return df
 
 
-# Example usage and testing
+def main(args):
+    """
+    Main entry point for PyO3 execution
+
+    Args:
+        args: List of arguments [command, ...additional_args]
+
+    Returns:
+        str: JSON formatted result
+    """
+    import json
+    import sys
+
+    if not args:
+        return json.dumps({"error": "No command provided"})
+
+    command = args[0]
+
+    # Example: Handle different commands
+    if command == "test":
+        # Run test with sample data
+        np.random.seed(42)
+        dates = pd.date_range(start='2023-01-01', end='2024-01-01', freq='D')
+
+        base_price = 100
+        returns = np.random.normal(0.001, 0.02, len(dates))
+        prices = [base_price]
+
+        for ret in returns[1:]:
+            prices.append(prices[-1] * (1 + ret))
+
+        sample_data = pd.DataFrame({
+            'date': dates,
+            'close': prices,
+            'high': [p * (1 + abs(np.random.normal(0, 0.01))) for p in prices],
+            'low': [p * (1 - abs(np.random.normal(0, 0.01))) for p in prices],
+            'volume': np.random.randint(1000, 10000, len(dates))
+        })
+
+        result = calculate_all_indicators(sample_data)
+
+        # Convert to JSON-serializable format
+        output = {
+            "success": True,
+            "data_points": len(result),
+            "indicators": [col for col in result.columns if col not in ['date', 'close', 'high', 'low', 'volume']],
+            "sample": result[result.columns[-5:]].tail(5).to_dict(orient='records')
+        }
+
+        return json.dumps(output)
+    else:
+        return json.dumps({"error": f"Unknown command: {command}"})
+
+
+# Example usage and testing (for subprocess backward compatibility)
 if __name__ == "__main__":
-    # Create sample data for testing
-    np.random.seed(42)
-    dates = pd.date_range(start='2023-01-01', end='2024-01-01', freq='D')
-    
-    # Generate realistic price data
-    base_price = 100
-    returns = np.random.normal(0.001, 0.02, len(dates))
-    prices = [base_price]
-    
-    for ret in returns[1:]:
-        prices.append(prices[-1] * (1 + ret))
-    
-    # Create OHLC data
-    sample_data = pd.DataFrame({
-        'date': dates,
-        'close': prices,
-        'high': [p * (1 + abs(np.random.normal(0, 0.01))) for p in prices],
-        'low': [p * (1 - abs(np.random.normal(0, 0.01))) for p in prices],
-        'volume': np.random.randint(1000, 10000, len(dates))
-    })
-    
-    # Calculate all indicators
-    result = calculate_all_indicators(sample_data)
-    
-    print("Technical Indicators Module Test Results:")
-    print("=" * 50)
-    print(f"Data points: {len(result)}")
-    print(f"Indicators calculated: {len([col for col in result.columns if col not in sample_data.columns])}")
-    print("\nIndicator columns added:")
-    for col in result.columns:
-        if col not in sample_data.columns:
-            print(f"  - {col}")
-    
-    print("\nSample of latest 5 indicator values:")
-    indicator_cols = [col for col in result.columns if col not in sample_data.columns]
-    print(result[indicator_cols].tail().round(2))
+    import sys
+    args = sys.argv[1:]
+
+    # If called with args, use main function
+    if args:
+        result = main(args)
+        print(result)
+    else:
+        # Original test code for direct execution
+        np.random.seed(42)
+        dates = pd.date_range(start='2023-01-01', end='2024-01-01', freq='D')
+
+        base_price = 100
+        returns = np.random.normal(0.001, 0.02, len(dates))
+        prices = [base_price]
+
+        for ret in returns[1:]:
+            prices.append(prices[-1] * (1 + ret))
+
+        sample_data = pd.DataFrame({
+            'date': dates,
+            'close': prices,
+            'high': [p * (1 + abs(np.random.normal(0, 0.01))) for p in prices],
+            'low': [p * (1 - abs(np.random.normal(0, 0.01))) for p in prices],
+            'volume': np.random.randint(1000, 10000, len(dates))
+        })
+
+        result = calculate_all_indicators(sample_data)
+
+        print("Technical Indicators Module Test Results:")
+        print("=" * 50)
+        print(f"Data points: {len(result)}")
+        print(f"Indicators calculated: {len([col for col in result.columns if col not in sample_data.columns])}")
+        print("\nIndicator columns added:")
+        for col in result.columns:
+            if col not in sample_data.columns:
+                print(f"  - {col}")
+
+        print("\nSample of latest 5 indicator values:")
+        indicator_cols = [col for col in result.columns if col not in sample_data.columns]
+        print(result[indicator_cols].tail().round(2))

@@ -1,4 +1,5 @@
-use crate::utils::python::{execute_python_command, get_script_path};
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 use tauri::AppHandle;
 
 /// Execute technical analysis Python script
@@ -47,8 +48,8 @@ pub async fn execute_technical_analysis_command(
         ));
     }
 
-    // Execute Python command
-    match execute_python_command(&app, script_name, &cmd_args) {
+    // Execute Python command with PyO3
+    match python_runtime::execute_python_script(&script_path, cmd_args) {
         Ok(output) => {
             // Check if output contains error JSON
             if output.contains("\"error\"") {
@@ -129,9 +130,9 @@ pub async fn compute_all_technicals(
         ));
     }
 
-    // Execute Python command with historical data as argument
-    let args = vec![historical_data];
-    match execute_python_command(&app, script_name, &args) {
+    // Execute Python command with historical data as argument with PyO3
+    let cmd_args = vec![historical_data];
+    match python_runtime::execute_python_script(&script_path, cmd_args) {
         Ok(output) => {
             // Check if output contains error JSON
             if output.contains("\"success\":false") || output.contains("\"error\"") {

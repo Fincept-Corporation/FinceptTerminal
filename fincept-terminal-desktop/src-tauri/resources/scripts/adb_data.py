@@ -551,10 +551,13 @@ def search_datasets(keyword: str) -> Dict[str, Any]:
 
 # --- CLI INTERFACE ---
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """Main CLI entry point for ADB KIDB Data Fetcher"""
 
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps({
             "error": "Usage: python adb_data.py <command> <args>",
             "available_commands": [
@@ -580,7 +583,7 @@ def main():
         }))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
 
     try:
         if command == "get_dataflows":
@@ -590,33 +593,33 @@ def main():
             result = get_all_codelists()
 
         elif command == "get_dataflow_details":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python adb_data.py get_dataflow_details <dataflow_code>"}))
                 sys.exit(1)
-            dataflow_code = sys.argv[2]
+            dataflow_code = args[1]
             result = get_dataflow_details(dataflow_code)
 
         elif command == "get_population":
-            economy = sys.argv[2] if len(sys.argv) > 2 else "all"
-            start_period = sys.argv[3] if len(sys.argv) > 3 else None
-            end_period = sys.argv[4] if len(sys.argv) > 4 else None
+            economy = args[1] if len(args) + 1 > 2 else "all"
+            start_period = args[2] if len(args) + 1 > 3 else None
+            end_period = args[3] if len(args) + 1 > 4 else None
             result = get_population_data(economy, start_period, end_period)
 
         elif command == "get_gdp":
-            economy = sys.argv[2] if len(sys.argv) > 2 else None
-            indicator = sys.argv[3] if len(sys.argv) > 3 else "NGDP_XDC"
-            start_period = sys.argv[4] if len(sys.argv) > 4 else None
-            end_period = sys.argv[5] if len(sys.argv) > 5 else None
+            economy = args[1] if len(args) + 1 > 2 else None
+            indicator = args[2] if len(args) + 1 > 3 else "NGDP_XDC"
+            start_period = args[3] if len(args) + 1 > 4 else None
+            end_period = args[4] if len(args) + 1 > 5 else None
             if not economy:
                 print(json.dumps({"error": "Economy code is required for GDP data"}))
                 sys.exit(1)
             result = get_gdp_data(economy, indicator, start_period, end_period)
 
         elif command == "get_multiple_indicators":
-            economy = sys.argv[2] if len(sys.argv) > 2 else None
-            indicators_str = sys.argv[3] if len(sys.argv) > 3 else None
-            start_period = sys.argv[4] if len(sys.argv) > 4 else None
-            end_period = sys.argv[5] if len(sys.argv) > 5 else None
+            economy = args[1] if len(args) + 1 > 2 else None
+            indicators_str = args[2] if len(args) + 1 > 3 else None
+            start_period = args[3] if len(args) + 1 > 4 else None
+            end_period = args[4] if len(args) + 1 > 5 else None
             if not economy or not indicators_str:
                 print(json.dumps({"error": "Economy code and indicators are required"}))
                 sys.exit(1)
@@ -624,10 +627,10 @@ def main():
             result = get_multiple_indicators(economy, indicators, start_period, end_period)
 
         elif command == "get_multiple_economies":
-            indicator = sys.argv[2] if len(sys.argv) > 2 else None
-            economies_str = sys.argv[3] if len(sys.argv) > 3 else None
-            start_period = sys.argv[4] if len(sys.argv) > 4 else None
-            end_period = sys.argv[5] if len(sys.argv) > 5 else None
+            indicator = args[1] if len(args) + 1 > 2 else None
+            economies_str = args[2] if len(args) + 1 > 3 else None
+            start_period = args[3] if len(args) + 1 > 4 else None
+            end_period = args[4] if len(args) + 1 > 5 else None
             if not indicator or not economies_str:
                 print(json.dumps({"error": "Indicator and economies are required"}))
                 sys.exit(1)
@@ -635,25 +638,25 @@ def main():
             result = get_multiple_economies_data(indicator, economies, start_period, end_period)
 
         elif command == "get_financial":
-            economy = sys.argv[2] if len(sys.argv) > 2 else None
-            start_period = sys.argv[3] if len(sys.argv) > 3 else None
-            end_period = sys.argv[4] if len(sys.argv) > 4 else None
+            economy = args[1] if len(args) + 1 > 2 else None
+            start_period = args[2] if len(args) + 1 > 3 else None
+            end_period = args[3] if len(args) + 1 > 4 else None
             if not economy:
                 print(json.dumps({"error": "Economy code is required for financial data"}))
                 sys.exit(1)
             result = get_financial_indicators(economy, start_period, end_period)
 
         elif command == "get_trade":
-            economy = sys.argv[2] if len(sys.argv) > 2 else None
-            start_period = sys.argv[3] if len(sys.argv) > 3 else None
-            end_period = sys.argv[4] if len(sys.argv) > 4 else None
+            economy = args[1] if len(args) + 1 > 2 else None
+            start_period = args[2] if len(args) + 1 > 3 else None
+            end_period = args[3] if len(args) + 1 > 4 else None
             if not economy:
                 print(json.dumps({"error": "Economy code is required for trade data"}))
                 sys.exit(1)
             result = get_trade_data(economy, start_period, end_period)
 
         elif command == "search":
-            keyword = sys.argv[2] if len(sys.argv) > 2 else None
+            keyword = args[1] if len(args) + 1 > 2 else None
             if not keyword:
                 print(json.dumps({"error": "Search keyword is required"}))
                 sys.exit(1)

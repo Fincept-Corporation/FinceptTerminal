@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { Settings, Trash2, Bot, User, Clock, Send, Plus, Search, Edit2, Check, X } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { llmApiService, ChatMessage as APIMessage } from '../../services/llmApi';
 import { sqliteService, ChatSession, ChatMessage, RecordedContext } from '../../services/sqliteService';
@@ -19,6 +20,7 @@ interface ChatTabProps {
 
 const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab }) => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
+  const { refreshUserProfile } = useAuth();
   const { t } = useTranslation('chat');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentSessionUuid, setCurrentSessionUuid] = useState<string | null>(null);
@@ -47,6 +49,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionsListRef = useRef<HTMLDivElement>(null);
   const streamedContentRef = useRef<string>(''); // Track accumulated streaming content
+  const retryTimeoutsRef = useRef<Set<NodeJS.Timeout>>(new Set()); // Track pending retry timeouts
 
   // Check if current provider supports MCP tools
   const providerSupportsMCP = () => {
@@ -110,7 +113,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       loadMCPToolsCount();
     }, 10000); // Check every 10 seconds
 
-    return () => clearInterval(mcpCheckInterval);
+    return () => {
+      clearInterval(mcpCheckInterval);
+      // Clear all pending retry timeouts on unmount
+      retryTimeoutsRef.current.forEach(clearTimeout);
+      retryTimeoutsRef.current.clear();
+    };
   }, []);
 
   // Auto-scroll to bottom
@@ -170,7 +178,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       // If we got 0 tools and haven't exceeded max retries, try again after a delay
       if (tools.length === 0 && retryCount < maxRetries) {
         const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff, max 10s
-        setTimeout(() => loadMCPToolsCount(retryCount + 1, maxRetries), delay);
+        const timeoutId = setTimeout(() => {
+          retryTimeoutsRef.current.delete(timeoutId);
+          loadMCPToolsCount(retryCount + 1, maxRetries);
+        }, delay);
+        retryTimeoutsRef.current.add(timeoutId);
       }
     } catch (error) {
       setMcpToolsCount(0);
@@ -181,7 +193,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
     try {
       setSystemStatus('STATUS: LOADING MESSAGES...');
       const loadedMessages = await sqliteService.getChatMessages(sessionUuid);
-      setMessages(loadedMessages);
+      // Limit messages in memory to last 200 to prevent memory issues
+      setMessages(loadedMessages.slice(-200));
       setSystemStatus('STATUS: READY');
     } catch (error) {
       console.error('Failed to load messages:', error);
@@ -475,6 +488,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       // Reload sessions and statistics
       await loadSessions();
       await loadStatistics();
+
+      // Refresh user profile to update credits in realtime
+      await refreshUserProfile();
 
     } catch (error) {
       console.error('Chat error:', error);

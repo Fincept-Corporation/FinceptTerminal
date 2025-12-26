@@ -96,14 +96,14 @@ Analyze this through Marshall's framework, connecting to geographic determinism.
         return "\n".join(formatted)
 
 
-def main():
+def main(argv=None):
     """CLI entry point for testing"""
     import argparse
 
     parser = argparse.ArgumentParser(description="Russia Geography Agent")
     parser.add_argument("--query", required=True, help="Query to analyze")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     agent = RussiaGeographyAgent()
     result = agent.analyze(args.query)

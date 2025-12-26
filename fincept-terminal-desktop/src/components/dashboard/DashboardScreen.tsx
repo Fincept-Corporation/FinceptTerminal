@@ -12,39 +12,77 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
+// Eagerly loaded tabs (needed immediately)
 import ForumTab from '@/components/tabs/ForumTab';
 import DashboardTab from '@/components/tabs/DashboardTab';
 import MarketsTab from '@/components/tabs/MarketsTab';
 import NewsTab from '@/components/tabs/NewsTab';
 import WatchlistTab from '@/components/tabs/WatchlistTab';
-import GeopoliticsTab from '@/components/tabs/GeopoliticsTab';
 import ChatTab from '@/components/tabs/ChatTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
 import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 import PortfolioTab from '@/components/tabs/portfolio-tab/PortfolioTab';
-import EquityResearchTab from '@/components/tabs/EquityResearchTab';
-import ScreenerTab from '@/components/tabs/ScreenerTab';
-import DBnomicsTab from '@/components/tabs/DBnomicsTab';
-import EconomicsTab from '@/components/tabs/EconomicsTab';
-import CodeEditorTab from '@/components/tabs/CodeEditorTab';
-import DocsTab from '@/components/tabs/DocsTab';
-import MaritimeTab from '@/components/tabs/MaritimeTab';
+import DocsTab from '@/components/tabs/docs/DocsTab';
 import SettingsTab from '@/components/tabs/SettingsTab';
-import NodeEditorTab from '@/components/tabs/NodeEditorTab';
 import DataSourcesTab from '@/components/tabs/data-sources/DataSourcesTab';
-import DataMappingTab from '@/components/tabs/data-mapping/DataMappingTab';
 import MCPTab from '@/components/tabs/mcp';
 import FyersTab from '@/components/tabs/fyers';
 import SupportTicketTab from '@/components/tabs/SupportTicketTab';
-import PolygonEqTab from '@/components/tabs/PolygonEqTab';
-import { TradingTab } from '@/components/tabs/TradingTab';
-import ReportBuilderTab from '@/components/tabs/ReportBuilderTab';
-import BacktestingTab from '@/components/tabs/BacktestingTabNew';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import AgentConfigTab from '@/components/tabs/AgentConfigTab';
-import AIQuantLabTab from '@/components/tabs/ai-quant-lab/AIQuantLabTab';
-import ExcelTab from '@/components/tabs/ExcelTab';
 import { useTranslation } from 'react-i18next';
+
+// Lazy loaded tabs (heavy/Python-dependent)
+const EquityResearchTab = React.lazy(() => import('@/components/tabs/EquityResearchTab'));
+const ScreenerTab = React.lazy(() => import('@/components/tabs/ScreenerTab'));
+const BacktestingTab = React.lazy(() => import('@/components/tabs/BacktestingTabNew'));
+const GeopoliticsTab = React.lazy(() => import('@/components/tabs/GeopoliticsTab'));
+const AIQuantLabTab = React.lazy(() => import('@/components/tabs/ai-quant-lab/AIQuantLabTab'));
+const CodeEditorTab = React.lazy(() => import('@/components/tabs/CodeEditorTab'));
+const NodeEditorTab = React.lazy(() => import('@/components/tabs/NodeEditorTab'));
+const PolygonEqTab = React.lazy(() => import('@/components/tabs/PolygonEqTab'));
+const DerivativesTab = React.lazy(() => import('@/components/tabs/DerivativesTab').then(m => ({ default: m.DerivativesTab })));
+const TradingTab = React.lazy(() => import('@/components/tabs/TradingTab').then(m => ({ default: m.TradingTab })));
+const DBnomicsTab = React.lazy(() => import('@/components/tabs/DBnomicsTab'));
+const EconomicsTab = React.lazy(() => import('@/components/tabs/EconomicsTab'));
+const MaritimeTab = React.lazy(() => import('@/components/tabs/MaritimeTab'));
+const ReportBuilderTab = React.lazy(() => import('@/components/tabs/ReportBuilderTab'));
+const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping/DataMappingTab'));
+const ExcelTab = React.lazy(() => import('@/components/tabs/ExcelTab'));
+
+// Loading fallback component for lazy-loaded tabs
+const TabLoadingFallback = () => (
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    backgroundColor: '#000000',
+    color: '#a3a3a3',
+    fontSize: '12px',
+    fontFamily: 'Consolas, "Courier New", monospace'
+  }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{
+        width: '40px',
+        height: '40px',
+        border: '3px solid #333',
+        borderTop: '3px solid #ea580c',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite',
+        margin: '0 auto 16px'
+      }} />
+      <div>Loading tab...</div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  </div>
+);
 
 // Dropdown Menu Component
 const DropdownMenu = ({ label, items, onItemClick }: { label: string; items: any[]; onItemClick: (item: any) => void }) => {
@@ -519,6 +557,7 @@ function FinxeptTerminalContent() {
 
   const tradingMenuItems = [
     { label: 'Trading Desk', shortcut: 'F9', action: () => setActiveTab('trading') },
+    { label: 'Derivatives Pricing', action: () => setActiveTab('derivatives') },
     { label: 'Fyers Broker', action: () => setActiveTab('fyers') },
     { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
     { label: 'Backtesting', shortcut: 'F5', action: () => setActiveTab('backtesting') },
@@ -968,7 +1007,9 @@ function FinxeptTerminalContent() {
               <WatchlistTab />
             </TabsContent>
             <TabsContent value="geopolitics" className="h-full m-0 p-0">
-              <GeopoliticsTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <GeopoliticsTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="chat" className="h-full m-0 p-0">
               <ChatTab
@@ -992,40 +1033,65 @@ function FinxeptTerminalContent() {
               <PortfolioTab />
             </TabsContent>
             <TabsContent value="backtesting" className="h-full m-0 p-0">
-              <BacktestingTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <BacktestingTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="research" className="h-full m-0 p-0">
-              <EquityResearchTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <EquityResearchTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="polygon" className="h-full m-0 p-0">
-              <PolygonEqTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <PolygonEqTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="screener" className="h-full m-0 p-0">
-              <ScreenerTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <ScreenerTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="dbnomics" className="h-full m-0 p-0">
-              <DBnomicsTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <DBnomicsTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="economics" className="h-full m-0 p-0">
-              <EconomicsTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <EconomicsTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="code" className="h-full m-0 p-0">
-              <CodeEditorTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <CodeEditorTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="docs" className="h-full m-0 p-0">
               <DocsTab />
             </TabsContent>
             <TabsContent value="maritime" className="h-full m-0 p-0">
-              <MaritimeTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <MaritimeTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="trading" className="h-full m-0 p-0">
-              <TradingTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <TradingTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="derivatives" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <DerivativesTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="settings" className="h-full m-0 p-0">
               <SettingsTab />
             </TabsContent>
             <TabsContent value="nodes" className="h-full m-0 p-0">
-              <NodeEditorTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <NodeEditorTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="datasources" className="h-full m-0 p-0">
               <DataSourcesTab />
@@ -1034,22 +1100,30 @@ function FinxeptTerminalContent() {
               <SupportTicketTab />
             </TabsContent>
             <TabsContent value="datamapping" className="h-full m-0 p-0">
-              <DataMappingTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <DataMappingTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="contexts" className="h-full m-0 p-0">
               <RecordedContextsManager />
             </TabsContent>
             <TabsContent value="reportbuilder" className="h-full m-0 p-0">
-              <ReportBuilderTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <ReportBuilderTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="agents" className="h-full m-0 p-0">
               <AgentConfigTab />
             </TabsContent>
             <TabsContent value="ai-quant-lab" className="h-full m-0 p-0">
-              <AIQuantLabTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <AIQuantLabTab />
+              </React.Suspense>
             </TabsContent>
             <TabsContent value="excel" className="h-full m-0 p-0">
-              <ExcelTab />
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <ExcelTab />
+              </React.Suspense>
             </TabsContent>
           </Tabs>
         )}

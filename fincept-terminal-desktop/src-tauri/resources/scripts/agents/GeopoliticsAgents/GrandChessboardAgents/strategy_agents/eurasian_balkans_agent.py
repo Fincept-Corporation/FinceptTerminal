@@ -93,14 +93,14 @@ Analyze through Eurasian Balkans strategic framework.
         return "\n".join(formatted)
 
 
-def main():
+def main(argv=None):
     """CLI entry point for testing"""
     import argparse
 
     parser = argparse.ArgumentParser(description="Eurasian Balkans Agent")
     parser.add_argument("--query", required=True, help="Query to analyze")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     agent = EurasianBalkansAgent()
     result = agent.analyze(args.query)

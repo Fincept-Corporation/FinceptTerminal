@@ -43,11 +43,17 @@ class LLMExecutor:
                 return self._execute_google(model, system_prompt, query, temperature, max_tokens)
             elif provider == "ollama":
                 return self._execute_ollama(model, system_prompt, query, temperature, max_tokens)
+            elif provider == "fincept":
+                return self._execute_fincept(model, system_prompt, query, temperature, max_tokens)
+            elif provider == "openrouter":
+                return self._execute_openrouter(model, system_prompt, query, temperature, max_tokens)
+            elif provider == "deepseek":
+                return self._execute_deepseek(model, system_prompt, query, temperature, max_tokens)
+            elif provider == "groq":
+                return self._execute_groq(model, system_prompt, query, temperature, max_tokens)
             else:
-                return {
-                    "success": False,
-                    "error": f"Unsupported provider: {provider}"
-                }
+                # Generic OpenAI-compatible API fallback
+                return self._execute_generic_openai_compatible(provider, model, system_prompt, query, temperature, max_tokens)
         except Exception as e:
             return {
                 "success": False,
@@ -264,4 +270,251 @@ class LLMExecutor:
             return {
                 "success": False,
                 "error": f"Ollama error: {str(e)}"
+            }
+
+    def _execute_fincept(self, model: str, system_prompt: str, query: str,
+                        temperature: float, max_tokens: int) -> Dict:
+        """Execute with Fincept LLM API"""
+        try:
+            import requests
+        except ImportError:
+            return {"success": False, "error": "requests package not installed"}
+
+        api_key = self.api_keys.get("FINCEPT_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "FINCEPT_API_KEY not configured in Settings"}
+
+        fincept_url = "https://finceptbackend.share.zrok.io/research/llm"
+
+        try:
+            # Combine system prompt and query into single prompt
+            full_prompt = f"{system_prompt}\n\nUser Query: {query}"
+
+            payload = {
+                "prompt": full_prompt,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            }
+
+            headers = {
+                "X-API-Key": api_key,
+                "Content-Type": "application/json"
+            }
+
+            response = requests.post(fincept_url, json=payload, headers=headers, timeout=60)
+            response.raise_for_status()
+
+            result = response.json()
+
+            # Fincept API returns nested response: {"success": true, "data": {"response": "...", ...}}
+            if result.get("success") and result.get("data"):
+                data = result.get("data", {})
+                llm_response = data.get("response", "")
+                tokens = data.get("usage", {}).get("total_tokens", 0) if isinstance(data.get("usage"), dict) else 0
+
+                return {
+                    "success": True,
+                    "response": llm_response,
+                    "provider": "fincept",
+                    "model": data.get("model", model),
+                    "tokens_used": tokens,
+                    "finish_reason": "complete"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.get("message", "Fincept API returned unexpected format")
+                }
+        except requests.exceptions.ConnectionError:
+            return {
+                "success": False,
+                "error": "Cannot connect to Fincept API. Check internet connection."
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Fincept API error: {str(e)}"
+            }
+
+    def _execute_openrouter(self, model: str, system_prompt: str, query: str,
+                           temperature: float, max_tokens: int) -> Dict:
+        """Execute with OpenRouter API (OpenAI-compatible)"""
+        try:
+            from openai import OpenAI
+        except ImportError:
+            return {"success": False, "error": "openai package not installed"}
+
+        api_key = self.api_keys.get("OPENROUTER_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "OPENROUTER_API_KEY not configured in Settings"}
+
+        try:
+            client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key
+            )
+
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": query}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+
+            return {
+                "success": True,
+                "response": response.choices[0].message.content,
+                "provider": "openrouter",
+                "model": model,
+                "tokens_used": response.usage.total_tokens if response.usage else 0,
+                "finish_reason": response.choices[0].finish_reason
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"OpenRouter API error: {str(e)}"
+            }
+
+    def _execute_deepseek(self, model: str, system_prompt: str, query: str,
+                         temperature: float, max_tokens: int) -> Dict:
+        """Execute with DeepSeek API (OpenAI-compatible)"""
+        try:
+            from openai import OpenAI
+        except ImportError:
+            return {"success": False, "error": "openai package not installed"}
+
+        api_key = self.api_keys.get("DEEPSEEK_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "DEEPSEEK_API_KEY not configured in Settings"}
+
+        try:
+            client = OpenAI(
+                base_url="https://api.deepseek.com",
+                api_key=api_key
+            )
+
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": query}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+
+            return {
+                "success": True,
+                "response": response.choices[0].message.content,
+                "provider": "deepseek",
+                "model": model,
+                "tokens_used": response.usage.total_tokens if response.usage else 0,
+                "finish_reason": response.choices[0].finish_reason
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"DeepSeek API error: {str(e)}"
+            }
+
+    def _execute_groq(self, model: str, system_prompt: str, query: str,
+                     temperature: float, max_tokens: int) -> Dict:
+        """Execute with Groq API (OpenAI-compatible)"""
+        try:
+            from openai import OpenAI
+        except ImportError:
+            return {"success": False, "error": "openai package not installed"}
+
+        api_key = self.api_keys.get("GROQ_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "GROQ_API_KEY not configured in Settings"}
+
+        try:
+            client = OpenAI(
+                base_url="https://api.groq.com/openai/v1",
+                api_key=api_key
+            )
+
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": query}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+
+            return {
+                "success": True,
+                "response": response.choices[0].message.content,
+                "provider": "groq",
+                "model": model,
+                "tokens_used": response.usage.total_tokens if response.usage else 0,
+                "finish_reason": response.choices[0].finish_reason
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Groq API error: {str(e)}"
+            }
+
+    def _execute_generic_openai_compatible(self, provider: str, model: str, system_prompt: str,
+                                          query: str, temperature: float, max_tokens: int) -> Dict:
+        """Execute with any OpenAI-compatible API using base_url from settings"""
+        try:
+            from openai import OpenAI
+        except ImportError:
+            return {"success": False, "error": "openai package not installed"}
+
+        api_key_name = f"{provider.upper()}_API_KEY"
+        api_key = self.api_keys.get(api_key_name)
+
+        if not api_key:
+            return {
+                "success": False,
+                "error": f"{api_key_name} not configured in Settings. Add API key or change provider."
+            }
+
+        # Try to get base_url from environment or use provider as base URL hint
+        base_url_key = f"{provider.upper()}_BASE_URL"
+        base_url = self.api_keys.get(base_url_key)
+
+        if not base_url:
+            return {
+                "success": False,
+                "error": f"Provider '{provider}' requires BASE_URL. Configure {base_url_key} in Settings or use a supported provider."
+            }
+
+        try:
+            client = OpenAI(
+                base_url=base_url,
+                api_key=api_key
+            )
+
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": query}
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+
+            return {
+                "success": True,
+                "response": response.choices[0].message.content,
+                "provider": provider,
+                "model": model,
+                "tokens_used": response.usage.total_tokens if response.usage else 0,
+                "finish_reason": response.choices[0].finish_reason
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"{provider} API error: {str(e)}"
             }

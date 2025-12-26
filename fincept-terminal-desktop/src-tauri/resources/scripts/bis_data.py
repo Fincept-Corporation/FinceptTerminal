@@ -911,7 +911,7 @@ class BISAPI:
 # CLI Interface
 async def main():
     """CLI interface for BIS API"""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps({
             "error": "Usage: python bis_data.py <command> [args...]",
             "available_commands": [
@@ -932,18 +932,18 @@ async def main():
         }))
         return
 
-    command = sys.argv[1]
+    command = args[0]
 
     async with BISAPI() as bis:
         try:
             if command == "get_data":
-                if len(sys.argv) < 3:
+                if len(args) + 1 < 3:
                     raise ValueError("Usage: get_data <flow> [key] [start_period] [end_period]")
 
-                flow = sys.argv[2]
-                key = sys.argv[3] if len(sys.argv) > 3 else "all"
-                start_period = sys.argv[4] if len(sys.argv) > 4 else None
-                end_period = sys.argv[5] if len(sys.argv) > 5 else None
+                flow = args[1]
+                key = args[2] if len(args) + 1 > 3 else "all"
+                start_period = args[3] if len(args) + 1 > 4 else None
+                end_period = args[4] if len(args) + 1 > 5 else None
 
                 result = await bis.get_data(flow, key, start_period, end_period)
 
@@ -1099,16 +1099,16 @@ async def main():
                 result = await bis.get_available_datasets()
 
             elif command == "get_data_structures":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
 
                 result = await bis.get_data_structures(agency_id, resource_id, version)
 
             elif command == "search_datasets":
-                if len(sys.argv) < 3:
+                if len(args) + 1 < 3:
                     raise ValueError("Usage: search_datasets <query>")
-                query = sys.argv[2]
+                query = args[1]
                 result = await bis.search_datasets(query)
 
             elif command == "get_economic_overview":
@@ -1131,151 +1131,151 @@ async def main():
                 )
 
             elif command == "get_dataset_metadata":
-                if len(sys.argv) < 3:
+                if len(args) + 1 < 3:
                     raise ValueError("Usage: get_dataset_metadata <flow>")
-                flow = sys.argv[2]
+                flow = args[1]
                 result = await bis.get_dataset_metadata(flow)
 
             elif command == "get_available_constraints":
-                if len(sys.argv) < 5:
+                if len(args) + 1 < 5:
                     raise ValueError("Usage: get_available_constraints <flow> <key> <component_id> [mode] [references]")
-                flow = sys.argv[2]
-                key = sys.argv[3]
-                component_id = sys.argv[4]
-                mode = sys.argv[5] if len(sys.argv) > 5 else "exact"
-                references = sys.argv[6] if len(sys.argv) > 6 else "none"
+                flow = args[1]
+                key = args[2]
+                component_id = args[3]
+                mode = args[4] if len(args) + 1 > 5 else "exact"
+                references = sys.argv[6] if len(args) + 1 > 6 else "none"
                 result = await bis.get_available_constraints(flow, key, component_id, mode, references)
 
             elif command == "get_dataflows":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_dataflows(agency_id, resource_id, version, references, detail)
 
             elif command == "get_categorisations":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_categorisations(agency_id, resource_id, version, references, detail)
 
             elif command == "get_content_constraints":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_content_constraints(agency_id, resource_id, version, references, detail)
 
             elif command == "get_actual_constraints":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_actual_constraints(agency_id, resource_id, version, references, detail)
 
             elif command == "get_allowed_constraints":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_allowed_constraints(agency_id, resource_id, version, references, detail)
 
             elif command == "get_structures":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_structures(agency_id, resource_id, version, references, detail)
 
             elif command == "get_concept_schemes":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_concept_schemes(agency_id, resource_id, version, references, detail)
 
             elif command == "get_codelists":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_codelists(agency_id, resource_id, version, references, detail)
 
             elif command == "get_category_schemes":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_category_schemes(agency_id, resource_id, version, references, detail)
 
             elif command == "get_hierarchical_codelists":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_hierarchical_codelists(agency_id, resource_id, version, references, detail)
 
             elif command == "get_agency_schemes":
-                agency_id = sys.argv[2] if len(sys.argv) > 2 else "all"
-                resource_id = sys.argv[3] if len(sys.argv) > 3 else "all"
-                version = sys.argv[4] if len(sys.argv) > 4 else "all"
-                references = sys.argv[5] if len(sys.argv) > 5 else "none"
-                detail = sys.argv[6] if len(sys.argv) > 6 else "full"
+                agency_id = args[1] if len(args) + 1 > 2 else "all"
+                resource_id = args[2] if len(args) + 1 > 3 else "all"
+                version = args[3] if len(args) + 1 > 4 else "all"
+                references = args[4] if len(args) + 1 > 5 else "none"
+                detail = sys.argv[6] if len(args) + 1 > 6 else "full"
                 result = await bis.get_agency_schemes(agency_id, resource_id, version, references, detail)
 
             elif command == "get_concepts":
-                if len(sys.argv) < 4:
+                if len(args) + 1 < 4:
                     raise ValueError("Usage: get_concepts <agency_id> <resource_id> <version> [item_id] [references] [detail]")
-                agency_id = sys.argv[2]
-                resource_id = sys.argv[3]
-                version = sys.argv[4]
-                item_id = sys.argv[5] if len(sys.argv) > 5 else "all"
-                references = sys.argv[6] if len(sys.argv) > 6 else "none"
-                detail = sys.argv[7] if len(sys.argv) > 7 else "full"
+                agency_id = args[1]
+                resource_id = args[2]
+                version = args[3]
+                item_id = args[4] if len(args) + 1 > 5 else "all"
+                references = sys.argv[6] if len(args) + 1 > 6 else "none"
+                detail = sys.argv[7] if len(args) + 1 > 7 else "full"
                 result = await bis.get_concepts(agency_id, resource_id, version, item_id, references, detail)
 
             elif command == "get_codes":
-                if len(sys.argv) < 4:
+                if len(args) + 1 < 4:
                     raise ValueError("Usage: get_codes <agency_id> <resource_id> <version> [item_id] [references] [detail]")
-                agency_id = sys.argv[2]
-                resource_id = sys.argv[3]
-                version = sys.argv[4]
-                item_id = sys.argv[5] if len(sys.argv) > 5 else "all"
-                references = sys.argv[6] if len(sys.argv) > 6 else "none"
-                detail = sys.argv[7] if len(sys.argv) > 7 else "full"
+                agency_id = args[1]
+                resource_id = args[2]
+                version = args[3]
+                item_id = args[4] if len(args) + 1 > 5 else "all"
+                references = sys.argv[6] if len(args) + 1 > 6 else "none"
+                detail = sys.argv[7] if len(args) + 1 > 7 else "full"
                 result = await bis.get_codes(agency_id, resource_id, version, item_id, references, detail)
 
             elif command == "get_categories":
-                if len(sys.argv) < 4:
+                if len(args) + 1 < 4:
                     raise ValueError("Usage: get_categories <agency_id> <resource_id> <version> [item_id] [references] [detail]")
-                agency_id = sys.argv[2]
-                resource_id = sys.argv[3]
-                version = sys.argv[4]
-                item_id = sys.argv[5] if len(sys.argv) > 5 else "all"
-                references = sys.argv[6] if len(sys.argv) > 6 else "none"
-                detail = sys.argv[7] if len(sys.argv) > 7 else "full"
+                agency_id = args[1]
+                resource_id = args[2]
+                version = args[3]
+                item_id = args[4] if len(args) + 1 > 5 else "all"
+                references = sys.argv[6] if len(args) + 1 > 6 else "none"
+                detail = sys.argv[7] if len(args) + 1 > 7 else "full"
                 result = await bis.get_categories(agency_id, resource_id, version, item_id, references, detail)
 
             elif command == "get_hierarchies":
-                if len(sys.argv) < 4:
+                if len(args) + 1 < 4:
                     raise ValueError("Usage: get_hierarchies <agency_id> <resource_id> <version> [item_id] [references] [detail]")
-                agency_id = sys.argv[2]
-                resource_id = sys.argv[3]
-                version = sys.argv[4]
-                item_id = sys.argv[5] if len(sys.argv) > 5 else "all"
-                references = sys.argv[6] if len(sys.argv) > 6 else "none"
-                detail = sys.argv[7] if len(sys.argv) > 7 else "full"
+                agency_id = args[1]
+                resource_id = args[2]
+                version = args[3]
+                item_id = args[4] if len(args) + 1 > 5 else "all"
+                references = sys.argv[6] if len(args) + 1 > 6 else "none"
+                detail = sys.argv[7] if len(args) + 1 > 7 else "full"
                 result = await bis.get_hierarchies(agency_id, resource_id, version, item_id, references, detail)
 
             else:

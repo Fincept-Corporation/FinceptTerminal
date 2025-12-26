@@ -104,7 +104,7 @@ Examples:
         parser = self.create_parser()
 
         if args is None:
-            args = parser.parse_args()
+            args = parser.parse_args(argv)
         else:
             args = parser.parse_args(args)
 
@@ -578,7 +578,7 @@ Recommendations:
         return "\n".join(recommendations_text)
 
 
-def main():
+def main(argv=None):
     """Main entry point for CLI"""
     cli = EconomicCLI()
     cli.run()

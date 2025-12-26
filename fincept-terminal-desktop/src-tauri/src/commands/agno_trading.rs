@@ -1,7 +1,8 @@
 // Agno Trading Agent Commands
 // Provides Rust/Tauri interface to Python-based Agno trading agents
 
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 
 /// List available LLM models
 #[tauri::command]
@@ -15,7 +16,8 @@ pub async fn agno_list_models(
         args.push(p);
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Recommend best model for a task
@@ -40,7 +42,8 @@ pub async fn agno_recommend_model(
         args.push("false".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Validate Agno configuration
@@ -50,7 +53,8 @@ pub async fn agno_validate_config(
     config_json: String,
 ) -> Result<String, String> {
     let args = vec!["validate_config".to_string(), config_json];
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Create a new trading agent
@@ -60,7 +64,8 @@ pub async fn agno_create_agent(
     agent_config_json: String,
 ) -> Result<String, String> {
     let args = vec!["create_agent".to_string(), agent_config_json];
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Run an agent with a prompt
@@ -77,7 +82,8 @@ pub async fn agno_run_agent(
         args.push(sid);
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Analyze market for a given symbol
@@ -110,7 +116,8 @@ pub async fn agno_analyze_market(
         args.push("{}".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Generate trading signal
@@ -150,7 +157,8 @@ pub async fn agno_generate_trade_signal(
         args.push("{}".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Run risk management analysis
@@ -183,7 +191,8 @@ pub async fn agno_manage_risk(
         args.push("{}".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get configuration template
@@ -200,7 +209,8 @@ pub async fn agno_get_config_template(
         args.push("default".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Create multi-model competition
@@ -227,7 +237,8 @@ pub async fn agno_create_competition(
         args.push("{}".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Run multi-model competition
@@ -254,7 +265,8 @@ pub async fn agno_run_competition(
         args.push("{}".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get model performance leaderboard
@@ -263,7 +275,8 @@ pub async fn agno_get_leaderboard(
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     let args = vec!["get_leaderboard".to_string()];
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get recent model decisions
@@ -280,7 +293,8 @@ pub async fn agno_get_recent_decisions(
         args.push("50".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // ============================================================================
@@ -311,7 +325,8 @@ pub async fn agno_execute_trade(
         args.push("{}".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Close an open position
@@ -334,7 +349,8 @@ pub async fn agno_close_position(
         args.push("manual".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get trade history for an agent
@@ -357,7 +373,8 @@ pub async fn agno_get_agent_trades(
         args.push(s);
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get performance metrics for an agent
@@ -367,7 +384,8 @@ pub async fn agno_get_agent_performance(
     agent_id: String,
 ) -> Result<String, String> {
     let args = vec!["get_agent_performance".to_string(), agent_id];
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get leaderboard from database
@@ -384,7 +402,8 @@ pub async fn agno_get_db_leaderboard(
         args.push("20".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get recent decisions from database
@@ -406,7 +425,8 @@ pub async fn agno_get_db_decisions(
         args.push(id);
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Run a Bull/Bear/Analyst debate
@@ -435,7 +455,8 @@ pub async fn agno_run_debate(
         args.push("{}".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get recent debate sessions
@@ -452,7 +473,8 @@ pub async fn agno_get_recent_debates(
         args.push("10".to_string());
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Evolve an agent based on performance
@@ -477,7 +499,8 @@ pub async fn agno_evolve_agent(
         args.push(n);
     }
 
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Check if agent should evolve
@@ -487,7 +510,8 @@ pub async fn agno_check_evolution(
     agent_id: String,
 ) -> Result<String, String> {
     let args = vec!["check_evolution".to_string(), agent_id];
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Get evolution summary for an agent
@@ -497,5 +521,6 @@ pub async fn agno_get_evolution_summary(
     agent_id: String,
 ) -> Result<String, String> {
     let args = vec!["get_evolution_summary".to_string(), agent_id];
-    execute_python_command(&app, "agno_trading_service.py", &args)
+    let script_path = get_script_path(&app, "agno_trading_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }

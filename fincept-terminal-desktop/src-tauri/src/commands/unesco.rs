@@ -1,9 +1,11 @@
+use crate::utils::python::execute_python_script_simple;
 use tauri::command;
 
 // ==================== DATA ENDPOINTS ====================
 
 #[command]
 pub async fn unesco_get_indicator_data(
+    app: tauri::AppHandle,
     indicators: Option<Vec<String>>,
     geo_units: Option<Vec<String>>,
     geo_unit_type: Option<String>,
@@ -13,68 +15,70 @@ pub async fn unesco_get_indicator_data(
     indicator_metadata: Option<bool>,
     version: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("indicator_data");
+    let mut args = vec!["indicator_data"];
 
+    let indicator_strs: Vec<String>;
     if let Some(indicators) = indicators {
-        for indicator in indicators {
-            cmd.arg(&indicator);
+        indicator_strs = indicators;
+        for indicator in &indicator_strs {
+            args.push(indicator.as_str());
         }
     }
 
+    let geo_unit_strs: Vec<String>;
     if let Some(geo_units) = geo_units {
-        for geo_unit in geo_units {
-            cmd.arg(&geo_unit);
+        geo_unit_strs = geo_units;
+        for geo_unit in &geo_unit_strs {
+            args.push(geo_unit.as_str());
         }
     }
 
-    if let Some(geo_unit_type) = geo_unit_type {
-        cmd.arg("--geo-unit-type");
-        cmd.arg(&geo_unit_type);
+    let geo_unit_type_str;
+    if let Some(gut) = geo_unit_type {
+        geo_unit_type_str = gut;
+        args.push("--geo-unit-type");
+        args.push(&geo_unit_type_str);
     }
 
-    if let Some(start_year) = start_year {
-        cmd.arg("--start-year");
-        cmd.arg(start_year.to_string());
+    let start_year_str;
+    if let Some(sy) = start_year {
+        start_year_str = sy.to_string();
+        args.push("--start-year");
+        args.push(&start_year_str);
     }
 
-    if let Some(end_year) = end_year {
-        cmd.arg("--end-year");
-        cmd.arg(end_year.to_string());
+    let end_year_str;
+    if let Some(ey) = end_year {
+        end_year_str = ey.to_string();
+        args.push("--end-year");
+        args.push(&end_year_str);
     }
 
     if let Some(footnotes) = footnotes {
         if footnotes {
-            cmd.arg("--footnotes");
+            args.push("--footnotes");
         }
     }
 
     if let Some(indicator_metadata) = indicator_metadata {
         if indicator_metadata {
-            cmd.arg("--metadata");
+            args.push("--metadata");
         }
     }
 
-    if let Some(version) = version {
-        cmd.arg("--version");
-        cmd.arg(&version);
+    let version_str;
+    if let Some(v) = version {
+        version_str = v;
+        args.push("--version");
+        args.push(&version_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_export_indicator_data(
+    app: tauri::AppHandle,
     format_type: String,
     indicators: Option<Vec<String>>,
     geo_units: Option<Vec<String>>,
@@ -85,512 +89,403 @@ pub async fn unesco_export_indicator_data(
     indicator_metadata: Option<bool>,
     version: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("export_indicator_data")
-        .arg(&format_type);
+    let mut args = vec!["export_indicator_data", &format_type];
 
+    let indicator_strs: Vec<String>;
     if let Some(indicators) = indicators {
-        for indicator in indicators {
-            cmd.arg(&indicator);
+        indicator_strs = indicators;
+        for indicator in &indicator_strs {
+            args.push(indicator.as_str());
         }
     }
 
+    let geo_unit_strs: Vec<String>;
     if let Some(geo_units) = geo_units {
-        for geo_unit in geo_units {
-            cmd.arg(&geo_unit);
+        geo_unit_strs = geo_units;
+        for geo_unit in &geo_unit_strs {
+            args.push(geo_unit.as_str());
         }
     }
 
-    if let Some(geo_unit_type) = geo_unit_type {
-        cmd.arg("--geo-unit-type");
-        cmd.arg(&geo_unit_type);
+    let geo_unit_type_str;
+    if let Some(gut) = geo_unit_type {
+        geo_unit_type_str = gut;
+        args.push("--geo-unit-type");
+        args.push(&geo_unit_type_str);
     }
 
-    if let Some(start_year) = start_year {
-        cmd.arg("--start-year");
-        cmd.arg(start_year.to_string());
+    let start_year_str;
+    if let Some(sy) = start_year {
+        start_year_str = sy.to_string();
+        args.push("--start-year");
+        args.push(&start_year_str);
     }
 
-    if let Some(end_year) = end_year {
-        cmd.arg("--end-year");
-        cmd.arg(end_year.to_string());
+    let end_year_str;
+    if let Some(ey) = end_year {
+        end_year_str = ey.to_string();
+        args.push("--end-year");
+        args.push(&end_year_str);
     }
 
     if let Some(footnotes) = footnotes {
         if footnotes {
-            cmd.arg("--footnotes");
+            args.push("--footnotes");
         }
     }
 
     if let Some(indicator_metadata) = indicator_metadata {
         if indicator_metadata {
-            cmd.arg("--metadata");
+            args.push("--metadata");
         }
     }
 
-    if let Some(version) = version {
-        cmd.arg("--version");
-        cmd.arg(&version);
+    let version_str;
+    if let Some(v) = version {
+        version_str = v;
+        args.push("--version");
+        args.push(&version_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 // ==================== DEFINITIONS ENDPOINTS ====================
 
 #[command]
-pub async fn unesco_list_geo_units(version: Option<String>) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("list_geo_units");
+pub async fn unesco_list_geo_units(app: tauri::AppHandle, version: Option<String>) -> Result<String, String> {
+    let mut args = vec!["list_geo_units"];
 
-    if let Some(version) = version {
-        cmd.arg(&version);
+    let version_str;
+    if let Some(v) = version {
+        version_str = v;
+        args.push(&version_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
-pub async fn unesco_export_geo_units(format_type: String, version: Option<String>) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("export_geo_units")
-        .arg(&format_type);
+pub async fn unesco_export_geo_units(app: tauri::AppHandle, format_type: String, version: Option<String>) -> Result<String, String> {
+    let mut args = vec!["export_geo_units", &format_type];
 
-    if let Some(version) = version {
-        cmd.arg(&version);
+    let version_str;
+    if let Some(v) = version {
+        version_str = v;
+        args.push(&version_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_list_indicators(
+    app: tauri::AppHandle,
     glossary_terms: Option<bool>,
     disaggregations: Option<bool>,
     version: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("list_indicators");
+    let mut args = vec!["list_indicators"];
 
     if let Some(glossary_terms) = glossary_terms {
         if glossary_terms {
-            cmd.arg("--glossary");
+            args.push("--glossary");
         }
     }
 
     if let Some(disaggregations) = disaggregations {
         if disaggregations {
-            cmd.arg("--disaggregations");
+            args.push("--disaggregations");
         }
     }
 
-    if let Some(version) = version {
-        cmd.arg("--version");
-        cmd.arg(&version);
+    let version_str;
+    if let Some(v) = version {
+        version_str = v;
+        args.push("--version");
+        args.push(&version_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_export_indicators(
+    app: tauri::AppHandle,
     format_type: String,
     glossary_terms: Option<bool>,
     disaggregations: Option<bool>,
     version: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("export_indicators")
-        .arg(&format_type);
+    let mut args = vec!["export_indicators", &format_type];
 
     if let Some(glossary_terms) = glossary_terms {
         if glossary_terms {
-            cmd.arg("--glossary");
+            args.push("--glossary");
         }
     }
 
     if let Some(disaggregations) = disaggregations {
         if disaggregations {
-            cmd.arg("--disaggregations");
+            args.push("--disaggregations");
         }
     }
 
-    if let Some(version) = version {
-        cmd.arg("--version");
-        cmd.arg(&version);
+    let version_str;
+    if let Some(v) = version {
+        version_str = v;
+        args.push("--version");
+        args.push(&version_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 // ==================== VERSION ENDPOINTS ====================
 
 #[command]
-pub async fn unesco_get_default_version() -> Result<String, String> {
-    let output = crate::utils::python::python_command()
-        .arg("resources/scripts/unesco_data.py")
-        .arg("get_default_version")
-        .output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+pub async fn unesco_get_default_version(app: tauri::AppHandle) -> Result<String, String> {
+    execute_python_script_simple(&app, "unesco_data.py", &["get_default_version"])
 }
 
 #[command]
-pub async fn unesco_list_versions() -> Result<String, String> {
-    let output = crate::utils::python::python_command()
-        .arg("resources/scripts/unesco_data.py")
-        .arg("list_versions")
-        .output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+pub async fn unesco_list_versions(app: tauri::AppHandle) -> Result<String, String> {
+    execute_python_script_simple(&app, "unesco_data.py", &["list_versions"])
 }
 
 // ==================== CONVENIENCE METHODS ====================
 
 #[command]
 pub async fn unesco_get_education_overview(
+    app: tauri::AppHandle,
     country_codes: Option<Vec<String>>,
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("education_overview");
+    let mut args = vec!["education_overview"];
 
+    let country_code_strs: Vec<String>;
     if let Some(country_codes) = country_codes {
-        for country in country_codes {
-            cmd.arg(&country);
+        country_code_strs = country_codes;
+        for country in &country_code_strs {
+            args.push(country.as_str());
         }
     }
 
-    if let Some(start_year) = start_year {
-        cmd.arg("--start-year");
-        cmd.arg(start_year.to_string());
+    let start_year_str;
+    if let Some(sy) = start_year {
+        start_year_str = sy.to_string();
+        args.push("--start-year");
+        args.push(&start_year_str);
     }
 
-    if let Some(end_year) = end_year {
-        cmd.arg("--end-year");
-        cmd.arg(end_year.to_string());
+    let end_year_str;
+    if let Some(ey) = end_year {
+        end_year_str = ey.to_string();
+        args.push("--end-year");
+        args.push(&end_year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_get_global_education_trends(
+    app: tauri::AppHandle,
     indicator_code: Option<String>,
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("global_trends");
+    let mut args = vec!["global_trends"];
 
-    if let Some(indicator_code) = indicator_code {
-        cmd.arg(&indicator_code);
+    let indicator_code_str;
+    if let Some(ic) = indicator_code {
+        indicator_code_str = ic;
+        args.push(&indicator_code_str);
     }
 
-    if let Some(start_year) = start_year {
-        cmd.arg("--start-year");
-        cmd.arg(start_year.to_string());
+    let start_year_str;
+    if let Some(sy) = start_year {
+        start_year_str = sy.to_string();
+        args.push("--start-year");
+        args.push(&start_year_str);
     }
 
-    if let Some(end_year) = end_year {
-        cmd.arg("--end-year");
-        cmd.arg(end_year.to_string());
+    let end_year_str;
+    if let Some(ey) = end_year {
+        end_year_str = ey.to_string();
+        args.push("--end-year");
+        args.push(&end_year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_get_country_comparison(
+    app: tauri::AppHandle,
     indicator_code: String,
     country_codes: Vec<String>,
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("country_comparison")
-        .arg(&indicator_code);
+    let mut args = vec!["country_comparison", &indicator_code];
 
-    for country in country_codes {
-        cmd.arg(&country);
+    for country in &country_codes {
+        args.push(country.as_str());
     }
 
-    if let Some(start_year) = start_year {
-        cmd.arg("--start-year");
-        cmd.arg(start_year.to_string());
+    let start_year_str;
+    if let Some(sy) = start_year {
+        start_year_str = sy.to_string();
+        args.push("--start-year");
+        args.push(&start_year_str);
     }
 
-    if let Some(end_year) = end_year {
-        cmd.arg("--end-year");
-        cmd.arg(end_year.to_string());
+    let end_year_str;
+    if let Some(ey) = end_year {
+        end_year_str = ey.to_string();
+        args.push("--end-year");
+        args.push(&end_year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_search_indicators_by_theme(
+    app: tauri::AppHandle,
     theme: String,
     limit: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("search_by_theme")
-        .arg(&theme);
+    let mut args = vec!["search_by_theme", &theme];
 
-    if let Some(limit) = limit {
-        cmd.arg(limit.to_string());
+    let limit_str;
+    if let Some(lim) = limit {
+        limit_str = lim.to_string();
+        args.push(&limit_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_get_regional_education_data(
+    app: tauri::AppHandle,
     region_id: String,
     indicator_codes: Option<Vec<String>>,
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("regional_data")
-        .arg(&region_id);
+    let mut args = vec!["regional_data", &region_id];
 
+    let indicator_code_strs: Vec<String>;
     if let Some(indicator_codes) = indicator_codes {
-        for indicator in indicator_codes {
-            cmd.arg(&indicator);
+        indicator_code_strs = indicator_codes;
+        for indicator in &indicator_code_strs {
+            args.push(indicator.as_str());
         }
     }
 
-    if let Some(start_year) = start_year {
-        cmd.arg("--start-year");
-        cmd.arg(start_year.to_string());
+    let start_year_str;
+    if let Some(sy) = start_year {
+        start_year_str = sy.to_string();
+        args.push("--start-year");
+        args.push(&start_year_str);
     }
 
-    if let Some(end_year) = end_year {
-        cmd.arg("--end-year");
-        cmd.arg(end_year.to_string());
+    let end_year_str;
+    if let Some(ey) = end_year {
+        end_year_str = ey.to_string();
+        args.push("--end-year");
+        args.push(&end_year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_get_science_technology_data(
+    app: tauri::AppHandle,
     country_codes: Option<Vec<String>>,
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("sti_data");
+    let mut args = vec!["sti_data"];
 
+    let country_code_strs: Vec<String>;
     if let Some(country_codes) = country_codes {
-        for country in country_codes {
-            cmd.arg(&country);
+        country_code_strs = country_codes;
+        for country in &country_code_strs {
+            args.push(country.as_str());
         }
     }
 
-    if let Some(start_year) = start_year {
-        cmd.arg("--start-year");
-        cmd.arg(start_year.to_string());
+    let start_year_str;
+    if let Some(sy) = start_year {
+        start_year_str = sy.to_string();
+        args.push("--start-year");
+        args.push(&start_year_str);
     }
 
-    if let Some(end_year) = end_year {
-        cmd.arg("--end-year");
-        cmd.arg(end_year.to_string());
+    let end_year_str;
+    if let Some(ey) = end_year {
+        end_year_str = ey.to_string();
+        args.push("--end-year");
+        args.push(&end_year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_get_culture_data(
+    app: tauri::AppHandle,
     country_codes: Option<Vec<String>>,
     start_year: Option<i32>,
     end_year: Option<i32>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("culture_data");
+    let mut args = vec!["culture_data"];
 
+    let country_code_strs: Vec<String>;
     if let Some(country_codes) = country_codes {
-        for country in country_codes {
-            cmd.arg(&country);
+        country_code_strs = country_codes;
+        for country in &country_code_strs {
+            args.push(country.as_str());
         }
     }
 
-    if let Some(start_year) = start_year {
-        cmd.arg("--start-year");
-        cmd.arg(start_year.to_string());
+    let start_year_str;
+    if let Some(sy) = start_year {
+        start_year_str = sy.to_string();
+        args.push("--start-year");
+        args.push(&start_year_str);
     }
 
-    if let Some(end_year) = end_year {
-        cmd.arg("--end-year");
-        cmd.arg(end_year.to_string());
+    let end_year_str;
+    if let Some(ey) = end_year {
+        end_year_str = ey.to_string();
+        args.push("--end-year");
+        args.push(&end_year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }
 
 #[command]
 pub async fn unesco_export_country_dataset(
+    app: tauri::AppHandle,
     country_code: String,
     format_type: String,
     include_metadata: Option<bool>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/unesco_data.py")
-        .arg("export_country_dataset")
-        .arg(&country_code)
-        .arg(&format_type);
+    let mut args = vec!["export_country_dataset", &country_code, &format_type];
 
     if let Some(include_metadata) = include_metadata {
         if include_metadata {
-            cmd.arg("--metadata");
+            args.push("--metadata");
         }
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "unesco_data.py", &args)
 }

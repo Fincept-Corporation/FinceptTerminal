@@ -29,15 +29,68 @@ export interface ApiKeys {
   [key: string]: string | undefined;
 }
 
+// Data API Keys (non-LLM providers)
 export const PREDEFINED_API_KEYS = [
   { key: 'FRED_API_KEY', label: 'FRED API Key', description: 'Federal Reserve Economic Data' },
   { key: 'POLYGON_API_KEY', label: 'Polygon.io API Key', description: 'Stock market data' },
   { key: 'ALPHA_VANTAGE_API_KEY', label: 'Alpha Vantage API Key', description: 'Stock & crypto data' },
-  { key: 'OPENAI_API_KEY', label: 'OpenAI API Key', description: 'GPT models' },
-  { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API Key', description: 'Claude models' },
   { key: 'COINGECKO_API_KEY', label: 'CoinGecko API Key', description: 'Cryptocurrency data' },
   { key: 'NASDAQ_API_KEY', label: 'NASDAQ API Key', description: 'NASDAQ market data' },
   { key: 'FINANCIAL_MODELING_PREP_API_KEY', label: 'Financial Modeling Prep', description: 'Financial statements & ratios' },
+] as const;
+
+// LLM Provider configurations
+export const LLM_PROVIDERS = [
+  {
+    id: 'fincept',
+    name: 'Fincept LLM',
+    description: 'Fincept Research API (Default - 5 credits/response)',
+    endpoint: 'https://finceptbackend.share.zrok.io/research/llm',
+    requiresApiKey: true,
+    isDefault: true,
+    models: ['fincept-llm']
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    description: 'GPT models',
+    endpoint: 'https://api.openai.com/v1',
+    requiresApiKey: true,
+    models: ['gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'gpt-4o']
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    description: 'Claude models',
+    endpoint: 'https://api.anthropic.com/v1',
+    requiresApiKey: true,
+    models: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307', 'claude-3-5-sonnet-20241022']
+  },
+  {
+    id: 'google',
+    name: 'Google Gemini',
+    description: 'Gemini models',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta',
+    requiresApiKey: true,
+    models: ['gemini-pro', 'gemini-1.5-pro-latest', 'gemini-1.5-flash']
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama (Local)',
+    description: 'Local LLM models',
+    endpoint: 'http://localhost:11434',
+    requiresApiKey: false,
+    models: [] // Dynamically loaded
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    description: 'Access to multiple LLM providers',
+    endpoint: 'https://openrouter.ai/api/v1',
+    requiresApiKey: true,
+    supportsCustomModels: true,
+    models: []
+  },
 ] as const;
 
 // ==================== SETTINGS ====================

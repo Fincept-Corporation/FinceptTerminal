@@ -48,6 +48,7 @@ pub mod adb;
 
 // Specialized data sources
 pub mod openafrica;
+pub mod hdx;
 pub mod economic_calendar;
 pub mod databento;
 pub mod sentinelhub;
@@ -73,6 +74,9 @@ pub mod ckan;
 // Analytics modules
 pub mod analytics;
 
+// FinancePy - Derivatives Pricing
+pub mod financepy;
+
 // AI Agents
 pub mod ai_agents;
 
@@ -94,3 +98,6 @@ pub mod database;
 
 // AI Quant Lab - Qlib and RD-Agent
 pub mod ai_quant_lab;
+
+// High-Performance OrderBook Processing
+pub mod orderbook;

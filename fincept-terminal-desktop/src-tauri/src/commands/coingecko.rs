@@ -1,19 +1,19 @@
 // CoinGecko cryptocurrency data commands
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 
-/// Execute CoinGecko Python script command
+/// Execute CoinGecko Python script command with PyO3
 #[tauri::command]
 pub async fn execute_coingecko_command(
     app: tauri::AppHandle,
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
-    // Build command arguments
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with console window hidden on Windows
-    execute_python_command(&app, "coingecko.py", &cmd_args)
+    let script_path = get_script_path(&app, "coingecko.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
 /// Get cryptocurrency price

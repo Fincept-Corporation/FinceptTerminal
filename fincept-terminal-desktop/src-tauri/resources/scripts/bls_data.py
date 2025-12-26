@@ -738,13 +738,16 @@ class BLSDataAPI:
             return BLSError("get_survey_categories", str(e)).to_dict()
 
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """Main function for CLI interface"""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps(BLSError("cli", "Usage: python bls_data.py <command> [args...]").to_dict()))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
 
     # Get API key from environment or command line
     api_key = os.getenv("BLS_API_KEY")
@@ -755,19 +758,19 @@ def main():
     # Map commands to async methods
     async def run_command():
         if command == "search_series":
-            query = sys.argv[2] if len(sys.argv) > 2 else ""
-            category = sys.argv[3] if len(sys.argv) > 3 else "cpi"
-            include_extras = sys.argv[4].lower() == "true" if len(sys.argv) > 4 else False
-            include_code_map = sys.argv[5].lower() == "true" if len(sys.argv) > 5 else False
+            query = args[1] if len(args) + 1 > 2 else ""
+            category = args[2] if len(args) + 1 > 3 else "cpi"
+            include_extras = args[3].lower() == "true" if len(args) + 1 > 4 else False
+            include_code_map = args[4].lower() == "true" if len(args) + 1 > 5 else False
             return api.search_bls_series(query, category, include_extras, include_code_map)
 
         elif command == "get_series":
-            series_ids = sys.argv[2] if len(sys.argv) > 2 else ""
-            start_date = sys.argv[3] if len(sys.argv) > 3 else None
-            end_date = sys.argv[4] if len(sys.argv) > 4 else None
-            calculations = sys.argv[5].lower() != "false" if len(sys.argv) > 5 else True
-            annual_average = sys.argv[6].lower() == "true" if len(sys.argv) > 6 else False
-            aspects = sys.argv[7].lower() == "true" if len(sys.argv) > 7 else False
+            series_ids = args[1] if len(args) + 1 > 2 else ""
+            start_date = args[2] if len(args) + 1 > 3 else None
+            end_date = args[3] if len(args) + 1 > 4 else None
+            calculations = args[4].lower() != "false" if len(args) + 1 > 5 else True
+            annual_average = sys.argv[6].lower() == "true" if len(args) + 1 > 6 else False
+            aspects = sys.argv[7].lower() == "true" if len(args) + 1 > 7 else False
             return await api.get_series_data(series_ids, start_date, end_date, calculations, annual_average, aspects)
 
         elif command == "get_popular":

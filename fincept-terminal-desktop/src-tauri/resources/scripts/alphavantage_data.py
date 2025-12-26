@@ -58,16 +58,19 @@ def get_quote(symbol: str) -> Dict[str, Any]:
         return {"error": str(e), "symbol": symbol}
 
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """Main CLI entry point"""
-    if len(sys.argv) < 3:
+    if len(args) + 1 < 3:
         print(json.dumps({
             "error": "Usage: python alphavantage_data.py quote <symbol>"
         }))
         sys.exit(1)
 
-    command = sys.argv[1]
-    symbol = sys.argv[2]
+    command = args[0]
+    symbol = args[1]
 
     if command == "quote":
         result = get_quote(symbol)

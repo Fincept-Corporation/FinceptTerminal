@@ -1,7 +1,8 @@
 // CFTC (Commodity Futures Trading Commission) data commands based on OpenBB cftc provider
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 
-/// Execute CFTC Python script command
+/// Execute CFTC Python script command with PyO3
 #[tauri::command]
 pub async fn execute_cftc_command(
     app: tauri::AppHandle,
@@ -12,8 +13,9 @@ pub async fn execute_cftc_command(
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with console window hidden on Windows
-    execute_python_command(&app, "cftc_data.py", &cmd_args)
+    // Execute Python script with PyO3
+    let script_path = get_script_path(&app, "cftc_data.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
 // COT DATA COMMANDS

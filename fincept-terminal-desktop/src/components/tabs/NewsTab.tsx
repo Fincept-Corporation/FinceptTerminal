@@ -5,6 +5,7 @@ import { contextRecorderService } from '../../services/contextRecorderService';
 import RecordingControlPanel from '../common/RecordingControlPanel';
 import { TimezoneSelector } from '../common/TimezoneSelector';
 import { useTranslation } from 'react-i18next';
+import { analyzeNewsArticle, type NewsAnalysisData, getSentimentColor, getUrgencyColor, getRiskColor } from '../../services/newsAnalysisService';
 
 // Extend Window interface for Tauri
 declare global {
@@ -28,6 +29,9 @@ const NewsTab: React.FC = () => {
   const [refreshInterval, setRefreshInterval] = useState(10); // minutes
   const [showIntervalSettings, setShowIntervalSettings] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [analysisData, setAnalysisData] = useState<NewsAnalysisData | null>(null);
+  const [analyzingArticle, setAnalyzingArticle] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   // Function to record current news data
   const recordCurrentData = async () => {
@@ -91,6 +95,30 @@ const NewsTab: React.FC = () => {
       // Silently handle fetch errors
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle AI analysis of article
+  const handleAnalyzeArticle = async () => {
+    if (!selectedArticle?.link) return;
+
+    setAnalyzingArticle(true);
+    setShowAnalysis(false);
+    setAnalysisData(null);
+
+    try {
+      const result = await analyzeNewsArticle(selectedArticle.link);
+
+      if (result.success) {
+        setAnalysisData(result.data);
+        setShowAnalysis(true);
+      } else {
+        console.error('Analysis failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Analysis error:', error);
+    } finally {
+      setAnalyzingArticle(false);
     }
   };
 
@@ -534,76 +562,406 @@ const NewsTab: React.FC = () => {
             ))}
           </div>
 
-          {/* Right Panel - Tertiary Feed + Analytics */}
+          {/* Right Panel - AI Analytics */}
           <div style={{
-            width: '400px',
+            width: '500px',
             backgroundColor: colors.panel,
             border: `1px solid ${colors.textMuted}`,
-            padding: '4px',
-            overflow: 'auto'
+            padding: '8px',
+            overflowY: 'auto',
+            overflowX: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: '100%'
           }}>
             {/* News Analytics Section */}
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
+            <div style={{ flex: 1, minHeight: '600px', overflowY: 'auto' }}>
+              <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', letterSpacing: '0.5px' }}>
                 REAL-TIME NEWS ANALYTICS
               </div>
-              <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '6px' }}></div>
+              <div style={{ borderBottom: `2px solid ${colors.primary}`, marginBottom: '12px' }}></div>
 
-              {/* Sentiment Analysis */}
-              <div style={{ marginBottom: '8px', fontSize: '9px' }}>
-                <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '3px' }}>
-                  SENTIMENT ANALYSIS
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>Bullish Articles:</span>
-                  <span style={{ color: colors.secondary }}>{bullishCount} ({Math.round((bullishCount / totalCount) * 100)}%)</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>Bearish Articles:</span>
-                  <span style={{ color: colors.alert }}>{bearishCount} ({Math.round((bearishCount / totalCount) * 100)}%)</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>Neutral Articles:</span>
-                  <span style={{ color: colors.warning }}>{neutralCount} ({Math.round((neutralCount / totalCount) * 100)}%)</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px', paddingTop: '2px', borderTop: `1px solid ${colors.textMuted}` }}>
-                  <span style={{ color: colors.accent, fontWeight: 'bold' }}>Sentiment Score:</span>
-                  <span style={{ color: parseFloat(sentimentScore) > 0 ? colors.secondary : parseFloat(sentimentScore) < 0 ? colors.alert : colors.warning, fontWeight: 'bold' }}>
-                    {sentimentScore} ({parseFloat(sentimentScore) > 0 ? 'BULLISH' : parseFloat(sentimentScore) < 0 ? 'BEARISH' : 'NEUTRAL'})
-                  </span>
-                </div>
-              </div>
+              {showAnalysis && analysisData ? (
+                /* AI Analysis Display */
+                <div style={{ fontSize: '11px' }}>
+                  {/* Header */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '12px',
+                    padding: '8px',
+                    background: 'rgba(147, 51, 234, 0.1)',
+                    border: `1px solid #9333ea`
+                  }}>
+                    <span style={{ color: '#9333ea', fontSize: '11px', fontWeight: 'bold' }}>
+                      AI POWERED ANALYSIS
+                    </span>
+                    <span style={{ fontSize: '9px', color: colors.textMuted }}>
+                      {analysisData.credits_used} CREDITS | {analysisData.credits_remaining.toLocaleString()} REMAINING
+                    </span>
+                  </div>
 
-              {/* News Flow Statistics */}
-              <div style={{ marginBottom: '8px', fontSize: '9px' }}>
-                <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '3px' }}>
-                  NEWS FLOW STATS
+                  {/* Summary */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{
+                      fontSize: '10px',
+                      color: colors.warning,
+                      fontWeight: 'bold',
+                      marginBottom: '6px',
+                      letterSpacing: '0.5px'
+                    }}>
+                      SUMMARY
+                    </div>
+                    <div style={{
+                      fontSize: '11px',
+                      color: colors.text,
+                      lineHeight: '1.6',
+                      padding: '8px',
+                      background: 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${colors.textMuted}`
+                    }}>
+                      {analysisData.analysis.summary}
+                    </div>
+                  </div>
+
+                  {/* Key Points */}
+                  {analysisData.analysis.key_points.length > 0 && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{
+                        fontSize: '10px',
+                        color: colors.warning,
+                        fontWeight: 'bold',
+                        marginBottom: '6px',
+                        letterSpacing: '0.5px'
+                      }}>
+                        KEY POINTS
+                      </div>
+                      <div style={{
+                        padding: '8px',
+                        background: 'rgba(255,255,255,0.02)',
+                        border: `1px solid ${colors.textMuted}`
+                      }}>
+                        {analysisData.analysis.key_points.map((point, idx) => (
+                          <div key={idx} style={{
+                            marginBottom: '6px',
+                            fontSize: '10px',
+                            color: colors.text,
+                            paddingLeft: '12px',
+                            borderLeft: `2px solid ${colors.primary}`,
+                            lineHeight: '1.5'
+                          }}>
+                            {point}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sentiment & Market Impact Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                    <div>
+                      <div style={{
+                        fontSize: '10px',
+                        color: colors.warning,
+                        fontWeight: 'bold',
+                        marginBottom: '6px',
+                        letterSpacing: '0.5px'
+                      }}>
+                        SENTIMENT
+                      </div>
+                      <div style={{
+                        padding: '8px',
+                        background: 'rgba(0,0,0,0.3)',
+                        border: `1px solid ${colors.textMuted}`,
+                        fontSize: '10px'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ color: colors.textMuted }}>Score:</span>
+                          <span style={{ color: getSentimentColor(analysisData.analysis.sentiment.score), fontWeight: 'bold' }}>
+                            {analysisData.analysis.sentiment.score.toFixed(2)}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ color: colors.textMuted }}>Intensity:</span>
+                          <span style={{ color: colors.text }}>{analysisData.analysis.sentiment.intensity.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: colors.textMuted }}>Confidence:</span>
+                          <span style={{ color: colors.secondary }}>
+                            {(analysisData.analysis.sentiment.confidence * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{
+                        fontSize: '10px',
+                        color: colors.warning,
+                        fontWeight: 'bold',
+                        marginBottom: '6px',
+                        letterSpacing: '0.5px'
+                      }}>
+                        MARKET IMPACT
+                      </div>
+                      <div style={{
+                        padding: '8px',
+                        background: 'rgba(0,0,0,0.3)',
+                        border: `1px solid ${colors.textMuted}`,
+                        fontSize: '10px'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ color: colors.textMuted }}>Urgency:</span>
+                          <span style={{
+                            color: getUrgencyColor(analysisData.analysis.market_impact.urgency),
+                            fontWeight: 'bold'
+                          }}>
+                            {analysisData.analysis.market_impact.urgency}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: colors.textMuted }}>Prediction:</span>
+                          <span style={{ color: colors.text, textTransform: 'uppercase', fontSize: '9px' }}>
+                            {analysisData.analysis.market_impact.prediction.replace('_', ' ')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Risk Signals */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{
+                      fontSize: '10px',
+                      color: colors.warning,
+                      fontWeight: 'bold',
+                      marginBottom: '6px',
+                      letterSpacing: '0.5px'
+                    }}>
+                      RISK SIGNALS
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      {Object.entries(analysisData.analysis.risk_signals).map(([type, signal]) => (
+                        <div key={type} style={{
+                          padding: '8px',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: `1px solid ${colors.textMuted}`,
+                          fontSize: '10px'
+                        }}>
+                          <div style={{
+                            color: getRiskColor(signal.level),
+                            fontWeight: 'bold',
+                            marginBottom: '4px',
+                            fontSize: '9px',
+                            letterSpacing: '0.3px'
+                          }}>
+                            {type.toUpperCase()}: {signal.level.toUpperCase()}
+                          </div>
+                          {signal.details && (
+                            <div style={{
+                              color: colors.textMuted,
+                              fontSize: '9px',
+                              lineHeight: '1.4'
+                            }}>
+                              {signal.details}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Topics & Keywords */}
+                  {(analysisData.analysis.topics.length > 0 || analysisData.analysis.keywords.length > 0) && (
+                    <div style={{ marginBottom: '16px' }}>
+                      {analysisData.analysis.topics.length > 0 && (
+                        <div style={{ marginBottom: '12px' }}>
+                          <div style={{
+                            fontSize: '10px',
+                            color: colors.warning,
+                            fontWeight: 'bold',
+                            marginBottom: '6px',
+                            letterSpacing: '0.5px'
+                          }}>
+                            TOPICS
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {analysisData.analysis.topics.map((topic, idx) => (
+                              <span key={idx} style={{
+                                background: 'rgba(147, 51, 234, 0.2)',
+                                padding: '4px 8px',
+                                fontSize: '9px',
+                                color: colors.text,
+                                border: '1px solid #9333ea',
+                                fontWeight: 'bold',
+                                letterSpacing: '0.3px'
+                              }}>
+                                {topic}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {analysisData.analysis.keywords.length > 0 && (
+                        <div>
+                          <div style={{
+                            fontSize: '10px',
+                            color: colors.warning,
+                            fontWeight: 'bold',
+                            marginBottom: '6px',
+                            letterSpacing: '0.5px'
+                          }}>
+                            KEYWORDS
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {analysisData.analysis.keywords.slice(0, 8).map((keyword, idx) => (
+                              <span key={idx} style={{
+                                background: 'rgba(100, 100, 100, 0.2)',
+                                padding: '4px 8px',
+                                fontSize: '9px',
+                                color: colors.textMuted,
+                                border: `1px solid ${colors.textMuted}`
+                              }}>
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Entities */}
+                  {analysisData.analysis.entities.organizations.length > 0 && (
+                    <div>
+                      <div style={{
+                        fontSize: '10px',
+                        color: colors.warning,
+                        fontWeight: 'bold',
+                        marginBottom: '6px',
+                        letterSpacing: '0.5px'
+                      }}>
+                        ORGANIZATIONS
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {analysisData.analysis.entities.organizations.map((org, idx) => (
+                          <div key={idx} style={{
+                            background: 'rgba(0,0,0,0.3)',
+                            padding: '6px 10px',
+                            border: `1px solid ${colors.textMuted}`,
+                            fontSize: '10px'
+                          }}>
+                            <div style={{ color: colors.text, fontWeight: 'bold', marginBottom: '2px' }}>
+                              {org.name}
+                            </div>
+                            <div style={{ color: colors.textMuted, fontSize: '9px' }}>
+                              {org.sector} {org.ticker ? `| ${org.ticker}` : ''}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>Total Articles:</span>
-                  <span style={{ color: colors.text }}>{newsArticles.length}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>Breaking News:</span>
-                  <span style={{ color: colors.alert }}>{breakingCount}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>Earnings Reports:</span>
-                  <span style={{ color: colors.info }}>{earningsCount}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>Economic Data:</span>
-                  <span style={{ color: colors.purple }}>{economicCount}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                  <span style={{ color: colors.textMuted }}>High Priority:</span>
-                  <span style={{ color: colors.primary }}>{alertCount}</span>
-                </div>
-              </div>
+              ) : (
+                /* Default Analytics Display */
+                <>
+                  {/* Sentiment Analysis */}
+                  <div style={{ marginBottom: '16px', fontSize: '10px' }}>
+                    <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '6px', letterSpacing: '0.5px' }}>
+                      SENTIMENT ANALYSIS
+                    </div>
+                    <div style={{
+                      padding: '8px',
+                      background: 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${colors.textMuted}`
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: colors.textMuted }}>Bullish Articles:</span>
+                        <span style={{ color: colors.secondary }}>{bullishCount} ({Math.round((bullishCount / totalCount) * 100)}%)</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: colors.textMuted }}>Bearish Articles:</span>
+                        <span style={{ color: colors.alert }}>{bearishCount} ({Math.round((bearishCount / totalCount) * 100)}%)</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: colors.textMuted }}>Neutral Articles:</span>
+                        <span style={{ color: colors.warning }}>{neutralCount} ({Math.round((neutralCount / totalCount) * 100)}%)</span>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        marginTop: '8px',
+                        paddingTop: '8px',
+                        borderTop: `1px solid ${colors.textMuted}`
+                      }}>
+                        <span style={{ color: colors.accent, fontWeight: 'bold' }}>Sentiment Score:</span>
+                        <span style={{
+                          color: parseFloat(sentimentScore) > 0 ? colors.secondary : parseFloat(sentimentScore) < 0 ? colors.alert : colors.warning,
+                          fontWeight: 'bold'
+                        }}>
+                          {sentimentScore} ({parseFloat(sentimentScore) > 0 ? 'BULLISH' : parseFloat(sentimentScore) < 0 ? 'BEARISH' : 'NEUTRAL'})
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* News Flow Statistics */}
+                  <div style={{ marginBottom: '16px', fontSize: '10px' }}>
+                    <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '6px', letterSpacing: '0.5px' }}>
+                      NEWS FLOW STATS
+                    </div>
+                    <div style={{
+                      padding: '8px',
+                      background: 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${colors.textMuted}`
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: colors.textMuted }}>Total Articles:</span>
+                        <span style={{ color: colors.text }}>{newsArticles.length}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: colors.textMuted }}>Breaking News:</span>
+                        <span style={{ color: colors.alert }}>{breakingCount}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: colors.textMuted }}>Earnings Reports:</span>
+                        <span style={{ color: colors.info }}>{earningsCount}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: colors.textMuted }}>Economic Data:</span>
+                        <span style={{ color: colors.purple }}>{economicCount}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ color: colors.textMuted }}>High Priority:</span>
+                        <span style={{ color: colors.primary }}>{alertCount}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    padding: '12px',
+                    background: 'rgba(147, 51, 234, 0.1)',
+                    border: `1px solid #9333ea`,
+                    textAlign: 'center',
+                    fontSize: '10px',
+                    color: colors.textMuted
+                  }}>
+                    Select an article and click AI ANALYZE for detailed insights
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Tertiary News Feed */}
-            <div style={{ borderTop: `2px solid ${colors.textMuted}`, paddingTop: '4px' }}>
+            <div style={{
+              borderTop: `2px solid ${colors.textMuted}`,
+              paddingTop: '4px',
+              marginTop: '12px',
+              flex: '0 0 auto',
+              maxHeight: '300px',
+              overflowY: 'auto'
+            }}>
               <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
                 ADDITIONAL HEADLINES
               </div>
@@ -1008,7 +1366,7 @@ const NewsTab: React.FC = () => {
                           flex: 1
                         }}
                       >
-                        📖 READ IN APP
+                        READ IN APP
                       </button>
                       <button
                         onClick={async (e) => {
@@ -1048,7 +1406,7 @@ const NewsTab: React.FC = () => {
                           flex: 1
                         }}
                       >
-                        🔗 OPEN IN BROWSER
+                        OPEN IN BROWSER
                       </button>
                       <button
                         onClick={(e) => {
@@ -1056,9 +1414,9 @@ const NewsTab: React.FC = () => {
                           const link = selectedArticle.link;
                           if (link) {
                             navigator.clipboard.writeText(link);
-                            e.currentTarget.textContent = '✓ COPIED!';
+                            e.currentTarget.textContent = 'COPIED!';
                             setTimeout(() => {
-                              e.currentTarget.textContent = '📋 COPY';
+                              e.currentTarget.textContent = 'COPY LINK';
                             }, 2000);
                           }
                         }}
@@ -1074,7 +1432,28 @@ const NewsTab: React.FC = () => {
                         }}
                         title="Copy link to clipboard"
                       >
-                        📋 COPY
+                        COPY LINK
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAnalyzeArticle();
+                        }}
+                        disabled={analyzingArticle}
+                        style={{
+                          backgroundColor: analyzingArticle ? colors.textMuted : '#9333ea',
+                          color: colors.text,
+                          border: 'none',
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          fontWeight: 'bold',
+                          cursor: analyzingArticle ? 'not-allowed' : 'pointer',
+                          borderRadius: '2px',
+                          opacity: analyzingArticle ? 0.6 : 1
+                        }}
+                        title="AI-powered analysis (10 credits)"
+                      >
+                        {analyzingArticle ? 'ANALYZING...' : 'AI ANALYZE'}
                       </button>
                     </div>
                   )}

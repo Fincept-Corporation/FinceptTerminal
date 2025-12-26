@@ -619,9 +619,12 @@ class CFTCDataWrapper:
             return {"error": CFTCError("cot_historical_trend", str(e)).to_dict()}
 
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """Main function for CLI interface"""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps({
             "error": "Usage: python cftc_data.py <command> [args...]",
             "commands": [
@@ -638,46 +641,46 @@ def main():
         }))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
     wrapper = CFTCDataWrapper()
 
     try:
         if command == "cot_data":
-            identifier = sys.argv[2] if len(sys.argv) > 2 else "all"
-            report_type = sys.argv[3] if len(sys.argv) > 3 else "legacy"
-            futures_only = sys.argv[4].lower() == "true" if len(sys.argv) > 4 else False
-            start_date = sys.argv[5] if len(sys.argv) > 5 else None
-            end_date = sys.argv[6] if len(sys.argv) > 6 else None
-            limit = int(sys.argv[7]) if len(sys.argv) > 7 else 1000
+            identifier = args[1] if len(args) + 1 > 2 else "all"
+            report_type = args[2] if len(args) + 1 > 3 else "legacy"
+            futures_only = args[3].lower() == "true" if len(args) + 1 > 4 else False
+            start_date = args[4] if len(args) + 1 > 5 else None
+            end_date = sys.argv[6] if len(args) + 1 > 6 else None
+            limit = int(sys.argv[7]) if len(args) + 1 > 7 else 1000
             result = wrapper.get_cot_data(identifier, report_type, futures_only, start_date, end_date, limit)
 
         elif command == "search_cot_markets":
-            query = sys.argv[2] if len(sys.argv) > 2 else None
+            query = args[1] if len(args) + 1 > 2 else None
             result = wrapper.search_cot_markets(query)
 
         elif command == "available_report_types":
             result = wrapper.get_available_report_types()
 
         elif command == "market_sentiment":
-            identifier = sys.argv[2] if len(sys.argv) > 2 else None
-            report_type = sys.argv[3] if len(sys.argv) > 3 else "disaggregated"
+            identifier = args[1] if len(args) + 1 > 2 else None
+            report_type = args[2] if len(args) + 1 > 3 else "disaggregated"
             result = wrapper.analyze_market_sentiment(identifier, report_type)
 
         elif command == "position_summary":
-            identifier = sys.argv[2] if len(sys.argv) > 2 else None
-            report_type = sys.argv[3] if len(sys.argv) > 3 else "disaggregated"
+            identifier = args[1] if len(args) + 1 > 2 else None
+            report_type = args[2] if len(args) + 1 > 3 else "disaggregated"
             result = wrapper.get_position_summary(identifier, report_type)
 
         elif command == "comprehensive_cot_overview":
-            identifiers_str = sys.argv[2] if len(sys.argv) > 2 else None
+            identifiers_str = args[1] if len(args) + 1 > 2 else None
             identifiers = identifiers_str.split(',') if identifiers_str else None
-            report_type = sys.argv[3] if len(sys.argv) > 3 else "disaggregated"
+            report_type = args[2] if len(args) + 1 > 3 else "disaggregated"
             result = wrapper.get_comprehensive_cot_overview(identifiers, report_type)
 
         elif command == "cot_historical_trend":
-            identifier = sys.argv[2] if len(sys.argv) > 2 else None
-            report_type = sys.argv[3] if len(sys.argv) > 3 else "disaggregated"
-            period = int(sys.argv[4]) if len(sys.argv) > 4 else 52
+            identifier = args[1] if len(args) + 1 > 2 else None
+            report_type = args[2] if len(args) + 1 > 3 else "disaggregated"
+            period = int(args[3]) if len(args) + 1 > 4 else 52
             result = wrapper.get_cot_historical_trend(identifier, report_type, period)
 
         else:

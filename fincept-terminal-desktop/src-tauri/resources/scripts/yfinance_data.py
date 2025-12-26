@@ -180,63 +180,60 @@ def get_batch_quotes(symbols):
             results.append(quote)
     return results
 
-def main():
-    if len(sys.argv) < 2:
-        print(json.dumps({"error": "Usage: python yfinance_data.py <command> <args>"}))
-        sys.exit(1)
+def main(args=None):
+    # Support both PyO3 (args parameter) and subprocess (sys.argv)
+    if args is None:
+        args = sys.argv[1:]
 
-    command = sys.argv[1]
+    if len(args) < 1:
+        return json.dumps({"error": "Usage: python yfinance_data.py <command> <args>"})
+
+    command = args[0]
 
     if command == "quote":
-        if len(sys.argv) < 3:
-            print(json.dumps({"error": "Usage: python yfinance_data.py quote <symbol>"}))
-            sys.exit(1)
-
-        symbol = sys.argv[2]
-        result = get_quote(symbol)
-        print(json.dumps(result, indent=2))
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py quote <symbol>"}
+        else:
+            symbol = args[1]
+            result = get_quote(symbol)
 
     elif command == "batch_quotes":
-        if len(sys.argv) < 3:
-            print(json.dumps({"error": "Usage: python yfinance_data.py batch_quotes <symbol1> <symbol2> ..."}))
-            sys.exit(1)
-
-        symbols = sys.argv[2:]
-        result = get_batch_quotes(symbols)
-        print(json.dumps(result, indent=2))
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py batch_quotes <symbol1> <symbol2> ..."}
+        else:
+            symbols = args[1:]
+            result = get_batch_quotes(symbols)
 
     elif command == "historical":
-        if len(sys.argv) < 5:
-            print(json.dumps({"error": "Usage: python yfinance_data.py historical <symbol> <start_date> <end_date>"}))
-            sys.exit(1)
-
-        symbol = sys.argv[2]
-        start_date = sys.argv[3]
-        end_date = sys.argv[4]
-        result = get_historical(symbol, start_date, end_date)
-        print(json.dumps(result, indent=2))
+        if len(args) < 4:
+            result = {"error": "Usage: python yfinance_data.py historical <symbol> <start_date> <end_date>"}
+        else:
+            symbol = args[1]
+            start_date = args[2]
+            end_date = args[3]
+            result = get_historical(symbol, start_date, end_date)
 
     elif command == "info":
-        if len(sys.argv) < 3:
-            print(json.dumps({"error": "Usage: python yfinance_data.py info <symbol>"}))
-            sys.exit(1)
-
-        symbol = sys.argv[2]
-        result = get_info(symbol)
-        print(json.dumps(result, indent=2))
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py info <symbol>"}
+        else:
+            symbol = args[1]
+            result = get_info(symbol)
 
     elif command == "financials":
-        if len(sys.argv) < 3:
-            print(json.dumps({"error": "Usage: python yfinance_data.py financials <symbol>"}))
-            sys.exit(1)
-
-        symbol = sys.argv[2]
-        result = get_financials(symbol)
-        print(json.dumps(result, indent=2))
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py financials <symbol>"}
+        else:
+            symbol = args[1]
+            result = get_financials(symbol)
 
     else:
-        print(json.dumps({"error": f"Unknown command: {command}"}))
-        sys.exit(1)
+        result = {"error": f"Unknown command: {command}"}
+
+    # Return JSON for PyO3, print for subprocess
+    output = json.dumps(result, indent=2)
+    print(output)
+    return output
 
 if __name__ == "__main__":
     main()

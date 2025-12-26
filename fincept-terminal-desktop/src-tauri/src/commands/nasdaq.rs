@@ -1,8 +1,9 @@
 // NASDAQ data commands based on OpenBB nasdaq provider
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 use chrono::Datelike;
 
-/// Execute NASDAQ Python script command
+/// Execute NASDAQ Python script command with PyO3
 #[tauri::command]
 pub async fn execute_nasdaq_command(
     app: tauri::AppHandle,
@@ -13,8 +14,9 @@ pub async fn execute_nasdaq_command(
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with console window hidden on Windows
-    execute_python_command(&app, "nasdaq_data.py", &cmd_args)
+    // Execute Python script with PyO3
+    let script_path = get_script_path(&app, "nasdaq_data.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
 // EQUITY SEARCH AND SCREENER COMMANDS

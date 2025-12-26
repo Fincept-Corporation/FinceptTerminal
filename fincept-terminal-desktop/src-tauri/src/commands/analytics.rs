@@ -1,8 +1,9 @@
 // Analytics Module Commands - Portfolio optimization and technical analysis
 #![allow(dead_code)]
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 
-/// Execute Technical Indicators command
+/// Execute Technical Indicators command with PyO3
 #[tauri::command]
 pub async fn execute_technical_indicators(
     app: tauri::AppHandle,
@@ -11,10 +12,13 @@ pub async fn execute_technical_indicators(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    execute_python_command(&app, "Analytics/technical_indicators.py", &cmd_args)
+
+    // Get script path and execute with PyO3
+    let script_path = get_script_path(&app, "Analytics/technical_indicators.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
-/// Execute PyPortfolioOpt wrapper command
+/// Execute PyPortfolioOpt wrapper command with PyO3
 #[tauri::command]
 pub async fn execute_pyportfolioopt(
     app: tauri::AppHandle,
@@ -23,10 +27,11 @@ pub async fn execute_pyportfolioopt(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    execute_python_command(&app, "Analytics/pyportfolioOpt_wrapper.py", &cmd_args)
+    let script_path = get_script_path(&app, "Analytics/pyportfolioOpt_wrapper.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
-/// Execute RiskFolio wrapper command
+/// Execute RiskFolio wrapper command with PyO3
 #[tauri::command]
 pub async fn execute_riskfolio(
     app: tauri::AppHandle,
@@ -35,10 +40,11 @@ pub async fn execute_riskfolio(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    execute_python_command(&app, "Analytics/riskfoliolib_wrapper.py", &cmd_args)
+    let script_path = get_script_path(&app, "Analytics/riskfoliolib_wrapper.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
-/// Execute Skfolio wrapper command
+/// Execute Skfolio wrapper command with PyO3
 #[tauri::command]
 pub async fn execute_skfolio(
     app: tauri::AppHandle,
@@ -47,7 +53,8 @@ pub async fn execute_skfolio(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    execute_python_command(&app, "Analytics/skfolio_wrapper.py", &cmd_args)
+    let script_path = get_script_path(&app, "Analytics/skfolio_wrapper.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
 // Module-specific commands for alternateInvestment
@@ -61,7 +68,8 @@ pub async fn analyze_digital_assets(
     if let Some(at) = analysis_type {
         args.push(at);
     }
-    execute_python_command(&app, "Analytics/alternateInvestment/digital_assets.py", &args)
+    let script_path = get_script_path(&app, "Analytics/alternateInvestment/digital_assets.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -74,7 +82,8 @@ pub async fn analyze_hedge_funds(
     if let Some(m) = metrics {
         args.push(m);
     }
-    execute_python_command(&app, "Analytics/alternateInvestment/hedge_funds.py", &args)
+    let script_path = get_script_path(&app, "Analytics/alternateInvestment/hedge_funds.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -87,7 +96,8 @@ pub async fn analyze_real_estate(
     if let Some(vm) = valuation_method {
         args.push(vm);
     }
-    execute_python_command(&app, "Analytics/alternateInvestment/real_estate.py", &args)
+    let script_path = get_script_path(&app, "Analytics/alternateInvestment/real_estate.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -100,7 +110,8 @@ pub async fn analyze_private_capital(
     if let Some(ap) = analysis_params {
         args.push(ap);
     }
-    execute_python_command(&app, "Analytics/alternateInvestment/private_capital.py", &args)
+    let script_path = get_script_path(&app, "Analytics/alternateInvestment/private_capital.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -113,7 +124,8 @@ pub async fn analyze_natural_resources(
     if let Some(ct) = commodity_type {
         args.push(ct);
     }
-    execute_python_command(&app, "Analytics/alternateInvestment/natural_resources.py", &args)
+    let script_path = get_script_path(&app, "Analytics/alternateInvestment/natural_resources.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // Derivatives analytics commands
@@ -127,7 +139,8 @@ pub async fn price_options(
     if let Some(pm) = pricing_model {
         args.push(pm);
     }
-    execute_python_command(&app, "Analytics/derivatives/options.py", &args)
+    let script_path = get_script_path(&app, "Analytics/derivatives/options.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -140,7 +153,8 @@ pub async fn analyze_arbitrage(
     if let Some(at) = arbitrage_type {
         args.push(at);
     }
-    execute_python_command(&app, "Analytics/derivatives/arbitrage.py", &args)
+    let script_path = get_script_path(&app, "Analytics/derivatives/arbitrage.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -153,7 +167,8 @@ pub async fn analyze_forward_commitments(
     if let Some(ct) = contract_type {
         args.push(ct);
     }
-    execute_python_command(&app, "Analytics/derivatives/forward_commitments.py", &args)
+    let script_path = get_script_path(&app, "Analytics/derivatives/forward_commitments.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // Economics analytics commands
@@ -167,7 +182,8 @@ pub async fn analyze_currency(
     if let Some(at) = analysis_type {
         args.push(at);
     }
-    execute_python_command(&app, "Analytics/economics/currency_analysis.py", &args)
+    let script_path = get_script_path(&app, "Analytics/economics/currency_analysis.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -180,7 +196,8 @@ pub async fn analyze_growth(
     if let Some(ind) = indicators {
         args.push(ind);
     }
-    execute_python_command(&app, "Analytics/economics/growth_analysis.py", &args)
+    let script_path = get_script_path(&app, "Analytics/economics/growth_analysis.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -193,7 +210,8 @@ pub async fn analyze_policy(
     if let Some(pt) = policy_type {
         args.push(pt);
     }
-    execute_python_command(&app, "Analytics/economics/policy_analysis.py", &args)
+    let script_path = get_script_path(&app, "Analytics/economics/policy_analysis.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -206,7 +224,8 @@ pub async fn analyze_market_cycles(
     if let Some(cp) = cycle_params {
         args.push(cp);
     }
-    execute_python_command(&app, "Analytics/economics/market_cycles.py", &args)
+    let script_path = get_script_path(&app, "Analytics/economics/market_cycles.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -219,7 +238,8 @@ pub async fn analyze_trade_geopolitics(
     if let Some(r) = region {
         args.push(r);
     }
-    execute_python_command(&app, "Analytics/economics/trade_geopolitics.py", &args)
+    let script_path = get_script_path(&app, "Analytics/economics/trade_geopolitics.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -232,7 +252,8 @@ pub async fn analyze_capital_flows(
     if let Some(ft) = flow_type {
         args.push(ft);
     }
-    execute_python_command(&app, "Analytics/economics/capital_flows.py", &args)
+    let script_path = get_script_path(&app, "Analytics/economics/capital_flows.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // Equity Investment analytics commands
@@ -246,7 +267,8 @@ pub async fn calculate_dcf_valuation(
     if let Some(dp) = dcf_params {
         args.push(dp);
     }
-    execute_python_command(&app, "Analytics/equityInvestment/equity_valuation/dcf_models.py", &args)
+    let script_path = get_script_path(&app, "Analytics/equityInvestment/equity_valuation/dcf_models.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -259,7 +281,8 @@ pub async fn calculate_dividend_valuation(
     if let Some(mt) = model_type {
         args.push(mt);
     }
-    execute_python_command(&app, "Analytics/equityInvestment/equity_valuation/dividend_models.py", &args)
+    let script_path = get_script_path(&app, "Analytics/equityInvestment/equity_valuation/dividend_models.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -272,7 +295,8 @@ pub async fn calculate_multiples_valuation(
     if let Some(m) = multiples {
         args.push(m);
     }
-    execute_python_command(&app, "Analytics/equityInvestment/equity_valuation/multiples_valuation.py", &args)
+    let script_path = get_script_path(&app, "Analytics/equityInvestment/equity_valuation/multiples_valuation.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -285,7 +309,8 @@ pub async fn analyze_fundamental(
     if let Some(at) = analysis_type {
         args.push(at);
     }
-    execute_python_command(&app, "Analytics/equityInvestment/company_analysis/fundamental_analysis.py", &args)
+    let script_path = get_script_path(&app, "Analytics/equityInvestment/company_analysis/fundamental_analysis.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -298,7 +323,8 @@ pub async fn analyze_industry(
     if let Some(ic) = industry_code {
         args.push(ic);
     }
-    execute_python_command(&app, "Analytics/equityInvestment/company_analysis/industry_analysis.py", &args)
+    let script_path = get_script_path(&app, "Analytics/equityInvestment/company_analysis/industry_analysis.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -311,7 +337,8 @@ pub async fn forecast_financials(
     if let Some(fp) = forecast_params {
         args.push(fp);
     }
-    execute_python_command(&app, "Analytics/equityInvestment/company_analysis/forecasting.py", &args)
+    let script_path = get_script_path(&app, "Analytics/equityInvestment/company_analysis/forecasting.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -324,7 +351,8 @@ pub async fn analyze_market_efficiency(
     if let Some(et) = efficiency_tests {
         args.push(et);
     }
-    execute_python_command(&app, "Analytics/equityInvestment/market_analysis/market_efficiency.py", &args)
+    let script_path = get_script_path(&app, "Analytics/equityInvestment/market_analysis/market_efficiency.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -337,7 +365,8 @@ pub async fn analyze_index(
     if let Some(it) = index_type {
         args.push(it);
     }
-    execute_python_command(&app, "Analytics/equityInvestment/market_analysis/index_analysis.py", &args)
+    let script_path = get_script_path(&app, "Analytics/equityInvestment/market_analysis/index_analysis.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // Portfolio Management analytics commands
@@ -351,7 +380,8 @@ pub async fn analyze_portfolio_risk(
     if let Some(rm) = risk_measures {
         args.push(rm);
     }
-    execute_python_command(&app, "Analytics/portfolioManagement/risk_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/risk_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -364,7 +394,8 @@ pub async fn analyze_portfolio_performance(
     if let Some(b) = benchmark {
         args.push(b);
     }
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_analytics.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_analytics.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -377,7 +408,8 @@ pub async fn optimize_portfolio_management(
     if let Some(om) = optimization_method {
         args.push(om);
     }
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -390,7 +422,8 @@ pub async fn plan_portfolio(
     if let Some(pp) = planning_params {
         args.push(pp);
     }
-    execute_python_command(&app, "Analytics/portfolioManagement/portfolio_planning.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_planning.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -403,7 +436,8 @@ pub async fn analyze_active_management(
     if let Some(st) = strategy_type {
         args.push(st);
     }
-    execute_python_command(&app, "Analytics/portfolioManagement/active_management.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/active_management.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -416,7 +450,8 @@ pub async fn analyze_behavioral_finance(
     if let Some(ba) = bias_analysis {
         args.push(ba);
     }
-    execute_python_command(&app, "Analytics/portfolioManagement/behavioral_finance.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/behavioral_finance.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -429,7 +464,8 @@ pub async fn analyze_etf(
     if let Some(ap) = analysis_params {
         args.push(ap);
     }
-    execute_python_command(&app, "Analytics/portfolioManagement/etf_analytics.py", &args)
+    let script_path = get_script_path(&app, "Analytics/portfolioManagement/etf_analytics.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 // Quantitative analytics commands
@@ -443,7 +479,8 @@ pub async fn calculate_quant_metrics(
     if let Some(m) = metrics {
         args.push(m);
     }
-    execute_python_command(&app, "Analytics/quant/quant_modules_3042.py", &args)
+    let script_path = get_script_path(&app, "Analytics/quant/quant_modules_3042.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }
 
 #[tauri::command]
@@ -456,5 +493,6 @@ pub async fn calculate_rates(
     if let Some(ct) = calculation_type {
         args.push(ct);
     }
-    execute_python_command(&app, "Analytics/quant/rate_calculations.py", &args)
+    let script_path = get_script_path(&app, "Analytics/quant/rate_calculations.py")?;
+    python_runtime::execute_python_script(&script_path, args)
 }

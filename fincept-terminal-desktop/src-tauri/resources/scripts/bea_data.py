@@ -576,9 +576,12 @@ class BEAWrapper:
         return result
 
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """CLI interface for BEA Data Fetcher"""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps({
             "error": "Usage: python bea_data.py <command> <args>",
             "available_commands": [
@@ -603,7 +606,7 @@ def main():
         }))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
     wrapper = BEAWrapper()
 
     try:
@@ -612,163 +615,163 @@ def main():
             print(json.dumps(result, indent=2))
 
         elif command == "parameter_list":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python bea_data.py parameter_list <dataset_name>"}))
                 sys.exit(1)
 
-            dataset_name = sys.argv[2]
+            dataset_name = args[1]
             result = wrapper.get_parameter_list(dataset_name)
             print(json.dumps(result, indent=2))
 
         elif command == "parameter_values":
-            if len(sys.argv) < 4:
+            if len(args) + 1 < 4:
                 print(json.dumps({"error": "Usage: python bea_data.py parameter_values <dataset_name> <parameter_name>"}))
                 sys.exit(1)
 
-            dataset_name = sys.argv[2]
-            parameter_name = sys.argv[3]
+            dataset_name = args[1]
+            parameter_name = args[2]
             result = wrapper.get_parameter_values(dataset_name, parameter_name)
             print(json.dumps(result, indent=2))
 
         elif command == "parameter_values_filtered":
-            if len(sys.argv) < 5:
+            if len(args) + 1 < 5:
                 print(json.dumps({"error": "Usage: python bea_data.py parameter_values_filtered <dataset_name> <parameter_name> <target_parameter>"}))
                 sys.exit(1)
 
-            dataset_name = sys.argv[2]
-            parameter_name = sys.argv[3]
-            target_parameter = sys.argv[4]
+            dataset_name = args[1]
+            parameter_name = args[2]
+            target_parameter = args[3]
             result = wrapper.get_parameter_values_filtered(dataset_name, parameter_name, target_parameter)
             print(json.dumps(result, indent=2))
 
         elif command == "nipa":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python bea_data.py nipa <table_name> [frequency] [year]"}))
                 sys.exit(1)
 
-            table_name = sys.argv[2]
-            frequency = sys.argv[3] if len(sys.argv) > 3 else 'A'
-            year = sys.argv[4] if len(sys.argv) > 4 else None
+            table_name = args[1]
+            frequency = args[2] if len(args) + 1 > 3 else 'A'
+            year = args[3] if len(args) + 1 > 4 else None
             result = wrapper.get_nipa_data(table_name, frequency, year)
             print(json.dumps(result, indent=2))
 
         elif command == "ni_underlying":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python bea_data.py ni_underlying <table_name> [frequency] [year]"}))
                 sys.exit(1)
 
-            table_name = sys.argv[2]
-            frequency = sys.argv[3] if len(sys.argv) > 3 else 'A'
-            year = sys.argv[4] if len(sys.argv) > 4 else None
+            table_name = args[1]
+            frequency = args[2] if len(args) + 1 > 3 else 'A'
+            year = args[3] if len(args) + 1 > 4 else None
             result = wrapper.get_ni_underlying_detail(table_name, frequency, year)
             print(json.dumps(result, indent=2))
 
         elif command == "fixed_assets":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python bea_data.py fixed_assets <table_name> [year]"}))
                 sys.exit(1)
 
-            table_name = sys.argv[2]
-            year = sys.argv[3] if len(sys.argv) > 3 else None
+            table_name = args[1]
+            year = args[2] if len(args) + 1 > 3 else None
             result = wrapper.get_fixed_assets(table_name, year)
             print(json.dumps(result, indent=2))
 
         elif command == "mne":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python bea_data.py mne <direction> [classification] [year] [country] [industry] [state] [ownership_level] [nonbank_affiliates_only] [get_footnotes]"}))
                 sys.exit(1)
 
-            direction = sys.argv[2]
-            classification = sys.argv[3] if len(sys.argv) > 3 else 'Country'
-            year = sys.argv[4] if len(sys.argv) > 4 else None
-            country = sys.argv[5] if len(sys.argv) > 5 else None
-            industry = sys.argv[6] if len(sys.argv) > 6 else None
-            state = sys.argv[7] if len(sys.argv) > 7 else None
-            ownership_level = sys.argv[8] if len(sys.argv) > 8 else None
-            nonbank_affiliates_only = sys.argv[9] if len(sys.argv) > 9 else None
-            get_footnotes = sys.argv[10] if len(sys.argv) > 10 else 'No'
+            direction = args[1]
+            classification = args[2] if len(args) + 1 > 3 else 'Country'
+            year = args[3] if len(args) + 1 > 4 else None
+            country = args[4] if len(args) + 1 > 5 else None
+            industry = sys.argv[6] if len(args) + 1 > 6 else None
+            state = sys.argv[7] if len(args) + 1 > 7 else None
+            ownership_level = sys.argv[8] if len(args) + 1 > 8 else None
+            nonbank_affiliates_only = sys.argv[9] if len(args) + 1 > 9 else None
+            get_footnotes = sys.argv[10] if len(args) + 1 > 10 else 'No'
             result = wrapper.get_mne_data(None, direction, classification, year, country, industry, state, ownership_level, nonbank_affiliates_only, get_footnotes)
             print(json.dumps(result, indent=2))
 
         elif command == "gdp_by_industry":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python bea_data.py gdp_by_industry <table_id> [year] [frequency] [industry]"}))
                 sys.exit(1)
 
-            table_id = sys.argv[2]
-            year = sys.argv[3] if len(sys.argv) > 3 else None
-            frequency = sys.argv[4] if len(sys.argv) > 4 else 'A'
-            industry = sys.argv[5] if len(sys.argv) > 5 else 'ALL'
+            table_id = args[1]
+            year = args[2] if len(args) + 1 > 3 else None
+            frequency = args[3] if len(args) + 1 > 4 else 'A'
+            industry = args[4] if len(args) + 1 > 5 else 'ALL'
             result = wrapper.get_gdp_by_industry(table_id, year, frequency, industry)
             print(json.dumps(result, indent=2))
 
         elif command == "international_transactions":
-            indicator = sys.argv[2] if len(sys.argv) > 2 else None
-            area_or_country = sys.argv[3] if len(sys.argv) > 3 else 'AllCountries'
-            frequency = sys.argv[4] if len(sys.argv) > 4 else 'A'
-            year = sys.argv[5] if len(sys.argv) > 5 else None
+            indicator = args[1] if len(args) + 1 > 2 else None
+            area_or_country = args[2] if len(args) + 1 > 3 else 'AllCountries'
+            frequency = args[3] if len(args) + 1 > 4 else 'A'
+            year = args[4] if len(args) + 1 > 5 else None
             result = wrapper.get_international_transactions(indicator, area_or_country, frequency, year)
             print(json.dumps(result, indent=2))
 
         elif command == "international_investment":
-            type_of_investment = sys.argv[2] if len(sys.argv) > 2 else None
-            component = sys.argv[3] if len(sys.argv) > 3 else None
-            frequency = sys.argv[4] if len(sys.argv) > 4 else 'A'
-            year = sys.argv[5] if len(sys.argv) > 5 else None
+            type_of_investment = args[1] if len(args) + 1 > 2 else None
+            component = args[2] if len(args) + 1 > 3 else None
+            frequency = args[3] if len(args) + 1 > 4 else 'A'
+            year = args[4] if len(args) + 1 > 5 else None
             result = wrapper.get_international_investment_position(type_of_investment, component, frequency, year)
             print(json.dumps(result, indent=2))
 
         elif command == "input_output":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python bea_data.py input_output <table_id> [year]"}))
                 sys.exit(1)
 
-            table_id = sys.argv[2]
-            year = sys.argv[3] if len(sys.argv) > 3 else None
+            table_id = args[1]
+            year = args[2] if len(args) + 1 > 3 else None
             result = wrapper.get_input_output(table_id, year)
             print(json.dumps(result, indent=2))
 
         elif command == "underlying_gdp_industry":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python bea_data.py underlying_gdp_industry <table_id> [year] [frequency] [industry]"}))
                 sys.exit(1)
 
-            table_id = sys.argv[2]
-            year = sys.argv[3] if len(sys.argv) > 3 else None
-            frequency = sys.argv[4] if len(sys.argv) > 4 else 'A'
-            industry = sys.argv[5] if len(sys.argv) > 5 else 'ALL'
+            table_id = args[1]
+            year = args[2] if len(args) + 1 > 3 else None
+            frequency = args[3] if len(args) + 1 > 4 else 'A'
+            industry = args[4] if len(args) + 1 > 5 else 'ALL'
             result = wrapper.get_underlying_gdp_by_industry(table_id, year, frequency, industry)
             print(json.dumps(result, indent=2))
 
         elif command == "international_services":
-            type_of_service = sys.argv[2] if len(sys.argv) > 2 else None
-            trade_direction = sys.argv[3] if len(sys.argv) > 3 else None
-            affiliation = sys.argv[4] if len(sys.argv) > 4 else None
-            area_or_country = sys.argv[5] if len(sys.argv) > 5 else 'AllCountries'
-            year = sys.argv[6] if len(sys.argv) > 6 else None
+            type_of_service = args[1] if len(args) + 1 > 2 else None
+            trade_direction = args[2] if len(args) + 1 > 3 else None
+            affiliation = args[3] if len(args) + 1 > 4 else None
+            area_or_country = args[4] if len(args) + 1 > 5 else 'AllCountries'
+            year = sys.argv[6] if len(args) + 1 > 6 else None
             result = wrapper.get_international_services_trade(type_of_service, trade_direction, affiliation, area_or_country, year)
             print(json.dumps(result, indent=2))
 
         elif command == "regional":
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({"error": "Usage: python bea_data.py regional <table_name> [line_code] [geo_fips] [year]"}))
                 sys.exit(1)
 
-            table_name = sys.argv[2]
-            line_code = sys.argv[3] if len(sys.argv) > 3 else 'ALL'
-            geo_fips = sys.argv[4] if len(sys.argv) > 4 else 'STATE'
-            year = sys.argv[5] if len(sys.argv) > 5 else None
+            table_name = args[1]
+            line_code = args[2] if len(args) + 1 > 3 else 'ALL'
+            geo_fips = args[3] if len(args) + 1 > 4 else 'STATE'
+            year = args[4] if len(args) + 1 > 5 else None
             result = wrapper.get_regional_data(table_name, line_code, geo_fips, year)
             print(json.dumps(result, indent=2))
 
         elif command == "economic_overview":
-            year = sys.argv[2] if len(sys.argv) > 2 else None
+            year = args[1] if len(args) + 1 > 2 else None
             result = wrapper.get_economic_overview(year)
             print(json.dumps(result, indent=2))
 
         elif command == "regional_snapshot":
-            geo_fips = sys.argv[2] if len(sys.argv) > 2 else 'USA'
-            year = sys.argv[3] if len(sys.argv) > 3 else None
+            geo_fips = args[1] if len(args) + 1 > 2 else 'USA'
+            year = args[2] if len(args) + 1 > 3 else None
             result = wrapper.get_regional_snapshot(geo_fips, year)
             print(json.dumps(result, indent=2))
 

@@ -397,16 +397,19 @@ class EIADataFetcher:
             "failed_fetches": len(errors)
         }
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """CLI interface for EIA data wrapper"""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps({
             "success": False,
             "error": "Usage: python eia_data.py <command> [args...]"
         }))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
     api_key = None  # In production, this should come from environment variables or config
 
     try:
@@ -414,35 +417,35 @@ def main():
 
         if command == "get_petroleum":
             # Usage: get_petroleum <category> [tables_csv] [start_date] [end_date]
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({
                     "success": False,
                     "error": "Usage: python eia_data.py get_petroleum <category> [tables_csv] [start_date] [end_date]"
                 }))
                 sys.exit(1)
 
-            category = sys.argv[2]
-            tables = sys.argv[3].split(',') if len(sys.argv) > 3 else None
-            start_date = sys.argv[4] if len(sys.argv) > 4 else None
-            end_date = sys.argv[5] if len(sys.argv) > 5 else None
+            category = args[1]
+            tables = args[2].split(',') if len(args) + 1 > 3 else None
+            start_date = args[3] if len(args) + 1 > 4 else None
+            end_date = args[4] if len(args) + 1 > 5 else None
 
             result = fetcher.get_petroleum_status_report(category, tables, start_date, end_date)
             print(json.dumps(result, indent=2))
 
         elif command == "get_steo":
             # Usage: get_steo <table> [symbols_csv] [frequency] [start_date] [end_date]
-            if len(sys.argv) < 3:
+            if len(args) + 1 < 3:
                 print(json.dumps({
                     "success": False,
                     "error": "Usage: python eia_data.py get_steo <table> [symbols_csv] [frequency] [start_date] [end_date]"
                 }))
                 sys.exit(1)
 
-            table = sys.argv[2]
-            symbols = sys.argv[3].split(',') if len(sys.argv) > 3 and sys.argv[3] else None
-            frequency = sys.argv[4] if len(sys.argv) > 4 else "month"
-            start_date = sys.argv[5] if len(sys.argv) > 5 else None
-            end_date = sys.argv[6] if len(sys.argv) > 6 else None
+            table = args[1]
+            symbols = args[2].split(',') if len(args) + 1 > 3 and args[2] else None
+            frequency = args[3] if len(args) + 1 > 4 else "month"
+            start_date = args[4] if len(args) + 1 > 5 else None
+            end_date = sys.argv[6] if len(args) + 1 > 6 else None
 
             result = fetcher.get_short_term_energy_outlook(table, symbols, frequency, start_date, end_date)
             print(json.dumps(result, indent=2))
@@ -456,7 +459,7 @@ def main():
             print(json.dumps(result, indent=2))
 
         elif command == "energy_overview":
-            limit = int(sys.argv[2]) if len(sys.argv) > 2 else None
+            limit = int(args[1]) if len(args) + 1 > 2 else None
             result = fetcher.get_energy_overview(limit)
             print(json.dumps(result, indent=2))
 
@@ -472,8 +475,8 @@ def main():
 
         elif command == "get_petroleum_imports":
             # Convenience method for petroleum imports
-            start_date = sys.argv[2] if len(sys.argv) > 2 else None
-            end_date = sys.argv[3] if len(sys.argv) > 3 else None
+            start_date = args[1] if len(args) + 1 > 2 else None
+            end_date = args[2] if len(args) + 1 > 3 else None
             result = fetcher.get_petroleum_status_report("imports", ["imports"], start_date, end_date)
             print(json.dumps(result, indent=2))
 

@@ -1,6 +1,7 @@
 // U.S. Treasury FiscalData API commands
 #![allow(dead_code)]
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 
 /// Execute FiscalData Python script command
 #[tauri::command]
@@ -11,7 +12,8 @@ pub async fn execute_fiscaldata_command(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    execute_python_command(&app, "fiscaldata_data.py", &cmd_args)
+    let script_path = get_script_path(&app, "fiscaldata_data.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
 /// Get Debt to the Penny data - Daily public debt outstanding

@@ -954,13 +954,16 @@ class NASDAQDataAPI:
             return period_str
 
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """Main function for CLI interface"""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps(NASDAQError("cli", "Usage: python nasdaq_data.py <command> [args...]").to_dict()))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
 
     # Get API key from environment
     api_key = os.getenv("NASDAQ_API_KEY")
@@ -971,46 +974,46 @@ def main():
     # Map commands to async methods
     async def run_command():
         if command == "search_equities":
-            query = sys.argv[2] if len(sys.argv) > 2 else ""
-            is_etf_arg = sys.argv[3] if len(sys.argv) > 3 else None
+            query = args[1] if len(args) + 1 > 2 else ""
+            is_etf_arg = args[2] if len(args) + 1 > 3 else None
             is_etf = None
             if is_etf_arg is not None:
                 is_etf = is_etf_arg.lower() == "true"
             return await api.search_equities(query, is_etf)
 
         elif command == "equity_screener":
-            exchange = sys.argv[2] if len(sys.argv) > 2 else "all"
-            market_cap = sys.argv[3] if len(sys.argv) > 3 else "all"
-            sector = sys.argv[4] if len(sys.argv) > 4 else "all"
-            country = sys.argv[5] if len(sys.argv) > 5 else "all"
-            limit = int(sys.argv[6]) if len(sys.argv) > 6 and sys.argv[6].isdigit() else None
+            exchange = args[1] if len(args) + 1 > 2 else "all"
+            market_cap = args[2] if len(args) + 1 > 3 else "all"
+            sector = args[3] if len(args) + 1 > 4 else "all"
+            country = args[4] if len(args) + 1 > 5 else "all"
+            limit = int(sys.argv[6]) if len(args) + 1 > 6 and sys.argv[6].isdigit() else None
             return await api.get_equity_screener(exchange, market_cap, sector, country, limit)
 
         elif command == "dividend_calendar":
-            start_date = sys.argv[2] if len(sys.argv) > 2 else None
-            end_date = sys.argv[3] if len(sys.argv) > 3 else None
+            start_date = args[1] if len(args) + 1 > 2 else None
+            end_date = args[2] if len(args) + 1 > 3 else None
             return await api.get_dividend_calendar(start_date, end_date)
 
         elif command == "earnings_calendar":
-            start_date = sys.argv[2] if len(sys.argv) > 2 else None
-            end_date = sys.argv[3] if len(sys.argv) > 3 else None
+            start_date = args[1] if len(args) + 1 > 2 else None
+            end_date = args[2] if len(args) + 1 > 3 else None
             return await api.get_earnings_calendar(start_date, end_date)
 
         elif command == "ipo_calendar":
-            status = sys.argv[2] if len(sys.argv) > 2 else "priced"
-            is_spo = sys.argv[3].lower() == "true" if len(sys.argv) > 3 else False
-            start_date = sys.argv[4] if len(sys.argv) > 4 else None
-            end_date = sys.argv[5] if len(sys.argv) > 5 else None
+            status = args[1] if len(args) + 1 > 2 else "priced"
+            is_spo = args[2].lower() == "true" if len(args) + 1 > 3 else False
+            start_date = args[3] if len(args) + 1 > 4 else None
+            end_date = args[4] if len(args) + 1 > 5 else None
             return await api.get_ipo_calendar(status, is_spo, start_date, end_date)
 
         elif command == "economic_calendar":
-            start_date = sys.argv[2] if len(sys.argv) > 2 else None
-            end_date = sys.argv[3] if len(sys.argv) > 3 else None
-            country = sys.argv[4] if len(sys.argv) > 4 else None
+            start_date = args[1] if len(args) + 1 > 2 else None
+            end_date = args[2] if len(args) + 1 > 3 else None
+            country = args[3] if len(args) + 1 > 4 else None
             return await api.get_economic_calendar(start_date, end_date, country)
 
         elif command == "top_retail":
-            limit = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 10
+            limit = int(args[1]) if len(args) + 1 > 2 and args[1].isdigit() else 10
             return await api.get_top_retail_activity(limit)
 
         elif command == "market_overview":

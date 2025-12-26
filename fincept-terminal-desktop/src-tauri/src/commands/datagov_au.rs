@@ -1,5 +1,6 @@
 // Australian Government data commands
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 
 /// Execute Australian Government Python script command
 #[tauri::command]
@@ -12,8 +13,9 @@ pub async fn execute_datagov_au_command(
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with console window hidden on Windows
-    execute_python_command(&app, "datagov_au_api.py", &cmd_args)
+    // Execute Python script with PyO3
+    let script_path = get_script_path(&app, "datagov_au_api.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
 /// Search Australian government datasets

@@ -7156,9 +7156,12 @@ def _calculate_short_volume_summary(results: List[Dict]) -> Dict:
         "bearish_sentiment_count": sentiment_distribution.get("Bearish", 0) + sentiment_distribution.get("Very Bearish", 0)
     }
 
-def main():
+def main(args=None):
+    # Support both PyO3 and subprocess
+    if args is None:
+        args = sys.argv[1:]
     """Main CLI entry point"""
-    if len(sys.argv) < 2:
+    if len(args) + 1 < 2:
         print(json.dumps({
             "error": "Usage: python polygon_data.py <command> <args>",
             "commands": [
@@ -7249,7 +7252,7 @@ def main():
         }))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
 
     if command == "tickers":
         # Parse optional arguments using key-value pairs
@@ -7286,7 +7289,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "ticker-details":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py ticker-details --ticker=SYMBOL [--date=DATE]"}))
             sys.exit(1)
 
@@ -7327,7 +7330,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "related-tickers":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py related-tickers --ticker=SYMBOL"}))
             sys.exit(1)
 
@@ -7465,7 +7468,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "ticker-events":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py ticker-events --identifier=IDENTIFIER [--types=TYPES]"}))
             sys.exit(1)
 
@@ -7536,7 +7539,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "ticker-snapshot":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py ticker-snapshot --ticker=SYMBOL"}))
             sys.exit(1)
 
@@ -7608,7 +7611,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "top-movers":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py top-movers --direction=gainers/losers [--include-otc=true/false]"}))
             sys.exit(1)
 
@@ -7635,7 +7638,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "trades":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py trades --ticker=SYMBOL [--timestamp=TIMESTAMP] [--timestamp-gte=TIMESTAMP] [--timestamp-lte=TIMESTAMP] [--limit=NUMBER] [--sort=SORT] [--order=ORDER]"}))
             sys.exit(1)
 
@@ -7670,7 +7673,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "last-trade":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py last-trade --ticker=SYMBOL"}))
             sys.exit(1)
 
@@ -7694,7 +7697,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "quotes":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py quotes --ticker=SYMBOL [--timestamp=TIMESTAMP] [--timestamp-gte=TIMESTAMP] [--timestamp-lte=TIMESTAMP] [--limit=NUMBER] [--sort=SORT] [--order=ORDER]"}))
             sys.exit(1)
 
@@ -7729,7 +7732,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "last-quote":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py last-quote --ticker=SYMBOL"}))
             sys.exit(1)
 
@@ -7753,7 +7756,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "sma":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py sma --ticker=SYMBOL --window=NUMBER --timespan=TIMESPAN --series-type=TYPE --adjusted=true/false --expand-underlying=true/false --limit=NUMBER"}))
             sys.exit(1)
 
@@ -7790,7 +7793,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "ema":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py ema --ticker=SYMBOL --window=NUMBER --timespan=TIMESPAN --series-type=TYPE --adjusted=true/false --expand-underlying=true/false --limit=NUMBER"}))
             sys.exit(1)
 
@@ -7827,7 +7830,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "macd":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py macd --ticker=SYMBOL --short-window=NUMBER --long-window=NUMBER --signal-window=NUMBER --timespan=TIMESPAN --series-type=TYPE --adjusted=true/false --expand-underlying=true/false --limit=NUMBER"}))
             sys.exit(1)
 
@@ -7864,7 +7867,7 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "rsi":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python polygon_data.py rsi --ticker=SYMBOL --window=NUMBER --timespan=TIMESPAN --series-type=TYPE --adjusted=true/false --expand-underlying=true/false --limit=NUMBER"}))
             sys.exit(1)
 

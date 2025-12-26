@@ -4,12 +4,14 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { geopoliticsService } from '@/services/geopoliticsService';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import GeopoliticsHDXPanel from './GeopoliticsHDXPanel';
 
 const GeopoliticsTab: React.FC = () => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const { t } = useTranslation('geopolitics');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'trade' | 'hdx'>('trade');
   const [qrNotifications, setQrNotifications] = useState<any[]>([]);
   const [epingNotifications, setEpingNotifications] = useState<any[]>([]);
   const [tariffData, setTariffData] = useState<any[]>([]);
@@ -285,53 +287,95 @@ const GeopoliticsTab: React.FC = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ color: colors.primary, fontWeight: 'bold' }}>{t('title')} INTELLIGENCE</span>
             <span style={{ color: colors.text }}>|</span>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              <button
+                onClick={() => setActiveTab('trade')}
+                style={{
+                  backgroundColor: activeTab === 'trade' ? colors.primary : colors.background,
+                  color: activeTab === 'trade' ? colors.background : colors.text,
+                  border: `1px solid ${colors.textMuted}`,
+                  padding: '2px 10px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  borderRadius: '2px',
+                  fontWeight: 'bold'
+                }}
+              >
+                TRADE DATA
+              </button>
+              <button
+                onClick={() => setActiveTab('hdx')}
+                style={{
+                  backgroundColor: activeTab === 'hdx' ? colors.primary : colors.background,
+                  color: activeTab === 'hdx' ? colors.background : colors.text,
+                  border: `1px solid ${colors.textMuted}`,
+                  padding: '2px 10px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  borderRadius: '2px',
+                  fontWeight: 'bold'
+                }}
+              >
+                HDX DATA
+              </button>
+            </div>
+            <span style={{ color: colors.text }}>|</span>
             <span style={{ color: colors.secondary }}>● LIVE</span>
-            <span style={{ color: colors.text }}>|</span>
-            <select
-              value={selectedCountry}
-              onChange={(e) => setSelectedCountry(e.target.value)}
-              style={{
-                backgroundColor: colors.background,
-                color: colors.text,
-                border: `1px solid ${colors.textMuted}`,
-                padding: '2px 8px',
-                fontSize: '12px',
-                borderRadius: '2px',
-                cursor: 'pointer'
-              }}
-            >
-              {countries.map(c => (
-                <option key={c.code} value={c.code}>{c.name}</option>
-              ))}
-            </select>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.info }}>QR: {qrNotifications.length}</span>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.warning }}>ePing: {epingNotifications.length}</span>
+            {activeTab === 'trade' && (
+              <>
+                <span style={{ color: colors.text }}>|</span>
+                <select
+                  value={selectedCountry}
+                  onChange={(e) => setSelectedCountry(e.target.value)}
+                  style={{
+                    backgroundColor: colors.background,
+                    color: colors.text,
+                    border: `1px solid ${colors.textMuted}`,
+                    padding: '2px 8px',
+                    fontSize: '12px',
+                    borderRadius: '2px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {countries.map(c => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
+                <span style={{ color: colors.text }}>|</span>
+                <span style={{ color: colors.info }}>QR: {qrNotifications.length}</span>
+                <span style={{ color: colors.text }}>|</span>
+                <span style={{ color: colors.warning }}>ePing: {epingNotifications.length}</span>
+              </>
+            )}
             <span style={{ color: colors.text }}>|</span>
             <span style={{ color: colors.text }}>{currentTime.toISOString().substring(0, 19)} UTC</span>
           </div>
-          <button
-            onClick={loadGeopoliticsData}
-            disabled={loading}
-            style={{
-              backgroundColor: loading ? colors.textMuted : colors.primary,
-              color: colors.background,
-              border: 'none',
-              padding: '4px 12px',
-              fontSize: '12px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              borderRadius: '2px',
-              fontWeight: 'bold'
-            }}
-          >
-            {loading ? 'LOADING...' : '↻ REFRESH'}
-          </button>
+          {activeTab === 'trade' && (
+            <button
+              onClick={loadGeopoliticsData}
+              disabled={loading}
+              style={{
+                backgroundColor: loading ? colors.textMuted : colors.primary,
+                color: colors.background,
+                border: 'none',
+                padding: '4px 12px',
+                fontSize: '12px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                borderRadius: '2px',
+                fontWeight: 'bold'
+              }}
+            >
+              {loading ? 'LOADING...' : '↻ REFRESH'}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Main Content */}
-      <div style={{ flex: 1, overflow: 'auto', padding: '8px', backgroundColor: '#050505' }}>
+      {activeTab === 'hdx' ? (
+        <GeopoliticsHDXPanel selectedRegion={selectedCountry} />
+      ) : (
+        <div style={{ flex: 1, overflow: 'auto', padding: '8px', backgroundColor: '#050505' }}>
 
         {/* Row 1: Statistics Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '8px' }}>
@@ -821,14 +865,22 @@ const GeopoliticsTab: React.FC = () => {
         </div>
 
       </div>
+      )}
 
       {/* Status Bar */}
       <TabFooter
         tabName="GEOPOLITICS"
-        leftInfo={[
-          { label: 'WTO Real-time Data', color: colors.textMuted },
-          { label: `${qrNotifications.length + epingNotifications.length} Total Notifications`, color: colors.textMuted },
-        ]}
+        leftInfo={
+          activeTab === 'trade'
+            ? [
+                { label: 'WTO Real-time Data', color: colors.textMuted },
+                { label: `${qrNotifications.length + epingNotifications.length} Total Notifications`, color: colors.textMuted },
+              ]
+            : [
+                { label: 'HDX Humanitarian Data', color: colors.textMuted },
+                { label: 'Global Crisis Intelligence', color: colors.textMuted },
+              ]
+        }
         statusInfo={`Last Updated: ${currentTime.toTimeString().substring(0, 8)}`}
         backgroundColor={colors.panel}
         borderColor={colors.textMuted}

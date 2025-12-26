@@ -93,14 +93,14 @@ Analyze through American world order framework.
         return "\n".join(formatted)
 
 
-def main():
+def main(argv=None):
     """CLI entry point for testing"""
     import argparse
 
     parser = argparse.ArgumentParser(description="American World Order Agent")
     parser.add_argument("--query", required=True, help="Query to analyze")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     agent = AmericanOrderAgent()
     result = agent.analyze(args.query)

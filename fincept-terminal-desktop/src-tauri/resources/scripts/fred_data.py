@@ -219,29 +219,33 @@ def get_multiple_series(series_ids: List[str], start_date: Optional[str] = None,
         results.append(result)
     return results
 
-def main():
-    if len(sys.argv) < 2:
+def main(args=None):
+    # Support both PyO3 (args parameter) and subprocess (sys.argv)
+    if args is None:
+        args = sys.argv[1:]
+
+    if len(args) + 1 < 2:
         print(json.dumps({"error": "Usage: python fred_data.py <command> <args>"}))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
 
     if command == "series":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python fred_data.py series <series_id> [start_date] [end_date] [frequency] [transform]"}))
             sys.exit(1)
 
-        series_id = sys.argv[2]
-        start_date = sys.argv[3] if len(sys.argv) > 3 else None
-        end_date = sys.argv[4] if len(sys.argv) > 4 else None
-        frequency = sys.argv[5] if len(sys.argv) > 5 else None
-        transform = sys.argv[6] if len(sys.argv) > 6 else None
+        series_id = args[1]
+        start_date = args[2] if len(args) + 1 > 3 else None
+        end_date = args[3] if len(args) + 1 > 4 else None
+        frequency = sys.argv[5] if len(args) + 1 > 5 else None
+        transform = sys.argv[6] if len(args) + 1 > 6 else None
 
         result = get_series(series_id, start_date, end_date, frequency, transform)
         print(json.dumps(result, indent=2))
 
     elif command == "multiple":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python fred_data.py multiple <series_id1> <series_id2> ... [start_date] [end_date]"}))
             sys.exit(1)
 
@@ -250,7 +254,7 @@ def main():
         start_date = None
         end_date = None
 
-        for i in range(2, len(sys.argv)):
+        for i in range(2, len(args) + 1):
             if '-' in sys.argv[i] and len(sys.argv[i]) == 10:  # Date format YYYY-MM-DD
                 if start_date is None:
                     start_date = sys.argv[i]
@@ -263,39 +267,39 @@ def main():
         print(json.dumps(result, indent=2))
 
     elif command == "search":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python fred_data.py search <search_text> [limit]"}))
             sys.exit(1)
 
-        search_text = sys.argv[2]
-        limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
+        search_text = args[1]
+        limit = int(args[2]) if len(args) + 1 > 3 else 10
 
         result = search_series(search_text, limit)
         print(json.dumps(result, indent=2))
 
     elif command == "categories":
-        category_id = int(sys.argv[2]) if len(sys.argv) > 2 else 0
+        category_id = int(args[1]) if len(args) + 1 > 2 else 0
         result = get_categories(category_id)
         print(json.dumps(result, indent=2))
 
     elif command == "category_series":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python fred_data.py category_series <category_id> [limit]"}))
             sys.exit(1)
 
-        category_id = int(sys.argv[2])
-        limit = int(sys.argv[3]) if len(sys.argv) > 3 else 50
+        category_id = int(args[1])
+        limit = int(args[2]) if len(args) + 1 > 3 else 50
 
         result = get_category_series(category_id, limit)
         print(json.dumps(result, indent=2))
 
     elif command == "releases":
-        if len(sys.argv) < 3:
+        if len(args) + 1 < 3:
             print(json.dumps({"error": "Usage: python fred_data.py releases <release_id> [limit]"}))
             sys.exit(1)
 
-        release_id = int(sys.argv[2])
-        limit = int(sys.argv[3]) if len(sys.argv) > 3 else 10
+        release_id = int(args[1])
+        limit = int(args[2]) if len(args) + 1 > 3 else 10
 
         result = get_release_dates(release_id, limit)
         print(json.dumps(result, indent=2))

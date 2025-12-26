@@ -113,13 +113,13 @@ def execute_agent(parameters: Dict[str, Any], inputs: Dict[str, Any]) -> Dict[st
             "agent": "capitalism"
         }
 
-def main():
+def main(argv=None):
     """CLI entry point"""
     parser = argparse.ArgumentParser(description='Capitalism Economic Agent')
     parser.add_argument('--parameters', type=str, required=True, help='JSON string of parameters')
     parser.add_argument('--inputs', type=str, required=True, help='JSON string of inputs')
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         parameters = json.loads(args.parameters)
@@ -127,7 +127,9 @@ def main():
 
         result = execute_agent(parameters, inputs)
 
-        print(json.dumps(result, indent=2))
+        result_json = json.dumps(result, indent=2)
+        print(result_json)
+        return result_json
         sys.exit(0)
 
     except json.JSONDecodeError as e:

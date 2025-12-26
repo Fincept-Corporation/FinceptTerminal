@@ -1,7 +1,8 @@
 // ECB (European Central Bank) data commands based on OpenBB ECB provider
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 
-/// Execute ECB Python script command
+/// Execute ECB Python script command with PyO3
 #[tauri::command]
 pub async fn execute_ecb_command(
     app: tauri::AppHandle,
@@ -12,8 +13,9 @@ pub async fn execute_ecb_command(
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with console window hidden on Windows
-    execute_python_command(&app, "ecb_data.py", &cmd_args)
+    // Execute Python script with PyO3
+    let script_path = get_script_path(&app, "ecb_data.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
 // BASIC DATA ACCESS COMMANDS

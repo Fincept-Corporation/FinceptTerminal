@@ -1,6 +1,7 @@
 // NASA GIBS (Global Imagery Browse Services) API commands
 #![allow(dead_code)]
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 
 /// Execute NASA GIBS Python script command
 #[tauri::command]
@@ -11,7 +12,8 @@ pub async fn execute_nasa_gibs_command(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    execute_python_command(&app, "nasa_gibs_api.py", &cmd_args)
+    let script_path = get_script_path(&app, "nasa_gibs_api.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }
 
 /// List all available imagery layers from NASA GIBS

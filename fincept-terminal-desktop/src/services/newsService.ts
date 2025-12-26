@@ -162,8 +162,49 @@ function parseRSSFeed(xmlText: string, feedConfig: typeof RSS_FEEDS[0]): NewsArt
         // Determine sentiment based on keywords
         let sentiment: NewsArticle['sentiment'] = 'NEUTRAL';
         const textLower = (title + ' ' + description).toLowerCase();
-        const bullishWords = ['surge', 'rally', 'gain', 'beat', 'growth', 'up', 'rise', 'jump', 'soar', 'high', 'record'];
-        const bearishWords = ['fall', 'drop', 'decline', 'loss', 'down', 'crash', 'plunge', 'miss', 'weak', 'low'];
+
+        // Comprehensive bullish keywords
+        const bullishWords = [
+          // Price action
+          'surge', 'rally', 'gain', 'rise', 'jump', 'soar', 'climb', 'spike', 'advance', 'rebound',
+          'boost', 'ascend', 'escalate', 'uptick', 'uptrend', 'upside', 'outperform', 'breakout',
+          // Performance
+          'beat', 'exceed', 'outpace', 'tops', 'smash', 'crush', 'strong', 'stellar', 'robust',
+          'solid', 'impressive', 'record', 'all-time high', 'peak', 'best', 'highest',
+          // Growth & fundamentals
+          'growth', 'expand', 'expansion', 'accelerate', 'momentum', 'bullish', 'optimistic',
+          'positive', 'upgrade', 'buy', 'overweight', 'accumulate', 'conviction buy',
+          // Business terms
+          'profit', 'earnings beat', 'revenue growth', 'margin expansion', 'innovation',
+          'breakthrough', 'success', 'win', 'victory', 'approval', 'approved', 'deal', 'partnership',
+          'acquisition', 'merger', 'dividend increase', 'buyback', 'bonus', 'reward',
+          // Market sentiment
+          'confidence', 'optimism', 'enthusiasm', 'hope', 'recovery', 'turnaround', 'revival',
+          'strength', 'resilience', 'stability', 'opportunity', 'potential', 'promise'
+        ];
+
+        // Comprehensive bearish keywords
+        const bearishWords = [
+          // Price action
+          'fall', 'drop', 'decline', 'plunge', 'crash', 'tumble', 'slide', 'sink', 'slump', 'dip',
+          'tank', 'nosedive', 'collapse', 'crater', 'downturn', 'downside', 'underperform', 'breakdown',
+          // Performance
+          'miss', 'disappoint', 'fail', 'below', 'under', 'worst', 'lowest', 'poor', 'weak',
+          'soften', 'sluggish', 'slow', 'stagnant', 'lackluster', 'underwhelming',
+          // Losses & problems
+          'loss', 'losses', 'deficit', 'shortfall', 'gap', 'trouble', 'concern', 'worry',
+          'fear', 'risk', 'threat', 'warning', 'alert', 'caution', 'danger', 'crisis',
+          // Business terms
+          'layoff', 'cut', 'reduction', 'downgrade', 'sell', 'underweight', 'avoid',
+          'bankruptcy', 'default', 'debt', 'writedown', 'impairment', 'charge', 'penalty',
+          'lawsuit', 'investigation', 'probe', 'scandal', 'fraud', 'violation',
+          // Market sentiment
+          'pessimism', 'bearish', 'negative', 'doubt', 'uncertainty', 'volatility', 'turbulence',
+          'pressure', 'struggle', 'challenge', 'headwind', 'obstacle', 'setback', 'reversal',
+          // Economic
+          'recession', 'inflation', 'rate hike', 'tightening', 'slowdown', 'contraction',
+          'unemployment', 'jobless', 'deflation'
+        ];
 
         const bullishCount = bullishWords.filter(word => textLower.includes(word)).length;
         const bearishCount = bearishWords.filter(word => textLower.includes(word)).length;

@@ -1,6 +1,7 @@
 // Polygon.io data commands
 use serde::{Deserialize, Serialize};
-use crate::utils::python::execute_python_command;
+use crate::utils::python::get_script_path;
+use crate::python_runtime;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolygonResponse {
@@ -9,7 +10,7 @@ pub struct PolygonResponse {
     pub error: Option<String>,
 }
 
-/// Execute Polygon.io Python script command
+/// Execute Polygon.io Python script command with PyO3
 #[tauri::command]
 pub async fn execute_polygon_command(
     app: tauri::AppHandle,
@@ -17,15 +18,13 @@ pub async fn execute_polygon_command(
     args: Vec<String>,
     api_key: Option<String>,
 ) -> Result<String, String> {
-    // Set API key environment variable if provided
     if let Some(key) = api_key {
         std::env::set_var("POLYGON_API_KEY", key);
     }
 
-    // Build command arguments
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
 
-    // Execute Python script with console window hidden on Windows
-    execute_python_command(&app, "polygon_data.py", &cmd_args)
+    let script_path = get_script_path(&app, "polygon_data.py")?;
+    python_runtime::execute_python_script(&script_path, cmd_args)
 }

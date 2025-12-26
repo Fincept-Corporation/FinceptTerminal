@@ -1,39 +1,40 @@
-// Utility module for Python execution path resolution
+// Utility module for Python execution with PyO3
 use std::path::PathBuf;
-use std::process::Command;
 use tauri::Manager;
-
-// Windows-specific imports to hide console windows
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
-// Windows creation flags to hide console window
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// Get the Python executable path from app installation directory
 /// In production: Uses installed Python from setup.rs
-/// In development: Falls back to system Python if installed Python not found
+/// In development: Uses %LOCALAPPDATA%/fincept-dev (matches setup.rs)
 pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // Get the resource directory where Python was installed by setup.rs
-    // Python is installed in the app's installation folder (resources/python)
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| format!("Failed to get resource directory: {}", e))?;
+    // Get install directory (same logic as setup.rs)
+    let install_dir = if cfg!(debug_assertions) {
+        // Dev mode: use OS-specific user directory
+        let base_dir = if cfg!(target_os = "windows") {
+            std::env::var("LOCALAPPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from("C:\\Users\\Default\\AppData\\Local"))
+        } else if cfg!(target_os = "macos") {
+            std::env::var("HOME")
+                .map(|h| PathBuf::from(h).join("Library/Application Support"))
+                .unwrap_or_else(|_| PathBuf::from("/tmp"))
+        } else {
+            std::env::var("HOME")
+                .map(|h| PathBuf::from(h).join(".local/share"))
+                .unwrap_or_else(|_| PathBuf::from("/tmp"))
+        };
+        base_dir.join("fincept-dev")
+    } else {
+        // Production: use app resource directory
+        app.path()
+            .resource_dir()
+            .map_err(|e| format!("Failed to get resource directory: {}", e))?
+    };
 
     // Platform-specific Python executable location
     let python_exe = if cfg!(target_os = "windows") {
-        // Windows: resources/python/python.exe
-        resource_dir.join("python").join("python.exe")
-    } else if cfg!(target_os = "linux") {
-        // Linux: resources/python/bin/python3
-        resource_dir.join("python").join("bin").join("python3")
-    } else if cfg!(target_os = "macos") {
-        // macOS: resources/python/bin/python3
-        resource_dir.join("python").join("bin").join("python3")
+        install_dir.join("python").join("python.exe")
     } else {
-        return Err("Unsupported platform".to_string());
+        install_dir.join("python").join("bin").join("python3")
     };
 
     // DEVELOPMENT MODE: Use bundled Python (where packages are installed)
@@ -94,20 +95,35 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 /// Get the Bun executable path from app installation directory
 /// In production: Uses installed Bun from setup.rs
-/// In development: Falls back to system Bun if installed Bun not found
+/// In development: Uses %LOCALAPPDATA%/fincept-dev (matches setup.rs)
 pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let resource_dir = app
-        .path()
-        .resource_dir()
-        .map_err(|e| format!("Failed to get resource directory: {}", e))?;
+    // Get install directory (same logic as setup.rs)
+    let install_dir = if cfg!(debug_assertions) {
+        let base_dir = if cfg!(target_os = "windows") {
+            std::env::var("LOCALAPPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from("C:\\Users\\Default\\AppData\\Local"))
+        } else if cfg!(target_os = "macos") {
+            std::env::var("HOME")
+                .map(|h| PathBuf::from(h).join("Library/Application Support"))
+                .unwrap_or_else(|_| PathBuf::from("/tmp"))
+        } else {
+            std::env::var("HOME")
+                .map(|h| PathBuf::from(h).join(".local/share"))
+                .unwrap_or_else(|_| PathBuf::from("/tmp"))
+        };
+        base_dir.join("fincept-dev")
+    } else {
+        app.path()
+            .resource_dir()
+            .map_err(|e| format!("Failed to get resource directory: {}", e))?
+    };
 
     // Platform-specific Bun executable location
     let bun_exe = if cfg!(target_os = "windows") {
-        // Windows: resources/bun/bun.exe
-        resource_dir.join("bun").join("bun.exe")
+        install_dir.join("bun").join("bun.exe")
     } else {
-        // Unix (Linux/macOS): resources/bun/bun
-        resource_dir.join("bun").join("bun")
+        install_dir.join("bun").join("bun")
     };
 
     // DEVELOPMENT MODE: Prefer system Bun
@@ -191,112 +207,16 @@ pub fn get_script_path(app: &tauri::AppHandle, script_name: &str) -> Result<Path
     ))
 }
 
-/// Create a Command that hides console windows on Windows
-/// Use this instead of Command::new("python") to prevent terminal windows
-pub fn python_command() -> Command {
-    #[cfg(target_os = "windows")]
-    {
-        let mut cmd = Command::new("python");
-        cmd.creation_flags(CREATE_NO_WINDOW);
-        cmd
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        Command::new("python")
-    }
-}
-
-/// Execute a Python script with arguments and return the output
-/// This function automatically hides console windows on Windows
-pub fn execute_python_command(
+/// Execute Python script with PyO3 embedded runtime
+/// This is the primary execution method - fast, embedded, no subprocess
+pub fn execute_python_script_simple(
     app: &tauri::AppHandle,
-    script_name: &str,
-    args: &[String],
+    script_relative_path: &str,
+    args: &[&str],
 ) -> Result<String, String> {
-    let python_path = get_python_path(app)?;
-    let script_path = get_script_path(app, script_name)?;
+    let script_path = get_script_path(app, script_relative_path)?;
+    let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
-    // Verify script exists
-    if !script_path.exists() {
-        return Err(format!(
-            "Script not found at: {}",
-            script_path.display()
-        ));
-    }
-
-    // Build command
-    let mut cmd = Command::new(&python_path);
-    cmd.arg(&script_path).args(args);
-
-    // Get Polygon API key from window storage via webview
-    // For now, we'll check common environment variable
-    if let Ok(api_key) = std::env::var("POLYGON_API_KEY") {
-        cmd.env("POLYGON_API_KEY", api_key);
-    }
-
-    // Hide console window on Windows
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    // Execute and capture output
-    let output = cmd
-        .output()
-        .map_err(|e| format!("Failed to execute command: {}", e))?;
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        // Filter out log lines (ERROR, WARNING, INFO, DEBUG) and keep only JSON
-        // Log lines typically start with log level keywords
-        let filtered_output: Vec<&str> = stdout
-            .lines()
-            .filter(|line| {
-                let trimmed = line.trim();
-                // Skip empty lines
-                if trimmed.is_empty() {
-                    return false;
-                }
-                // Skip lines that start with log level indicators
-                if trimmed.starts_with("ERROR")
-                    || trimmed.starts_with("WARNING")
-                    || trimmed.starts_with("INFO")
-                    || trimmed.starts_with("DEBUG")
-                    || trimmed.starts_with("TRACE") {
-                    return false;
-                }
-                // Skip continuation lines (lines that are indented)
-                if line.starts_with("         ") || line.starts_with("\t") {
-                    return false;
-                }
-                // Keep everything else (JSON output)
-                true
-            })
-            .collect();
-
-        Ok(filtered_output.join("\n"))
-    } else {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-
-        // Build detailed error message
-        let mut error_msg = format!("Command failed with exit code: {:?}\n\n", output.status.code());
-
-        if !stderr.is_empty() {
-            error_msg.push_str(&format!("STDERR:\n{}\n\n", stderr));
-        }
-
-        if !stdout.is_empty() {
-            error_msg.push_str(&format!("STDOUT:\n{}\n\n", stdout));
-        }
-
-        if stderr.is_empty() && stdout.is_empty() {
-            error_msg.push_str("No output was produced by the Python script.\n");
-            error_msg.push_str(&format!("Script: {}\n", script_path.display()));
-            error_msg.push_str(&format!("Python: {}\n", python_path.display()));
-            error_msg.push_str(&format!("Args: {:?}", args));
-        }
-
-        Err(error_msg)
-    }
+    // Execute with PyO3
+    crate::python_runtime::execute_python_script(&script_path, args_vec)
 }

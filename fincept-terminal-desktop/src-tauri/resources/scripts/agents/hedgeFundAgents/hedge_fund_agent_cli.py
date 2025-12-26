@@ -296,15 +296,17 @@ def execute_agent(parameters: Dict[str, Any], inputs: Dict[str, Any]) -> Dict[st
     except Exception as e:
         return {"success": False, "error": str(e), "agent": "hedge_fund"}
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description='Hedge Fund Agent - Multi-Strategy Analysis')
     parser.add_argument('--parameters', type=str, required=True)
     parser.add_argument('--inputs', type=str, required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     try:
         result = execute_agent(json.loads(args.parameters), json.loads(args.inputs))
-        print(json.dumps(result, indent=2))
+        result_json = json.dumps(result, indent=2)
+        print(result_json)
+        return result_json
         sys.exit(0)
     except Exception as e:
         print(json.dumps({"success": False, "error": str(e), "agent": "hedge_fund"}), file=sys.stderr)

@@ -1,174 +1,84 @@
+use crate::utils::python::execute_python_script_simple;
 use tauri::command;
 
 // ==================== METADATA COMMANDS ====================
 
 #[command]
-pub async fn bea_get_dataset_list() -> Result<String, String> {
-    let output = crate::utils::python::python_command()
-        .arg("resources/scripts/bea_data.py")
-        .arg("dataset_list")
-        .output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+pub async fn bea_get_dataset_list(app: tauri::AppHandle) -> Result<String, String> {
+    execute_python_script_simple(&app, "bea_data.py", &["dataset_list"])
 }
 
 #[command]
-pub async fn bea_get_parameter_list(dataset_name: String) -> Result<String, String> {
-    let output = crate::utils::python::python_command()
-        .arg("resources/scripts/bea_data.py")
-        .arg("parameter_list")
-        .arg(&dataset_name)
-        .output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+pub async fn bea_get_parameter_list(app: tauri::AppHandle, dataset_name: String) -> Result<String, String> {
+    execute_python_script_simple(&app, "bea_data.py", &["parameter_list", &dataset_name])
 }
 
 #[command]
-pub async fn bea_get_parameter_values(dataset_name: String, parameter_name: String) -> Result<String, String> {
-    let output = crate::utils::python::python_command()
-        .arg("resources/scripts/bea_data.py")
-        .arg("parameter_values")
-        .arg(&dataset_name)
-        .arg(&parameter_name)
-        .output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+pub async fn bea_get_parameter_values(app: tauri::AppHandle, dataset_name: String, parameter_name: String) -> Result<String, String> {
+    execute_python_script_simple(&app, "bea_data.py", &["parameter_values", &dataset_name, &parameter_name])
 }
 
 #[command]
 pub async fn bea_get_parameter_values_filtered(
+    app: tauri::AppHandle,
     dataset_name: String,
     parameter_name: String,
     target_parameter: String
 ) -> Result<String, String> {
-    let output = crate::utils::python::python_command()
-        .arg("resources/scripts/bea_data.py")
-        .arg("parameter_values_filtered")
-        .arg(&dataset_name)
-        .arg(&parameter_name)
-        .arg(&target_parameter)
-        .output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &["parameter_values_filtered", &dataset_name, &parameter_name, &target_parameter])
 }
 
 // ==================== DATA RETRIEVAL COMMANDS ====================
 
 #[command]
-pub async fn bea_get_nipa_data(table_name: String, frequency: Option<String>, year: Option<String>) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("nipa")
-        .arg(&table_name);
+pub async fn bea_get_nipa_data(app: tauri::AppHandle, table_name: String, frequency: Option<String>, year: Option<String>) -> Result<String, String> {
+    let freq = frequency.unwrap_or_else(|| "A".to_string());
+    let mut args = vec!["nipa", &table_name, &freq];
 
-    if let Some(freq) = frequency {
-        cmd.arg(&freq);
-    } else {
-        cmd.arg("A"); // Default to Annual
-    }
-
+    let year_str;
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
 pub async fn bea_get_ni_underlying_detail(
+    app: tauri::AppHandle,
     table_name: String,
     frequency: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("ni_underlying")
-        .arg(&table_name);
+    let freq = frequency.unwrap_or_else(|| "A".to_string());
+    let mut args = vec!["ni_underlying", &table_name, &freq];
 
-    if let Some(freq) = frequency {
-        cmd.arg(&freq);
-    } else {
-        cmd.arg("A"); // Default to Annual
-    }
-
+    let year_str;
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
-pub async fn bea_get_fixed_assets(table_name: String, year: Option<String>) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("fixed_assets")
-        .arg(&table_name);
+pub async fn bea_get_fixed_assets(app: tauri::AppHandle, table_name: String, year: Option<String>) -> Result<String, String> {
+    let mut args = vec!["fixed_assets", &table_name];
 
+    let year_str;
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
 pub async fn bea_get_mne_data(
+    app: tauri::AppHandle,
     direction: String,
     classification: Option<String>,
     year: Option<String>,
@@ -179,383 +89,274 @@ pub async fn bea_get_mne_data(
     nonbank_affiliates_only: Option<String>,
     get_footnotes: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("mne")
-        .arg(&direction);
+    let class = classification.unwrap_or_else(|| "Country".to_string());
+    let footnotes = get_footnotes.unwrap_or_else(|| "No".to_string());
 
-    if let Some(class) = classification {
-        cmd.arg(&class);
-    } else {
-        cmd.arg("Country"); // Default
-    }
+    let mut args = vec!["mne", &direction, &class];
+
+    let year_str;
+    let country_str;
+    let industry_str;
+    let state_str;
+    let ownership_str;
+    let nonbank_str;
 
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
-
     if let Some(cnt) = country {
-        cmd.arg(&cnt);
+        country_str = cnt;
+        args.push(&country_str);
     }
-
     if let Some(ind) = industry {
-        cmd.arg(&ind);
+        industry_str = ind;
+        args.push(&industry_str);
     }
-
     if let Some(st) = state {
-        cmd.arg(&st);
+        state_str = st;
+        args.push(&state_str);
     }
-
     if let Some(ol) = ownership_level {
-        cmd.arg(&ol);
+        ownership_str = ol;
+        args.push(&ownership_str);
     }
-
     if let Some(nba) = nonbank_affiliates_only {
-        cmd.arg(&nba);
+        nonbank_str = nba;
+        args.push(&nonbank_str);
     }
 
-    if let Some(gf) = get_footnotes {
-        cmd.arg(&gf);
-    } else {
-        cmd.arg("No"); // Default
-    }
+    args.push(&footnotes);
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
 pub async fn bea_get_gdp_by_industry(
+    app: tauri::AppHandle,
     table_id: String,
     year: Option<String>,
     frequency: Option<String>,
     industry: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("gdp_by_industry")
-        .arg(&table_id);
+    let freq = frequency.unwrap_or_else(|| "A".to_string());
+    let ind = industry.unwrap_or_else(|| "ALL".to_string());
 
+    let mut args = vec!["gdp_by_industry", &table_id];
+
+    let year_str;
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    if let Some(freq) = frequency {
-        cmd.arg(&freq);
-    } else {
-        cmd.arg("A"); // Default to Annual
-    }
+    args.push(&freq);
+    args.push(&ind);
 
-    if let Some(ind) = industry {
-        cmd.arg(&ind);
-    } else {
-        cmd.arg("ALL"); // Default
-    }
-
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
 pub async fn bea_get_international_transactions(
+    app: tauri::AppHandle,
     indicator: Option<String>,
     area_or_country: Option<String>,
     frequency: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("international_transactions");
+    let aoc = area_or_country.unwrap_or_else(|| "AllCountries".to_string());
+    let freq = frequency.unwrap_or_else(|| "A".to_string());
+
+    let mut args = vec!["international_transactions"];
+
+    let indicator_str;
+    let year_str;
 
     if let Some(ind) = indicator {
-        cmd.arg(&ind);
+        indicator_str = ind;
+        args.push(&indicator_str);
     }
 
-    if let Some(aoc) = area_or_country {
-        cmd.arg(&aoc);
-    } else {
-        cmd.arg("AllCountries"); // Default
-    }
-
-    if let Some(freq) = frequency {
-        cmd.arg(&freq);
-    } else {
-        cmd.arg("A"); // Default to Annual
-    }
+    args.push(&aoc);
+    args.push(&freq);
 
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
 pub async fn bea_get_international_investment_position(
+    app: tauri::AppHandle,
     type_of_investment: Option<String>,
     component: Option<String>,
     frequency: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("international_investment");
+    let freq = frequency.unwrap_or_else(|| "A".to_string());
+
+    let mut args = vec!["international_investment"];
+
+    let toi_str;
+    let comp_str;
+    let year_str;
 
     if let Some(toi) = type_of_investment {
-        cmd.arg(&toi);
+        toi_str = toi;
+        args.push(&toi_str);
     }
 
     if let Some(comp) = component {
-        cmd.arg(&comp);
+        comp_str = comp;
+        args.push(&comp_str);
     }
 
-    if let Some(freq) = frequency {
-        cmd.arg(&freq);
-    } else {
-        cmd.arg("A"); // Default to Annual
-    }
+    args.push(&freq);
 
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
-pub async fn bea_get_input_output(table_id: String, year: Option<String>) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("input_output")
-        .arg(&table_id);
+pub async fn bea_get_input_output(app: tauri::AppHandle, table_id: String, year: Option<String>) -> Result<String, String> {
+    let mut args = vec!["input_output", &table_id];
 
+    let year_str;
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
 pub async fn bea_get_underlying_gdp_by_industry(
+    app: tauri::AppHandle,
     table_id: String,
     year: Option<String>,
     frequency: Option<String>,
     industry: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("underlying_gdp_industry")
-        .arg(&table_id);
+    let freq = frequency.unwrap_or_else(|| "A".to_string());
+    let ind = industry.unwrap_or_else(|| "ALL".to_string());
 
+    let mut args = vec!["underlying_gdp_industry", &table_id];
+
+    let year_str;
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    if let Some(freq) = frequency {
-        cmd.arg(&freq);
-    } else {
-        cmd.arg("A"); // Default to Annual
-    }
+    args.push(&freq);
+    args.push(&ind);
 
-    if let Some(ind) = industry {
-        cmd.arg(&ind);
-    } else {
-        cmd.arg("ALL"); // Default
-    }
-
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
 pub async fn bea_get_international_services_trade(
+    app: tauri::AppHandle,
     type_of_service: Option<String>,
     trade_direction: Option<String>,
     affiliation: Option<String>,
     area_or_country: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("international_services");
+    let aoc = area_or_country.unwrap_or_else(|| "AllCountries".to_string());
+
+    let mut args = vec!["international_services"];
+
+    let tos_str;
+    let td_str;
+    let aff_str;
+    let year_str;
 
     if let Some(tos) = type_of_service {
-        cmd.arg(&tos);
+        tos_str = tos;
+        args.push(&tos_str);
     }
 
     if let Some(td) = trade_direction {
-        cmd.arg(&td);
+        td_str = td;
+        args.push(&td_str);
     }
 
     if let Some(aff) = affiliation {
-        cmd.arg(&aff);
+        aff_str = aff;
+        args.push(&aff_str);
     }
 
-    if let Some(aoc) = area_or_country {
-        cmd.arg(&aoc);
-    } else {
-        cmd.arg("AllCountries"); // Default
-    }
+    args.push(&aoc);
 
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
 pub async fn bea_get_regional_data(
+    app: tauri::AppHandle,
     table_name: String,
     line_code: Option<String>,
     geo_fips: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("regional")
-        .arg(&table_name);
+    let lc = line_code.unwrap_or_else(|| "ALL".to_string());
+    let gf = geo_fips.unwrap_or_else(|| "STATE".to_string());
 
-    if let Some(lc) = line_code {
-        cmd.arg(&lc);
-    } else {
-        cmd.arg("ALL"); // Default
-    }
+    let mut args = vec!["regional", &table_name, &lc, &gf];
 
-    if let Some(gf) = geo_fips {
-        cmd.arg(&gf);
-    } else {
-        cmd.arg("STATE"); // Default
-    }
-
+    let year_str;
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 // ==================== COMPOSITE COMMANDS ====================
 
 #[command]
-pub async fn bea_get_economic_overview(year: Option<String>) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("economic_overview");
+pub async fn bea_get_economic_overview(app: tauri::AppHandle, year: Option<String>) -> Result<String, String> {
+    let mut args = vec!["economic_overview"];
 
+    let year_str;
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
 
 #[command]
 pub async fn bea_get_regional_snapshot(
+    app: tauri::AppHandle,
     geo_fips: Option<String>,
     year: Option<String>
 ) -> Result<String, String> {
-    let mut cmd = crate::utils::python::python_command();
-    cmd.arg("resources/scripts/bea_data.py")
-        .arg("regional_snapshot");
+    let gf = geo_fips.unwrap_or_else(|| "STATE".to_string());
 
-    if let Some(gf) = geo_fips {
-        cmd.arg(&gf);
-    } else {
-        cmd.arg("STATE"); // Default
-    }
+    let mut args = vec!["regional_snapshot", &gf];
 
+    let year_str;
     if let Some(yr) = year {
-        cmd.arg(&yr);
+        year_str = yr;
+        args.push(&year_str);
     }
 
-    let output = cmd.output()
-        .map_err(|e| format!("Failed to execute Python command: {}", e))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Python script failed: {}", stderr));
-    }
-
-    let result = String::from_utf8_lossy(&output.stdout).to_string();
-    Ok(result)
+    execute_python_script_simple(&app, "bea_data.py", &args)
 }
