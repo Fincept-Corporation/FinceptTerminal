@@ -364,6 +364,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_cors_fetch::init())
         .plugin(tauri_plugin_dialog::init())
@@ -395,6 +396,7 @@ pub fn run() {
             commands::market_data::get_financials,
             commands::polygon::execute_polygon_command,
             commands::yfinance::execute_yfinance_command,
+            commands::edgar::execute_edgar_command,
             commands::alphavantage::execute_alphavantage_command,
             commands::alphavantage::get_alphavantage_quote,
             commands::alphavantage::get_alphavantage_daily,

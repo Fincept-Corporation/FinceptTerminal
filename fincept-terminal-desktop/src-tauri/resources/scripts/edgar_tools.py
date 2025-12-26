@@ -271,6 +271,75 @@ class EdgarToolsWrapper:
         except Exception as e:
             return {"error": EdgarError("get_company_filings", str(e), traceback.format_exc()).to_dict()}
 
+    def get_corporate_events(self, ticker: str, limit: int = 20) -> Dict[str, Any]:
+        """
+        Get corporate events from 8-K filings
+
+        Args:
+            ticker: Stock ticker symbol
+            limit: Maximum number of 8-K filings to return
+
+        Returns:
+            List of corporate events with item descriptions
+        """
+        try:
+            company = Company(ticker)
+            filings = company.get_filings(form="8-K")
+
+            events = []
+            for i, filing in enumerate(filings):
+                if i >= limit:
+                    break
+
+                try:
+                    # Get the 8-K filing object to extract item information
+                    form8k = filing.obj()
+
+                    event_data = {
+                        "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                        "period_of_report": str(filing.period_of_report) if hasattr(filing, 'period_of_report') else None,
+                        "form": "8-K",
+                        "filing_url": filing.filing_url if hasattr(filing, 'filing_url') else None,
+                        "accession_number": filing.accession_number,
+                    }
+
+                    # Try to extract item information
+                    if form8k and hasattr(form8k, 'items'):
+                        event_data["items"] = form8k.items
+                    elif form8k and hasattr(form8k, 'item'):
+                        event_data["items"] = [form8k.item]
+
+                    # Try to get text excerpt for event description
+                    if form8k and hasattr(form8k, 'text'):
+                        try:
+                            text = form8k.text()
+                            # Get first 500 chars as event description
+                            event_data["description"] = text[:500] if text else None
+                        except:
+                            pass
+
+                    events.append(event_data)
+
+                except Exception as e:
+                    # If obj() fails, add basic filing info
+                    events.append({
+                        "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
+                        "period_of_report": str(filing.period_of_report) if hasattr(filing, 'period_of_report') else None,
+                        "form": "8-K",
+                        "filing_url": filing.filing_url if hasattr(filing, 'filing_url') else None,
+                        "accession_number": filing.accession_number,
+                        "error": str(e)
+                    })
+
+            return {
+                "success": True,
+                "data": events,
+                "count": len(events),
+                "parameters": {"ticker": ticker, "limit": limit}
+            }
+        except Exception as e:
+            return {"error": EdgarError("get_corporate_events", str(e), traceback.format_exc()).to_dict()}
+
     def get_latest_filing(self, ticker: str, form: str, n: int = 1) -> Dict[str, Any]:
         """
         Get latest filing(s) of specific form type
@@ -346,10 +415,10 @@ class EdgarToolsWrapper:
                                       f"No financial data available for {ticker}").to_dict()
                 }
 
-            # Get all three statements
-            balance_sheet = financials.balance_sheet(periods=periods, annual=annual, as_dataframe=True)
-            income_stmt = financials.income_statement(periods=periods, annual=annual, as_dataframe=True)
-            cash_flow = financials.cash_flow(periods=periods, annual=annual, as_dataframe=True)
+            # Get all three statements (edgartools properties)
+            balance_sheet = financials.balance_sheet
+            income_stmt = financials.income_statement
+            cash_flow = financials.cashflow_statement  # Note: cashflow_statement, not cash_flow
 
             return {
                 "success": True,
@@ -370,7 +439,11 @@ class EdgarToolsWrapper:
         """Get balance sheet data"""
         try:
             company = Company(ticker)
-            bs = company.balance_sheet(periods=periods, annual=annual, as_dataframe=as_json)
+            financials = company.get_financials() if annual else company.get_quarterly_financials()
+            if not financials:
+                return {"error": EdgarError("get_balance_sheet", f"No financials for {ticker}").to_dict()}
+
+            bs = financials.balance_sheet
 
             return {
                 "success": True,
@@ -385,7 +458,11 @@ class EdgarToolsWrapper:
         """Get income statement data"""
         try:
             company = Company(ticker)
-            inc = company.income_statement(periods=periods, annual=annual, as_dataframe=as_json)
+            financials = company.get_financials() if annual else company.get_quarterly_financials()
+            if not financials:
+                return {"error": EdgarError("get_income_statement", f"No financials for {ticker}").to_dict()}
+
+            inc = financials.income_statement
 
             return {
                 "success": True,
@@ -400,7 +477,11 @@ class EdgarToolsWrapper:
         """Get cash flow statement data"""
         try:
             company = Company(ticker)
-            cf = company.cash_flow(periods=periods, annual=annual, as_dataframe=as_json)
+            financials = company.get_financials() if annual else company.get_quarterly_financials()
+            if not financials:
+                return {"error": EdgarError("get_cash_flow", f"No financials for {ticker}").to_dict()}
+
+            cf = financials.cashflow_statement
 
             return {
                 "success": True,
@@ -516,20 +597,39 @@ class EdgarToolsWrapper:
 
                     if thirteenf and hasattr(thirteenf, 'holdings'):
                         holdings_df = thirteenf.holdings
+
+                        # Convert Decimal to float for JSON serialization
+                        def convert_decimals(obj):
+                            """Convert Decimal objects to float for JSON serialization"""
+                            from decimal import Decimal
+                            if isinstance(obj, Decimal):
+                                return float(obj)
+                            return obj
+
+                        # Get holdings sample and convert to dict with Decimal handling
+                        holdings_sample = None
+                        if holdings_df is not None and hasattr(holdings_df, 'head'):
+                            sample_df = holdings_df.head(10)
+                            holdings_sample = sample_df.to_dict('records') if hasattr(sample_df, 'to_dict') else None
+                            # Convert any Decimal values in the dict
+                            if holdings_sample:
+                                for record in holdings_sample:
+                                    for key, value in record.items():
+                                        record[key] = convert_decimals(value)
+
                         holdings_data.append({
                             "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
                             "period_of_report": str(filing.period_of_report) if hasattr(filing, 'period_of_report') else None,
-                            "manager_name": thirteenf.manager_name if hasattr(thirteenf, 'manager_name') else None,
-                            "total_value": thirteenf.total_value if hasattr(thirteenf, 'total_value') else None,
-                            "total_holdings": thirteenf.total_holdings if hasattr(thirteenf, 'total_holdings') else None,
-                            "holdings_sample": holdings_df.head(10).to_dict() if holdings_df is not None else None,
+                            "total_value": convert_decimals(thirteenf.total_value) if hasattr(thirteenf, 'total_value') else None,
+                            "total_holdings": int(thirteenf.total_holdings) if hasattr(thirteenf, 'total_holdings') else None,
+                            "holdings_sample": holdings_sample,
                             "accession_number": filing.accession_number,
                         })
-                except:
+                except Exception as e:
                     holdings_data.append({
                         "filing_date": str(filing.filing_date) if hasattr(filing, 'filing_date') else None,
                         "accession_number": filing.accession_number,
-                        "note": "Unable to parse 13F data"
+                        "note": f"Unable to parse 13F data: {str(e)}"
                     })
 
             return {
@@ -587,26 +687,46 @@ class EdgarToolsWrapper:
                 "has_xbrl": proxy.has_xbrl if hasattr(proxy, 'has_xbrl') else False,
             }
 
-            # Executive compensation data
-            if hasattr(proxy, 'executive_compensation') and proxy.executive_compensation:
+            # Executive compensation data (check if not None and not empty DataFrame)
+            if hasattr(proxy, 'executive_compensation'):
                 exec_comp = proxy.executive_compensation
-                data["executive_compensation"] = {
-                    "peo_total_comp": exec_comp.peo_total_comp if hasattr(exec_comp, 'peo_total_comp') else None,
-                    "peo_actually_paid_comp": exec_comp.peo_actually_paid_comp if hasattr(exec_comp, 'peo_actually_paid_comp') else None,
-                    "neo_avg_total_comp": exec_comp.neo_avg_total_comp if hasattr(exec_comp, 'neo_avg_total_comp') else None,
-                    "neo_avg_actually_paid_comp": exec_comp.neo_avg_actually_paid_comp if hasattr(exec_comp, 'neo_avg_actually_paid_comp') else None,
-                }
+                # Check if it's a DataFrame and not empty, or if it's another truthy object
+                if exec_comp is not None:
+                    try:
+                        # If it's a DataFrame, check if not empty
+                        if hasattr(exec_comp, 'empty') and not exec_comp.empty:
+                            data["executive_compensation"] = exec_comp.to_dict() if hasattr(exec_comp, 'to_dict') else str(exec_comp)
+                        elif not hasattr(exec_comp, 'empty'):
+                            # Not a DataFrame, handle as object
+                            data["executive_compensation"] = {
+                                "peo_total_comp": exec_comp.peo_total_comp if hasattr(exec_comp, 'peo_total_comp') else None,
+                                "peo_actually_paid_comp": exec_comp.peo_actually_paid_comp if hasattr(exec_comp, 'peo_actually_paid_comp') else None,
+                                "neo_avg_total_comp": exec_comp.neo_avg_total_comp if hasattr(exec_comp, 'neo_avg_total_comp') else None,
+                                "neo_avg_actually_paid_comp": exec_comp.neo_avg_actually_paid_comp if hasattr(exec_comp, 'neo_avg_actually_paid_comp') else None,
+                            }
+                    except:
+                        data["executive_compensation"] = "Unable to parse executive compensation"
 
-            # Named executives
-            if hasattr(proxy, 'named_executives') and proxy.named_executives:
-                data["named_executives"] = [
-                    {
-                        "name": ne.name if hasattr(ne, 'name') else None,
-                        "role": ne.role if hasattr(ne, 'role') else None,
-                        "total_comp": ne.total_comp if hasattr(ne, 'total_comp') else None,
-                    }
-                    for ne in proxy.named_executives[:10]
-                ]
+            # Named executives (check if not None and not empty)
+            if hasattr(proxy, 'named_executives'):
+                named_execs = proxy.named_executives
+                if named_execs is not None:
+                    try:
+                        # If it's a DataFrame, convert to list
+                        if hasattr(named_execs, 'to_dict'):
+                            data["named_executives"] = named_execs.to_dict('records')[:10] if hasattr(named_execs, 'empty') and not named_execs.empty else []
+                        elif hasattr(named_execs, '__iter__'):
+                            # It's an iterable (list, etc.)
+                            data["named_executives"] = [
+                                {
+                                    "name": ne.name if hasattr(ne, 'name') else str(ne.get('name')) if isinstance(ne, dict) else None,
+                                    "role": ne.role if hasattr(ne, 'role') else str(ne.get('role')) if isinstance(ne, dict) else None,
+                                    "total_comp": ne.total_comp if hasattr(ne, 'total_comp') else ne.get('total_comp') if isinstance(ne, dict) else None,
+                                }
+                                for ne in list(named_execs)[:10]
+                            ]
+                    except:
+                        data["named_executives"] = "Unable to parse named executives"
 
             return {
                 "success": True,
@@ -932,9 +1052,13 @@ class EdgarToolsWrapper:
             return {"error": EdgarError("get_xbrl_data", str(e), traceback.format_exc()).to_dict()}
 
 
-def main():
-    """Main CLI interface"""
-    if len(sys.argv) < 2:
+def main(args=None):
+    """Main CLI interface - supports both PyO3 and subprocess execution"""
+    # Support both PyO3 (args parameter) and subprocess (sys.argv)
+    if args is None:
+        args = sys.argv[1:]
+
+    if len(args) < 1:
         print(json.dumps({
             "error": "Usage: python edgar_tools.py <command> [args...]",
             "commands": {
@@ -948,6 +1072,7 @@ def main():
                 "company": [
                     "get_company <ticker>",
                     "get_company_filings <ticker> [form] [year] [quarter] [limit]",
+                    "get_corporate_events <ticker> [limit]",
                     "get_latest_filing <ticker> <form> [n]",
                     "find_company <query> [top_n]",
                     "find <identifier>",
@@ -983,7 +1108,7 @@ def main():
         }, indent=2))
         sys.exit(1)
 
-    command = sys.argv[1]
+    command = args[0]
 
     # Initialize wrapper with default identity
     try:
@@ -995,20 +1120,20 @@ def main():
     try:
         # Configuration commands
         if command == "set_identity":
-            identity = sys.argv[2] if len(sys.argv) > 2 else None
+            identity = args[1] if len(args) > 1 else None
             result = wrapper.set_user_identity(identity)
 
         elif command == "get_identity":
             result = wrapper.get_user_identity()
 
         elif command == "configure_connection":
-            verify_ssl = sys.argv[2].lower() == "true" if len(sys.argv) > 2 else None
-            proxy = sys.argv[3] if len(sys.argv) > 3 else None
-            timeout = float(sys.argv[4]) if len(sys.argv) > 4 else None
+            verify_ssl = args[1].lower() == "true" if len(args) > 1 else None
+            proxy = args[2] if len(args) > 2 else None
+            timeout = float(args[3]) if len(args) > 3 else None
             result = wrapper.configure_connection(verify_ssl, proxy, timeout)
 
         elif command == "clear_cache":
-            dry_run = sys.argv[2].lower() == "true" if len(sys.argv) > 2 else True
+            dry_run = args[1].lower() == "true" if len(args) > 1 else True
             result = wrapper.clear_local_cache(dry_run)
 
         elif command == "get_storage_info":
@@ -1016,120 +1141,145 @@ def main():
 
         # Company commands
         elif command == "get_company":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            result = wrapper.get_company(ticker)
+            if len(args) < 2:
+                result = {"error": "Usage: edgar_tools.py get_company <ticker>"}
+            else:
+                ticker = args[1]
+                result = wrapper.get_company(ticker)
 
         elif command == "get_company_filings":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            form = sys.argv[3] if len(sys.argv) > 3 else None
-            year = int(sys.argv[4]) if len(sys.argv) > 4 else None
-            quarter = int(sys.argv[5]) if len(sys.argv) > 5 else None
-            limit = int(sys.argv[6]) if len(sys.argv) > 6 else 20
-            result = wrapper.get_company_filings(ticker, form, year, quarter, limit)
+            if len(args) < 2:
+                result = {"error": "Usage: edgar_tools.py get_company_filings <ticker> [form] [year] [quarter] [limit]"}
+            else:
+                ticker = args[1]
+                form = args[2] if len(args) > 2 else None
+                year = int(args[3]) if len(args) > 3 else None
+                quarter = int(args[4]) if len(args) > 4 else None
+                limit = int(args[5]) if len(args) > 5 else 20
+                result = wrapper.get_company_filings(ticker, form, year, quarter, limit)
+
+        elif command == "get_corporate_events":
+            if len(args) < 2:
+                result = {"error": "Usage: edgar_tools.py get_corporate_events <ticker> [limit]"}
+            else:
+                ticker = args[1]
+                limit = int(args[2]) if len(args) > 2 else 20
+                result = wrapper.get_corporate_events(ticker, limit)
 
         elif command == "get_latest_filing":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            form = sys.argv[3] if len(sys.argv) > 3 else "10-K"
-            n = int(sys.argv[4]) if len(sys.argv) > 4 else 1
-            result = wrapper.get_latest_filing(ticker, form, n)
+            if len(args) < 2:
+                result = {"error": "Usage: edgar_tools.py get_latest_filing <ticker> [form] [n]"}
+            else:
+                ticker = args[1]
+                form = args[2] if len(args) > 2 else "10-K"
+                n = int(args[3]) if len(args) > 3 else 1
+                result = wrapper.get_latest_filing(ticker, form, n)
 
         # Financial commands
         elif command == "get_financials":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            periods = int(sys.argv[3]) if len(sys.argv) > 3 else 4
-            annual = sys.argv[4].lower() != "false" if len(sys.argv) > 4 else True
+            ticker = args[1] if len(args) > 1 else None
+            periods = int(args[2]) if len(args) > 2 else 4
+            annual = args[3].lower() != "false" if len(args) > 3 else True
             result = wrapper.get_financials(ticker, periods, annual)
 
         elif command == "get_balance_sheet":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            periods = int(sys.argv[3]) if len(sys.argv) > 3 else 4
-            annual = sys.argv[4].lower() != "false" if len(sys.argv) > 4 else True
+            ticker = args[1] if len(args) > 1 else None
+            periods = int(args[2]) if len(args) > 2 else 4
+            annual = args[3].lower() != "false" if len(args) > 3 else True
             result = wrapper.get_balance_sheet(ticker, periods, annual)
 
         elif command == "get_income_statement":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            periods = int(sys.argv[3]) if len(sys.argv) > 3 else 4
-            annual = sys.argv[4].lower() != "false" if len(sys.argv) > 4 else True
+            ticker = args[1] if len(args) > 1 else None
+            periods = int(args[2]) if len(args) > 2 else 4
+            annual = args[3].lower() != "false" if len(args) > 3 else True
             result = wrapper.get_income_statement(ticker, periods, annual)
 
         elif command == "get_cash_flow":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            periods = int(sys.argv[3]) if len(sys.argv) > 3 else 4
-            annual = sys.argv[4].lower() != "false" if len(sys.argv) > 4 else True
+            ticker = args[1] if len(args) > 1 else None
+            periods = int(args[2]) if len(args) > 2 else 4
+            annual = args[3].lower() != "false" if len(args) > 3 else True
             result = wrapper.get_cash_flow(ticker, periods, annual)
 
         elif command == "get_company_facts":
-            cik = sys.argv[2] if len(sys.argv) > 2 else None
+            cik = args[1] if len(args) > 1 else None
             result = wrapper.get_company_facts(cik)
 
         elif command == "get_xbrl_data":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            form = sys.argv[3] if len(sys.argv) > 3 else "10-K"
+            ticker = args[1] if len(args) > 1 else None
+            form = args[2] if len(args) > 2 else "10-K"
             result = wrapper.get_xbrl_data(ticker, form)
 
         # Insider transactions
         elif command == "get_insider_transactions":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            limit = int(sys.argv[3]) if len(sys.argv) > 3 else 20
+            ticker = args[1] if len(args) > 1 else None
+            limit = int(args[2]) if len(args) > 2 else 20
             result = wrapper.get_insider_transactions(ticker, limit)
 
         # Fund holdings
         elif command == "get_fund_holdings":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            limit = int(sys.argv[3]) if len(sys.argv) > 3 else 5
+            ticker = args[1] if len(args) > 1 else None
+            limit = int(args[2]) if len(args) > 2 else 5
             result = wrapper.get_fund_holdings(ticker, limit)
 
         # Proxy statement
         elif command == "get_proxy_statement":
-            ticker = sys.argv[2] if len(sys.argv) > 2 else None
-            result = wrapper.get_proxy_statement(ticker)
+            if len(args) < 2:
+                result = {"error": "Usage: edgar_tools.py get_proxy_statement <ticker>"}
+            else:
+                ticker = args[1]
+                result = wrapper.get_proxy_statement(ticker)
 
         # Current filings
         elif command == "get_current_filings" or command == "get_latest_filings":
-            form = sys.argv[2] if len(sys.argv) > 2 else ""
-            page_size = int(sys.argv[3]) if len(sys.argv) > 3 else 40
+            form = args[1] if len(args) > 1 else ""
+            page_size = int(args[2]) if len(args) > 2 else 40
             result = wrapper.get_current_filings(form, page_size)
 
         # Search commands
         elif command == "find_company":
-            query = sys.argv[2] if len(sys.argv) > 2 else None
-            top_n = int(sys.argv[3]) if len(sys.argv) > 3 else 10
+            query = args[1] if len(args) > 1 else None
+            top_n = int(args[2]) if len(args) > 2 else 10
             result = wrapper.find_company_by_name(query, top_n)
 
         elif command == "find":
-            identifier = sys.argv[2] if len(sys.argv) > 2 else None
+            identifier = args[1] if len(args) > 1 else None
             result = wrapper.find_by_identifier(identifier)
 
         elif command == "get_company_tickers":
-            limit = int(sys.argv[2]) if len(sys.argv) > 2 else 100
+            limit = int(args[1]) if len(args) > 1 else 100
             result = wrapper.get_company_tickers_list(limit)
 
         # Filing operations
         elif command == "get_filing_by_accession":
-            accession = sys.argv[2] if len(sys.argv) > 2 else None
+            accession = args[1] if len(args) > 1 else None
             result = wrapper.get_filing_by_accession(accession)
 
         elif command == "get_filing_text":
-            accession = sys.argv[2] if len(sys.argv) > 2 else None
-            max_length = int(sys.argv[3]) if len(sys.argv) > 3 else 10000
+            accession = args[1] if len(args) > 1 else None
+            max_length = int(args[2]) if len(args) > 2 else 10000
             result = wrapper.get_filing_text(accession, max_length)
 
         elif command == "get_filings_by_date":
-            year = int(sys.argv[2]) if len(sys.argv) > 2 else None
-            quarter = int(sys.argv[3]) if len(sys.argv) > 3 else None
-            form = sys.argv[4] if len(sys.argv) > 4 else None
-            limit = int(sys.argv[5]) if len(sys.argv) > 5 else 50
+            year = int(args[1]) if len(args) > 1 else None
+            quarter = int(args[2]) if len(args) > 2 else None
+            form = args[3] if len(args) > 3 else None
+            limit = int(args[4]) if len(args) > 4 else 50
             result = wrapper.get_filings_by_date(year, quarter, form, limit)
 
         else:
             result = {"error": EdgarError(command, f"Unknown command: {command}").to_dict()}
 
-        print(json.dumps(result, indent=2))
+        # Return JSON for PyO3, print for subprocess
+        output = json.dumps(result, indent=2)
+        print(output)
+        return output
 
     except Exception as e:
-        print(json.dumps({
+        error_output = json.dumps({
             "error": EdgarError(command, str(e), traceback.format_exc()).to_dict()
-        }, indent=2))
+        }, indent=2)
+        print(error_output)
+        return error_output
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ pub mod imf;
 pub mod fmp;
 pub mod federal_reserve;
 pub mod sec;
+pub mod edgar;
 pub mod cftc;
 pub mod cboe;
 pub mod bls;

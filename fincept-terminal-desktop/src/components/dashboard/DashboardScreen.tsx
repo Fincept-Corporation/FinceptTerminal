@@ -31,6 +31,7 @@ import FyersTab from '@/components/tabs/fyers';
 import SupportTicketTab from '@/components/tabs/SupportTicketTab';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import AgentConfigTab from '@/components/tabs/AgentConfigTab';
+import RelationshipMapTab from '@/components/tabs/RelationshipMapTab';
 import { useTranslation } from 'react-i18next';
 
 // Lazy loaded tabs (heavy/Python-dependent)
@@ -541,6 +542,7 @@ function FinxeptTerminalContent() {
 
   const marketsMenuItems = [
     { label: 'Live Markets', shortcut: 'F2', action: () => setActiveTab('markets') },
+    { label: 'Relationship Map', action: () => setActiveTab('relationship-map') },
     { label: 'Stock Screener', shortcut: 'F8', action: () => setActiveTab('screener') },
     { label: 'Polygon Data', action: () => setActiveTab('polygon'), separator: true },
     { label: 'Economics', action: () => setActiveTab('economics') },
@@ -996,6 +998,9 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="markets" className="h-full m-0 p-0">
               <MarketsTab />
+            </TabsContent>
+            <TabsContent value="relationship-map" className="h-full m-0 p-0">
+              <RelationshipMapTab />
             </TabsContent>
             <TabsContent value="news" className="h-full m-0 p-0">
               <NewsTab />

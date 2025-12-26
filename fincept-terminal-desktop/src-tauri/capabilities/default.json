@@ -6,6 +6,8 @@
   "permissions": [
     "core:default",
     "opener:default",
+    "shell:default",
+    "shell:allow-open",
     "http:default",
     {
       "identifier": "http:default",
