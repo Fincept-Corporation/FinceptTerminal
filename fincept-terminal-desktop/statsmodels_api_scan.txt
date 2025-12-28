@@ -1,0 +1,58 @@
+=== STATSMODELS API (via statsmodels.api) ===
+
+Total items: 69
+
+Classes (41):
+  BayesGaussMI
+  BinomialBayesMixedGLM
+  ConditionalLogit
+  ConditionalMNLogit
+  ConditionalPoisson
+  Factor
+  GEE
+  GLM
+  GLMGam
+  GLS
+  GLSAR
+  GeneralizedPoisson
+  HurdleCountModel
+  Logit
+  MANOVA
+  MI
+  MICE
+  MICEData
+  MNLogit
+  MixedLM
+  ... and 21 more
+
+Functions (10):
+  add_constant
+  categorical
+  load
+  load_pickle
+  qqline
+  qqplot
+  qqplot_2samples
+  show_versions
+  test
+  webdoc
+
+Modules (18):
+  cov_struct
+  datasets
+  distributions
+  duration
+  emplike
+  families
+  formula
+  gam
+  genmod
+  graphics
+  iolib
+  multivariate
+  nonparametric
+  regression
+  robust
+  stats
+  tools
+  tsa

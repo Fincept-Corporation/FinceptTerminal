@@ -1,8 +1,8 @@
-// Data Mapping Tab - Complete Rewrite with Standalone API Integration
+// Data Mapping Tab - Bloomberg Terminal Theme UI
 
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, List, Save, Play, ArrowLeft, ArrowRight, CheckCircle, Circle, Bookmark } from 'lucide-react';
+import { Plus, List, Save, Play, ArrowLeft, ArrowRight, CheckCircle2, Circle, Bookmark, Database, Trash2, Edit3 } from 'lucide-react';
 import {
   DataMappingConfig,
   APIConfig,
@@ -163,11 +163,9 @@ export default function DataMappingTab() {
     setIsTesting(true);
 
     try {
-      // Detect if data has common array structure (only if not already configured from template)
       const detectDataArray = (obj: any): { rootPath: string; isArray: boolean } => {
         if (Array.isArray(obj)) return { rootPath: '', isArray: true };
 
-        // Common patterns: data, results, items, records
         const arrayKeys = ['data', 'results', 'items', 'records', 'response'];
         for (const key of arrayKeys) {
           if (obj[key] && Array.isArray(obj[key]) && obj[key].length > 0) {
@@ -178,10 +176,8 @@ export default function DataMappingTab() {
         return { rootPath: '', isArray: false };
       };
 
-      // Use existing extraction config if available (from template), otherwise auto-detect
       let extractionConfig;
       if (fieldMappings.length > 0 && fieldMappings[0].source?.path?.startsWith('$')) {
-        // Template has configured extraction, detect from sample data
         const { rootPath, isArray } = detectDataArray(sampleData);
         extractionConfig = {
           engine: ParserEngine.JSONPATH,
@@ -189,7 +185,6 @@ export default function DataMappingTab() {
           isArray,
         };
       } else {
-        // No template, auto-detect
         const { rootPath, isArray } = detectDataArray(sampleData);
         extractionConfig = {
           engine: ParserEngine.JSONPATH,
@@ -263,7 +258,6 @@ export default function DataMappingTab() {
     }
 
     try {
-      // Detect if data has common array structure (same logic as test)
       const detectDataArray = (obj: any): { rootPath: string; isArray: boolean } => {
         if (Array.isArray(obj)) return { rootPath: '', isArray: true };
 
@@ -277,10 +271,8 @@ export default function DataMappingTab() {
         return { rootPath: '', isArray: false };
       };
 
-      // Use existing extraction config if available (from template), otherwise auto-detect
       let extractionConfig;
       if (fieldMappings.length > 0 && fieldMappings[0].source?.path?.startsWith('$')) {
-        // Template has configured extraction, detect from sample data
         const { rootPath, isArray } = detectDataArray(sampleData);
         extractionConfig = {
           engine: ParserEngine.JSONPATH,
@@ -288,7 +280,6 @@ export default function DataMappingTab() {
           isArray,
         };
       } else {
-        // No template, auto-detect
         const { rootPath, isArray } = detectDataArray(sampleData);
         extractionConfig = {
           engine: ParserEngine.JSONPATH,
@@ -373,7 +364,6 @@ export default function DataMappingTab() {
   };
 
   const handleSelectTemplate = (template: MappingTemplate) => {
-    // Load template into create view
     setMappingId(uuidv4());
     setMappingName(template.mappingConfig.name || template.name);
     setMappingDescription(template.mappingConfig.description || template.description);
@@ -424,12 +414,22 @@ export default function DataMappingTab() {
     return 'pending';
   };
 
+  const getStepLabel = (step: CreateStep): string => {
+    const labels: Record<CreateStep, string> = {
+      'api-config': 'API CONFIG',
+      'schema-select': 'SCHEMA',
+      'field-mapping': 'MAPPING',
+      'cache-settings': 'CACHE',
+      'test-save': 'TEST & SAVE',
+    };
+    return labels[step];
+  };
+
   const renderStepContent = () => {
     switch (currentStep) {
       case 'api-config':
         return (
-          <div className="p-6 max-w-4xl mx-auto">
-            <h2 className="text-lg font-bold text-white mb-4">Configure API Connection</h2>
+          <div className="p-6 max-w-6xl mx-auto">
             <APIConfigurationPanel
               config={apiConfig}
               onChange={handleApiConfigChange}
@@ -441,7 +441,6 @@ export default function DataMappingTab() {
       case 'schema-select':
         return (
           <div className="p-6 max-w-full mx-auto">
-            <h2 className="text-lg font-bold text-white mb-4">Choose Target Schema</h2>
             <SchemaBuilder
               schemaType={schemaType}
               selectedSchema={selectedSchema}
@@ -451,7 +450,6 @@ export default function DataMappingTab() {
               onCustomFieldsChange={setCustomFields}
               sampleData={sampleData}
               onFieldMappingsAutoCreate={(newMappings) => {
-                // Only add mappings for fields that don't already have mappings
                 const existingFields = new Set(fieldMappings.map(m => m.targetField));
                 const uniqueNewMappings = newMappings.filter(m => !existingFields.has(m.targetField));
                 if (uniqueNewMappings.length > 0) {
@@ -465,15 +463,18 @@ export default function DataMappingTab() {
       case 'field-mapping':
         if (!sampleData) {
           return (
-            <div className="p-6 text-center">
-              <p className="text-red-400">Please fetch sample data first</p>
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <Database className="mx-auto mb-3 text-[#666666]" size={48} />
+                <p className="text-[#999999] text-sm">No sample data available</p>
+                <p className="text-[#666666] text-xs mt-1">Please fetch sample data from API configuration</p>
+              </div>
             </div>
           );
         }
 
         return (
           <div className="p-6 h-full">
-            <h2 className="text-lg font-bold text-white mb-4">Map API Fields to Schema</h2>
             <VisualFieldMapper
               schemaType={schemaType}
               selectedSchema={selectedSchema}
@@ -488,7 +489,6 @@ export default function DataMappingTab() {
       case 'cache-settings':
         return (
           <div className="p-6 max-w-4xl mx-auto">
-            <h2 className="text-lg font-bold text-white mb-4">Cache & Security Settings</h2>
             <CacheSettings
               cacheEnabled={apiConfig.cacheEnabled}
               cacheTTL={apiConfig.cacheTTL}
@@ -503,15 +503,18 @@ export default function DataMappingTab() {
 
       case 'test-save':
         return (
-          <div className="p-6 max-w-4xl mx-auto space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">Test & Save Mapping</h2>
+          <div className="p-6 max-w-6xl mx-auto space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="text-[#FFA500] text-xs font-bold tracking-wider">TEST & VALIDATION</h3>
+                <p className="text-[#999999] text-xs mt-1">Run test to verify mapping configuration</p>
+              </div>
               <button
                 onClick={handleTestMapping}
                 disabled={isTesting}
-                className="bg-green-600 hover:bg-green-700 disabled:bg-zinc-700 text-white px-4 py-2 rounded font-bold flex items-center gap-2"
+                className="bg-[#FFA500] hover:bg-[#FF8C00] disabled:bg-[#333333] disabled:text-[#666666] text-black px-4 py-2 rounded text-xs font-bold flex items-center gap-2 transition-colors"
               >
-                <Play size={16} />
+                <Play size={14} />
                 {isTesting ? 'TESTING...' : 'RUN TEST'}
               </button>
             </div>
@@ -519,13 +522,15 @@ export default function DataMappingTab() {
             <LivePreview result={testResult || undefined} isLoading={isTesting} />
 
             {testResult?.success && (
-              <button
-                onClick={handleSaveMapping}
-                className="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 rounded font-bold flex items-center justify-center gap-2"
-              >
-                <Save size={18} />
-                SAVE MAPPING
-              </button>
+              <div className="pt-4 border-t border-[#2a2a2a]">
+                <button
+                  onClick={handleSaveMapping}
+                  className="w-full bg-[#00AA00] hover:bg-[#009900] text-white py-3 rounded text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Save size={18} />
+                  SAVE MAPPING CONFIGURATION
+                </button>
+              </div>
             )}
           </div>
         );
@@ -536,99 +541,104 @@ export default function DataMappingTab() {
   };
 
   return (
-    <div className="w-full h-full bg-zinc-950 flex flex-col">
-      {/* Header */}
-      <div className="bg-zinc-900 border-b border-zinc-800 p-3">
+    <div className="w-full h-full bg-[#0a0a0a] flex flex-col text-white">
+      {/* Bloomberg-style Header */}
+      <div className="bg-[#1a1a1a] border-b border-[#2a2a2a] px-4 py-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-orange-500 text-sm font-bold tracking-wide">
-              DATA MAPPING
-            </span>
-            <div className="w-px h-5 bg-zinc-700"></div>
-            <span className="text-gray-500 text-xs">
-              Connect any API directly to Fincept Terminal
-            </span>
+            <Database className="text-[#FFA500]" size={18} />
+            <div className="flex items-center gap-3">
+              <span className="text-[#FFA500] text-sm font-bold tracking-wider">DATA MAPPING</span>
+              <div className="w-px h-4 bg-[#333333]"></div>
+              <span className="text-[#999999] text-xs">API Integration & Schema Transformation</span>
+            </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setView('list')}
-              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 ${view === 'list'
-                ? 'bg-orange-600 text-white'
-                : 'bg-transparent text-gray-400 border border-zinc-700 hover:border-zinc-600'
-                }`}
+              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-all ${
+                view === 'list'
+                  ? 'bg-[#FFA500] text-black'
+                  : 'bg-[#2a2a2a] text-[#999999] hover:bg-[#333333] hover:text-white'
+              }`}
             >
-              <List size={12} />
-              MY MAPPINGS
+              <List size={14} />
+              MAPPINGS
             </button>
             <button
               onClick={() => setView('templates')}
-              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 ${view === 'templates'
-                ? 'bg-orange-600 text-white'
-                : 'bg-transparent text-gray-400 border border-zinc-700 hover:border-zinc-600'
-                }`}
+              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-all ${
+                view === 'templates'
+                  ? 'bg-[#FFA500] text-black'
+                  : 'bg-[#2a2a2a] text-[#999999] hover:bg-[#333333] hover:text-white'
+              }`}
             >
-              <Bookmark size={12} />
+              <Bookmark size={14} />
               TEMPLATES
             </button>
             <button
               onClick={handleStartNewMapping}
-              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 ${view === 'create'
-                ? 'bg-orange-600 text-white'
-                : 'bg-transparent text-gray-400 border border-zinc-700 hover:border-zinc-600'
-                }`}
+              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-all ${
+                view === 'create'
+                  ? 'bg-[#FFA500] text-black'
+                  : 'bg-[#2a2a2a] text-[#999999] hover:bg-[#333333] hover:text-white'
+              }`}
             >
-              <Plus size={12} />
-              CREATE NEW
+              <Plus size={14} />
+              CREATE
             </button>
           </div>
         </div>
       </div>
 
-      {/* Step Progress */}
+      {/* Step Progress Bar - Bloomberg Style */}
       {view === 'create' && (
-        <div className="bg-zinc-900 border-b border-zinc-800 p-3">
-          <div className="flex items-center gap-2">
+        <div className="bg-[#1a1a1a] border-b border-[#2a2a2a] px-4 py-3">
+          <div className="flex items-center gap-1">
             {steps.map((step, index) => {
               const status = getStepStatus(step);
-              const Icon = status === 'complete' ? CheckCircle : Circle;
+              const isActive = status === 'current';
+              const isComplete = status === 'complete';
 
               return (
                 <React.Fragment key={step}>
                   <div
-                    className={`flex-1 flex flex-col items-center cursor-pointer ${index <= stepIndex ? 'opacity-100' : 'opacity-40'
-                      }`}
+                    className={`flex-1 cursor-pointer transition-all ${
+                      index <= stepIndex ? 'opacity-100' : 'opacity-40'
+                    }`}
                     onClick={() => index <= stepIndex && setCurrentStep(step)}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon
-                        size={14}
-                        className={
-                          status === 'complete'
-                            ? 'text-green-500'
-                            : status === 'current'
-                              ? 'text-orange-500'
-                              : 'text-gray-600'
-                        }
-                      />
+                    <div className="flex items-center gap-2 mb-2 px-2">
+                      {isComplete ? (
+                        <CheckCircle2 size={14} className="text-[#00AA00] flex-shrink-0" />
+                      ) : (
+                        <Circle size={14} className={isActive ? 'text-[#FFA500]' : 'text-[#4a4a4a]'} />
+                      )}
                       <span
-                        className={`text-xs font-bold uppercase ${status === 'complete'
-                          ? 'text-green-500'
-                          : status === 'current'
-                            ? 'text-orange-500'
-                            : 'text-gray-600'
-                          }`}
+                        className={`text-[10px] font-bold tracking-wider ${
+                          isComplete
+                            ? 'text-[#00AA00]'
+                            : isActive
+                            ? 'text-[#FFA500]'
+                            : 'text-[#666666]'
+                        }`}
                       >
-                        {step.replace('-', ' ')}
+                        {getStepLabel(step)}
                       </span>
                     </div>
                     <div
-                      className={`h-1 w-full rounded ${index <= stepIndex ? 'bg-orange-500' : 'bg-zinc-700'
-                        }`}
+                      className={`h-0.5 w-full transition-all ${
+                        isComplete
+                          ? 'bg-[#00AA00]'
+                          : isActive
+                          ? 'bg-[#FFA500]'
+                          : 'bg-[#2a2a2a]'
+                      }`}
                     ></div>
                   </div>
                   {index < steps.length - 1 && (
-                    <ArrowRight size={12} className="text-zinc-700 flex-shrink-0" />
+                    <div className="w-2 h-0.5 bg-[#2a2a2a] mb-5 flex-shrink-0"></div>
                   )}
                 </React.Fragment>
               );
@@ -637,54 +647,74 @@ export default function DataMappingTab() {
         </div>
       )}
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
+      {/* Content Area */}
+      <div className="flex-1 overflow-auto bg-[#0a0a0a]">
         {view === 'list' && (
           <div className="p-6">
             {isLoadingMappings ? (
-              <div className="text-center py-12 text-gray-400">Loading mappings...</div>
+              <div className="flex items-center justify-center h-64">
+                <div className="text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#FFA500] mb-3"></div>
+                  <p className="text-[#999999] text-sm">Loading mappings...</p>
+                </div>
+              </div>
             ) : savedMappings.length === 0 ? (
-              <div className="text-center py-12">
-                <h3 className="text-gray-400 mb-3">No mappings yet</h3>
-                <p className="text-gray-600 text-sm mb-6">
-                  Create your first API mapping to get started
-                </p>
-                <button
-                  onClick={handleStartNewMapping}
-                  className="bg-orange-600 hover:bg-orange-700 text-white px-6 py-3 rounded font-bold flex items-center gap-2 mx-auto"
-                >
-                  <Plus size={16} />
-                  CREATE FIRST MAPPING
-                </button>
+              <div className="flex items-center justify-center h-64">
+                <div className="text-center max-w-md">
+                  <Database className="mx-auto mb-4 text-[#666666]" size={48} />
+                  <h3 className="text-[#CCCCCC] text-lg font-bold mb-2">NO MAPPINGS CONFIGURED</h3>
+                  <p className="text-[#999999] text-sm mb-6">
+                    Create your first API data mapping to connect external data sources to Fincept Terminal
+                  </p>
+                  <button
+                    onClick={handleStartNewMapping}
+                    className="bg-[#FFA500] hover:bg-[#FF8C00] text-black px-6 py-3 rounded text-sm font-bold flex items-center gap-2 mx-auto transition-colors"
+                  >
+                    <Plus size={16} />
+                    CREATE FIRST MAPPING
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {savedMappings.map((mapping) => (
                   <div
                     key={mapping.id}
-                    className="bg-zinc-900 border border-zinc-700 rounded p-4 hover:border-zinc-600 transition-colors"
+                    className="bg-[#1a1a1a] border border-[#2a2a2a] rounded hover:border-[#FFA500] transition-all group"
                   >
-                    <h3 className="text-white font-bold mb-1">{mapping.name}</h3>
-                    <p className="text-xs text-gray-400 mb-3">{mapping.description}</p>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-gray-500">
-                        {mapping.target.schemaType === 'predefined'
-                          ? mapping.target.schema?.toUpperCase()
-                          : 'CUSTOM'}
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleLoadMapping(mapping)}
-                          className="text-blue-400 hover:text-blue-300"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMapping(mapping.id)}
-                          className="text-red-400 hover:text-red-300"
-                        >
-                          Delete
-                        </button>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="text-white font-bold text-sm mb-1">{mapping.name}</h3>
+                          <p className="text-[#999999] text-xs line-clamp-2">{mapping.description}</p>
+                        </div>
+                        <div className="ml-2 px-2 py-1 bg-[#2a2a2a] rounded text-[10px] font-bold text-[#FFA500]">
+                          {mapping.target.schemaType === 'predefined'
+                            ? mapping.target.schema?.toUpperCase()
+                            : 'CUSTOM'}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-3 border-t border-[#2a2a2a]">
+                        <span className="text-[#666666] text-[10px]">
+                          {new Date(mapping.metadata.createdAt).toLocaleDateString()}
+                        </span>
+                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => handleLoadMapping(mapping)}
+                            className="p-1 hover:bg-[#2a2a2a] rounded text-[#999999] hover:text-[#FFA500] transition-colors"
+                            title="Edit"
+                          >
+                            <Edit3 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMapping(mapping.id)}
+                            className="p-1 hover:bg-[#2a2a2a] rounded text-[#999999] hover:text-red-500 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -703,9 +733,9 @@ export default function DataMappingTab() {
         {view === 'create' && <>{renderStepContent()}</>}
       </div>
 
-      {/* Navigation Footer */}
+      {/* Navigation Footer - Bloomberg Style */}
       {view === 'create' && (
-        <div className="bg-zinc-900 border-t border-zinc-800 p-3 flex justify-between">
+        <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] px-4 py-3 flex justify-between items-center">
           <button
             onClick={() => {
               const prevIndex = stepIndex - 1;
@@ -714,11 +744,15 @@ export default function DataMappingTab() {
               }
             }}
             disabled={stepIndex === 0}
-            className="px-4 py-2 rounded text-xs font-bold flex items-center gap-2 bg-transparent text-gray-400 border border-zinc-700 hover:border-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded text-xs font-bold flex items-center gap-2 bg-[#2a2a2a] text-[#999999] hover:bg-[#333333] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             <ArrowLeft size={14} />
             PREVIOUS
           </button>
+
+          <div className="text-[#666666] text-xs">
+            STEP {stepIndex + 1} OF {steps.length}
+          </div>
 
           <button
             onClick={() => {
@@ -732,7 +766,7 @@ export default function DataMappingTab() {
               }
             }}
             disabled={stepIndex === steps.length - 1}
-            className="px-4 py-2 rounded text-xs font-bold flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 rounded text-xs font-bold flex items-center gap-2 bg-[#FFA500] hover:bg-[#FF8C00] text-black disabled:opacity-30 disabled:cursor-not-allowed transition-all"
           >
             NEXT
             <ArrowRight size={14} />
@@ -743,13 +777,13 @@ export default function DataMappingTab() {
       <TabFooter
         tabName="DATA MAPPING"
         leftInfo={[
-          { label: `Mappings: ${savedMappings.length}`, color: '#a3a3a3' },
-          { label: `View: ${view.toUpperCase()}`, color: '#a3a3a3' },
-          ...(view === 'create' ? [{ label: `Step: ${currentStep.toUpperCase()}`, color: '#ea580c' }] : [])
+          { label: `TOTAL: ${savedMappings.length}`, color: '#999999' },
+          { label: `MODE: ${view.toUpperCase()}`, color: '#999999' },
+          ...(view === 'create' ? [{ label: getStepLabel(currentStep), color: '#FFA500' }] : [])
         ]}
-        statusInfo={`Schema transformations | API integrations | Real-time mapping`}
+        statusInfo={`API TRANSFORMATION • SCHEMA MAPPING • DATA INTEGRATION`}
         backgroundColor="#1a1a1a"
-        borderColor="#2d2d2d"
+        borderColor="#2a2a2a"
       />
     </div>
   );

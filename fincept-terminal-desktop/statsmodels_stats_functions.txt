@@ -1,0 +1,5 @@
+statsmodels.stats functions (1 total):
+
+Statistical Tests:
+  test
+

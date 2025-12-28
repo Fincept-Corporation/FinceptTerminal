@@ -51,6 +51,7 @@ const MaritimeTab = React.lazy(() => import('@/components/tabs/MaritimeTab'));
 const ReportBuilderTab = React.lazy(() => import('@/components/tabs/ReportBuilderTab'));
 const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping/DataMappingTab'));
 const ExcelTab = React.lazy(() => import('@/components/tabs/ExcelTab'));
+const Visualization3DTab = React.lazy(() => import('@/components/tabs/Visualization3DTab'));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -551,6 +552,7 @@ function FinxeptTerminalContent() {
 
   const researchMenuItems = [
     { label: 'Equity Research', shortcut: 'F7', action: () => setActiveTab('research') },
+    { label: '3D Visualization', action: () => setActiveTab('3d-viz') },
     { label: 'AI Quant Lab', action: () => setActiveTab('ai-quant-lab') },
     { label: 'Geopolitics', action: () => setActiveTab('geopolitics') },
     { label: 'Maritime Intelligence', action: () => setActiveTab('maritime') },
@@ -1128,6 +1130,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="excel" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <ExcelTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="3d-viz" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <Visualization3DTab />
               </React.Suspense>
             </TabsContent>
           </Tabs>

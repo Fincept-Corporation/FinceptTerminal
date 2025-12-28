@@ -1,0 +1,19 @@
+lr: 0.001
+model_kwargs:
+  batch_norm: false
+  context_length: 50
+  distr_output: !!python/object/apply:copyreg.__newobj_ex__
+    args:
+    - !!python/name:gluonts.torch.distributions.studentT.StudentTOutput ''
+    - !!python/tuple []
+    - &id001 !!python/object/apply:collections.OrderedDict
+      - - - beta
+          - 0.0
+    state:
+      __init_args__: *id001
+      beta: 0.0
+  hidden_dimensions:
+  - 20
+  - 20
+  prediction_length: 5
+weight_decay: 1.0e-08
