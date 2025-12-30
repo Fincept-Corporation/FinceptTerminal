@@ -117,12 +117,15 @@ const AgentConfigTab: React.FC = () => {
 
       if (!finceptExists && userApiKey) {
         console.log('[AgentConfigTab] Creating new Fincept config with user API key');
+        const now = new Date().toISOString();
         const finceptConfig = {
           provider: 'fincept',
           api_key: userApiKey,
           base_url: 'https://finceptbackend.share.zrok.io/research/llm',
           model: 'fincept-llm',
           is_active: true,
+          created_at: now,
+          updated_at: now,
         };
         await sqliteService.saveLLMConfig(finceptConfig);
         configs = await sqliteService.getLLMConfigs();

@@ -57,21 +57,20 @@ export interface ApiResponse {
   status_code?: number;
 }
 
-// Payment related types
+// Payment related types - Credit-based system
 export interface SubscriptionPlan {
   plan_id: string;
   name: string;
   description: string;
   price_usd: number;
-  billing_interval: string;
-  api_calls_limit: number | string;
-  databases_access: string[];
-  priority_support: boolean;
-  features: {
-    api_calls: string;
-    databases: string;
-    support: string;
-  };
+  price_display: string;
+  credits_amount: number;
+  support_type: string;
+  support_display: string;
+  validity_days: number;
+  validity_display: string;
+  is_popular: boolean;
+  display_order: number;
 }
 
 export interface PaymentSession {
@@ -142,14 +141,14 @@ interface AuthContextType {
   resetPassword: (email: string, otp: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   // Payment methods
   fetchPlans: () => Promise<{ success: boolean; error?: string }>;
-  createPaymentSession: (planId: string) => Promise<{ success: boolean; data?: PaymentSession; error?: string }>;
+  createPaymentSession: (planId: string, currency?: string) => Promise<{ success: boolean; data?: PaymentSession; error?: string }>;
   getUserSubscription: () => Promise<{ success: boolean; data?: UserSubscription; error?: string }>;
   refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Device ID generation
+// Device ID generation (must be 10-255 characters for API)
 const generateDeviceId = (): string => {
   const getNavigatorInfo = () => {
     return {
@@ -157,7 +156,9 @@ const generateDeviceId = (): string => {
       userAgent: navigator.userAgent,
       language: navigator.language,
       cookieEnabled: navigator.cookieEnabled,
-      onLine: navigator.onLine
+      onLine: navigator.onLine,
+      screenRes: `${window.screen.width}x${window.screen.height}`,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
     };
   };
 
@@ -171,7 +172,16 @@ const generateDeviceId = (): string => {
     hash = hash & hash;
   }
 
-  return `desktop_${Math.abs(hash).toString(16)}`;
+  // Generate a device ID that's between 10-255 characters
+  const hashStr = Math.abs(hash).toString(16);
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2);
+
+  // Format: fincept_desktop_{hash}_{timestamp}_{random}
+  const deviceId = `fincept_desktop_${hashStr}_${timestamp}_${random}`;
+
+  // Ensure it's within the valid range (10-255 characters)
+  return deviceId.length > 255 ? deviceId.substring(0, 255) : deviceId;
 };
 
 // Session storage utilities
@@ -237,12 +247,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['data'] | null> => {
   try {
     const result = await AuthApiService.getUserProfile(apiKey);
-    console.log('AuthContext: Raw profile result:', result); // Add this debug line
 
     if (result.success && result.data) {
-      // Fix: Extract the nested data properly
       const profileData = (result.data as any).data || result.data;
-      console.log('AuthContext: Extracted profile data:', profileData); // Add this debug line
       return profileData;
     }
     return null;
@@ -301,37 +308,22 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
   // Validate session with API
   const validateSession = async (sessionData: SessionData): Promise<SessionData | null> => {
     if (!sessionData.api_key) {
-      console.log('validateSession: No API key found');
       return null;
     }
 
-    console.log('validateSession: Validating session with API...');
     const result = await AuthApiService.getAuthStatus(sessionData.api_key, sessionData.device_id);
-    console.log('validateSession: Auth status result:', result);
-    console.log('validateSession: result.success =', result.success);
-    console.log('validateSession: result.data =', result.data);
 
-    // Backend returns nested structure: result.data.data contains the actual auth data
     const authData = (result.data as any)?.data || result.data;
-    console.log('validateSession: authData =', authData);
-    console.log('validateSession: authData?.authenticated =', authData?.authenticated);
 
     if (result.success && authData?.authenticated) {
       const apiData = authData;
-      console.log('validateSession: User authenticated, type:', apiData.user_type);
 
-      // For registered users, fetch detailed profile and subscription
       let userProfile = null;
       let userSubscription = null;
 
       if (apiData.user_type === 'registered') {
-        console.log('validateSession: Fetching user profile...');
         userProfile = await fetchUserProfile(sessionData.api_key);
-        console.log('validateSession: User profile result:', userProfile);
-
-        console.log('validateSession: Fetching user subscription...');
         userSubscription = await fetchUserSubscription(sessionData.api_key);
-        console.log('validateSession: User subscription result:', userSubscription);
       }
 
       const validatedSession = {
@@ -353,47 +345,37 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
         subscription: userSubscription || undefined
       };
 
-      console.log('validateSession: Returning validated session:', validatedSession);
       return validatedSession;
     }
 
-    console.log('validateSession: Auth status check failed or not authenticated');
     return null;
   };
 
   // Initialize session on app load
   useEffect(() => {
     const initializeSession = async () => {
-      console.log('AuthContext: Initializing session...');
-
       try {
         setIsFirstTimeUser(checkIsFirstTimeUser());
 
         const savedSession = loadSession();
-        console.log('AuthContext: Saved session:', savedSession ? 'Found' : 'Not found');
 
-        // In your AuthContext useEffect:
         if (savedSession) {
           if (savedSession.user_type === 'registered') {
-            // Always validate registered users, even in dev mode
             const validatedSession = await validateSession(savedSession);
             if (validatedSession) {
               setSession(validatedSession);
               saveSession(validatedSession);
             } else {
-              console.log('Session validation failed, clearing...');
               clearSession();
             }
           } else {
-            // Only skip validation for guest users in dev mode
             setSession(savedSession);
           }
         }
 
       } catch (error) {
-        console.error('AuthContext: Initialization error:', error);
+        console.error('Session initialization error:', error);
       } finally {
-        console.log('AuthContext: Initialization complete');
         setIsLoading(false);
       }
     };
@@ -413,45 +395,34 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
   };
 
   // Fetch subscription plans
-  // Fetch subscription plans
   const fetchPlans = async (): Promise<{ success: boolean; error?: string }> => {
     setIsLoadingPlans(true);
     try {
-      console.log('AuthContext: Fetching plans from API...');
       const result = await PaymentApiService.getSubscriptionPlans();
 
-      console.log('AuthContext: Plans API result:', result);
-
       if (result.success && result.data) {
-        // Handle the nested response structure: result.data.data.plans
         const plansData = (result.data as any).data || result.data;
         const plans = plansData.plans || [];
 
-        console.log('AuthContext: Extracted plans:', plans);
-        console.log('AuthContext: Number of plans:', plans.length);
-
         if (plans.length > 0) {
           setAvailablePlans(plans);
-          console.log('AuthContext: Plans set successfully');
           return { success: true };
         } else {
-          console.log('AuthContext: No plans found in response');
           return { success: false, error: 'No plans available' };
         }
       } else {
-        console.log('AuthContext: API request failed:', result.error);
         return { success: false, error: result.error || 'Failed to fetch plans' };
       }
     } catch (error) {
-      console.error('AuthContext: Failed to fetch plans:', error);
+      console.error('Failed to fetch plans:', error);
       return { success: false, error: 'Failed to fetch plans' };
     } finally {
       setIsLoadingPlans(false);
     }
   };
 
-  // Create payment session
-  const createPaymentSession = async (planId: string): Promise<{ success: boolean; data?: PaymentSession; error?: string }> => {
+  // Create payment session - Updated for new API format
+  const createPaymentSession = async (planId: string, currency: string = 'USD'): Promise<{ success: boolean; data?: PaymentSession; error?: string }> => {
     if (!session?.api_key) {
       return { success: false, error: 'No API key available' };
     }
@@ -459,11 +430,24 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     try {
       const result = await PaymentApiService.createCheckoutSession(session.api_key, {
         plan_id: planId,
-        return_url: `${window.location.origin}/payment-success`
+        currency: currency
       });
 
       if (result.success && result.data) {
-        return { success: true, data: result.data };
+        // Handle double-wrapped response
+        const apiData = (result.data as any)?.data || result.data;
+
+        // Map the new API response to PaymentSession format
+        const paymentSession: PaymentSession = {
+          checkout_url: apiData.checkout_url,
+          session_id: apiData.payment_session_id,
+          payment_uuid: apiData.order_id,
+          plan: {
+            name: apiData.plan?.name || 'Unknown Plan',
+            price: apiData.pricing?.amount || 0
+          }
+        };
+        return { success: true, data: paymentSession };
       } else {
         return { success: false, error: result.error || 'Failed to create payment session' };
       }
@@ -495,63 +479,59 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
   // Login function
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      console.log('AuthContext: Attempting login for:', email);
-
       const result = await AuthApiService.login({ email, password }) as ApiResponse;
 
-      console.log('AuthContext: Full login result:', result);
-      console.log('AuthContext: result.success:', result.success);
-      console.log('AuthContext: result.data:', result.data);
+      console.log('=== LOGIN RESPONSE DEBUG ===');
+      console.log('Full result:', JSON.stringify(result, null, 2));
+      console.log('result.success:', result.success);
+      console.log('result.data:', result.data);
+      console.log('========================');
 
-      // In AuthContext.tsx, update the login function around line 480-515:
+      // Backend returns: { success: true, data: { api_key: "..." } }
+      // But makeApiRequest wraps it again, so we need to check result.data.data
+      const apiData = (result.data as any)?.data || result.data;
 
-if (result.success && result.data && result.data.data && result.data.data.api_key) {
-  const apiKey = result.data.data.api_key;
-  console.log('AuthContext: Login successful, API key received:', apiKey.substring(0, 20) + '...');
+      if (result.success && apiData && apiData.api_key) {
+        const apiKey = apiData.api_key;
 
-  // Fetch user profile and subscription to get account_type and other details
-  const [userProfile, userSubscription] = await Promise.all([
-    fetchUserProfile(apiKey),
-    fetchUserSubscription(apiKey)
-  ]);
+        const [userProfile, userSubscription] = await Promise.all([
+          fetchUserProfile(apiKey),
+          fetchUserSubscription(apiKey)
+        ]);
 
-  const newSession: SessionData = {
-    authenticated: true,
-    user_type: 'registered',
-    api_key: apiKey,
-    device_id: generateDeviceId(),
-    user_info: userProfile ? {
-      username: userProfile.username,
-      email: userProfile.email,
-      account_type: userProfile.account_type,  // ← This should be working
-      credit_balance: userProfile.credit_balance,
-      is_verified: userProfile.is_verified,
-      mfa_enabled: userProfile.mfa_enabled
-    } : {
-      // Fallback if profile fetch fails - assume free account
-      email: email,
-      account_type: 'free',  // ← Make sure this fallback is 'free', not undefined
-      credit_balance: 0
-    },
-    subscription: userSubscription || undefined
-  };
+        const newSession: SessionData = {
+          authenticated: true,
+          user_type: 'registered',
+          api_key: apiKey,
+          device_id: generateDeviceId(),
+          user_info: userProfile ? {
+            username: userProfile.username,
+            email: userProfile.email,
+            account_type: userProfile.account_type,
+            credit_balance: userProfile.credit_balance,
+            is_verified: userProfile.is_verified,
+            mfa_enabled: userProfile.mfa_enabled
+          } : {
+            email: email,
+            account_type: 'free',
+            credit_balance: 0
+          },
+          subscription: userSubscription || undefined
+        };
 
-  setSession(newSession);
-  saveSession(newSession);
-  setIsFirstTimeUser(checkIsFirstTimeUser());
+        setSession(newSession);
+        saveSession(newSession);
+        setIsFirstTimeUser(checkIsFirstTimeUser());
 
-  console.log('AuthContext: Login successful, account_type:', newSession.user_info?.account_type);
-  console.log('AuthContext: Has subscription:', !!newSession.subscription?.has_subscription);
-  return { success: true };
-} else {
-        console.log('AuthContext: Login failed - success:', result.success, 'data:', result.data, 'error:', result.error);
+        return { success: true };
+      } else {
         return {
           success: false,
           error: result.error || result.message || 'Login failed'
         };
       }
     } catch (error) {
-      console.error('AuthContext: Login error:', error);
+      console.error('Login error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Login failed'
@@ -589,11 +569,13 @@ if (result.success && result.data && result.data.data && result.data.data.api_ke
     try {
       const result = await AuthApiService.verifyOtp({ email, otp }) as ApiResponse;
 
-      if (result.success && result.data && result.data.data && result.data.data.api_key) {
-        const apiKey = result.data.data.api_key;
-        console.log('AuthContext: OTP verification successful, API key received');
+      // Backend returns: { success: true, data: { api_key: "..." } }
+      // But makeApiRequest wraps it again, so we need to check result.data.data
+      const apiData = (result.data as any)?.data || result.data;
 
-        // Fetch user profile for new registered user (no subscription yet)
+      if (result.success && apiData && apiData.api_key) {
+        const apiKey = apiData.api_key;
+
         const userProfile = await fetchUserProfile(apiKey);
 
         const newSession: SessionData = {
@@ -609,12 +591,11 @@ if (result.success && result.data && result.data.data && result.data.data.api_ke
             is_verified: userProfile.is_verified,
             mfa_enabled: userProfile.mfa_enabled
           } : {
-            // Fallback if profile fetch fails - assume free account
             email: email,
             account_type: 'free',
             credit_balance: 0
           },
-          subscription: undefined // New user won't have subscription yet
+          subscription: undefined
         };
 
         setSession(newSession);
@@ -701,7 +682,10 @@ if (result.success && result.data && result.data.data && result.data.data.api_ke
         hardware_info: {
           platform: navigator.platform,
           user_agent: navigator.userAgent,
-          language: navigator.language
+          language: navigator.language,
+          screen_resolution: `${window.screen.width}x${window.screen.height}`,
+          cpu_cores: navigator.hardwareConcurrency || 4,
+          memory_gb: (navigator as any).deviceMemory || 8
         }
       }) as DeviceRegisterResponse;
 
@@ -738,13 +722,9 @@ if (result.success && result.data && result.data.data && result.data.data.api_ke
 
   // Logout function
   const logout = async (): Promise<void> => {
-    console.log('AuthContext: Logging out...');
-
     setSession(null);
     clearSession();
     setIsFirstTimeUser(checkIsFirstTimeUser());
-
-    console.log('AuthContext: Logout complete');
   };
 
   const value: AuthContextType = {

@@ -2,8 +2,8 @@
 // Provider-agnostic trades feed component
 
 import React, { useState, useEffect } from 'react';
-import { useWebSocket } from '../../../hooks/useWebSocket';
-import { isProviderAvailable } from '../../../services/websocket';
+import { useRustTrades } from '../../../hooks/useRustWebSocket';
+
 
 interface Trade {
   price: number;
@@ -21,46 +21,26 @@ interface TradesFeedProps {
 export function TradesFeed({ symbol, provider, maxTrades = 50 }: TradesFeedProps) {
   const [trades, setTrades] = useState<Trade[]>([]);
 
-  // Only subscribe if WebSocket adapter exists for this provider
-  const hasWebSocket = isProviderAvailable(provider);
-
-  const { message, isLoading, error } = useWebSocket(
-    hasWebSocket ? `${provider}.trades.${symbol}` : null,
-    null,
-    { autoSubscribe: hasWebSocket }
+  // Use Rust WebSocket backend
+  const { trades: rustTrades, error: wsError } = useRustTrades(
+    provider,
+    symbol,
+    maxTrades
   );
 
   useEffect(() => {
-    if (!message || message.type !== 'trade') return;
+    if (!rustTrades || rustTrades.length === 0) return;
 
-    const data = message.data;
+    // Map Rust trade data to component format
+    const newTrades: Trade[] = rustTrades.map((trade) => ({
+      price: trade.price,
+      size: trade.quantity,
+      side: trade.side === 'buy' || trade.side === 'sell' ? trade.side : 'buy',
+      time: trade.timestamp
+    }));
 
-    // Handle different data formats
-    let newTrades: Trade[] = [];
-
-    if (Array.isArray(data.trades)) {
-      // Multiple trades (e.g., HyperLiquid)
-      newTrades = data.trades.map((trade: any) => ({
-        price: trade.price || parseFloat(trade.px),
-        size: trade.size || parseFloat(trade.sz),
-        side: trade.side === 'sell' || trade.side === 'A' ? 'sell' : 'buy',
-        time: trade.time || Date.now()
-      }));
-    } else {
-      // Single trade (e.g., Kraken)
-      newTrades = [{
-        price: data.price || parseFloat(data.px),
-        size: data.size || parseFloat(data.sz),
-        side: data.side === 'sell' || data.side === 'A' ? 'sell' : 'buy',
-        time: data.time || Date.now()
-      }];
-    }
-
-    setTrades(prev => {
-      const updated = [...newTrades, ...prev];
-      return updated.slice(0, maxTrades);
-    });
-  }, [message, maxTrades]);
+    setTrades(newTrades.slice(0, maxTrades));
+  }, [rustTrades, maxTrades]);
 
   return (
     <div className="flex flex-col h-full bg-[#0d0d0d] text-white font-mono text-[11px]">
@@ -82,14 +62,9 @@ export function TradesFeed({ symbol, provider, maxTrades = 50 }: TradesFeedProps
 
       {/* Trades List */}
       <div className="flex-1 overflow-y-auto">
-        {isLoading && trades.length === 0 ? (
-          <div className="p-4 text-center text-gray-500">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mx-auto mb-2"></div>
-            Connecting...
-          </div>
-        ) : error && trades.length === 0 ? (
+        {wsError && trades.length === 0 ? (
           <div className="p-4 text-center text-red-500 text-xs">
-            Connection error
+            Connection error: {wsError}
           </div>
         ) : trades.length === 0 ? (
           <div className="p-4 text-center text-gray-500">Waiting for trades...</div>

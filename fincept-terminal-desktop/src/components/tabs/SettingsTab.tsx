@@ -4,8 +4,7 @@ import { sqliteService, type LLMConfig, type LLMGlobalSettings, type LLMModelCon
 import { ollamaService } from '@/services/ollamaService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { terminalThemeService, FONT_FAMILIES, COLOR_THEMES, FontSettings } from '@/services/terminalThemeService';
-import { getWebSocketManager, ConnectionStatus, getAvailableProviders } from '@/services/websocket';
-import { useWebSocketManager } from '@/hooks/useWebSocket';
+import { getWebSocketManager, ConnectionStatus, getAvailableProviders } from '@/services/websocketBridge';
 import { DataSourcesPanel } from '@/components/settings/DataSourcesPanel';
 import { BacktestingProvidersPanel } from '@/components/settings/BacktestingProvidersPanel';
 import { LanguageSelector } from '@/components/settings/LanguageSelector';
@@ -18,7 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function SettingsTab() {
   const { t } = useTranslation('settings');
-  const { user } = useAuth();
+  const { session } = useAuth();
   const { theme, updateTheme, resetTheme, colors, fontSize: themeFontSize, fontFamily: themeFontFamily, fontWeight: themeFontWeight, fontStyle } = useTerminalTheme();
   const { defaultTimezone, setDefaultTimezone, options: timezoneOptions } = useTimezone();
   const [activeSection, setActiveSection] = useState<'credentials' | 'terminal' | 'terminalConfig' | 'llm' | 'dataConnections' | 'backtesting' | 'language'>('credentials');
@@ -28,7 +27,7 @@ export default function SettingsTab() {
   const [dbInitialized, setDbInitialized] = useState(false);
 
   // WebSocket Data Connections State
-  const { stats, statuses, metrics, manager } = useWebSocketManager();
+  // WebSocket manager removed - now using Rust backend
   const [wsProviders, setWsProviders] = useState<Array<{
     id: number;
     provider_name: string;
@@ -116,23 +115,24 @@ export default function SettingsTab() {
   }, []);
 
   // Track programmatic providers that get initialized
-  useEffect(() => {
-    const detectedProviders = new Set<string>([
-      ...Array.from(statuses.keys()),
-      ...manager.getSubscriptions().map(sub => sub.topic.split('.')[0])
-    ]);
+  // TODO: Re-implement with new Rust WebSocket backend
+  // useEffect(() => {
+  //   const detectedProviders = new Set<string>([
+  //     ...Array.from(statuses.keys()),
+  //     ...manager.getSubscriptions().map(sub => sub.topic.split('.')[0])
+  //   ]);
 
-    // Filter out database-configured providers
-    detectedProviders.forEach(p => {
-      if (wsProviders.find(wp => wp.provider_name === p)) {
-        detectedProviders.delete(p);
-      }
-    });
+  //   // Filter out database-configured providers
+  //   detectedProviders.forEach(p => {
+  //     if (wsProviders.find(wp => wp.provider_name === p)) {
+  //       detectedProviders.delete(p);
+  //     }
+  //   });
 
-    if (detectedProviders.size > 0) {
-      setProgrammaticProviders(prev => new Set([...prev, ...detectedProviders]));
-    }
-  }, [statuses, wsProviders]);
+  //   if (detectedProviders.size > 0) {
+  //     setProgrammaticProviders(prev => new Set([...prev, ...detectedProviders]));
+  //   }
+  // }, [wsProviders]);
 
   const checkAndLoadData = async () => {
     try {
@@ -176,20 +176,20 @@ export default function SettingsTab() {
       const providers = await sqliteService.getWSProviderConfigs();
       setWsProviders(providers);
 
-      // Auto-initialize enabled providers in WebSocket Manager
-      const wsManager = getWebSocketManager();
-      for (const provider of providers) {
-        if (provider.enabled) {
-          wsManager.setProviderConfig(provider.provider_name, {
-            provider_name: provider.provider_name,
-            enabled: provider.enabled,
-            api_key: provider.api_key || undefined,
-            api_secret: provider.api_secret || undefined,
-            endpoint: provider.endpoint || undefined
-          });
-          console.log(`[Settings] Auto-initialized provider: ${provider.provider_name}`);
-        }
-      }
+      // TODO: Re-implement auto-initialization with new Rust WebSocket backend
+      // const wsManager = getWebSocketManager();
+      // for (const provider of providers) {
+      //   if (provider.enabled) {
+      //     wsManager.setProviderConfig(provider.provider_name, {
+      //       provider_name: provider.provider_name,
+      //       enabled: provider.enabled,
+      //       api_key: provider.api_key || undefined,
+      //       api_secret: provider.api_secret || undefined,
+      //       endpoint: provider.endpoint || undefined
+      //     });
+      //     console.log(`[Settings] Auto-initialized provider: ${provider.provider_name}`);
+      //   }
+      // }
     } catch (error) {
       console.error('Failed to load WS providers:', error);
     }
@@ -208,15 +208,15 @@ export default function SettingsTab() {
       if (result.success) {
         showMessage('success', result.message);
 
-        // Initialize provider in WebSocket Manager
-        const manager = getWebSocketManager();
-        manager.setProviderConfig(providerForm.provider_name, {
-          provider_name: providerForm.provider_name,
-          enabled: providerForm.enabled,
-          api_key: providerForm.api_key || undefined,
-          api_secret: providerForm.api_secret || undefined,
-          endpoint: providerForm.endpoint || undefined
-        });
+        // TODO: Re-implement with new Rust WebSocket backend
+        // const manager = getWebSocketManager();
+        // manager.setProviderConfig(providerForm.provider_name, {
+        //   provider_name: providerForm.provider_name,
+        //   enabled: providerForm.enabled,
+        //   api_key: providerForm.api_key || undefined,
+        //   api_secret: providerForm.api_secret || undefined,
+        //   endpoint: providerForm.endpoint || undefined
+        // });
 
         // Reset form
         setProviderForm({
@@ -246,16 +246,16 @@ export default function SettingsTab() {
         showMessage('success', result.message);
         await loadWSProviders();
 
-        // Reconnect or disconnect based on new state
-        const manager = getWebSocketManager();
-        if (result.enabled) {
-          const config = await sqliteService.getWSProviderConfig(providerName);
-          if (config) {
-            manager.setProviderConfig(providerName, config);
-          }
-        } else {
-          await manager.disconnect(providerName);
-        }
+        // TODO: Re-implement with new Rust WebSocket backend
+        // const manager = getWebSocketManager();
+        // if (result.enabled) {
+        //   const config = await sqliteService.getWSProviderConfig(providerName);
+        //   if (config) {
+        //     manager.setProviderConfig(providerName, config);
+        //   }
+        // } else {
+        //   await manager.disconnect(providerName);
+        // }
       }
     } catch (error) {
       showMessage('error', 'Failed to toggle provider');
@@ -293,18 +293,14 @@ export default function SettingsTab() {
       const config = await sqliteService.getWSProviderConfig(providerName);
 
       if (config) {
-        manager.setProviderConfig(providerName, config);
-
-        // Check if there are existing subscriptions to restore
-        const hasSubscriptions = manager.getProviderSubscriptions(providerName).length > 0;
-
-        if (hasSubscriptions) {
-          // Use reconnect to restore subscriptions
-          await manager.reconnect(providerName);
-        } else {
-          // Just connect if no subscriptions
+        // TODO: Re-implement with new Rust WebSocket backend
+        // manager.setProviderConfig(providerName, config);
+        // const hasSubscriptions = manager.getProviderSubscriptions(providerName).length > 0;
+        // if (hasSubscriptions) {
+        //   await manager.reconnect(providerName);
+        // } else {
           await manager.connect(providerName);
-        }
+        // }
 
         showMessage('success', `Connected to ${providerName}`);
       } else {
@@ -327,9 +323,11 @@ export default function SettingsTab() {
 
   const handleTestProvider = async (providerName: string) => {
     try {
-      const manager = getWebSocketManager();
-      const latency = await manager.ping(providerName);
-      showMessage('success', `Ping: ${latency}ms`);
+      // TODO: Re-implement ping with new Rust WebSocket backend
+      // const manager = getWebSocketManager();
+      // const latency = await manager.ping(providerName);
+      // showMessage('success', `Ping: ${latency}ms`);
+      showMessage('success', `Test connection feature coming soon`);
     } catch (error) {
       showMessage('error', `Ping failed for ${providerName}`);
     }
@@ -337,16 +335,17 @@ export default function SettingsTab() {
 
   const handleUnsubscribe = async (subscriptionId: string, topic: string) => {
     try {
-      const manager = getWebSocketManager();
-      const subscriptions = manager.getSubscriptions();
-      const sub = subscriptions.find(s => s.id === subscriptionId);
+      // TODO: Re-implement with new Rust WebSocket backend
+      // const manager = getWebSocketManager();
+      // const subscriptions = manager.getSubscriptions();
+      // const sub = subscriptions.find(s => s.id === subscriptionId);
 
-      if (sub) {
-        sub.unsubscribe();
-        showMessage('success', `Unsubscribed from ${topic}`);
-      } else {
-        showMessage('error', 'Subscription not found');
-      }
+      // if (sub) {
+      //   sub.unsubscribe();
+      //   showMessage('success', `Unsubscribed from ${topic}`);
+      // } else {
+        showMessage('error', 'Subscription management coming soon');
+      // }
     } catch (error) {
       showMessage('error', `Failed to unsubscribe from ${topic}`);
     }
@@ -381,15 +380,18 @@ export default function SettingsTab() {
 
       // Initialize Fincept LLM as default if no configs exist
       if (configs.length === 0) {
-        // Try to get API key from user profile
-        const userApiKey = user?.api_key || '';
+        // Try to get API key from session profile
+        const userApiKey = session?.api_key || '';
 
+        const now = new Date().toISOString();
         const finceptConfig = {
           provider: 'fincept',
           api_key: userApiKey,
           base_url: 'https://finceptbackend.share.zrok.io/research/llm',
           model: 'fincept-llm',
           is_active: true,
+          created_at: now,
+          updated_at: now,
         };
         await sqliteService.saveLLMConfig(finceptConfig);
         configs = await sqliteService.getLLMConfigs();
@@ -895,7 +897,7 @@ export default function SettingsTab() {
                           ✓ FINCEPT AUTO-CONFIGURED
                         </div>
                         <div style={{ color: '#888', fontSize: '8px' }}>
-                          Key: {user?.api_key?.substring(0, 8)}... • 5 credits/response
+                          Key: {session?.api_key?.substring(0, 8)}... • 5 credits/response
                         </div>
                       </div>
                     )}

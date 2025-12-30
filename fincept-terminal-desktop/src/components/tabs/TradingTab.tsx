@@ -9,7 +9,7 @@ import {
   Clock, TrendingDown as ArrowDown, TrendingUp as ArrowUp, ChevronUp, Minimize2
 } from 'lucide-react';
 import { useBrokerContext } from '../../contexts/BrokerContext';
-import { useWebSocket } from '../../hooks/useWebSocket';
+import { useRustTicker, useRustOrderBook, useRustTrades } from '../../hooks/useRustWebSocket';
 import { invoke } from '@tauri-apps/api/core';
 // Import new enhanced order form
 import { EnhancedOrderForm } from './trading/core/OrderForm';
@@ -98,9 +98,9 @@ export function TradingTab() {
 
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedSymbol, setSelectedSymbol] = useState(defaultSymbols[0] || 'BTC/USD');
-  const [tickerData, setTickerData] = useState<any>(null);
+  const [tickerState, setTickerData] = useState<any>(null);
   const [orderBook, setOrderBook] = useState<OrderBook>({ bids: [], asks: [], symbol: '' });
-  const [tradesData, setTradesData] = useState<any[]>([]);
+  const [tradesState, setTradesData] = useState<any[]>([]);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [lastOrderBookUpdate, setLastOrderBookUpdate] = useState<number>(0);
 
@@ -247,108 +247,80 @@ export function TradingTab() {
     setLastOrderBookUpdate(0);
   }, [selectedSymbol]);
 
-  // Subscribe to WebSocket feeds
-  const { message: tickerMessage } = useWebSocket(
-    activeBroker ? `${activeBroker}.ticker.${selectedSymbol}` : null
+  // Subscribe to Rust WebSocket feeds (10,000+ connections, minimal memory)
+  const { data: tickerData, error: tickerError } = useRustTicker(
+    activeBroker || '',
+    selectedSymbol,
+    !!activeBroker
   );
 
-  const { message: orderbookMessage } = useWebSocket(
-    activeBroker ? `${activeBroker}.book.${selectedSymbol}` : null
+  const { data: orderbookData, error: orderbookError } = useRustOrderBook(
+    activeBroker || '',
+    selectedSymbol,
+    25,
+    !!activeBroker
   );
 
-  const { message: tradesMessage } = useWebSocket(
-    activeBroker ? `${activeBroker}.trade.${selectedSymbol}` : null
+  const { trades: tradesData, error: tradesError } = useRustTrades(
+    activeBroker || '',
+    selectedSymbol,
+    50,
+    !!activeBroker
   );
 
-  // Update ticker data
+  // Update ticker data from Rust WebSocket
   useEffect(() => {
-    if (tickerMessage && tickerMessage.data) {
-      const data = tickerMessage.data;
-      if (data.symbol === selectedSymbol) {
-        setTickerData(data);
-        if (tradingMode === 'paper' && paperAdapter) {
-          const matchingEngine = (paperAdapter as any).matchingEngine;
-          if (matchingEngine && typeof matchingEngine.updatePriceFromWebSocket === 'function') {
-            matchingEngine.updatePriceFromWebSocket(selectedSymbol, {
-              bid: data.bid,
-              ask: data.ask,
-              last: data.last,
-            });
-          }
+    if (tickerData && tickerData.symbol === selectedSymbol) {
+      setTickerData({
+        symbol: tickerData.symbol,
+        price: tickerData.price,
+        bid: tickerData.bid,
+        ask: tickerData.ask,
+        last: tickerData.price,
+        volume: tickerData.volume,
+        high: tickerData.high,
+        low: tickerData.low,
+        change: tickerData.change,
+        changePercent: tickerData.change_percent,
+      });
+
+      if (tradingMode === 'paper' && paperAdapter) {
+        const matchingEngine = (paperAdapter as any).matchingEngine;
+        if (matchingEngine && typeof matchingEngine.updatePriceFromWebSocket === 'function') {
+          matchingEngine.updatePriceFromWebSocket(selectedSymbol, {
+            bid: tickerData.bid,
+            ask: tickerData.ask,
+            last: tickerData.price,
+          });
         }
       }
     }
-  }, [tickerMessage, tradingMode, paperAdapter, selectedSymbol]);
+  }, [tickerData, tradingMode, paperAdapter, selectedSymbol]);
 
-  // Update orderbook using high-performance Rust backend (20-50x faster)
+  // Update orderbook from Rust WebSocket
   useEffect(() => {
-    if (!orderbookMessage || !orderbookMessage.data) return;
-    const data = orderbookMessage.data;
-    const messageType = data.messageType;
-    const dataSymbol = data.symbol || selectedSymbol;
-
-    if (dataSymbol !== selectedSymbol) return;
-
-    const updateOrderBook = async () => {
-      try {
-        if (messageType === 'snapshot') {
-          // Rust-powered snapshot processing
-          const [sortedBids, sortedAsks] = await invoke<[OrderBookLevel[], OrderBookLevel[]]>(
-            'update_orderbook_snapshot',
-            {
-              bids: data.bids || [],
-              asks: data.asks || [],
-              maxDepth: 25
-            }
-          );
-
-          setOrderBook({
-            bids: sortedBids,
-            asks: sortedAsks,
-            symbol: dataSymbol,
-            checksum: data.checksum
-          });
-          setLastOrderBookUpdate(Date.now());
-        } else if (messageType === 'update') {
-          // High-performance Rust merge with HashMap optimization
-          const [mergedBids, mergedAsks] = await invoke<[OrderBookLevel[], OrderBookLevel[]]>(
-            'merge_orderbook',
-            {
-              existingBids: orderBook.bids,
-              existingAsks: orderBook.asks,
-              updateBids: data.bids || null,
-              updateAsks: data.asks || null,
-              maxDepth: 25
-            }
-          );
-
-          setOrderBook({
-            bids: mergedBids,
-            asks: mergedAsks,
-            symbol: dataSymbol,
-            checksum: data.checksum
-          });
-          setLastOrderBookUpdate(Date.now());
-        }
-      } catch (error) {
-        console.error('[TradingTab] Rust orderbook processing failed:', error);
-        // Fallback: Keep existing orderbook on error
-      }
-    };
-
-    updateOrderBook();
-  }, [orderbookMessage, selectedSymbol, orderBook.bids, orderBook.asks]);
-
-  // Update trades
-  useEffect(() => {
-    if (tradesMessage && tradesMessage.data) {
-      const data = tradesMessage.data;
-      const dataSymbol = data.symbol || selectedSymbol;
-      if (dataSymbol === selectedSymbol) {
-        setTradesData(prev => [data, ...prev].slice(0, 50));
-      }
+    if (orderbookData && orderbookData.symbol === selectedSymbol) {
+      setOrderBook({
+        bids: orderbookData.bids.map(b => ({ price: b.price, size: b.quantity })),
+        asks: orderbookData.asks.map(a => ({ price: a.price, size: a.quantity })),
+        symbol: orderbookData.symbol,
+      });
+      setLastOrderBookUpdate(Date.now());
     }
-  }, [tradesMessage, selectedSymbol]);
+  }, [orderbookData, selectedSymbol]);
+
+  // Update trades from Rust WebSocket (auto-maintains 50 trades)
+  useEffect(() => {
+    if (tradesData && tradesData.length > 0) {
+      setTradesData(tradesData.map(t => ({
+        symbol: t.symbol,
+        price: t.price,
+        quantity: t.quantity,
+        side: t.side,
+        timestamp: t.timestamp,
+      })));
+    }
+  }, [tradesData]);
 
   // Load paper trading data
   useEffect(() => {
@@ -507,17 +479,17 @@ export function TradingTab() {
     await setActiveBroker(brokerId);
   };
 
-  const currentPrice = tickerData?.last || orderBook.asks[0]?.price || 0;
+  const currentPrice = tickerState?.last || tickerState?.price || orderBook.asks[0]?.price || 0;
 
   // Calculate price change - try multiple field names
-  const priceChange = tickerData?.change || tickerData?.price_change || 0;
+  const priceChange = tickerState?.change || tickerState?.price_change || 0;
 
   // Calculate percentage change - try from data or calculate manually
-  let priceChangePercent = tickerData?.change_percent || tickerData?.percentage || tickerData?.percent_change || 0;
+  let priceChangePercent = tickerState?.changePercent || tickerState?.change_percent || tickerState?.percentage || tickerState?.percent_change || 0;
 
   // If no percentage provided, calculate it from price change and current price
-  if (priceChangePercent === 0 && tickerData?.last && tickerData?.open && tickerData.open > 0) {
-    priceChangePercent = ((tickerData.last - tickerData.open) / tickerData.open) * 100;
+  if (priceChangePercent === 0 && tickerState?.last && tickerState?.open && tickerState.open > 0) {
+    priceChangePercent = ((tickerState.last - tickerState.open) / tickerState.open) * 100;
   } else if (priceChangePercent === 0 && priceChange !== 0 && currentPrice > 0) {
     // Calculate from absolute change if we have it
     const previousPrice = currentPrice - priceChange;
@@ -527,9 +499,9 @@ export function TradingTab() {
   }
 
   // Calculate 24h price range (High - Low)
-  const spread24h = (tickerData?.high && tickerData?.low) ? (tickerData.high - tickerData.low) : 0;
-  const spread24hPercent = (spread24h > 0 && tickerData?.low && tickerData.low > 0)
-    ? ((spread24h / tickerData.low) * 100)
+  const spread24h = (tickerState?.high && tickerState?.low) ? (tickerState.high - tickerState.low) : 0;
+  const spread24hPercent = (spread24h > 0 && tickerState?.low && tickerState.low > 0)
+    ? ((spread24h / tickerState.low) * 100)
     : 0;
 
   return (
@@ -858,9 +830,9 @@ export function TradingTab() {
         {/* Price Display */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
           <span style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.YELLOW }}>
-            {tickerData ? `$${tickerData.last?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}` : '--'}
+            {tickerState ? `$${(tickerState.last || tickerState.price)?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}` : '--'}
           </span>
-          {tickerData && (
+          {tickerState && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               {priceChange >= 0 ? (
                 <ArrowUp size={16} color={BLOOMBERG.GREEN} />
@@ -906,38 +878,38 @@ export function TradingTab() {
               )}
             </div>
           </div>
-          {tickerData && (
+          {tickerState && (
             <>
               <div>
                 <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H HIGH</div>
-                <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>${tickerData.high?.toFixed(2) || '--'}</div>
+                <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>${tickerState.high?.toFixed(2) || '--'}</div>
               </div>
               <div>
                 <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H LOW</div>
-                <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>${tickerData.low?.toFixed(2) || '--'}</div>
+                <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>${tickerState.low?.toFixed(2) || '--'}</div>
               </div>
               <div>
                 <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H VOLUME</div>
                 <div style={{ color: BLOOMBERG.PURPLE, fontWeight: 600 }}>
-                  {tickerData.volume ? (
+                  {tickerState.volume ? (
                     <>
                       {/* Show volume in USD if available */}
-                      {tickerData.quoteVolume ? (
-                        `$${tickerData.quoteVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                      ) : tickerData.volumeUsd ? (
-                        `$${tickerData.volumeUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                      {tickerState.quoteVolume ? (
+                        `$${tickerState.quoteVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                      ) : tickerState.volume ? (
+                        `$${(tickerState.volume * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
                       ) : (
                         // Calculate USD value from volume * current price
                         currentPrice > 0 ? (
                           <>
-                            ${(tickerData.volume * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            ${(tickerState.volume * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                             <span style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginLeft: '4px' }}>
-                              ({tickerData.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} {selectedSymbol.split('/')[0]})
+                              ({tickerState.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} {selectedSymbol.split('/')[0]})
                             </span>
                           </>
                         ) : (
                           <>
-                            {tickerData.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                            {tickerState.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                             <span style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginLeft: '2px' }}>
                               {selectedSymbol.split('/')[0]}
                             </span>
@@ -1255,7 +1227,7 @@ export function TradingTab() {
                             ${trade.price?.toFixed(2)}
                           </td>
                           <td style={{ padding: '4px 6px', textAlign: 'right', color: BLOOMBERG.WHITE }}>
-                            {trade.amount?.toFixed(4)}
+                            {trade.quantity?.toFixed(4)}
                           </td>
                         </tr>
                       ))}

@@ -1,8 +1,8 @@
 // TradingChart.tsx - TradingView Lightweight Charts with historical + live data
 import React, { useEffect, useRef, useState } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, Time } from 'lightweight-charts';
-import { useWebSocket } from '../../../hooks/useWebSocket';
-import { isProviderAvailable } from '../../../services/websocket';
+import { useRustCandles } from '../../../hooks/useRustWebSocket';
+
 import { useBrokerContext } from '../../../contexts/BrokerContext';
 
 interface TradingChartProps {
@@ -23,14 +23,11 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
 
   const { realAdapter } = useBrokerContext();
 
-  // Only subscribe if WebSocket adapter exists for this provider
-  const hasWebSocket = isProviderAvailable(provider);
-
-  // Subscribe to candle data
-  const { message, error: wsError } = useWebSocket(
-    hasWebSocket ? `${provider}.ohlc.${symbol}` : null,
-    null,
-    { autoSubscribe: hasWebSocket, params: { interval: parseInterval(interval) } }
+  // Use Rust WebSocket backend for candle data
+  const { candles: rustCandles, latestCandle, error: wsError } = useRustCandles(
+    provider,
+    symbol,
+    interval
   );
 
   // Initialize chart
@@ -179,16 +176,19 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
     fetchHistoricalData();
   }, [symbol, interval, realAdapter]);
 
-  // Handle live candle updates from WebSocket
+  // Handle live candle updates from Rust WebSocket
   useEffect(() => {
-    if (!message || message.type !== 'candle') return;
+    if (!latestCandle) return;
     if (!candlestickSeriesRef.current || !volumeSeriesRef.current) return;
 
-    const data = message.data;
-
     // Parse candle data
-    const candle = parseCandleData(data);
-    if (!candle) return;
+    const candle: CandlestickData = {
+      time: Math.floor(latestCandle.timestamp / 1000) as Time,
+      open: latestCandle.open,
+      high: latestCandle.high,
+      low: latestCandle.low,
+      close: latestCandle.close,
+    };
 
     console.log('[TradingChart] Live candle update:', candle);
 
@@ -199,7 +199,7 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
       // Update volume
       volumeSeriesRef.current.update({
         time: candle.time,
-        value: (data.volume || data.v || 0) as number,
+        value: latestCandle.volume,
         color: candle.close >= candle.open ? '#10b98180' : '#dc262680',
       });
 
@@ -217,7 +217,7 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
     } catch (error) {
       console.error('[TradingChart] Failed to update candle:', error);
     }
-  }, [message]);
+  }, [latestCandle]);
 
   return (
     <div className="relative w-full h-full bg-[#0d0d0d]">
@@ -260,7 +260,7 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
           <span>{interval}</span>
           <span>•</span>
           <span>{candleData.length} candles</span>
-          {hasWebSocket && (
+          {latestCandle && (
             <>
               <span>•</span>
               <span className="text-green-400">● Live</span>

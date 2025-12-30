@@ -3,9 +3,6 @@
 // Replaces ProviderContext with enhanced broker registry support
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
-import { getWebSocketManager } from '../services/websocket';
-import type { ProviderConfig } from '../services/websocket/types';
-import { ConnectionStatus } from '../services/websocket/types';
 import {
   BROKER_REGISTRY,
   getAllBrokers,
@@ -20,6 +17,7 @@ import {
 import { createPaperTradingAdapter } from '../paper-trading';
 import type { IExchangeAdapter } from '../brokers/crypto/types';
 import type { PaperTradingAdapter } from '../paper-trading/PaperTradingAdapter';
+import type { ProviderConfig, ConnectionStatus } from '../services/websocketBridge';
 
 interface BrokerContextType {
   // Active broker
@@ -116,16 +114,19 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       setIsLoading(true);
 
       try {
-        const manager = getWebSocketManager();
+        
         const configs = new Map<string, ProviderConfig>();
 
         // Initialize configs for all available brokers
         for (const broker of availableBrokers) {
           if (broker.websocket.enabled && broker.websocket.endpoint) {
             configs.set(broker.id, {
-              provider_name: broker.id,
+              name: broker.id,
+              url: broker.websocket.endpoint,
               enabled: true,
-              endpoint: broker.websocket.endpoint,
+              reconnect_delay_ms: 5000,
+              max_reconnect_attempts: 10,
+              heartbeat_interval_ms: 30000,
             });
           }
         }
@@ -144,10 +145,10 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
           setTradingModeState(savedMode);
         }
 
-        // Apply configurations to WebSocket manager
-        configs.forEach((config, provider) => {
-          manager.setProviderConfig(provider, config);
-        });
+        // TODO: Re-implement with new Rust WebSocket backend
+        // configs.forEach((config, provider) => {
+        //   manager.setProviderConfig(provider, config);
+        // });
       } catch (error) {
         console.error('[BrokerContext] Failed to load configurations:', error);
       } finally {
@@ -259,42 +260,37 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         console.log(`[BrokerContext] ✓ setPaperAdapter() called`);
 
         // Connect WebSocket AFTER adapters are ready
-        const manager = getWebSocketManager();
+        
         const config = providerConfigs.get(activeBroker);
 
         console.log(`[BrokerContext] WebSocket config for ${activeBroker}:`, config ? 'EXISTS' : 'MISSING');
 
         if (config) {
-          console.log(`[BrokerContext] Setting WebSocket config for ${activeBroker}...`);
-          manager.setProviderConfig(activeBroker, config);
-
-          console.log(`[BrokerContext] Connecting WebSocket for ${activeBroker}...`);
-          try {
-            await manager.connect(activeBroker);
-
-            // Wait for WebSocket to actually OPEN (not just connect call to finish)
-            let wsStatus = manager.getStatus(activeBroker);
-            let waitCount = 0;
-            const maxWait = 20; // 10 seconds max
-
-            while (wsStatus !== ConnectionStatus.CONNECTED && waitCount < maxWait) {
-              console.log(`[BrokerContext] Waiting for WebSocket... (${waitCount + 1}/${maxWait}) - Status: ${wsStatus}`);
-              await new Promise(resolve => setTimeout(resolve, 500));
-              wsStatus = manager.getStatus(activeBroker);
-              waitCount++;
-            }
-
-            console.log(`[BrokerContext] ✓ ${activeBroker} WebSocket status: ${wsStatus}`);
-          } catch (wsError) {
-            console.error(`[BrokerContext] ⚠ WebSocket connection failed:`, wsError);
-            console.log(`[BrokerContext] Continuing without WebSocket (real-time updates unavailable)`);
-          }
+          console.log(`[BrokerContext] WebSocket config found for ${activeBroker}`);
+          // TODO: Re-implement with new Rust WebSocket backend
+          // manager.setProviderConfig(activeBroker, config);
+          // console.log(`[BrokerContext] Connecting WebSocket for ${activeBroker}...`);
+          // try {
+          //   await manager.connect(activeBroker);
+          //   let wsStatus = manager.getStatus(activeBroker);
+          //   let waitCount = 0;
+          //   const maxWait = 20;
+          //   while (wsStatus !== ConnectionStatus.CONNECTED && waitCount < maxWait) {
+          //     console.log(`[BrokerContext] Waiting for WebSocket... (${waitCount + 1}/${maxWait}) - Status: ${wsStatus}`);
+          //     await new Promise(resolve => setTimeout(resolve, 500));
+          //     wsStatus = manager.getStatus(activeBroker);
+          //     waitCount++;
+          //   }
+          //   console.log(`[BrokerContext] ✓ ${activeBroker} WebSocket status: ${wsStatus}`);
+          // } catch (wsError) {
+          //   console.error(`[BrokerContext] ⚠ WebSocket connection failed:`, wsError);
+          //   console.log(`[BrokerContext] Continuing without WebSocket (real-time updates unavailable)`);
+          // }
 
           console.log(`[BrokerContext] ========================================`);
           console.log(`[BrokerContext] ${activeBroker} initialization complete!`);
           console.log(`[BrokerContext] Real Adapter: ${newRealAdapter.isConnected() ? '✓ CONNECTED' : '✗ NOT CONNECTED'}`);
           console.log(`[BrokerContext] Paper Adapter: ${newPaperAdapter.isConnected() ? '✓ CONNECTED' : '✗ NOT CONNECTED'}`);
-          console.log(`[BrokerContext] WebSocket: ${manager.getStatus(activeBroker)}`);
           console.log(`[BrokerContext] ========================================`);
         } else {
           console.warn(`[BrokerContext] No WebSocket config found for ${activeBroker}!`);
@@ -383,9 +379,8 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
       newConfigs.set(provider, updatedConfig);
 
-      // Update WebSocket manager
-      const manager = getWebSocketManager();
-      manager.setProviderConfig(provider, updatedConfig);
+      // TODO: Re-implement with new Rust WebSocket backend
+      // manager.setProviderConfig(provider, updatedConfig);
 
       return newConfigs;
     });

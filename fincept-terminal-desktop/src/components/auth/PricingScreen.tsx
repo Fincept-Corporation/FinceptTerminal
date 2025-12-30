@@ -25,48 +25,63 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [hasLoadedPlans, setHasLoadedPlans] = useState(false);
+  const [showDowngradeConfirm, setShowDowngradeConfirm] = useState(false);
+  const [pendingPlanSelection, setPendingPlanSelection] = useState<string>('');
 
   // Prevent multiple simultaneous requests
   const loadingRef = useRef(false);
   const retryTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 2; // Only retry twice to prevent infinite loops
 
   // Load plans on component mount - with debouncing
   useEffect(() => {
     const loadPlans = async () => {
-      // Prevent multiple simultaneous requests
       if (loadingRef.current || hasLoadedPlans || isLoadingPlans) {
-        console.log('Skipping plan load - already in progress or completed');
         return;
       }
 
       if (availablePlans.length > 0) {
-        console.log('Plans already available, skipping load');
         setHasLoadedPlans(true);
         return;
       }
 
       loadingRef.current = true;
-      console.log('Loading subscription plans from API...');
 
       try {
         const result = await fetchPlans();
         if (result.success) {
           setHasLoadedPlans(true);
           setError('');
+          retryCountRef.current = 0;
         } else {
           setError(result.error || 'Failed to load subscription plans');
 
-          // Retry after 3 seconds if it failed
+          if (retryCountRef.current < MAX_RETRIES) {
+            retryCountRef.current += 1;
+
+            retryTimeoutRef.current = setTimeout(() => {
+              loadingRef.current = false;
+              setHasLoadedPlans(false);
+              loadPlans();
+            }, 3000);
+          } else {
+            setError('Unable to load plans after multiple attempts. Please try again later or continue with free plan.');
+          }
+        }
+      } catch (err) {
+        console.error('Error loading plans:', err);
+        setError('Failed to load subscription plans');
+
+        if (retryCountRef.current < MAX_RETRIES) {
+          retryCountRef.current += 1;
+
           retryTimeoutRef.current = setTimeout(() => {
-            console.log('Retrying to load plans...');
             loadingRef.current = false;
             setHasLoadedPlans(false);
             loadPlans();
           }, 3000);
         }
-      } catch (err) {
-        console.error('Error loading plans:', err);
-        setError('Failed to load subscription plans');
       } finally {
         loadingRef.current = false;
       }
@@ -101,12 +116,57 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
 
   const getPlanIcon = (planId: string) => {
     const iconMap: Record<string, React.ReactNode> = {
+      'free': <Shield className="w-4 h-4" />,
+      'basic': <Shield className="w-4 h-4" />,
+      'standard': <Star className="w-4 h-4" />,
+      'pro': <Crown className="w-4 h-4" />,
+      'enterprise': <Zap className="w-4 h-4" />,
       'starter_20': <Star className="w-4 h-4" />,
       'professional_49': <Zap className="w-4 h-4" />,
       'enterprise_99': <Crown className="w-4 h-4" />,
       'unlimited_199': <Rocket className="w-4 h-4" />
     };
     return iconMap[planId] || <Shield className="w-4 h-4" />;
+  };
+
+  // Check if selecting a plan is a downgrade
+  const isDowngrade = (targetPlanId: string): boolean => {
+    const currentPlanId = session?.user_info?.account_type || 'free';
+    const planTiers: { [key: string]: number } = {
+      'free': 0,
+      'basic': 1,
+      'standard': 2,
+      'pro': 3,
+      'enterprise': 4
+    };
+
+    const currentTier = planTiers[currentPlanId] || 0;
+    const targetTier = planTiers[targetPlanId] || 0;
+
+    return targetTier < currentTier && currentTier > 0;
+  };
+
+  // Handle plan selection with downgrade confirmation
+  const handlePlanClick = (planId: string) => {
+    if (isDowngrade(planId)) {
+      setPendingPlanSelection(planId);
+      setShowDowngradeConfirm(true);
+    } else {
+      setSelectedPlan(planId);
+    }
+  };
+
+  // Confirm downgrade
+  const confirmDowngrade = () => {
+    setSelectedPlan(pendingPlanSelection);
+    setShowDowngradeConfirm(false);
+    setPendingPlanSelection('');
+  };
+
+  // Cancel downgrade
+  const cancelDowngrade = () => {
+    setShowDowngradeConfirm(false);
+    setPendingPlanSelection('');
   };
 
 const handleSelectPlan = async () => {
@@ -124,30 +184,36 @@ const handleSelectPlan = async () => {
   setError('');
 
   try {
-    console.log('Creating payment session for plan:', selectedPlan);
-
-    const result = await createPaymentSession(selectedPlan);
+    const result = await createPaymentSession(selectedPlan, 'USD');
 
     if (result.success && result.data) {
-      console.log('Payment session created:', result.data);
+      console.log('=== PAYMENT SESSION DEBUG ===');
+      console.log('Full response data:', JSON.stringify(result.data, null, 2));
+      console.log('checkout_url:', result.data.checkout_url);
+      console.log('session_id:', result.data.session_id);
+      console.log('order_id:', result.data.payment_uuid);
+      console.log('========================');
 
-      // DEBUG: Log the exact structure
-      console.log('result.data structure:', JSON.stringify(result.data, null, 2));
-      console.log('checkout_url direct access:', (result.data as any).checkout_url);
-      console.log('checkout_url via data.data:', (result.data as any).data?.checkout_url);
+      // Use checkout_url from the new API format
+      const checkoutUrl = result.data.checkout_url;
 
-      // Try different data access patterns
-      const checkoutUrl = (result.data as any).checkout_url || (result.data as any).data?.checkout_url;
+      if (checkoutUrl && checkoutUrl !== 'undefined') {
+        console.log('Opening payment in external browser:', checkoutUrl);
 
-      if (checkoutUrl) {
-        console.log('Found checkout URL:', checkoutUrl);
+        // Store order_id in localStorage for payment processing screen
+        localStorage.setItem('pending_payment_order_id', result.data.payment_uuid);
 
+        // Open in external browser using Tauri shell
+        const { open } = await import('@tauri-apps/plugin-shell');
+        await open(checkoutUrl);
 
-        PaymentUtils.openPaymentUrl(checkoutUrl);
+        // Navigate to payment processing screen which will poll for status
         onNavigate('paymentProcessing' as Screen);
       } else {
-        console.error('No checkout URL found in result data');
-        setError('No payment URL received. Please try again.');
+        console.error('❌ No checkout_url found in response!');
+        console.error('Available fields:', Object.keys(result.data));
+        console.error('Full response:', result.data);
+        setError(`No payment session received. Available fields: ${Object.keys(result.data).join(', ')}`);
       }
     } else {
       console.error('Failed to create payment session:', result.error);
@@ -162,7 +228,6 @@ const handleSelectPlan = async () => {
 };
 
   const handleContinueWithFree = () => {
-    console.log('Continuing with free plan');
     onProceedToDashboard();
   };
 
@@ -170,8 +235,8 @@ const handleSelectPlan = async () => {
     setError('');
     setHasLoadedPlans(false);
     loadingRef.current = false;
+    retryCountRef.current = 0;
 
-    console.log('Manual retry - loading plans...');
     const result = await fetchPlans();
     if (result.success) {
       setHasLoadedPlans(true);
@@ -183,23 +248,21 @@ const handleSelectPlan = async () => {
   const getPlanCard = (plan: any) => {
     const isSelected = selectedPlan === plan.plan_id;
     const displayPrice = plan.price_usd;
-    const priceUnit = 'month';
 
-    // Determine if plan is popular or recommended
-    const isPopular = plan.plan_id === 'starter_20';
-    const isRecommended = plan.plan_id === 'unlimited_199';
+    // Use API's is_popular flag
+    const isPopular = plan.is_popular;
+    const isRecommended = plan.plan_id === 'pro' || plan.plan_id === 'enterprise';
 
     // Check if this is the current plan
-    const currentPlanId = (session?.subscription as any)?.data?.subscription?.plan?.plan_id ||
-                          session?.subscription?.subscription?.plan?.plan_id;
+    const currentPlanId = session?.user_info?.account_type || 'free';
     const isCurrentPlan = currentPlanId === plan.plan_id;
 
     return (
       <div
         key={plan.plan_id}
-        onClick={() => !isCurrentPlan && setSelectedPlan(plan.plan_id)}
+        onClick={() => !isCurrentPlan && handlePlanClick(plan.plan_id)}
         className={`
-          relative rounded-lg border-2 p-4 transition-all duration-200
+          relative rounded-lg border-2 p-4 transition-all duration-200 flex flex-col
           ${isCurrentPlan
             ? 'border-green-500 bg-green-600/10 cursor-default'
             : isSelected
@@ -232,6 +295,7 @@ const handleSelectPlan = async () => {
           </div>
         )}
 
+        {/* Header Section - Fixed Height */}
         <div className="text-center mb-3">
           <div className={`
             inline-flex items-center justify-center w-8 h-8 rounded-full mb-2
@@ -245,47 +309,42 @@ const handleSelectPlan = async () => {
           <div className="mb-2">
             <div className="flex items-baseline justify-center">
               <span className="text-2xl font-bold text-white">
-                {PaymentUtils.formatCurrency(displayPrice)}
+                {plan.price_display}
               </span>
-              <span className="text-zinc-400 text-xs ml-1">/{priceUnit}</span>
             </div>
           </div>
 
-          <p className="text-zinc-400 text-xs">{plan.description}</p>
+          <p className="text-zinc-400 text-xs h-10 line-clamp-2">{plan.description}</p>
         </div>
 
-        <div className="space-y-2 mb-3">
+        {/* Credits/Validity Section - Fixed Height */}
+        <div className="mb-3">
           <div className="grid grid-cols-2 gap-1 text-xs">
             <div className="bg-zinc-800/30 p-1.5 rounded text-center">
-              <div className="text-zinc-400 text-xs">{plan.features.api_calls}</div>
-              <div className="text-white font-medium text-xs">API Calls</div>
+              <div className="text-zinc-400 text-xs">{plan.credits_amount.toLocaleString()}</div>
+              <div className="text-white font-medium text-xs">Credits</div>
             </div>
             <div className="bg-zinc-800/30 p-1.5 rounded text-center">
-              <div className="text-zinc-400 text-xs">{plan.features.databases}</div>
-              <div className="text-white font-medium text-xs">Databases</div>
+              <div className="text-zinc-400 text-xs">{plan.validity_display}</div>
+              <div className="text-white font-medium text-xs">Validity</div>
             </div>
           </div>
         </div>
 
-        <div className="space-y-1">
+        {/* Features Section - Flexible Height */}
+        <div className="flex-1">
           <div className="text-xs text-zinc-300 space-y-0.5">
             <div className="flex items-center">
               <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
-              <span>{plan.features.support}</span>
-            </div>
-            {plan.priority_support && (
-              <div className="flex items-center">
-                <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
-                <span>Priority support</span>
-              </div>
-            )}
-            <div className="flex items-center">
-              <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
-              <span>Real-time data</span>
+              <span>{plan.support_display}</span>
             </div>
             <div className="flex items-center">
               <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
-              <span>Custom dashboards</span>
+              <span>All API endpoints</span>
+            </div>
+            <div className="flex items-center">
+              <Check className="w-3 h-3 text-green-400 mr-2 flex-shrink-0" />
+              <span>Real-time data access</span>
             </div>
           </div>
         </div>
@@ -344,16 +403,66 @@ const handleSelectPlan = async () => {
 
   const selectedPlanData = availablePlans.find(p => p.plan_id === selectedPlan);
 
-  // Get current plan info
-  const currentPlanId = (session?.subscription as any)?.data?.subscription?.plan?.plan_id ||
-                        session?.subscription?.subscription?.plan?.plan_id;
+  // Get current plan info (credit-based system)
+  // In credit system, users can always buy more credits
+  // Free plan users have 350 credits, can purchase any plan
+  const currentPlanId = session?.user_info?.account_type || 'free';
   const currentPlanData = availablePlans.find(p => p.plan_id === currentPlanId);
-  const hasActiveSubscription = (session?.subscription as any)?.data?.has_subscription ||
-                                 session?.subscription?.has_subscription;
+  const hasActiveSubscription = !!session?.user_info?.account_type && session.user_info.account_type !== 'free';
   const isCurrentPlanSelected = selectedPlan === currentPlanId;
+  const pendingPlanData = availablePlans.find(p => p.plan_id === pendingPlanSelection);
 
   return (
-    <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-700 rounded-xl p-6 w-full max-w-5xl mx-auto shadow-2xl">
+    <>
+      {/* Downgrade Confirmation Modal */}
+      {showDowngradeConfirm && pendingPlanData && currentPlanData && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+            <div className="flex items-center mb-4">
+              <AlertCircle className="w-6 h-6 text-orange-500 mr-3" />
+              <h3 className="text-white text-lg font-semibold">Confirm Plan Downgrade</h3>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <p className="text-zinc-300 text-sm">
+                You are about to downgrade from <span className="font-semibold text-white">{currentPlanData.name}</span> to <span className="font-semibold text-white">{pendingPlanData.name}</span>.
+              </p>
+
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+                <p className="text-orange-200 text-xs font-medium mb-2">What happens when you downgrade:</p>
+                <ul className="text-orange-200/80 text-xs space-y-1">
+                  <li>• Credits: {currentPlanData.credits_amount.toLocaleString()} → {pendingPlanData.credits_amount.toLocaleString()} per month</li>
+                  <li>• Price: {currentPlanData.price_display} → {pendingPlanData.price_display} per month</li>
+                  <li>• Your remaining credits from the current plan will be lost</li>
+                  <li>• The new plan will take effect immediately after payment</li>
+                </ul>
+              </div>
+
+              <p className="text-zinc-400 text-xs">
+                Are you sure you want to continue with the downgrade?
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={cancelDowngrade}
+                variant="outline"
+                className="flex-1 bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmDowngrade}
+                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                Confirm Downgrade
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-700 rounded-xl p-6 w-full max-w-6xl mx-auto shadow-2xl overflow-y-auto max-h-[90vh]">
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center">
@@ -401,7 +510,7 @@ const handleSelectPlan = async () => {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-5 gap-3 mb-6">
             {availablePlans.map(getPlanCard)}
           </div>
 
@@ -423,7 +532,7 @@ const handleSelectPlan = async () => {
                 <div className="text-zinc-400 text-xs">
                   {selectedPlanData ? (
                     <>
-                      {PaymentUtils.formatCurrency(selectedPlanData.price_usd)}/month • 14-day free trial • Cancel anytime
+                      {selectedPlanData.price_display} • {selectedPlanData.credits_amount.toLocaleString()} credits • {selectedPlanData.validity_display}
                     </>
                   ) : (
                     'Select a plan to continue'
@@ -478,6 +587,7 @@ const handleSelectPlan = async () => {
         </>
       )}
     </div>
+    </>
   );
 };
 

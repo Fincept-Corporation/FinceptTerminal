@@ -17,6 +17,7 @@ mod utils;
 mod setup;
 mod database;
 mod python_runtime;
+mod websocket;
 // mod finscript; // TODO: Implement FinScript module
 
 // MCP Server Process with communication channels
@@ -29,6 +30,19 @@ struct MCPProcess {
 // Global state to manage MCP server processes
 struct MCPState {
     processes: Mutex<HashMap<String, MCPProcess>>,
+}
+
+// Global state for WebSocket manager
+struct WebSocketState {
+    manager: Arc<tokio::sync::RwLock<websocket::WebSocketManager>>,
+    router: Arc<tokio::sync::RwLock<websocket::MessageRouter>>,
+    services: Arc<tokio::sync::RwLock<WebSocketServices>>,
+}
+
+struct WebSocketServices {
+    paper_trading: websocket::services::PaperTradingService,
+    arbitrage: websocket::services::ArbitrageService,
+    portfolio: websocket::services::PortfolioService,
 }
 
 #[derive(Debug, Serialize)]
@@ -296,6 +310,108 @@ fn sha256_hash(input: String) -> String {
     format!("{:x}", result)
 }
 
+// ============================================================================
+// WEBSOCKET COMMANDS
+// ============================================================================
+
+/// Set WebSocket provider configuration
+#[tauri::command]
+async fn ws_set_config(
+    state: tauri::State<'_, WebSocketState>,
+    config: websocket::types::ProviderConfig,
+) -> Result<(), String> {
+    let manager = state.manager.read().await;
+    manager.set_config(config);
+    Ok(())
+}
+
+/// Connect to WebSocket provider
+#[tauri::command]
+async fn ws_connect(
+    state: tauri::State<'_, WebSocketState>,
+    provider: String,
+) -> Result<(), String> {
+    let manager = state.manager.read().await;
+    manager.connect(&provider).await
+        .map_err(|e| e.to_string())
+}
+
+/// Disconnect from WebSocket provider
+#[tauri::command]
+async fn ws_disconnect(
+    state: tauri::State<'_, WebSocketState>,
+    provider: String,
+) -> Result<(), String> {
+    let manager = state.manager.read().await;
+    manager.disconnect(&provider).await
+        .map_err(|e| e.to_string())
+}
+
+/// Subscribe to WebSocket channel
+#[tauri::command]
+async fn ws_subscribe(
+    state: tauri::State<'_, WebSocketState>,
+    provider: String,
+    symbol: String,
+    channel: String,
+    params: Option<serde_json::Value>,
+) -> Result<(), String> {
+    // Register frontend subscriber
+    state.router.write().await.subscribe_frontend(&format!("{}.{}.{}", provider, channel, symbol));
+
+    // Subscribe via manager
+    let manager = state.manager.read().await;
+    manager.subscribe(&provider, &symbol, &channel, params).await
+        .map_err(|e| e.to_string())
+}
+
+/// Unsubscribe from WebSocket channel
+#[tauri::command]
+async fn ws_unsubscribe(
+    state: tauri::State<'_, WebSocketState>,
+    provider: String,
+    symbol: String,
+    channel: String,
+) -> Result<(), String> {
+    // Unregister frontend subscriber
+    state.router.write().await.unsubscribe_frontend(&format!("{}.{}.{}", provider, channel, symbol));
+
+    // Unsubscribe via manager
+    let manager = state.manager.read().await;
+    manager.unsubscribe(&provider, &symbol, &channel).await
+        .map_err(|e| e.to_string())
+}
+
+/// Get connection metrics for a provider
+#[tauri::command]
+async fn ws_get_metrics(
+    state: tauri::State<'_, WebSocketState>,
+    provider: String,
+) -> Result<Option<websocket::types::ConnectionMetrics>, String> {
+    let manager = state.manager.read().await;
+    Ok(manager.get_metrics(&provider))
+}
+
+/// Get all connection metrics
+#[tauri::command]
+async fn ws_get_all_metrics(
+    state: tauri::State<'_, WebSocketState>,
+) -> Result<Vec<websocket::types::ConnectionMetrics>, String> {
+    let manager = state.manager.read().await;
+    Ok(manager.get_all_metrics())
+}
+
+/// Reconnect to provider
+#[tauri::command]
+async fn ws_reconnect(
+    state: tauri::State<'_, WebSocketState>,
+    provider: String,
+) -> Result<(), String> {
+    let manager = state.manager.read().await;
+    manager.reconnect(&provider).await
+        .map_err(|e| e.to_string())
+}
+
 // Windows-specific imports to hide console windows
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -362,6 +478,21 @@ pub fn run() {
         eprintln!("Failed to initialize database: {}", e);
     }
 
+    // Initialize WebSocket system
+    let router = Arc::new(tokio::sync::RwLock::new(websocket::MessageRouter::new()));
+    let manager = Arc::new(tokio::sync::RwLock::new(websocket::WebSocketManager::new(router.clone())));
+    let services = Arc::new(tokio::sync::RwLock::new(WebSocketServices {
+        paper_trading: websocket::services::PaperTradingService::new(),
+        arbitrage: websocket::services::ArbitrageService::new(),
+        portfolio: websocket::services::PortfolioService::new(),
+    }));
+
+    let ws_state = WebSocketState {
+        manager: manager.clone(),
+        router: router.clone(),
+        services: services.clone(),
+    };
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
@@ -375,6 +506,13 @@ pub fn run() {
             processes: Mutex::new(HashMap::new()),
         })
         .manage(commands::backtesting::BacktestingState::default())
+        .manage(ws_state)
+        .setup(move |app| {
+            // Set app handle for router to emit events to frontend (no-op for now, events are emitted directly)
+            let _ = router;  // Silence unused warning
+            let _ = app.handle().clone();
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             cleanup_running_workflows,
@@ -386,6 +524,14 @@ pub fn run() {
             ping_mcp_server,
             kill_mcp_server,
             sha256_hash,
+            ws_set_config,
+            ws_connect,
+            ws_disconnect,
+            ws_subscribe,
+            ws_unsubscribe,
+            ws_get_metrics,
+            ws_get_all_metrics,
+            ws_reconnect,
             execute_python_script,
             commands::market_data::get_market_quote,
             commands::market_data::get_market_quotes,

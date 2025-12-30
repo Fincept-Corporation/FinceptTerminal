@@ -109,10 +109,10 @@ const NewsTab: React.FC = () => {
     try {
       const result = await analyzeNewsArticle(selectedArticle.link);
 
-      if (result.success) {
+      if (result.success && 'data' in result) {
         setAnalysisData(result.data);
         setShowAnalysis(true);
-      } else {
+      } else if ('error' in result) {
         console.error('Analysis failed:', result.error);
       }
     } catch (error) {
@@ -205,7 +205,7 @@ const NewsTab: React.FC = () => {
     }
   };
 
-  const getSentimentColor = (sentiment: string) => {
+  const getArticleSentimentColor = (sentiment: string) => {
     switch (sentiment) {
       case 'BULLISH': return colors.secondary;
       case 'BEARISH': return colors.alert;
@@ -494,7 +494,7 @@ const NewsTab: React.FC = () => {
                   </span>
                   <span style={{ color: colors.info, minWidth: '50px' }}>[{article.category}]</span>
                   <span style={{ color: colors.purple, minWidth: '30px' }}>{article.region}</span>
-                  <span style={{ color: getSentimentColor(article.sentiment), minWidth: '50px' }}>{article.sentiment}</span>
+                  <span style={{ color: getArticleSentimentColor(article.sentiment), minWidth: '50px' }}>{article.sentiment}</span>
                 </div>
 
                 <div style={{ color: colors.text, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
@@ -543,7 +543,7 @@ const NewsTab: React.FC = () => {
                   </span>
                   <span style={{ color: colors.info, minWidth: '50px' }}>[{article.category}]</span>
                   <span style={{ color: colors.purple, minWidth: '30px' }}>{article.region}</span>
-                  <span style={{ color: getSentimentColor(article.sentiment), minWidth: '50px' }}>{article.sentiment}</span>
+                  <span style={{ color: getArticleSentimentColor(article.sentiment), minWidth: '50px' }}>{article.sentiment}</span>
                 </div>
 
                 <div style={{ color: colors.text, fontWeight: 'bold', fontSize: '10px', lineHeight: '1.2', marginBottom: '2px' }}>
@@ -995,7 +995,7 @@ const NewsTab: React.FC = () => {
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '8px' }}>
                     <span style={{ color: colors.accent }}>{article.source}</span>
-                    <span style={{ color: getSentimentColor(article.sentiment) }}>{article.sentiment}</span>
+                    <span style={{ color: getArticleSentimentColor(article.sentiment) }}>{article.sentiment}</span>
                   </div>
                 </div>
               ))}
@@ -1203,7 +1203,7 @@ const NewsTab: React.FC = () => {
                           {selectedArticle.category}
                         </span>
                         <span style={{
-                          backgroundColor: getSentimentColor(selectedArticle.sentiment),
+                          backgroundColor: getArticleSentimentColor(selectedArticle.sentiment),
                           color: colors.background,
                           padding: '2px 8px',
                           borderRadius: '2px',
@@ -1297,7 +1297,7 @@ const NewsTab: React.FC = () => {
                     </div>
                     <div>
                       <span style={{ color: colors.textMuted }}>SENTIMENT: </span>
-                      <span style={{ color: getSentimentColor(selectedArticle.sentiment), fontWeight: 'bold' }}>
+                      <span style={{ color: getArticleSentimentColor(selectedArticle.sentiment), fontWeight: 'bold' }}>
                         {selectedArticle.sentiment}
                       </span>
                     </div>

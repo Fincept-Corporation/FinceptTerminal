@@ -14,7 +14,7 @@ import {
   getWebSocketTopic,
   parseDataSourceConfig
 } from '@/services/dataSourceRegistry';
-import { getAvailableProviders } from '@/services/websocket';
+import { getAvailableProviders } from '@/services/websocketBridge';
 
 interface DataSourcesPanelProps {
   colors: any;
@@ -595,7 +595,7 @@ export function DataSourcesPanel({ colors }: DataSourcesPanelProps) {
                       borderRadius: '4px'
                     }}
                   >
-                    {availableProviders.map(p => (
+                    {availableProviders.map((p: string) => (
                       <option key={p} value={p} style={{ backgroundColor: colors.background, color: colors.text }}>{p}</option>
                     ))}
                   </select>
@@ -791,7 +791,7 @@ export function DataSourcesPanel({ colors }: DataSourcesPanelProps) {
                       borderRadius: '4px'
                     }}
                   >
-                    {availableProviders.map(p => (
+                    {availableProviders.map((p: string) => (
                       <option key={p} value={p} style={{ backgroundColor: colors.background, color: colors.text }}>{p}</option>
                     ))}
                   </select>

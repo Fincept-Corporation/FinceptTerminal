@@ -23,40 +23,58 @@ interface PaymentApiResponse<T = any> {
 
 // Request Types
 interface CheckoutRequest {
-  plan_id: string;
-  return_url?: string;
+  plan_id: string; // Valid values: free, basic, standard, pro, enterprise
+  currency: string; // USD, EUR, INR, etc.
 }
 
 // Response Types
 interface SubscriptionPlan {
   plan_id: string;
   name: string;
-  description: string;
-  price_usd: number;
-  billing_interval: string;
-  api_calls_limit: number | string;
-  databases_access: string[];
-  priority_support: boolean;
-  features: {
-    api_calls: string;
-    databases: string;
-    support: string;
+  pricing: {
+    currency: string;
+    amount: number;
+    base_usd: number;
+    symbol: string;
   };
+  credits: number;
+  validity_days: number;
+  features: string[];
+  is_free: boolean;
+  // Legacy fields for backward compatibility
+  description?: string;
+  price_usd?: number;
+  price_display?: string;
+  credits_amount?: number;
+  support_type?: string;
+  support_display?: string;
+  validity_display?: string;
+  is_popular?: boolean;
+  display_order?: number;
 }
 
 interface PlansResponse {
   plans: SubscriptionPlan[];
-  total_plans: number;
+  currency: string;
+  total_plans?: number;
 }
 
 interface CheckoutResponse {
+  order_id: string;
   checkout_url: string;
-  session_id: string;
-  payment_uuid: string;
+  payment_session_id: string;
+  pricing: {
+    currency: string;
+    amount: number;
+    base_usd: number;
+    symbol: string;
+  };
   plan: {
     name: string;
-    price: number;
+    credits: number;
+    validity_days: number;
   };
+  expires_at: string;
 }
 
 interface UserSubscriptionResponse {
@@ -109,19 +127,7 @@ interface PaymentHistoryResponse {
   };
 }
 
-// Payment Window Manager Interface
-interface PaymentWindowManager {
-  openPaymentWindow: (url: string, planName: string, planPrice: number) => Promise<boolean>;
-}
-
-// Global payment window manager - will be set by the main app
-let paymentWindowManager: PaymentWindowManager | null = null;
-
-export const setPaymentWindowManager = (manager: PaymentWindowManager) => {
-  paymentWindowManager = manager;
-};
-
-// Generic Payment API request function with enhanced debugging
+// Generic Payment API request function
 const makePaymentApiRequest = async <T = any>(
   method: string,
   endpoint: string,
@@ -136,32 +142,6 @@ const makePaymentApiRequest = async <T = any>(
 
     const url = getPaymentApiEndpoint(endpoint);
 
-    // Enhanced debug logging
-    console.log('💳 Making payment request:', {
-      method,
-      url,
-      endpoint,
-      data,
-      timestamp: new Date().toISOString()
-    });
-
-    // Debug headers (with API key redacted)
-    const debugHeaders: any = { ...defaultHeaders };
-    if (debugHeaders['X-API-Key']) {
-      debugHeaders['X-API-Key'] = '[REDACTED - Length: ' + debugHeaders['X-API-Key'].length + ']';
-    }
-    console.log('💳 Request headers:', debugHeaders);
-
-    // Check if API key is actually present
-    const hasApiKey = !!headers?.['X-API-Key'];
-    const apiKeyLength = headers?.['X-API-Key']?.length || 0;
-    console.log('💳 API Key debug:', {
-      hasApiKey,
-      apiKeyLength,
-      headerKeys: Object.keys(defaultHeaders),
-      originalHeaderKeys: headers ? Object.keys(headers) : 'none'
-    });
-
     const config: RequestInit = {
       method,
       headers: defaultHeaders,
@@ -170,44 +150,17 @@ const makePaymentApiRequest = async <T = any>(
 
     if (data && (method === 'POST' || method === 'PUT')) {
       config.body = JSON.stringify(data);
-      console.log('💳 Request body:', JSON.stringify(data, null, 2));
     }
-
-    console.log('💳 Final fetch config:', {
-      url,
-      method: config.method,
-      mode: config.mode,
-      hasBody: !!config.body,
-      bodyLength: config.body ? (config.body as string).length : 0
-    });
 
     const response = await fetch(url, config);
 
-    console.log('💰 Payment response received:', {
-      status: response.status,
-      statusText: response.statusText,
-      url: response.url,
-      ok: response.ok,
-      headers: Object.fromEntries(response.headers.entries())
-    });
-
     const responseText = await response.text();
-    console.log('📄 Payment response text (first 500 chars):', responseText.substring(0, 500));
-    console.log('📄 Payment response full length:', responseText.length);
 
     let responseData;
     try {
       responseData = JSON.parse(responseText);
-      console.log('✅ Payment JSON parsed successfully:', {
-        success: responseData.success,
-        hasData: !!responseData.data,
-        message: responseData.message,
-        error: responseData.error,
-        errorCode: responseData.error_code
-      });
     } catch (parseError) {
-      console.error('❌ Payment JSON parse failed:', parseError);
-      console.log('📄 Raw response that failed to parse:', responseText);
+      console.error('Payment JSON parse failed:', parseError);
       return {
         success: false,
         error: `Invalid JSON response: ${responseText.substring(0, 100)}...`,
@@ -215,16 +168,8 @@ const makePaymentApiRequest = async <T = any>(
       };
     }
 
-    // Enhanced response logging for failures
     if (!response.ok) {
-      console.error('❌ Payment request failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        responseData,
-        requestHeaders: debugHeaders,
-        requestUrl: url,
-        requestMethod: method
-      });
+      console.error('Payment request failed:', response.status, responseData.message || response.statusText);
     }
 
     return {
@@ -235,12 +180,7 @@ const makePaymentApiRequest = async <T = any>(
     };
 
   } catch (error) {
-    console.error('💥 Payment request failed completely:', error);
-    console.error('💥 Error details:', {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : 'No stack trace'
-    });
+    console.error('Payment request error:', error);
 
     if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
       return {
@@ -258,67 +198,51 @@ const makePaymentApiRequest = async <T = any>(
 
 // Payment API Service Class with enhanced debugging
 export class PaymentApiService {
-  // Get all subscription plans
+  // Get all subscription plans from API
   static async getSubscriptionPlans(): Promise<PaymentApiResponse<PlansResponse>> {
-    console.log('📋 PaymentApiService: Starting getSubscriptionPlans request');
+    const response = await makePaymentApiRequest<PlansResponse>('GET', '/payment/plans');
 
-    const result = await makePaymentApiRequest<PlansResponse>('GET', '/payment/plans');
-
-    console.log('📋 PaymentApiService: getSubscriptionPlans result:', {
-      success: result.success,
-      hasData: !!result.data,
-      statusCode: result.status_code,
-      error: result.error
-    });
-
-    if (result.success && result.data) {
-      console.log('📋 PaymentApiService: Raw API response structure:', {
-        dataKeys: Object.keys(result.data),
-        hasPlans: !!(result.data as any).plans,
-        hasDataProperty: !!(result.data as any).data,
-        plansCount: (result.data as any).plans?.length || 'no plans array'
-      });
-
-      // Check if the data has the expected structure
-      if ((result.data as any).plans) {
-        console.log('📋 PaymentApiService: Found plans directly in result.data');
-        console.log('📋 PaymentApiService: Number of plans:', (result.data as any).plans.length);
-      } else if ((result.data as any).data && (result.data as any).data.plans) {
-        console.log('📋 PaymentApiService: Found plans in result.data.data');
-        console.log('📋 PaymentApiService: Number of plans:', (result.data as any).data.plans.length);
-      } else {
-        console.log('📋 PaymentApiService: Plans not found in expected location');
-        console.log('📋 PaymentApiService: Available properties:', Object.keys(result.data));
-      }
+    // Handle double-wrapped response: response.data might contain {success, data: {plans}}
+    let plansData = response.data;
+    if (plansData && (plansData as any).data && (plansData as any).success) {
+      // Double-wrapped - extract the inner data
+      plansData = (plansData as any).data;
     }
 
-    return result;
+    // Add backward compatibility fields to each plan
+    if (response.success && plansData?.plans) {
+      plansData.plans = plansData.plans.map((plan: any, index: number) => ({
+        ...plan,
+        // Add backward compatibility fields
+        price_usd: plan.pricing?.base_usd || 0,
+        price_display: `${plan.pricing?.symbol || '$'}${plan.pricing?.amount || 0}`,
+        credits_amount: plan.credits || 0,
+        description: plan.features?.join(', ') || '',
+        support_type: plan.is_free ? 'community' : 'priority',
+        support_display: plan.is_free ? 'Community Support' : 'Priority Support',
+        validity_display: plan.validity_days > 0 ? `${plan.validity_days} days` : 'One-time',
+        is_popular: plan.plan_id === 'standard', // Mark standard as popular
+        display_order: index + 1
+      }));
+
+      plansData.total_plans = plansData.plans.length;
+      response.data = plansData;
+    }
+
+    return response;
   }
 
   // Get specific plan details
   static async getPlanDetails(planId: string): Promise<PaymentApiResponse<SubscriptionPlan>> {
-    console.log('📋 PaymentApiService: Getting plan details for:', planId);
     return makePaymentApiRequest<SubscriptionPlan>('GET', `/payment/plans/${planId}`);
   }
 
-  // Create checkout session with enhanced debugging
+  // Create checkout session - Updated to use /payment/create-order endpoint
   static async createCheckoutSession(
     apiKey: string,
     request: CheckoutRequest
   ): Promise<PaymentApiResponse<CheckoutResponse>> {
-    console.log('🔑 PaymentApiService: createCheckoutSession called');
-    console.log('🔑 PaymentApiService: API Key debug:', {
-      hasApiKey: !!apiKey,
-      apiKeyType: typeof apiKey,
-      apiKeyLength: apiKey?.length || 0,
-      apiKeyPrefix: apiKey ? apiKey.substring(0, 10) + '...' : 'null',
-      apiKeyValid: apiKey && apiKey.length > 10
-    });
-    console.log('🔑 PaymentApiService: Request data:', request);
-
-    // Verify API key format
     if (!apiKey) {
-      console.error('🔑 PaymentApiService: No API key provided!');
       return {
         success: false,
         error: 'No API key provided'
@@ -326,33 +250,18 @@ export class PaymentApiService {
     }
 
     if (typeof apiKey !== 'string') {
-      console.error('🔑 PaymentApiService: API key is not a string:', typeof apiKey);
       return {
         success: false,
         error: 'Invalid API key format'
       };
     }
 
-    // Test different header variations to debug the issue
     const headers = {
       'X-API-Key': apiKey
     };
 
-    console.log('🔑 PaymentApiService: Headers being passed:', {
-      'X-API-Key': '[REDACTED - Length: ' + apiKey.length + ']',
-      headerCount: Object.keys(headers).length
-    });
-
-    const result = await makePaymentApiRequest<CheckoutResponse>('POST', '/payment/checkout', request, headers);
-
-    console.log('🔑 PaymentApiService: createCheckoutSession result:', {
-      success: result.success,
-      statusCode: result.status_code,
-      error: result.error,
-      hasData: !!result.data
-    });
-
-    return result;
+    console.log('Creating payment order:', { plan_id: request.plan_id, currency: request.currency });
+    return await makePaymentApiRequest<CheckoutResponse>('POST', '/payment/create-order', request, headers);
   }
 
   // Handle payment success
@@ -361,12 +270,6 @@ export class PaymentApiService {
     sessionId?: string,
     paymentId?: string
   ): Promise<PaymentApiResponse<PaymentSuccessResponse>> {
-    console.log('✅ PaymentApiService: handlePaymentSuccess called:', {
-      hasApiKey: !!apiKey,
-      sessionId,
-      paymentId
-    });
-
     const params = new URLSearchParams();
     if (sessionId) params.append('session_id', sessionId);
     if (paymentId) params.append('payment_id', paymentId);
@@ -381,27 +284,20 @@ export class PaymentApiService {
 
   // Get user's current subscription
   static async getUserSubscription(apiKey: string): Promise<PaymentApiResponse<UserSubscriptionResponse>> {
-    console.log('👤 PaymentApiService: getUserSubscription called:', {
-      hasApiKey: !!apiKey,
-      apiKeyLength: apiKey?.length || 0
-    });
-
-    return makePaymentApiRequest<UserSubscriptionResponse>('GET', '/payment/subscription', undefined, {
+    return makePaymentApiRequest<UserSubscriptionResponse>('GET', '/user/subscriptions', undefined, {
       'X-API-Key': apiKey
     });
   }
 
   // Get user's usage details
   static async getUserUsage(apiKey: string): Promise<PaymentApiResponse<any>> {
-    console.log('📊 PaymentApiService: getUserUsage called');
-    return makePaymentApiRequest('GET', '/payment/usage', undefined, {
+    return makePaymentApiRequest('GET', '/user/usage', undefined, {
       'X-API-Key': apiKey
     });
   }
 
   // Cancel subscription
   static async cancelSubscription(apiKey: string): Promise<PaymentApiResponse<any>> {
-    console.log('❌ PaymentApiService: cancelSubscription called');
     return makePaymentApiRequest('POST', '/payment/cancel', undefined, {
       'X-API-Key': apiKey
     });
@@ -409,22 +305,20 @@ export class PaymentApiService {
 
   // Reactivate subscription
   static async reactivateSubscription(apiKey: string): Promise<PaymentApiResponse<any>> {
-    console.log('🔄 PaymentApiService: reactivateSubscription called');
     return makePaymentApiRequest('POST', '/payment/reactivate', undefined, {
       'X-API-Key': apiKey
     });
   }
 
-  // Get payment history
+  // Get payment history (transactions)
   static async getPaymentHistory(
     apiKey: string,
     page: number = 1,
     limit: number = 10
   ): Promise<PaymentApiResponse<PaymentHistoryResponse>> {
-    console.log('📜 PaymentApiService: getPaymentHistory called:', { page, limit });
     return makePaymentApiRequest<PaymentHistoryResponse>(
       'GET',
-      `/payment/payments?page=${page}&limit=${limit}`,
+      `/user/transactions?page=${page}&limit=${limit}`,
       undefined,
       { 'X-API-Key': apiKey }
     );
@@ -435,7 +329,6 @@ export class PaymentApiService {
     apiKey: string,
     paymentUuid: string
   ): Promise<PaymentApiResponse<any>> {
-    console.log('💳 PaymentApiService: getPaymentDetails called:', paymentUuid);
     return makePaymentApiRequest(
       'GET',
       `/payment/payments/${paymentUuid}`,
@@ -446,31 +339,14 @@ export class PaymentApiService {
 
   // Webhook validation (for future use)
   static async validateWebhook(webhookData: any): Promise<PaymentApiResponse<any>> {
-    console.log('🔗 PaymentApiService: validateWebhook called');
     return makePaymentApiRequest('POST', '/payment/webhook', webhookData);
   }
 
   // Debug function to test API key validity
   static async testApiKey(apiKey: string): Promise<PaymentApiResponse<any>> {
-    console.log('🧪 PaymentApiService: Testing API key validity');
-    console.log('🧪 API Key test details:', {
-      hasApiKey: !!apiKey,
-      apiKeyLength: apiKey?.length || 0,
-      apiKeyPrefix: apiKey ? apiKey.substring(0, 15) + '...' : 'null'
-    });
-
-    // Try a simple GET request first
-    const testResult = await makePaymentApiRequest('GET', '/payment/subscription', undefined, {
+    return await makePaymentApiRequest('GET', '/payment/subscription', undefined, {
       'X-API-Key': apiKey
     });
-
-    console.log('🧪 API Key test result:', {
-      success: testResult.success,
-      statusCode: testResult.status_code,
-      error: testResult.error
-    });
-
-    return testResult;
   }
 }
 
@@ -598,37 +474,24 @@ static validatePaymentUrl(url: string): boolean {
   }
 }
 
-  // Updated: Open payment URL using in-app window
+  // Open payment URL in external browser (Tauri shell)
   static async openPaymentUrl(
     checkoutUrl: string,
     planName: string = 'Subscription',
     planPrice: number = 0
   ): Promise<boolean> {
-    console.log('PaymentUtils: Opening payment URL:', checkoutUrl);
-
-    // Validate the checkout URL
     if (!this.validatePaymentUrl(checkoutUrl)) {
-      console.error('PaymentUtils: Invalid checkout URL provided');
+      console.error('Invalid checkout URL provided');
       alert('Payment URL is invalid. Please try again or contact support.');
       return false;
     }
 
     try {
-      // Try to use in-app payment window first
-      if (paymentWindowManager) {
-        console.log('PaymentUtils: Using in-app payment window');
-        return await paymentWindowManager.openPaymentWindow(checkoutUrl, planName, planPrice);
-      }
-
-      // Fallback to external browser if in-app window is not available
-      console.log('PaymentUtils: Falling back to external browser');
+      // Always use external browser for Tauri
       return this.openPaymentUrlExternal(checkoutUrl);
-
     } catch (error) {
-      console.error('PaymentUtils: Failed to open payment window:', error);
-
-      // Final fallback to external browser
-      return this.openPaymentUrlExternal(checkoutUrl);
+      console.error('Failed to open payment window:', error);
+      return false;
     }
   }
 
@@ -638,9 +501,8 @@ static validatePaymentUrl(url: string): boolean {
     planName: string = 'Subscription',
     planPrice: number = 0
   ): Promise<boolean> {
-    // Validate URL first
     if (!this.validatePaymentUrl(checkoutUrl)) {
-      console.error('PaymentUtils: Invalid or suspicious payment URL');
+      console.error('Invalid or suspicious payment URL');
       alert('Invalid payment URL. Please contact support.');
       return false;
     }
@@ -654,7 +516,6 @@ static validatePaymentUrl(url: string): boolean {
       const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
 
       if (!newWindow) {
-        console.warn('PaymentUtils: Popup blocked, trying clipboard fallback');
 
         // Try to copy URL to clipboard as fallback
         if (navigator.clipboard && checkoutUrl !== 'undefined') {

@@ -7,7 +7,6 @@ import { NavigationProvider } from './contexts/NavigationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { DataSourceProvider } from './contexts/DataSourceContext';
 import { ProviderProvider } from './contexts/ProviderContext';
-import { setPaymentWindowManager } from './services/paymentApi';
 import { workflowService } from './services/workflowService';
 
 // Import screens
@@ -26,7 +25,6 @@ import DashboardScreen from './components/dashboard/DashboardScreen';
 import BackgroundPattern from './components/common/BackgroundPattern';
 import Header from './components/common/Header';
 import Footer from './components/common/Footer';
-import PaymentOverlay from './components/payment/PaymentOverlay';
 import SetupScreen from './components/setup/SetupScreen';
 import { Toaster } from 'sonner';
 
@@ -44,16 +42,6 @@ export type Screen =
   | 'paymentSuccess'
   | 'dashboard';
 
-interface PaymentWindowState {
-  isOpen: boolean;
-  checkoutUrl: string;
-  planName: string;
-  planPrice: number;
-  onSuccess?: () => void;
-  onCancel?: () => void;
-  onError?: (error: string) => void;
-}
-
 const App: React.FC = () => {
   const { session, isLoading } = useAuth();
   const [currentScreen, setCurrentScreen] = useState<Screen>('login');
@@ -62,12 +50,6 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [setupComplete, setSetupComplete] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
-  const [paymentWindow, setPaymentWindow] = useState<PaymentWindowState>({
-    isOpen: false,
-    checkoutUrl: '',
-    planName: '',
-    planPrice: 0
-  });
 
   // Check setup status on app initialization
   useEffect(() => {
@@ -88,55 +70,14 @@ const App: React.FC = () => {
     checkSetup();
   }, []);
 
-  // Set up payment window manager on app initialization
-  useEffect(() => {
-    const paymentManager = {
-      openPaymentWindow: (
-        url: string,
-        planName: string,
-        planPrice: number
-      ): Promise<boolean> => {
-        return new Promise((resolve) => {
-          console.log('PaymentManager: Opening payment window for:', planName);
-
-          setPaymentWindow({
-            isOpen: true,
-            checkoutUrl: url,
-            planName,
-            planPrice,
-            onSuccess: () => {
-              console.log('PaymentManager: Payment completed successfully');
-              setPaymentWindow(prev => ({ ...prev, isOpen: false }));
-              setCurrentScreen('paymentProcessing');
-              resolve(true);
-            },
-            onCancel: () => {
-              console.log('PaymentManager: Payment cancelled by user');
-              setPaymentWindow(prev => ({ ...prev, isOpen: false }));
-              setCurrentScreen('pricing');
-              resolve(false);
-            },
-            onError: (error: string) => {
-              console.error('PaymentManager: Payment error:', error);
-              setPaymentWindow(prev => ({ ...prev, isOpen: false }));
-              setCurrentScreen('pricing');
-              resolve(false);
-            }
-          });
-        });
-      }
-    };
-
-    setPaymentWindowManager(paymentManager);
-    console.log('PaymentManager: Initialized in-app payment window manager');
-  }, []);
+  // Payment window manager no longer needed - using external browser
+  // Removed in-app payment window code
 
   // Cleanup running workflows on app unmount
   useEffect(() => {
     return () => {
-      console.log('[App] App unmounting, cleaning up running workflows...');
       workflowService.cleanupRunningWorkflows().catch((error: Error) => {
-        console.error('[App] Failed to cleanup running workflows:', error);
+        console.error('Failed to cleanup running workflows:', error);
       });
     };
   }, []);
@@ -147,56 +88,44 @@ const App: React.FC = () => {
     const sessionId = urlParams.get('session_id');
     const paymentId = urlParams.get('payment_id');
 
-    // If we have payment parameters, go directly to success screen (don't wait for session)
     if (sessionId || paymentId) {
-      console.log('Payment success URL detected, redirecting to payment success screen');
       setCurrentScreen('paymentSuccess');
-      // Clear URL parameters to prevent issues on refresh
       window.history.replaceState({}, document.title, window.location.pathname);
       return;
     }
-  }, []); // Run only once on mount
+  }, []);
 
   // Auto-navigation based on authentication state
   useEffect(() => {
-    console.log('App.tsx useEffect triggered:', {
-      session: session?.authenticated,
-      isLoading,
-      currentScreen,
-      userType: session?.user_type,
-      accountType: session?.user_info?.account_type,
-      hasSubscription: session?.subscription?.has_subscription,
-      cameFromLogin,
-      hasChosenFreePlan
-    });
-
     if (!isLoading) {
       if (session?.authenticated) {
-        console.log('Session is authenticated');
-
-        // Check if user is on free plan and needs to see pricing
         const isFreePlan = session.user_info?.account_type === 'free';
-        const hasActiveSubscription = (session.subscription as any)?.data?.has_subscription || session.subscription?.has_subscription;
+        const hasPaidPlan = session.user_info?.account_type &&
+                           ['basic', 'standard', 'pro', 'enterprise'].includes(session.user_info.account_type);
 
-        // Show pricing if:
-        // 1. User is registered with free account type AND
-        // 2. No active subscription AND
-        // 3. Either came from fresh login OR hasn't chosen free plan yet
-        if (session.user_type === 'registered' &&
+        // If user has a paid plan (basic, standard, pro, enterprise), go to dashboard
+        if (session.user_type === 'registered' && hasPaidPlan) {
+          if (currentScreen !== 'paymentProcessing' &&
+              currentScreen !== 'paymentSuccess' &&
+              currentScreen !== 'pricing' &&
+              currentScreen !== 'dashboard') {
+            console.log('User has paid plan, navigating to dashboard');
+            setCurrentScreen('dashboard');
+          }
+        }
+        // If free plan user just logged in, show pricing
+        else if (session.user_type === 'registered' &&
             isFreePlan &&
-            !hasActiveSubscription &&
             currentScreen !== 'pricing' &&
             currentScreen !== 'paymentProcessing' &&
             currentScreen !== 'paymentSuccess' &&
             (cameFromLogin || !hasChosenFreePlan)) {
-          console.log('Free user without subscription detected, showing pricing screen');
           setCurrentScreen('pricing');
-        } else if (hasActiveSubscription ||
-                   session.user_type === 'guest' ||
+        }
+        // Guest users or free plan users who chose to continue with free
+        else if (session.user_type === 'guest' ||
                    (hasChosenFreePlan && !cameFromLogin) ||
                    (isFreePlan && hasChosenFreePlan)) {
-          console.log('User has subscription, is guest, or chose free plan - redirecting to dashboard');
-          // Don't force redirect if user manually navigated to pricing
           if (currentScreen !== 'paymentProcessing' &&
               currentScreen !== 'paymentSuccess' &&
               currentScreen !== 'pricing') {
@@ -204,14 +133,11 @@ const App: React.FC = () => {
           }
         }
       } else {
-        console.log('Session not authenticated, staying on auth screens');
-        // Don't redirect if on payment success screen - let it handle authentication internally
         if (currentScreen === 'dashboard' ||
             currentScreen === 'pricing' ||
             currentScreen === 'paymentProcessing') {
           setCurrentScreen('login');
         }
-        // Don't reset flags or redirect from paymentSuccess - it needs to complete first
         if (currentScreen !== 'paymentSuccess') {
           setHasChosenFreePlan(false);
           setCameFromLogin(false);
@@ -263,8 +189,6 @@ const App: React.FC = () => {
             </ThemeProvider>
           </DataSourceProvider>
         </ProviderProvider>
-        {/* In-App Payment Window Overlay */}
-        <PaymentOverlay paymentWindow={paymentWindow} />
         {/* Toast Notifications */}
         <Toaster position="top-right" richColors closeButton />
       </>
@@ -279,8 +203,6 @@ const App: React.FC = () => {
         <div className="relative z-10 flex items-center justify-center">
           {renderPaymentScreen()}
         </div>
-        {/* In-App Payment Window Overlay */}
-        <PaymentOverlay paymentWindow={paymentWindow} />
       </div>
     );
   }
@@ -374,18 +296,15 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black relative overflow-hidden flex flex-col" style={{ minHeight: '100vh', height: '100%' }}>
+    <div className="h-screen bg-black relative overflow-hidden flex flex-col">
       <BackgroundPattern />
       <Header onNavigate={setCurrentScreen} />
 
-      <div className="relative z-10 flex items-center justify-center flex-1">
+      <div className="relative z-10 flex items-center justify-center flex-1 overflow-hidden">
         {renderCurrentScreen()}
       </div>
 
       <Footer onNavigate={setCurrentScreen} />
-
-      {/* In-App Payment Window Overlay - Available on all screens */}
-      <PaymentOverlay paymentWindow={paymentWindow} />
     </div>
   );
 };

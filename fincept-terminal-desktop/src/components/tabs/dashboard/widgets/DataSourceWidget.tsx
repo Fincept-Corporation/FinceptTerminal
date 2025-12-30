@@ -24,15 +24,20 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
   onRemove
 }) => {
   const { t } = useTranslation('dashboard');
-  const { data, error, loading, connected, source, refresh } = useDataSource(alias);
+  const { dataSources, loading, error, refreshDataSources } = useDataSource();
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
   const [isBlinking, setIsBlinking] = useState(false);
 
+  // Find the specific data source by alias
+  const source = dataSources.find(ds => ds.alias === alias);
+  const connected = source?.enabled || false;
+  const data = null; // Data will be handled separately
+
   // Log data updates for debugging
   useEffect(() => {
-    if (data) {
-      console.log(`[DataSourceWidget ${alias}] Data update #${updateCount}:`, data);
+    if (source) {
+      console.log(`[DataSourceWidget ${alias}] Data source:`, source);
     }
   }, [data, alias, updateCount]);
 
@@ -123,7 +128,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
           <div>{t('widgets.noData')}</div>
           {source?.type === 'rest_api' && (
             <button
-              onClick={refresh}
+              onClick={refreshDataSources}
               style={{
                 background: BLOOMBERG_ORANGE,
                 color: '#000',
@@ -197,7 +202,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
         {source?.type === 'rest_api' && (
           <div style={{ marginTop: '8px', textAlign: 'center' }}>
             <button
-              onClick={refresh}
+              onClick={refreshDataSources}
               disabled={loading}
               style={{
                 background: loading ? BLOOMBERG_GRAY : BLOOMBERG_ORANGE,
@@ -223,7 +228,7 @@ export const DataSourceWidget: React.FC<DataSourceWidgetProps> = ({
       id={id}
       title={displayName || source?.display_name || alias}
       onRemove={onRemove}
-      onRefresh={source?.type === 'rest_api' ? refresh : undefined}
+      onRefresh={source?.type === 'rest_api' ? refreshDataSources : undefined}
       isLoading={loading && !data}
       error={null}
       headerColor={source?.type === 'websocket' ? BLOOMBERG_GREEN : BLOOMBERG_ORANGE}

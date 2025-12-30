@@ -20,7 +20,7 @@ interface ChatTabProps {
 
 const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab }) => {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
-  const { refreshUserProfile } = useAuth();
+  const auth = useAuth();
   const { t } = useTranslation('chat');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [currentSessionUuid, setCurrentSessionUuid] = useState<string | null>(null);
@@ -490,7 +490,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       await loadStatistics();
 
       // Refresh user profile to update credits in realtime
-      await refreshUserProfile();
+      await auth.refreshUserData();
 
     } catch (error) {
       console.error('Chat error:', error);

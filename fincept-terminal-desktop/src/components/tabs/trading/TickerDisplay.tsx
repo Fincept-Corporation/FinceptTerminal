@@ -2,8 +2,7 @@
 // Provider-agnostic ticker display component
 
 import React, { useState, useEffect } from 'react';
-import { useWebSocket } from '../../../hooks/useWebSocket';
-import { isProviderAvailable } from '../../../services/websocket';
+import { useRustTicker } from '../../../hooks/useRustWebSocket';
 
 interface TickerDisplayProps {
   symbol: string;
@@ -24,38 +23,27 @@ interface TickerData {
 export function TickerDisplay({ symbol, provider }: TickerDisplayProps) {
   const [ticker, setTicker] = useState<TickerData | null>(null);
 
-  // Only subscribe if WebSocket adapter exists for this provider
-  const hasWebSocket = isProviderAvailable(provider);
-
-  const { message } = useWebSocket(
-    hasWebSocket ? `${provider}.ticker.${symbol}` : null,
-    null,
-    { autoSubscribe: hasWebSocket }
-  );
+  // Use Rust WebSocket hook
+  const { data: tickerData } = useRustTicker(provider, symbol, true);
 
   useEffect(() => {
-    if (!message || message.type !== 'ticker') return;
+    if (!tickerData) return;
 
-    const data = message.data;
-
-    // Parse nested data if needed
-    const tickerData = data.ticker || data;
-
-    // Extract values with multiple fallbacks for different provider formats
-    const last = parseFloat(tickerData.last || tickerData.close || tickerData.price || tickerData.mid || 0);
-    const bid = parseFloat(tickerData.bid || tickerData.bid_price || tickerData.b || 0);
-    const ask = parseFloat(tickerData.ask || tickerData.ask_price || tickerData.a || 0);
-    const volume = parseFloat(tickerData.volume || tickerData.vol || tickerData.v || 0);
-    const high = parseFloat(tickerData.high || tickerData.h || 0);
-    const low = parseFloat(tickerData.low || tickerData.l || 0);
+    // Extract values with fallbacks
+    const last = tickerData.price || 0;
+    const bid = tickerData.bid || 0;
+    const ask = tickerData.ask || 0;
+    const volume = tickerData.volume || 0;
+    const high = tickerData.high || 0;
+    const low = tickerData.low || 0;
 
     // Calculate change if not provided
-    let change = parseFloat(tickerData.change || 0);
-    let changePct = parseFloat(tickerData.change_pct || tickerData.changePct || 0);
+    let change = tickerData.change || 0;
+    let changePct = tickerData.change_percent || 0;
 
     if (change === 0 && tickerData.open) {
-      change = last - parseFloat(tickerData.open);
-      changePct = (change / parseFloat(tickerData.open)) * 100;
+      change = last - tickerData.open;
+      changePct = (change / tickerData.open) * 100;
     }
 
     setTicker({
@@ -68,7 +56,7 @@ export function TickerDisplay({ symbol, provider }: TickerDisplayProps) {
       change,
       changePct
     });
-  }, [message]);
+  }, [tickerData]);
 
   if (!ticker) {
     return (

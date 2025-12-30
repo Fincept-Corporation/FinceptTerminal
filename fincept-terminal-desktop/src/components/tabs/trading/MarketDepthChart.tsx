@@ -1,7 +1,7 @@
 // MarketDepthChart.tsx - Market depth table with visual depth bars
 import React, { useState, useEffect } from 'react';
-import { useWebSocket } from '../../../hooks/useWebSocket';
-import { isProviderAvailable } from '../../../services/websocket';
+import { useRustOrderBook } from '../../../hooks/useRustWebSocket';
+
 
 interface MarketDepthChartProps {
   symbol: string;
@@ -19,50 +19,44 @@ export function MarketDepthChart({ symbol, provider }: MarketDepthChartProps) {
   const [asks, setAsks] = useState<DepthLevel[]>([]);
   const [maxCumulative, setMaxCumulative] = useState(0);
 
-  // Only subscribe if WebSocket adapter exists for this provider
-  const hasWebSocket = isProviderAvailable(provider);
-
-  const { message, isLoading } = useWebSocket(
-    hasWebSocket ? `${provider}.book.${symbol}` : null,
-    null,
-    { autoSubscribe: hasWebSocket, params: { depth: 50 } }
-  );
+  // Use Rust WebSocket hook with 50 levels depth
+  const { data: orderbookData } = useRustOrderBook(provider, symbol, 50, true);
 
   useEffect(() => {
-    if (!message || message.type !== 'orderbook') return;
+    if (!orderbookData) return;
 
-    const data = message.data;
-    if (!data || !Array.isArray(data.bids) || !Array.isArray(data.asks)) return;
+    const data = orderbookData;
+    if (!Array.isArray(data.bids) || !Array.isArray(data.asks)) return;
 
     try {
       // Process bids (buy orders) - highest to lowest
       const rawBids = data.bids
-        .filter((level: any) => level && typeof level.price === 'number' && typeof level.size === 'number')
+        .filter((level: any) => level && typeof level.price === 'number' && typeof level.quantity === 'number')
         .sort((a: any, b: any) => b.price - a.price)
         .slice(0, 25);
 
       let bidCumulative = 0;
       const processedBids: DepthLevel[] = rawBids.map((level: any) => {
-        bidCumulative += level.size;
+        bidCumulative += level.quantity;
         return {
           price: level.price,
-          size: level.size,
+          size: level.quantity,
           cumulative: bidCumulative,
         };
       });
 
       // Process asks (sell orders) - lowest to highest
       const rawAsks = data.asks
-        .filter((level: any) => level && typeof level.price === 'number' && typeof level.size === 'number')
+        .filter((level: any) => level && typeof level.price === 'number' && typeof level.quantity === 'number')
         .sort((a: any, b: any) => a.price - b.price)
         .slice(0, 25);
 
       let askCumulative = 0;
       const processedAsks: DepthLevel[] = rawAsks.map((level: any) => {
-        askCumulative += level.size;
+        askCumulative += level.quantity;
         return {
           price: level.price,
-          size: level.size,
+          size: level.quantity,
           cumulative: askCumulative,
         };
       });
@@ -77,9 +71,9 @@ export function MarketDepthChart({ symbol, provider }: MarketDepthChartProps) {
     } catch (error) {
       console.error('[MarketDepthChart] Failed to process data:', error);
     }
-  }, [message]);
+  }, [orderbookData]);
 
-  if (isLoading) {
+  if (!orderbookData) {
     return (
       <div className="bg-[#0d0d0d] border-t border-gray-800 p-3">
         <h3 className="text-[10px] font-bold text-gray-400 tracking-wider mb-2">MARKET DEPTH</h3>

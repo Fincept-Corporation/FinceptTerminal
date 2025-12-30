@@ -555,15 +555,15 @@ const RelationshipMapTab: React.FC = () => {
       {/* Header */}
       <div
         className="border-b px-4 py-3 flex items-center justify-between"
-        style={{ borderColor: colors.border }}
+        style={{ borderColor: colors.textMuted }}
       >
         <div className="flex items-center gap-3">
           <Globe className="w-5 h-5" style={{ color: colors.accent }} />
           <h2 className="text-lg font-semibold">Relationship Map</h2>
           <span className="text-xs px-2 py-1 rounded font-mono" style={{
-            backgroundColor: colors.surface,
+            backgroundColor: colors.panel,
             color: colors.accent,
-            border: `1px solid ${colors.border}`
+            border: `1px solid ${colors.textMuted}`
           }}>
             {selectedSymbol}
           </span>
@@ -581,8 +581,8 @@ const RelationshipMapTab: React.FC = () => {
             placeholder="Enter ticker (e.g., AAPL, TSLA, GOOGL)..."
             className="w-full pl-10 pr-4 py-2 rounded border focus:outline-none focus:ring-1"
             style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
+              backgroundColor: colors.panel,
+              borderColor: colors.textMuted,
               color: colors.text,
             }}
           />
@@ -609,10 +609,10 @@ const RelationshipMapTab: React.FC = () => {
         ) : error ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center p-8 rounded border" style={{
-              backgroundColor: colors.surface,
-              borderColor: colors.error
+              backgroundColor: colors.panel,
+              borderColor: colors.alert
             }}>
-              <p className="text-lg font-semibold mb-2" style={{ color: colors.error }}>Error</p>
+              <p className="text-lg font-semibold mb-2" style={{ color: colors.alert }}>Error</p>
               <p style={{ color: colors.textMuted }}>{error}</p>
             </div>
           </div>
@@ -638,14 +638,14 @@ const RelationshipMapTab: React.FC = () => {
             <Controls
               style={{
                 background: '#1a1a1a',
-                border: `1px solid ${colors.border}`,
+                border: `1px solid ${colors.textMuted}`,
                 borderRadius: '4px',
               }}
             />
             <MiniMap
               style={{
                 background: '#1a1a1a',
-                border: `1px solid ${colors.border}`,
+                border: `1px solid ${colors.textMuted}`,
               }}
               maskColor="#0a0a0a90"
               nodeColor={(node) => {

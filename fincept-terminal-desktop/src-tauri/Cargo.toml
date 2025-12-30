@@ -54,6 +54,13 @@ hashbrown = "0.15"  # Faster HashMap alternative
 ahash = "0.8"  # Fast hashing for orderbook
 smallvec = "1.13"  # Stack-allocated vectors for small arrays
 
+# WebSocket dependencies
+tokio-tungstenite = "0.23"  # WebSocket client
+dashmap = "6"  # Concurrent HashMap for subscriptions
+url = "2"  # URL parsing for WebSocket connections
+async-trait = "0.1"  # Async trait support
+thiserror = "2"  # Error handling
+
 [target.'cfg(target_os = "windows")'.dependencies]
 [target.'cfg(target_os = "macos")'.dependencies]
 nix = { version = "0.29", features = ["signal", "process"] }

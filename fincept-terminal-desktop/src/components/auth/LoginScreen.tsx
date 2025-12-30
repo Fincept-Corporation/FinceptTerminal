@@ -36,15 +36,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
     setError("");
 
     try {
-      console.log('Login attempt for:', email);
-
       const result = await login(email, password);
 
       if (result.success) {
-        console.log('Login successful - App.tsx will handle routing based on account type');
         // App.tsx useEffect will handle navigation based on account_type
       } else {
-        console.log('Login failed:', result.error);
 
         // Provide user-friendly error messages
         const errorMessage = result.error || 'Login failed. Please check your credentials.';
@@ -70,7 +66,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
         }
       }
     } catch (err) {
-      console.error('Login error:', err);
       setError(t('login.errors.unexpectedError'));
     } finally {
       setIsLoading(false);
@@ -82,19 +77,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
     setError("");
 
     try {
-      console.log('Setting up guest access...');
-
       const result = await setupGuestAccess();
 
       if (result.success) {
-        console.log('Guest access setup successful - App.tsx will handle routing');
         // App.tsx useEffect will handle navigation to dashboard
       } else {
-        console.log('Guest access setup failed:', result.error);
         setError(result.error || t('login.errors.guestSetupFailed'));
       }
     } catch (err) {
-      console.error('Guest access error:', err);
       setError(t('login.errors.guestSetupFailed'));
     } finally {
       setIsGuestLoading(false);

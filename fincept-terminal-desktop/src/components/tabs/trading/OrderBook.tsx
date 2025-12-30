@@ -2,8 +2,8 @@
 // Provider-agnostic order book component
 
 import React, { useState, useEffect } from 'react';
-import { useWebSocket } from '../../../hooks/useWebSocket';
-import { isProviderAvailable } from '../../../services/websocket';
+import { useRustOrderBook } from '../../../hooks/useRustWebSocket';
+
 
 interface OrderBookLevel {
   price: number;
@@ -22,67 +22,46 @@ export function OrderBook({ symbol, provider, depth = 25 }: OrderBookProps) {
   const [asks, setAsks] = useState<OrderBookLevel[]>([]);
   const [spread, setSpread] = useState<number>(0);
 
-  // Only subscribe if WebSocket adapter exists for this provider
-  const hasWebSocket = isProviderAvailable(provider);
-
-  const { message } = useWebSocket(
-    hasWebSocket ? `${provider}.book.${symbol}` : null,
-    null,
-    { autoSubscribe: hasWebSocket, params: { depth } }
+  // Use Rust WebSocket backend
+  const { data, error: wsError } = useRustOrderBook(
+    provider,
+    symbol,
+    depth
   );
 
   useEffect(() => {
-    if (!message || message.type !== 'orderbook') return;
+    if (!data) return;
 
-    const data = message.data;
-
-    // Validate data structure
-    if (!data || typeof data !== 'object') {
-      console.warn('[OrderBook] Invalid data structure:', data);
-      return;
-    }
+    const rustBids = data.bids || [];
+    const rustAsks = data.asks || [];
 
     // Process bids (buy orders) - highest first
-    const rawBids = Array.isArray(data.bids) ? data.bids : [];
-    const processedBids = rawBids
-      .filter((level: any) =>
-        level &&
-        typeof level === 'object' &&
-        typeof level.price === 'number' &&
-        typeof level.size === 'number'
-      )
+    const processedBids = rustBids
       .slice(0, depth)
       .sort((a: any, b: any) => b.price - a.price);
 
     // Process asks (sell orders) - lowest first
-    const rawAsks = Array.isArray(data.asks) ? data.asks : [];
-    const processedAsks = rawAsks
-      .filter((level: any) =>
-        level &&
-        typeof level === 'object' &&
-        typeof level.price === 'number' &&
-        typeof level.size === 'number'
-      )
+    const processedAsks = rustAsks
       .slice(0, depth)
       .sort((a: any, b: any) => a.price - b.price);
 
     // Calculate running totals
     let bidTotal = 0;
     const bidsWithTotal = processedBids.map((level: any) => {
-      bidTotal += level.size || 0;
+      bidTotal += level.quantity || 0;
       return {
         price: level.price || 0,
-        size: level.size || 0,
+        size: level.quantity || 0,
         total: bidTotal
       };
     });
 
     let askTotal = 0;
     const asksWithTotal = processedAsks.map((level: any) => {
-      askTotal += level.size || 0;
+      askTotal += level.quantity || 0;
       return {
         price: level.price || 0,
-        size: level.size || 0,
+        size: level.quantity || 0,
         total: askTotal
       };
     });
@@ -96,7 +75,7 @@ export function OrderBook({ symbol, provider, depth = 25 }: OrderBookProps) {
       const bestAsk = processedAsks[0].price || 0;
       setSpread(bestAsk - bestBid);
     }
-  }, [message, depth]);
+  }, [data, depth]);
 
   const maxTotal = Math.max(
     bids[bids.length - 1]?.total || 0,

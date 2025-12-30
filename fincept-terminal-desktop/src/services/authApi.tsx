@@ -57,15 +57,25 @@ interface DeviceRegisterRequest {
     platform: string;
     user_agent: string;
     language: string;
+    screen_resolution?: string;
+    cpu_cores?: number;
+    memory_gb?: number;
   };
 }
 
 // Response Types
 interface LoginResponse {
   api_key: string;
-  username: string;
-  email: string;
-  credit_balance: number;
+  username?: string;
+  email?: string;
+  credit_balance?: number;
+  user?: {
+    id: number;
+    username: string;
+    email: string;
+    account_type: string;
+    credit_balance: number;
+  };
 }
 
 interface UserProfileResponse {
@@ -75,6 +85,7 @@ interface UserProfileResponse {
   account_type: string;
   credit_balance: number;
   is_verified: boolean;
+  is_admin: boolean;
   mfa_enabled: boolean;
   created_at: string;
   last_login_at: string;
@@ -104,9 +115,12 @@ interface AuthStatusResponse {
 interface DeviceRegisterResponse {
   api_key?: string;
   temp_api_key?: string;
+  guest_id?: number;
+  device_id?: string;
   expires_at?: string;
   daily_limit?: number;
   requests_today?: number;
+  credit_balance?: number;
 }
 
 // Generic API request function
@@ -123,13 +137,6 @@ const makeApiRequest = async <T = any>(
     };
 
     const url = getApiEndpoint(endpoint);
-    console.log('🚀 Making auth request:', {
-      method,
-      url,
-      endpoint,
-      data,
-      headers: { ...defaultHeaders, 'X-API-Key': (defaultHeaders as any)['X-API-Key'] ? '[REDACTED]' : undefined }
-    });
 
     const config: RequestInit = {
       method,
@@ -143,22 +150,12 @@ const makeApiRequest = async <T = any>(
 
     const response = await fetch(url, config);
 
-    console.log('📡 Auth response received:', {
-      status: response.status,
-      statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
-      url: response.url
-    });
-
     const responseText = await response.text();
-    console.log('📄 Raw auth response text:', responseText.substring(0, 200));
 
     let responseData;
     try {
       responseData = JSON.parse(responseText);
-      console.log('✅ Parsed auth JSON:', responseData);
     } catch (parseError) {
-      console.error('❌ Auth JSON parse failed:', parseError);
       console.log('📄 Full auth response text:', responseText);
 
       // Provide user-friendly error messages based on status code
@@ -217,7 +214,6 @@ const makeApiRequest = async <T = any>(
     };
 
   } catch (error) {
-    console.error('💥 Auth request failed completely:', error);
 
     if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
       return {
@@ -248,6 +244,10 @@ export class AuthApiService {
 
   // Login user
   static async login(request: LoginRequest): Promise<ApiResponse<LoginResponse>> {
+    console.log('=== LOGIN REQUEST DEBUG ===');
+    console.log('Endpoint: /user/login');
+    console.log('Request body:', JSON.stringify(request, null, 2));
+    console.log('========================');
     return makeApiRequest<LoginResponse>('POST', '/user/login', request);
   }
 
@@ -460,7 +460,7 @@ export class AuthApiService {
   }
 }
 
-// Utility function to generate device ID
+// Utility function to generate device ID (must be 10-255 characters)
 export const generateDeviceId = (): string => {
   const getNavigatorInfo = () => {
     return {
@@ -468,7 +468,9 @@ export const generateDeviceId = (): string => {
       userAgent: navigator.userAgent,
       language: navigator.language,
       cookieEnabled: navigator.cookieEnabled,
-      onLine: navigator.onLine
+      onLine: navigator.onLine,
+      screenRes: `${window.screen.width}x${window.screen.height}`,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
     };
   };
 
@@ -482,7 +484,16 @@ export const generateDeviceId = (): string => {
     hash = hash & hash;
   }
 
-  return `desktop_${Math.abs(hash).toString(16)}`;
+  // Generate a device ID that's between 10-255 characters
+  const hashStr = Math.abs(hash).toString(16);
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2);
+
+  // Format: fincept_desktop_{hash}_{timestamp}_{random}
+  const deviceId = `fincept_desktop_${hashStr}_${timestamp}_${random}`;
+
+  // Ensure it's within the valid range (10-255 characters)
+  return deviceId.length > 255 ? deviceId.substring(0, 255) : deviceId;
 };
 
 // Auth utility functions

@@ -53,23 +53,38 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     try {
       console.log(`Payment status check #${checkCount + 1}`);
 
-      // Get updated user subscription to see if payment completed
-      const subscriptionResult = await PaymentApiService.getUserSubscription(session.api_key);
+      // Check if we have an order_id from localStorage (set by PricingScreen)
+      const pendingOrderId = localStorage.getItem('pending_payment_order_id');
 
-      if (subscriptionResult.success && subscriptionResult.data?.has_subscription) {
-        console.log('Payment completed - user now has active subscription');
-        setStatus('completed');
-        setPaymentData(subscriptionResult.data);
+      if (pendingOrderId) {
+        // Check the actual order status from backend
+        const statusResponse = await PaymentApiService.getPaymentHistory(session.api_key, 1, 10);
 
-        // Refresh user data in context
-        await refreshUserData();
+        if (statusResponse.success && statusResponse.data?.payments) {
+          const recentPayment = statusResponse.data.payments.find(
+            (p: any) => p.payment_uuid === pendingOrderId
+          );
 
-        // Clear intervals
-        if (intervalRef.current) clearInterval(intervalRef.current);
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+          if (recentPayment && recentPayment.status === 'completed') {
+            console.log('Payment completed!', recentPayment);
+            setStatus('completed');
+            setPaymentData(recentPayment);
+            localStorage.removeItem('pending_payment_order_id');
 
-        return;
+            // Refresh user data to get updated credits
+            await refreshUserData();
+
+            // Clear intervals
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            return;
+          }
+        }
       }
+
+      // Fallback: Check credit balance increase
+      await refreshUserData();
+      console.log('User credits:', session.user_info?.credit_balance);
 
       setCheckCount(prev => prev + 1);
       setLastChecked(new Date());

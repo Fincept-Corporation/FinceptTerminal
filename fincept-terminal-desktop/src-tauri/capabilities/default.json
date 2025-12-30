@@ -17,7 +17,13 @@
         { "url": "http://*" }
       ]
     },
-    "cors-fetch:default",
+    {
+      "identifier": "cors-fetch:default",
+      "allow": [
+        { "url": "https://*" },
+        { "url": "http://*" }
+      ]
+    },
     "dialog:default",
     "dialog:allow-ask",
     "dialog:allow-message",

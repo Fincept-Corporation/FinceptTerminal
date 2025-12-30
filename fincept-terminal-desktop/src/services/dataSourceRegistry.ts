@@ -2,7 +2,7 @@
 // Central service for managing unified data sources (WebSocket + REST API)
 
 import { sqliteService, DataSource } from './sqliteService';
-import { getWebSocketManager } from './websocket';
+import { getWebSocketManager } from './websocketBridge';
 import { mappingEngine } from '../components/tabs/data-mapping/engine/MappingEngine';
 import { DataMappingConfig } from '../components/tabs/data-mapping/types';
 import { dataSourceLogger } from './loggerService';
@@ -64,18 +64,18 @@ export async function createWebSocketDataSource(input: {
     const topic = `${config.provider}.${config.channel}${config.symbol ? '.' + config.symbol : ''}`;
 
     try {
-      // Set provider config if not already set
-      const existingConfig = wsManager.getProviderConfig(config.provider);
-      if (!existingConfig) {
-        wsManager.setProviderConfig(config.provider, {
-          provider_name: config.provider,
-          enabled: true,
-          api_key: input.params?.api_key,
-          api_secret: input.params?.api_secret,
-          endpoint: input.params?.endpoint
-        });
-        dataSourceLogger.debug(`Provider config set for: ${config.provider}`);
-      }
+      // TODO: Re-implement with new Rust WebSocket backend
+      // const existingConfig = wsManager.getProviderConfig(config.provider);
+      // if (!existingConfig) {
+      //   wsManager.setProviderConfig(config.provider, {
+      //     provider_name: config.provider,
+      //     enabled: true,
+      //     api_key: input.params?.api_key,
+      //     api_secret: input.params?.api_secret,
+      //     endpoint: input.params?.endpoint
+      //   });
+      //   dataSourceLogger.debug(`Provider config set for: ${config.provider}`);
+      // }
 
       // Note: Actual subscription happens when component uses useDataSource
       dataSourceLogger.debug(`WebSocket source created: ${input.alias} -> ${topic}`);
