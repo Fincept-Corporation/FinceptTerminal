@@ -134,7 +134,7 @@ const MarketplaceTab: React.FC = () => {
         setDatasets(transformedDatasets);
         setTotalPages(totalPagesCount);
       } else {
-        console.error('❌ Failed to fetch datasets:', response.error);
+        console.error('[ERROR] Failed to fetch datasets:', response.error);
         setDatasets([]);
       }
     } catch (error) {
@@ -311,9 +311,9 @@ const MarketplaceTab: React.FC = () => {
 
       if (response.success) {
         const uploadedDataset = (response.data as any)?.data || response.data;
-        console.log('✅ Dataset uploaded successfully:', uploadedDataset);
-        console.log('✅ Dataset ID:', (uploadedDataset as any)?.id);
-        console.log('✅ Dataset full object:', JSON.stringify(uploadedDataset, null, 2));
+        console.log('[OK] Dataset uploaded successfully:', uploadedDataset);
+        console.log('[OK] Dataset ID:', (uploadedDataset as any)?.id);
+        console.log('[OK] Dataset full object:', JSON.stringify(uploadedDataset, null, 2));
 
         alert(`Dataset uploaded successfully! ID: ${(uploadedDataset as any)?.id || 'Unknown'}\nTitle: ${(uploadedDataset as any)?.title || 'Unknown'}`);
 
@@ -343,7 +343,7 @@ const MarketplaceTab: React.FC = () => {
           setCurrentScreen('BROWSE');
         }, 1500);
       } else {
-        console.error('❌ Upload failed:', response.error);
+        console.error('[ERROR] Upload failed:', response.error);
         alert(`Upload failed: ${response.error || 'Unknown error'}`);
       }
     } catch (error) {
@@ -417,7 +417,7 @@ const MarketplaceTab: React.FC = () => {
                   🔧 STATS
                 </button>
                 <button onClick={() => setCurrentScreen('ADMIN_PENDING')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'ADMIN_PENDING' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'ADMIN_PENDING' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  ⏳ PENDING
+                   PENDING
                 </button>
                 <button onClick={() => setCurrentScreen('ADMIN_REVENUE')} style={{ padding: '6px 12px', backgroundColor: currentScreen === 'ADMIN_REVENUE' ? C.ORANGE : C.DARK_BG, border: `2px solid ${C.GRAY}`, color: currentScreen === 'ADMIN_REVENUE' ? C.DARK_BG : C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
                   💵 REVENUE
@@ -570,7 +570,7 @@ const MarketplaceTab: React.FC = () => {
                     </span>
                   </div>
                   <button onClick={() => !cartItems.includes(selectedProduct.id) && setCartItems([...cartItems, selectedProduct.id])} style={{ marginTop: '16px', padding: '14px 32px', backgroundColor: cartItems.includes(selectedProduct.id) ? C.GREEN : C.DARK_BG, border: `2px solid ${C.GREEN}`, color: cartItems.includes(selectedProduct.id) ? C.DARK_BG : C.GREEN, fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                    {cartItems.includes(selectedProduct.id) ? '✓ ADDED TO CART' : 'ADD TO CART'}
+                    {cartItems.includes(selectedProduct.id) ? '[OK] ADDED TO CART' : 'ADD TO CART'}
                   </button>
                 </div>
                 <div style={{ backgroundColor: C.PANEL_BG, border: `2px solid ${C.GRAY}`, padding: '20px' }}>
@@ -730,7 +730,7 @@ const MarketplaceTab: React.FC = () => {
         tabName="MARKETPLACE"
         leftInfo={[
           { label: '🔒 SECURE PRODUCTS', color: C.CYAN },
-          { label: '✓ VERIFIED VENDORS', color: C.GREEN },
+          { label: '[OK] VERIFIED VENDORS', color: C.GREEN },
         ]}
         statusInfo={
           <>
@@ -1126,7 +1126,7 @@ const MyDatasetsScreen: React.FC<{ session: any; C: any; fetchMyDatasets: () => 
                   {isLoading ? 'UPDATING...' : '💾 SAVE CHANGES'}
                 </button>
                 <button onClick={() => setEditingDataset(null)} style={{ padding: '10px 20px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GRAY}`, color: C.WHITE, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                  ❌ CANCEL
+                  [ERROR] CANCEL
                 </button>
               </div>
             </div>
@@ -1155,7 +1155,7 @@ const MyDatasetsScreen: React.FC<{ session: any; C: any; fetchMyDatasets: () => 
                     <div style={{ color: C.WHITE, fontSize: '13px', lineHeight: '1.5' }}>{dataset.description}</div>
                     {dataset.rejection_reason && (
                       <div style={{ marginTop: '12px', backgroundColor: 'rgba(255,0,0,0.1)', border: `1px solid ${C.RED}`, padding: '10px', borderRadius: '4px' }}>
-                        <div style={{ color: C.RED, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>❌ REJECTION REASON:</div>
+                        <div style={{ color: C.RED, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>[ERROR] REJECTION REASON:</div>
                         <div style={{ color: C.RED, fontSize: '12px' }}>{dataset.rejection_reason}</div>
                       </div>
                     )}
@@ -1163,7 +1163,7 @@ const MyDatasetsScreen: React.FC<{ session: any; C: any; fetchMyDatasets: () => 
                   <div style={{ display: 'flex', gap: '8px', marginLeft: '20px' }}>
                     {(dataset.status === 'pending' || dataset.status === 'rejected') && (
                       <button onClick={() => handleEdit(dataset)} style={{ padding: '8px 16px', backgroundColor: C.DARK_BG, border: `2px solid ${C.BLUE}`, color: C.BLUE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                        ✏️ EDIT
+                         EDIT
                       </button>
                     )}
                     <button onClick={() => handleDelete(dataset.id, dataset.title)} style={{ padding: '8px 16px', backgroundColor: C.DARK_BG, border: `2px solid ${C.RED}`, color: C.RED, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
@@ -1238,7 +1238,7 @@ const PricingScreen: React.FC<{ session: any; C: any }> = ({ session, C }) => {
                       <div style={{ color: C.CYAN, fontSize: '12px', fontWeight: 'bold', marginBottom: '12px' }}>FEATURES:</div>
                       {tier.features.map((feature, fidx) => (
                         <div key={fidx} style={{ color: C.WHITE, fontSize: '12px', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ color: C.GREEN }}>✓</span>
+                          <span style={{ color: C.GREEN }}>[OK]</span>
                           <span>{feature}</span>
                         </div>
                       ))}
@@ -1327,7 +1327,7 @@ const AdminPendingScreen: React.FC<{ session: any; C: any }> = ({ session, C }) 
   return (
     <>
       <div style={{ padding: '12px', backgroundColor: C.PANEL_BG, borderBottom: `2px solid ${C.GRAY}` }}>
-        <div style={{ color: C.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>⏳ PENDING DATASETS APPROVAL ({pendingDatasets.length})</div>
+        <div style={{ color: C.ORANGE, fontSize: '20px', fontWeight: 'bold' }}> PENDING DATASETS APPROVAL ({pendingDatasets.length})</div>
       </div>
       <div className="marketplace-scroll" style={{ flex: 1, overflowY: 'auto', backgroundColor: '#050505', padding: '20px' }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -1370,7 +1370,7 @@ const AdminPendingScreen: React.FC<{ session: any; C: any }> = ({ session, C }) 
                     />
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button onClick={() => handleReject(dataset.id)} disabled={!rejectionReason.trim()} style={{ padding: '8px 16px', backgroundColor: C.RED, border: 'none', color: C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: rejectionReason.trim() ? 'pointer' : 'not-allowed', fontFamily: 'Consolas, monospace' }}>
-                        ❌ CONFIRM REJECT
+                        [ERROR] CONFIRM REJECT
                       </button>
                       <button onClick={() => { setRejectingDatasetId(null); setRejectionReason(''); }} style={{ padding: '8px 16px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GRAY}`, color: C.WHITE, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
                         CANCEL
@@ -1380,10 +1380,10 @@ const AdminPendingScreen: React.FC<{ session: any; C: any }> = ({ session, C }) 
                 ) : (
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={() => handleApprove(dataset.id, dataset.title)} style={{ padding: '10px 20px', backgroundColor: C.DARK_BG, border: `2px solid ${C.GREEN}`, color: C.GREEN, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                      ✅ APPROVE
+                      [OK] APPROVE
                     </button>
                     <button onClick={() => setRejectingDatasetId(dataset.id)} style={{ padding: '10px 20px', backgroundColor: C.DARK_BG, border: `2px solid ${C.RED}`, color: C.RED, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', fontFamily: 'Consolas, monospace' }}>
-                      ❌ REJECT
+                      [ERROR] REJECT
                     </button>
                   </div>
                 )}

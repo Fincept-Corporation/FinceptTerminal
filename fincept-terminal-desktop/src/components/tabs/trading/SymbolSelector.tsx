@@ -47,7 +47,7 @@ export function SymbolSelector({ selectedSymbol, onSymbolChange }: SymbolSelecto
     if (activeBroker === 'kraken') {
       return 'e.g. BTC/USD';
     } else if (activeBroker === 'hyperliquid') {
-      return 'e.g. BTC/USDC:USDC';
+      return 'e.g. BTC/USD';
     }
     return 'Search symbol...';
   }, [activeBroker, activeBrokerMetadata]);

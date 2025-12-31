@@ -1,13 +1,14 @@
 // File: src/components/tabs/TradingTab.tsx
 // Professional Bloomberg Terminal-Grade Trading Interface
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import {
   TrendingUp, TrendingDown, Activity, DollarSign, BarChart3,
   Settings as SettingsIcon, Globe, Wifi, WifiOff, Bell,
   Zap, Target, AlertCircle, RefreshCw, Maximize2, ChevronDown,
   Clock, TrendingDown as ArrowDown, TrendingUp as ArrowUp, ChevronUp, Minimize2
 } from 'lucide-react';
+
 import { useBrokerContext } from '../../contexts/BrokerContext';
 import { useRustTicker, useRustOrderBook, useRustTrades } from '../../hooks/useRustWebSocket';
 import { invoke } from '@tauri-apps/api/core';
@@ -94,6 +95,7 @@ export function TradingTab() {
     paperAdapter,
     defaultSymbols,
     isConnecting,
+    isLoading,
   } = useBrokerContext();
 
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -144,6 +146,41 @@ export function TradingTab() {
   // Watchlist prices
   const [watchlistPrices, setWatchlistPrices] = useState<Record<string, { price: number; change: number }>>({});
 
+  // Initialize WebSocket providers (Kraken & HyperLiquid)
+  useEffect(() => {
+    const initializeProviders = async () => {
+      try {
+        // Initialize Kraken
+        await invoke('ws_set_config', {
+          config: {
+            name: 'kraken',
+            url: 'wss://ws.kraken.com/v2',
+            enabled: true,
+            reconnect_delay_ms: 5000,
+            max_reconnect_attempts: 10,
+            heartbeat_interval_ms: 30000,
+          }
+        });
+
+        // Initialize HyperLiquid
+        await invoke('ws_set_config', {
+          config: {
+            name: 'hyperliquid',
+            url: 'wss://api.hyperliquid.xyz/ws',
+            enabled: true,
+            reconnect_delay_ms: 5000,
+            max_reconnect_attempts: 10,
+            heartbeat_interval_ms: 30000,
+          }
+        });
+      } catch (err) {
+        // Ignore config errors
+      }
+    };
+
+    initializeProviders();
+  }, []);
+
   // Update time
   useEffect(() => {
     const timer = setInterval(() => {
@@ -153,11 +190,12 @@ export function TradingTab() {
   }, []);
 
   // Fetch watchlist prices - Using bulk API fetch (updated every 15 minutes)
+  // NOTE: This batches all requests into one API call for optimal performance
   useEffect(() => {
     const fetchWatchlistPrices = async () => {
       try {
         // Approach 1: Try using exchange's bulk fetchTickers if available
-        if (activeAdapter && typeof activeAdapter.fetchTickers === 'function') {
+        if (activeAdapter?.isConnected() && typeof activeAdapter.fetchTickers === 'function') {
           try {
             const tickers = await activeAdapter.fetchTickers(watchlist);
             const prices: Record<string, { price: number; change: number }> = {};
@@ -239,12 +277,11 @@ export function TradingTab() {
     return () => clearInterval(interval);
   }, [activeAdapter, watchlist]);
 
-  // Clear data when symbol changes
+  // Clear data when symbol changes - but don't clear orderbook immediately
   useEffect(() => {
     setTickerData(null);
-    setOrderBook({ bids: [], asks: [], symbol: selectedSymbol });
     setTradesData([]);
-    setLastOrderBookUpdate(0);
+    // Don't clear orderbook - let WebSocket update it
   }, [selectedSymbol]);
 
   // Subscribe to Rust WebSocket feeds (10,000+ connections, minimal memory)
@@ -270,44 +307,48 @@ export function TradingTab() {
 
   // Update ticker data from Rust WebSocket
   useEffect(() => {
-    if (tickerData && tickerData.symbol === selectedSymbol) {
-      setTickerData({
-        symbol: tickerData.symbol,
-        price: tickerData.price,
-        bid: tickerData.bid,
-        ask: tickerData.ask,
-        last: tickerData.price,
-        volume: tickerData.volume,
-        high: tickerData.high,
-        low: tickerData.low,
-        change: tickerData.change,
-        changePercent: tickerData.change_percent,
-      });
+    if (!tickerData) return;
 
-      if (tradingMode === 'paper' && paperAdapter) {
-        const matchingEngine = (paperAdapter as any).matchingEngine;
-        if (matchingEngine && typeof matchingEngine.updatePriceFromWebSocket === 'function') {
-          matchingEngine.updatePriceFromWebSocket(selectedSymbol, {
-            bid: tickerData.bid,
-            ask: tickerData.ask,
-            last: tickerData.price,
-          });
-        }
+    setTickerData({
+      symbol: tickerData.symbol,
+      price: tickerData.price,
+      bid: tickerData.bid,
+      ask: tickerData.ask,
+      last: tickerData.price,
+      volume: tickerData.volume,
+      high: tickerData.high,
+      low: tickerData.low,
+      change: tickerData.change,
+      changePercent: tickerData.change_percent,
+      open: tickerData.open,
+    });
+
+    if (tradingMode === 'paper' && paperAdapter) {
+      const matchingEngine = paperAdapter && 'matchingEngine' in paperAdapter
+        ? (paperAdapter as any).matchingEngine
+        : null;
+
+      if (matchingEngine && typeof matchingEngine.updatePriceFromWebSocket === 'function') {
+        matchingEngine.updatePriceFromWebSocket(selectedSymbol, {
+          bid: tickerData.bid,
+          ask: tickerData.ask,
+          last: tickerData.price,
+        });
       }
     }
-  }, [tickerData, tradingMode, paperAdapter, selectedSymbol]);
+  }, [tickerData]);
 
   // Update orderbook from Rust WebSocket
   useEffect(() => {
-    if (orderbookData && orderbookData.symbol === selectedSymbol) {
-      setOrderBook({
-        bids: orderbookData.bids.map(b => ({ price: b.price, size: b.quantity })),
-        asks: orderbookData.asks.map(a => ({ price: a.price, size: a.quantity })),
-        symbol: orderbookData.symbol,
-      });
-      setLastOrderBookUpdate(Date.now());
-    }
-  }, [orderbookData, selectedSymbol]);
+    if (!orderbookData) return;
+
+    setOrderBook({
+      bids: orderbookData.bids.map(b => ({ price: b.price, size: b.quantity })),
+      asks: orderbookData.asks.map(a => ({ price: a.price, size: a.quantity })),
+      symbol: orderbookData.symbol,
+    });
+    setLastOrderBookUpdate(Date.now());
+  }, [orderbookData]);
 
   // Update trades from Rust WebSocket (auto-maintains 50 trades)
   useEffect(() => {
@@ -373,23 +414,35 @@ export function TradingTab() {
     };
 
     loadPaperTradingData();
-    const interval = setInterval(loadPaperTradingData, 2000);
-    return () => clearInterval(interval);
+    // Use useRef for interval cleanup to avoid closure issues
+    const intervalRef = { current: null as NodeJS.Timeout | null };
+    intervalRef.current = setInterval(loadPaperTradingData, 2000);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
   }, [tradingMode, paperAdapter]);
 
-  // Update slippage & fees
+  // Update slippage & fees - use proper adapter methods instead of direct mutation
   useEffect(() => {
-    if (paperAdapter) {
-      (paperAdapter as any).paperConfig.slippage.market = slippage;
-      (paperAdapter as any).paperConfig.fees.maker = makerFee;
-      (paperAdapter as any).paperConfig.fees.taker = takerFee;
+    if (paperAdapter && 'paperConfig' in paperAdapter) {
+      const config = (paperAdapter as any).paperConfig;
+      if (config && config.slippage && config.fees) {
+        config.slippage.market = slippage;
+        config.fees.maker = makerFee;
+        config.fees.taker = takerFee;
+      }
     }
   }, [slippage, makerFee, takerFee, paperAdapter]);
 
-  // Fetch markets
+  // Fetch markets - with proper null checks and connection validation
   useEffect(() => {
     const fetchMarkets = async () => {
-      if (!activeAdapter) return;
+      if (!activeAdapter || !activeAdapter.isConnected()) {
+        setAvailableSymbols(defaultSymbols);
+        return;
+      }
       setIsLoadingSymbols(true);
       try {
         const markets = await activeAdapter.fetchMarkets();
@@ -399,6 +452,7 @@ export function TradingTab() {
           .sort();
         setAvailableSymbols(symbols);
       } catch (error) {
+        console.error('[TradingTab] Failed to fetch markets:', error);
         setAvailableSymbols(defaultSymbols);
       } finally {
         setIsLoadingSymbols(false);
@@ -407,8 +461,9 @@ export function TradingTab() {
     fetchMarkets();
   }, [activeAdapter, defaultSymbols]);
 
-  // Handle order placement
+  // Handle order placement - re-validate adapter before each async operation
   const handlePlaceOrder = useCallback(async (orderRequest: OrderRequest) => {
+    // Initial validation
     if (!paperAdapter || !paperAdapter.isConnected()) {
       alert('Paper trading adapter not available');
       throw new Error('Adapter not available');
@@ -416,6 +471,7 @@ export function TradingTab() {
 
     setIsPlacingOrder(true);
     try {
+      // Create order
       const order = await paperAdapter.createOrder(
         orderRequest.symbol,
         orderRequest.type,
@@ -425,6 +481,12 @@ export function TradingTab() {
         { stopPrice: orderRequest.stopPrice }
       );
 
+      // Re-validate adapter is still connected after async operation
+      if (!paperAdapter || !paperAdapter.isConnected()) {
+        throw new Error('Adapter disconnected during order placement');
+      }
+
+      // Fetch updated orders
       const ordersData = await paperAdapter.fetchOpenOrders();
       const mappedOrders: Order[] = ordersData.map((o: any) => ({
         id: o.id,
@@ -438,13 +500,19 @@ export function TradingTab() {
       }));
       setOrders(mappedOrders);
 
+      // Re-validate again before fetching balance
+      if (!paperAdapter || !paperAdapter.isConnected()) {
+        throw new Error('Adapter disconnected during order refresh');
+      }
+
+      // Fetch updated balance
       const balanceData = await paperAdapter.fetchBalance();
       const usdBalance = (balanceData.free as any)?.USD || 0;
       setBalance(usdBalance);
 
-      alert(`✓ Order placed: ${order.id}`);
+      alert(`[OK] Order placed: ${order.id}`);
     } catch (error) {
-      alert(`✗ Order failed: ${(error as Error).message}`);
+      alert(`[FAIL] Order failed: ${(error as Error).message}`);
       throw error;
     } finally {
       setIsPlacingOrder(false);
@@ -481,20 +549,32 @@ export function TradingTab() {
 
   const currentPrice = tickerState?.last || tickerState?.price || orderBook.asks[0]?.price || 0;
 
-  // Calculate price change - try multiple field names
-  const priceChange = tickerState?.change || tickerState?.price_change || 0;
+  // Calculate price change and percentage - use 24h open price from watchlist as fallback
+  let priceChange = 0;
+  let priceChangePercent = 0;
 
-  // Calculate percentage change - try from data or calculate manually
-  let priceChangePercent = tickerState?.changePercent || tickerState?.change_percent || tickerState?.percentage || tickerState?.percent_change || 0;
+  if (tickerState) {
+    // Try direct fields first
+    priceChange = tickerState.change || 0;
+    priceChangePercent = tickerState.changePercent || tickerState.change_percent || 0;
 
-  // If no percentage provided, calculate it from price change and current price
-  if (priceChangePercent === 0 && tickerState?.last && tickerState?.open && tickerState.open > 0) {
-    priceChangePercent = ((tickerState.last - tickerState.open) / tickerState.open) * 100;
-  } else if (priceChangePercent === 0 && priceChange !== 0 && currentPrice > 0) {
-    // Calculate from absolute change if we have it
-    const previousPrice = currentPrice - priceChange;
-    if (previousPrice > 0) {
-      priceChangePercent = (priceChange / previousPrice) * 100;
+    // If not available, calculate from open/last
+    if (priceChange === 0 && priceChangePercent === 0) {
+      const last = tickerState.last || tickerState.price || 0;
+      const open = tickerState.open || 0;
+
+      if (last > 0 && open > 0) {
+        priceChange = last - open;
+        priceChangePercent = (priceChange / open) * 100;
+      }
+    }
+  }
+
+  // Fallback: use watchlist data if ticker doesn't have change info
+  if (priceChange === 0 && priceChangePercent === 0 && watchlistPrices[selectedSymbol]) {
+    priceChangePercent = watchlistPrices[selectedSymbol].change;
+    if (currentPrice > 0) {
+      priceChange = (priceChangePercent / 100) * currentPrice / (1 + priceChangePercent / 100);
     }
   }
 
@@ -829,10 +909,10 @@ export function TradingTab() {
 
         {/* Price Display */}
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-          <span style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.YELLOW }}>
+          <span style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.YELLOW, willChange: 'contents', transition: 'none' }}>
             {tickerState ? `$${(tickerState.last || tickerState.price)?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}` : '--'}
           </span>
-          {tickerState && (
+          {tickerState && (priceChange !== 0 || priceChangePercent !== 0) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               {priceChange >= 0 ? (
                 <ArrowUp size={16} color={BLOOMBERG.GREEN} />
@@ -848,80 +928,59 @@ export function TradingTab() {
               </span>
             </div>
           )}
+          {tickerState && priceChange === 0 && priceChangePercent === 0 && (
+            <div style={{ fontSize: '11px', color: BLOOMBERG.GRAY, fontStyle: 'italic' }}>
+              No change data
+            </div>
+          )}
         </div>
 
         <div style={{ height: '24px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
 
         {/* Market Stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '11px' }}>
-          <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '11px', willChange: 'contents' }}>
+          <div style={{ minWidth: '60px' }}>
             <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>BID</div>
-            <div style={{ color: BLOOMBERG.GREEN, fontWeight: 600 }}>
-              {tickerData ? `$${tickerData.bid?.toFixed(2) || '0.00'}` : '--'}
+            <div style={{ color: BLOOMBERG.GREEN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+              {tickerState?.bid ? `$${tickerState.bid.toFixed(2)}` : '--'}
             </div>
           </div>
-          <div>
+          <div style={{ minWidth: '60px' }}>
             <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>ASK</div>
-            <div style={{ color: BLOOMBERG.RED, fontWeight: 600 }}>
-              {tickerData ? `$${tickerData.ask?.toFixed(2) || '0.00'}` : '--'}
+            <div style={{ color: BLOOMBERG.RED, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+              {tickerState?.ask ? `$${tickerState.ask.toFixed(2)}` : '--'}
             </div>
           </div>
-          <div>
+          <div style={{ minWidth: '120px' }}>
             <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H RANGE</div>
-            <div style={{ color: BLOOMBERG.CYAN, fontWeight: 600 }}>
-              {spread24h > 0 ? (
-                <>
-                  ${spread24h.toFixed(2)} ({spread24hPercent.toFixed(2)}%)
-                </>
-              ) : (
-                '--'
-              )}
+            <div style={{ color: BLOOMBERG.CYAN, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+              {spread24h > 0 ? `$${spread24h.toFixed(2)} (${spread24hPercent.toFixed(2)}%)` : '--'}
             </div>
           </div>
-          {tickerState && (
-            <>
-              <div>
-                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H HIGH</div>
-                <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>${tickerState.high?.toFixed(2) || '--'}</div>
-              </div>
-              <div>
-                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H LOW</div>
-                <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600 }}>${tickerState.low?.toFixed(2) || '--'}</div>
-              </div>
-              <div>
-                <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H VOLUME</div>
-                <div style={{ color: BLOOMBERG.PURPLE, fontWeight: 600 }}>
-                  {tickerState.volume ? (
-                    <>
-                      {/* Show volume in USD if available */}
-                      {tickerState.quoteVolume ? (
-                        `$${tickerState.quoteVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                      ) : tickerState.volume ? (
-                        `$${(tickerState.volume * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-                      ) : (
-                        // Calculate USD value from volume * current price
-                        currentPrice > 0 ? (
-                          <>
-                            ${(tickerState.volume * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                            <span style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginLeft: '4px' }}>
-                              ({tickerState.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} {selectedSymbol.split('/')[0]})
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            {tickerState.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                            <span style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginLeft: '2px' }}>
-                              {selectedSymbol.split('/')[0]}
-                            </span>
-                          </>
-                        )
-                      )}
-                    </>
-                  ) : '--'}
-                </div>
-              </div>
-            </>
-          )}
+          <div style={{ minWidth: '80px' }}>
+            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H HIGH</div>
+            <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+              {tickerState?.high ? `$${tickerState.high.toFixed(2)}` : '--'}
+            </div>
+          </div>
+          <div style={{ minWidth: '80px' }}>
+            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H LOW</div>
+            <div style={{ color: BLOOMBERG.WHITE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+              {tickerState?.low ? `$${tickerState.low.toFixed(2)}` : '--'}
+            </div>
+          </div>
+          <div style={{ minWidth: '100px' }}>
+            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>24H VOLUME</div>
+            <div style={{ color: BLOOMBERG.PURPLE, fontWeight: 600, willChange: 'contents', transition: 'none' }}>
+              {tickerState?.volume ? (
+                tickerState.quoteVolume
+                  ? `$${tickerState.quoteVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                  : currentPrice > 0
+                    ? `$${(tickerState.volume * currentPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                    : `${tickerState.volume.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${selectedSymbol.split('/')[0]}`
+              ) : '--'}
+            </div>
+          </div>
         </div>
 
         {tradingMode === 'paper' && (
@@ -1508,18 +1567,90 @@ export function TradingTab() {
             </div>
             <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
               {tradingMode === 'paper' ? (
-                !paperAdapter || !paperAdapter.isConnected() ? (
+                isLoading ? (
                   <div style={{
                     padding: '20px',
                     textAlign: 'center',
-                    border: `1px solid ${BLOOMBERG.ORANGE}`,
-                    backgroundColor: `${BLOOMBERG.ORANGE}10`
+                    border: `1px solid ${BLOOMBERG.CYAN}`,
+                    backgroundColor: `${BLOOMBERG.CYAN}10`
                   }}>
-                    <div style={{ color: BLOOMBERG.ORANGE, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
-                      ⚠️ INITIALIZING...
+                    <div style={{ color: BLOOMBERG.CYAN, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
+                      ⏳ LOADING...
                     </div>
                     <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
-                      {isConnecting ? 'Connecting to broker...' : 'Waiting for adapter...'}
+                      Loading broker configurations...
+                    </div>
+                  </div>
+                ) : !paperAdapter ? (
+                  <div style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    border: `1px solid ${BLOOMBERG.RED}`,
+                    backgroundColor: `${BLOOMBERG.RED}10`
+                  }}>
+                    <div style={{ color: BLOOMBERG.RED, fontSize: '12px', fontWeight: 700, marginBottom: '12px' }}>
+                      {isConnecting ? '⏳ CONNECTING...' : '❌ ADAPTER NOT READY'}
+                    </div>
+                    {!isConnecting && (
+                      <>
+                        <div style={{ color: BLOOMBERG.WHITE, fontSize: '10px', marginBottom: '12px', lineHeight: '1.5' }}>
+                          Paper trading adapter failed to initialize.
+                          <br />
+                          This is usually caused by:
+                        </div>
+                        <div style={{
+                          color: BLOOMBERG.GRAY,
+                          fontSize: '9px',
+                          textAlign: 'left',
+                          backgroundColor: BLOOMBERG.DARK_BG,
+                          padding: '8px',
+                          borderRadius: '2px',
+                          marginBottom: '12px',
+                          lineHeight: '1.6'
+                        }}>
+                          1. Database initialization failure<br />
+                          2. Missing write permissions<br />
+                          3. Broker adapter connection error
+                        </div>
+                        <div style={{ color: BLOOMBERG.YELLOW, fontSize: '9px', marginBottom: '8px' }}>
+                          Check the browser console (F12) and terminal for detailed error messages
+                        </div>
+                        <button
+                          onClick={() => window.location.reload()}
+                          style={{
+                            padding: '6px 12px',
+                            backgroundColor: BLOOMBERG.ORANGE,
+                            border: 'none',
+                            color: BLOOMBERG.DARK_BG,
+                            cursor: 'pointer',
+                            fontSize: '10px',
+                            fontWeight: 700,
+                            borderRadius: '2px',
+                            marginTop: '4px'
+                          }}
+                        >
+                          RELOAD APPLICATION
+                        </button>
+                      </>
+                    )}
+                    {isConnecting && (
+                      <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
+                        Setting up paper trading adapter...
+                      </div>
+                    )}
+                  </div>
+                ) : !paperAdapter.isConnected() ? (
+                  <div style={{
+                    padding: '20px',
+                    textAlign: 'center',
+                    border: `1px solid ${BLOOMBERG.YELLOW}`,
+                    backgroundColor: `${BLOOMBERG.YELLOW}10`
+                  }}>
+                    <div style={{ color: BLOOMBERG.YELLOW, fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
+                      ⏳ CONNECTING...
+                    </div>
+                    <div style={{ color: BLOOMBERG.GRAY, fontSize: '10px' }}>
+                      Establishing connection to {activeBroker}...
                     </div>
                   </div>
                 ) : (

@@ -1558,7 +1558,7 @@ const ReportBuilderTab: React.FC = () => {
                     className="px-2 py-1 text-[9px] rounded bg-[#0a0a0a] border border-[#333333] hover:border-[#FFA500] transition-colors"
                     style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
                   >
-                    ✓ Grammar
+                    [OK] Grammar
                   </button>
                 </div>
               </div>

@@ -28,7 +28,9 @@ export {
 // ============================================================================
 // STOCK BROKERS
 // ============================================================================
-export { KiteConnectAdapter, createKiteAdapter } from './stocks';
+// Stock broker adapters (Kite, Fyers) are available in their subdirectories:
+// - ./stocks/kite/ - Zerodha Kite Connect integration
+// - ./stocks/fyers/ - Fyers API integration
 
 // ============================================================================
 // UNIFIED BROKER REGISTRY (NEW SYSTEM)

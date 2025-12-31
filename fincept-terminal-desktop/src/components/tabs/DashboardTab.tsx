@@ -130,7 +130,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         const healthCheck = await sqliteService.healthCheck();
         if (healthCheck.healthy) {
           setDbInitialized(true);
-          console.log('[Dashboard] ✓ SQLite database initialized and ready for caching');
+          console.log('[Dashboard] [OK] SQLite database initialized and ready for caching');
         } else {
           console.warn('[Dashboard] Database not healthy:', healthCheck.message);
           setDbInitialized(true); // Allow dashboard to load anyway

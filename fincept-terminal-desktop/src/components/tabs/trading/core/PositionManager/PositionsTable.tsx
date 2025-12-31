@@ -45,10 +45,10 @@ export function PositionsTable() {
       // Additional refresh after 500ms to ensure DB sync
       setTimeout(() => refresh(), 500);
 
-      alert(`✓ Position closed: ${position.symbol}`);
+      alert(`[OK] Position closed: ${position.symbol}`);
     } catch (error) {
       console.error('[PositionsTable] Close error:', error);
-      alert(`✗ Failed to close position: ${(error as Error).message}`);
+      alert(`[FAIL] Failed to close position: ${(error as Error).message}`);
     }
   };
 

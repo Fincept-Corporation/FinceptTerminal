@@ -17,18 +17,27 @@ import type {
 import { paperTradingDatabase } from './PaperTradingDatabase';
 import { PaperTradingBalance } from './PaperTradingBalance';
 import { InsufficientFunds } from '../brokers/crypto/types';
+import { transactionLockManager } from './TransactionLockManager';
+import { SlippageCalculator } from './SlippageCalculator';
 
 export class OrderMatchingEngine {
   private balanceManager: PaperTradingBalance;
+  private slippageCalculator: SlippageCalculator;
   private monitoringInterval: NodeJS.Timeout | null = null;
   private priceCache: Map<string, PriceSnapshot> = new Map();
   private websocketPriceUpdates: Map<string, PriceSnapshot> = new Map();
+  private readonly MAX_CACHE_SIZE = 1000; // LRU cache limit
+  private cacheAccessOrder: Map<string, number> = new Map(); // For LRU tracking
+
+  // Trailing stop tracking: orderId => { peak/trough price, current stop price }
+  private trailingStopTracking: Map<string, { extremePrice: number; stopPrice: number }> = new Map();
 
   constructor(
     private config: PaperTradingConfig,
     private realExchangeAdapter: IExchangeAdapter
   ) {
     this.balanceManager = new PaperTradingBalance(config);
+    this.slippageCalculator = new SlippageCalculator(config);
   }
 
   /**
@@ -43,6 +52,11 @@ export class OrderMatchingEngine {
       timestamp: Date.now(),
     };
     this.websocketPriceUpdates.set(symbol, snapshot);
+
+    // Update slippage calculator price history for volatility calculation
+    if (snapshot.last > 0) {
+      this.slippageCalculator.updatePriceHistory(symbol, snapshot.last);
+    }
   }
 
   // ============================================================================
@@ -50,7 +64,7 @@ export class OrderMatchingEngine {
   // ============================================================================
 
   /**
-   * Place a new order
+   * Place a new order (with transaction locking)
    */
   async placeOrder(
     symbol: string,
@@ -60,80 +74,89 @@ export class OrderMatchingEngine {
     price?: number,
     params?: OrderParams
   ): Promise<OrderMatchResult> {
-    const orderId = `order_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    // Acquire locks for portfolio and symbol to prevent concurrent modifications
+    return await transactionLockManager.withMultipleLocks(
+      [
+        { type: 'portfolio', id: this.config.portfolioId },
+        { type: 'symbol', id: this.config.portfolioId, symbol },
+      ],
+      async () => {
+        const orderId = `order_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-    // Get current price for validation
-    const priceSnapshot = await this.fetchPriceSnapshot(symbol);
-    const executionPrice = price || (side === 'buy' ? priceSnapshot.ask : priceSnapshot.bid);
+        // Get current price for validation
+        const priceSnapshot = await this.fetchPriceSnapshot(symbol);
+        const executionPrice = price || (side === 'buy' ? priceSnapshot.ask : priceSnapshot.bid);
 
-    // Check sufficient funds
-    const leverage = params?.leverage || this.config.defaultLeverage || 1;
-    const fundsCheck = await this.balanceManager.checkSufficientFunds(
-      this.config.portfolioId,
-      symbol,
-      side,
-      amount,
-      executionPrice,
-      leverage
+        // Check sufficient funds (within lock to ensure atomicity)
+        const leverage = params?.leverage || this.config.defaultLeverage || 1;
+        const fundsCheck = await this.balanceManager.checkSufficientFunds(
+          this.config.portfolioId,
+          symbol,
+          side,
+          amount,
+          executionPrice,
+          leverage
+        );
+
+        if (!fundsCheck.sufficient) {
+          return {
+            success: false,
+            order: this.createOrderObject(orderId, symbol, type, side, amount, price, params, 'rejected'),
+            trades: [],
+            balance: fundsCheck.available,
+            error: fundsCheck.error,
+          };
+        }
+
+        // Create order in database
+        await paperTradingDatabase.createOrder({
+          id: orderId,
+          portfolioId: this.config.portfolioId,
+          symbol,
+          side,
+          type,
+          quantity: amount,
+          price: price || null,
+          stopPrice: params?.stopPrice || null,
+          timeInForce: params?.timeInForce,
+          postOnly: params?.postOnly,
+          reduceOnly: params?.reduceOnly,
+          trailingPercent: params?.trailingPercent || null,
+          trailingAmount: params?.trailingAmount || null,
+          icebergQty: params?.icebergQty || null,
+          leverage: params?.leverage,
+          marginMode: params?.marginMode,
+        });
+
+        // Handle different order types
+        switch (type) {
+          case 'market':
+            return await this.executeMarketOrder(orderId, symbol, side, amount, params);
+
+          case 'limit':
+            return await this.handleLimitOrder(orderId, symbol, side, amount, price!, params);
+
+          case 'stop':
+          case 'stop_limit':
+            return await this.handleStopOrder(orderId, symbol, type, side, amount, price, params);
+
+          case 'trailing_stop':
+            return await this.handleTrailingStopOrder(orderId, symbol, side, amount, params);
+
+          case 'iceberg':
+            return await this.handleIcebergOrder(orderId, symbol, side, amount, price!, params);
+
+          default:
+            return {
+              success: false,
+              order: this.createOrderObject(orderId, symbol, type, side, amount, price, params, 'rejected'),
+              trades: [],
+              balance: fundsCheck.available,
+              error: `Unsupported order type: ${type}`,
+            };
+        }
+      }
     );
-
-    if (!fundsCheck.sufficient) {
-      return {
-        success: false,
-        order: this.createOrderObject(orderId, symbol, type, side, amount, price, params, 'rejected'),
-        trades: [],
-        balance: fundsCheck.available,
-        error: fundsCheck.error,
-      };
-    }
-
-    // Create order in database
-    await paperTradingDatabase.createOrder({
-      id: orderId,
-      portfolioId: this.config.portfolioId,
-      symbol,
-      side,
-      type,
-      quantity: amount,
-      price: price || null,
-      stopPrice: params?.stopPrice || null,
-      timeInForce: params?.timeInForce,
-      postOnly: params?.postOnly,
-      reduceOnly: params?.reduceOnly,
-      trailingPercent: params?.trailingPercent || null,
-      trailingAmount: params?.trailingAmount || null,
-      icebergQty: params?.icebergQty || null,
-      leverage: params?.leverage,
-      marginMode: params?.marginMode,
-    });
-
-    // Handle different order types
-    switch (type) {
-      case 'market':
-        return await this.executeMarketOrder(orderId, symbol, side, amount, params);
-
-      case 'limit':
-        return await this.handleLimitOrder(orderId, symbol, side, amount, price!, params);
-
-      case 'stop':
-      case 'stop_limit':
-        return await this.handleStopOrder(orderId, symbol, type, side, amount, price, params);
-
-      case 'trailing_stop':
-        return await this.handleTrailingStopOrder(orderId, symbol, side, amount, params);
-
-      case 'iceberg':
-        return await this.handleIcebergOrder(orderId, symbol, side, amount, price!, params);
-
-      default:
-        return {
-          success: false,
-          order: this.createOrderObject(orderId, symbol, type, side, amount, price, params, 'rejected'),
-          trades: [],
-          balance: fundsCheck.available,
-          error: `Unsupported order type: ${type}`,
-        };
-    }
   }
 
   // ============================================================================
@@ -149,12 +172,26 @@ export class OrderMatchingEngine {
   ): Promise<OrderMatchResult> {
     const priceSnapshot = await this.fetchPriceSnapshot(symbol);
 
-    // Apply slippage for market orders
+    // Update price history for volatility tracking
+    this.slippageCalculator.updatePriceHistory(symbol, priceSnapshot.last);
+
+    // Calculate execution price with improved slippage model
     const basePrice = side === 'buy' ? priceSnapshot.ask : priceSnapshot.bid;
-    const slippage = this.config.slippage.market;
-    const executionPrice = side === 'buy'
-      ? basePrice * (1 + slippage)
-      : basePrice * (1 - slippage);
+    const executionPrice = this.slippageCalculator.calculateExecutionPrice(
+      symbol,
+      side,
+      amount,
+      basePrice,
+      priceSnapshot
+    );
+
+    // Log slippage details if in volatility-adjusted mode
+    if (this.config.slippage.modelType === 'volatility-adjusted' || this.config.slippage.modelType === 'size-dependent') {
+      const stats = this.slippageCalculator.getSlippageStats(symbol, amount, basePrice);
+      console.log(`[Slippage] ${symbol} ${side} ${amount}: base=${(stats.baseSlippage * 100).toFixed(3)}%, ` +
+        `size=${(stats.sizeImpact * 100).toFixed(3)}%, vol=${(stats.volatilityImpact * 100).toFixed(3)}%, ` +
+        `total=${(stats.totalSlippage * 100).toFixed(3)}%`);
+    }
 
     // Simulate latency if configured
     if (this.config.simulatedLatency && this.config.simulatedLatency > 0) {
@@ -423,6 +460,43 @@ export class OrderMatchingEngine {
       };
     }
 
+    // Get current price to initialize trailing stop
+    const priceSnapshot = await this.fetchPriceSnapshot(symbol);
+    const currentPrice = priceSnapshot.last;
+
+    // Initialize stop price
+    let initialStopPrice: number;
+    if (params.trailingPercent) {
+      // Percentage-based trailing
+      if (side === 'sell') {
+        // Sell trailing stop: stop price trails below market price
+        initialStopPrice = currentPrice * (1 - params.trailingPercent / 100);
+      } else {
+        // Buy trailing stop: stop price trails above market price
+        initialStopPrice = currentPrice * (1 + params.trailingPercent / 100);
+      }
+    } else if (params.trailingAmount) {
+      // Fixed amount trailing
+      if (side === 'sell') {
+        initialStopPrice = currentPrice - params.trailingAmount;
+      } else {
+        initialStopPrice = currentPrice + params.trailingAmount;
+      }
+    } else {
+      initialStopPrice = currentPrice;
+    }
+
+    // Initialize tracking
+    this.trailingStopTracking.set(orderId, {
+      extremePrice: currentPrice, // Track highest (for sell) or lowest (for buy) price
+      stopPrice: initialStopPrice,
+    });
+
+    // Update order with initial stop price
+    await paperTradingDatabase.updateOrder(orderId, { stopPrice: initialStopPrice });
+
+    console.log(`[TrailingStop] Initialized order ${orderId}: current=${currentPrice}, stop=${initialStopPrice.toFixed(2)}, side=${side}`);
+
     // Store as pending order - will be monitored
     const order = await paperTradingDatabase.getOrder(orderId);
     return {
@@ -431,6 +505,76 @@ export class OrderMatchingEngine {
       trades: [],
       balance: 0,
     };
+  }
+
+  /**
+   * Update trailing stop price based on market movement
+   */
+  private async updateTrailingStop(order: PaperTradingOrder, currentPrice: number): Promise<void> {
+    const tracking = this.trailingStopTracking.get(order.id);
+    if (!tracking) {
+      // Initialize if not exists (edge case: order created before engine restart)
+      const initialStopPrice = order.stopPrice || currentPrice;
+      this.trailingStopTracking.set(order.id, {
+        extremePrice: currentPrice,
+        stopPrice: initialStopPrice,
+      });
+      return;
+    }
+
+    const { extremePrice, stopPrice } = tracking;
+    let newExtremePrice = extremePrice;
+    let newStopPrice = stopPrice;
+    let updated = false;
+
+    if (order.side === 'sell') {
+      // SELL trailing stop: Trails BELOW market (protects long position)
+      // Stop moves UP as price rises (trailing behind)
+      if (currentPrice > extremePrice) {
+        newExtremePrice = currentPrice;
+
+        if (order.trailingPercent) {
+          newStopPrice = currentPrice * (1 - order.trailingPercent / 100);
+        } else if (order.trailingAmount) {
+          newStopPrice = currentPrice - order.trailingAmount;
+        }
+
+        // Stop price can only move UP (never down) for sell trailing stop
+        if (newStopPrice > stopPrice) {
+          updated = true;
+        }
+      }
+    } else {
+      // BUY trailing stop: Trails ABOVE market (protects short position)
+      // Stop moves DOWN as price falls (trailing behind)
+      if (currentPrice < extremePrice) {
+        newExtremePrice = currentPrice;
+
+        if (order.trailingPercent) {
+          newStopPrice = currentPrice * (1 + order.trailingPercent / 100);
+        } else if (order.trailingAmount) {
+          newStopPrice = currentPrice + order.trailingAmount;
+        }
+
+        // Stop price can only move DOWN (never up) for buy trailing stop
+        if (newStopPrice < stopPrice) {
+          updated = true;
+        }
+      }
+    }
+
+    if (updated) {
+      // Update tracking
+      this.trailingStopTracking.set(order.id, {
+        extremePrice: newExtremePrice,
+        stopPrice: newStopPrice,
+      });
+
+      // Update database
+      await paperTradingDatabase.updateOrder(order.id, { stopPrice: newStopPrice });
+
+      console.log(`[TrailingStop] Updated order ${order.id}: price=${currentPrice.toFixed(2)}, newStop=${newStopPrice.toFixed(2)} (${order.side})`);
+    }
   }
 
   // ============================================================================
@@ -558,6 +702,27 @@ export class OrderMatchingEngine {
   }
 
   /**
+   * Clean up all resources (call on disconnect)
+   */
+  cleanup(): void {
+    console.log('[OrderMatchingEngine] Cleaning up resources...');
+
+    // Stop monitoring
+    this.stopMonitoring();
+
+    // Clear all caches
+    this.priceCache.clear();
+    this.websocketPriceUpdates.clear();
+    this.cacheAccessOrder.clear();
+    this.trailingStopTracking.clear();
+
+    // Clear slippage calculator caches
+    this.slippageCalculator.clearCache();
+
+    console.log('[OrderMatchingEngine] Cleanup complete');
+  }
+
+  /**
    * Check all pending orders for execution conditions
    */
   private async checkPendingOrders(): Promise<void> {
@@ -567,6 +732,12 @@ export class OrderMatchingEngine {
       for (const order of pendingOrders) {
         try {
           const priceSnapshot = await this.fetchPriceSnapshot(order.symbol);
+
+          // Update price history for volatility tracking (CRITICAL FIX)
+          // This ensures volatility-adjusted slippage works for limit/stop orders
+          if (priceSnapshot.last > 0) {
+            this.slippageCalculator.updatePriceHistory(order.symbol, priceSnapshot.last);
+          }
 
           // Check liquidations first
           await this.checkPositionLiquidations(order.symbol, priceSnapshot.last);
@@ -595,6 +766,19 @@ export class OrderMatchingEngine {
             const triggered = await this.checkStopOrderTrigger(order, priceSnapshot.last);
             if (triggered) {
               await this.executeTriggeredStopOrder(order, priceSnapshot.last);
+            }
+          }
+
+          // Check and update trailing stop orders
+          if (order.type === 'trailing_stop' && order.status === 'pending') {
+            await this.updateTrailingStop(order, priceSnapshot.last);
+
+            // Check if trailing stop is triggered
+            const triggered = await this.checkStopOrderTrigger(order, priceSnapshot.last);
+            if (triggered) {
+              console.log(`[TrailingStop] Order ${order.id} triggered at price ${priceSnapshot.last}`);
+              await this.executeTriggeredStopOrder(order, priceSnapshot.last);
+              this.trailingStopTracking.delete(order.id); // Clean up tracking
             }
           }
 
@@ -648,6 +832,11 @@ export class OrderMatchingEngine {
     await paperTradingDatabase.updateOrder(orderId, { status: 'cancelled' });
     console.log(`[OrderMatching] Order ${orderId} cancelled successfully`);
 
+    // Clean up trailing stop tracking if applicable
+    if (order.type === 'trailing_stop') {
+      this.trailingStopTracking.delete(orderId);
+    }
+
     const updatedOrder = await paperTradingDatabase.getOrder(orderId);
     return updatedOrder!;
   }
@@ -677,20 +866,26 @@ export class OrderMatchingEngine {
   // ============================================================================
 
   /**
-   * Fetch price snapshot from real exchange
+   * Fetch price snapshot from real exchange (with improved caching)
    */
   private async fetchPriceSnapshot(symbol: string): Promise<PriceSnapshot> {
+    // Determine cache freshness based on asset class
+    const assetClass = this.config.assetClass || 'crypto';
+    const cacheFreshness = this.getCacheFreshness(assetClass);
+
     // Prioritize WebSocket price updates for monitoring
     const wsPrice = this.websocketPriceUpdates.get(symbol);
-    if (wsPrice && Date.now() - wsPrice.timestamp < 2000) {
+    if (wsPrice && Date.now() - wsPrice.timestamp < cacheFreshness.websocket) {
+      this.updateCacheAccessTime(symbol);
       return wsPrice;
     }
 
     const cached = this.priceCache.get(symbol);
     const now = Date.now();
 
-    // Use cache if fresh (within 1 second)
-    if (cached && now - cached.timestamp < 1000) {
+    // Use cache if fresh (based on asset class)
+    if (cached && now - cached.timestamp < cacheFreshness.regular) {
+      this.updateCacheAccessTime(symbol);
       return cached;
     }
 
@@ -705,8 +900,67 @@ export class OrderMatchingEngine {
       timestamp: now,
     };
 
-    this.priceCache.set(symbol, snapshot);
+    this.setPriceCache(symbol, snapshot);
     return snapshot;
+  }
+
+  /**
+   * Get cache freshness thresholds based on asset class
+   */
+  private getCacheFreshness(assetClass: string): { websocket: number; regular: number } {
+    switch (assetClass) {
+      case 'crypto':
+        return { websocket: 500, regular: 200 }; // 500ms for WS, 200ms for regular
+      case 'stocks':
+        return { websocket: 1000, regular: 500 }; // Stocks update slower
+      case 'forex':
+        return { websocket: 300, regular: 150 }; // FX is fast-moving
+      case 'commodities':
+        return { websocket: 2000, regular: 1000 }; // Slower markets
+      default:
+        return { websocket: 500, regular: 200 }; // Default to crypto
+    }
+  }
+
+  /**
+   * Set price in cache with LRU eviction
+   */
+  private setPriceCache(symbol: string, snapshot: PriceSnapshot): void {
+    // Evict oldest entry if cache is full
+    if (this.priceCache.size >= this.MAX_CACHE_SIZE) {
+      this.evictLRUCacheEntry();
+    }
+
+    this.priceCache.set(symbol, snapshot);
+    this.updateCacheAccessTime(symbol);
+  }
+
+  /**
+   * Update cache access time for LRU tracking
+   */
+  private updateCacheAccessTime(symbol: string): void {
+    this.cacheAccessOrder.set(symbol, Date.now());
+  }
+
+  /**
+   * Evict least recently used cache entry
+   */
+  private evictLRUCacheEntry(): void {
+    let oldestSymbol: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const [symbol, accessTime] of this.cacheAccessOrder.entries()) {
+      if (accessTime < oldestTime) {
+        oldestTime = accessTime;
+        oldestSymbol = symbol;
+      }
+    }
+
+    if (oldestSymbol) {
+      this.priceCache.delete(oldestSymbol);
+      this.cacheAccessOrder.delete(oldestSymbol);
+      this.websocketPriceUpdates.delete(oldestSymbol);
+    }
   }
 
   // ============================================================================

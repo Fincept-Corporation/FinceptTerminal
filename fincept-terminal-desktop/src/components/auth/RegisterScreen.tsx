@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, User, Mail, Phone, Building, Lock, Key, ChevronDown, Check, X } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, Lock, Key, ChevronDown, Check, X } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -33,7 +33,6 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     email: "",
     phone: "",
     countryCode: "+1", // Default to US
-    company: "",
     password: "",
     confirmPassword: ""
   });
@@ -164,7 +163,17 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
       const username = `${formData.firstName.trim()}${formData.lastName.trim()}`.toLowerCase();
       console.log('Generated username:', username);
 
-      const result = await signup(username, formData.email, formData.password);
+      // Get selected country name
+      const selectedCountry = countries.find(country => country.dialCode === formData.countryCode);
+
+      // Prepare additional registration data
+      const additionalData = {
+        phone: formData.phone || undefined,
+        country_code: formData.countryCode,
+        country: selectedCountry?.name || undefined
+      };
+
+      const result = await signup(username, formData.email, formData.password, additionalData);
 
       if (result.success) {
         console.log('Registration successful, OTP sent to:', formData.email);
@@ -235,7 +244,18 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
     try {
       const username = `${formData.firstName.trim()}${formData.lastName.trim()}`.toLowerCase();
-      const result = await signup(username, formData.email, formData.password);
+
+      // Get selected country name
+      const selectedCountry = countries.find(country => country.dialCode === formData.countryCode);
+
+      // Prepare additional registration data
+      const additionalData = {
+        phone: formData.phone || undefined,
+        country_code: formData.countryCode,
+        country: selectedCountry?.name || undefined
+      };
+
+      const result = await signup(username, formData.email, formData.password, additionalData);
 
       if (result.success) {
         setError(""); // Clear any previous errors
@@ -399,24 +419,6 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                   disabled={isLoading}
                 />
               </div>
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor="company" className="text-white text-xs">
-              {t('register.companyLabel')}
-            </Label>
-            <div className="relative">
-              <Building className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-              <Input
-                id="company"
-                type="text"
-                placeholder={t('register.companyPlaceholder')}
-                value={formData.company}
-                onChange={(e) => handleChange("company", e.target.value)}
-                className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
-                disabled={isLoading}
-              />
             </div>
           </div>
 

@@ -1578,7 +1578,7 @@ const ForumTab: React.FC = () => {
                   <span style={{ color: getPriorityColor(post.priority), fontWeight: 'bold' }}>[{post.priority}]</span>
                   <span style={{ color: BLOOMBERG_BLUE }}>[{post.category}]</span>
                   <span style={{ color: getSentimentColor(post.sentiment) }}>{post.sentiment}</span>
-                  {post.verified && <span style={{ color: BLOOMBERG_CYAN }}>✓ VERIFIED</span>}
+                  {post.verified && <span style={{ color: BLOOMBERG_CYAN }}>[OK] VERIFIED</span>}
                 </div>
 
                 <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginBottom: '2px', fontSize: '9px' }}>

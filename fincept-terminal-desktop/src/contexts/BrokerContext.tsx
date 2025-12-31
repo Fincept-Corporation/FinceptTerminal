@@ -1,6 +1,6 @@
 // File: src/contexts/BrokerContext.tsx
 // Unified broker management context for multi-broker trading
-// Replaces ProviderContext with enhanced broker registry support
+// Optimized and performance-oriented with proper cleanup and error handling
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import {
@@ -17,7 +17,66 @@ import {
 import { createPaperTradingAdapter } from '../paper-trading';
 import type { IExchangeAdapter } from '../brokers/crypto/types';
 import type { PaperTradingAdapter } from '../paper-trading/PaperTradingAdapter';
-import type { ProviderConfig, ConnectionStatus } from '../services/websocketBridge';
+import { websocketBridge, type ProviderConfig, type ConnectionStatus } from '../services/websocketBridge';
+
+// Constants
+const CONNECTION_TIMEOUT = 10000; // 10 seconds
+const CONNECTION_RETRY_ATTEMPTS = 3;
+const CONNECTION_RETRY_DELAY = 2000; // 2 seconds
+
+// Helper to validate localStorage values
+function validateTradingMode(value: string | null): 'live' | 'paper' | null {
+  if (value === 'live' || value === 'paper') return value;
+  return null;
+}
+
+function validatePaperPortfolioMode(value: string | null): 'separate' | 'unified' {
+  if (value === 'separate' || value === 'unified') return value;
+  return 'separate';
+}
+
+// Helper to safely access localStorage
+function safeLocalStorageGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch (error) {
+    console.warn(`[BrokerContext] Failed to read from localStorage (${key}):`, error);
+    return null;
+  }
+}
+
+function safeLocalStorageSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch (error) {
+    console.warn(`[BrokerContext] Failed to write to localStorage (${key}):`, error);
+  }
+}
+
+// Helper to create timeout promise
+function createTimeout(ms: number): Promise<never> {
+  return new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`Connection timeout after ${ms}ms`)), ms)
+  );
+}
+
+// Helper to retry connection with exponential backoff
+async function retryConnect(
+  connectFn: () => Promise<void>,
+  attempts: number = CONNECTION_RETRY_ATTEMPTS,
+  delay: number = CONNECTION_RETRY_DELAY
+): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      await Promise.race([connectFn(), createTimeout(CONNECTION_TIMEOUT)]);
+      return;
+    } catch (error) {
+      if (i === attempts - 1) throw error;
+      console.warn(`[BrokerContext] Connection attempt ${i + 1} failed, retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay * (i + 1))); // Exponential backoff
+    }
+  }
+}
 
 interface BrokerContextType {
   // Active broker
@@ -64,10 +123,16 @@ interface BrokerProviderProps {
 }
 
 export function BrokerProvider({ children }: BrokerProviderProps) {
-  const [activeBroker, setActiveBrokerState] = useState<string>('kraken');
+  console.log('[BrokerContext] ========================================');
+  console.log('[BrokerContext] BrokerProvider mounting...');
+  console.log('[BrokerContext] ========================================');
+
+  const [activeBroker, setActiveBrokerState] = useState<string>(() => {
+    return safeLocalStorageGet('active_broker') || 'kraken';
+  });
   const [tradingMode, setTradingModeState] = useState<'live' | 'paper'>('paper');
   const [paperPortfolioMode, setPaperPortfolioModeState] = useState<'separate' | 'unified'>(() => {
-    return (localStorage.getItem('paper_portfolio_mode') as 'separate' | 'unified') || 'separate';
+    return validatePaperPortfolioMode(safeLocalStorageGet('paper_portfolio_mode'));
   });
   const [providerConfigs, setProviderConfigs] = useState<Map<string, ProviderConfig>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
@@ -77,15 +142,19 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
   const [realAdapter, setRealAdapter] = useState<IExchangeAdapter | null>(null);
   const [paperAdapter, setPaperAdapter] = useState<PaperTradingAdapter | null>(null);
 
+  // Refs for cleanup and abort control
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const hasInitializedRef = useRef(false); // Prevent duplicate initialization
+
+  // Get available brokers (memoized once, doesn't change)
+  const availableBrokers = useMemo(() => {
+    return getAllBrokers().filter(b => b.type === 'crypto');
+  }, []);
+
   // Get broker metadata
   const activeBrokerMetadata = useMemo(() => {
     return getBrokerMetadata(activeBroker) || null;
   }, [activeBroker]);
-
-  // Get available brokers (only crypto for now)
-  const availableBrokers = useMemo(() => {
-    return getAllBrokers().filter(b => b.type === 'crypto');
-  }, []);
 
   // Get default symbols
   const defaultSymbols = useMemo(() => {
@@ -108,13 +177,26 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
     return tradingMode === 'paper' ? paperAdapter : realAdapter;
   }, [tradingMode, realAdapter, paperAdapter]);
 
+  // Get broker fees from metadata
+  const getBrokerFees = useCallback((metadata: BrokerMetadata | null) => {
+    if (!metadata?.fees) {
+      return { maker: 0.001, taker: 0.001 }; // Default 0.1%
+    }
+    return {
+      maker: metadata.fees.maker || 0.001,
+      taker: metadata.fees.taker || 0.001,
+    };
+  }, []);
+
   // Load configurations on mount
   useEffect(() => {
     const loadConfigurations = async () => {
+      console.log('[BrokerContext] loadConfigurations: Starting...');
+
       setIsLoading(true);
+      console.log('[BrokerContext] loadConfigurations: isLoading set to true');
 
       try {
-        
         const configs = new Map<string, ProviderConfig>();
 
         // Initialize configs for all available brokers
@@ -133,9 +215,20 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
         setProviderConfigs(configs);
 
-        // Load saved preferences
-        const savedBroker = localStorage.getItem('active_trading_broker');
-        const savedMode = localStorage.getItem('trading_mode') as 'live' | 'paper' | null;
+        // Initialize provider configs in Rust WebSocket backend
+        console.log('[BrokerContext] Initializing provider configs in Rust WebSocket backend...');
+        for (const [providerId, config] of configs.entries()) {
+          try {
+            await websocketBridge.setConfig(config);
+            console.log(`[BrokerContext] ✓ Configured provider: ${providerId}`);
+          } catch (error) {
+            console.error(`[BrokerContext] ✗ Failed to configure provider ${providerId}:`, error);
+          }
+        }
+
+        // Load saved preferences with validation
+        const savedBroker = safeLocalStorageGet('active_trading_broker');
+        const savedMode = validateTradingMode(safeLocalStorageGet('trading_mode'));
 
         if (savedBroker && BROKER_REGISTRY[savedBroker]) {
           setActiveBrokerState(savedBroker);
@@ -145,189 +238,177 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
           setTradingModeState(savedMode);
         }
 
-        // TODO: Re-implement with new Rust WebSocket backend
-        // configs.forEach((config, provider) => {
-        //   manager.setProviderConfig(provider, config);
-        // });
+        console.log('[BrokerContext] loadConfigurations: Complete');
+        console.log('[BrokerContext] - Active broker:', savedBroker || 'kraken (default)');
+        console.log('[BrokerContext] - Trading mode:', savedMode || 'paper (default)');
       } catch (error) {
         console.error('[BrokerContext] Failed to load configurations:', error);
       } finally {
+        console.log('[BrokerContext] loadConfigurations: Complete - triggering initialization');
         setIsLoading(false);
+
+        // Trigger initialization only once
+        if (!hasInitializedRef.current) {
+          hasInitializedRef.current = true;
+          console.log('[BrokerContext] Starting initial adapter initialization...');
+          // Use queueMicrotask to avoid timing issues with React.Suspense boundaries
+          queueMicrotask(() => initializeAdapters());
+        }
       }
     };
 
     loadConfigurations();
-  }, [availableBrokers]);
+  }, []); // Only run once on mount
 
-  // Initialize adapters when broker changes
-  const isInitializedRef = useRef(false);
+  // Cleanup adapters helper
+  const cleanupAdapters = useCallback(async (
+    real: IExchangeAdapter | null,
+    paper: PaperTradingAdapter | null
+  ) => {
+    try {
+      if (real) {
+        console.log('[BrokerContext] Disconnecting real adapter...');
+        try {
+          await Promise.race([real.disconnect(), createTimeout(5000)]);
+        } catch (err) {
+          console.error('[BrokerContext] Real adapter disconnect error:', err);
+        }
+      }
+      if (paper) {
+        console.log('[BrokerContext] Disconnecting paper adapter...');
+        try {
+          await Promise.race([paper.disconnect(), createTimeout(5000)]);
+        } catch (err) {
+          console.error('[BrokerContext] Paper adapter disconnect error:', err);
+        }
+      }
+    } catch (err) {
+      console.error('[BrokerContext] Cleanup error:', err);
+    }
+  }, []);
 
-  useEffect(() => {
-    console.log(`[BrokerContext] useEffect triggered - activeBroker: ${activeBroker}, isLoading: ${isLoading}, isInitialized: ${isInitializedRef.current}`);
+  // Initialize adapters function
+  const initializeAdapters = useCallback(async () => {
+    console.log('[BrokerContext] initializeAdapters called');
 
-    // Don't initialize while loading configs
-    if (isLoading) {
-      console.log(`[BrokerContext] Skipping initialization - still loading configs`);
+    // Create new abort controller for this initialization
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
+    // Don't check isMountedRef here - it causes issues with lazy loading and Suspense
+    // The abort signal is sufficient to prevent stale operations
+    if (signal.aborted) {
+      console.log('[BrokerContext] initializeAdapters aborted by signal');
       return;
     }
 
-    // Don't re-initialize if already initialized (keeps connection alive across tab changes)
-    if (isInitializedRef.current) {
-      console.log(`[BrokerContext] Skipping initialization - already initialized`);
-      return;
-    }
+    setIsConnecting(true);
 
-    const initializeAdapters = async () => {
-      setIsConnecting(true);
+    try {
+      console.log(`[BrokerContext] ========================================`);
+      console.log(`[BrokerContext] Initializing ${activeBroker} adapters...`);
+      console.log(`[BrokerContext] ========================================`);
 
+      // Clean up old adapters first
+      await cleanupAdapters(realAdapter, paperAdapter);
+
+      if (signal.aborted) return;
+
+      // Create real adapter
+      console.log(`[BrokerContext] Creating ${activeBroker} real adapter...`);
+      const newRealAdapter = createBrokerAdapter(activeBroker);
+
+      console.log(`[BrokerContext] Connecting ${activeBroker} real adapter...`);
       try {
-        console.log(`[BrokerContext] ========================================`);
-        console.log(`[BrokerContext] Initializing ${activeBroker} adapters...`);
-        console.log(`[BrokerContext] ========================================`);
-
-        // Clean up old adapters
-        if (realAdapter) {
-          console.log(`[BrokerContext] Disconnecting old real adapter...`);
-          await realAdapter.disconnect();
-        }
-        if (paperAdapter) {
-          console.log(`[BrokerContext] Disconnecting old paper adapter...`);
-          await paperAdapter.disconnect();
-        }
-
-        // Create real adapter
-        console.log(`[BrokerContext] Creating ${activeBroker} real adapter...`);
-        const newRealAdapter = createBrokerAdapter(activeBroker);
-
-        console.log(`[BrokerContext] Connecting ${activeBroker} real adapter...`);
-        try {
-          await newRealAdapter.connect();
-          console.log(`[BrokerContext] ✓ ${activeBroker} real adapter connected (status: ${newRealAdapter.isConnected() ? 'CONNECTED' : 'NOT CONNECTED'})`);
-        } catch (connectError) {
-          console.error(`[BrokerContext] ⚠ Failed to connect ${activeBroker} real adapter:`, connectError);
-          console.log(`[BrokerContext] Continuing with disconnected adapter (market data will be unavailable)`);
-          // Don't throw - allow the app to continue with a disconnected adapter
-        }
-
-        setRealAdapter(newRealAdapter);
-
-        // Create paper adapter (wrapping real adapter)
-        // Portfolio ID depends on mode: separate per broker or unified global
-        console.log(`[BrokerContext] Creating ${activeBroker} paper adapter...`);
-        const portfolioId = paperPortfolioMode === 'unified'
-          ? 'paper_global'
-          : `paper_${activeBroker}`;
-        console.log(`[BrokerContext] Portfolio ID: ${portfolioId} (mode: ${paperPortfolioMode})`);
-
-        let newPaperAdapter: PaperTradingAdapter;
-
-        try {
-          newPaperAdapter = createPaperTradingAdapter(
-            {
-              portfolioId,
-              portfolioName: paperPortfolioMode === 'unified'
-                ? 'Global Paper Trading Portfolio'
-                : `${activeBroker.toUpperCase()} Paper Trading`,
-              provider: activeBroker,
-              assetClass: 'crypto',
-              initialBalance: 100000,
-              currency: 'USD',
-              fees: {
-                maker: activeBroker === 'kraken' ? 0.0002 : 0.0002,
-                taker: activeBroker === 'kraken' ? 0.0005 : 0.0005,
-              },
-              slippage: {
-                market: 0,
-                limit: 0,
-              },
-              enableMarginTrading: true,
-              defaultLeverage: 1,
-              maxLeverage: activeBrokerMetadata?.advancedFeatures.maxLeverage || 1,
-            },
-            newRealAdapter
-          );
-          console.log(`[BrokerContext] ✓ Paper adapter instance created`);
-        } catch (error) {
-          console.error(`[BrokerContext] ✗ Failed to create paper adapter:`, error);
-          throw error;
-        }
-
-        console.log(`[BrokerContext] Connecting ${activeBroker} paper adapter...`);
-        await newPaperAdapter.connect();
-        console.log(`[BrokerContext] ✓ ${activeBroker} paper adapter connected (status: ${newPaperAdapter.isConnected() ? 'CONNECTED' : 'NOT CONNECTED'})`);
-
-        setPaperAdapter(newPaperAdapter);
-        console.log(`[BrokerContext] ✓ setPaperAdapter() called`);
-
-        // Connect WebSocket AFTER adapters are ready
-        
-        const config = providerConfigs.get(activeBroker);
-
-        console.log(`[BrokerContext] WebSocket config for ${activeBroker}:`, config ? 'EXISTS' : 'MISSING');
-
-        if (config) {
-          console.log(`[BrokerContext] WebSocket config found for ${activeBroker}`);
-          // TODO: Re-implement with new Rust WebSocket backend
-          // manager.setProviderConfig(activeBroker, config);
-          // console.log(`[BrokerContext] Connecting WebSocket for ${activeBroker}...`);
-          // try {
-          //   await manager.connect(activeBroker);
-          //   let wsStatus = manager.getStatus(activeBroker);
-          //   let waitCount = 0;
-          //   const maxWait = 20;
-          //   while (wsStatus !== ConnectionStatus.CONNECTED && waitCount < maxWait) {
-          //     console.log(`[BrokerContext] Waiting for WebSocket... (${waitCount + 1}/${maxWait}) - Status: ${wsStatus}`);
-          //     await new Promise(resolve => setTimeout(resolve, 500));
-          //     wsStatus = manager.getStatus(activeBroker);
-          //     waitCount++;
-          //   }
-          //   console.log(`[BrokerContext] ✓ ${activeBroker} WebSocket status: ${wsStatus}`);
-          // } catch (wsError) {
-          //   console.error(`[BrokerContext] ⚠ WebSocket connection failed:`, wsError);
-          //   console.log(`[BrokerContext] Continuing without WebSocket (real-time updates unavailable)`);
-          // }
-
-          console.log(`[BrokerContext] ========================================`);
-          console.log(`[BrokerContext] ${activeBroker} initialization complete!`);
-          console.log(`[BrokerContext] Real Adapter: ${newRealAdapter.isConnected() ? '✓ CONNECTED' : '✗ NOT CONNECTED'}`);
-          console.log(`[BrokerContext] Paper Adapter: ${newPaperAdapter.isConnected() ? '✓ CONNECTED' : '✗ NOT CONNECTED'}`);
-          console.log(`[BrokerContext] ========================================`);
-        } else {
-          console.warn(`[BrokerContext] No WebSocket config found for ${activeBroker}!`);
-        }
-
-        // Mark as initialized
-        isInitializedRef.current = true;
-      } catch (error) {
-        console.error(`[BrokerContext] ✗ Failed to initialize ${activeBroker}:`, error);
-        console.error(`[BrokerContext] Error details:`, error);
-        console.error(`[BrokerContext] Stack trace:`, (error as Error)?.stack);
-
-        // Set adapters to null on failure
-        setRealAdapter(null);
-        setPaperAdapter(null);
-      } finally {
-        setIsConnecting(false);
+        await retryConnect(() => newRealAdapter.connect());
+        console.log(`[BrokerContext] [OK] ${activeBroker} real adapter connected`);
+      } catch (connectError) {
+        console.error(`[BrokerContext] [WARN] Failed to connect ${activeBroker} real adapter after retries:`, connectError);
+        console.log(`[BrokerContext] Continuing with disconnected adapter (market data will be unavailable)`);
       }
-    };
 
-    // Call async function and catch any unhandled errors
-    initializeAdapters().catch(err => {
-      console.error('[BrokerContext] Unhandled error in initializeAdapters:', err);
-    });
-
-    // Cleanup only when broker actually changes (not on tab change)
-    return () => {
-      // Only cleanup if we're switching brokers (flag was reset)
-      if (!isInitializedRef.current && realAdapter) {
-        console.log(`[BrokerContext] Cleanup: Disconnecting adapters for broker switch`);
-        realAdapter.disconnect();
-        if (paperAdapter) {
-          paperAdapter.disconnect();
-        }
+      if (signal.aborted) {
+        await cleanupAdapters(newRealAdapter, null);
+        return;
       }
-    };
-  }, [isLoading, activeBroker, paperPortfolioMode]); // Depend on activeBroker and portfolio mode
+
+      // Update real adapter state
+      setRealAdapter(newRealAdapter);
+
+      // Create paper adapter (wrapping real adapter)
+      console.log(`[BrokerContext] Creating ${activeBroker} paper adapter...`);
+      const portfolioId = paperPortfolioMode === 'unified'
+        ? 'paper_global'
+        : `paper_${activeBroker}`;
+
+      const fees = getBrokerFees(activeBrokerMetadata);
+      console.log(`[BrokerContext] Portfolio ID: ${portfolioId} (mode: ${paperPortfolioMode})`);
+      console.log(`[BrokerContext] Fees: maker ${fees.maker}, taker ${fees.taker}`);
+
+      const newPaperAdapter = createPaperTradingAdapter(
+        {
+          portfolioId,
+          portfolioName: paperPortfolioMode === 'unified'
+            ? 'Global Paper Trading Portfolio'
+            : `${activeBroker.toUpperCase()} Paper Trading`,
+          provider: activeBroker,
+          assetClass: 'crypto',
+          initialBalance: 100000,
+          currency: 'USD',
+          fees,
+          slippage: {
+            market: 0.001, // 0.1% realistic slippage
+            limit: 0,
+          },
+          enableMarginTrading: true,
+          defaultLeverage: 1,
+          maxLeverage: activeBrokerMetadata?.advancedFeatures.maxLeverage || 1,
+        },
+        newRealAdapter
+      );
+
+      if (signal.aborted) {
+        await cleanupAdapters(newRealAdapter, newPaperAdapter);
+        return;
+      }
+
+      console.log(`[BrokerContext] Connecting ${activeBroker} paper adapter...`);
+      try {
+        await retryConnect(() => newPaperAdapter.connect());
+        console.log(`[BrokerContext] [OK] ${activeBroker} paper adapter connected`);
+      } catch (connectError) {
+        console.error(`[BrokerContext] [WARN] Failed to connect paper adapter:`, connectError);
+        throw connectError; // Paper adapter is critical
+      }
+
+      if (signal.aborted) {
+        await cleanupAdapters(newRealAdapter, newPaperAdapter);
+        return;
+      }
+
+      // Update paper adapter state
+      setPaperAdapter(newPaperAdapter);
+
+      console.log(`[BrokerContext] ========================================`);
+      console.log(`[BrokerContext] ${activeBroker} initialization complete!`);
+      console.log(`[BrokerContext] Real Adapter: ${newRealAdapter.isConnected() ? '[OK] CONNECTED' : '[FAIL] NOT CONNECTED'}`);
+      console.log(`[BrokerContext] Paper Adapter: ${newPaperAdapter.isConnected() ? '[OK] CONNECTED' : '[FAIL] NOT CONNECTED'}`);
+      console.log(`[BrokerContext] ========================================`);
+    } catch (error) {
+      if (signal.aborted) return;
+
+      console.error(`[BrokerContext] [FAIL] Failed to initialize ${activeBroker}:`, error);
+      console.error(`[BrokerContext] Error details:`, error);
+      console.error(`[BrokerContext] Stack trace:`, (error as Error)?.stack);
+
+      // Set adapters to null on failure
+      setRealAdapter(null);
+      setPaperAdapter(null);
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [activeBroker, paperPortfolioMode, activeBrokerMetadata, cleanupAdapters, realAdapter, paperAdapter, getBrokerFees]);
 
   // Set active broker
   const setActiveBroker = useCallback(async (brokerId: string) => {
@@ -337,30 +418,40 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
     console.log(`[BrokerContext] Switching to broker: ${brokerId}`);
 
-    // Reset initialization flag to allow switching brokers
-    isInitializedRef.current = false;
+    // Abort any ongoing initialization
+    abortControllerRef.current?.abort();
 
+    // Update state
     setActiveBrokerState(brokerId);
 
     // Save preference
-    localStorage.setItem('active_trading_broker', brokerId);
-  }, []);
+    safeLocalStorageSet('active_broker', brokerId);
+
+    // Re-initialize adapters
+    await initializeAdapters();
+  }, [initializeAdapters]);
 
   // Set trading mode
   const setTradingMode = useCallback((mode: 'live' | 'paper') => {
     console.log(`[BrokerContext] Switching to ${mode} mode`);
     setTradingModeState(mode);
-    localStorage.setItem('trading_mode', mode);
+    safeLocalStorageSet('trading_mode', mode);
   }, []);
 
   // Set paper portfolio mode
-  const setPaperPortfolioMode = useCallback((mode: 'separate' | 'unified') => {
+  const setPaperPortfolioMode = useCallback(async (mode: 'separate' | 'unified') => {
     console.log(`[BrokerContext] Switching paper portfolio mode to: ${mode}`);
+
+    // Abort any ongoing initialization
+    abortControllerRef.current?.abort();
+
+    // Update state
     setPaperPortfolioModeState(mode);
-    localStorage.setItem('paper_portfolio_mode', mode);
-    // Reset initialization to recreate adapters with new portfolio ID
-    isInitializedRef.current = false;
-  }, []);
+    safeLocalStorageSet('paper_portfolio_mode', mode);
+
+    // Re-initialize adapters
+    await initializeAdapters();
+  }, [initializeAdapters]);
 
   // Update provider config
   const updateProviderConfig = useCallback(async (
@@ -374,41 +465,63 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       const updatedConfig: ProviderConfig = {
         ...existingConfig,
         ...config,
-        provider_name: provider,
+        name: provider, // Use 'name' instead of 'provider_name'
       } as ProviderConfig;
 
       newConfigs.set(provider, updatedConfig);
 
-      // TODO: Re-implement with new Rust WebSocket backend
-      // manager.setProviderConfig(provider, updatedConfig);
+      // Update config in Rust WebSocket backend
+      websocketBridge.setConfig(updatedConfig).catch(error => {
+        console.error(`[BrokerContext] Failed to update provider config for ${provider}:`, error);
+      });
 
       return newConfigs;
     });
   }, []);
 
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    activeBroker,
+    activeBrokerMetadata,
+    setActiveBroker,
+    availableBrokers,
+    tradingMode,
+    setTradingMode,
+    paperPortfolioMode,
+    setPaperPortfolioMode,
+    realAdapter,
+    paperAdapter,
+    activeAdapter,
+    features,
+    supports,
+    defaultSymbols,
+    providerConfigs,
+    updateProviderConfig,
+    isLoading,
+    isConnecting,
+  }), [
+    activeBroker,
+    activeBrokerMetadata,
+    setActiveBroker,
+    availableBrokers,
+    tradingMode,
+    setTradingMode,
+    paperPortfolioMode,
+    setPaperPortfolioMode,
+    realAdapter,
+    paperAdapter,
+    activeAdapter,
+    features,
+    supports,
+    defaultSymbols,
+    providerConfigs,
+    updateProviderConfig,
+    isLoading,
+    isConnecting,
+  ]);
+
   return (
-    <BrokerContext.Provider
-      value={{
-        activeBroker,
-        activeBrokerMetadata,
-        setActiveBroker,
-        availableBrokers,
-        tradingMode,
-        setTradingMode,
-        paperPortfolioMode,
-        setPaperPortfolioMode,
-        realAdapter,
-        paperAdapter,
-        activeAdapter,
-        features,
-        supports,
-        defaultSymbols,
-        providerConfigs,
-        updateProviderConfig,
-        isLoading,
-        isConnecting,
-      }}
-    >
+    <BrokerContext.Provider value={contextValue}>
       {children}
     </BrokerContext.Provider>
   );
@@ -449,8 +562,9 @@ export function useBrokerFeatures() {
     supports,
     hasFeature: (category: keyof BrokerFeatures, feature: string) => {
       if (!features) return false;
-      const categoryFeatures = features[category] as any;
-      return categoryFeatures?.[feature] === true;
+      const categoryFeatures = features[category];
+      if (!categoryFeatures || typeof categoryFeatures !== 'object') return false;
+      return (categoryFeatures as Record<string, boolean>)[feature] === true;
     },
   };
 }

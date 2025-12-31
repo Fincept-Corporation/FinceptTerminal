@@ -27,7 +27,7 @@ export async function demoStockDataWorkflow() {
   // 1. Initialize the node system
   console.log('Step 1: Initializing node system...');
   await initializeNodeSystem();
-  console.log('✓ Node system initialized\n');
+  console.log('[OK] Node system initialized\n');
 
   // 2. Create nodes
   console.log('Step 2: Creating nodes...');
@@ -49,7 +49,7 @@ export async function demoStockDataWorkflow() {
     },
   };
 
-  console.log('✓ Created Stock Data node\n');
+  console.log('[OK] Created Stock Data node\n');
 
   // 3. Create workflow
   console.log('Step 3: Creating workflow...');
@@ -65,7 +65,7 @@ export async function demoStockDataWorkflow() {
     },
   };
 
-  console.log('✓ Workflow created\n');
+  console.log('[OK] Workflow created\n');
 
   // 4. Execute workflow
   console.log('Step 4: Executing workflow...');
@@ -73,7 +73,7 @@ export async function demoStockDataWorkflow() {
   const executor = new WorkflowExecutor(workflow);
   const result = await executor.execute();
 
-  console.log('✓ Workflow executed\n');
+  console.log('[OK] Workflow executed\n');
 
   // 5. Display results
   console.log('Step 5: Results:');

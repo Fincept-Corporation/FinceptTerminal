@@ -27,11 +27,11 @@ import DocsTab from '@/components/tabs/docs/DocsTab';
 import SettingsTab from '@/components/tabs/SettingsTab';
 import DataSourcesTab from '@/components/tabs/data-sources/DataSourcesTab';
 import MCPTab from '@/components/tabs/mcp';
-import FyersTab from '@/components/tabs/fyers';
 import SupportTicketTab from '@/components/tabs/SupportTicketTab';
 import RecordedContextsManager from '@/components/common/RecordedContextsManager';
 import AgentConfigTab from '@/components/tabs/AgentConfigTab';
 import RelationshipMapTab from '@/components/tabs/RelationshipMapTab';
+import MonitoringTab from '@/components/tabs/MonitoringTab';
 import { useTranslation } from 'react-i18next';
 
 // Lazy loaded tabs (heavy/Python-dependent)
@@ -45,6 +45,7 @@ const NodeEditorTab = React.lazy(() => import('@/components/tabs/NodeEditorTab')
 const PolygonEqTab = React.lazy(() => import('@/components/tabs/PolygonEqTab'));
 const DerivativesTab = React.lazy(() => import('@/components/tabs/DerivativesTab').then(m => ({ default: m.DerivativesTab })));
 const TradingTab = React.lazy(() => import('@/components/tabs/TradingTab').then(m => ({ default: m.TradingTab })));
+const EquityTradingTab = React.lazy(() => import('@/components/tabs/equity-trading/EquityTradingTab'));
 const DBnomicsTab = React.lazy(() => import('@/components/tabs/DBnomicsTab'));
 const EconomicsTab = React.lazy(() => import('@/components/tabs/EconomicsTab'));
 const MaritimeTab = React.lazy(() => import('@/components/tabs/MaritimeTab'));
@@ -327,7 +328,7 @@ function FinxeptTerminalContent() {
           {hasSubscription && (
             <>
               <span style={{ color: '#787878' }}>|</span>
-              <span>✅ Active</span>
+              <span>[OK] Active</span>
             </>
           )}
         </span>
@@ -506,7 +507,7 @@ function FinxeptTerminalContent() {
         case 'F9':
           event.preventDefault();
           setActiveTab('trading');
-          setStatusMessage('Navigated to Trading (F9)');
+          setStatusMessage('Navigated to Crypto Trading (F9)');
           setTimeout(() => setStatusMessage(''), 2000);
           break;
         case 'F10':
@@ -560,9 +561,9 @@ function FinxeptTerminalContent() {
   ];
 
   const tradingMenuItems = [
-    { label: 'Trading Desk', shortcut: 'F9', action: () => setActiveTab('trading') },
+    { label: 'Crypto Trading', shortcut: 'F9', action: () => setActiveTab('trading') },
+    { label: 'Equity Trading', action: () => setActiveTab('equity-trading') },
     { label: 'Derivatives Pricing', action: () => setActiveTab('derivatives') },
-    { label: 'Fyers Broker', action: () => setActiveTab('fyers') },
     { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
     { label: 'Backtesting', shortcut: 'F5', action: () => setActiveTab('backtesting') },
     { label: 'Watchlist', shortcut: 'F6', action: () => setActiveTab('watchlist') }
@@ -856,6 +857,13 @@ function FinxeptTerminalContent() {
                   {t('navigation.news')}
                 </TabsTrigger>
                 <TabsTrigger
+                  value="monitoring"
+                  style={activeTab === 'monitoring' ? tabStyles.active : tabStyles.default}
+                  title="Monitoring"
+                >
+                  Monitoring
+                </TabsTrigger>
+                <TabsTrigger
                   value="portfolio"
                   style={activeTab === 'portfolio' ? tabStyles.active : tabStyles.default}
                   title="Portfolio (F4)"
@@ -893,9 +901,16 @@ function FinxeptTerminalContent() {
                 <TabsTrigger
                   value="trading"
                   style={activeTab === 'trading' ? tabStyles.active : tabStyles.default}
-                  title="Trading (F9)"
+                  title="Crypto Trading (F9)"
                 >
-                  {t('navigation.trading')}
+                  Crypto Trading
+                </TabsTrigger>
+                <TabsTrigger
+                  value="equity-trading"
+                  style={activeTab === 'equity-trading' ? tabStyles.active : tabStyles.default}
+                  title="Equity Trading"
+                >
+                  Equity Trading
                 </TabsTrigger>
                 <TabsTrigger
                   value="chat"
@@ -1007,6 +1022,9 @@ function FinxeptTerminalContent() {
             <TabsContent value="news" className="h-full m-0 p-0">
               <NewsTab />
             </TabsContent>
+            <TabsContent value="monitoring" className="h-full m-0 p-0">
+              <MonitoringTab />
+            </TabsContent>
             <TabsContent value="forum" className="h-full m-0 p-0">
               <ForumTab />
             </TabsContent>
@@ -1023,9 +1041,6 @@ function FinxeptTerminalContent() {
                 onNavigateToSettings={() => setActiveTab('settings')}
                 onNavigateToTab={(tabName) => setActiveTab(tabName)}
               />
-            </TabsContent>
-            <TabsContent value="fyers" className="h-full m-0 p-0">
-              <FyersTab />
             </TabsContent>
             <TabsContent value="mcp" className="h-full m-0 p-0">
               <MCPTab onNavigateToTab={(tabName) => setActiveTab(tabName)} />
@@ -1085,6 +1100,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="trading" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <TradingTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="equity-trading" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <EquityTradingTab />
               </React.Suspense>
             </TabsContent>
             <TabsContent value="derivatives" className="h-full m-0 p-0">

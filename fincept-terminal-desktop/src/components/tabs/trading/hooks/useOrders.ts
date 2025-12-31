@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useBrokerContext } from '../../../../contexts/BrokerContext';
 import type { UnifiedOrder } from '../types';
 
-export function useOrders(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 500) {
+export function useOrders(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 2000) {
   const { activeAdapter } = useBrokerContext();
   const [openOrders, setOpenOrders] = useState<UnifiedOrder[]>([]);
   const [isLoading, setIsLoading] = useState(false);

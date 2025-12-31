@@ -134,7 +134,8 @@ export const saveCredential = async (cred: Omit<Credential, 'created_at' | 'upda
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
-  return await invoke('db_save_credential', { cred: credWithTimestamps });
+  // Rust command expects 'credential' not 'cred'
+  return await invoke('db_save_credential', { credential: credWithTimestamps });
 };
 
 export const getCredentials = async (): Promise<Credential[]> => {

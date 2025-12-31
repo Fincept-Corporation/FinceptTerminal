@@ -167,9 +167,9 @@ const makeApiRequest = async <T = any>(
     let responseData;
     try {
       responseData = JSON.parse(responseText);
-      console.log('✅ Parsed marketplace JSON:', responseData);
+      console.log('[OK] Parsed marketplace JSON:', responseData);
     } catch (parseError) {
-      console.error('❌ Marketplace JSON parse failed:', parseError);
+      console.error('[ERROR] Marketplace JSON parse failed:', parseError);
       return {
         success: false,
         error: `Invalid JSON response: ${responseText.substring(0, 100)}...`,

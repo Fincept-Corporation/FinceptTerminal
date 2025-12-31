@@ -39,7 +39,7 @@ export function initTauriCORS() {
       }
     });
 
-    console.log('✅ Tauri CORS plugin configured successfully');
+    console.log('[OK] Tauri CORS plugin configured successfully');
   } else {
     console.log('ℹ️  CORSFetch not available (running in dev mode with Vite proxy)');
   }

@@ -95,7 +95,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
           color: RED,
           fontSize: '10px'
         }}>
-          ⚠ {analyticsError}
+          [WARN] {analyticsError}
         </div>
       )}
 

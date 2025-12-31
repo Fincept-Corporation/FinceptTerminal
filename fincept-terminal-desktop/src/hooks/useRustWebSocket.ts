@@ -19,13 +19,19 @@ export function useRustTicker(provider: string, symbol: string, autoConnect = tr
   const [data, setData] = useState<TickerData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const subscribed = useRef(false);
+  const listenerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    let unlisten: (() => void) | null = null;
 
     const subscribe = async () => {
       try {
+        // Clean up old listener if it exists
+        if (listenerRef.current) {
+          listenerRef.current();
+          listenerRef.current = null;
+        }
+
         // Subscribe to ticker channel
         if (!subscribed.current) {
           await websocketBridge.subscribe(provider, symbol, 'ticker');
@@ -33,11 +39,31 @@ export function useRustTicker(provider: string, symbol: string, autoConnect = tr
         }
 
         // Listen to ticker events
-        unlisten = await websocketBridge.onTicker((tickerData) => {
-          if (mounted && tickerData.provider === provider && tickerData.symbol === symbol) {
-            setData(tickerData);
-          }
+        const unlisten = await websocketBridge.onTicker((tickerData) => {
+          // Normalize symbols for comparison (both with and without slashes)
+          const normalizedInputSymbol = symbol.replace('/', '').toUpperCase();
+          const normalizedReceivedSymbol = tickerData.symbol.replace('/', '').toUpperCase();
+
+          console.log('[useRustTicker] Received ticker:', {
+            provider: tickerData.provider,
+            symbol: tickerData.symbol,
+            expectedProvider: provider,
+            expectedSymbol: symbol,
+            normalizedInput: normalizedInputSymbol,
+            normalizedReceived: normalizedReceivedSymbol,
+            matches: normalizedReceivedSymbol === normalizedInputSymbol && tickerData.provider === provider
+          });
+
+          // Only process if mounted and matches our symbol/provider
+          if (!mounted) return;
+          if (tickerData.provider !== provider) return;
+          if (normalizedReceivedSymbol !== normalizedInputSymbol) return;
+
+          console.log('[useRustTicker] ✅ Setting ticker data:', tickerData);
+          setData(tickerData);
         });
+
+        listenerRef.current = unlisten;
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : String(err));
@@ -51,11 +77,12 @@ export function useRustTicker(provider: string, symbol: string, autoConnect = tr
 
     return () => {
       mounted = false;
-      if (unlisten) {
-        unlisten();
+      if (listenerRef.current) {
+        listenerRef.current();
+        listenerRef.current = null;
       }
       if (subscribed.current) {
-        websocketBridge.unsubscribe(provider, symbol, 'ticker').catch(console.error);
+        websocketBridge.unsubscribe(provider, symbol, 'ticker').catch(() => {});
         subscribed.current = false;
       }
     };
@@ -77,13 +104,19 @@ export function useRustOrderBook(
   const [data, setData] = useState<OrderBookData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const subscribed = useRef(false);
+  const listenerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    let unlisten: (() => void) | null = null;
 
     const subscribe = async () => {
       try {
+        // Clean up old listener if it exists
+        if (listenerRef.current) {
+          listenerRef.current();
+          listenerRef.current = null;
+        }
+
         // Subscribe to book channel with depth parameter
         if (!subscribed.current) {
           await websocketBridge.subscribe(provider, symbol, 'book', { depth });
@@ -91,11 +124,32 @@ export function useRustOrderBook(
         }
 
         // Listen to orderbook events
-        unlisten = await websocketBridge.onOrderBook((bookData) => {
-          if (mounted && bookData.provider === provider && bookData.symbol === symbol) {
-            setData(bookData);
-          }
+        const unlisten = await websocketBridge.onOrderBook((bookData) => {
+          // Normalize symbols for comparison (both with and without slashes)
+          const normalizedInputSymbol = symbol.replace('/', '').toUpperCase();
+          const normalizedReceivedSymbol = bookData.symbol.replace('/', '').toUpperCase();
+
+          console.log('[useRustOrderBook] Received orderbook:', {
+            provider: bookData.provider,
+            symbol: bookData.symbol,
+            expectedProvider: provider,
+            expectedSymbol: symbol,
+            normalizedInput: normalizedInputSymbol,
+            normalizedReceived: normalizedReceivedSymbol,
+            bidsCount: bookData.bids.length,
+            asksCount: bookData.asks.length,
+            matches: normalizedReceivedSymbol === normalizedInputSymbol && bookData.provider === provider
+          });
+
+          if (!mounted) return;
+          if (bookData.provider !== provider) return;
+          if (normalizedReceivedSymbol !== normalizedInputSymbol) return;
+
+          console.log('[useRustOrderBook] ✅ Setting orderbook data:', bookData);
+          setData(bookData);
         });
+
+        listenerRef.current = unlisten;
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : String(err));
@@ -109,11 +163,12 @@ export function useRustOrderBook(
 
     return () => {
       mounted = false;
-      if (unlisten) {
-        unlisten();
+      if (listenerRef.current) {
+        listenerRef.current();
+        listenerRef.current = null;
       }
       if (subscribed.current) {
-        websocketBridge.unsubscribe(provider, symbol, 'book').catch(console.error);
+        websocketBridge.unsubscribe(provider, symbol, 'book').catch(() => {});
         subscribed.current = false;
       }
     };
@@ -130,13 +185,19 @@ export function useRustTrades(provider: string, symbol: string, maxTrades = 50, 
   const [trades, setTrades] = useState<TradeData[]>([]);
   const [error, setError] = useState<string | null>(null);
   const subscribed = useRef(false);
+  const listenerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    let unlisten: (() => void) | null = null;
 
     const subscribe = async () => {
       try {
+        // Clean up old listener if it exists
+        if (listenerRef.current) {
+          listenerRef.current();
+          listenerRef.current = null;
+        }
+
         // Subscribe to trade channel
         if (!subscribed.current) {
           await websocketBridge.subscribe(provider, symbol, 'trade');
@@ -144,14 +205,22 @@ export function useRustTrades(provider: string, symbol: string, maxTrades = 50, 
         }
 
         // Listen to trade events
-        unlisten = await websocketBridge.onTrade((tradeData) => {
-          if (mounted && tradeData.provider === provider && tradeData.symbol === symbol) {
-            setTrades((prev) => {
-              const updated = [tradeData, ...prev];
-              return updated.slice(0, maxTrades);
-            });
-          }
+        const unlisten = await websocketBridge.onTrade((tradeData) => {
+          // Normalize symbols for comparison (both with and without slashes)
+          const normalizedInputSymbol = symbol.replace('/', '').toUpperCase();
+          const normalizedReceivedSymbol = tradeData.symbol.replace('/', '').toUpperCase();
+
+          if (!mounted) return;
+          if (tradeData.provider !== provider) return;
+          if (normalizedReceivedSymbol !== normalizedInputSymbol) return;
+
+          setTrades((prev) => {
+            const updated = [tradeData, ...prev];
+            return updated.slice(0, maxTrades);
+          });
         });
+
+        listenerRef.current = unlisten;
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : String(err));
@@ -165,11 +234,12 @@ export function useRustTrades(provider: string, symbol: string, maxTrades = 50, 
 
     return () => {
       mounted = false;
-      if (unlisten) {
-        unlisten();
+      if (listenerRef.current) {
+        listenerRef.current();
+        listenerRef.current = null;
       }
       if (subscribed.current) {
-        websocketBridge.unsubscribe(provider, symbol, 'trade').catch(console.error);
+        websocketBridge.unsubscribe(provider, symbol, 'trade').catch(() => {});
         subscribed.current = false;
       }
     };
@@ -244,7 +314,7 @@ export function useRustCandles(
         unlisten();
       }
       if (subscribed.current) {
-        websocketBridge.unsubscribe(provider, symbol, 'ohlc').catch(console.error);
+        websocketBridge.unsubscribe(provider, symbol, 'ohlc').catch(() => {});
         subscribed.current = false;
       }
     };
@@ -283,7 +353,7 @@ export function useConnectionStatus(provider: string) {
               setMetrics(m);
             }
           } catch (err) {
-            console.error('Failed to fetch metrics:', err);
+            // Ignore metrics fetch errors
           }
         }
       };
@@ -360,7 +430,7 @@ export function useMultiProviderTicker(providers: string[], symbol: string) {
         unlisten();
       }
       for (const provider of subscribed.current) {
-        websocketBridge.unsubscribe(provider, symbol, 'ticker').catch(console.error);
+        websocketBridge.unsubscribe(provider, symbol, 'ticker').catch(() => {});
       }
       subscribed.current.clear();
     };

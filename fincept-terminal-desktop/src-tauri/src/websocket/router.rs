@@ -68,8 +68,33 @@ impl MessageRouter {
 
     /// Check if frontend is subscribed to topic
     fn has_frontend_subscriber(&self, provider: &str, symbol: &str, channel: &str) -> bool {
-        let topic = format!("{}.{}.{}", provider, channel, symbol);
-        self.frontend_subscribers.contains_key(&topic)
+        // The incoming symbol is already normalized by adapters (e.g., "BTCUSD" without slash)
+        // But frontend might register with slash format (e.g., "BTC/USD")
+
+        // Normalize the symbol by removing any slashes
+        let normalized_symbol = symbol.replace("/", "");
+
+        // Build list of topic variants to check
+        let mut topics_to_check = vec![
+            format!("{}.{}.{}", provider, channel, symbol),           // Original (e.g., BTCUSD)
+            format!("{}.{}.{}", provider, channel, normalized_symbol.clone()), // Normalized (e.g., BTCUSD)
+        ];
+
+        // Also check common slash patterns for crypto pairs
+        // For symbols like BTCUSD, check BTC/USD
+        if normalized_symbol.len() >= 6 {
+            // Try standard crypto pair format (3 chars / remaining)
+            let variant = format!("{}/{}", &normalized_symbol[..3], &normalized_symbol[3..]);
+            topics_to_check.push(format!("{}.{}.{}", provider, channel, variant));
+        }
+        if normalized_symbol.len() >= 8 {
+            // Try 4/4 split (e.g., DOGE/USDT -> DOGE/USDT)
+            let variant = format!("{}/{}", &normalized_symbol[..4], &normalized_symbol[4..]);
+            topics_to_check.push(format!("{}.{}.{}", provider, channel, variant));
+        }
+
+        // Return true if any topic matches
+        topics_to_check.iter().any(|topic| self.frontend_subscribers.contains_key(topic))
     }
 
     /// Route message to all consumers
@@ -180,9 +205,7 @@ impl MessageRouter {
 
     fn emit_to_frontend<T: Serialize + Clone>(&self, event: &str, payload: &T) {
         if let Some(app) = &self.app_handle {
-            if let Err(e) = app.emit(event, payload) {
-                eprintln!("[Router] Failed to emit {} event: {}", event, e);
-            }
+            let _ = app.emit(event, payload);
         }
     }
 }

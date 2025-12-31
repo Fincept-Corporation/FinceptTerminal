@@ -434,7 +434,7 @@ export function APIConfigurationPanel({
           <div className="flex items-center gap-2 mb-3">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
             <h4 className="text-xs font-bold text-green-500 uppercase">
-              ✓ Sample Data Fetched Successfully
+              [OK] Sample Data Fetched Successfully
             </h4>
           </div>
           <div className="bg-black/30 rounded p-3 max-h-96 overflow-auto">

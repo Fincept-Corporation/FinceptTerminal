@@ -1459,7 +1459,7 @@ export default function NodeEditorTab() {
                   fontWeight: 'bold',
                 }}
               >
-                ⚡ MCP TOOLS ({mcpNodeConfigs.length})
+                 MCP TOOLS ({mcpNodeConfigs.length})
               </div>
               {mcpNodeConfigs.map((config) => (
                 <button

@@ -83,8 +83,11 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
       (orderType === 'limit' ? `Price: ${orderData.price}\n` : '') +
       `Total: ${((orderData.quantity || 0) * (orderData.price || currentPrice)).toFixed(2)} USD`;
 
-    if (!confirm(confirmMsg)) {
-      return; // User cancelled - don't call placeOrder
+    const confirmed = confirm(confirmMsg);
+    if (!confirmed) {
+      // User cancelled - properly handle cancellation without calling placeOrder
+      console.log('[EnhancedOrderForm] Order cancelled by user');
+      return;
     }
 
     try {
@@ -99,7 +102,7 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
         onOrderPlaced();
       }
 
-      alert(`✓ Order placed: ${side.toUpperCase()} ${orderData.quantity} ${symbol.split('/')[0]}`);
+      alert(`[OK] Order placed: ${side.toUpperCase()} ${orderData.quantity} ${symbol.split('/')[0]}`);
     } catch (err) {
       const error = err as Error;
       setValidationError(error.message);
@@ -242,7 +245,7 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
             whiteSpace: 'pre-line',
           }}
         >
-          ⚠️ {validationError}
+          [WARN]️ {validationError}
         </div>
       )}
 
@@ -257,7 +260,7 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
             fontSize: '10px',
           }}
         >
-          ✗ {error.message}
+          [FAIL] {error.message}
         </div>
       )}
 

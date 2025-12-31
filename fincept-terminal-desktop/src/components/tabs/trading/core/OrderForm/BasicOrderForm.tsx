@@ -1,9 +1,9 @@
 /**
- * Basic Order Form
- * Market and Limit orders (universal for all exchanges)
+ * Basic Order Form - Rewritten for performance
+ * No useEffect hooks, direct state management
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import type { OrderType, OrderSide } from '../../../../../brokers/crypto/types';
 import type { UnifiedOrderRequest } from '../../types';
 import { formatPrice, formatCurrency } from '../../utils/formatters';
@@ -39,66 +39,59 @@ export function BasicOrderForm({
   onOrderChange,
   balance = 0,
 }: BasicOrderFormProps) {
-  const [quantity, setQuantity] = useState<string>('');
-  const [price, setPrice] = useState<string>('');
-  const [total, setTotal] = useState<number>(0);
+  const [quantity, setQuantity] = useState('');
+  const [price, setPrice] = useState(currentPrice.toFixed(2));
 
-  // Update price when current price changes
-  useEffect(() => {
-    if (orderType === 'market' || !price) {
-      setPrice(currentPrice.toString());
-    }
-  }, [currentPrice, orderType]);
+  // Calculate total
+  const total = (parseFloat(quantity) || 0) * (parseFloat(price) || currentPrice);
+  const maxQuantity = balance > 0 && currentPrice > 0 ? balance / currentPrice : 0;
 
-  // Calculate total whenever quantity or price changes
-  useEffect(() => {
-    const qty = parseFloat(quantity) || 0;
-    const prc = parseFloat(price) || currentPrice;
-    setTotal(qty * prc);
-
-    // Notify parent of order changes
+  // Update parent
+  const notifyParent = useCallback((qty: number, prc: number) => {
     onOrderChange({
       symbol,
       type: orderType,
       side,
       quantity: qty,
-      price: orderType === 'limit' ? prc : undefined,
+      price: orderType === 'limit' && prc > 0 ? prc : undefined,
     });
-  }, [quantity, price, symbol, orderType, side, currentPrice, onOrderChange]);
+  }, [symbol, orderType, side, onOrderChange]);
 
-  // Handle quantity change
-  const handleQuantityChange = (value: string) => {
-    // Allow empty string, numbers and decimal point
-    // This allows users to clear the field and type new values freely
+  // Handle quantity input
+  const handleQuantityChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
     if (value === '' || /^\d*\.?\d*$/.test(value)) {
       setQuantity(value);
+      const qty = parseFloat(value) || 0;
+      const prc = parseFloat(price) || currentPrice;
+      notifyParent(qty, prc);
     }
-  };
+  }, [price, currentPrice, notifyParent]);
 
-  // Handle price change
-  const handlePriceChange = (value: string) => {
-    // Allow empty string, numbers and decimal point
-    // This allows users to clear the field and type new values freely
+  // Handle price input
+  const handlePriceChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
     if (value === '' || /^\d*\.?\d*$/.test(value)) {
       setPrice(value);
+      const qty = parseFloat(quantity) || 0;
+      const prc = parseFloat(value) || 0;
+      notifyParent(qty, prc);
     }
-  };
+  }, [quantity, notifyParent]);
 
-  // Quick percentage buttons for quantity
-  const handlePercentage = (percent: number) => {
+  // Handle percentage buttons
+  const handlePercentage = useCallback((percent: number) => {
     if (balance === 0 || currentPrice === 0) return;
-
     const prc = parseFloat(price) || currentPrice;
-    const availableQty = (balance * percent) / prc;
-    setQuantity(availableQty.toFixed(4));
-  };
-
-  // Calculate max quantity based on balance
-  const maxQuantity = balance > 0 && currentPrice > 0 ? balance / currentPrice : 0;
+    const qty = (balance * percent) / prc;
+    const qtyStr = qty.toFixed(4);
+    setQuantity(qtyStr);
+    notifyParent(qty, prc);
+  }, [balance, currentPrice, price, notifyParent]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Price Input (only for limit orders) */}
+      {/* Price Input (limit orders only) */}
       {orderType === 'limit' && (
         <div>
           <label
@@ -116,7 +109,7 @@ export function BasicOrderForm({
           <input
             type="text"
             value={price}
-            onChange={(e) => handlePriceChange(e.target.value)}
+            onChange={handlePriceChange}
             placeholder="0.00"
             style={{
               width: '100%',
@@ -168,7 +161,7 @@ export function BasicOrderForm({
         <input
           type="text"
           value={quantity}
-          onChange={(e) => handleQuantityChange(e.target.value)}
+          onChange={handleQuantityChange}
           placeholder="0.0000"
           style={{
             width: '100%',
@@ -249,7 +242,7 @@ export function BasicOrderForm({
             color: BLOOMBERG.RED,
           }}
         >
-          ⚠️ Insufficient balance (Available: {formatCurrency(balance)})
+          [WARN] Insufficient balance (Available: {formatCurrency(balance)})
         </div>
       )}
     </div>

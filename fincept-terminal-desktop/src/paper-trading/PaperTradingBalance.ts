@@ -228,17 +228,25 @@ export class PaperTradingBalance {
       console.log(`  Adding: ${fillQuantity} @ ${fillPrice}`);
 
       // Calculate new average entry price (VWAP - Volume Weighted Average Price)
-      const totalValue = existingPosition.entryPrice * existingPosition.quantity + fillPrice * fillQuantity;
+      // IMPORTANT: Fees are already deducted from balance when order executes
+      // DO NOT include fees in entry price calculation as that would double-count them
+      const existingCost = existingPosition.entryPrice * existingPosition.quantity;
+      const newFillCost = fillPrice * fillQuantity; // Pure cost without fees
+      const totalCost = existingCost + newFillCost;
       const totalQuantity = existingPosition.quantity + fillQuantity;
-      const newEntryPrice = totalValue / totalQuantity;
+      const newEntryPrice = totalCost / totalQuantity;
 
       console.log(`  New position: ${totalQuantity} @ ${newEntryPrice}`);
 
+      const entryFeeRate = this.config.fees?.taker || 0.0005;
+      const exitFeeRate = this.config.fees?.taker || 0.0005;
       const liquidationPrice = this.calculateLiquidationPrice(
         newPositionSide,
         newEntryPrice,
         leverage,
-        totalQuantity
+        totalQuantity,
+        entryFeeRate,
+        exitFeeRate
       );
 
       await paperTradingDatabase.updatePosition(existingPosition.id, {
@@ -269,7 +277,17 @@ export class PaperTradingBalance {
     console.log(`[PaperTradingBalance] Creating new ${side} position for ${symbol}`);
     const positionId = `pos_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
-    const liquidationPrice = this.calculateLiquidationPrice(side, entryPrice, leverage, quantity);
+    // Use config fee rates for accurate liquidation price
+    const entryFeeRate = this.config.fees?.taker || 0.0005;
+    const exitFeeRate = this.config.fees?.taker || 0.0005;
+    const liquidationPrice = this.calculateLiquidationPrice(
+      side,
+      entryPrice,
+      leverage,
+      quantity,
+      entryFeeRate,
+      exitFeeRate
+    );
 
     await paperTradingDatabase.createPosition({
       id: positionId,
@@ -462,28 +480,55 @@ export class PaperTradingBalance {
   }
 
   /**
-   * Calculate liquidation price
+   * Calculate liquidation price (improved with fee consideration)
    */
   private calculateLiquidationPrice(
     side: 'long' | 'short',
     entryPrice: number,
     leverage: number,
-    quantity: number
+    quantity: number,
+    entryFeeRate: number = 0.0005, // Default taker fee 0.05%
+    exitFeeRate: number = 0.0005   // Default exit fee 0.05%
   ): number | null {
     if (leverage <= 1) return null; // No liquidation for unleveraged positions
+    if (quantity <= 0) return null; // Cannot calculate liquidation for zero/negative quantity
+    if (entryPrice <= 0) return null; // Invalid entry price
 
-    // Simplified liquidation calculation
-    // Liquidation occurs when loss equals initial margin (100% of margin lost)
-    // For more accuracy, should consider maintenance margin requirements
+    // Maintenance margin rate (typically 50% of initial margin)
+    const maintenanceMarginRate = 0.5 / leverage;
 
-    const maintenanceMarginRate = 0.5 / leverage; // 50% of initial margin
+    // Position value
+    const positionValue = entryPrice * quantity;
 
+    // Initial margin (capital used to open position)
+    const initialMargin = positionValue / leverage;
+
+    // Entry fees already paid (reduces available margin)
+    const entryFees = positionValue * entryFeeRate;
+
+    // Exit fees that will be charged on liquidation
+    const liquidationPenalty = positionValue * exitFeeRate;
+
+    // Effective margin after fees
+    const effectiveMargin = initialMargin - entryFees;
+
+    // Maintenance margin requirement
+    const maintenanceMargin = positionValue * maintenanceMarginRate;
+
+    // Maximum loss before liquidation = effective margin - maintenance margin - exit fees
+    const maxLoss = effectiveMargin - maintenanceMargin - liquidationPenalty;
+
+    // Calculate liquidation price
     if (side === 'long') {
-      // Long liquidation: price drops by (1 / leverage) * (1 - maintenance margin rate)
-      return entryPrice * (1 - (1 / leverage) + maintenanceMarginRate);
+      // Long liquidation: price drops until loss equals maxLoss
+      // Loss = (entryPrice - liquidationPrice) * quantity
+      // liquidationPrice = entryPrice - (maxLoss / quantity)
+      return entryPrice - (maxLoss / quantity);
     } else {
-      // Short liquidation: price rises by (1 / leverage) * (1 - maintenance margin rate)
-      return entryPrice * (1 + (1 / leverage) - maintenanceMarginRate);
+      // Short liquidation: price rises until loss equals maxLoss
+      // Loss = (liquidationPrice - entryPrice) * quantity
+      // liquidationPrice = entryPrice + (maxLoss / quantity)
+      return entryPrice + (maxLoss / quantity);
     }
   }
 

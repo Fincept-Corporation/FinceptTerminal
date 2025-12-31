@@ -158,9 +158,9 @@ const makeForumRequest = async <T = any>(
     let responseData;
     try {
       responseData = JSON.parse(responseText);
-      console.log('✅ Forum Parsed JSON:', responseData);
+      console.log('[OK] Forum Parsed JSON:', responseData);
     } catch (parseError) {
-      console.error('❌ Forum JSON parse failed:', parseError);
+      console.error('[ERROR] Forum JSON parse failed:', parseError);
       return {
         success: false,
         error: `Invalid JSON response: ${responseText.substring(0, 100)}...`,

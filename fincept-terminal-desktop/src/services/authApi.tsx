@@ -32,6 +32,9 @@ interface RegisterRequest {
   username: string;
   email: string;
   password: string;
+  phone?: string;
+  country_code?: string;
+  country?: string;
 }
 
 interface VerifyOtpRequest {

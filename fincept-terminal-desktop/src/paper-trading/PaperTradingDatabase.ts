@@ -20,6 +20,41 @@ import type { Order, OrderSide } from '../brokers/crypto/types';
 
 export class PaperTradingDatabase {
   // ============================================================================
+  // DATABASE HEALTH CHECK
+  // ============================================================================
+
+  /**
+   * Check if database is accessible and initialized
+   */
+  async checkHealth(): Promise<boolean> {
+    try {
+      console.log('[PaperTradingDatabase] Performing health check...');
+      // Use dedicated health check command
+      const result = await invoke<boolean>('db_check_health');
+      console.log('[PaperTradingDatabase] Health check result:', result);
+
+      if (result) {
+        console.log('[PaperTradingDatabase] ✓ Database is healthy and accessible');
+        return true;
+      } else {
+        console.error('[PaperTradingDatabase] ✗ Database health check returned false');
+        return false;
+      }
+    } catch (error) {
+      console.error('[PaperTradingDatabase] ========================================');
+      console.error('[PaperTradingDatabase] DATABASE HEALTH CHECK FAILED');
+      console.error('[PaperTradingDatabase] ========================================');
+      console.error('[PaperTradingDatabase] Error details:', error);
+      console.error('[PaperTradingDatabase] This usually means:');
+      console.error('[PaperTradingDatabase] 1. Database failed to initialize on app startup');
+      console.error('[PaperTradingDatabase] 2. Missing write permissions to app data directory');
+      console.error('[PaperTradingDatabase] 3. Rust backend is not running or commands not registered');
+      console.error('[PaperTradingDatabase] ========================================');
+      return false;
+    }
+  }
+
+  // ============================================================================
   // PORTFOLIO OPERATIONS
   // ============================================================================
 
@@ -238,6 +273,7 @@ export class PaperTradingDatabase {
     avgFillPrice?: number;
     status?: string;
     filledAt?: string | null;
+    stopPrice?: number;
   }): Promise<void> {
     await invoke('db_update_order', {
       id: orderId,
@@ -245,6 +281,7 @@ export class PaperTradingDatabase {
       avgFillPrice: updates.avgFillPrice || null,
       status: updates.status || null,
       filledAt: updates.filledAt !== undefined ? updates.filledAt : null,
+      stopPrice: updates.stopPrice || null,
     });
   }
 

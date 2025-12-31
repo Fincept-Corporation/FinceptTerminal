@@ -848,7 +848,7 @@ export function NotesTab() {
                         fontSize: '8px',
                         fontWeight: 700
                       }}>
-                        {isUrgent ? '🔴 URGENT' : `⏰ ${timeText.toUpperCase()}`}
+                        {isUrgent ? '🔴 URGENT' : ` ${timeText.toUpperCase()}`}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', fontSize: '9px', color: BLOOMBERG.GRAY }}>

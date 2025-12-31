@@ -386,7 +386,7 @@ const DataSourceNode: React.FC<DataSourceNodeProps> = ({ data, selected }) => {
                 fontWeight: 'bold',
                 marginBottom: '4px'
               }}>
-                ✓ Query Successful
+                [OK] Query Successful
               </div>
               <div style={{
                 color: '#6b7280',
@@ -411,7 +411,7 @@ const DataSourceNode: React.FC<DataSourceNodeProps> = ({ data, selected }) => {
                 fontWeight: 'bold',
                 marginBottom: '4px'
               }}>
-                ✗ Error
+                [FAIL] Error
               </div>
               <div style={{
                 color: '#d4d4d4',

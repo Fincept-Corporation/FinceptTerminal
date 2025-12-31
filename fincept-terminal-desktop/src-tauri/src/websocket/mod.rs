@@ -13,6 +13,5 @@ pub mod router;
 pub mod adapters;
 pub mod services;
 
-pub use types::*;
 pub use manager::WebSocketManager;
 pub use router::MessageRouter;

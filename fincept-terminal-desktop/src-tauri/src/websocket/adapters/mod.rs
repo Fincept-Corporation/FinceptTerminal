@@ -2,14 +2,15 @@
 
 use super::types::*;
 use async_trait::async_trait;
-use std::sync::Arc;
 
 pub mod kraken;
 pub mod hyperliquid;
+pub mod binance;
 pub mod fyers;
 
 pub use kraken::KrakenAdapter;
 pub use hyperliquid::HyperLiquidAdapter;
+pub use binance::BinanceAdapter;
 pub use fyers::FyersAdapter;
 
 // ============================================================================
@@ -58,6 +59,7 @@ pub fn create_adapter(
     match provider.to_lowercase().as_str() {
         "kraken" => Ok(Box::new(KrakenAdapter::new(config))),
         "hyperliquid" => Ok(Box::new(HyperLiquidAdapter::new(config))),
+        "binance" => Ok(Box::new(BinanceAdapter::new(config))),
         "fyers" => Ok(Box::new(FyersAdapter::new(config))),
         _ => Err(anyhow::anyhow!("Unknown provider: {}", provider)),
     }

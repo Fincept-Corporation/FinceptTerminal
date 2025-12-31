@@ -99,6 +99,11 @@ export function useOrderExecution(): UseOrderExecutionResult {
           params.clientOrderId = order.clientOrderId;
         }
 
+        // Re-check connection before executing order
+        if (!activeAdapter || !activeAdapter.isConnected()) {
+          throw new Error('Exchange disconnected before order execution');
+        }
+
         // Execute order
         const result = await activeAdapter.createOrder(
           order.symbol,

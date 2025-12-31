@@ -546,7 +546,7 @@ const IndicatorBox: React.FC<{
             e.currentTarget.style.color = COLORS.GRAY;
           }}
         >
-          <span style={{ fontSize: '10px' }}>⚙️</span>
+          <span style={{ fontSize: '10px' }}></span>
           <span>{showSettings ? 'Hide' : 'Adjust'}</span>
         </button>
 
@@ -1885,7 +1885,7 @@ const EquityResearchTab: React.FC = () => {
                 gap: '16px',
               }}>
                 <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
-                  {loading ? '⏳ LOADING FINANCIAL DATA...' : '⚠️ NO FINANCIAL DATA AVAILABLE'}
+                  {loading ? ' LOADING FINANCIAL DATA...' : '[WARN]️ NO FINANCIAL DATA AVAILABLE'}
                 </div>
                 <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
                   {loading ? 'Please wait while we fetch the data' : 'Financial statements are not available for this symbol'}
@@ -2432,7 +2432,7 @@ const EquityResearchTab: React.FC = () => {
                 gap: '16px',
               }}>
                 <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
-                  ⏳ FETCHING LATEST NEWS...
+                   FETCHING LATEST NEWS...
                 </div>
                 <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
                   Loading news for {currentSymbol}
@@ -2448,7 +2448,7 @@ const EquityResearchTab: React.FC = () => {
                 gap: '16px',
               }}>
                 <div style={{ color: COLORS.RED, fontSize: '14px', fontWeight: 'bold' }}>
-                  ⚠️ NO NEWS AVAILABLE
+                  [WARN]️ NO NEWS AVAILABLE
                 </div>
                 <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
                   {newsData?.error || 'Unable to fetch news at this time'}
@@ -2634,7 +2634,7 @@ const EquityResearchTab: React.FC = () => {
                 gap: '16px',
               }}>
                 <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
-                  ⏳ COMPUTING TECHNICAL INDICATORS...
+                   COMPUTING TECHNICAL INDICATORS...
                 </div>
                 <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
                   Analyzing {historicalData.length} data points
@@ -2650,7 +2650,7 @@ const EquityResearchTab: React.FC = () => {
                 gap: '16px',
               }}>
                 <div style={{ color: COLORS.RED, fontSize: '14px', fontWeight: 'bold' }}>
-                  ⚠️ NO TECHNICAL DATA AVAILABLE
+                  [WARN]️ NO TECHNICAL DATA AVAILABLE
                 </div>
                 <div style={{ color: COLORS.GRAY, fontSize: '11px' }}>
                   Please wait for historical data to load
@@ -2668,7 +2668,7 @@ const EquityResearchTab: React.FC = () => {
                     color: COLORS.YELLOW,
                   }}>
                     <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>
-                      ⚠️ NO INDICATOR DATA
+                      [WARN]️ NO INDICATOR DATA
                     </div>
                     <div style={{ fontSize: '11px', color: COLORS.GRAY }}>
                       Technical indicators could not be computed. Please try again or select a different symbol.

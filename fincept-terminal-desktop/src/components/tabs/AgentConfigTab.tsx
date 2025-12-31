@@ -916,7 +916,7 @@ const AgentConfigTab: React.FC = () => {
                           if (!activeLLM) {
                             return (
                               <div style={{ gridColumn: '1 / -1', color: BLOOMBERG.RED, textAlign: 'center' }}>
-                                ⚠️ No active LLM configured in Settings
+                                [WARN]️ No active LLM configured in Settings
                               </div>
                             );
                           }
@@ -937,7 +937,7 @@ const AgentConfigTab: React.FC = () => {
                               <div>
                                 <span style={{ color: BLOOMBERG.GRAY }}>API Key:</span>{' '}
                                 <span style={{ color: hasApiKey ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
-                                  {hasApiKey ? '✓ Configured' : '✗ Missing'}
+                                  {hasApiKey ? '[OK] Configured' : '[FAIL] Missing'}
                                 </span>
                               </div>
                               <div>

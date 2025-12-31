@@ -74,9 +74,14 @@ impl WebSocketManager {
             return Err(WebSocketError::AlreadyConnected(provider.to_string()));
         }
 
-        // Check if already connecting
-        if self.connecting.contains_key(provider) {
-            return Ok(()); // Wait for existing connection attempt
+        // Check if already connecting - wait for it to complete
+        while self.connecting.contains_key(provider) {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        // Check again if connected (might have been connected by another task)
+        if self.is_connected(provider) {
+            return Ok(());
         }
 
         self.connecting.insert(provider.to_string(), true);

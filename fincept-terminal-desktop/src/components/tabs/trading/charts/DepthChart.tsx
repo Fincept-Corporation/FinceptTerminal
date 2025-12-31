@@ -3,9 +3,10 @@
  * Shows orderbook bid/ask distribution
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { useOrderBook } from '../hooks/useMarketData';
+import { useRustOrderBook } from '../../../../hooks/useRustWebSocket';
+import { useBrokerContext } from '../../../../contexts/BrokerContext';
 
 interface DepthChartProps {
   symbol: string;
@@ -19,8 +20,51 @@ interface DepthDataPoint {
   askTotal: number;
 }
 
+interface OrderBookLevel {
+  price: number;
+  size: number;
+}
+
+interface OrderBook {
+  bids: OrderBookLevel[];
+  asks: OrderBookLevel[];
+  symbol: string;
+}
+
 export function DepthChart({ symbol, height = 300, limit = 50 }: DepthChartProps) {
-  const { orderBook, isLoading, error } = useOrderBook(symbol, limit, true);
+  const { activeBroker } = useBrokerContext();
+  const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  // Use Rust WebSocket hook for real-time orderbook data
+  const { data: orderbookData, error: orderbookError } = useRustOrderBook(
+    activeBroker || '',
+    symbol,
+    limit,
+    !!activeBroker
+  );
+
+  // Update orderbook from WebSocket
+  useEffect(() => {
+    if (!orderbookData) return;
+
+    setOrderBook({
+      bids: orderbookData.bids.map(b => ({ price: b.price, size: b.quantity })),
+      asks: orderbookData.asks.map(a => ({ price: a.price, size: a.quantity })),
+      symbol: orderbookData.symbol,
+    });
+    setIsLoading(false);
+    setError(null);
+  }, [orderbookData]);
+
+  // Handle errors
+  useEffect(() => {
+    if (orderbookError) {
+      setError(new Error(orderbookError));
+      setIsLoading(false);
+    }
+  }, [orderbookError]);
 
   const depthData = useMemo(() => {
     if (!orderBook) return [];

@@ -40,6 +40,13 @@ export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: nu
     setError(null);
 
     try {
+      // Re-validate adapter before async operation
+      if (!activeAdapter || !activeAdapter.isConnected()) {
+        setOhlcv([]);
+        setIsLoading(false);
+        return;
+      }
+
       // Fetch OHLCV from adapter
       const rawData = await activeAdapter.fetchOHLCV(symbol, timeframe, limit);
 
@@ -101,11 +108,15 @@ export function useOrderBook(symbol?: string, limit: number = 20, autoRefresh: b
     try {
       const rawBook = await activeAdapter.fetchOrderBook(symbol, limit);
 
-      // Normalize to unified format
+      // Normalize to unified format with array element validation
       const normalized: UnifiedOrderBook = {
         symbol,
-        bids: (rawBook.bids || []).map((level: any) => ({ price: level[0] as number, size: level[1] as number })),
-        asks: (rawBook.asks || []).map((level: any) => ({ price: level[0] as number, size: level[1] as number })),
+        bids: (rawBook.bids || [])
+          .filter((level: any) => Array.isArray(level) && level.length >= 2)
+          .map((level: any) => ({ price: level[0] as number, size: level[1] as number })),
+        asks: (rawBook.asks || [])
+          .filter((level: any) => Array.isArray(level) && level.length >= 2)
+          .map((level: any) => ({ price: level[0] as number, size: level[1] as number })),
         timestamp: rawBook.timestamp || Date.now(),
       };
 
@@ -125,7 +136,8 @@ export function useOrderBook(symbol?: string, limit: number = 20, autoRefresh: b
 
     if (!autoRefresh) return;
 
-    const interval = setInterval(fetchOrderBook, 1000); // Update every 1s
+    // Changed from 1000ms to 3000ms to reduce API load
+    const interval = setInterval(fetchOrderBook, 3000);
     return () => clearInterval(interval);
   }, [fetchOrderBook, autoRefresh]);
 

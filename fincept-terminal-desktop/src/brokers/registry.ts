@@ -66,6 +66,12 @@ export interface BrokerMetadata {
     enabled: boolean;
     endpoint?: string;
   };
+
+  // Trading fees
+  fees?: {
+    maker: number;
+    taker: number;
+  };
 }
 
 // ============================================================================
@@ -135,6 +141,11 @@ export const BROKER_REGISTRY: Record<string, BrokerMetadata> = {
       enabled: true,
       endpoint: 'wss://ws.kraken.com/v2',
     },
+
+    fees: {
+      maker: 0.0016,
+      taker: 0.0026,
+    },
   },
 
   hyperliquid: {
@@ -177,11 +188,16 @@ export const BROKER_REGISTRY: Record<string, BrokerMetadata> = {
       deposits: false,
     },
 
-    defaultSymbols: ['BTC/USDC:USDC', 'ETH/USDC:USDC', 'SOL/USDC:USDC', 'AVAX/USDC:USDC', 'MATIC/USDC:USDC'],
+    defaultSymbols: ['BTC/USD', 'ETH/USD', 'SOL/USD', 'AVAX/USD', 'MATIC/USD', 'ARB/USD', 'OP/USD', 'SUI/USD'],
 
     websocket: {
       enabled: true, // HyperLiquidAdapter now available
       endpoint: 'wss://api.hyperliquid.xyz/ws',
+    },
+
+    fees: {
+      maker: 0.00015,
+      taker: 0.00035,
     },
   },
 };

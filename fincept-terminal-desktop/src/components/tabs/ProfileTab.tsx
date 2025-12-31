@@ -68,12 +68,12 @@ const ProfileTab: React.FC = () => {
       }
 
       if (showNotification) {
-        alert('✓ Profile data refreshed successfully!');
+        alert('[OK] Profile data refreshed successfully!');
       }
     } catch (error) {
       console.error('Error fetching data:', error);
       if (showNotification) {
-        alert('✗ Failed to refresh data. Please try again.');
+        alert('[FAIL] Failed to refresh data. Please try again.');
       }
     } finally {
       setLoading(false);

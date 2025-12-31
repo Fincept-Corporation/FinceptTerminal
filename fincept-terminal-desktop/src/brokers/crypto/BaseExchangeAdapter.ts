@@ -77,7 +77,7 @@ export abstract class BaseExchangeAdapter implements IExchangeAdapter {
 
         this._isConnected = true;
         this.emit('connected', { exchange: this.id });
-        console.log(`[${this.id}] ✓ Connected successfully`);
+        console.log(`[${this.id}] [OK] Connected successfully`);
         return;
       } catch (error: any) {
         lastError = error;
@@ -100,7 +100,7 @@ export abstract class BaseExchangeAdapter implements IExchangeAdapter {
 
         // Don't retry on CORS errors - they won't resolve with retries
         if (isNetworkError && errorMessage.includes('CORS')) {
-          console.error(`[${this.id}] ✗ CORS error detected - cannot connect from browser`);
+          console.error(`[${this.id}] [FAIL] CORS error detected - cannot connect from browser`);
           this._isConnected = false;
           break;
         }
@@ -114,7 +114,7 @@ export abstract class BaseExchangeAdapter implements IExchangeAdapter {
 
     // All retries failed
     this._isConnected = false;
-    console.error(`[${this.id}] ✗ Failed to connect after ${maxRetries + 1} attempts`);
+    console.error(`[${this.id}] [FAIL] Failed to connect after ${maxRetries + 1} attempts`);
 
     // Create a user-friendly error message
     const errorMessage = lastError?.message || String(lastError);

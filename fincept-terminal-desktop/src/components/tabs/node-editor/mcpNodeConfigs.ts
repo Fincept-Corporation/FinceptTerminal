@@ -58,7 +58,7 @@ function getIconForTool(tool: MCPTool): string {
 
   // Database tools
   if (serverId.includes('postgres')) return '🐘';
-  if (serverId.includes('questdb')) return '⚡';
+  if (serverId.includes('questdb')) return '';
   if (serverId.includes('sqlite')) return '💾';
   if (serverId.includes('mysql')) return '🐬';
 
@@ -79,7 +79,7 @@ function getIconForTool(tool: MCPTool): string {
   if (serverId.includes('calendar')) return '📅';
 
   // Default
-  return '⚡';
+  return '';
 }
 
 /**

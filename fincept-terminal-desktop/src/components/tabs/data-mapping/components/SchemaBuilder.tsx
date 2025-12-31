@@ -527,7 +527,7 @@ export function SchemaBuilder({
           {/* Helper Text */}
           {customFields.length > 0 && (
             <div className="mt-3 text-xs text-green-500 bg-green-900/20 border border-green-700 rounded p-3">
-              <strong>✓ {customFields.length} field{customFields.length !== 1 ? 's' : ''} added!</strong>
+              <strong>[OK] {customFields.length} field{customFields.length !== 1 ? 's' : ''} added!</strong>
               {' '}Field mappings have been created automatically. You can review them in Step 3 (Field Mapping).
             </div>
           )}

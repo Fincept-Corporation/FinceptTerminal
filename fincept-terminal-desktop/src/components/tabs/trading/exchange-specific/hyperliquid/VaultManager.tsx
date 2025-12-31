@@ -37,9 +37,9 @@ export function HyperLiquidVaultManager() {
       (activeAdapter as any).setVaultAddress(vaultAddress);
       const balance = await (activeAdapter as any).fetchVaultBalance(vaultAddress);
       setVaultBalance(balance);
-      alert(`✓ Vault connected: ${vaultAddress.slice(0, 8)}...`);
+      alert(`[OK] Vault connected: ${vaultAddress.slice(0, 8)}...`);
     } catch (error) {
-      alert(`✗ Vault connection failed: ${(error as Error).message}`);
+      alert(`[FAIL] Vault connection failed: ${(error as Error).message}`);
     } finally {
       setIsLoading(false);
     }
@@ -48,7 +48,7 @@ export function HyperLiquidVaultManager() {
   const handleSetSubAccount = () => {
     if (!subAccountAddress || !activeAdapter) return;
     (activeAdapter as any).setSubAccountAddress(subAccountAddress);
-    alert(`✓ Subaccount set: ${subAccountAddress.slice(0, 8)}...`);
+    alert(`[OK] Subaccount set: ${subAccountAddress.slice(0, 8)}...`);
   };
 
   return (
@@ -70,7 +70,7 @@ export function HyperLiquidVaultManager() {
           letterSpacing: '0.5px',
         }}
       >
-        ⚡ HYPERLIQUID VAULT & SUBACCOUNTS
+         HYPERLIQUID VAULT & SUBACCOUNTS
       </div>
 
       {/* Vault Address */}
@@ -180,7 +180,7 @@ export function HyperLiquidVaultManager() {
             color: BLOOMBERG.CYAN,
           }}
         >
-          ✓ Vault Balance: ${vaultBalance.total?.USD?.toFixed(2) || '0.00'}
+          [OK] Vault Balance: ${vaultBalance.total?.USD?.toFixed(2) || '0.00'}
         </div>
       )}
 

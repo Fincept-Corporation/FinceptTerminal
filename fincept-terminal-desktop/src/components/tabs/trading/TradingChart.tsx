@@ -21,7 +21,7 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
   const [error, setError] = useState<string | null>(null);
   const [candleData, setCandleData] = useState<CandlestickData[]>([]);
 
-  const { realAdapter } = useBrokerContext();
+  const { activeAdapter } = useBrokerContext();
 
   // Use Rust WebSocket backend for candle data
   const { candles: rustCandles, latestCandle, error: wsError } = useRustCandles(
@@ -117,7 +117,7 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
   // Fetch historical data on mount or when symbol/interval changes
   useEffect(() => {
     const fetchHistoricalData = async () => {
-      if (!realAdapter) {
+      if (!activeAdapter) {
         console.log('[TradingChart] No adapter available, skipping historical fetch');
         return;
       }
@@ -132,7 +132,7 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
         const timeframe = interval; // CCXT uses same format
         const limit = 100; // Last 100 candles
 
-        const ohlcv = await realAdapter.fetchOHLCV(symbol, timeframe, undefined);
+        const ohlcv = await activeAdapter.fetchOHLCV(symbol, timeframe, undefined);
 
         console.log(`[TradingChart] Fetched ${ohlcv.length} historical candles`);
 
@@ -174,7 +174,7 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
     };
 
     fetchHistoricalData();
-  }, [symbol, interval, realAdapter]);
+  }, [symbol, interval, activeAdapter]);
 
   // Handle live candle updates from Rust WebSocket
   useEffect(() => {
@@ -246,7 +246,7 @@ export function TradingChart({ symbol, provider, interval = '1m' }: TradingChart
       {/* WebSocket Error */}
       {wsError && !isLoading && !error && (
         <div className="absolute top-2 right-2 bg-yellow-900/50 border border-yellow-600 px-3 py-2 rounded text-xs text-yellow-400 z-10">
-          ⚠️ Live updates unavailable
+          [WARN]️ Live updates unavailable
         </div>
       )}
 

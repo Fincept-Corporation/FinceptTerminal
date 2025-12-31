@@ -22,7 +22,7 @@ pandas>=2.3.3,<3.0
 vectorbt==0.28.2
 backtesting==0.6.5
 # fast-trade==1.0.2  # Commented out - not tested with Python 3.12, use backtesting.py instead
-peewee==3.18.3
+peewee>=3.17.0,<3.18.0  # Range for stable binary wheel compatibility
 pip_system_certs==5.3
 platformdirs==4.5.0
 propcache==0.4.1

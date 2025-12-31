@@ -979,7 +979,7 @@ class LLMApiService {
         // Provider doesn't support tools - show warning message
         llmLogger.warn(`Provider '${activeConfig.provider}' does not support function calling. Available tools: ${tools.length}`);
 
-        const warningMessage = `⚠️ MCP Tools Not Supported\n\n` +
+        const warningMessage = `[WARN]️ MCP Tools Not Supported\n\n` +
           `Your current LLM provider (${activeConfig.provider.toUpperCase()}) does not support function calling with MCP tools.\n\n` +
           `**Available MCP Tools:** ${tools.length} tools detected\n` +
           `**Supported Providers:** OpenAI, Gemini, DeepSeek, OpenRouter, Ollama\n\n` +

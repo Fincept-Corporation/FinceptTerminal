@@ -3,6 +3,21 @@
 use crate::database::*;
 
 // ============================================================================
+// Database Health Commands
+// ============================================================================
+
+#[tauri::command]
+pub async fn db_check_health() -> Result<bool, String> {
+    match pool::get_pool() {
+        Ok(_) => Ok(true),
+        Err(e) => {
+            eprintln!("[Database] Health check failed: {}", e);
+            Err(format!("Database not initialized: {}", e))
+        }
+    }
+}
+
+// ============================================================================
 // Settings Commands
 // ============================================================================
 

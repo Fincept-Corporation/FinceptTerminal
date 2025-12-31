@@ -9,6 +9,7 @@ use std::time::Duration;
 use std::sync::mpsc::{channel, Sender, Receiver};
 use serde::Serialize;
 use sha2::{Sha256, Digest};
+use tauri::{Manager, Listener};
 
 // Data sources and commands modules
 mod data_sources;
@@ -18,6 +19,7 @@ mod setup;
 mod database;
 mod python_runtime;
 mod websocket;
+mod barter_integration;
 // mod finscript; // TODO: Implement FinScript module
 
 // MCP Server Process with communication channels
@@ -43,6 +45,7 @@ struct WebSocketServices {
     paper_trading: websocket::services::PaperTradingService,
     arbitrage: websocket::services::ArbitrageService,
     portfolio: websocket::services::PortfolioService,
+    monitoring: websocket::services::MonitoringService,
 }
 
 #[derive(Debug, Serialize)]
@@ -320,8 +323,14 @@ async fn ws_set_config(
     state: tauri::State<'_, WebSocketState>,
     config: websocket::types::ProviderConfig,
 ) -> Result<(), String> {
+    eprintln!("[ws_set_config] Called with provider: {}", config.name);
+    eprintln!("[ws_set_config] URL: {}", config.url);
+    eprintln!("[ws_set_config] Enabled: {}", config.enabled);
+
     let manager = state.manager.read().await;
-    manager.set_config(config);
+    manager.set_config(config.clone());
+
+    eprintln!("[ws_set_config] ✓ Config set for provider: {}", config.name);
     Ok(())
 }
 
@@ -331,9 +340,18 @@ async fn ws_connect(
     state: tauri::State<'_, WebSocketState>,
     provider: String,
 ) -> Result<(), String> {
+    eprintln!("[ws_connect] Called for provider: {}", provider);
+
     let manager = state.manager.read().await;
-    manager.connect(&provider).await
-        .map_err(|e| e.to_string())
+    let result = manager.connect(&provider).await
+        .map_err(|e| e.to_string());
+
+    match &result {
+        Ok(_) => eprintln!("[ws_connect] ✓ Successfully connected to {}", provider),
+        Err(e) => eprintln!("[ws_connect] ✗ Failed to connect to {}: {}", provider, e),
+    }
+
+    result
 }
 
 /// Disconnect from WebSocket provider
@@ -356,13 +374,25 @@ async fn ws_subscribe(
     channel: String,
     params: Option<serde_json::Value>,
 ) -> Result<(), String> {
+    eprintln!("[ws_subscribe] Called: provider={}, symbol={}, channel={}", provider, symbol, channel);
+
     // Register frontend subscriber
-    state.router.write().await.subscribe_frontend(&format!("{}.{}.{}", provider, channel, symbol));
+    let topic = format!("{}.{}.{}", provider, channel, symbol);
+    eprintln!("[ws_subscribe] Registering frontend subscriber for topic: {}", topic);
+    state.router.write().await.subscribe_frontend(&topic);
 
     // Subscribe via manager
+    eprintln!("[ws_subscribe] Calling manager.subscribe...");
     let manager = state.manager.read().await;
-    manager.subscribe(&provider, &symbol, &channel, params).await
-        .map_err(|e| e.to_string())
+    let result = manager.subscribe(&provider, &symbol, &channel, params).await
+        .map_err(|e| e.to_string());
+
+    match &result {
+        Ok(_) => eprintln!("[ws_subscribe] ✓ Successfully subscribed to {} {} {}", provider, symbol, channel),
+        Err(e) => eprintln!("[ws_subscribe] ✗ Failed to subscribe: {}", e),
+    }
+
+    result
 }
 
 /// Unsubscribe from WebSocket channel
@@ -410,6 +440,159 @@ async fn ws_reconnect(
     let manager = state.manager.read().await;
     manager.reconnect(&provider).await
         .map_err(|e| e.to_string())
+}
+
+// ============================================================================
+// MONITORING COMMANDS
+// ============================================================================
+
+/// Add monitoring condition
+#[tauri::command]
+async fn monitor_add_condition(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, WebSocketState>,
+    condition: websocket::services::monitoring::MonitorCondition,
+) -> Result<i64, String> {
+    use rusqlite::params;
+
+    let pool = database::pool::get_pool().map_err(|e| e.to_string())?;
+    let conn = pool.get().map_err(|e| e.to_string())?;
+
+    conn.execute(
+        "INSERT INTO monitor_conditions (provider, symbol, field, operator, value, value2, enabled)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            &condition.provider,
+            &condition.symbol,
+            match condition.field {
+                websocket::services::monitoring::MonitorField::Price => "price",
+                websocket::services::monitoring::MonitorField::Volume => "volume",
+                websocket::services::monitoring::MonitorField::ChangePercent => "change_percent",
+                websocket::services::monitoring::MonitorField::Spread => "spread",
+            },
+            match condition.operator {
+                websocket::services::monitoring::MonitorOperator::GreaterThan => ">",
+                websocket::services::monitoring::MonitorOperator::LessThan => "<",
+                websocket::services::monitoring::MonitorOperator::GreaterThanOrEqual => ">=",
+                websocket::services::monitoring::MonitorOperator::LessThanOrEqual => "<=",
+                websocket::services::monitoring::MonitorOperator::Equal => "==",
+                websocket::services::monitoring::MonitorOperator::Between => "between",
+            },
+            condition.value,
+            condition.value2,
+            if condition.enabled { 1 } else { 0 },
+        ],
+    ).map_err(|e| e.to_string())?;
+
+    let id = conn.last_insert_rowid();
+
+    // Reload conditions
+    let services = state.services.read().await;
+    let _ = services.monitoring.load_conditions().await;
+
+    Ok(id)
+}
+
+/// Get all monitoring conditions
+#[tauri::command]
+async fn monitor_get_conditions(
+    app: tauri::AppHandle,
+) -> Result<Vec<websocket::services::monitoring::MonitorCondition>, String> {
+    let pool = database::pool::get_pool().map_err(|e| e.to_string())?;
+    let conn = pool.get().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, provider, symbol, field, operator, value, value2, enabled
+         FROM monitor_conditions
+         ORDER BY created_at DESC"
+    ).map_err(|e| e.to_string())?;
+
+    let conditions = stmt
+        .query_map([], |row| {
+            Ok(websocket::services::monitoring::MonitorCondition {
+                id: Some(row.get(0)?),
+                provider: row.get(1)?,
+                symbol: row.get(2)?,
+                field: websocket::services::monitoring::MonitorField::from_str(&row.get::<_, String>(3)?).unwrap(),
+                operator: websocket::services::monitoring::MonitorOperator::from_str(&row.get::<_, String>(4)?).unwrap(),
+                value: row.get(5)?,
+                value2: row.get(6)?,
+                enabled: row.get::<_, i32>(7)? == 1,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(conditions)
+}
+
+/// Delete monitoring condition
+#[tauri::command]
+async fn monitor_delete_condition(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, WebSocketState>,
+    id: i64,
+) -> Result<(), String> {
+    use rusqlite::params;
+
+    let pool = database::pool::get_pool().map_err(|e| e.to_string())?;
+    let conn = pool.get().map_err(|e| e.to_string())?;
+
+    conn.execute("DELETE FROM monitor_conditions WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+
+    // Reload conditions
+    let services = state.services.read().await;
+    services.monitoring.load_conditions().await.map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Get recent alerts
+#[tauri::command]
+async fn monitor_get_alerts(
+    app: tauri::AppHandle,
+    limit: i64,
+) -> Result<Vec<websocket::services::monitoring::MonitorAlert>, String> {
+    use rusqlite::params;
+
+    let pool = database::pool::get_pool().map_err(|e| e.to_string())?;
+    let conn = pool.get().map_err(|e| e.to_string())?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, condition_id, provider, symbol, field, triggered_value, triggered_at
+         FROM monitor_alerts
+         ORDER BY triggered_at DESC
+         LIMIT ?1"
+    ).map_err(|e| e.to_string())?;
+
+    let alerts = stmt
+        .query_map(params![limit], |row| {
+            Ok(websocket::services::monitoring::MonitorAlert {
+                id: Some(row.get(0)?),
+                condition_id: row.get(1)?,
+                provider: row.get(2)?,
+                symbol: row.get(3)?,
+                field: websocket::services::monitoring::MonitorField::from_str(&row.get::<_, String>(4)?).unwrap(),
+                triggered_value: row.get(5)?,
+                triggered_at: row.get::<_, i64>(6)? as u64,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(alerts)
+}
+
+/// Load monitoring conditions on startup
+#[tauri::command]
+async fn monitor_load_conditions(
+    state: tauri::State<'_, WebSocketState>,
+) -> Result<(), String> {
+    let services = state.services.read().await;
+    services.monitoring.load_conditions().await.map_err(|e| e.to_string())
 }
 
 // Windows-specific imports to hide console windows
@@ -474,17 +657,31 @@ fn execute_python_script(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize high-performance Rust SQLite database
+    // CRITICAL: Database is required for paper trading and other core features
     if let Err(e) = tokio::runtime::Runtime::new().unwrap().block_on(database::initialize()) {
-        eprintln!("Failed to initialize database: {}", e);
+        eprintln!("========================================");
+        eprintln!("CRITICAL ERROR: Failed to initialize database!");
+        eprintln!("Error: {}", e);
+        eprintln!("The application cannot function without the database.");
+        eprintln!("Please ensure you have write permissions to:");
+        eprintln!("  Windows: %APPDATA%\\fincept-terminal");
+        eprintln!("  macOS: ~/Library/Application Support/fincept-terminal");
+        eprintln!("  Linux: ~/.local/share/fincept-terminal");
+        eprintln!("========================================");
+        // Note: We don't panic here to allow the app to show an error UI
+        // The frontend will detect database failures via health checks
     }
 
     // Initialize WebSocket system
     let router = Arc::new(tokio::sync::RwLock::new(websocket::MessageRouter::new()));
     let manager = Arc::new(tokio::sync::RwLock::new(websocket::WebSocketManager::new(router.clone())));
+
+    // Initialize services with default monitoring (will be configured in setup)
     let services = Arc::new(tokio::sync::RwLock::new(WebSocketServices {
         paper_trading: websocket::services::PaperTradingService::new(),
         arbitrage: websocket::services::ArbitrageService::new(),
         portfolio: websocket::services::PortfolioService::new(),
+        monitoring: websocket::services::MonitoringService::default(),
     }));
 
     let ws_state = WebSocketState {
@@ -492,6 +689,11 @@ pub fn run() {
         router: router.clone(),
         services: services.clone(),
     };
+
+    // Initialize Barter trading system (Paper mode by default)
+    let barter_state = barter_integration::commands::BarterState::new(
+        barter_integration::types::TradingMode::Paper
+    );
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -507,10 +709,71 @@ pub fn run() {
         })
         .manage(commands::backtesting::BacktestingState::default())
         .manage(ws_state)
+        .manage(barter_state)
         .setup(move |app| {
-            // Set app handle for router to emit events to frontend (no-op for now, events are emitted directly)
-            let _ = router;  // Silence unused warning
-            let _ = app.handle().clone();
+            // CRITICAL: Set app handle for router to emit WebSocket events to frontend
+            let app_handle = app.handle().clone();
+            let router_clone = router.clone();
+            let services_clone = services.clone();
+
+            // Get database path
+            let db_path = app.path().app_data_dir()
+                .map(|p| p.join("fincept_terminal.db").to_string_lossy().to_string())
+                .unwrap_or_else(|_| "fincept_terminal.db".to_string());
+
+            // Use tauri::async_runtime to spawn task in Tauri's runtime
+            tauri::async_runtime::spawn(async move {
+                // Set router app handle
+                router_clone.write().await.set_app_handle(app_handle.clone());
+
+                // Initialize monitoring service with proper database path
+                let mut services_guard = services_clone.write().await;
+                services_guard.monitoring = websocket::services::MonitoringService::new(db_path);
+                services_guard.monitoring.set_app_handle(app_handle.clone());
+
+                // Subscribe to ticker stream and start monitoring
+                let ticker_rx = router_clone.read().await.subscribe_ticker();
+                services_guard.monitoring.start_monitoring(ticker_rx);
+
+                // Load existing conditions from database
+                let _ = services_guard.monitoring.load_conditions().await;
+
+                drop(services_guard); // Release the lock before listening
+
+                // Listen for Fyers ticker events from frontend
+                let router_clone_for_event = router_clone.clone();
+                let _ = app_handle.listen("fyers_ticker", move |event: tauri::Event| {
+                    if let Ok(payload_str) = serde_json::from_str::<serde_json::Value>(event.payload()) {
+                        if let Some(payload) = payload_str.as_object() {
+                            // Parse ticker data from frontend event
+                            let ticker = websocket::types::TickerData {
+                                provider: payload.get("provider").and_then(|v| v.as_str()).unwrap_or("fyers").to_string(),
+                                symbol: payload.get("symbol").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                                price: payload.get("price").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                                volume: payload.get("volume").and_then(|v| v.as_f64()),
+                                bid: payload.get("bid").and_then(|v| v.as_f64()),
+                                ask: payload.get("ask").and_then(|v| v.as_f64()),
+                                bid_size: payload.get("bid_size").and_then(|v| v.as_f64()),
+                                ask_size: payload.get("ask_size").and_then(|v| v.as_f64()),
+                                high: payload.get("high").and_then(|v| v.as_f64()),
+                                low: payload.get("low").and_then(|v| v.as_f64()),
+                                open: payload.get("open").and_then(|v| v.as_f64()),
+                                close: payload.get("close").and_then(|v| v.as_f64()),
+                                change: payload.get("change").and_then(|v| v.as_f64()),
+                                change_percent: payload.get("change_percent").and_then(|v| v.as_f64()),
+                                timestamp: payload.get("timestamp").and_then(|v| v.as_u64()).unwrap_or(0),
+                            };
+
+                            // Route to monitoring service
+                            let router = router_clone_for_event.clone();
+                            tauri::async_runtime::spawn(async move {
+                                router.read().await.route(websocket::types::MarketMessage::Ticker(ticker)).await;
+                            });
+                        }
+                    }
+                });
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -532,6 +795,11 @@ pub fn run() {
             ws_get_metrics,
             ws_get_all_metrics,
             ws_reconnect,
+            monitor_add_condition,
+            monitor_get_conditions,
+            monitor_delete_condition,
+            monitor_get_alerts,
+            monitor_load_conditions,
             execute_python_script,
             commands::market_data::get_market_quote,
             commands::market_data::get_market_quotes,
@@ -1247,6 +1515,31 @@ pub fn run() {
             commands::backtesting::create_directory,
             commands::backtesting::write_file,
             commands::backtesting::read_file,
+            // Barter Trading Commands
+            barter_integration::start_market_stream,
+            barter_integration::stop_market_stream,
+            barter_integration::get_active_streams,
+            barter_integration::subscribe_symbols,
+            barter_integration::unsubscribe_symbols,
+            barter_integration::submit_order,
+            barter_integration::cancel_order,
+            barter_integration::get_order,
+            barter_integration::get_all_orders,
+            barter_integration::get_open_orders,
+            barter_integration::get_positions,
+            barter_integration::get_position,
+            barter_integration::get_balances,
+            barter_integration::close_all_positions,
+            barter_integration::list_strategies,
+            barter_integration::get_strategy_parameters,
+            barter_integration::update_strategy_parameters,
+            barter_integration::run_backtest,
+            barter_integration::optimize_strategy,
+            barter_integration::get_supported_exchanges,
+            barter_integration::get_trading_modes,
+            barter_integration::parse_databento_dataset,
+            barter_integration::map_custom_dataset,
+            barter_integration::map_tick_dataset,
             // Company News Commands
             commands::company_news::fetch_company_news,
             commands::company_news::fetch_news_by_topic,
@@ -1311,6 +1604,7 @@ pub fn run() {
             commands::orderbook::calculate_cumulative_liquidity,
             commands::orderbook::batch_merge_orderbook,
             // High-Performance Rust SQLite Database Commands
+            commands::database::db_check_health,
             commands::database::db_save_setting,
             commands::database::db_get_setting,
             commands::database::db_get_all_settings,

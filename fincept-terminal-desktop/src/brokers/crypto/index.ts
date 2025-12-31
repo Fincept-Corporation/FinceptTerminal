@@ -50,8 +50,24 @@ export const SUPPORTED_EXCHANGES = {
       subaccounts: true,
     },
   },
-  // Future exchanges will be added here
-  // binance: { ... },
+  binance: {
+    id: 'binance',
+    name: 'Binance',
+    adapter: KrakenAdapter, // Using BaseExchangeAdapter (CCXT) until dedicated adapter
+    type: 'centralized',
+    assetClass: 'crypto',
+    region: 'global',
+    features: {
+      spot: true,
+      margin: true,
+      futures: true,
+      options: true,
+      staking: true,
+      earn: true,
+      lending: true,
+    },
+  },
+  // Future exchanges
   // coinbase: { ... },
   // etc.
 } as const;

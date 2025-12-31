@@ -39,7 +39,7 @@ export const MARKETPLACE_SERVERS: MCPServerDefinition[] = [
     name: 'QuestDB',
     description: 'Connect to QuestDB time-series databases for fast analytics',
     category: 'data',
-    icon: '⚡',
+    icon: '',
     command: 'bunx',
     args: ['-y', '@questdb/mcp-server'],
     requiresArg: 'DATABASE_URL', // Connection string passed as CLI argument
@@ -59,39 +59,8 @@ export const MARKETPLACE_SERVERS: MCPServerDefinition[] = [
     requiresConfig: false,
     tools: ['search_wikipedia', 'get_article', 'get_summary', 'get_sections', 'get_links', 'get_coordinates', 'get_related_topics', 'summarize_article_for_query', 'summarize_article_section', 'extract_key_facts'],
     documentation: 'https://github.com/Rudra-ravi/wikipedia-mcp'
-  },
-  {
-    id: 'kite',
-    name: 'Zerodha Kite',
-    description: 'Indian stock trading, portfolio management, order execution, and real-time market data via Kite Connect API',
-    category: 'data',
-    icon: '📈',
-    command: 'bunx',
-    args: ['-y', 'mcp-remote', 'https://mcp.kite.trade/mcp'],
-    env: {
-      KITE_API_KEY: '',
-      KITE_API_SECRET: ''
-    },
-    requiresConfig: true, // Uses KiteForm.tsx
-    tools: [
-      'get_profile',
-      'get_holdings',
-      'get_positions',
-      'get_orders',
-      'place_order',
-      'modify_order',
-      'cancel_order',
-      'get_gtt_orders',
-      'place_gtt_order',
-      'modify_gtt_order',
-      'delete_gtt_order',
-      'get_quote',
-      'get_ohlc',
-      'get_ltp',
-      'get_instruments'
-    ],
-    documentation: 'https://github.com/zerodha/kite-mcp-server'
   }
+  // Kite MCP server removed - moved to equity-trading tab with new implementation
 ];
 
 /**

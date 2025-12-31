@@ -243,13 +243,13 @@ Support: support@fincept.in
 
               <div className="flex flex-wrap justify-center gap-2 mt-3 text-xs sm:text-sm">
                 <span className="bg-green-500/20 text-green-300 px-3 py-1 rounded-full">
-                  ✓ Unlimited API Calls
+                  [OK] Unlimited API Calls
                 </span>
                 <span className="bg-blue-500/20 text-blue-300 px-3 py-1 rounded-full">
-                  ✓ Priority Support
+                  [OK] Priority Support
                 </span>
                 <span className="bg-purple-500/20 text-purple-300 px-3 py-1 rounded-full">
-                  ✓ Premium Features
+                  [OK] Premium Features
                 </span>
               </div>
             </div>

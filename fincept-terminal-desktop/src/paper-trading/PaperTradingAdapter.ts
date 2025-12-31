@@ -58,9 +58,9 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
         console.log('[PaperTradingAdapter] Attempting to connect real adapter for market data...');
         try {
           await this.realAdapter.connect();
-          console.log('[PaperTradingAdapter] ✓ Real adapter connected successfully');
+          console.log('[PaperTradingAdapter] [OK] Real adapter connected successfully');
         } catch (error) {
-          console.warn('[PaperTradingAdapter] ⚠ Real adapter connection failed:', error);
+          console.warn('[PaperTradingAdapter] [WARN] Real adapter connection failed:', error);
           console.log('[PaperTradingAdapter] Paper trading will work in offline mode (market data unavailable)');
           // Don't throw - continue with paper adapter in offline mode
         }
@@ -87,21 +87,23 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       this._isAuthenticated = true; // Paper trading doesn't require real auth
       this.initialized = true;
 
-      console.log('[PaperTradingAdapter] ✓ Connection complete!');
+      console.log('[PaperTradingAdapter] [OK] Connection complete!');
       console.log('[PaperTradingAdapter] Mode:', this.realAdapter.isConnected() ? 'ONLINE (with market data)' : 'OFFLINE (no market data)');
       this.emit('connected', { exchange: this.id });
       this.emit('authenticated', { exchange: this.id });
     } catch (error) {
       this._isConnected = false;
-      console.error('[PaperTradingAdapter] ✗ Connection failed:', error);
+      console.error('[PaperTradingAdapter] [FAIL] Connection failed:', error);
       throw this.handleError(error);
     }
   }
 
   async disconnect(): Promise<void> {
-    this.matchingEngine.stopMonitoring();
+    // Clean up all resources (stop monitoring + clear caches)
+    this.matchingEngine.cleanup();
     this._isConnected = false;
     this._isAuthenticated = false;
+    this.initialized = false;
     this.emit('disconnected', { exchange: this.id });
   }
 
@@ -163,10 +165,10 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       // 7. Reinitialize balance manager
       this.balanceManager = new PaperTradingBalance(this.paperConfig);
 
-      console.log('[PaperTradingAdapter] ✓ Account reset complete!');
+      console.log('[PaperTradingAdapter] [OK] Account reset complete!');
       this.emit('reset', { exchange: this.id, portfolioId });
     } catch (error) {
-      console.error('[PaperTradingAdapter] ✗ Reset failed:', error);
+      console.error('[PaperTradingAdapter] [FAIL] Reset failed:', error);
       throw error;
     }
   }
@@ -179,10 +181,24 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
   }
 
   private async initializePortfolio(): Promise<void> {
+    // Check database health first
+    console.log('[PaperTradingAdapter] Checking database health...');
+    const isHealthy = await paperTradingDatabase.checkHealth();
+
+    if (!isHealthy) {
+      throw new Error(
+        'Paper trading database is not accessible. The Rust database backend may have failed to initialize. ' +
+        'Please check the terminal/console for database initialization errors and restart the application.'
+      );
+    }
+
+    console.log('[PaperTradingAdapter] Database health check passed');
+
     const existing = await paperTradingDatabase.getPortfolio(this.paperConfig.portfolioId);
 
     if (!existing) {
       // Create new portfolio
+      console.log('[PaperTradingAdapter] Creating new portfolio:', this.paperConfig.portfolioId);
       await paperTradingDatabase.createPortfolio({
         id: this.paperConfig.portfolioId,
         name: this.paperConfig.portfolioName,
@@ -192,6 +208,9 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
         marginMode: this.paperConfig.marginMode,
         leverage: this.paperConfig.defaultLeverage,
       });
+      console.log('[PaperTradingAdapter] Portfolio created successfully');
+    } else {
+      console.log('[PaperTradingAdapter] Using existing portfolio:', this.paperConfig.portfolioId);
     }
   }
 
@@ -398,14 +417,68 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
     price?: number,
     params?: OrderParams
   ): Promise<Order> {
-    // For paper trading, we'll cancel and recreate the order
-    await this.cancelOrder(orderId, symbol);
-
-    if (!type || !side || !amount) {
-      throw new Error('Edit order requires type, side, and amount');
+    if (!this.initialized) {
+      throw new Error('Paper trading adapter not initialized. Call connect() first.');
     }
 
-    return await this.createOrder(symbol, type, side, amount, price, params);
+    // Import the lock manager locally to avoid circular dependency
+    const { transactionLockManager } = await import('./TransactionLockManager');
+
+    // Execute atomically with locks
+    return await transactionLockManager.withMultipleLocks(
+      [
+        { type: 'portfolio', id: this.paperConfig.portfolioId },
+        { type: 'order', id: orderId },
+        { type: 'symbol', id: this.paperConfig.portfolioId, symbol },
+      ],
+      async () => {
+        // Fetch the original order first
+        const originalOrder = await paperTradingDatabase.getOrder(orderId);
+        if (!originalOrder) {
+          throw new Error(`Order ${orderId} not found`);
+        }
+
+        if (originalOrder.status === 'filled') {
+          throw new Error(`Cannot edit filled order ${orderId}`);
+        }
+
+        if (originalOrder.status === 'cancelled') {
+          throw new Error(`Cannot edit cancelled order ${orderId}`);
+        }
+
+        // Validate new parameters
+        if (!type || !side || !amount) {
+          throw new Error('Edit order requires type, side, and amount');
+        }
+
+        // Try to create new order FIRST (validates sufficient funds, etc.)
+        let newOrder: Order;
+        try {
+          newOrder = await this.createOrder(symbol, type, side, amount, price, params);
+        } catch (error) {
+          // If new order fails, don't cancel the original
+          throw new Error(`Failed to create replacement order: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Only after new order succeeds, cancel the original
+        try {
+          await this.matchingEngine.cancelOrder(orderId);
+        } catch (cancelError) {
+          // If cancel fails after new order created, we have a problem
+          // Try to cancel the new order to maintain atomicity
+          console.error('[PaperTradingAdapter] Failed to cancel original order after creating new one:', cancelError);
+          try {
+            await this.matchingEngine.cancelOrder(newOrder.id);
+          } catch (cleanupError) {
+            console.error('[PaperTradingAdapter] Failed to cleanup new order:', cleanupError);
+          }
+          throw new Error(`Edit order failed: ${cancelError instanceof Error ? cancelError.message : String(cancelError)}`);
+        }
+
+        this.emit('order', { exchange: this.id, data: newOrder });
+        return newOrder;
+      }
+    );
   }
 
   async cancelOrder(orderId: string, symbol: string): Promise<Order> {
@@ -792,33 +865,65 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
   }
 
   /**
-   * Get paper trading statistics
+   * Get paper trading statistics (improved with comprehensive metrics)
    */
   async getStatistics(): Promise<any> {
+    const { StatisticsCalculator } = await import('./StatisticsCalculator');
+    const statsCalculator = new StatisticsCalculator();
+
     const portfolio = await paperTradingDatabase.getPortfolio(this.paperConfig.portfolioId);
     const positions = await paperTradingDatabase.getPortfolioPositions(this.paperConfig.portfolioId);
-    const trades = await paperTradingDatabase.getPortfolioTrades(this.paperConfig.portfolioId);
-    const pnl = await this.balanceManager.calculatePortfolioPnL(this.paperConfig.portfolioId);
     const totalValue = await this.balanceManager.calculateTotalValue(this.paperConfig.portfolioId);
 
-    const winningTrades = trades.filter(t => {
-      // Calculate P&L for each trade (simplified)
-      return t.side === 'sell'; // Assume sells close positions
-    });
+    // Get comprehensive statistics
+    const performanceSummary = await statsCalculator.getPerformanceSummary(
+      this.paperConfig.portfolioId,
+      this.paperConfig.initialBalance
+    );
 
     return {
+      // Portfolio info
       portfolioId: this.paperConfig.portfolioId,
       portfolioName: this.paperConfig.portfolioName,
       initialBalance: this.paperConfig.initialBalance,
       currentBalance: portfolio?.currentBalance || 0,
       totalValue,
-      totalPnL: pnl.totalPnL,
-      realizedPnL: pnl.realizedPnL,
-      unrealizedPnL: pnl.unrealizedPnL,
-      totalTrades: trades.length,
+
+      // P&L metrics
+      totalPnL: performanceSummary.stats.totalPnL,
+      realizedPnL: performanceSummary.stats.realizedPnL,
+      unrealizedPnL: performanceSummary.stats.unrealizedPnL,
+      returnPercent: performanceSummary.returnPercent.toFixed(2),
+
+      // Trade metrics
+      totalTrades: performanceSummary.stats.totalTrades,
+      winningTrades: performanceSummary.stats.winningTrades,
+      losingTrades: performanceSummary.stats.losingTrades,
+      winRate: performanceSummary.stats.winRate.toFixed(2),
+
+      // Position metrics
       openPositions: positions.filter(p => p.status === 'open').length,
       closedPositions: positions.filter(p => p.status === 'closed').length,
-      returnPercent: ((pnl.totalPnL / this.paperConfig.initialBalance) * 100).toFixed(2),
+
+      // Performance metrics
+      averageWin: performanceSummary.stats.averageWin.toFixed(2),
+      averageLoss: performanceSummary.stats.averageLoss.toFixed(2),
+      largestWin: performanceSummary.stats.largestWin.toFixed(2),
+      largestLoss: performanceSummary.stats.largestLoss.toFixed(2),
+      profitFactor: performanceSummary.stats.profitFactor.toFixed(2),
+      riskRewardRatio: performanceSummary.riskRewardRatio.toFixed(2),
+
+      // Advanced metrics
+      sharpeRatio: performanceSummary.stats.sharpeRatio?.toFixed(2) || null,
+      maxDrawdown: performanceSummary.stats.maxDrawdown?.toFixed(2) || null,
+      expectancy: performanceSummary.expectancy.toFixed(2),
+      kellyCriterion: (performanceSummary.kellyCriterion * 100).toFixed(2), // as percentage
+
+      // Timing metrics
+      avgHoldingPeriod: performanceSummary.stats.avgHoldingPeriod?.toFixed(0) || null, // in minutes
+
+      // Fees
+      totalFees: performanceSummary.stats.totalFees.toFixed(2),
     };
   }
 

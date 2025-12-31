@@ -81,10 +81,10 @@ const ToolCallDisplay: React.FC<ToolCallDisplayProps> = ({
           <span style={{ color: statusColor, fontSize: '10px' }}>Running...</span>
         )}
         {status === 'success' && (
-          <span style={{ color: statusColor, fontSize: '10px' }}>✓ Success</span>
+          <span style={{ color: statusColor, fontSize: '10px' }}>[OK] Success</span>
         )}
         {status === 'error' && (
-          <span style={{ color: statusColor, fontSize: '10px' }}>✗ Failed</span>
+          <span style={{ color: statusColor, fontSize: '10px' }}>[FAIL] Failed</span>
         )}
       </div>
 

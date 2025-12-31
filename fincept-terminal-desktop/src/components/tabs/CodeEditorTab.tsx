@@ -411,7 +411,7 @@ ${result.output}
       if (result.signals.length > 0) {
         outputText += `\nSignals Generated:\n`;
         result.signals.forEach(signal => {
-          const icon = signal.signal_type === 'Buy' ? '✓ BUY' : '✗ SELL';
+          const icon = signal.signal_type === 'Buy' ? '[OK] BUY' : '[FAIL] SELL';
           outputText += `  ${icon}: ${signal.message}\n`;
         });
       }
@@ -419,14 +419,14 @@ ${result.output}
       if (result.plots.length > 0) {
         outputText += `\nPlots Generated:\n`;
         result.plots.forEach(plot => {
-          outputText += `  ✓ ${plot.plot_type}: ${plot.label} (${plot.data.length} data points)\n`;
+          outputText += `  [OK] ${plot.plot_type}: ${plot.label} (${plot.data.length} data points)\n`;
         });
       }
 
       if (result.errors.length > 0) {
         outputText += `\nErrors:\n`;
         result.errors.forEach(error => {
-          outputText += `  ✗ ${error}\n`;
+          outputText += `  [FAIL] ${error}\n`;
         });
       }
 

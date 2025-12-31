@@ -70,7 +70,7 @@ export const EXAMPLE_SIMPLE: MCPServerDefinition = {
   name: 'Time Server',
   description: 'Get current time in any timezone',
   category: 'productivity',
-  icon: '⏰',
+  icon: '',
   command: 'bunx',
   args: ['-y', '@modelcontextprotocol/server-time'],
   env: {},

@@ -422,7 +422,7 @@ workflow.start();
 
 // Monitor workflow
 workflow.status();
-// Running: ✓
+// Running: [OK]
 // Nodes: 4
 // Connections: 3
 // Last execution: 10s ago

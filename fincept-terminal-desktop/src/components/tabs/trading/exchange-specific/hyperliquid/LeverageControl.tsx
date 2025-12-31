@@ -206,7 +206,7 @@ export function HyperLiquidLeverageControl({ symbol, currentLeverage = 1, onLeve
             color: BLOOMBERG.RED,
           }}
         >
-          ⚠️ High leverage ({leverage}x) increases liquidation risk
+          [WARN]️ High leverage ({leverage}x) increases liquidation risk
         </div>
       )}
     </div>

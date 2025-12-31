@@ -356,7 +356,7 @@ export default function DataSourcesTab() {
                             fontWeight: 'bold',
                           }}
                         >
-                          ✓ READY
+                          [OK] READY
                         </span>
                       )}
                     </div>

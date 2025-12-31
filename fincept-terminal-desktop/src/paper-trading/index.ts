@@ -77,7 +77,7 @@ export function createPaperTradingAdapter(
     paperTradingConfig: PaperTradingConfig;
     realAdapter: IExchangeAdapter;
   } = {
-    exchange: `${config.provider}_paper`,
+    exchange: config.provider, // Use provider directly (must be valid CCXT exchange)
     enableRateLimit: true,
     paperTradingConfig: config,
     realAdapter,

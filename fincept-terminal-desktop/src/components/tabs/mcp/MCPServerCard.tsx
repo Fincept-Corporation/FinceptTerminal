@@ -39,8 +39,8 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
   const statusIcon = {
     running: '🟢',
     stopped: '🔴',
-    error: '❌'
-  }[server.status] || '⚪';
+    error: '[ERROR]'
+  }[server.status] || '';
 
   const statusText = {
     running: `Running | ${server.callsToday} calls today`,
@@ -107,7 +107,7 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({
                 fontWeight: 'bold',
                 marginBottom: '2px'
               }}>
-                ⚠ HEALTH WARNING: {healthInfo.errorCount} errors
+                [WARN] HEALTH WARNING: {healthInfo.errorCount} errors
               </div>
               {healthInfo.lastError && (
                 <div style={{

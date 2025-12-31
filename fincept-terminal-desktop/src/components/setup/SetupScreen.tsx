@@ -153,7 +153,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
             Setting up your environment for the first time...
           </p>
           {setupStatus && !setupStatus.needs_setup && (
-            <p className="text-emerald-500 text-sm">✓ System is ready!</p>
+            <p className="text-emerald-500 text-sm">[OK] System is ready!</p>
           )}
         </div>
 
@@ -168,7 +168,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
                     pythonProgress === 100 ? 'bg-emerald-500 scale-110' :
                     pythonProgress > 0 ? 'bg-blue-500 animate-pulse' : 'bg-zinc-800'
                   }`}>
-                    {pythonProgress === 100 ? '✓' : '1'}
+                    {pythonProgress === 100 ? '[OK]' : '1'}
                   </div>
                   <div className="flex-1">
                     <h3 className="text-white font-semibold">Python 3.12.7</h3>
@@ -203,7 +203,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
                     bunProgress === 100 ? 'bg-emerald-500 scale-110' :
                     bunProgress > 0 ? 'bg-blue-500 animate-pulse' : 'bg-zinc-800'
                   }`}>
-                    {bunProgress === 100 ? '✓' : '2'}
+                    {bunProgress === 100 ? '[OK]' : '2'}
                   </div>
                   <div className="flex-1">
                     <h3 className="text-white font-semibold">Bun v1.1.0</h3>
@@ -238,7 +238,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
                     packagesProgress === 100 ? 'bg-emerald-500 scale-110' :
                     packagesProgress > 0 ? 'bg-blue-500 animate-pulse' : 'bg-zinc-800'
                   }`}>
-                    {packagesProgress === 100 ? '✓' : '3'}
+                    {packagesProgress === 100 ? '[OK]' : '3'}
                   </div>
                   <div className="flex-1">
                     <h3 className="text-white font-semibold">Python Libraries</h3>
@@ -271,7 +271,7 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
         {error && (
           <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4 space-y-3">
             <div className="flex items-start space-x-3">
-              <span className="text-red-500 text-xl">⚠</span>
+              <span className="text-red-500 text-xl">[WARN]</span>
               <div className="flex-1">
                 <h4 className="text-red-500 font-semibold">Setup Error</h4>
                 <p className="text-red-300 text-sm mt-1">{error}</p>
@@ -308,10 +308,10 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
                   <strong>Note:</strong> This is a one-time setup process. The application will download and install the necessary runtimes for optimal performance.
                 </p>
                 <p className="text-blue-200 text-sm font-medium">
-                  ⏱️ This process may take a few minutes to complete. On older CPUs, it might take longer.
+                   This process may take a few minutes to complete. On older CPUs, it might take longer.
                 </p>
                 <p className="text-yellow-300 text-sm font-semibold">
-                  ⚠️ Please do not close the application during installation. Wait for the process to complete.
+                  [WARN]️ Please do not close the application during installation. Wait for the process to complete.
                 </p>
               </div>
             </div>

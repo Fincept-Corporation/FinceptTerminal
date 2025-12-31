@@ -101,7 +101,7 @@ export function AdvancedOrderForm({
           }
         }}
       >
-        <span>⚡ ADVANCED OPTIONS</span>
+        <span> ADVANCED OPTIONS</span>
         <span>{showAdvanced ? '▼' : '▶'}</span>
       </button>
 

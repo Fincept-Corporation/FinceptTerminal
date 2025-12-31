@@ -132,7 +132,16 @@ interface AuthContextType {
   availablePlans: SubscriptionPlan[];
   isLoadingPlans: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signup: (username: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (
+    username: string,
+    email: string,
+    password: string,
+    additionalData?: {
+      phone?: string;
+      country_code?: string;
+      country?: string;
+    }
+  ) => Promise<{ success: boolean; error?: string }>;
   verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   setupGuestAccess: () => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -540,12 +549,24 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
   };
 
   // Signup function
-  const signup = async (username: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const signup = async (
+    username: string,
+    email: string,
+    password: string,
+    additionalData?: {
+      phone?: string;
+      country_code?: string;
+      country?: string;
+    }
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
       const result = await AuthApiService.register({
         username,
         email,
-        password
+        password,
+        ...(additionalData?.phone && { phone: additionalData.phone }),
+        ...(additionalData?.country_code && { country_code: additionalData.country_code }),
+        ...(additionalData?.country && { country: additionalData.country })
       }) as ApiResponse;
 
       if (result.success) {

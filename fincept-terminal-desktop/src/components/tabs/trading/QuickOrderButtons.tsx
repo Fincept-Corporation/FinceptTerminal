@@ -101,7 +101,7 @@ export function QuickOrderButtons({ symbol, currentPrice, onPlaceOrder }: QuickO
       </div>
 
       <div className="mt-3 text-[10px] text-gray-600">
-        ⚠️ Market orders execute instantly
+        [WARN]️ Market orders execute instantly
       </div>
     </div>
   );

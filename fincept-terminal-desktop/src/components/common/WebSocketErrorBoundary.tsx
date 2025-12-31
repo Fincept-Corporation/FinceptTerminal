@@ -34,7 +34,7 @@ export class WebSocketErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex items-center justify-center h-full bg-[#0d0d0d] text-white">
           <div className="text-center p-6">
-            <div className="text-red-500 text-lg mb-2">⚠ Connection Error</div>
+            <div className="text-red-500 text-lg mb-2">[WARN] Connection Error</div>
             <div className="text-gray-400 text-sm mb-4">
               {this.state.error?.message || 'WebSocket connection failed'}
             </div>

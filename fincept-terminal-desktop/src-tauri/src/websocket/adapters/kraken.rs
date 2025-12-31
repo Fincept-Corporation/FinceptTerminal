@@ -7,7 +7,6 @@ use super::WebSocketAdapter;
 use crate::websocket::types::*;
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -47,15 +46,22 @@ impl KrakenAdapter {
 
     /// Parse Kraken ticker message
     fn parse_ticker(&self, data: &Value) -> Option<TickerData> {
-        let symbol = data.get("symbol")?.as_str()?;
+        // Get the first element from the data array
         let ticker_data = data.get("data")?.as_array()?.get(0)?;
 
-        let last = ticker_data.get("last")?.as_str()?.parse::<f64>().ok()?;
-        let bid = ticker_data.get("bid")?.as_str()?.parse::<f64>().ok();
-        let ask = ticker_data.get("ask")?.as_str()?.parse::<f64>().ok();
-        let volume = ticker_data.get("volume")?.as_str()?.parse::<f64>().ok();
-        let high = ticker_data.get("high")?.as_str()?.parse::<f64>().ok();
-        let low = ticker_data.get("low")?.as_str()?.parse::<f64>().ok();
+        // Symbol is inside the data object
+        let symbol = ticker_data.get("symbol")?.as_str()?;
+
+        // Values are numbers, not strings
+        let last = ticker_data.get("last")?.as_f64()?;
+        let bid = ticker_data.get("bid")?.as_f64();
+        let ask = ticker_data.get("ask")?.as_f64();
+        let bid_qty = ticker_data.get("bid_qty")?.as_f64();
+        let ask_qty = ticker_data.get("ask_qty")?.as_f64();
+        let volume = ticker_data.get("volume")?.as_f64();
+        let high = ticker_data.get("high")?.as_f64();
+        let low = ticker_data.get("low")?.as_f64();
+        let vwap = ticker_data.get("vwap")?.as_f64();
 
         Some(TickerData {
             provider: "kraken".to_string(),
@@ -63,13 +69,13 @@ impl KrakenAdapter {
             price: last,
             bid,
             ask,
-            bid_size: None,
-            ask_size: None,
+            bid_size: bid_qty,
+            ask_size: ask_qty,
             volume,
             high,
             low,
-            open: None,
-            close: None,
+            open: vwap, // Using VWAP as a proxy for open (already Option<f64>)
+            close: Some(last),
             change: None,
             change_percent: None,
             timestamp: Self::now(),
@@ -78,17 +84,21 @@ impl KrakenAdapter {
 
     /// Parse Kraken order book message
     fn parse_orderbook(&self, data: &Value, is_snapshot: bool) -> Option<OrderBookData> {
-        let symbol = data.get("symbol")?.as_str()?;
+        // Get the first element from the data array
         let book_data = data.get("data")?.as_array()?.get(0)?;
+
+        // Symbol is inside the data object
+        let symbol = book_data.get("symbol")?.as_str()?;
 
         let parse_levels = |levels: &Value| -> Vec<OrderBookLevel> {
             levels.as_array()
                 .map(|arr| {
                     arr.iter()
                         .filter_map(|level| {
+                            // Kraken v2 book levels: {"price": 88500.0, "qty": 1.5}
                             Some(OrderBookLevel {
-                                price: level.get("price")?.as_str()?.parse().ok()?,
-                                quantity: level.get("qty")?.as_str()?.parse().ok()?,
+                                price: level.get("price")?.as_f64()?,
+                                quantity: level.get("qty")?.as_f64()?,
                                 count: None,
                             })
                         })
@@ -204,7 +214,11 @@ impl KrakenAdapter {
                         "ohlc" => {
                             self.parse_candle(&data).map(MarketMessage::Candle)
                         }
-                        _ => None,
+                        "heartbeat" | "status" => {
+                            // Heartbeat and status messages - ignore silently
+                            None
+                        }
+                        _ => None
                     };
 
                     if let Some(msg) = market_msg {
@@ -261,11 +275,23 @@ impl KrakenAdapter {
 impl WebSocketAdapter for KrakenAdapter {
     async fn connect(&mut self) -> anyhow::Result<()> {
         let url = self.config.url.clone();
-        let (ws_stream, _) = connect_async(if url.is_empty() { KRAKEN_WS_URL } else { &url }).await?;
+        let connect_url = if url.is_empty() { KRAKEN_WS_URL } else { &url };
+
+        eprintln!("[Kraken::connect] Connecting to: {}", connect_url);
+
+        let (ws_stream, _) = connect_async(connect_url).await
+            .map_err(|e| {
+                eprintln!("[Kraken::connect] ✗ Failed to connect: {}", e);
+                e
+            })?;
+
+        eprintln!("[Kraken::connect] ✓ WebSocket connection established");
 
         let ws = Arc::new(RwLock::new(ws_stream));
         self.ws = Some(ws.clone());
         *self.connected.write().await = true;
+
+        eprintln!("[Kraken::connect] Starting receive loop...");
 
         // Start receive loop
         if let Some(callback) = self.message_callback.clone() {
@@ -273,8 +299,12 @@ impl WebSocketAdapter for KrakenAdapter {
             tokio::spawn(async move {
                 Self::receive_loop(ws, callback, connected).await;
             });
+            eprintln!("[Kraken::connect] ✓ Receive loop started");
+        } else {
+            eprintln!("[Kraken::connect] ⚠ No message callback set!");
         }
 
+        eprintln!("[Kraken::connect] ✓ Connection complete");
         Ok(())
     }
 
@@ -295,8 +325,13 @@ impl WebSocketAdapter for KrakenAdapter {
         channel: &str,
         params: Option<Value>,
     ) -> anyhow::Result<()> {
+        eprintln!("[Kraken::subscribe] symbol={}, channel={}", symbol, channel);
+
         let ws = self.ws.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Not connected"))?;
+            .ok_or_else(|| {
+                eprintln!("[Kraken::subscribe] ✗ Not connected");
+                anyhow::anyhow!("Not connected")
+            })?;
 
         // Build subscription message
         let mut sub_msg = serde_json::json!({
@@ -321,8 +356,15 @@ impl WebSocketAdapter for KrakenAdapter {
         }
 
         let msg_str = serde_json::to_string(&sub_msg)?;
-        ws.write().await.send(Message::Text(msg_str)).await?;
+        eprintln!("[Kraken::subscribe] Sending subscription message: {}", msg_str);
 
+        ws.write().await.send(Message::Text(msg_str)).await
+            .map_err(|e| {
+                eprintln!("[Kraken::subscribe] ✗ Failed to send: {}", e);
+                anyhow::anyhow!("Failed to send subscription: {}", e)
+            })?;
+
+        eprintln!("[Kraken::subscribe] ✓ Subscription message sent");
         Ok(())
     }
 

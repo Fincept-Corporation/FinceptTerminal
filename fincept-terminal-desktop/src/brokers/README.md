@@ -7,15 +7,22 @@ Professional-grade broker and exchange integrations for Fincept Terminal. Bloomb
 ```
 src/brokers/
 ├── index.ts              # Main exports and broker registry
-├── exchanges/            # Crypto exchanges (CCXT-based)
+├── crypto/               # Crypto exchanges (CCXT-based)
 │   ├── types.ts         # Unified type definitions
 │   ├── BaseExchangeAdapter.ts  # Abstract base class
-│   ├── KrakenAdapter.ts        # Kraken implementation
-│   ├── index.ts         # Exchange registry & factory
-│   └── README.md        # Detailed documentation
-├── zerodha/             # Zerodha Kite (Indian broker)
-│   ├── index.ts         # Zerodha exports and metadata
-│   └── kiteAdapter.tsx  # Complete Kite Connect API adapter
+│   ├── kraken/          # Kraken exchange
+│   │   └── KrakenAdapter.ts
+│   ├── hyperliquid/     # HyperLiquid DEX
+│   │   └── HyperLiquidAdapter.ts
+│   └── index.ts         # Exchange registry & factory
+├── stocks/              # Stock brokers
+│   ├── fyers/           # Fyers (Indian broker)
+│   │   └── adapter.ts
+│   ├── kite/            # Zerodha Kite (Indian broker)
+│   │   └── adapter.ts
+│   └── index.ts
+├── registry.ts          # Broker metadata and factory
+├── features.ts          # Feature detection system
 └── README.md            # This file
 ```
 
@@ -39,12 +46,20 @@ src/brokers/
 - **Special**: 4% fee discount (Builder Code), No market orders (simulated with limits)
 - **Files**: `src/brokers/exchanges/HyperLiquidAdapter.ts`
 
-### 3. **Zerodha Kite** (Stock Broker)
+### 3. **Zerodha Kite** (Stock Broker) - NEW
 - **Region**: India
 - **Assets**: Equity, F&O, Commodity, Currency, Mutual Funds
 - **Features**: Trading, Portfolio, GTT, Alerts, Margin Calculator
 - **API Version**: Kite Connect v3
-- **Files**: `src/brokers/zerodha/`
+- **Status**: In development (see `src/brokers/stocks/kite/` and `src/components/tabs/equity-trading/`)
+- **Files**: `src/brokers/stocks/kite/`
+
+### 4. **Fyers** (Stock Broker) - NEW
+- **Region**: India
+- **Assets**: Equity, F&O, Commodity, Currency
+- **Features**: Trading, Portfolio, Market Data, WebSocket
+- **Status**: In development (see `src/brokers/stocks/fyers/` and `src/components/tabs/equity-trading/`)
+- **Files**: `src/brokers/stocks/fyers/`
 
 ## Adding New Brokers
 

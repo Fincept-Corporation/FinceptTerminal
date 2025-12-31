@@ -236,10 +236,10 @@ const LoginAuditDashboard: React.FC = () => {
                     {/* Alerts Panel */}
                     <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '8px', overflow: 'auto' }}>
                         <div style={{ color: colors.alert, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
-                            ⚠️ {t('activity.securityAlerts')} ({alerts.length})
+                            [WARN]️ {t('activity.securityAlerts')} ({alerts.length})
                         </div>
                         {alerts.length === 0 ? (
-                            <div style={{ color: colors.secondary, fontSize: '11px' }}>✓ {t('activity.noActiveAlerts')}</div>
+                            <div style={{ color: colors.secondary, fontSize: '11px' }}>[OK] {t('activity.noActiveAlerts')}</div>
                         ) : (
                             alerts.map((alert) => (
                                 <div key={alert.id} style={{
@@ -322,7 +322,7 @@ const LoginAuditDashboard: React.FC = () => {
                     padding: '40px',
                     color: colors.secondary
                 }}>
-                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>✓</div>
+                    <div style={{ fontSize: '24px', marginBottom: '8px' }}>[OK]</div>
                     <div>No security alerts at this time</div>
                 </div>
             ) : (

@@ -467,7 +467,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             fontSize: '9px',
             fontWeight: 600
           }}>
-            ⚠ {error}
+            [WARN] {error}
           </div>
         )}
 
@@ -484,7 +484,7 @@ export function OrderForm({ symbol, currentPrice, onPlaceOrder, isLoading }: Ord
             textAlign: 'center',
             letterSpacing: '0.5px'
           }}>
-            ⚠️ LIVE TRADING MODE - REAL MONEY!
+            [WARN]️ LIVE TRADING MODE - REAL MONEY!
           </div>
         )}
 

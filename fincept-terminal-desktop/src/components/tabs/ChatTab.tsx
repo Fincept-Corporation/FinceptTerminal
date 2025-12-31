@@ -387,7 +387,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         };
 
         conversationHistory.unshift(systemMessage);
-        console.log('[ChatTab] ✅ System message with context added to conversation');
+        console.log('[ChatTab] [OK] System message with context added to conversation');
         console.log('[ChatTab] 📤 Total conversation history length:', conversationHistory.length);
       } else {
         console.log('[ChatTab] ℹ️ No active contexts linked');
@@ -459,7 +459,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
         const errorMessage = await sqliteService.addChatMessage({
           session_uuid: currentSessionUuid,
           role: 'assistant',
-          content: `❌ Error: ${response.error}\n\nPlease check your LLM configuration and try again.`
+          content: `[ERROR] Error: ${response.error}\n\nPlease check your LLM configuration and try again.`
         });
         setMessages(prev => [...prev, errorMessage]);
         setIsTyping(false);
@@ -497,7 +497,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       const errorMessage = await sqliteService.addChatMessage({
         session_uuid: currentSessionUuid,
         role: 'assistant',
-        content: `❌ Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        content: `[ERROR] Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
       });
       setMessages(prev => [...prev, errorMessage]);
       setIsTyping(false);
@@ -1158,7 +1158,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                 fontSize: '9px',
                 marginBottom: '6px'
               }}>
-                MCP Tools: {mcpToolsCount > 0 ? `${mcpToolsCount} Available ✓` : 'None'}
+                MCP Tools: {mcpToolsCount > 0 ? `${mcpToolsCount} Available [OK]` : 'None'}
               </div>
               <button
                 onClick={() => onNavigateToTab?.('mcp')}
@@ -1188,7 +1188,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                   border: `1px solid ${colors.alert}`,
                   borderRadius: '2px'
                 }}>
-                  ⚠️ {currentProvider.toUpperCase()} doesn't support MCP tools
+                  [WARN]️ {currentProvider.toUpperCase()} doesn't support MCP tools
                 </div>
               )}
             </div>

@@ -420,6 +420,38 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_optimization_runs_strategy ON optimization_runs(strategy_id);
         CREATE INDEX IF NOT EXISTS idx_optimization_runs_provider ON optimization_runs(provider_name);
         CREATE INDEX IF NOT EXISTS idx_optimization_runs_status ON optimization_runs(status);
+
+        -- Monitor conditions table
+        CREATE TABLE IF NOT EXISTS monitor_conditions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            field TEXT NOT NULL CHECK (field IN ('price', 'volume', 'change_percent', 'spread')),
+            operator TEXT NOT NULL CHECK (operator IN ('>', '<', '>=', '<=', '==', 'between')),
+            value REAL NOT NULL,
+            value2 REAL,
+            enabled INTEGER DEFAULT 1,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitor_conditions_provider_symbol ON monitor_conditions(provider, symbol);
+        CREATE INDEX IF NOT EXISTS idx_monitor_conditions_enabled ON monitor_conditions(enabled);
+
+        -- Monitor alerts table
+        CREATE TABLE IF NOT EXISTS monitor_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            condition_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            field TEXT NOT NULL,
+            triggered_value REAL NOT NULL,
+            triggered_at INTEGER NOT NULL,
+            FOREIGN KEY(condition_id) REFERENCES monitor_conditions(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_monitor_alerts_triggered_at ON monitor_alerts(triggered_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_monitor_alerts_condition_id ON monitor_alerts(condition_id);
         ",
     )?;
 

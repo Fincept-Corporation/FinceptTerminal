@@ -56,8 +56,11 @@ export interface PaperTradingConfig {
   };
 
   slippage: {
-    market: number; // e.g., 0.001 (0.1%)
+    market: number; // e.g., 0.001 (0.1%) - base slippage
     limit: number; // Usually 0
+    modelType?: 'fixed' | 'size-dependent' | 'volatility-adjusted'; // Default: 'fixed'
+    sizeImpactFactor?: number; // e.g., 0.0001 - additional slippage per unit size
+    volatilityMultiplier?: number; // e.g., 2.0 - multiplier during high volatility
   };
 
   // Risk settings (optional)

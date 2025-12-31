@@ -399,7 +399,7 @@ const ValidationMessage: React.FC<{ parameter: INodeProperties; value: NodeParam
 
   return (
     <div className="text-xs text-red-400 flex items-center gap-1">
-      <span>⚠️</span>
+      <span>[WARN]️</span>
       <span>{validation.error}</span>
     </div>
   );

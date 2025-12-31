@@ -55,11 +55,30 @@ ahash = "0.8"  # Fast hashing for orderbook
 smallvec = "1.13"  # Stack-allocated vectors for small arrays
 
 # WebSocket dependencies
-tokio-tungstenite = "0.23"  # WebSocket client
+tokio-tungstenite = { version = "0.23", features = ["native-tls"] }  # WebSocket client with TLS support
 dashmap = "6"  # Concurrent HashMap for subscriptions
 url = "2"  # URL parsing for WebSocket connections
 async-trait = "0.1"  # Async trait support
 thiserror = "2"  # Error handling
+hftbacktest = { version = "0.9.4", default-features = false, features = ["backtest"] }
+
+# Barter-rs ecosystem for live/paper trading
+barter = "0.12"
+barter-data = "0.10"
+barter-execution = "0.6"
+barter-instrument = "0.3"
+barter-integration = "0.8"
+rust_decimal = "1.36"
+rust_decimal_macros = "1.36"
+smol_str = "0.3"
+fnv = "1.0"
+indexmap = { version = "2", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+futures = "0.3"
+pin-project = "1.1"
+regex = "1.12.2"
+rayon = "1.11.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -894,7 +894,7 @@ export default function SettingsTab() {
                         padding: '8px 10px'
                       }}>
                         <div style={{ color: colors.success, fontSize: '9px', fontWeight: 600, marginBottom: '3px' }}>
-                          ✓ FINCEPT AUTO-CONFIGURED
+                          [OK] FINCEPT AUTO-CONFIGURED
                         </div>
                         <div style={{ color: '#888', fontSize: '8px' }}>
                           Key: {session?.api_key?.substring(0, 8)}... • 5 credits/response
@@ -1053,7 +1053,7 @@ export default function SettingsTab() {
                                 )}
                                 {ollamaModels.length > 0 && (
                                   <div style={{ marginTop: '3px', fontSize: '8px', color: colors.success }}>
-                                    ✓ {ollamaModels.length} model{ollamaModels.length !== 1 ? 's' : ''}
+                                    [OK] {ollamaModels.length} model{ollamaModels.length !== 1 ? 's' : ''}
                                   </div>
                                 )}
                               </div>

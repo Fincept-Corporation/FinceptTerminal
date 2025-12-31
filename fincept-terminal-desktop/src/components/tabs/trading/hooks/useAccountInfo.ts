@@ -239,9 +239,8 @@ export function useTradingStats() {
   const [error, setError] = useState<Error | null>(null);
 
   const fetchStats = useCallback(async () => {
-    const adapter = tradingMode === 'paper' ? paperAdapter : activeAdapter;
-
-    if (!adapter) {
+    // Remove redundant adapter logic - just use activeAdapter directly
+    if (!activeAdapter) {
       setStats(null);
       return;
     }
@@ -251,8 +250,8 @@ export function useTradingStats() {
 
     try {
       // Get statistics from paper trading adapter if available
-      if (tradingMode === 'paper' && (adapter as any).getStatistics) {
-        const paperStats = await (adapter as any).getStatistics();
+      if (tradingMode === 'paper' && (activeAdapter as any).getStatistics) {
+        const paperStats = await (activeAdapter as any).getStatistics();
         setStats(paperStats);
       } else {
         // For live trading, calculate stats from closed orders
@@ -266,13 +265,30 @@ export function useTradingStats() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, paperAdapter, tradingMode]);
+  }, [activeAdapter, tradingMode]);
 
   useEffect(() => {
-    fetchStats();
+    // Add isMounted ref for cleanup
+    let isMounted = true;
 
-    const interval = setInterval(fetchStats, 10000);
-    return () => clearInterval(interval);
+    const runFetch = async () => {
+      if (isMounted) {
+        await fetchStats();
+      }
+    };
+
+    runFetch();
+
+    const interval = setInterval(() => {
+      if (isMounted) {
+        runFetch();
+      }
+    }, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [fetchStats]);
 
   return {

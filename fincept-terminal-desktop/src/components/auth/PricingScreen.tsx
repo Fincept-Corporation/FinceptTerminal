@@ -210,7 +210,7 @@ const handleSelectPlan = async () => {
         // Navigate to payment processing screen which will poll for status
         onNavigate('paymentProcessing' as Screen);
       } else {
-        console.error('❌ No checkout_url found in response!');
+        console.error('[ERROR] No checkout_url found in response!');
         console.error('Available fields:', Object.keys(result.data));
         console.error('Full response:', result.data);
         setError(`No payment session received. Available fields: ${Object.keys(result.data).join(', ')}`);

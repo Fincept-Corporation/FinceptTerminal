@@ -852,7 +852,7 @@ function QuickActionsView({
                   fontSize: '9px',
                   color: BLOOMBERG.GREEN
                 }}>
-                  ✓ Trade executed successfully (Paper Trading)
+                  [OK] Trade executed successfully (Paper Trading)
                   {result.data.trade_id && <span style={{ marginLeft: '6px' }}>ID: {result.data.trade_id}</span>}
                 </div>
               )}
@@ -867,7 +867,7 @@ function QuickActionsView({
                 }}>
                   {result.data.warnings.map((warn: string, idx: number) => (
                     <div key={idx} style={{ fontSize: '8px', color: BLOOMBERG.YELLOW, marginBottom: '2px' }}>
-                      ⚠ {warn}
+                      [WARN] {warn}
                     </div>
                   ))}
                 </div>

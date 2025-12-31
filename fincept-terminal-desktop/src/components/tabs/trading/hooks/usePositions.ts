@@ -7,8 +7,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useBrokerContext } from '../../../../contexts/BrokerContext';
 import type { UnifiedPosition } from '../types';
 
-export function usePositions(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 500) {
-  const { activeAdapter, tradingMode } = useBrokerContext();
+export function usePositions(symbol?: string, autoRefresh: boolean = true, refreshInterval: number = 2000) {
+  const { activeAdapter, tradingMode, activeBroker } = useBrokerContext();
   const [positions, setPositions] = useState<UnifiedPosition[]>([]);
   // Start with loading false - only set true when actually fetching
   const [isLoading, setIsLoading] = useState(false);
@@ -65,15 +65,18 @@ export function usePositions(symbol?: string, autoRefresh: boolean = true, refre
     }
   }, [activeAdapter, symbol]);
 
-  // Auto-refresh
+  // Auto-refresh - clear positions when broker changes
   useEffect(() => {
+    // Clear positions when switching brokers
+    setPositions([]);
+
     fetchPositions();
 
     if (!autoRefresh) return;
 
     const interval = setInterval(fetchPositions, refreshInterval);
     return () => clearInterval(interval);
-  }, [fetchPositions, autoRefresh, refreshInterval]);
+  }, [fetchPositions, autoRefresh, refreshInterval, activeBroker]);
 
   return {
     positions,

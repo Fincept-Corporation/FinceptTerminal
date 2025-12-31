@@ -140,7 +140,7 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
           fontSize: '10px',
           color: ORANGE
         }}>
-          ⚠️ <strong>INSUFFICIENT HISTORICAL DATA:</strong> Risk metrics require at least 5 days of portfolio snapshots for accurate calculations.
+          [WARN]️ <strong>INSUFFICIENT HISTORICAL DATA:</strong> Risk metrics require at least 5 days of portfolio snapshots for accurate calculations.
           Current data points: {portfolioReturns.length}. Metrics shown are preliminary.
         </div>
       )}
@@ -433,32 +433,32 @@ const RiskMetricsView: React.FC<RiskMetricsViewProps> = ({ portfolioSummary }) =
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           {sharpeRatio < 1 && (
             <div style={{ fontSize: '9px', color: WHITE, padding: '8px', backgroundColor: 'rgba(255,0,0,0.1)', borderRadius: '2px' }}>
-              ⚠️ <strong>LOW SHARPE RATIO:</strong> Consider diversifying to improve risk-adjusted returns
+              [WARN]️ <strong>LOW SHARPE RATIO:</strong> Consider diversifying to improve risk-adjusted returns
             </div>
           )}
           {beta > 1.5 && (
             <div style={{ fontSize: '9px', color: WHITE, padding: '8px', backgroundColor: 'rgba(255,165,0,0.1)', borderRadius: '2px' }}>
-              ⚠️ <strong>HIGH BETA:</strong> Portfolio is more volatile than market. Consider defensive assets
+              [WARN]️ <strong>HIGH BETA:</strong> Portfolio is more volatile than market. Consider defensive assets
             </div>
           )}
           {volatility > 25 && (
             <div style={{ fontSize: '9px', color: WHITE, padding: '8px', backgroundColor: 'rgba(255,0,0,0.1)', borderRadius: '2px' }}>
-              ⚠️ <strong>HIGH VOLATILITY:</strong> Consider adding bonds or stable assets to reduce swings
+              [WARN]️ <strong>HIGH VOLATILITY:</strong> Consider adding bonds or stable assets to reduce swings
             </div>
           )}
           {maxDrawdown > 20 && (
             <div style={{ fontSize: '9px', color: WHITE, padding: '8px', backgroundColor: 'rgba(255,0,0,0.1)', borderRadius: '2px' }}>
-              ⚠️ <strong>LARGE DRAWDOWN:</strong> Review stop-loss strategies and position sizing
+              [WARN]️ <strong>LARGE DRAWDOWN:</strong> Review stop-loss strategies and position sizing
             </div>
           )}
           {sharpeRatio > 2 && (
             <div style={{ fontSize: '9px', color: WHITE, padding: '8px', backgroundColor: 'rgba(0,200,0,0.1)', borderRadius: '2px' }}>
-              ✓ <strong>EXCELLENT SHARPE:</strong> Portfolio shows strong risk-adjusted performance
+              [OK] <strong>EXCELLENT SHARPE:</strong> Portfolio shows strong risk-adjusted performance
             </div>
           )}
           {beta >= 0.8 && beta <= 1.2 && (
             <div style={{ fontSize: '9px', color: WHITE, padding: '8px', backgroundColor: 'rgba(0,255,255,0.1)', borderRadius: '2px' }}>
-              ✓ <strong>BALANCED BETA:</strong> Good market correlation, neither too aggressive nor defensive
+              [OK] <strong>BALANCED BETA:</strong> Good market correlation, neither too aggressive nor defensive
             </div>
           )}
         </div>

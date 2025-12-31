@@ -32,9 +32,9 @@ export function OrdersTable() {
     try {
       await cancelOrder(order.id, order.symbol);
       await refresh();
-      alert(`✓ Order canceled: ${order.id}`);
+      alert(`[OK] Order canceled: ${order.id}`);
     } catch (error) {
-      alert(`✗ Failed to cancel order: ${(error as Error).message}`);
+      alert(`[FAIL] Failed to cancel order: ${(error as Error).message}`);
     }
   };
 
@@ -46,9 +46,9 @@ export function OrdersTable() {
     try {
       await cancelAllOrders();
       await refresh();
-      alert('✓ All orders canceled');
+      alert('[OK] All orders canceled');
     } catch (error) {
-      alert(`✗ Failed to cancel all orders: ${(error as Error).message}`);
+      alert(`[FAIL] Failed to cancel all orders: ${(error as Error).message}`);
     }
   };
 

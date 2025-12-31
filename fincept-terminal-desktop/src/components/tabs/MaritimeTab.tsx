@@ -1458,7 +1458,7 @@ export default function MaritimeTab() {
                 <span style={{ color: '#0ff' }}>●</span> Maritime routes: {tradeRoutes.length} corridors
               </div>
               <div style={{ marginTop: '8px', padding: '6px', background: '#000', border: '1px solid #1a1a1a', color: '#ffd700' }}>
-                ⚠ CLASSIFIED: For authorized personnel only
+                [WARN] CLASSIFIED: For authorized personnel only
               </div>
             </div>
           </div>

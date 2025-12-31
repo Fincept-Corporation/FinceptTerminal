@@ -131,7 +131,7 @@ class NoteReminderService {
       case 'LOW':
         return '🟢';
       default:
-        return '⚪';
+        return '';
     }
   }
 
