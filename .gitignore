@@ -116,6 +116,38 @@ fincept-terminal-desktop/src-tauri/resources/bun/
 !fincept-terminal-desktop/src-tauri/resources/**/*.dylib
 
 # ============================================================
+# Large files that should NEVER be in git
+# ============================================================
+
+# Rust build artifacts (any target folder)
+**/target/
+*.rlib
+*.rmeta
+*.pdb
+
+# Large data files
+*.csv
+*.bin
+*.pt
+*.onnx
+*.h5
+*.pkl
+*.pickle
+
+# Large binary/media files
+*.pdf
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# ML models
+*.model
+*.weights
+
+# ============================================================
 # Legacy and deprecated
 # ============================================================
 legacy-python-depreciated
