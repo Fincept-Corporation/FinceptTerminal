@@ -364,23 +364,43 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
         download_file(&url, &zip_path, app, "bun").await?;
 
         emit_progress(app, "bun", 40, "Extracting Bun...", false);
+
+        let temp_extract = temp_dir.join("bun_temp");
+        fs::create_dir_all(&temp_extract).ok();
+
         Command::new("unzip")
-            .args(&["-o", zip_path.to_str().unwrap(), "-d", bun_dir.to_str().unwrap()])
+            .args(&["-o", zip_path.to_str().unwrap(), "-d", temp_extract.to_str().unwrap()])
             .output()
             .map_err(|e| format!("Failed to extract: {}", e))?;
 
-        // Find and mark bun executable
-        if let Ok(entries) = fs::read_dir(&bun_dir) {
-            for entry in entries.flatten() {
-                let bun_file = entry.path().join("bun");
-                if bun_file.exists() {
-                    Command::new("chmod").args(&["+x", bun_file.to_str().unwrap()]).output().ok();
-                    break;
+        // Find and move bun executable from nested folder
+        fn find_bun_executable(dir: &PathBuf) -> Option<PathBuf> {
+            if let Ok(entries) = fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() && path.file_name().map(|n| n == "bun").unwrap_or(false) {
+                        return Some(path);
+                    } else if path.is_dir() {
+                        if let Some(found) = find_bun_executable(&path) {
+                            return Some(found);
+                        }
+                    }
                 }
             }
+            None
+        }
+
+        if let Some(bun_file) = find_bun_executable(&temp_extract) {
+            let bun_dest = bun_dir.join("bun");
+            fs::copy(&bun_file, &bun_dest)
+                .map_err(|e| format!("Failed to copy bun: {}", e))?;
+            Command::new("chmod").args(&["+x", bun_dest.to_str().unwrap()]).output().ok();
+        } else {
+            return Err("Bun executable not found in archive".to_string());
         }
 
         fs::remove_file(zip_path).ok();
+        fs::remove_dir_all(temp_extract).ok();
     }
 
     emit_progress(app, "bun", 60, "Bun extracted", false);
