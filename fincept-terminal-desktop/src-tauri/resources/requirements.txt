@@ -17,7 +17,7 @@ gnews==0.4.2
 idna==3.11
 multidict==6.7.0
 multitasking==0.0.12
-numpy>=1.26.4,<3.0
+numpy>=1.26.4,<3.0  # Support both numpy 1.x and 2.x for compatibility
 pandas>=2.3.3,<3.0
 vectorbt==0.28.2
 backtesting==0.6.5

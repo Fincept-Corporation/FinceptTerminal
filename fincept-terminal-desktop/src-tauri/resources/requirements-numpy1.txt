@@ -1,0 +1,73 @@
+# Python Environment 1: NumPy 1.x Compatible Libraries
+# For older finance libraries that don't support NumPy 2.x yet
+
+# Core dependencies
+numpy>=1.26.4,<2.0  # NumPy 1.x for compatibility
+pandas>=2.0.0,<2.3.0  # Older pandas versions work better with NumPy 1.x
+
+# Time series and forecasting (NumPy 1.x dependent)
+gluonts[torch]==0.16.2  # Requires numpy<2.2
+statsmodels==0.14.6
+pmdarima==2.1.1
+functime==0.1.10
+
+# Backtesting and trading
+vectorbt==0.28.2
+backtesting==0.6.5
+
+# Technical analysis
+ta==0.11.0
+talipp==2.7.0
+tsmoothie==1.0.5
+
+# Financial modeling
+py_vollib==1.0.1
+pypme==0.6.2
+
+# Portfolio optimization (may need NumPy 1.x)
+PyPortfolioOpt==1.5.6
+finquant-enhanced
+
+# Quantitative finance
+financepy==1.0.1
+ffn==1.1.2
+fortitudo.tech==1.2
+
+# Fixed income
+rateslib==2.1.1
+
+# Data fetching
+yfinance==0.2.66
+databento==0.66.0
+databento-dbn==0.44.0
+
+# Core utilities
+beautifulsoup4==4.14.2
+feedparser==6.0.12
+gnews==0.4.2
+requests==2.32.5
+aiohttp==3.13.2
+websockets==15.0.1
+protobuf>=3.20.2,<6.0.0
+pyarrow==22.0.0
+
+# Visualization
+matplotlib>=3.8.0,<3.10.0  # Compatible with NumPy 1.x
+plotly==6.5.0
+seaborn>=0.12.0
+
+# ML libraries (NumPy 1.x compatible versions)
+scikit-learn>=1.3.0,<1.6.0
+scipy>=1.10.0,<1.15.0
+lightgbm>=4.0.0,<5.0.0
+xgboost>=2.0.0,<2.2.0
+catboost>=1.2.0,<1.3.0
+
+# Optimization
+cvxpy>=1.0.0
+cvxopt==1.3.2
+
+# Qlib and RD-Agent (may need NumPy 1.x)
+pyqlib==0.9.7
+rdagent==0.8.0
+mlflow>=2.0.0
