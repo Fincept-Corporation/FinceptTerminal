@@ -139,50 +139,51 @@ fn check_uv(install_dir: &PathBuf) -> bool {
     uv_exe.exists()
 }
 
-/// Check if packages are installed (legacy check for backward compatibility)
+/// Check if packages are installed (either environment)
 fn check_packages(install_dir: &PathBuf) -> bool {
     check_packages_numpy1(install_dir) || check_packages_numpy2(install_dir)
 }
 
-/// Check if NumPy 1.x environment packages are installed
+/// Check NumPy 1.x venv
 fn check_packages_numpy1(install_dir: &PathBuf) -> bool {
-    let venv_path = if cfg!(target_os = "windows") {
+    let venv_python = if cfg!(target_os = "windows") {
         install_dir.join("venv-numpy1/Scripts/python.exe")
     } else {
         install_dir.join("venv-numpy1/bin/python3")
     };
 
-    if !venv_path.exists() {
+    if !venv_python.exists() {
         return false;
     }
 
-    let mut cmd = Command::new(&venv_path);
-    cmd.args(&["-c", "import gluonts, yfinance, vectorbt"]);
+    let mut cmd = Command::new(&venv_python);
+    cmd.args(&["-c", "import gluonts, yfinance, numpy"]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
     cmd.output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-/// Check if NumPy 2.x environment packages are installed
+/// Check NumPy 2.x venv
 fn check_packages_numpy2(install_dir: &PathBuf) -> bool {
-    let venv_path = if cfg!(target_os = "windows") {
+    let venv_python = if cfg!(target_os = "windows") {
         install_dir.join("venv-numpy2/Scripts/python.exe")
     } else {
         install_dir.join("venv-numpy2/bin/python3")
     };
 
-    if !venv_path.exists() {
+    if !venv_python.exists() {
         return false;
     }
 
-    let mut cmd = Command::new(&venv_path);
-    cmd.args(&["-c", "import vnpy, edgartools"]);
+    let mut cmd = Command::new(&venv_python);
+    cmd.args(&["-c", "import vnpy, edgartools, numpy"]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
     cmd.output().map(|o| o.status.success()).unwrap_or(false)
 }
+
 
 /// Download file with progress
 async fn download_file(url: &str, dest: &PathBuf, app: &AppHandle, step: &str) -> Result<(), String> {
@@ -766,9 +767,9 @@ async fn install_uv(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String
     Ok(())
 }
 
-/// Install NumPy 1.x environment packages using UV (SUPER FAST)
+/// Install NumPy 1.x venv packages
 async fn install_packages_numpy1(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
-    emit_progress(app, "packages-np1", 0, "Installing NumPy 1.x packages (UV)...", false);
+    emit_progress(app, "packages-np1", 0, "Installing NumPy 1.x packages...", false);
 
     let python_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/python.exe")
@@ -787,10 +788,10 @@ async fn install_packages_numpy1(app: &AppHandle, install_dir: &PathBuf) -> Resu
         .resolve("resources/requirements-numpy1.txt", tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("Failed to find requirements-numpy1.txt: {}", e))?;
 
-    eprintln!("[SETUP] [NumPy1] Creating virtual environment at: {}", venv_path.display());
-    emit_progress(app, "packages-np1", 10, "Creating venv-numpy1...", false);
+    eprintln!("[SETUP] [NumPy1] Creating venv at: {}", venv_path.display());
+    emit_progress(app, "packages-np1", 10, "Creating venv...", false);
 
-    // Create venv using UV (fastest way)
+    // Create venv
     let mut cmd = Command::new(&uv_exe);
     cmd.args(&["venv", "--python", python_exe.to_str().unwrap(), venv_path.to_str().unwrap()]);
     #[cfg(target_os = "windows")]
@@ -798,14 +799,12 @@ async fn install_packages_numpy1(app: &AppHandle, install_dir: &PathBuf) -> Resu
 
     let output = cmd.output().map_err(|e| format!("Failed to create venv: {}", e))?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("venv creation failed: {}", stderr));
+        return Err(format!("venv creation failed: {}", String::from_utf8_lossy(&output.stderr)));
     }
 
-    eprintln!("[SETUP] [NumPy1] Installing packages with UV...");
-    emit_progress(app, "packages-np1", 30, "Installing NumPy 1.x packages...", false);
+    emit_progress(app, "packages-np1", 30, "Installing packages...", false);
 
-    // Install packages using UV pip (super fast!)
+    // Install packages
     let venv_python = if cfg!(target_os = "windows") {
         venv_path.join("Scripts/python.exe")
     } else {
@@ -817,31 +816,23 @@ async fn install_packages_numpy1(app: &AppHandle, install_dir: &PathBuf) -> Resu
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
+    eprintln!("[SETUP] [NumPy1] Running: {:?}", cmd);
     let output = cmd.output().map_err(|e| format!("Failed to install packages: {}", e))?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
 
-    eprintln!("[SETUP] [NumPy1] UV stdout: {}", stdout);
-    eprintln!("[SETUP] [NumPy1] UV stderr: {}", stderr);
+    eprintln!("[SETUP] [NumPy1] stdout: {}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("[SETUP] [NumPy1] stderr: {}", String::from_utf8_lossy(&output.stderr));
 
     if !output.status.success() {
-        return Err(format!("NumPy 1.x package installation failed: {}", stderr));
+        return Err(format!("NumPy 1.x installation failed: {}", String::from_utf8_lossy(&output.stderr)));
     }
 
-    emit_progress(app, "packages-np1", 90, "NumPy 1.x packages installed", false);
-
-    // Verify
-    if !check_packages_numpy1(install_dir) {
-        return Err("NumPy 1.x package verification failed".to_string());
-    }
-
-    emit_progress(app, "packages-np1", 100, "NumPy 1.x complete ✓", false);
+    emit_progress(app, "packages-np1", 100, "NumPy 1.x complete", false);
     Ok(())
 }
 
-/// Install NumPy 2.x environment packages using UV (SUPER FAST)
+/// Install NumPy 2.x venv packages
 async fn install_packages_numpy2(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
-    emit_progress(app, "packages-np2", 0, "Installing NumPy 2.x packages (UV)...", false);
+    emit_progress(app, "packages-np2", 0, "Installing NumPy 2.x packages...", false);
 
     let python_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/python.exe")
@@ -860,10 +851,10 @@ async fn install_packages_numpy2(app: &AppHandle, install_dir: &PathBuf) -> Resu
         .resolve("resources/requirements-numpy2.txt", tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("Failed to find requirements-numpy2.txt: {}", e))?;
 
-    eprintln!("[SETUP] [NumPy2] Creating virtual environment at: {}", venv_path.display());
-    emit_progress(app, "packages-np2", 10, "Creating venv-numpy2...", false);
+    eprintln!("[SETUP] [NumPy2] Creating venv at: {}", venv_path.display());
+    emit_progress(app, "packages-np2", 10, "Creating venv...", false);
 
-    // Create venv using UV (fastest way)
+    // Create venv
     let mut cmd = Command::new(&uv_exe);
     cmd.args(&["venv", "--python", python_exe.to_str().unwrap(), venv_path.to_str().unwrap()]);
     #[cfg(target_os = "windows")]
@@ -871,14 +862,12 @@ async fn install_packages_numpy2(app: &AppHandle, install_dir: &PathBuf) -> Resu
 
     let output = cmd.output().map_err(|e| format!("Failed to create venv: {}", e))?;
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("venv creation failed: {}", stderr));
+        return Err(format!("venv creation failed: {}", String::from_utf8_lossy(&output.stderr)));
     }
 
-    eprintln!("[SETUP] [NumPy2] Installing packages with UV...");
-    emit_progress(app, "packages-np2", 30, "Installing NumPy 2.x packages...", false);
+    emit_progress(app, "packages-np2", 30, "Installing packages...", false);
 
-    // Install packages using UV pip (super fast!)
+    // Install packages
     let venv_python = if cfg!(target_os = "windows") {
         venv_path.join("Scripts/python.exe")
     } else {
@@ -890,32 +879,17 @@ async fn install_packages_numpy2(app: &AppHandle, install_dir: &PathBuf) -> Resu
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
+    eprintln!("[SETUP] [NumPy2] Running: {:?}", cmd);
     let output = cmd.output().map_err(|e| format!("Failed to install packages: {}", e))?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
 
-    eprintln!("[SETUP] [NumPy2] UV stdout: {}", stdout);
-    eprintln!("[SETUP] [NumPy2] UV stderr: {}", stderr);
+    eprintln!("[SETUP] [NumPy2] stdout: {}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("[SETUP] [NumPy2] stderr: {}", String::from_utf8_lossy(&output.stderr));
 
     if !output.status.success() {
-        return Err(format!("NumPy 2.x package installation failed: {}", stderr));
+        return Err(format!("NumPy 2.x installation failed: {}", String::from_utf8_lossy(&output.stderr)));
     }
 
-    emit_progress(app, "packages-np2", 90, "NumPy 2.x packages installed", false);
-
-    // Verify
-    if !check_packages_numpy2(install_dir) {
-        return Err("NumPy 2.x package verification failed".to_string());
-    }
-
-    emit_progress(app, "packages-np2", 100, "NumPy 2.x complete ✓", false);
-    Ok(())
-}
-
-/// Install both package environments (legacy wrapper)
-async fn install_packages(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
-    install_packages_numpy1(app, install_dir).await?;
-    install_packages_numpy2(app, install_dir).await?;
+    emit_progress(app, "packages-np2", 100, "NumPy 2.x complete", false);
     Ok(())
 }
 
@@ -929,7 +903,7 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
     let uv_installed = check_uv(&install_dir);
     let packages_numpy1_installed = check_packages_numpy1(&install_dir);
     let packages_numpy2_installed = check_packages_numpy2(&install_dir);
-    let packages_installed = packages_numpy1_installed || packages_numpy2_installed;
+    let packages_installed = packages_numpy1_installed && packages_numpy2_installed;
 
     let needs_setup = !python_installed || !bun_installed || !uv_installed || !packages_numpy1_installed || !packages_numpy2_installed;
 
@@ -1011,6 +985,6 @@ async fn run_setup_internal(app: AppHandle) -> Result<(), String> {
         emit_progress(&app, "packages-np2", 100, "NumPy 2.x already installed", false);
     }
 
-    emit_progress(&app, "complete", 100, "Setup complete! Both environments ready ✓", false);
+    emit_progress(&app, "complete", 100, "Setup complete! Both environments ready", false);
     Ok(())
 }

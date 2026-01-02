@@ -1,18 +1,22 @@
-# Python Environment 2: NumPy 2.x Compatible Libraries
-# For modern libraries that require or support NumPy 2.x
+# NumPy 2.x Environment - Modern Libraries
+# For libraries that require or support NumPy 2.x
 
 # Core dependencies
-numpy>=2.2.3,<3.0  # NumPy 2.x for modern libraries
-pandas>=2.3.3,<3.0  # Latest pandas supports NumPy 2.x
+numpy>=2.2.3,<3.0
+pandas>=2.3.3,<3.0
 
-# Trading platform
-vnpy==4.3.0  # Requires numpy>=2.2.3
+# Trading platform (requires NumPy 2.x)
+vnpy==4.3.0
 
-# Quant finance
-gs-quant==1.4.67
+# Data fetching
+requests==2.32.5
+aiohttp==3.13.2
+websockets==15.0.1
+beautifulsoup4==4.14.2
+protobuf>=3.20.2,<6.0.0
 
-# Data sources
-edgartools>=5.6.0  # SEC EDGAR data
+# SEC EDGAR data
+edgartools>=5.6.0
 
 # LLM and AI
 openai>=2.8.1,<3.0
@@ -24,17 +28,11 @@ litellm>=1.73
 tiktoken>=0.5.0
 
 # ML/DL (NumPy 2.x compatible)
-torch>=2.0.0  # Latest PyTorch supports NumPy 2.x
-
-# Core utilities (NumPy 2.x compatible)
-requests==2.32.5
-aiohttp==3.13.2
-websockets==15.0.1
-protobuf>=3.20.2,<6.0.0
+torch>=2.0.0
 
 # Visualization
 plotly==6.5.0
-matplotlib>=3.9.3,<4.0  # Latest matplotlib supports NumPy 2.x
+matplotlib>=3.9.3,<4.0
 
 # Development tools
 jupyter>=1.0.0
@@ -53,7 +51,4 @@ ruamel.yaml>=0.17.38
 python-redis-lock>=4.0.0
 setuptools-scm>=8.0.0
 tables>=3.8.0
-
-# Web scraping
 selenium>=4.0.0
-beautifulsoup4==4.14.2
