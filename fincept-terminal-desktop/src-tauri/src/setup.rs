@@ -361,27 +361,67 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
         };
 
         let zip_path = temp_dir.join("bun.zip");
+        eprintln!("[SETUP] [bun] Downloading from: {}", url);
         download_file(&url, &zip_path, app, "bun").await?;
+        eprintln!("[SETUP] [bun] Downloaded to: {}", zip_path.display());
 
         emit_progress(app, "bun", 40, "Extracting Bun...", false);
 
         let temp_extract = temp_dir.join("bun_temp");
-        fs::create_dir_all(&temp_extract).ok();
+        fs::create_dir_all(&temp_extract)
+            .map_err(|e| format!("Failed to create temp extract dir: {}", e))?;
 
-        Command::new("unzip")
-            .args(&["-o", zip_path.to_str().unwrap(), "-d", temp_extract.to_str().unwrap()])
-            .output()
-            .map_err(|e| format!("Failed to extract: {}", e))?;
+        eprintln!("[SETUP] [bun] Extracting to: {}", temp_extract.display());
+
+        // Check if unzip is available
+        let unzip_check = Command::new("which").arg("unzip").output();
+        if unzip_check.is_err() || !unzip_check.unwrap().status.success() {
+            eprintln!("[SETUP] [bun] WARNING: unzip command not found, trying fallback");
+            // Try using tar if unzip is not available (some minimal Linux systems)
+            let tar_result = Command::new("tar")
+                .args(&["-xf", zip_path.to_str().unwrap(), "-C", temp_extract.to_str().unwrap()])
+                .output();
+
+            if tar_result.is_err() {
+                return Err("Neither unzip nor tar available for extraction".to_string());
+            }
+        } else {
+            let output = Command::new("unzip")
+                .args(&["-o", zip_path.to_str().unwrap(), "-d", temp_extract.to_str().unwrap()])
+                .output()
+                .map_err(|e| format!("Failed to run unzip: {}", e))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                eprintln!("[SETUP] [bun] Unzip stderr: {}", stderr);
+                return Err(format!("Unzip failed: {}", stderr));
+            }
+        }
+
+        eprintln!("[SETUP] [bun] Extraction complete, searching for executable...");
 
         // Find and move bun executable from nested folder
-        fn find_bun_executable(dir: &PathBuf) -> Option<PathBuf> {
+        fn find_bun_executable(dir: &PathBuf, depth: usize) -> Option<PathBuf> {
+            eprintln!("[SETUP] [bun] Searching in: {} (depth: {})", dir.display(), depth);
+
+            if depth > 5 {
+                return None; // Prevent infinite recursion
+            }
+
             if let Ok(entries) = fs::read_dir(dir) {
                 for entry in entries.flatten() {
                     let path = entry.path();
-                    if path.is_file() && path.file_name().map(|n| n == "bun").unwrap_or(false) {
-                        return Some(path);
+                    eprintln!("[SETUP] [bun] Found: {}", path.display());
+
+                    if path.is_file() {
+                        if let Some(filename) = path.file_name() {
+                            if filename == "bun" {
+                                eprintln!("[SETUP] [bun] ✓ Found bun executable at: {}", path.display());
+                                return Some(path);
+                            }
+                        }
                     } else if path.is_dir() {
-                        if let Some(found) = find_bun_executable(&path) {
+                        if let Some(found) = find_bun_executable(&path, depth + 1) {
                             return Some(found);
                         }
                     }
@@ -390,12 +430,39 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
             None
         }
 
-        if let Some(bun_file) = find_bun_executable(&temp_extract) {
+        if let Some(bun_file) = find_bun_executable(&temp_extract, 0) {
             let bun_dest = bun_dir.join("bun");
+            eprintln!("[SETUP] [bun] Copying from {} to {}", bun_file.display(), bun_dest.display());
+
             fs::copy(&bun_file, &bun_dest)
-                .map_err(|e| format!("Failed to copy bun: {}", e))?;
-            Command::new("chmod").args(&["+x", bun_dest.to_str().unwrap()]).output().ok();
+                .map_err(|e| format!("Failed to copy bun from {} to {}: {}", bun_file.display(), bun_dest.display(), e))?;
+
+            eprintln!("[SETUP] [bun] Setting executable permissions...");
+            let chmod_output = Command::new("chmod")
+                .args(&["+x", bun_dest.to_str().unwrap()])
+                .output();
+
+            match chmod_output {
+                Ok(output) => {
+                    if !output.status.success() {
+                        let stderr = String::from_utf8_lossy(&output.stderr);
+                        eprintln!("[SETUP] [bun] chmod stderr: {}", stderr);
+                    } else {
+                        eprintln!("[SETUP] [bun] ✓ Executable permissions set");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[SETUP] [bun] chmod error: {}", e);
+                }
+            }
         } else {
+            // List what we found in temp_extract for debugging
+            eprintln!("[SETUP] [bun] ERROR: Bun executable not found. Contents of temp_extract:");
+            if let Ok(entries) = fs::read_dir(&temp_extract) {
+                for entry in entries.flatten() {
+                    eprintln!("[SETUP] [bun]   - {}", entry.path().display());
+                }
+            }
             return Err("Bun executable not found in archive".to_string());
         }
 
@@ -406,11 +473,51 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
     emit_progress(app, "bun", 60, "Bun extracted", false);
 
     // Verify
+    eprintln!("[SETUP] [bun] Verifying installation...");
+    let bun_path = if cfg!(target_os = "windows") {
+        install_dir.join("bun/bun.exe")
+    } else {
+        install_dir.join("bun/bun")
+    };
+    eprintln!("[SETUP] [bun] Checking path: {}", bun_path.display());
+    eprintln!("[SETUP] [bun] File exists: {}", bun_path.exists());
+
     let (installed, version) = check_bun(install_dir);
     if !installed {
-        return Err("Bun verification failed".to_string());
+        eprintln!("[SETUP] [bun] ERROR: Verification failed!");
+        eprintln!("[SETUP] [bun] Expected path: {}", bun_path.display());
+
+        // Try running bun directly to see what error we get
+        if bun_path.exists() {
+            eprintln!("[SETUP] [bun] File exists but verification failed. Trying to run it...");
+            let test_cmd = Command::new(&bun_path).arg("--version").output();
+            match test_cmd {
+                Ok(output) => {
+                    eprintln!("[SETUP] [bun] Exit code: {}", output.status);
+                    eprintln!("[SETUP] [bun] Stdout: {}", String::from_utf8_lossy(&output.stdout));
+                    eprintln!("[SETUP] [bun] Stderr: {}", String::from_utf8_lossy(&output.stderr));
+                }
+                Err(e) => {
+                    eprintln!("[SETUP] [bun] Failed to execute: {}", e);
+                }
+            }
+
+            // Check file permissions
+            #[cfg(not(target_os = "windows"))]
+            {
+                let metadata = std::fs::metadata(&bun_path);
+                if let Ok(meta) = metadata {
+                    use std::os::unix::fs::PermissionsExt;
+                    let permissions = meta.permissions();
+                    eprintln!("[SETUP] [bun] File permissions: {:o}", permissions.mode());
+                }
+            }
+        }
+
+        return Err("Bun verification failed - executable exists but cannot run".to_string());
     }
 
+    eprintln!("[SETUP] [bun] ✓ Verification successful: {}", version.as_ref().unwrap_or(&"unknown".to_string()));
     emit_progress(app, "bun", 70, &format!("Bun {} verified", version.unwrap_or_default()), false);
     Ok(())
 }
