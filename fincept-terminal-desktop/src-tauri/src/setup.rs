@@ -302,6 +302,37 @@ fn extract_zip(zip_path: &PathBuf, dest_dir: &PathBuf) -> Result<(), String> {
     Ok(())
 }
 
+/// Detect CPU features to determine which Bun build to use
+#[cfg(target_os = "linux")]
+fn detect_cpu_features() -> bool {
+    // Check if CPU supports AVX2 (required for standard Bun build)
+    // Returns true if AVX2 is supported, false otherwise
+
+    // Method 1: Check /proc/cpuinfo
+    if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
+        // Look for avx2 in the flags line
+        for line in cpuinfo.lines() {
+            if line.starts_with("flags") || line.starts_with("Features") {
+                let has_avx2 = line.contains("avx2");
+                eprintln!("[SETUP] [bun] CPU flags found: {}", if has_avx2 { "AVX2 supported" } else { "AVX2 NOT supported" });
+                return has_avx2;
+            }
+        }
+    }
+
+    // Method 2: Try using lscpu command
+    if let Ok(output) = Command::new("lscpu").output() {
+        let lscpu_output = String::from_utf8_lossy(&output.stdout);
+        if lscpu_output.contains("avx2") {
+            eprintln!("[SETUP] [bun] CPU check (lscpu): AVX2 supported");
+            return true;
+        }
+    }
+
+    eprintln!("[SETUP] [bun] CPU check: Could not detect AVX2, using baseline build for safety");
+    false
+}
+
 /// Install Bun (all platforms)
 async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
     emit_progress(app, "bun", 0, "Installing Bun...", false);
@@ -346,24 +377,75 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
 
     #[cfg(not(target_os = "windows"))]
     {
-        let url = if cfg!(target_os = "macos") {
+        // Determine the best Bun build URL based on platform and architecture
+        let urls = if cfg!(target_os = "macos") {
             if cfg!(target_arch = "aarch64") {
-                format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-aarch64.zip", BUN_VERSION)
+                vec![format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-aarch64.zip", BUN_VERSION)]
             } else {
-                format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-x64.zip", BUN_VERSION)
+                vec![format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-x64.zip", BUN_VERSION)]
             }
         } else {
+            // Linux
             if cfg!(target_arch = "aarch64") {
-                format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-aarch64.zip", BUN_VERSION)
+                vec![format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-aarch64.zip", BUN_VERSION)]
             } else {
-                format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION)
+                // For x64 Linux, detect CPU features and choose appropriate build
+                #[cfg(target_os = "linux")]
+                {
+                    let has_avx2 = detect_cpu_features();
+
+                    if has_avx2 {
+                        // CPU supports AVX2, use standard build (faster) with baseline as fallback
+                        eprintln!("[SETUP] [bun] CPU supports AVX2, using optimized build");
+                        vec![
+                            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION),
+                            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64-baseline.zip", BUN_VERSION),
+                        ]
+                    } else {
+                        // CPU doesn't support AVX2 or detection failed, use baseline build
+                        eprintln!("[SETUP] [bun] Using baseline build for compatibility");
+                        vec![
+                            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64-baseline.zip", BUN_VERSION),
+                            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION),
+                        ]
+                    }
+                }
+
+                #[cfg(not(target_os = "linux"))]
+                {
+                    // Fallback for other Unix-like systems
+                    vec![
+                        format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64-baseline.zip", BUN_VERSION),
+                        format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION),
+                    ]
+                }
             }
         };
 
         let zip_path = temp_dir.join("bun.zip");
-        eprintln!("[SETUP] [bun] Downloading from: {}", url);
-        download_file(&url, &zip_path, app, "bun").await?;
-        eprintln!("[SETUP] [bun] Downloaded to: {}", zip_path.display());
+        let mut download_success = false;
+
+        // Try each URL until one works
+        for (idx, url) in urls.iter().enumerate() {
+            eprintln!("[SETUP] [bun] Attempting download from: {}", url);
+            match download_file(&url, &zip_path, app, "bun").await {
+                Ok(_) => {
+                    eprintln!("[SETUP] [bun] Downloaded successfully to: {}", zip_path.display());
+                    download_success = true;
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("[SETUP] [bun] Download failed (attempt {}/{}): {}", idx + 1, urls.len(), e);
+                    if idx < urls.len() - 1 {
+                        eprintln!("[SETUP] [bun] Trying alternative URL...");
+                    }
+                }
+            }
+        }
+
+        if !download_success {
+            return Err("Failed to download Bun from any available source".to_string());
+        }
 
         emit_progress(app, "bun", 40, "Extracting Bun...", false);
 
@@ -491,11 +573,20 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
         if bun_path.exists() {
             eprintln!("[SETUP] [bun] File exists but verification failed. Trying to run it...");
             let test_cmd = Command::new(&bun_path).arg("--version").output();
+            let mut is_sigill = false;
+
             match test_cmd {
                 Ok(output) => {
-                    eprintln!("[SETUP] [bun] Exit code: {}", output.status);
+                    let status_str = format!("{}", output.status);
+                    eprintln!("[SETUP] [bun] Exit code: {}", status_str);
                     eprintln!("[SETUP] [bun] Stdout: {}", String::from_utf8_lossy(&output.stdout));
                     eprintln!("[SETUP] [bun] Stderr: {}", String::from_utf8_lossy(&output.stderr));
+
+                    // Check if it's a SIGILL error (illegal instruction)
+                    if status_str.contains("SIGILL") || status_str.contains("signal: 4") {
+                        eprintln!("[SETUP] [bun] SIGILL detected - binary incompatible with CPU");
+                        is_sigill = true;
+                    }
                 }
                 Err(e) => {
                     eprintln!("[SETUP] [bun] Failed to execute: {}", e);
@@ -511,6 +602,10 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
                     let permissions = meta.permissions();
                     eprintln!("[SETUP] [bun] File permissions: {:o}", permissions.mode());
                 }
+            }
+
+            if is_sigill {
+                return Err("Bun verification failed - CPU incompatibility detected. The downloaded binary requires newer CPU instructions (AVX2) that your system doesn't support. This usually happens in virtualized environments. Please report this issue.".to_string());
             }
         }
 
