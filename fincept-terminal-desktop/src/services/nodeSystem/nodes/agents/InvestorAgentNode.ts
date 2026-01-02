@@ -173,7 +173,7 @@ export class InvestorAgentNode implements INodeType {
     ],
   };
 
-  private readonly investorStyles: Record<string, { principles: string[]; focusAreas: string[] }> = {
+  private static readonly investorStyles: Record<string, { principles: string[]; focusAreas: string[] }> = {
     warren_buffett: {
       principles: ['Economic moats', 'Long-term holding', 'Circle of competence', 'Margin of safety', 'Quality management'],
       focusAreas: ['Return on equity', 'Debt levels', 'Consistent earnings', 'Brand value', 'Pricing power'],
@@ -217,7 +217,7 @@ export class InvestorAgentNode implements INodeType {
 
     // Get input data based on analysis type
     let analysisTarget: string = '';
-    let additionalData: Record<string, unknown> = {};
+    let additionalData: Record<string, any> = {};
 
     const inputData = this.getInputData();
 
@@ -280,24 +280,21 @@ export class InvestorAgentNode implements INodeType {
     }
 
     // Get investor style
-    const investorStyle = this.investorStyles[investor] || { principles: [], focusAreas: [] };
-
-    const bridge = new AgentBridge();
+    const investorStyle = InvestorAgentNode.investorStyles[investor] || { principles: [], focusAreas: [] };
 
     try {
-      const result = await bridge.executeAgent(`investor_${investor}`, {
-        query: this.buildQuery(analysisType, analysisTarget, context),
-        context: {
-          investor,
-          investorStyle,
-          analysisType,
-          analysisTarget,
+      const result = await AgentBridge.executeAgent({
+        agentId: `investor_${investor}`,
+        category: 'investor',
+        parameters: {
+          query: InvestorAgentNode.buildQueryStatic(analysisType, analysisTarget, context),
           ...additionalData,
         },
-        llmProvider,
-        model,
+        llmProvider: llmProvider as any,
+        llmModel: model,
       });
 
+      const responseData = result.data || {};
       return [[{
         json: {
           success: true,
@@ -305,11 +302,11 @@ export class InvestorAgentNode implements INodeType {
           investorStyle,
           analysisType,
           analysisTarget,
-          analysis: result.response,
-          keyInsights: result.keyInsights || [],
-          recommendation: result.recommendation,
-          riskFactors: result.riskFactors || [],
-          confidence: result.confidence,
+          analysis: responseData.response || responseData.analysis || '',
+          keyInsights: responseData.keyInsights || [],
+          recommendation: responseData.recommendation,
+          riskFactors: responseData.riskFactors || [],
+          confidence: responseData.confidence,
           principles: investorStyle.principles,
           timestamp: new Date().toISOString(),
           executionId: this.getExecutionId(),
@@ -329,7 +326,7 @@ export class InvestorAgentNode implements INodeType {
     }
   }
 
-  private buildQuery(analysisType: string, target: string, context: string): string {
+  private static buildQueryStatic(analysisType: string, target: string, context: string): string {
     const queries: Record<string, string> = {
       stockAnalysis: `Analyze ${target} as an investment opportunity. ${context}`,
       portfolioReview: `Review this portfolio and provide recommendations. ${context}`,

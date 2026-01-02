@@ -131,27 +131,26 @@ export class GetOrdersNode implements INodeType {
     const includeTradeDetails = this.getNodeParameter('includeTradeDetails', 0) as boolean;
     const sortOrder = this.getNodeParameter('sortOrder', 0) as string;
 
-    const tradingBridge = new TradingBridge();
     const isPaper = broker === 'paper';
 
     try {
       // Mock order data - would come from actual broker API
-      let orders = this.getMockOrders(broker, isPaper);
+      let orders: any[] = GetOrdersNode.getMockOrders(broker, isPaper);
 
       // Filter by status
       if (orderStatus !== 'all') {
-        orders = orders.filter(o => o.status.toLowerCase() === orderStatus.toLowerCase());
+        orders = orders.filter((o: any) => o.status.toLowerCase() === orderStatus.toLowerCase());
       }
 
       // Filter by symbol
       if (filterSymbol) {
         const symbols = filterSymbol.split(',').map(s => s.trim().toUpperCase());
-        orders = orders.filter(o => symbols.includes(o.symbol.toUpperCase()));
+        orders = orders.filter((o: any) => symbols.includes(o.symbol.toUpperCase()));
       }
 
       // Filter by side
       if (orderSide !== 'all') {
-        orders = orders.filter(o => o.side.toLowerCase() === orderSide.toLowerCase());
+        orders = orders.filter((o: any) => o.side.toLowerCase() === orderSide.toLowerCase());
       }
 
       // Filter by time period
@@ -165,11 +164,11 @@ export class GetOrdersNode implements INodeType {
 
       if (timePeriod !== 'all' && periodMs[timePeriod]) {
         const cutoff = new Date(now.getTime() - periodMs[timePeriod]);
-        orders = orders.filter(o => new Date(o.timestamp) >= cutoff);
+        orders = orders.filter((o: any) => new Date(o.timestamp) >= cutoff);
       }
 
       // Sort orders
-      orders.sort((a, b) => {
+      orders.sort((a: any, b: any) => {
         const timeA = new Date(a.timestamp).getTime();
         const timeB = new Date(b.timestamp).getTime();
         return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
@@ -181,13 +180,13 @@ export class GetOrdersNode implements INodeType {
       // Calculate summary statistics
       const summary = {
         totalOrders: orders.length,
-        openOrders: orders.filter(o => o.status === 'open' || o.status === 'pending').length,
-        filledOrders: orders.filter(o => o.status === 'filled').length,
-        cancelledOrders: orders.filter(o => o.status === 'cancelled').length,
-        rejectedOrders: orders.filter(o => o.status === 'rejected').length,
-        buyOrders: orders.filter(o => o.side === 'BUY').length,
-        sellOrders: orders.filter(o => o.side === 'SELL').length,
-        totalVolume: orders.reduce((sum, o) => sum + (o.filledQuantity || 0) * (o.averagePrice || o.price), 0),
+        openOrders: orders.filter((o: any) => o.status === 'open' || o.status === 'pending').length,
+        filledOrders: orders.filter((o: any) => o.status === 'filled').length,
+        cancelledOrders: orders.filter((o: any) => o.status === 'cancelled').length,
+        rejectedOrders: orders.filter((o: any) => o.status === 'rejected').length,
+        buyOrders: orders.filter((o: any) => o.side === 'BUY').length,
+        sellOrders: orders.filter((o: any) => o.side === 'SELL').length,
+        totalVolume: orders.reduce((sum: any, o: any) => sum + (o.filledQuantity || 0) * (o.averagePrice || o.price), 0),
         broker,
         paperTrading: isPaper,
         period: timePeriod,
@@ -225,7 +224,7 @@ export class GetOrdersNode implements INodeType {
     }
   }
 
-  private getMockOrders(broker: string, isPaper: boolean): any[] {
+  private static getMockOrders(broker: string, isPaper: boolean): any[] {
     const now = new Date();
 
     return [

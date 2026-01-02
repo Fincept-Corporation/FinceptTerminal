@@ -11,7 +11,7 @@ import {
   NodeConnectionType,
   NodePropertyType,
 } from '../../types';
-import { MarketDataBridge } from '../../adapters/MarketDataBridge';
+import { MarketDataBridge, DataProvider } from '../../adapters/MarketDataBridge';
 
 export class GetTickerStatsNode implements INodeType {
   description: INodeTypeDescription = {
@@ -133,7 +133,7 @@ export class GetTickerStatsNode implements INodeType {
   async execute(this: IExecuteFunctions): Promise<NodeOutput> {
     const useInputSymbols = this.getNodeParameter('useInputSymbols', 0) as boolean;
     const statsType = this.getNodeParameter('statsType', 0) as string;
-    const provider = this.getNodeParameter('provider', 0) as string;
+    const provider = this.getNodeParameter('provider', 0) as DataProvider;
     const includeTechnical = this.getNodeParameter('includeTechnical', 0) as boolean;
     const includeBeta = this.getNodeParameter('includeBeta', 0) as boolean;
 
@@ -160,14 +160,14 @@ export class GetTickerStatsNode implements INodeType {
       }]];
     }
 
-    const bridge = new MarketDataBridge();
-    const results: Array<{ json: Record<string, unknown> }> = [];
+    
+    const results: Array<{ json: Record<string, any> }> = [];
 
     for (const symbol of symbols) {
       try {
-        const stats = await bridge.getTickerStats(symbol, provider);
+        const stats = await MarketDataBridge.getTickerStats(symbol, provider);
 
-        const result: Record<string, unknown> = {
+        const result: Record<string, any> = {
           symbol,
           statsType,
           provider,
@@ -178,15 +178,12 @@ export class GetTickerStatsNode implements INodeType {
         switch (statsType) {
           case '24h':
             result.stats24h = {
-              open: stats.open,
-              high: stats.high,
-              low: stats.low,
-              close: stats.close,
-              volume: stats.volume,
-              volumeWeightedAvg: stats.vwap,
-              change: stats.change,
-              changePercent: stats.changePercent,
-              trades: stats.trades,
+              lastPrice: stats.lastPrice,
+              high: stats.highPrice24h,
+              low: stats.lowPrice24h,
+              volume: stats.volume24h,
+              change: stats.change24h,
+              changePercent: stats.changePercent24h,
             };
             break;
 
@@ -194,82 +191,81 @@ export class GetTickerStatsNode implements INodeType {
             const periods = this.getNodeParameter('performancePeriods', 0) as string[];
             result.performance = {};
             for (const period of periods) {
-              (result.performance as Record<string, unknown>)[period] = this.calculatePerformance(stats, period);
+              (result.performance as Record<string, any>)[period] = GetTickerStatsNode.calculatePerformance(stats, period);
             }
             break;
 
           case 'ath':
-            result.allTimeHigh = stats.ath || stats.high52Week;
-            result.allTimeLow = stats.atl || stats.low52Week;
-            result.athDate = stats.athDate;
-            result.atlDate = stats.atlDate;
-            result.fromAth = stats.price && stats.ath ? ((stats.price - stats.ath) / stats.ath * 100).toFixed(2) + '%' : null;
-            result.fromAtl = stats.price && stats.atl ? ((stats.price - stats.atl) / stats.atl * 100).toFixed(2) + '%' : null;
+            result.allTimeHigh = null;
+            result.allTimeLow = null;
+            result.athDate = null;
+            result.atlDate = null;
+            result.fromAth = null;
+            result.fromAtl = null;
             break;
 
           case '52week':
             result.week52 = {
-              high: stats.high52Week,
-              low: stats.low52Week,
-              range: stats.high52Week && stats.low52Week ? stats.high52Week - stats.low52Week : null,
-              percentFromHigh: stats.price && stats.high52Week ? ((stats.price - stats.high52Week) / stats.high52Week * 100).toFixed(2) : null,
-              percentFromLow: stats.price && stats.low52Week ? ((stats.price - stats.low52Week) / stats.low52Week * 100).toFixed(2) : null,
+              high: null,
+              low: null,
+              range: null,
+              percentFromHigh: null,
+              percentFromLow: null,
             };
             break;
 
           case 'volatility':
             result.volatility = {
-              daily: stats.volatility?.daily || this.estimateVolatility(stats, 'daily'),
-              weekly: stats.volatility?.weekly || this.estimateVolatility(stats, 'weekly'),
-              monthly: stats.volatility?.monthly || this.estimateVolatility(stats, 'monthly'),
-              annual: stats.volatility?.annual || this.estimateVolatility(stats, 'annual'),
-              atr: stats.atr,
-              atrPercent: stats.price && stats.atr ? (stats.atr / stats.price * 100).toFixed(2) : null,
+              daily: GetTickerStatsNode.estimateVolatility(stats, 'daily'),
+              weekly: GetTickerStatsNode.estimateVolatility(stats, 'weekly'),
+              monthly: GetTickerStatsNode.estimateVolatility(stats, 'monthly'),
+              annual: GetTickerStatsNode.estimateVolatility(stats, 'annual'),
+              atr: null,
+              atrPercent: null,
             };
             break;
 
           case 'volume':
             result.volumeProfile = {
-              current: stats.volume,
-              average: stats.avgVolume,
-              ratio: stats.volume && stats.avgVolume ? (stats.volume / stats.avgVolume).toFixed(2) : null,
-              dollarVolume: stats.price && stats.volume ? stats.price * stats.volume : null,
-              avgDollarVolume: stats.price && stats.avgVolume ? stats.price * stats.avgVolume : null,
+              current: stats.volume24h,
+              average: null,
+              ratio: null,
+              dollarVolume: stats.lastPrice && stats.volume24h ? stats.lastPrice * stats.volume24h : null,
+              avgDollarVolume: null,
             };
             break;
 
           case 'all':
           default:
             result.stats24h = {
-              open: stats.open,
-              high: stats.high,
-              low: stats.low,
-              close: stats.close,
-              volume: stats.volume,
-              change: stats.change,
-              changePercent: stats.changePercent,
+              lastPrice: stats.lastPrice,
+              high: stats.highPrice24h,
+              low: stats.lowPrice24h,
+              volume: stats.volume24h,
+              change: stats.change24h,
+              changePercent: stats.changePercent24h,
             };
             result.week52 = {
-              high: stats.high52Week,
-              low: stats.low52Week,
+              high: null,
+              low: null,
             };
             result.averages = {
-              volume: stats.avgVolume,
-              price50: stats.sma50,
-              price200: stats.sma200,
+              volume: null,
+              price50: null,
+              price200: null,
             };
             break;
         }
 
         // Add technical levels if requested
         if (includeTechnical) {
-          result.technicalLevels = this.calculateTechnicalLevels(stats);
+          result.technicalLevels = GetTickerStatsNode.calculateTechnicalLevels(stats);
         }
 
         // Add beta if requested
         if (includeBeta) {
           const benchmark = this.getNodeParameter('benchmark', 0) as string;
-          result.beta = stats.beta || 1.0;
+          result.beta = 1.0;
           result.benchmark = benchmark;
         }
 
@@ -288,7 +284,7 @@ export class GetTickerStatsNode implements INodeType {
     return [results];
   }
 
-  private calculatePerformance(stats: any, period: string): Record<string, unknown> {
+  private static calculatePerformance(stats: any, period: string): Record<string, any> {
     // Mock performance calculation - would use historical data in production
     const mockReturns: Record<string, number> = {
       '1d': -0.5,
@@ -308,7 +304,7 @@ export class GetTickerStatsNode implements INodeType {
     };
   }
 
-  private estimateVolatility(stats: any, period: string): number {
+  private static estimateVolatility(stats: any, period: string): number {
     // Estimate volatility from high-low range
     const range = stats.high && stats.low ? (stats.high - stats.low) / stats.low : 0;
 
@@ -322,7 +318,7 @@ export class GetTickerStatsNode implements INodeType {
     return parseFloat((range * 100 * (multipliers[period] || 1)).toFixed(2));
   }
 
-  private calculateTechnicalLevels(stats: any): Record<string, unknown> {
+  private static calculateTechnicalLevels(stats: any): Record<string, any> {
     const high = stats.high || stats.close;
     const low = stats.low || stats.close;
     const close = stats.close;

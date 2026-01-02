@@ -124,12 +124,11 @@ export class CancelOrderNode implements INodeType {
     const cancelMode = this.getNodeParameter('cancelMode', 0) as string;
     const broker = this.getNodeParameter('broker', 0) as string;
 
-    const tradingBridge = new TradingBridge();
     const isPaper = broker === 'paper';
-    const auditLogger = new AuditLogger();
+
 
     try {
-      const results: Array<{ json: Record<string, unknown> }> = [];
+      const results: Array<{ json: Record<string, any> }> = [];
       let orderIds: string[] = [];
 
       switch (cancelMode) {
@@ -153,21 +152,21 @@ export class CancelOrderNode implements INodeType {
           const cancelOnly = this.getNodeParameter('cancelOnly', 0) as string;
 
           // Get open orders for symbol
-          const orders = await this.getOpenOrders(tradingBridge, broker, isPaper);
-          let filtered = orders.filter(o => o.symbol.toUpperCase() === symbol.toUpperCase());
+          const orders = await CancelOrderNode.getOpenOrders(broker, isPaper);
+          let filtered = orders.filter((o: any) => o.symbol.toUpperCase() === symbol.toUpperCase());
 
           // Apply additional filter
           if (cancelOnly === 'buy') {
-            filtered = filtered.filter(o => o.side === 'BUY');
+            filtered = filtered.filter((o: any) => o.side === 'BUY');
           } else if (cancelOnly === 'sell') {
-            filtered = filtered.filter(o => o.side === 'SELL');
+            filtered = filtered.filter((o: any) => o.side === 'SELL');
           } else if (cancelOnly === 'limit') {
-            filtered = filtered.filter(o => o.orderType === 'LIMIT');
+            filtered = filtered.filter((o: any) => o.orderType === 'LIMIT');
           } else if (cancelOnly === 'stop') {
-            filtered = filtered.filter(o => o.orderType === 'SL' || o.orderType === 'SL-L');
+            filtered = filtered.filter((o: any) => o.orderType === 'SL' || o.orderType === 'SL-L');
           }
 
-          orderIds = filtered.map(o => o.orderId);
+          orderIds = filtered.map((o: any) => o.orderId);
           break;
         }
 
@@ -175,21 +174,21 @@ export class CancelOrderNode implements INodeType {
           const cancelOnly = this.getNodeParameter('cancelOnly', 0) as string;
 
           // Get all open orders
-          const orders = await this.getOpenOrders(tradingBridge, broker, isPaper);
+          const orders = await CancelOrderNode.getOpenOrders(broker, isPaper);
           let filtered = orders;
 
           // Apply filter
           if (cancelOnly === 'buy') {
-            filtered = filtered.filter(o => o.side === 'BUY');
+            filtered = filtered.filter((o: any) => o.side === 'BUY');
           } else if (cancelOnly === 'sell') {
-            filtered = filtered.filter(o => o.side === 'SELL');
+            filtered = filtered.filter((o: any) => o.side === 'SELL');
           } else if (cancelOnly === 'limit') {
-            filtered = filtered.filter(o => o.orderType === 'LIMIT');
+            filtered = filtered.filter((o: any) => o.orderType === 'LIMIT');
           } else if (cancelOnly === 'stop') {
-            filtered = filtered.filter(o => o.orderType === 'SL' || o.orderType === 'SL-L');
+            filtered = filtered.filter((o: any) => o.orderType === 'SL' || o.orderType === 'SL-L');
           }
 
-          orderIds = filtered.map(o => o.orderId);
+          orderIds = filtered.map((o: any) => o.orderId);
           break;
         }
 
@@ -226,15 +225,15 @@ export class CancelOrderNode implements INodeType {
       // Cancel each order
       for (const orderId of orderIds) {
         try {
-          const result = await tradingBridge.cancelOrder(orderId, broker, isPaper);
+          const result = await TradingBridge.cancelOrder(orderId, broker as any);
 
           // Log the cancellation
-          await auditLogger.log({
-            type: 'ORDER_CANCELLED' as any,
+          await AuditLogger.log({
+            actionType: 'ORDER_CANCELLED',
+            orderId,
+            paperTrading: isPaper,
             details: {
-              orderId,
               broker,
-              paperTrading: isPaper,
             },
           });
 
@@ -274,7 +273,7 @@ export class CancelOrderNode implements INodeType {
     }
   }
 
-  private async getOpenOrders(bridge: TradingBridge, broker: string, isPaper: boolean): Promise<any[]> {
+  private static async getOpenOrders(broker: string, isPaper: boolean): Promise<any[]> {
     // Mock implementation - would fetch real orders
     return [
       { orderId: 'ORD001', symbol: 'AAPL', side: 'BUY', orderType: 'LIMIT', status: 'open' },

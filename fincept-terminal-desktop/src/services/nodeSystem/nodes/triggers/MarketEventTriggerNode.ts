@@ -189,7 +189,7 @@ export class MarketEventTriggerNode implements INodeType {
   };
 
   // Market hours configuration
-  private readonly marketHours: Record<string, { open: string; close: string; timezone: string; preMarket?: string; afterHours?: string }> = {
+  private static readonly marketHours: Record<string, { open: string; close: string; timezone: string; preMarket?: string; afterHours?: string }> = {
     NYSE: { open: '09:30', close: '16:00', timezone: 'America/New_York', preMarket: '04:00', afterHours: '20:00' },
     NSE: { open: '09:15', close: '15:30', timezone: 'Asia/Kolkata', preMarket: '09:00' },
     BSE: { open: '09:15', close: '15:30', timezone: 'Asia/Kolkata', preMarket: '09:00' },
@@ -225,7 +225,7 @@ export class MarketEventTriggerNode implements INodeType {
       case 'preMarketStart':
       case 'afterHoursStart': {
         const exchange = this.getNodeParameter('exchange', 0) as string;
-        const hours = this.marketHours[exchange];
+        const hours = MarketEventTriggerNode.marketHours[exchange];
         triggerConfig.exchange = exchange;
         triggerConfig.timezone = hours.timezone;
 
@@ -243,7 +243,7 @@ export class MarketEventTriggerNode implements INodeType {
           description = `${exchange} after-hours at ${hours.afterHours} ${hours.timezone}`;
         }
 
-        nextTrigger = this.getNextMarketEvent(exchange, eventType, offsetMinutes);
+        nextTrigger = MarketEventTriggerNode.getNextMarketEvent(exchange, eventType, offsetMinutes);
         break;
       }
 
@@ -277,13 +277,13 @@ export class MarketEventTriggerNode implements INodeType {
 
       case 'quarterEnd': {
         description = 'Quarter end';
-        nextTrigger = this.getNextQuarterEnd();
+        nextTrigger = MarketEventTriggerNode.getNextQuarterEnd();
         break;
       }
 
       case 'monthEnd': {
         description = 'Month end';
-        nextTrigger = this.getNextMonthEnd();
+        nextTrigger = MarketEventTriggerNode.getNextMonthEnd();
         break;
       }
 
@@ -313,8 +313,8 @@ export class MarketEventTriggerNode implements INodeType {
     }]];
   }
 
-  private getNextMarketEvent(exchange: string, eventType: string, offsetMinutes: number): Date {
-    const hours = this.marketHours[exchange];
+  private static getNextMarketEvent(exchange: string, eventType: string, offsetMinutes: number): Date {
+    const hours = MarketEventTriggerNode.marketHours[exchange];
     const now = new Date();
     const next = new Date(now);
 
@@ -340,7 +340,7 @@ export class MarketEventTriggerNode implements INodeType {
     return next;
   }
 
-  private getNextQuarterEnd(): Date {
+  private static getNextQuarterEnd(): Date {
     const now = new Date();
     const month = now.getMonth();
     const year = now.getFullYear();
@@ -359,7 +359,7 @@ export class MarketEventTriggerNode implements INodeType {
     return new Date(year + 1, 2 + 1, 0);
   }
 
-  private getNextMonthEnd(): Date {
+  private static getNextMonthEnd(): Date {
     const now = new Date();
     const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 

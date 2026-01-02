@@ -91,6 +91,9 @@ interface OptimizationResults {
     expected_annual_return: number;
     annual_volatility: number;
     sharpe_ratio: number;
+    sortino_ratio?: number;
+    calmar_ratio?: number;
+    max_drawdown?: number;
   };
   discrete_allocation?: {
     allocation: Record<string, number>;
@@ -1370,10 +1373,10 @@ const PortfolioOptimizationView: React.FC<PortfolioOptimizationViewProps> = ({ p
 
               {/* Prepare chart data */}
               {(() => {
-                const chartData = results.efficient_frontier.returns.map((ret: number, idx: number) => ({
-                  volatility: parseFloat((results.efficient_frontier.volatility[idx] * 100).toFixed(2)),
+                const chartData = results.efficient_frontier!.returns.map((ret: number, idx: number) => ({
+                  volatility: parseFloat((results.efficient_frontier!.volatility[idx] * 100).toFixed(2)),
                   returns: parseFloat((ret * 100).toFixed(2)),
-                  sharpe: parseFloat(results.efficient_frontier.sharpe_ratios?.[idx]?.toFixed(3) || '0'),
+                  sharpe: parseFloat(results.efficient_frontier!.sharpe_ratios?.[idx]?.toFixed(3) || '0'),
                 }));
 
                 // Custom dot component for better visualization

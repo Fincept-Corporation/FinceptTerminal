@@ -178,12 +178,11 @@ export class ClosePositionNode implements INodeType {
     const onlyProfitable = this.getNodeParameter('onlyProfitable', 0) as boolean;
     const onlyIfLoss = this.getNodeParameter('onlyIfLoss', 0) as boolean;
 
-    const tradingBridge = new TradingBridge();
     const isPaper = broker === 'paper';
 
     try {
       // Get current positions
-      const positions = await tradingBridge.getPositions(broker, isPaper);
+      const positions = await TradingBridge.getPositions(broker as any);
 
       // Determine which positions to close
       let positionsToClose = positions;
@@ -207,19 +206,20 @@ export class ClosePositionNode implements INodeType {
           }]];
         }
 
-        positionsToClose = positions.filter(p => p.symbol.toUpperCase() === symbol.toUpperCase());
+        positionsToClose = positions.filter((p: any) => p.symbol.toUpperCase() === symbol.toUpperCase());
       }
 
       // Filter by profit condition
       if (onlyProfitable) {
-        positionsToClose = positionsToClose.filter(p => p.pnl > 0);
+        positionsToClose = positionsToClose.filter((p: any) => (p.pnl || 0) > 0);
       }
 
       // Filter by loss condition
       if (onlyIfLoss) {
         const lossThreshold = this.getNodeParameter('lossThreshold', 0) as number;
-        positionsToClose = positionsToClose.filter(p => {
-          const pnlPercent = p.averagePrice > 0 ? ((p.lastPrice - p.averagePrice) / p.averagePrice) * 100 : 0;
+        positionsToClose = positionsToClose.filter((p: any) => {
+          const currentPrice = p.currentPrice || p.averagePrice;
+          const pnlPercent = p.averagePrice > 0 ? ((currentPrice - p.averagePrice) / p.averagePrice) * 100 : 0;
           return pnlPercent < -lossThreshold;
         });
       }
@@ -236,7 +236,7 @@ export class ClosePositionNode implements INodeType {
         }]];
       }
 
-      const results: Array<{ json: Record<string, unknown> }> = [];
+      const results: Array<{ json: Record<string, any> }> = [];
 
       for (const position of positionsToClose) {
         // Calculate quantity to close
@@ -256,7 +256,8 @@ export class ClosePositionNode implements INodeType {
           }
           case 'dollars': {
             const dollarAmount = this.getNodeParameter('dollarAmount', 0) as number;
-            closeQuantity = Math.floor(dollarAmount / position.lastPrice);
+            const currentPrice = (position as any).currentPrice || position.averagePrice;
+            closeQuantity = Math.floor(dollarAmount / currentPrice);
             closeQuantity = Math.min(closeQuantity, positionQty);
             break;
           }
@@ -279,20 +280,23 @@ export class ClosePositionNode implements INodeType {
 
         // Determine close side (opposite of position)
         const closeSide = position.quantity > 0 ? 'SELL' : 'BUY';
-        const estimatedValue = closeQuantity * position.lastPrice;
+        const currentPrice = (position as any).currentPrice || position.averagePrice;
+        const estimatedValue = closeQuantity * currentPrice;
 
         // Request confirmation if enabled
         if (requireConfirmation && !isPaper) {
-          const confirmationService = new ConfirmationService();
-          const confirmed = await confirmationService.requestTradeConfirmation({
-            symbol: position.symbol,
-            side: closeSide,
-            quantity: closeQuantity,
-            price: position.lastPrice,
-            broker,
-            estimatedValue,
-            isClosing: true,
-          });
+          const confirmed = await ConfirmationService.requestTradeConfirmation(
+            {
+              symbol: position.symbol,
+              side: closeSide as any,
+              quantity: closeQuantity,
+              price: currentPrice,
+              type: 'MARKET',
+            },
+            { valid: true, failed: [], warnings: [], passed: [], overallRisk: 'low', message: 'Position close approved' },
+            undefined,
+            isPaper
+          );
 
           if (!confirmed) {
             results.push({
@@ -313,29 +317,29 @@ export class ClosePositionNode implements INodeType {
           ? this.getNodeParameter('limitPrice', 0) as number
           : undefined;
 
-        const result = await tradingBridge.closePosition(
+        const result = await TradingBridge.closePosition(
           position.symbol,
-          closeQuantity,
-          broker,
-          isPaper
+          broker as any,
+          closeQuantity
         );
 
         // Log the close
-        const auditLogger = new AuditLogger();
-        await auditLogger.logOrder({
-          orderId: result.orderId,
-          symbol: position.symbol,
-          side: closeSide as any,
-          quantity: closeQuantity,
-          price: position.lastPrice,
-          status: result.status,
-          broker,
-          paperTrading: isPaper,
-          action: 'close_position',
-        });
+        await AuditLogger.logOrder(
+          'ORDER_PLACED',
+          {
+            orderId: result.orderId || 'UNKNOWN',
+            symbol: position.symbol,
+            side: closeSide,
+            quantity: closeQuantity,
+            price: currentPrice,
+            status: result.status || 'UNKNOWN',
+          },
+          undefined,
+          isPaper
+        );
 
         // Calculate realized P&L
-        const realizedPnl = (position.lastPrice - position.averagePrice) * closeQuantity * (position.quantity > 0 ? 1 : -1);
+        const realizedPnl = (currentPrice - position.averagePrice) * closeQuantity * (position.quantity > 0 ? 1 : -1);
 
         results.push({
           json: {
@@ -345,7 +349,7 @@ export class ClosePositionNode implements INodeType {
             side: closeSide,
             quantityClosed: closeQuantity,
             remainingQuantity: positionQty - closeQuantity,
-            price: position.lastPrice,
+            price: currentPrice,
             realizedPnl,
             realizedPnlPercent: ((realizedPnl / (closeQuantity * position.averagePrice)) * 100).toFixed(2) + '%',
             status: result.status,

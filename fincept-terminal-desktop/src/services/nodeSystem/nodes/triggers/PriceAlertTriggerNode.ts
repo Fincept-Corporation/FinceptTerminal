@@ -201,12 +201,12 @@ export class PriceAlertTriggerNode implements INodeType {
         timestamp: new Date().toISOString(),
         executionId: this.getExecutionId(),
         status: 'monitoring',
-        message: `Monitoring ${symbol} for ${this.formatCondition(condition, triggerConfig)}`,
+        message: `Monitoring ${symbol} for ${PriceAlertTriggerNode.formatCondition(condition, triggerConfig)}`,
       },
     }]];
   }
 
-  private formatCondition(condition: string, config: any): string {
+  private static formatCondition(condition: string, config: any): string {
     switch (condition) {
       case 'above':
         return `price > $${config.targetPrice}`;

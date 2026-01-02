@@ -151,13 +151,12 @@ export class GetFundamentalsNode implements INodeType {
       }]];
     }
 
-    const bridge = new MarketDataBridge();
+    
 
     try {
-      const fundamentals = await bridge.getFundamentals(symbol, dataType, provider);
+      const fundamentals = await MarketDataBridge.getFundamentals(symbol, provider as any);
 
-      const result: Record<string, unknown> = {
-        symbol,
+      const result: Record<string, any> = {
         dataType,
         provider,
         ...fundamentals,
@@ -166,7 +165,7 @@ export class GetFundamentalsNode implements INodeType {
 
       // Add industry comparison if requested
       if (includeIndustry && fundamentals.industry) {
-        result.industryComparison = await this.getIndustryComparison(symbol, fundamentals);
+        result.industryComparison = await GetFundamentalsNode.getIndustryComparison(symbol, fundamentals);
       }
 
       return [[{ json: result }]];
@@ -182,7 +181,7 @@ export class GetFundamentalsNode implements INodeType {
     }
   }
 
-  private async getIndustryComparison(symbol: string, data: any): Promise<Record<string, unknown>> {
+  private static async getIndustryComparison(symbol: string, data: any): Promise<Record<string, any>> {
     // Mock industry comparison - would call actual API in production
     return {
       industry: data.industry || 'Technology',

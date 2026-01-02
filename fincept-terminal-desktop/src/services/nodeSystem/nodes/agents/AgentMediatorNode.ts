@@ -153,7 +153,7 @@ export class AgentMediatorNode implements INodeType {
         const field = this.getNodeParameter('responsesField', 0) as string;
         const firstItem = inputData[0]?.json;
         if (firstItem && Array.isArray(firstItem[field])) {
-          responses = firstItem[field];
+          responses = firstItem[field] as Array<{ agentId: string; agentName?: string; response: string }>;
         }
         originalQuery = originalQuery || (firstItem?.query as string) || '';
         break;
@@ -175,7 +175,7 @@ export class AgentMediatorNode implements INodeType {
 
         // Try to find responses in common formats
         if (firstItem?.responses && Array.isArray(firstItem.responses)) {
-          responses = firstItem.responses;
+          responses = firstItem.responses as Array<{ agentId: string; agentName?: string; response: string }>;
         } else if (firstItem?.synthesis) {
           // Already synthesized, just pass through
           return [[{ json: firstItem }]];
@@ -205,59 +205,33 @@ export class AgentMediatorNode implements INodeType {
 
     const focusAreas = focusAreasStr ? focusAreasStr.split(',').map(s => s.trim()) : [];
 
-    const bridge = new AgentBridge();
-
     try {
-      const result = await bridge.mediateResults(
-        responses.filter(r => r.response),
-        {
-          llmProvider,
-          model,
-          mode: mediationMode,
-          maxLength,
-          focusAreas,
-          includeAttribution,
-          generateRecommendations,
-          originalQuery,
-        }
-      );
+      // Convert responses to AgentExecutionResult format
+      const agentResults: any[] = responses.filter(r => r.response).map(r => ({
+        success: true,
+        agentId: r.agentId,
+        agentName: r.agentName,
+        data: { response: r.response },
+      }));
 
-      const output: Record<string, unknown> = {
+      // Build mediation prompt
+      const mediationPrompt = `Mode: ${mediationMode}. Original query: ${originalQuery}. ${
+        focusAreas.length > 0 ? `Focus on: ${focusAreas.join(', ')}.` : ''
+      }`;
+
+      const result = await AgentBridge.mediateResults(agentResults, mediationPrompt);
+
+      const output: Record<string, any> = {
         success: true,
         mediationMode,
         agentCount: responses.length,
         originalQuery,
-        synthesis: result.synthesis,
+        synthesis: result,
         timestamp: new Date().toISOString(),
       };
 
-      if (mediationMode === 'debate' || mediationMode === 'compare') {
-        output.viewpoints = result.viewpoints || [];
-        output.differences = result.differences || [];
-      }
-
-      if (mediationMode === 'consensus') {
-        output.agreements = result.agreements || [];
-        output.disagreements = result.disagreements || [];
-        output.consensusLevel = result.consensusLevel;
-      }
-
-      if (mediationMode === 'rank') {
-        output.ranking = result.ranking || [];
-      }
-
-      if (mediationMode === 'actions' || generateRecommendations) {
-        output.recommendations = result.recommendations || [];
-        output.actionItems = result.actionItems || [];
-      }
-
-      if (includeAttribution) {
-        output.attributions = result.attributions || [];
-      }
-
-      if (focusAreas.length > 0) {
-        output.focusAreaAnalysis = result.focusAreaAnalysis || {};
-      }
+      // Simple mediation result - just include the synthesis
+      output.analysis = result;
 
       return [[{ json: output }]];
     } catch (error) {

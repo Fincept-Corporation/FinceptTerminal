@@ -83,25 +83,20 @@ export class GetBalanceNode implements INodeType {
     const includePnl = this.getNodeParameter('includePnl', 0) as boolean;
     const currency = this.getNodeParameter('currency', 0) as string;
 
-    const tradingBridge = new TradingBridge();
     const isPaper = broker === 'paper';
 
     try {
-      const balance = await tradingBridge.getBalance(broker, isPaper);
+      const balance = await TradingBridge.getBalance(broker as any, currency);
 
-      const result: Record<string, unknown> = {
+      const result: Record<string, any> = {
         broker,
         paperTrading: isPaper,
         currency,
 
         // Core balance info
-        cashBalance: balance.cashBalance,
-        availableBalance: balance.availableBalance,
-        buyingPower: balance.buyingPower,
-
-        // Portfolio value
-        portfolioValue: balance.portfolioValue,
-        totalEquity: balance.totalEquity,
+        available: balance.available,
+        used: balance.used,
+        total: balance.total,
 
         fetchedAt: new Date().toISOString(),
       };
@@ -109,34 +104,34 @@ export class GetBalanceNode implements INodeType {
       // Add margin details if requested
       if (includeMargin) {
         result.margin = {
-          usedMargin: balance.usedMargin || 0,
-          availableMargin: balance.availableMargin || balance.availableBalance,
-          marginLevel: balance.marginLevel || 100,
-          leverage: balance.leverage || 1,
-          maintenanceMargin: balance.maintenanceMargin || 0,
-          marginCallLevel: balance.marginCallLevel || 50,
-          isMarginCall: balance.marginLevel ? balance.marginLevel < (balance.marginCallLevel || 50) : false,
+          usedMargin: balance.marginUsed || 0,
+          availableMargin: balance.margin || balance.available,
+          marginLevel: 100,
+          leverage: 1,
+          maintenanceMargin: 0,
+          marginCallLevel: 50,
+          isMarginCall: false,
         };
       }
 
       // Add P&L summary if requested
       if (includePnl) {
         result.pnl = {
-          unrealizedPnl: balance.unrealizedPnl || 0,
-          realizedPnlToday: balance.realizedPnlToday || 0,
-          realizedPnlWeek: balance.realizedPnlWeek || 0,
-          realizedPnlMonth: balance.realizedPnlMonth || 0,
-          realizedPnlYear: balance.realizedPnlYear || 0,
-          returnToday: balance.returnToday || '0%',
-          returnWeek: balance.returnWeek || '0%',
-          returnMonth: balance.returnMonth || '0%',
-          returnYear: balance.returnYear || '0%',
+          unrealizedPnl: 0,
+          realizedPnlToday: 0,
+          realizedPnlWeek: 0,
+          realizedPnlMonth: 0,
+          realizedPnlYear: 0,
+          returnToday: '0%',
+          returnWeek: '0%',
+          returnMonth: '0%',
+          returnYear: '0%',
         };
       }
 
       // Add crypto-specific fields if applicable
       if (['binance', 'kraken', 'coinbase'].includes(broker)) {
-        result.cryptoBalances = balance.cryptoBalances || {};
+        result.cryptoBalances = {};
       }
 
       return [[{ json: result }]];

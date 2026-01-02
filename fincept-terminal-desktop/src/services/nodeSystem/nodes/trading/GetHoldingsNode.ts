@@ -110,11 +110,10 @@ export class GetHoldingsNode implements INodeType {
     const sortBy = this.getNodeParameter('sortBy', 0) as string;
     const outputMode = this.getNodeParameter('outputMode', 0) as string;
 
-    const tradingBridge = new TradingBridge();
     const isPaper = broker === 'paper';
 
     try {
-      let holdings = await tradingBridge.getHoldings(broker, isPaper);
+      let holdings = await TradingBridge.getHoldings(broker as any);
 
       // Filter by symbol if specified
       if (filterSymbol) {
@@ -125,11 +124,11 @@ export class GetHoldingsNode implements INodeType {
       // Calculate market values if requested
       if (includeMarketValue) {
         for (const holding of holdings) {
-          holding.marketValue = holding.quantity * holding.lastPrice;
-          holding.costBasis = holding.quantity * holding.averagePrice;
-          holding.unrealizedPnl = holding.marketValue - holding.costBasis;
-          holding.unrealizedPnlPercent = holding.costBasis !== 0
-            ? ((holding.unrealizedPnl / holding.costBasis) * 100).toFixed(2)
+          (holding as any).marketValue = holding.quantity * (holding.currentPrice || holding.averagePrice);
+          (holding as any).costBasis = holding.quantity * holding.averagePrice;
+          (holding as any).unrealizedPnl = (holding as any).marketValue - (holding as any).costBasis;
+          (holding as any).unrealizedPnlPercent = (holding as any).costBasis !== 0
+            ? (((holding as any).unrealizedPnl / (holding as any).costBasis) * 100).toFixed(2)
             : '0';
         }
       }
@@ -148,30 +147,30 @@ export class GetHoldingsNode implements INodeType {
 
         for (const holding of holdings) {
           const sectorInfo = sectorMap[holding.symbol] || { sector: 'Unknown', industry: 'Unknown' };
-          holding.sector = sectorInfo.sector;
-          holding.industry = sectorInfo.industry;
+          (holding as any).sector = sectorInfo.sector;
+          (holding as any).industry = sectorInfo.industry;
         }
       }
 
       // Add mock dividend data if requested
       if (includeDividends) {
         for (const holding of holdings) {
-          holding.annualDividend = (holding.lastPrice * 0.02).toFixed(2); // Mock 2% yield
-          holding.dividendYield = '2.00%';
-          holding.exDividendDate = null;
+          (holding as any).annualDividend = ((holding.currentPrice || holding.averagePrice) * 0.02).toFixed(2); // Mock 2% yield
+          (holding as any).dividendYield = '2.00%';
+          (holding as any).exDividendDate = null;
         }
       }
 
       // Sort holdings
       switch (sortBy) {
         case 'value':
-          holdings.sort((a, b) => (b.marketValue || 0) - (a.marketValue || 0));
+          holdings.sort((a, b) => (b.currentValue || 0) - (a.currentValue || 0));
           break;
         case 'pnl':
-          holdings.sort((a, b) => (b.unrealizedPnl || 0) - (a.unrealizedPnl || 0));
+          holdings.sort((a, b) => (b.pnl || 0) - (a.pnl || 0));
           break;
         case 'pnlPercent':
-          holdings.sort((a, b) => parseFloat(b.unrealizedPnlPercent || '0') - parseFloat(a.unrealizedPnlPercent || '0'));
+          holdings.sort((a, b) => (b.pnlPercent || 0) - (a.pnlPercent || 0));
           break;
         case 'symbol':
           holdings.sort((a, b) => a.symbol.localeCompare(b.symbol));
@@ -182,16 +181,16 @@ export class GetHoldingsNode implements INodeType {
       }
 
       // Calculate portfolio summary
-      const totalValue = holdings.reduce((sum, h) => sum + (h.marketValue || 0), 0);
-      const totalCost = holdings.reduce((sum, h) => sum + (h.costBasis || 0), 0);
+      const totalValue = holdings.reduce((sum, h) => sum + (h.currentValue || 0), 0);
+      const totalCost = holdings.reduce((sum, h) => sum + (h.investedValue || 0), 0);
       const totalPnl = totalValue - totalCost;
 
       // Calculate sector allocation
       const sectorAllocation: Record<string, number> = {};
       if (includeSector) {
         for (const holding of holdings) {
-          const sector = holding.sector || 'Unknown';
-          sectorAllocation[sector] = (sectorAllocation[sector] || 0) + (holding.marketValue || 0);
+          const sector = (holding as any).sector || 'Unknown';
+          sectorAllocation[sector] = (sectorAllocation[sector] || 0) + (holding.currentValue || 0);
         }
         // Convert to percentages
         for (const sector of Object.keys(sectorAllocation)) {
@@ -205,9 +204,9 @@ export class GetHoldingsNode implements INodeType {
         totalCostBasis: totalCost,
         totalUnrealizedPnl: totalPnl,
         totalUnrealizedPnlPercent: totalCost !== 0 ? ((totalPnl / totalCost) * 100).toFixed(2) + '%' : '0%',
-        profitableHoldings: holdings.filter(h => (h.unrealizedPnl || 0) > 0).length,
-        losingHoldings: holdings.filter(h => (h.unrealizedPnl || 0) < 0).length,
-        topHolding: holdings[0] ? { symbol: holdings[0].symbol, weight: ((holdings[0].marketValue || 0) / totalValue * 100).toFixed(2) + '%' } : null,
+        profitableHoldings: holdings.filter(h => (h.pnl || 0) > 0).length,
+        losingHoldings: holdings.filter(h => (h.pnl || 0) < 0).length,
+        topHolding: holdings[0] ? { symbol: holdings[0].symbol, weight: ((holdings[0].currentValue || 0) / totalValue * 100).toFixed(2) + '%' } : null,
         sectorAllocation: includeSector ? sectorAllocation : undefined,
         broker,
         paperTrading: isPaper,
@@ -216,8 +215,8 @@ export class GetHoldingsNode implements INodeType {
 
       // Calculate weights for each holding
       for (const holding of holdings) {
-        holding.portfolioWeight = totalValue > 0
-          ? ((holding.marketValue || 0) / totalValue * 100).toFixed(2) + '%'
+        (holding as any).portfolioWeight = totalValue > 0
+          ? ((holding.currentValue || 0) / totalValue * 100).toFixed(2) + '%'
           : '0%';
       }
 
@@ -244,7 +243,7 @@ export class GetHoldingsNode implements INodeType {
               },
             }]];
           }
-          return [holdings.map(h => ({ json: h }))];
+          return [holdings.map(h => ({ json: h as any }))];
       }
     } catch (error) {
       return [[{

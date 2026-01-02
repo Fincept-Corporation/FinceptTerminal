@@ -228,19 +228,19 @@ export class GetHistoricalDataNode implements INodeType {
     }
 
     // Fetch historical data using the bridge
-    const bridge = new MarketDataBridge();
+    
 
     try {
-      const data = await bridge.getHistoricalData(symbol, {
+      const data = await MarketDataBridge.getHistoricalData({
+        symbol,
         interval,
         period,
         startDate,
         endDate,
-        limit: numBars,
         provider,
       });
 
-      const candles = data.candles || [];
+      const candles = data || [];
 
       // Format output based on preference
       switch (outputFormat) {

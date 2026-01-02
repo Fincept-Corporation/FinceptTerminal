@@ -11,7 +11,7 @@ import {
   NodeConnectionType,
   NodePropertyType,
 } from '../../types';
-import { MarketDataBridge } from '../../adapters/MarketDataBridge';
+import { MarketDataBridge, DataProvider } from '../../adapters/MarketDataBridge';
 
 export class GetQuoteNode implements INodeType {
   description: INodeTypeDescription = {
@@ -136,12 +136,10 @@ export class GetQuoteNode implements INodeType {
     ],
   };
 
-  private bridge = new MarketDataBridge();
-
   async execute(this: IExecuteFunctions): Promise<NodeOutput> {
     const useInputSymbols = this.getNodeParameter('useInputSymbols', 0) as boolean;
     const assetType = this.getNodeParameter('assetType', 0) as string;
-    const provider = this.getNodeParameter('provider', 0) as string;
+    const provider = this.getNodeParameter('provider', 0) as DataProvider;
     const includeDetails = this.getNodeParameter('includeDetails', 0) as boolean;
 
     let symbols: string[] = [];
@@ -175,17 +173,16 @@ export class GetQuoteNode implements INodeType {
     }
 
     // Fetch quotes using the bridge
-    const bridge = new MarketDataBridge();
-    const results: Array<{ json: Record<string, unknown> }> = [];
+    
+    const results: Array<{ json: Record<string, any> }> = [];
 
     for (const symbol of symbols) {
       try {
-        const quote = await bridge.getQuote(symbol, provider);
+        const quote = await MarketDataBridge.getQuote(symbol, provider);
 
         if (includeDetails) {
           results.push({
             json: {
-              symbol,
               ...quote,
               assetType,
               provider,
@@ -196,7 +193,7 @@ export class GetQuoteNode implements INodeType {
           // Minimal quote data
           results.push({
             json: {
-              symbol,
+              symbol: quote.symbol,
               price: quote.price,
               change: quote.change,
               changePercent: quote.changePercent,

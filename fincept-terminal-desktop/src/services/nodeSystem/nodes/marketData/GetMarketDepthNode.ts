@@ -125,12 +125,12 @@ export class GetMarketDepthNode implements INodeType {
       }]];
     }
 
-    const bridge = new MarketDataBridge();
+    
 
     try {
-      const depth = await bridge.getMarketDepth(symbol, parseInt(levels) || 10, provider);
+      const depth = await MarketDataBridge.getMarketDepth(symbol, provider as any, parseInt(levels) || 10);
 
-      const result: Record<string, unknown> = {
+      const result: Record<string, any> = {
         symbol,
         levels: parseInt(levels) || 10,
         provider,
@@ -141,10 +141,10 @@ export class GetMarketDepthNode implements INodeType {
       };
 
       if (includeStats && depth.bids && depth.asks) {
-        const totalBidVolume = depth.bids.reduce((sum: number, [, qty]: [number, number]) => sum + qty, 0);
-        const totalAskVolume = depth.asks.reduce((sum: number, [, qty]: [number, number]) => sum + qty, 0);
-        const bestBid = depth.bids[0]?.[0] || 0;
-        const bestAsk = depth.asks[0]?.[0] || 0;
+        const totalBidVolume = depth.bids.reduce((sum: number, item: { price: number; quantity: number }) => sum + item.quantity, 0);
+        const totalAskVolume = depth.asks.reduce((sum: number, item: { price: number; quantity: number }) => sum + item.quantity, 0);
+        const bestBid = depth.bids[0]?.price || 0;
+        const bestAsk = depth.asks[0]?.price || 0;
         const spread = bestAsk - bestBid;
         const spreadPercent = bestBid > 0 ? (spread / bestBid) * 100 : 0;
         const midPrice = (bestBid + bestAsk) / 2;
@@ -163,8 +163,8 @@ export class GetMarketDepthNode implements INodeType {
       }
 
       if (includeImbalance && depth.bids && depth.asks) {
-        const bidVolume = depth.bids.slice(0, 5).reduce((sum: number, [, qty]: [number, number]) => sum + qty, 0);
-        const askVolume = depth.asks.slice(0, 5).reduce((sum: number, [, qty]: [number, number]) => sum + qty, 0);
+        const bidVolume = depth.bids.slice(0, 5).reduce((sum: number, item: { price: number; quantity: number }) => sum + item.quantity, 0);
+        const askVolume = depth.asks.slice(0, 5).reduce((sum: number, item: { price: number; quantity: number }) => sum + item.quantity, 0);
         const totalVolume = bidVolume + askVolume;
 
         const imbalance = totalVolume > 0 ? (bidVolume - askVolume) / totalVolume : 0;

@@ -262,12 +262,12 @@ export class NewsEventTriggerNode implements INodeType {
         timestamp: new Date().toISOString(),
         executionId: this.getExecutionId(),
         status: 'monitoring',
-        message: `Monitoring ${symbols.join(', ')} for ${this.getEventTypeLabel(eventType)} events`,
+        message: `Monitoring ${symbols.join(', ')} for ${NewsEventTriggerNode.getEventTypeLabel(eventType)} events`,
       },
     }]];
   }
 
-  private getEventTypeLabel(eventType: string): string {
+  private static getEventTypeLabel(eventType: string): string {
     const labels: Record<string, string> = {
       news: 'news',
       earnings: 'earnings',

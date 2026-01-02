@@ -400,14 +400,17 @@ export function createTradingNodeDescription(
 // EXPORTS
 // ================================
 
-export {
+export type {
   INodeType,
   INodeTypeDescription,
   IExecuteFunctions,
   NodeOutput,
   INodeExecutionData,
   IDataObject,
+  INodeProperties,
+};
+
+export {
   NodeConnectionType,
   NodePropertyType,
-  INodeProperties,
 };

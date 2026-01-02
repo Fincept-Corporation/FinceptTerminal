@@ -202,7 +202,7 @@ export class StreamQuotesNode implements INodeType {
       json: {
         type: 'streamSetup',
         ...streamConfig,
-        websocketUrl: this.getWebSocketUrl(provider, symbols, streamType),
+        websocketUrl: StreamQuotesNode.getWebSocketUrl(provider, symbols, streamType),
         timestamp: new Date().toISOString(),
         executionId: this.getExecutionId(),
         message: `Streaming ${symbols.join(', ')} via ${provider}`,
@@ -210,7 +210,7 @@ export class StreamQuotesNode implements INodeType {
     }]];
   }
 
-  private getWebSocketUrl(provider: string, symbols: string[], streamType: string): string {
+  private static getWebSocketUrl(provider: string, symbols: string[], streamType: string): string {
     switch (provider) {
       case 'binance':
         const streams = symbols.map(s => `${s.toLowerCase()}@${streamType}`).join('/');

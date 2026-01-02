@@ -179,7 +179,7 @@ export class HedgeFundAgentNode implements INodeType {
     ],
   };
 
-  private readonly strategyDescriptions: Record<string, { description: string; characteristics: string[] }> = {
+  private static readonly strategyDescriptions: Record<string, { description: string; characteristics: string[] }> = {
     long_short_equity: {
       description: 'Combines long positions in undervalued stocks with short positions in overvalued stocks',
       characteristics: ['Stock selection', 'Sector analysis', 'Relative value', 'Factor exposure'],
@@ -234,10 +234,10 @@ export class HedgeFundAgentNode implements INodeType {
     const model = this.getNodeParameter('model', 0) as string;
 
     const inputData = this.getInputData();
-    const strategyInfo = this.strategyDescriptions[strategy];
+    const strategyInfo = HedgeFundAgentNode.strategyDescriptions[strategy];
 
     // Build context based on analysis mode
-    const context: Record<string, unknown> = {
+    const context: Record<string, any> = {
       strategy,
       strategyInfo,
       focus,
@@ -291,17 +291,20 @@ export class HedgeFundAgentNode implements INodeType {
       context.eventType = this.getNodeParameter('eventType', 0) as string;
     }
 
-    const bridge = new AgentBridge();
-
     try {
-      const result = await bridge.executeAgent(`hedgefund_${strategy}`, {
-        query,
-        context,
-        llmProvider,
-        model,
+      const result = await AgentBridge.executeAgent({
+        agentId: `hedgefund_${strategy}`,
+        category: 'hedgeFund',
+        parameters: {
+          query,
+          ...context,
+        },
+        llmProvider: llmProvider as any,
+        llmModel: model,
       });
 
-      const output: Record<string, unknown> = {
+      const responseData = result.data || {};
+      const output: Record<string, any> = {
         success: true,
         strategy,
         strategyDescription: strategyInfo?.description,
@@ -311,26 +314,26 @@ export class HedgeFundAgentNode implements INodeType {
         riskTolerance,
         timeHorizon,
         capitalAllocation,
-        analysis: result.response,
+        analysis: responseData.response || responseData.analysis || '',
         timestamp: new Date().toISOString(),
         executionId: this.getExecutionId(),
       };
 
       // Parse structured output if available
-      if (result.opportunities) {
-        output.opportunities = result.opportunities;
+      if (responseData.opportunities) {
+        output.opportunities = responseData.opportunities;
       }
-      if (result.positions) {
-        output.recommendedPositions = result.positions;
+      if (responseData.positions) {
+        output.recommendedPositions = responseData.positions;
       }
-      if (result.hedges && includeHedges) {
-        output.hedges = result.hedges;
+      if (responseData.hedges && includeHedges) {
+        output.hedges = responseData.hedges;
       }
-      if (result.riskMetrics) {
-        output.riskMetrics = result.riskMetrics;
+      if (responseData.riskMetrics) {
+        output.riskMetrics = responseData.riskMetrics;
       }
-      if (result.marketRegime) {
-        output.marketRegime = result.marketRegime;
+      if (responseData.marketRegime) {
+        output.marketRegime = responseData.marketRegime;
       }
 
       return [[{ json: output }]];

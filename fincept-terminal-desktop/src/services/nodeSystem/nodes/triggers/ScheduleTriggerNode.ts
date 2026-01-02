@@ -11,6 +11,7 @@ import {
   NodeConnectionType,
   NodePropertyType,
 } from '../../types';
+import { MarketEventTriggerNode } from './MarketEventTriggerNode';
 
 export class ScheduleTriggerNode implements INodeType {
   description: INodeTypeDescription = {
@@ -161,22 +162,22 @@ export class ScheduleTriggerNode implements INodeType {
         const time = this.getNodeParameter('time', 0) as string;
         const [hour, minute] = time.split(':').map(Number);
         cronExpression = `${minute} ${hour} * * *`;
-        nextRun = this.getNextDailyRun(hour, minute, timezone);
+        nextRun = ScheduleTriggerNode.getNextDailyRun(hour, minute, timezone);
         break;
       case 'everyWeek':
         const daysOfWeek = this.getNodeParameter('daysOfWeek', 0) as string[];
         cronExpression = `0 9 * * ${daysOfWeek.join(',')}`;
-        nextRun = this.getNextWeeklyRun(daysOfWeek, timezone);
+        nextRun = ScheduleTriggerNode.getNextWeeklyRun(daysOfWeek, timezone);
         break;
       case 'marketOpen':
         const openExchange = this.getNodeParameter('exchange', 0) as string;
-        cronExpression = this.getMarketOpenCron(openExchange);
-        nextRun = this.getNextMarketOpen(openExchange);
+        cronExpression = ScheduleTriggerNode.getMarketOpenCron(openExchange);
+        nextRun = ScheduleTriggerNode.getNextMarketOpen(openExchange);
         break;
       case 'marketClose':
         const closeExchange = this.getNodeParameter('exchange', 0) as string;
-        cronExpression = this.getMarketCloseCron(closeExchange);
-        nextRun = this.getNextMarketClose(closeExchange);
+        cronExpression = ScheduleTriggerNode.getMarketCloseCron(closeExchange);
+        nextRun = ScheduleTriggerNode.getNextMarketClose(closeExchange);
         break;
       case 'cron':
         cronExpression = this.getNodeParameter('cronExpression', 0) as string;
@@ -201,7 +202,7 @@ export class ScheduleTriggerNode implements INodeType {
     }]];
   }
 
-  private getNextDailyRun(hour: number, minute: number, timezone: string): Date {
+  private static getNextDailyRun(hour: number, minute: number, timezone: string): Date {
     const now = new Date();
     const next = new Date(now);
     next.setHours(hour, minute, 0, 0);
@@ -211,7 +212,7 @@ export class ScheduleTriggerNode implements INodeType {
     return next;
   }
 
-  private getNextWeeklyRun(days: string[], timezone: string): Date {
+  private static getNextWeeklyRun(days: string[], timezone: string): Date {
     const now = new Date();
     const currentDay = now.getDay();
     const daysNum = days.map(Number).sort((a, b) => a - b);
@@ -232,7 +233,7 @@ export class ScheduleTriggerNode implements INodeType {
     return next;
   }
 
-  private getMarketOpenCron(exchange: string): string {
+  private static getMarketOpenCron(exchange: string): string {
     switch (exchange) {
       case 'NYSE': return '30 9 * * 1-5'; // 9:30 AM ET
       case 'NSE': return '15 9 * * 1-5'; // 9:15 AM IST
@@ -242,7 +243,7 @@ export class ScheduleTriggerNode implements INodeType {
     }
   }
 
-  private getMarketCloseCron(exchange: string): string {
+  private static getMarketCloseCron(exchange: string): string {
     switch (exchange) {
       case 'NYSE': return '0 16 * * 1-5'; // 4:00 PM ET
       case 'NSE': return '30 15 * * 1-5'; // 3:30 PM IST
@@ -252,7 +253,7 @@ export class ScheduleTriggerNode implements INodeType {
     }
   }
 
-  private getNextMarketOpen(exchange: string): Date {
+  private static getNextMarketOpen(exchange: string): Date {
     const now = new Date();
     const next = new Date(now);
 
@@ -282,7 +283,7 @@ export class ScheduleTriggerNode implements INodeType {
     return next;
   }
 
-  private getNextMarketClose(exchange: string): Date {
+  private static getNextMarketClose(exchange: string): Date {
     const now = new Date();
     const next = new Date(now);
 

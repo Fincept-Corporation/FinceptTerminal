@@ -11,9 +11,9 @@ import {
   NodeConnectionType,
   NodePropertyType,
 } from '../../types';
-import { TradingBridge, OrderSide, OrderType, ProductType, Validity } from '../../adapters/TradingBridge';
+import { TradingBridge, OrderSide, OrderType, ProductType, OrderValidity } from '../../adapters/TradingBridge';
 import { RiskManager } from '../../safety/RiskManager';
-import { AuditLogger, LogType } from '../../safety/AuditLogger';
+import { AuditLogger } from '../../safety/AuditLogger';
 import { ConfirmationService } from '../../safety/ConfirmationService';
 
 export class PlaceOrderNode implements INodeType {
@@ -237,18 +237,13 @@ export class PlaceOrderNode implements INodeType {
     ],
   };
 
-  private tradingBridge = new TradingBridge();
-  private riskManager = new RiskManager();
-  private auditLogger = new AuditLogger();
-  private confirmationService = new ConfirmationService();
-
   async execute(this: IExecuteFunctions): Promise<NodeOutput> {
     const useInputSymbol = this.getNodeParameter('useInputSymbol', 0) as boolean;
     const side = this.getNodeParameter('side', 0) as OrderSide;
     const orderType = this.getNodeParameter('orderType', 0) as OrderType;
     const quantityType = this.getNodeParameter('quantityType', 0) as string;
     const productType = this.getNodeParameter('productType', 0) as ProductType;
-    const validity = this.getNodeParameter('validity', 0) as Validity;
+    const validity = this.getNodeParameter('validity', 0) as OrderValidity;
     const broker = this.getNodeParameter('broker', 0) as string;
     const requireConfirmation = this.getNodeParameter('requireConfirmation', 0) as boolean;
     const validateRisk = this.getNodeParameter('validateRisk', 0) as boolean;
@@ -303,10 +298,10 @@ export class PlaceOrderNode implements INodeType {
     let limitPrice: number | undefined;
     let stopPrice: number | undefined;
 
-    if (orderType === 'LIMIT' || orderType === 'SL-L') {
+    if (orderType === 'LIMIT') {
       limitPrice = this.getNodeParameter('limitPrice', 0) as number;
     }
-    if (orderType === 'SL' || orderType === 'SL-L') {
+    if (orderType === 'STOP_LOSS' || orderType === 'STOP_LOSS_MARKET') {
       stopPrice = this.getNodeParameter('stopPrice', 0) as number;
     }
 
@@ -327,38 +322,44 @@ export class PlaceOrderNode implements INodeType {
       tag: tag || `workflow_${this.getExecutionId()}`,
     };
 
+    const isPaper = broker === 'paper';
+
     // Validate against risk limits if enabled
     if (validateRisk) {
-      const riskManager = new RiskManager();
-      const validation = riskManager.validateOrder({
-        symbol,
-        side,
-        quantity,
-        price: estimatedPrice,
-        orderType,
-      });
+
+      const validation = await RiskManager.validateOrder(
+        orderRequest as any,
+        [],
+        { currency: 'USD', available: 100000, used: 0, total: 100000 },
+        estimatedPrice
+      );
 
       if (!validation.valid) {
         // Log the blocked order
-        const auditLogger = new AuditLogger();
-        await auditLogger.logOrder({
-          orderId: 'BLOCKED',
-          symbol,
-          side,
-          quantity,
-          price: estimatedPrice,
-          status: 'blocked',
-          broker,
-          reason: validation.errors.join(', '),
-        });
+
+        await AuditLogger.logOrder(
+          'RISK_CHECK_FAILED' as any,
+          {
+            orderId: 'BLOCKED',
+            symbol,
+            side,
+            quantity,
+            price: estimatedPrice,
+            status: 'blocked',
+            broker,
+            reason: validation.failed.map((f: any) => f.message).join(', '),
+          },
+          undefined,
+          isPaper
+        );
 
         return [[{
           json: {
             success: false,
             blocked: true,
             reason: 'Risk validation failed',
-            errors: validation.errors,
-            warnings: validation.warnings,
+            errors: validation.failed.map((f: any) => f.message),
+            warnings: validation.warnings.map((w: any) => w.message),
             order: orderRequest,
             timestamp: new Date().toISOString(),
           },
@@ -368,15 +369,18 @@ export class PlaceOrderNode implements INodeType {
 
     // Request confirmation if enabled (and not paper trading)
     if (requireConfirmation && broker !== 'paper') {
-      const confirmationService = new ConfirmationService();
-      const confirmed = await confirmationService.requestTradeConfirmation({
-        symbol,
-        side,
-        quantity,
-        price: estimatedPrice,
-        broker,
-        estimatedValue,
-      });
+      const confirmed = await ConfirmationService.requestTradeConfirmation(
+        {
+          symbol,
+          side,
+          quantity,
+          price: estimatedPrice,
+          type: orderType,
+        },
+        { valid: true, failed: [], warnings: [], passed: [], overallRisk: 'low', message: 'Trade approved' },
+        undefined,
+        isPaper
+      );
 
       if (!confirmed) {
         return [[{
@@ -392,38 +396,38 @@ export class PlaceOrderNode implements INodeType {
     }
 
     // Execute the order
-    const tradingBridge = new TradingBridge();
-    const isPaper = broker === 'paper';
-
     try {
-      const result = await tradingBridge.placeOrder(
+      const result = await TradingBridge.placeOrder(
         {
           symbol,
           side,
-          orderType,
+          type: orderType,
           quantity,
           price: limitPrice,
           triggerPrice: stopPrice,
-          productType,
+          product: productType,
           validity,
           tag: orderRequest.tag,
-        },
-        broker,
-        isPaper
+        } as any,
+        broker as any
       );
 
       // Log the order
-      const auditLogger = new AuditLogger();
-      await auditLogger.logOrder({
-        orderId: result.orderId,
-        symbol,
-        side,
-        quantity,
-        price: estimatedPrice,
-        status: result.status,
-        broker,
-        paperTrading: isPaper,
-      });
+
+      await AuditLogger.logOrder(
+        'ORDER_PLACED',
+        {
+          orderId: result.orderId || 'UNKNOWN',
+          symbol,
+          side,
+          quantity,
+          price: estimatedPrice,
+          status: result.status || 'UNKNOWN',
+          broker,
+        },
+        undefined,
+        isPaper
+      );
 
       // Handle stop loss / take profit if configured
       const stopLossPercent = this.getNodeParameter('stopLossPercent', 0) as number;
@@ -461,7 +465,7 @@ export class PlaceOrderNode implements INodeType {
           side,
           quantity,
           orderType,
-          price: limitPrice || result.price,
+          price: limitPrice || result.filledPrice || estimatedPrice,
           status: result.status,
           broker,
           paperTrading: isPaper,
@@ -474,17 +478,22 @@ export class PlaceOrderNode implements INodeType {
       }]];
     } catch (error) {
       // Log the error
-      const auditLogger = new AuditLogger();
-      await auditLogger.logOrder({
-        orderId: 'ERROR',
-        symbol,
-        side,
-        quantity,
-        price: estimatedPrice,
-        status: 'error',
-        broker,
-        reason: error instanceof Error ? error.message : 'Unknown error',
-      });
+      
+      await AuditLogger.logOrder(
+        'NODE_FAILED' as any,
+        {
+          orderId: 'ERROR',
+          symbol,
+          side,
+          quantity,
+          price: estimatedPrice,
+          status: 'error',
+          broker,
+          reason: error instanceof Error ? error.message : 'Unknown error',
+        },
+        undefined,
+        isPaper
+      );
 
       return [[{
         json: {

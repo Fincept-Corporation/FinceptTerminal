@@ -177,7 +177,7 @@ export class GeopoliticsAgentNode implements INodeType {
     ],
   };
 
-  private readonly frameworkDescriptions: Record<string, string> = {
+  private static readonly frameworkDescriptions: Record<string, string> = {
     grand_chessboard: 'Brzezinski\'s analysis of Eurasia as the center of world power and American grand strategy',
     prisoners_geography: 'How physical geography shapes nations\' destinies and limits their options',
     world_order: 'Kissinger\'s analysis of different concepts of international order throughout history',
@@ -214,9 +214,9 @@ export class GeopoliticsAgentNode implements INodeType {
       }]];
     }
 
-    const context: Record<string, unknown> = {
+    const context: Record<string, any> = {
       framework,
-      frameworkDescription: this.frameworkDescriptions[framework.split('_')[0]] || '',
+      frameworkDescription: GeopoliticsAgentNode.frameworkDescriptions[framework.split('_')[0]] || '',
       analysisFocus,
       timeHorizon,
       includeMarketImpact,
@@ -253,47 +253,50 @@ export class GeopoliticsAgentNode implements INodeType {
 
     query += ` Time horizon: ${timeHorizon}.`;
 
-    const bridge = new AgentBridge();
-
     try {
-      const result = await bridge.executeAgent(`geopolitics_${framework}`, {
-        query,
-        context,
-        llmProvider,
-        model,
+      const result = await AgentBridge.executeAgent({
+        agentId: `geopolitics_${framework}`,
+        category: 'geopolitics',
+        parameters: {
+          query,
+          ...context,
+        },
+        llmProvider: llmProvider as any,
+        llmModel: model,
       });
 
-      const output: Record<string, unknown> = {
+      const responseData = result.data || {};
+      const output: Record<string, any> = {
         success: true,
         framework,
         frameworkDescription: context.frameworkDescription,
         topic,
         analysisFocus,
         timeHorizon,
-        analysis: result.response,
-        keyInsights: result.keyInsights || [],
+        analysis: responseData.response || responseData.analysis || '',
+        keyInsights: responseData.keyInsights || [],
         timestamp: new Date().toISOString(),
         executionId: this.getExecutionId(),
       };
 
       // Add focus-specific outputs
-      if (analysisFocus === 'risk' && result.risks) {
-        output.risks = result.risks;
-        output.riskLevel = result.riskLevel;
+      if (analysisFocus === 'risk' && responseData.risks) {
+        output.risks = responseData.risks;
+        output.riskLevel = responseData.riskLevel;
       }
 
-      if (analysisFocus === 'scenarios' && result.scenarios) {
-        output.scenarios = result.scenarios;
+      if (analysisFocus === 'scenarios' && responseData.scenarios) {
+        output.scenarios = responseData.scenarios;
       }
 
-      if (includeMarketImpact && result.marketImpact) {
-        output.marketImpact = result.marketImpact;
-        output.tradingIdeas = result.tradingIdeas || [];
-        output.hedgingStrategies = result.hedgingStrategies || [];
+      if (includeMarketImpact && responseData.marketImpact) {
+        output.marketImpact = responseData.marketImpact;
+        output.tradingIdeas = responseData.tradingIdeas || [];
+        output.hedgingStrategies = responseData.hedgingStrategies || [];
       }
 
-      if (result.historicalParallels) {
-        output.historicalParallels = result.historicalParallels;
+      if (responseData.historicalParallels) {
+        output.historicalParallels = responseData.historicalParallels;
       }
 
       return [[{ json: output }]];

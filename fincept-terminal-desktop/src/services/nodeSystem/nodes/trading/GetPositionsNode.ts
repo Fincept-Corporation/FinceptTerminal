@@ -111,11 +111,10 @@ export class GetPositionsNode implements INodeType {
     const includeMarketValue = this.getNodeParameter('includeMarketValue', 0) as boolean;
     const outputMode = this.getNodeParameter('outputMode', 0) as string;
 
-    const tradingBridge = new TradingBridge();
     const isPaper = broker === 'paper';
 
-    try {
-      let positions = await tradingBridge.getPositions(broker, isPaper);
+    try{
+      let positions = await TradingBridge.getPositions(broker as any);
 
       // Filter by symbol if specified
       if (filterSymbol) {
@@ -132,10 +131,10 @@ export class GetPositionsNode implements INodeType {
           positions = positions.filter(p => p.quantity < 0);
           break;
         case 'profit':
-          positions = positions.filter(p => p.pnl > 0);
+          positions = positions.filter(p => (p.pnl || 0) > 0);
           break;
         case 'loss':
-          positions = positions.filter(p => p.pnl < 0);
+          positions = positions.filter(p => (p.pnl || 0) < 0);
           break;
       }
 
@@ -147,11 +146,11 @@ export class GetPositionsNode implements INodeType {
       // Calculate market values if requested
       if (includeMarketValue) {
         for (const pos of positions) {
-          pos.marketValue = pos.quantity * pos.lastPrice;
-          pos.costBasis = pos.quantity * pos.averagePrice;
-          pos.unrealizedPnl = pos.marketValue - pos.costBasis;
-          pos.unrealizedPnlPercent = pos.costBasis !== 0
-            ? ((pos.unrealizedPnl / pos.costBasis) * 100).toFixed(2) + '%'
+          (pos as any).marketValue = pos.quantity * (pos.currentPrice || pos.averagePrice);
+          (pos as any).costBasis = pos.quantity * pos.averagePrice;
+          (pos as any).unrealizedPnl = (pos as any).marketValue - (pos as any).costBasis;
+          (pos as any).unrealizedPnlPercent = (pos as any).costBasis !== 0
+            ? (((pos as any).unrealizedPnl / (pos as any).costBasis) * 100).toFixed(2) + '%'
             : '0%';
         }
       }
@@ -161,13 +160,13 @@ export class GetPositionsNode implements INodeType {
         totalPositions: positions.length,
         longPositions: positions.filter(p => p.quantity > 0).length,
         shortPositions: positions.filter(p => p.quantity < 0).length,
-        totalMarketValue: positions.reduce((sum, p) => sum + (p.marketValue || 0), 0),
-        totalCostBasis: positions.reduce((sum, p) => sum + (p.costBasis || 0), 0),
-        totalUnrealizedPnl: positions.reduce((sum, p) => sum + (p.unrealizedPnl || 0), 0),
-        profitablePositions: positions.filter(p => (p.unrealizedPnl || 0) > 0).length,
-        losingPositions: positions.filter(p => (p.unrealizedPnl || 0) < 0).length,
+        totalMarketValue: positions.reduce((sum, p) => sum + ((p as any).marketValue || 0), 0),
+        totalCostBasis: positions.reduce((sum, p) => sum + ((p as any).costBasis || 0), 0),
+        totalUnrealizedPnl: positions.reduce((sum, p) => sum + ((p as any).unrealizedPnl || 0), 0),
+        profitablePositions: positions.filter(p => ((p as any).unrealizedPnl || 0) > 0).length,
+        losingPositions: positions.filter(p => ((p as any).unrealizedPnl || 0) < 0).length,
         largestPosition: positions.reduce((max, p) =>
-          Math.abs(p.marketValue || 0) > Math.abs(max?.marketValue || 0) ? p : max, positions[0]),
+          Math.abs((p as any).marketValue || 0) > Math.abs((max as any)?.marketValue || 0) ? p : max, positions[0]) as any,
         broker,
         paperTrading: isPaper,
         fetchedAt: new Date().toISOString(),
@@ -197,7 +196,7 @@ export class GetPositionsNode implements INodeType {
               },
             }]];
           }
-          return [positions.map(p => ({ json: p }))];
+          return [positions.map(p => ({ json: p as any }))];
       }
     } catch (error) {
       return [[{

@@ -155,12 +155,11 @@ export class ModifyOrderNode implements INodeType {
       }]];
     }
 
-    const tradingBridge = new TradingBridge();
     const isPaper = broker === 'paper';
 
     try {
       // Build modification request
-      const modifications: Record<string, unknown> = {};
+      const modifications: Record<string, any> = {};
 
       switch (modificationType) {
         case 'price':
@@ -178,17 +177,17 @@ export class ModifyOrderNode implements INodeType {
           break;
       }
 
-      const result = await tradingBridge.modifyOrder(orderId, modifications, broker, isPaper);
+      const result = await TradingBridge.modifyOrder(orderId, modifications as any, broker as any);
 
       // Log the modification
-      const auditLogger = new AuditLogger();
-      await auditLogger.log({
-        type: 'ORDER_MODIFIED' as any,
+
+      await AuditLogger.log({
+        actionType: 'ORDER_MODIFIED',
+        orderId,
+        paperTrading: isPaper,
         details: {
-          orderId,
-          modifications,
+          modifications: modifications as any,
           broker,
-          paperTrading: isPaper,
         },
       });
 

@@ -186,7 +186,7 @@ export class AgentNode implements INodeType {
     }
 
     // Parse context
-    let context: Record<string, unknown> = {};
+    let context: Record<string, any> = {};
     try {
       const contextStr = this.getNodeParameter('context', 0) as string;
       context = JSON.parse(contextStr);
@@ -198,21 +198,23 @@ export class AgentNode implements INodeType {
     const agentDef = AGENT_DEFINITIONS.find(a => a.id === agentId);
     const agentName = agentDef?.name || agentId;
 
-    const bridge = new AgentBridge();
-
     try {
-      const result = await bridge.executeAgent(agentId || category, {
-        query,
-        context,
-        llmProvider,
-        model,
-        maxTokens,
-        temperature,
-        timeout: timeout * 1000,
+      const result = await AgentBridge.executeAgent({
+        agentId: agentId || category,
+        category: category as any,
+        parameters: {
+          query,
+          context,
+          maxTokens,
+          temperature,
+          timeout: timeout * 1000,
+        },
+        llmProvider: llmProvider as any,
+        llmModel: model,
       });
 
       // Format output based on preference
-      let formattedOutput: Record<string, unknown> = {
+      let formattedOutput: Record<string, any> = {
         success: true,
         agentId: agentId || category,
         agentName,
@@ -220,22 +222,25 @@ export class AgentNode implements INodeType {
         query,
       };
 
+      const responseData = result.data || {};
+      const responseText = responseData.response || responseData.analysis || JSON.stringify(responseData);
+
       switch (outputFormat) {
         case 'summary':
-          formattedOutput.summary = result.summary || result.response?.substring(0, 500);
+          formattedOutput.summary = responseData.summary || responseText?.substring(0, 500);
           break;
         case 'keyPoints':
-          formattedOutput.keyPoints = result.keyPoints || this.extractKeyPoints(result.response);
+          formattedOutput.keyPoints = responseData.keyPoints || AgentNode.extractKeyPointsStatic(responseText);
           break;
         case 'json':
-          formattedOutput.structured = result.structured || this.structureResponse(result.response);
+          formattedOutput.structured = responseData.structured || AgentNode.structureResponseStatic(responseText);
           break;
         case 'full':
         default:
-          formattedOutput.response = result.response;
-          formattedOutput.analysis = result.analysis;
-          if (includeSources && result.sources) {
-            formattedOutput.sources = result.sources;
+          formattedOutput.response = responseText;
+          formattedOutput.analysis = responseData.analysis;
+          if (includeSources && responseData.sources) {
+            formattedOutput.sources = responseData.sources;
           }
       }
 
@@ -260,7 +265,7 @@ export class AgentNode implements INodeType {
     }
   }
 
-  private extractKeyPoints(response: string): string[] {
+  private static extractKeyPointsStatic(response: string): string[] {
     // Simple key point extraction
     if (!response) return [];
 
@@ -278,7 +283,7 @@ export class AgentNode implements INodeType {
     return keyPoints.length > 0 ? keyPoints : lines.slice(0, 5);
   }
 
-  private structureResponse(response: string): Record<string, unknown> {
+  private static structureResponseStatic(response: string): Record<string, unknown> {
     // Try to extract structured data from response
     return {
       raw: response,

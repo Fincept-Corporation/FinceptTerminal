@@ -224,7 +224,7 @@ export class MultiAgentNode implements INodeType {
     switch (agentSelection) {
       case 'preset': {
         const preset = this.getNodeParameter('presetGroup', 0) as string;
-        agentIds = this.getPresetAgents(preset);
+        agentIds = MultiAgentNode.getPresetAgentsStatic(preset);
         break;
       }
       case 'category': {
@@ -250,24 +250,35 @@ export class MultiAgentNode implements INodeType {
       }]];
     }
 
-    const bridge = new AgentBridge();
     const startTime = Date.now();
 
     try {
-      // Execute agents
-      const results = await bridge.executeMultipleAgents(agentIds, {
-        query,
-        llmProvider,
-        model,
-        timeout: timeout * 1000,
+      // Build requests for each agent
+      const agentRequests = agentIds.map(agentId => {
+        const agentDef = AGENT_DEFINITIONS.find(a => a.id === agentId);
+        return {
+          agentId,
+          category: (agentDef?.category as any) || 'geopolitics',
+          parameters: {
+            query,
+          },
+          llmProvider: llmProvider as any,
+          llmModel: model,
+        };
+      });
+
+      // Execute agents using MultiAgentRequest interface
+      const multiAgentResult = await AgentBridge.executeMultipleAgents({
+        agents: agentRequests,
         parallel: executionMode === 'parallel',
-        continueOnError,
+        llmProvider: llmProvider as any,
       });
 
       const executionTime = Date.now() - startTime;
+      const results = multiAgentResult.agentResults;
 
       // Process results based on aggregation mode
-      const output: Record<string, unknown> = {
+      const output: Record<string, any> = {
         success: true,
         query,
         agentCount: agentIds.length,
@@ -284,25 +295,21 @@ export class MultiAgentNode implements INodeType {
             agentId: r.agentId,
             agentName: AGENT_DEFINITIONS.find(a => a.id === r.agentId)?.name || r.agentId,
             success: r.success,
-            response: r.response,
+            response: r.data?.response || r.data?.analysis || JSON.stringify(r.data),
             error: r.error,
           }));
           break;
 
         case 'synthesize': {
-          const synthesis = await bridge.mediateResults(
-            results.filter(r => r.success).map(r => ({
-              agentId: r.agentId,
-              response: r.response,
-            })),
-            { llmProvider, model }
+          const synthesis = await AgentBridge.mediateResults(
+            results.filter(r => r.success),
           );
           output.synthesis = synthesis;
           break;
         }
 
         case 'consensus': {
-          output.consensus = this.findConsensus(results);
+          output.consensus = MultiAgentNode.findConsensusStatic(results);
           break;
         }
 
@@ -311,19 +318,15 @@ export class MultiAgentNode implements INodeType {
             agentId: r.agentId,
             agentName: AGENT_DEFINITIONS.find(a => a.id === r.agentId)?.name || r.agentId,
             success: r.success,
-            response: r.response,
+            response: r.data?.response || r.data?.analysis || JSON.stringify(r.data),
             error: r.error,
           }));
 
-          const synthesis = await bridge.mediateResults(
-            results.filter(r => r.success).map(r => ({
-              agentId: r.agentId,
-              response: r.response,
-            })),
-            { llmProvider, model }
+          const synthesis = await AgentBridge.mediateResults(
+            results.filter(r => r.success),
           );
           output.synthesis = synthesis;
-          output.consensus = this.findConsensus(results);
+          output.consensus = MultiAgentNode.findConsensusStatic(results);
           break;
         }
       }
@@ -342,7 +345,7 @@ export class MultiAgentNode implements INodeType {
     }
   }
 
-  private getPresetAgents(preset: string): string[] {
+  private static getPresetAgentsStatic(preset: string): string[] {
     const presets: Record<string, string[]> = {
       geopolitics_full: AGENT_DEFINITIONS.filter(a => a.category === 'geopolitics').map(a => a.id),
       geopolitics_core: ['grand_chessboard', 'world_order', 'prisoners_geography', 'rise_fall_powers', 'clash_civilizations'],
@@ -356,7 +359,7 @@ export class MultiAgentNode implements INodeType {
     return presets[preset] || [];
   }
 
-  private findConsensus(results: any[]): Record<string, unknown> {
+  private static findConsensusStatic(results: any[]): Record<string, any> {
     const successfulResults = results.filter(r => r.success);
 
     if (successfulResults.length < 2) {
@@ -369,7 +372,8 @@ export class MultiAgentNode implements INodeType {
     // Simple word frequency analysis for finding common themes
     const allWords: Record<string, number> = {};
     for (const result of successfulResults) {
-      const words = (result.response || '').toLowerCase().split(/\s+/);
+      const responseText = result.data?.response || result.data?.analysis || JSON.stringify(result.data) || '';
+      const words = (responseText as string).toLowerCase().split(/\s+/);
       const uniqueWords = new Set(words);
       for (const word of uniqueWords) {
         if (word.length > 5) { // Only meaningful words
