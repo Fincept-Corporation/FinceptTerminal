@@ -110,5 +110,11 @@ pub mod database;
 // AI Quant Lab - Qlib and RD-Agent
 pub mod ai_quant_lab;
 
+// FFN Analytics - Portfolio Performance Analysis
+pub mod ffn_analytics;
+
+// Functime Analytics - Time Series Forecasting
+pub mod functime_analytics;
+
 // High-Performance OrderBook Processing
 pub mod orderbook;

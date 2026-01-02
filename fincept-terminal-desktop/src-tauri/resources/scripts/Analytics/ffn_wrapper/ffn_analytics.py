@@ -134,36 +134,84 @@ class FFNAnalyticsEngine:
         """
         prices = prices if prices is not None else self.prices
         rf = rf if rf is not None else self.config.risk_free_rate
+        returns = self.returns
 
         if prices is None:
             raise ValueError("No price data loaded. Call load_data() first.")
 
-        # Use FFN's calc_perf_stats for comprehensive statistics
-        stats = ffn.calc_perf_stats(
-            prices,
-            risk_free_rate=rf,
-            annualization_factor=self.config.annualization_factor
-        )
+        # Handle DataFrame (multiple assets) vs Series (single asset)
+        if isinstance(prices, pd.DataFrame):
+            # For DataFrames, calculate stats for each column
+            all_metrics = {}
+            for col in prices.columns:
+                col_prices = prices[col]
+                col_returns = returns[col] if isinstance(returns, pd.DataFrame) else returns
+                all_metrics[col] = self._calculate_single_asset_stats(col_prices, col_returns, rf)
+            return all_metrics
+        else:
+            # Single asset
+            return self._calculate_single_asset_stats(prices, returns, rf)
 
-        # Create PerformanceStats object for additional analysis
-        self.performance_stats = ffn.PerformanceStats(prices)
-        self.performance_stats.set_riskfree_rate(rf)
+    def _calculate_single_asset_stats(self, prices: pd.Series, returns: pd.Series, rf: float) -> Dict[str, Any]:
+        """
+        Calculate performance statistics for a single asset
 
-        # Extract key metrics
+        Parameters:
+        -----------
+        prices : pd.Series
+            Price series for a single asset
+        returns : pd.Series
+            Return series for a single asset
+        rf : float
+            Risk-free rate
+
+        Returns:
+        --------
+        Dictionary with performance metrics
+        """
+        # Helper to safely convert to float
+        def safe_float(val):
+            if val is None:
+                return None
+            try:
+                if hasattr(val, 'size') and val.size == 0:
+                    return None
+                if pd.isna(val):
+                    return None
+                return float(val)
+            except (TypeError, ValueError):
+                return None
+
+        # Helper to safely call FFN functions
+        def safe_call(func, *args, **kwargs):
+            try:
+                result = func(*args, **kwargs)
+                return safe_float(result)
+            except Exception:
+                return None
+
+        # Try to create PerformanceStats object (may fail with edge cases)
+        try:
+            self.performance_stats = ffn.PerformanceStats(prices)
+            self.performance_stats.set_riskfree_rate(rf)
+        except Exception:
+            self.performance_stats = None
+
+        # Extract key metrics with safe handling - each wrapped in try-except
         metrics = {
-            'total_return': ffn.calc_total_return(prices),
-            'cagr': ffn.calc_cagr(prices),
-            'sharpe_ratio': ffn.calc_sharpe(self.returns, rf=rf, annualize=True),
-            'sortino_ratio': ffn.calc_sortino_ratio(self.returns, rf=rf, annualize=True),
-            'max_drawdown': ffn.calc_max_drawdown(prices),
-            'calmar_ratio': ffn.calc_calmar_ratio(prices),
-            'volatility': self.returns.std() * np.sqrt(self.config.annualization_factor),
-            'daily_mean': self.returns.mean(),
-            'daily_vol': self.returns.std(),
-            'best_day': self.returns.max(),
-            'worst_day': self.returns.min(),
-            'mtd': ffn.calc_mtd(prices, prices.resample('M').last()) if len(prices) > 20 else None,
-            'ytd': ffn.calc_ytd(prices, prices.resample('Y').last()) if len(prices) > 252 else None,
+            'total_return': safe_call(ffn.calc_total_return, prices),
+            'cagr': safe_call(ffn.calc_cagr, prices),
+            'sharpe_ratio': safe_call(ffn.calc_sharpe, returns, rf=rf, nperiods=self.config.annualization_factor, annualize=True),
+            'sortino_ratio': safe_call(ffn.calc_sortino_ratio, returns, rf=rf, nperiods=self.config.annualization_factor, annualize=True),
+            'max_drawdown': safe_call(ffn.calc_max_drawdown, prices),
+            'calmar_ratio': safe_call(ffn.calc_calmar_ratio, prices),
+            'volatility': safe_float(returns.std() * np.sqrt(self.config.annualization_factor)) if returns is not None and len(returns) > 0 else None,
+            'daily_mean': safe_float(returns.mean()) if returns is not None and len(returns) > 0 else None,
+            'daily_vol': safe_float(returns.std()) if returns is not None and len(returns) > 0 else None,
+            'best_day': safe_float(returns.max()) if returns is not None and len(returns) > 0 else None,
+            'worst_day': safe_float(returns.min()) if returns is not None and len(returns) > 0 else None,
+            'mtd': None,  # Skip MTD/YTD calculations - they often cause issues with small datasets
+            'ytd': None,
         }
 
         return metrics
@@ -186,19 +234,26 @@ class FFNAnalyticsEngine:
         if prices is None:
             raise ValueError("No price data loaded. Call load_data() first.")
 
-        # Get drawdown series
-        dd_series = ffn.to_drawdown_series(prices)
+        try:
+            # Get drawdown series
+            dd_series = ffn.to_drawdown_series(prices)
 
-        # Get drawdown details
-        self.drawdown_details = ffn.drawdown_details(dd_series)
+            # Get drawdown details
+            self.drawdown_details = ffn.drawdown_details(dd_series)
 
-        # Filter by threshold
-        if self.config.drawdown_threshold > 0:
-            self.drawdown_details = self.drawdown_details[
-                abs(self.drawdown_details['drawdown']) >= self.config.drawdown_threshold
-            ]
+            # Filter by threshold - check if DataFrame is not empty first
+            if self.drawdown_details is not None and hasattr(self.drawdown_details, 'size') and self.drawdown_details.size > 0 and self.config.drawdown_threshold > 0:
+                try:
+                    mask = abs(self.drawdown_details['drawdown']) >= self.config.drawdown_threshold
+                    self.drawdown_details = self.drawdown_details[mask]
+                except Exception:
+                    pass
 
-        return self.drawdown_details
+            return self.drawdown_details
+        except Exception:
+            # Return empty DataFrame on error
+            self.drawdown_details = pd.DataFrame()
+            return self.drawdown_details
 
     def calculate_rolling_metrics(self,
                                   window: int = 252,
@@ -218,24 +273,37 @@ class FFNAnalyticsEngine:
         Dictionary with rolling metric series
         """
         if self.returns is None:
-            raise ValueError("No return data available. Call load_data() first.")
+            return {}
+
+        # Ensure we have enough data points
+        if len(self.returns) < window:
+            # Use a smaller window if not enough data
+            window = max(2, len(self.returns) - 1)
+
+        if window < 2:
+            return {}
 
         metrics = metrics or ['sharpe', 'volatility', 'returns']
         results = {}
 
-        if 'returns' in metrics:
-            results['rolling_returns'] = self.returns.rolling(window).sum()
+        try:
+            if 'returns' in metrics:
+                results['rolling_returns'] = self.returns.rolling(window, min_periods=1).sum()
 
-        if 'volatility' in metrics:
-            results['rolling_volatility'] = (
-                self.returns.rolling(window).std() *
-                np.sqrt(self.config.annualization_factor)
-            )
+            if 'volatility' in metrics:
+                results['rolling_volatility'] = (
+                    self.returns.rolling(window, min_periods=2).std() *
+                    np.sqrt(self.config.annualization_factor)
+                )
 
-        if 'sharpe' in metrics:
-            rolling_mean = self.returns.rolling(window).mean() * self.config.annualization_factor
-            rolling_std = self.returns.rolling(window).std() * np.sqrt(self.config.annualization_factor)
-            results['rolling_sharpe'] = (rolling_mean - self.config.risk_free_rate) / rolling_std
+            if 'sharpe' in metrics:
+                rolling_mean = self.returns.rolling(window, min_periods=2).mean() * self.config.annualization_factor
+                rolling_std = self.returns.rolling(window, min_periods=2).std() * np.sqrt(self.config.annualization_factor)
+                # Avoid division by zero
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    results['rolling_sharpe'] = (rolling_mean - self.config.risk_free_rate) / rolling_std
+        except Exception:
+            pass
 
         self.rolling_metrics = results
         return results
@@ -251,27 +319,35 @@ class FFNAnalyticsEngine:
         prices = prices if prices is not None else self.prices
 
         if prices is None:
-            raise ValueError("No price data loaded. Call load_data() first.")
+            return pd.DataFrame()
 
-        # Resample to monthly
-        monthly_prices = prices.resample('M').last()
-        monthly_rets = ffn.to_returns(monthly_prices)
+        try:
+            # Resample to monthly
+            monthly_prices = prices.resample('M').last()
 
-        # Create pivot table
-        monthly_rets_df = monthly_rets.to_frame('returns')
-        monthly_rets_df['year'] = monthly_rets_df.index.year
-        monthly_rets_df['month'] = monthly_rets_df.index.month
+            if len(monthly_prices) < 2:
+                return pd.DataFrame()
 
-        self.monthly_returns = monthly_rets_df.pivot(
-            index='year',
-            columns='month',
-            values='returns'
-        )
+            monthly_rets = ffn.to_returns(monthly_prices)
 
-        # Add year total
-        self.monthly_returns['Year'] = self.monthly_returns.sum(axis=1)
+            # Create pivot table
+            monthly_rets_df = monthly_rets.to_frame('returns')
+            monthly_rets_df['year'] = monthly_rets_df.index.year
+            monthly_rets_df['month'] = monthly_rets_df.index.month
 
-        return self.monthly_returns
+            self.monthly_returns = monthly_rets_df.pivot(
+                index='year',
+                columns='month',
+                values='returns'
+            )
+
+            # Add year total
+            self.monthly_returns['Year'] = self.monthly_returns.sum(axis=1)
+
+            return self.monthly_returns
+        except Exception:
+            self.monthly_returns = pd.DataFrame()
+            return self.monthly_returns
 
     def rebase_prices(self,
                      prices: Union[pd.Series, pd.DataFrame] = None,
