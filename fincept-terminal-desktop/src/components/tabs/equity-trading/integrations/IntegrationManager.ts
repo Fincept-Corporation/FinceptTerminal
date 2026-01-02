@@ -25,11 +25,16 @@ export class IntegrationManager {
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    console.log('[IntegrationManager] Initializing integrations...');
-
     try {
-      // Register Paper Trading
-      await pluginManager.registerPlugin(paperTradingIntegration.createPlugin());
+      // Register Paper Trading (ignore if already registered)
+      try {
+        await pluginManager.registerPlugin(paperTradingIntegration.createPlugin());
+      } catch (error: any) {
+        if (!error.message?.includes('already registered')) {
+          throw error;
+        }
+        // Plugin already registered, continue
+      }
 
       // TODO: Register other integrations
       // - Alpha Arena
@@ -38,7 +43,6 @@ export class IntegrationManager {
       // - Rust Performance
 
       this.initialized = true;
-      console.log('[IntegrationManager] All integrations registered');
     } catch (error) {
       console.error('[IntegrationManager] Initialization failed:', error);
       throw error;
@@ -72,7 +76,6 @@ export class IntegrationManager {
    */
   async getPaperBalance(): Promise<number> {
     const balance = await paperTradingIntegration.getBalance();
-    console.log('[IntegrationManager] getPaperBalance returning:', balance);
     return balance;
   }
 
@@ -116,7 +119,6 @@ export class IntegrationManager {
    */
   async connectAlphaArena(): Promise<void> {
     // TODO: Implement Alpha Arena connection
-    console.log('[IntegrationManager] Alpha Arena integration - Coming soon');
   }
 
   /**
@@ -124,7 +126,6 @@ export class IntegrationManager {
    */
   async initializeAIChat(): Promise<void> {
     // TODO: Implement AI Chat integration
-    console.log('[IntegrationManager] AI Chat integration - Coming soon');
   }
 
   /**
@@ -132,7 +133,6 @@ export class IntegrationManager {
    */
   async exportToExcel(data: any, type: 'orders' | 'positions' | 'holdings'): Promise<void> {
     // TODO: Implement Excel export
-    console.log('[IntegrationManager] Excel export integration - Coming soon');
   }
 
   /**
@@ -142,7 +142,6 @@ export class IntegrationManager {
     // TODO: Implement Rust performance hooks for:
     // - hftbacktest
     // - barter-rs
-    console.log('[IntegrationManager] Rust performance hooks - Coming soon');
   }
 
   /**

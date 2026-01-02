@@ -1,5 +1,6 @@
-import React from 'react';
-import { getBloombergColors } from '../portfolio/utils';
+import React, { useState, useEffect } from 'react';
+import { marketDataService } from '../../../../services/marketDataService';
+import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, createFocusHandlers } from '../bloombergStyles';
 
 interface AddAssetModalProps {
   show: boolean;
@@ -24,35 +25,69 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
   onClose,
   onAdd
 }) => {
+  const [fetchingPrice, setFetchingPrice] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
+
+  // Auto-fetch price when symbol changes
+  useEffect(() => {
+    const fetchPrice = async () => {
+      const symbol = formState.symbol.trim().toUpperCase();
+
+      if (!symbol || symbol.length < 2) {
+        return;
+      }
+
+      setFetchingPrice(true);
+      setPriceError(null);
+
+      try {
+        const quote = await marketDataService.getQuote(symbol);
+
+        if (quote && quote.price) {
+          onPriceChange(quote.price.toFixed(2));
+          setPriceError(null);
+        } else {
+          setPriceError('Price not found');
+        }
+      } catch (error) {
+        console.error('Failed to fetch price:', error);
+        setPriceError('Failed to fetch');
+      } finally {
+        setFetchingPrice(false);
+      }
+    };
+
+    // Debounce: wait 800ms after user stops typing
+    const timer = setTimeout(fetchPrice, 800);
+    return () => clearTimeout(timer);
+  }, [formState.symbol]);
+
   if (!show) return null;
 
-  const { WHITE, GREEN, GRAY, DARK_BG, PANEL_BG } = getBloombergColors();
-
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.8)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
+    <div style={COMMON_STYLES.modalOverlay}>
       <div style={{
-        backgroundColor: DARK_BG,
-        border: `2px solid ${GREEN}`,
-        padding: '24px',
-        minWidth: '400px'
+        ...COMMON_STYLES.modalPanel,
+        border: BORDERS.GREEN,
+        borderWidth: '2px',
+        fontFamily: TYPOGRAPHY.MONO
       }}>
-        <div style={{ color: GREEN, fontSize: '14px', fontWeight: 'bold', marginBottom: '16px' }}>
+        <div style={{
+          color: BLOOMBERG.GREEN,
+          fontSize: TYPOGRAPHY.HEADING,
+          fontWeight: TYPOGRAPHY.BOLD,
+          marginBottom: SPACING.LARGE,
+          letterSpacing: TYPOGRAPHY.WIDE
+        }}>
           ADD ASSET TO PORTFOLIO
         </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+        <div style={{ marginBottom: SPACING.DEFAULT }}>
+          <label style={{
+            ...COMMON_STYLES.dataLabel,
+            display: 'block',
+            marginBottom: SPACING.SMALL
+          }}>
             SYMBOL *
           </label>
           <input
@@ -60,71 +95,82 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
             value={formState.symbol}
             onChange={(e) => onSymbolChange(e.target.value.toUpperCase())}
             style={{
-              width: '100%',
-              background: PANEL_BG,
-              border: `1px solid ${GRAY}`,
-              color: WHITE,
-              padding: '8px',
-              fontSize: '11px',
+              ...COMMON_STYLES.inputField,
               textTransform: 'uppercase'
             }}
+            {...createFocusHandlers()}
             placeholder="AAPL"
           />
         </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+        <div style={{ marginBottom: SPACING.DEFAULT }}>
+          <label style={{
+            ...COMMON_STYLES.dataLabel,
+            display: 'block',
+            marginBottom: SPACING.SMALL
+          }}>
             QUANTITY *
           </label>
           <input
             type="number"
             value={formState.quantity}
             onChange={(e) => onQuantityChange(e.target.value)}
-            style={{
-              width: '100%',
-              background: PANEL_BG,
-              border: `1px solid ${GRAY}`,
-              color: WHITE,
-              padding: '8px',
-              fontSize: '11px'
-            }}
+            style={COMMON_STYLES.inputField}
+            {...createFocusHandlers()}
             placeholder="100"
             step="0.0001"
           />
         </div>
 
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
-            BUY PRICE *
-          </label>
+        <div style={{ marginBottom: SPACING.LARGE }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: SPACING.SMALL
+          }}>
+            <label style={COMMON_STYLES.dataLabel}>
+              BUY PRICE *
+            </label>
+            {fetchingPrice && (
+              <span style={{ color: BLOOMBERG.YELLOW, fontSize: TYPOGRAPHY.TINY }}>
+                ● Fetching...
+              </span>
+            )}
+            {!fetchingPrice && priceError && (
+              <span style={{ color: BLOOMBERG.RED, fontSize: TYPOGRAPHY.TINY }}>
+                {priceError}
+              </span>
+            )}
+            {!fetchingPrice && !priceError && formState.price && formState.symbol && (
+              <span style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.TINY }}>
+                ✓ Auto-fetched
+              </span>
+            )}
+          </div>
           <input
             type="number"
             value={formState.price}
             onChange={(e) => onPriceChange(e.target.value)}
             style={{
-              width: '100%',
-              background: PANEL_BG,
-              border: `1px solid ${GRAY}`,
-              color: WHITE,
-              padding: '8px',
-              fontSize: '11px'
+              ...COMMON_STYLES.inputField,
+              borderColor: fetchingPrice ? BLOOMBERG.YELLOW : BLOOMBERG.BORDER
             }}
+            {...createFocusHandlers()}
             placeholder="150.00"
             step="0.01"
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: SPACING.MEDIUM, justifyContent: 'flex-end' }}>
           <button
             onClick={onClose}
-            style={{
-              background: GRAY,
-              color: 'black',
-              border: 'none',
-              padding: '8px 16px',
-              fontSize: '10px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
+            style={COMMON_STYLES.buttonSecondary}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
             }}
           >
             CANCEL
@@ -132,13 +178,15 @@ const AddAssetModal: React.FC<AddAssetModalProps> = ({
           <button
             onClick={onAdd}
             style={{
-              background: GREEN,
-              color: 'black',
-              border: 'none',
-              padding: '8px 16px',
-              fontSize: '10px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
+              ...COMMON_STYLES.buttonPrimary,
+              backgroundColor: BLOOMBERG.GREEN,
+              borderColor: BLOOMBERG.GREEN
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '0.85';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = '1';
             }}
           >
             ADD

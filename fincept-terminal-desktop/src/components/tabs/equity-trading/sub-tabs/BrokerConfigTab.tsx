@@ -118,6 +118,16 @@ const BrokerConfigTab: React.FC<BrokerConfigTabProps> = ({
             onToggle={() => toggleBroker('kite')}
             authStatus={brokerState.authStatus.get('kite')}
           />
+
+          {/* Alpaca Markets */}
+          <BrokerCard
+            brokerId="alpaca"
+            title="ALPACA MARKETS"
+            description="US stock broker with paper & live trading"
+            isExpanded={expandedBroker === 'alpaca'}
+            onToggle={() => toggleBroker('alpaca')}
+            authStatus={brokerState.authStatus.get('alpaca')}
+          />
         </div>
       </div>
     </div>
@@ -166,6 +176,10 @@ const BrokerCard: React.FC<{
           data.appType = credentials.additionalData.appType || '100';
         }
 
+        if (brokerId === 'alpaca' && credentials.additionalData) {
+          data.isPaper = credentials.additionalData.isPaper !== false;
+        }
+
         setFormData(data);
       }
     } catch (error) {
@@ -204,6 +218,8 @@ const BrokerCard: React.FC<{
           pin: formData.pin,
           totpKey: formData.totpKey,
           appType: formData.appType || '100',
+        } : brokerId === 'alpaca' ? {
+          isPaper: formData.isPaper !== false,
         } : {},
       };
 
@@ -365,6 +381,17 @@ const BrokerCard: React.FC<{
 
           {brokerId === 'kite' && (
             <KiteConfigForm
+              formData={formData}
+              onChange={setFormData}
+              onSave={handleSave}
+              onDisconnect={handleDisconnect}
+              saving={saving}
+              isAuthenticated={isAuthenticated}
+            />
+          )}
+
+          {brokerId === 'alpaca' && (
+            <AlpacaConfigForm
               formData={formData}
               onChange={setFormData}
               onSave={handleSave}
@@ -677,6 +704,210 @@ const KiteConfigForm: React.FC<{
             🔗 GENERATE LOGIN URL
           </button>
         )}
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+        <button
+          onClick={onSave}
+          disabled={saving}
+          style={{
+            flex: 1,
+            padding: '10px 16px',
+            backgroundColor: saving ? BLOOMBERG.MUTED : BLOOMBERG.ORANGE,
+            border: `1px solid ${saving ? BLOOMBERG.MUTED : BLOOMBERG.ORANGE}`,
+            borderRadius: '0',
+            color: BLOOMBERG.DARK_BG,
+            fontSize: '10px',
+            fontWeight: 700,
+            letterSpacing: '0.5px',
+            cursor: saving ? 'not-allowed' : 'pointer',
+            transition: 'all 0.15s ease',
+            fontFamily: 'monospace',
+            outline: 'none',
+            textTransform: 'uppercase'
+          }}
+          onMouseEnter={(e) => {
+            if (!saving) e.currentTarget.style.backgroundColor = BLOOMBERG.YELLOW;
+          }}
+          onMouseLeave={(e) => {
+            if (!saving) e.currentTarget.style.backgroundColor = BLOOMBERG.ORANGE;
+          }}
+        >
+          {saving ? 'CONNECTING...' : isAuthenticated ? 'UPDATE' : 'CONNECT'}
+        </button>
+
+        {isAuthenticated && (
+          <button
+            onClick={onDisconnect}
+            style={{
+              padding: '10px 16px',
+              backgroundColor: 'transparent',
+              border: `1px solid ${BLOOMBERG.RED}`,
+              borderRadius: '0',
+              color: BLOOMBERG.RED,
+              fontSize: '10px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              fontFamily: 'monospace',
+              outline: 'none',
+              textTransform: 'uppercase'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = BLOOMBERG.RED;
+              e.currentTarget.style.color = BLOOMBERG.WHITE;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = BLOOMBERG.RED;
+            }}
+          >
+            DISCONNECT
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Alpaca Configuration Form
+const AlpacaConfigForm: React.FC<{
+  formData: any;
+  onChange: (data: any) => void;
+  onSave: () => void;
+  onDisconnect: () => void;
+  saving: boolean;
+  isAuthenticated: boolean;
+}> = ({ formData, onChange, onSave, onDisconnect, saving, isAuthenticated }) => {
+  const labelStyle: React.CSSProperties = {
+    display: 'block',
+    fontSize: '9px',
+    fontWeight: 700,
+    color: BLOOMBERG.GRAY,
+    marginBottom: '6px',
+    letterSpacing: '0.5px',
+    textTransform: 'uppercase'
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '8px 10px',
+    backgroundColor: BLOOMBERG.DARK_BG,
+    border: `1px solid ${BLOOMBERG.BORDER}`,
+    borderRadius: '0',
+    color: BLOOMBERG.WHITE,
+    fontSize: '11px',
+    fontWeight: 600,
+    fontFamily: 'monospace',
+    outline: 'none',
+    transition: 'border-color 0.15s ease'
+  };
+
+  const isPaper = formData.isPaper !== false; // default to paper
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {/* Trading Mode Selection */}
+      <div>
+        <label style={labelStyle}>TRADING MODE</label>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={() => onChange({ ...formData, isPaper: true })}
+            style={{
+              flex: 1,
+              padding: '10px',
+              background: isPaper ? BLOOMBERG.GREEN : 'transparent',
+              border: `1px solid ${isPaper ? BLOOMBERG.GREEN : BLOOMBERG.BORDER}`,
+              color: isPaper ? BLOOMBERG.DARK_BG : BLOOMBERG.GREEN,
+              fontSize: '10px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              letterSpacing: '0.5px',
+              fontFamily: 'monospace',
+              textTransform: 'uppercase'
+            }}
+          >
+            📊 PAPER TRADING
+          </button>
+          <button
+            onClick={() => onChange({ ...formData, isPaper: false })}
+            style={{
+              flex: 1,
+              padding: '10px',
+              background: !isPaper ? BLOOMBERG.RED : 'transparent',
+              border: `1px solid ${!isPaper ? BLOOMBERG.RED : BLOOMBERG.BORDER}`,
+              color: !isPaper ? BLOOMBERG.WHITE : BLOOMBERG.RED,
+              fontSize: '10px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              letterSpacing: '0.5px',
+              fontFamily: 'monospace',
+              textTransform: 'uppercase'
+            }}
+          >
+            🔴 LIVE TRADING
+          </button>
+        </div>
+        <div style={{
+          fontSize: '9px',
+          color: BLOOMBERG.MUTED,
+          marginTop: '6px',
+          padding: '8px',
+          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: BLOOMBERG.PANEL_BG,
+          letterSpacing: '0.3px'
+        }}>
+          {isPaper
+            ? '✓ Safe simulation mode. Uses paper-api.alpaca.markets'
+            : '⚠️ Real money trading. Uses api.alpaca.markets - USE WITH CAUTION'}
+        </div>
+      </div>
+
+      <div>
+        <label style={labelStyle}>API KEY</label>
+        <input
+          type="text"
+          value={formData.apiKey || ''}
+          onChange={(e) => onChange({ ...formData, apiKey: e.target.value })}
+          style={inputStyle}
+          placeholder="Your Alpaca API Key"
+          onFocus={(e) => e.target.style.borderColor = BLOOMBERG.ORANGE}
+          onBlur={(e) => e.target.style.borderColor = BLOOMBERG.BORDER}
+        />
+      </div>
+
+      <div>
+        <label style={labelStyle}>SECRET KEY</label>
+        <input
+          type="password"
+          value={formData.apiSecret || ''}
+          onChange={(e) => onChange({ ...formData, apiSecret: e.target.value })}
+          style={inputStyle}
+          placeholder="Your Alpaca Secret Key"
+          onFocus={(e) => e.target.style.borderColor = BLOOMBERG.ORANGE}
+          onBlur={(e) => e.target.style.borderColor = BLOOMBERG.BORDER}
+        />
+        <div style={{
+          fontSize: '9px',
+          color: BLOOMBERG.CYAN,
+          marginTop: '6px',
+          letterSpacing: '0.3px',
+          padding: '8px',
+          border: `1px solid ${BLOOMBERG.BORDER}`,
+          backgroundColor: BLOOMBERG.PANEL_BG
+        }}>
+          <div style={{ marginBottom: '4px', fontWeight: 700, color: BLOOMBERG.ORANGE }}>
+            HOW TO GET API CREDENTIALS:
+          </div>
+          <div>1. Sign up at <a href="https://alpaca.markets" target="_blank" rel="noopener noreferrer" style={{ color: BLOOMBERG.ORANGE, textDecoration: 'underline' }}>alpaca.markets</a></div>
+          <div>2. Navigate to Paper Trading or Live Trading section</div>
+          <div>3. Click "View API Keys" or "Generate New Keys"</div>
+          <div>4. Copy API Key and Secret Key from dashboard</div>
+          <div>5. Paste them above and click CONNECT</div>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>

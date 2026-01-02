@@ -5,7 +5,7 @@
 
 // ==================== BROKER TYPES ====================
 
-export type BrokerType = 'fyers' | 'kite';
+export type BrokerType = 'fyers' | 'kite' | 'alpaca';
 
 export enum BrokerStatus {
   DISCONNECTED = 'DISCONNECTED',

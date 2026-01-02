@@ -29,9 +29,10 @@ export class TokenRefreshService {
   private listeners: Set<(status: AuthStatus) => void> = new Set();
 
   // Default refresh intervals (in milliseconds)
-  private readonly DEFAULT_INTERVALS = {
+  private readonly DEFAULT_INTERVALS: Record<BrokerType, number> = {
     fyers: 6 * 60 * 60 * 1000,  // 6 hours (token valid for 24h, refresh at 25%)
     kite: 12 * 60 * 60 * 1000,  // 12 hours (token valid for 1 day, refresh at 50%)
+    alpaca: 24 * 60 * 60 * 1000, // 24 hours (API key auth, less frequent)
   };
 
   private readonly DEFAULT_RETRY_ATTEMPTS = 3;

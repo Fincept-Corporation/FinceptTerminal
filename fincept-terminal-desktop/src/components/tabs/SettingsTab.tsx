@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link, Globe, Check, Plus, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react';
+import { Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link, Globe, Check, Plus, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff, TrendingUp } from 'lucide-react';
 import { sqliteService, type LLMConfig, type LLMGlobalSettings, type LLMModelConfig, PREDEFINED_API_KEYS, type ApiKeys } from '@/services/sqliteService';
 import { ollamaService } from '@/services/ollamaService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
@@ -9,6 +9,7 @@ import { DataSourcesPanel } from '@/components/settings/DataSourcesPanel';
 import { BacktestingProvidersPanel } from '@/components/settings/BacktestingProvidersPanel';
 import { LanguageSelector } from '@/components/settings/LanguageSelector';
 import { TerminalConfigPanel } from '@/components/settings/TerminalConfigPanel';
+import { PolymarketCredentialsPanel } from '@/components/settings/PolymarketCredentialsPanel';
 import { useTimezone, TIMEZONE_OPTIONS } from '@/contexts/TimezoneContext';
 import { Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +21,7 @@ export default function SettingsTab() {
   const { session } = useAuth();
   const { theme, updateTheme, resetTheme, colors, fontSize: themeFontSize, fontFamily: themeFontFamily, fontWeight: themeFontWeight, fontStyle } = useTerminalTheme();
   const { defaultTimezone, setDefaultTimezone, options: timezoneOptions } = useTimezone();
-  const [activeSection, setActiveSection] = useState<'credentials' | 'terminal' | 'terminalConfig' | 'llm' | 'dataConnections' | 'backtesting' | 'language'>('credentials');
+  const [activeSection, setActiveSection] = useState<'credentials' | 'polymarket' | 'terminal' | 'terminalConfig' | 'llm' | 'dataConnections' | 'backtesting' | 'language'>('credentials');
   const [apiKeys, setApiKeys] = useState<ApiKeys>({});
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -682,6 +683,7 @@ export default function SettingsTab() {
           <div style={{ padding: '16px 0' }}>
             {[
               { id: 'credentials', icon: Lock, label: t('sidebar.credentials') },
+              { id: 'polymarket', icon: TrendingUp, label: 'Polymarket API' },
               { id: 'llm', icon: Bot, label: t('sidebar.llm') },
               { id: 'dataConnections', icon: Database, label: t('sidebar.dataSources') },
               { id: 'backtesting', icon: Activity, label: t('sidebar.backtesting') },
@@ -802,6 +804,11 @@ export default function SettingsTab() {
                   ))}
                 </div>
               </div>
+            )}
+
+            {/* Polymarket API Section */}
+            {activeSection === 'polymarket' && (
+              <PolymarketCredentialsPanel />
             )}
 
             {/* LLM Configuration Section */}

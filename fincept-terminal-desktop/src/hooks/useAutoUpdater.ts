@@ -31,19 +31,13 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
       setIsChecking(true);
       setError(null);
 
-      console.log('[AutoUpdater] Checking for updates...');
       const update = await check();
 
       if (update?.available) {
-        console.log(`[AutoUpdater] Update available: v${update.version}`);
-        console.log(`[AutoUpdater] Current version: v${update.currentVersion}`);
-        console.log(`[AutoUpdater] Release date: ${update.date}`);
-        console.log(`[AutoUpdater] Release notes: ${update.body}`);
 
         // Check if this version was previously dismissed
         const dismissedVersion = localStorage.getItem(DISMISSED_VERSION_KEY);
         if (dismissedVersion === update.version) {
-          console.log('[AutoUpdater] Update was previously dismissed by user');
           if (!silent) {
             setError('This update was previously dismissed. A new update will be shown when available.');
           }
@@ -56,7 +50,6 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
         // Update last check timestamp
         localStorage.setItem(LAST_CHECK_KEY, Date.now().toString());
       } else {
-        console.log('[AutoUpdater] No updates available - you are on the latest version');
         if (!silent) {
           setError('You are running the latest version!');
           setTimeout(() => setError(null), 3000);
@@ -87,7 +80,6 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
       setInstallProgress(0);
       setError(null);
 
-      console.log('[AutoUpdater] Starting download and installation...');
 
       // Download and install with progress tracking
       let totalBytes = 0;
@@ -98,24 +90,19 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
           case 'Started':
             totalBytes = (event.data as any).contentLength || 0;
             downloadedBytes = 0;
-            console.log(`[AutoUpdater] Download started - Size: ${totalBytes} bytes`);
             setInstallProgress(0);
             break;
           case 'Progress':
             downloadedBytes += event.data.chunkLength;
             const progress = totalBytes > 0 ? (downloadedBytes / totalBytes) * 100 : 0;
-            console.log(`[AutoUpdater] Download progress: ${progress.toFixed(2)}%`);
             setInstallProgress(Math.min(progress, 100));
             break;
           case 'Finished':
-            console.log('[AutoUpdater] Download complete, installing...');
             setInstallProgress(100);
             break;
         }
       });
 
-      console.log('[AutoUpdater] Update installed successfully!');
-      console.log('[AutoUpdater] Relaunching application in 2 seconds...');
 
       // Give user a moment to see the success message
       setTimeout(async () => {
@@ -141,7 +128,6 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
     if (updateInfo?.version) {
       // Store the dismissed version so we don't show it again
       localStorage.setItem(DISMISSED_VERSION_KEY, updateInfo.version);
-      console.log(`[AutoUpdater] Update v${updateInfo.version} dismissed by user`);
     }
     setUpdateAvailable(false);
     setUpdateInfo(null);
@@ -151,13 +137,11 @@ export function useAutoUpdater(): UseAutoUpdaterReturn {
   useEffect(() => {
     // Perform initial check on mount (delayed by 5 seconds to not interfere with app startup)
     const initialCheckTimer = setTimeout(() => {
-      console.log('[AutoUpdater] Performing initial background update check...');
       checkForUpdate(true);
     }, 5000);
 
     // Set up periodic checks every 30 minutes
     const interval = setInterval(() => {
-      console.log('[AutoUpdater] Performing periodic update check...');
       checkForUpdate(true);
     }, CHECK_INTERVAL_MS);
 

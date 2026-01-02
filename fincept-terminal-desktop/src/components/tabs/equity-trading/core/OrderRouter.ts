@@ -69,8 +69,38 @@ export class OrderRouter {
     config: RoutingConfig
   ): Promise<OrderResult> {
     console.log(`[OrderRouter] Routing order with strategy: ${config.strategy}`);
+    console.log(`[OrderRouter] Order exchange: ${order.exchange}, symbol: ${order.symbol}`);
 
     try {
+      // CRITICAL: Filter brokers by exchange support FIRST
+      const exchangeSupportedBrokers = brokerOrchestrator.getBrokersForExchange(order.exchange);
+
+      if (exchangeSupportedBrokers.length === 0) {
+        console.error(`[OrderRouter] No active broker supports exchange: ${order.exchange}`);
+        return {
+          success: false,
+          message: `No broker supports exchange ${order.exchange}. Please configure a broker for this market.`,
+        };
+      }
+
+      console.log(`[OrderRouter] Available brokers for ${order.exchange}:`, exchangeSupportedBrokers);
+
+      // Filter user-selected brokers by exchange support
+      if (config.brokers && config.brokers.length > 0) {
+        const validBrokers = config.brokers.filter(b => exchangeSupportedBrokers.includes(b));
+        if (validBrokers.length === 0) {
+          console.error(`[OrderRouter] None of the selected brokers support ${order.exchange}`);
+          return {
+            success: false,
+            message: `Selected brokers do not support ${order.exchange}`,
+          };
+        }
+        config.brokers = validBrokers;
+      } else {
+        // Use all brokers that support this exchange
+        config.brokers = exchangeSupportedBrokers;
+      }
+
       // Execute plugin PRE_ORDER hooks (for paper trading, etc.)
       let cancelled = false;
       const cancelFn = () => { cancelled = true; };

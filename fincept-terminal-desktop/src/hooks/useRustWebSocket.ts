@@ -44,22 +44,11 @@ export function useRustTicker(provider: string, symbol: string, autoConnect = tr
           const normalizedInputSymbol = symbol.replace('/', '').toUpperCase();
           const normalizedReceivedSymbol = tickerData.symbol.replace('/', '').toUpperCase();
 
-          console.log('[useRustTicker] Received ticker:', {
-            provider: tickerData.provider,
-            symbol: tickerData.symbol,
-            expectedProvider: provider,
-            expectedSymbol: symbol,
-            normalizedInput: normalizedInputSymbol,
-            normalizedReceived: normalizedReceivedSymbol,
-            matches: normalizedReceivedSymbol === normalizedInputSymbol && tickerData.provider === provider
-          });
-
           // Only process if mounted and matches our symbol/provider
           if (!mounted) return;
           if (tickerData.provider !== provider) return;
           if (normalizedReceivedSymbol !== normalizedInputSymbol) return;
 
-          console.log('[useRustTicker] ✅ Setting ticker data:', tickerData);
           setData(tickerData);
         });
 
@@ -129,23 +118,10 @@ export function useRustOrderBook(
           const normalizedInputSymbol = symbol.replace('/', '').toUpperCase();
           const normalizedReceivedSymbol = bookData.symbol.replace('/', '').toUpperCase();
 
-          console.log('[useRustOrderBook] Received orderbook:', {
-            provider: bookData.provider,
-            symbol: bookData.symbol,
-            expectedProvider: provider,
-            expectedSymbol: symbol,
-            normalizedInput: normalizedInputSymbol,
-            normalizedReceived: normalizedReceivedSymbol,
-            bidsCount: bookData.bids.length,
-            asksCount: bookData.asks.length,
-            matches: normalizedReceivedSymbol === normalizedInputSymbol && bookData.provider === provider
-          });
-
           if (!mounted) return;
           if (bookData.provider !== provider) return;
           if (normalizedReceivedSymbol !== normalizedInputSymbol) return;
 
-          console.log('[useRustOrderBook] ✅ Setting orderbook data:', bookData);
           setData(bookData);
         });
 

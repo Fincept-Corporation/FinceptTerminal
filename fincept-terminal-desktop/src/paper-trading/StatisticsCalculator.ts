@@ -37,7 +37,11 @@ export class StatisticsCalculator {
     const totalFees = trades.reduce((sum, t) => sum + t.fee, 0);
 
     // Analyze closed positions for win/loss statistics
-    const closedPositions = positions.filter(p => p.status === 'closed' && p.realizedPnl !== 0);
+    // Include positions with status 'closed' OR non-zero realizedPnl (handles cases where status wasn't updated)
+    const closedPositions = positions.filter(p =>
+      p.status === 'closed' ||
+      (p.realizedPnl !== 0 && p.realizedPnl !== null && p.realizedPnl !== undefined)
+    );
 
     const winningTrades = closedPositions.filter(p => p.realizedPnl > 0);
     const losingTrades = closedPositions.filter(p => p.realizedPnl < 0);

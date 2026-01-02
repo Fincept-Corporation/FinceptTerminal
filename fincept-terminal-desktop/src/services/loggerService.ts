@@ -62,22 +62,12 @@ export function createLogger(options: LoggerOptions) {
     };
 
     const logToConsole = (entry: LogEntry): void => {
-        const prefix = `[${entry.namespace}]`;
-        const args = entry.data !== undefined ? [prefix, entry.message, entry.data] : [prefix, entry.message];
-
-        switch (entry.level) {
-            case 'debug':
-                console.debug(...args);
-                break;
-            case 'info':
-                console.info(...args);
-                break;
-            case 'warn':
-                console.warn(...args);
-                break;
-            case 'error':
-                console.error(...args);
-                break;
+        // Disabled for production - logs only stored in history
+        // Only log errors
+        if (entry.level === 'error') {
+            const prefix = `[${entry.namespace}]`;
+            const args = entry.data !== undefined ? [prefix, entry.message, entry.data] : [prefix, entry.message];
+            console.error(...args);
         }
     };
 

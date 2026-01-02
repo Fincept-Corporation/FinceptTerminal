@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Target, Activity, Award, AlertTriangle } from 'lucide-react';
 import { activeManagementService, type ComprehensiveAnalysisResult } from '@/services/activeManagementService';
-import { getBloombergColors, formatPercent, formatNumber } from './utils';
+import { formatPercent, formatNumber } from './utils';
+import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
 
 interface ActiveManagementViewProps {
   portfolioId: string;
@@ -12,9 +13,6 @@ interface ActiveManagementViewProps {
 }
 
 const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId, portfolioData }) => {
-  const BLOOMBERG_COLORS = getBloombergColors();
-  const { ORANGE, WHITE, RED, GREEN, GRAY, DARK_BG, PANEL_BG, CYAN, YELLOW } = BLOOMBERG_COLORS;
-
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<ComprehensiveAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,10 +40,11 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
         portfolioData.returns.length
       );
 
-      // Use fetched returns if available, otherwise calibrate to portfolio size
-      const returns = benchmarkReturns.length > 0
-        ? benchmarkReturns
-        : portfolioData.returns.map(() => Math.random() * 0.01 - 0.005);
+      // Require real benchmark data - no fallback to random data
+      if (benchmarkReturns.length === 0) {
+        setError('Unable to fetch benchmark returns. Please check your internet connection and try again.');
+        return;
+      }
 
       const result = await activeManagementService.comprehensiveAnalysis(
         {
@@ -53,7 +52,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           weights: portfolioData.weights,
         },
         {
-          returns,
+          returns: benchmarkReturns,
         }
       );
 
@@ -68,8 +67,14 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
 
   if (loading) {
     return (
-      <div style={{ padding: '24px', textAlign: 'center' }}>
-        <div style={{ color: ORANGE, fontSize: '12px', marginBottom: '12px' }}>
+      <div style={{
+        height: '100%',
+        backgroundColor: BLOOMBERG.DARK_BG,
+        padding: SPACING.XLARGE,
+        textAlign: 'center',
+        fontFamily: TYPOGRAPHY.MONO
+      }}>
+        <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.MEDIUM }}>
           Running Active Management Analysis...
         </div>
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
@@ -80,24 +85,37 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
   if (error) {
     return (
       <div style={{
-        padding: '24px',
-        backgroundColor: 'rgba(255,0,0,0.1)',
-        border: `1px solid ${RED}`,
-        color: RED,
-        fontSize: '11px'
+        height: '100%',
+        backgroundColor: BLOOMBERG.DARK_BG,
+        padding: SPACING.XLARGE,
+        fontFamily: TYPOGRAPHY.MONO
       }}>
-        <AlertTriangle size={16} style={{ display: 'inline-block', marginRight: '8px' }} />
-        {error}
+        <div style={{
+          padding: SPACING.DEFAULT,
+          backgroundColor: 'rgba(255,59,59,0.1)',
+          border: BORDERS.RED,
+          color: BLOOMBERG.RED,
+          fontSize: TYPOGRAPHY.DEFAULT
+        }}>
+          <AlertTriangle size={16} style={{ display: 'inline-block', marginRight: SPACING.SMALL }} />
+          {error}
+        </div>
       </div>
     );
   }
 
   if (!analysis) {
     return (
-      <div style={{ padding: '24px', textAlign: 'center', color: GRAY, fontSize: '11px' }}>
-        <Activity size={48} color={GRAY} style={{ margin: '0 auto 12px' }} />
-        <div>No analysis data yet</div>
-        <div style={{ marginTop: '8px', fontSize: '10px' }}>
+      <div style={{
+        height: '100%',
+        backgroundColor: BLOOMBERG.DARK_BG,
+        padding: SPACING.XLARGE,
+        textAlign: 'center',
+        fontFamily: TYPOGRAPHY.MONO
+      }}>
+        <Activity size={48} color={BLOOMBERG.GRAY} style={{ margin: `0 auto ${SPACING.MEDIUM}` }} />
+        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.DEFAULT }}>No analysis data yet</div>
+        <div style={{ marginTop: SPACING.SMALL, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.GRAY }}>
           Portfolio needs return data to perform active management analysis
         </div>
       </div>
@@ -107,50 +125,60 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
   const { value_added_analysis, information_ratio_analysis, active_management_assessment, improvement_recommendations } = analysis;
 
   return (
-    <div style={{ height: '100%', overflow: 'auto' }}>
+    <div style={{
+      height: '100%',
+      backgroundColor: BLOOMBERG.DARK_BG,
+      overflow: 'auto',
+      fontFamily: TYPOGRAPHY.MONO
+    }}>
       {/* Header */}
       <div style={{
-        backgroundColor: PANEL_BG,
-        borderBottom: `1px solid ${GRAY}`,
-        padding: '12px',
+        backgroundColor: BLOOMBERG.PANEL_BG,
+        borderBottom: BORDERS.ORANGE,
+        padding: SPACING.MEDIUM,
         position: 'sticky',
         top: 0,
         zIndex: 10
       }}>
-        <div style={{ color: ORANGE, fontWeight: 'bold', fontSize: '12px', marginBottom: '8px' }}>
+        <div style={{
+          color: BLOOMBERG.ORANGE,
+          fontWeight: TYPOGRAPHY.BOLD,
+          fontSize: TYPOGRAPHY.SUBHEADING,
+          marginBottom: SPACING.SMALL
+        }}>
           ACTIVE MANAGEMENT ANALYTICS
         </div>
-        <div style={{ display: 'flex', gap: '24px', fontSize: '10px' }}>
+        <div style={{ display: 'flex', gap: SPACING.XLARGE, fontSize: TYPOGRAPHY.BODY }}>
           <div>
-            <span style={{ color: GRAY }}>BENCHMARK: </span>
-            <span style={{ color: CYAN }}>{benchmarkSymbol}</span>
+            <span style={{ color: BLOOMBERG.GRAY }}>BENCHMARK: </span>
+            <span style={{ color: BLOOMBERG.CYAN }}>{benchmarkSymbol}</span>
           </div>
           <div>
-            <span style={{ color: GRAY }}>QUALITY RATING: </span>
+            <span style={{ color: BLOOMBERG.GRAY }}>QUALITY RATING: </span>
             <span style={{
-              color: active_management_assessment.quality_rating === 'Excellent' ? GREEN :
-                active_management_assessment.quality_rating === 'Good' ? CYAN :
-                  active_management_assessment.quality_rating === 'Average' ? YELLOW : RED,
-              fontWeight: 'bold'
+              color: active_management_assessment.quality_rating === 'Excellent' ? BLOOMBERG.GREEN :
+                active_management_assessment.quality_rating === 'Good' ? BLOOMBERG.CYAN :
+                  active_management_assessment.quality_rating === 'Average' ? BLOOMBERG.YELLOW : BLOOMBERG.RED,
+              fontWeight: TYPOGRAPHY.BOLD
             }}>
               {active_management_assessment.quality_rating}
             </span>
           </div>
           <div>
-            <span style={{ color: GRAY }}>QUALITY SCORE: </span>
-            <span style={{ color: WHITE }}>{active_management_assessment.quality_score}/100</span>
+            <span style={{ color: BLOOMBERG.GRAY }}>QUALITY SCORE: </span>
+            <span style={{ color: BLOOMBERG.WHITE }}>{active_management_assessment.quality_score}/100</span>
           </div>
         </div>
       </div>
 
       {/* Key Metrics Grid */}
-      <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+      <div style={{ padding: SPACING.MEDIUM, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: SPACING.MEDIUM }}>
         {/* Active Return */}
         <MetricCard
           title="ACTIVE RETURN"
           value={formatPercent(value_added_analysis.active_return_annualized)}
           icon={<TrendingUp size={16} />}
-          color={value_added_analysis.active_return_annualized >= 0 ? GREEN : RED}
+          color={value_added_analysis.active_return_annualized >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
           subtitle="Annualized"
         />
 
@@ -159,7 +187,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="INFORMATION RATIO"
           value={formatNumber(information_ratio_analysis.information_ratio_annualized, 2)}
           icon={<Target size={16} />}
-          color={information_ratio_analysis.information_ratio_annualized > 0.5 ? GREEN : YELLOW}
+          color={information_ratio_analysis.information_ratio_annualized > 0.5 ? BLOOMBERG.GREEN : BLOOMBERG.YELLOW}
           subtitle="Risk-Adjusted Performance"
         />
 
@@ -168,7 +196,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="TRACKING ERROR"
           value={formatPercent(information_ratio_analysis.tracking_error_annualized)}
           icon={<Activity size={16} />}
-          color={CYAN}
+          color={BLOOMBERG.CYAN}
           subtitle="Annualized"
         />
 
@@ -177,7 +205,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="HIT RATE"
           value={formatPercent(value_added_analysis.hit_rate)}
           icon={<Award size={16} />}
-          color={value_added_analysis.hit_rate > 0.55 ? GREEN : YELLOW}
+          color={value_added_analysis.hit_rate > 0.55 ? BLOOMBERG.GREEN : BLOOMBERG.YELLOW}
           subtitle="Positive Periods"
         />
 
@@ -186,7 +214,7 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="SIGNIFICANCE"
           value={value_added_analysis.statistical_significance.is_significant ? 'YES' : 'NO'}
           icon={<TrendingUp size={16} />}
-          color={value_added_analysis.statistical_significance.is_significant ? GREEN : RED}
+          color={value_added_analysis.statistical_significance.is_significant ? BLOOMBERG.GREEN : BLOOMBERG.RED}
           subtitle={`p-value: ${value_added_analysis.statistical_significance.p_value.toFixed(3)}`}
         />
 
@@ -195,37 +223,42 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
           title="T-STATISTIC"
           value={formatNumber(value_added_analysis.statistical_significance.t_statistic, 2)}
           icon={<Activity size={16} />}
-          color={Math.abs(value_added_analysis.statistical_significance.t_statistic) > 2 ? GREEN : YELLOW}
+          color={Math.abs(value_added_analysis.statistical_significance.t_statistic) > 2 ? BLOOMBERG.GREEN : BLOOMBERG.YELLOW}
           subtitle="Statistical Measure"
         />
       </div>
 
       {/* Value Decomposition */}
-      <div style={{ padding: '0 12px 12px' }}>
+      <div style={{ padding: `0 ${SPACING.MEDIUM} ${SPACING.MEDIUM}` }}>
         <div style={{
-          backgroundColor: PANEL_BG,
-          border: `1px solid ${GRAY}`,
-          padding: '12px'
+          backgroundColor: BLOOMBERG.PANEL_BG,
+          border: BORDERS.STANDARD,
+          padding: SPACING.MEDIUM
         }}>
-          <div style={{ color: ORANGE, fontSize: '11px', fontWeight: 'bold', marginBottom: '12px' }}>
+          <div style={{
+            color: BLOOMBERG.ORANGE,
+            fontSize: TYPOGRAPHY.DEFAULT,
+            fontWeight: TYPOGRAPHY.BOLD,
+            marginBottom: SPACING.MEDIUM
+          }}>
             VALUE ADDED DECOMPOSITION
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '10px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: SPACING.MEDIUM, fontSize: TYPOGRAPHY.BODY }}>
             <div>
-              <div style={{ color: GRAY, marginBottom: '4px' }}>ALLOCATION EFFECT</div>
-              <div style={{ color: WHITE, fontSize: '12px', fontWeight: 'bold' }}>
+              <div style={{ color: BLOOMBERG.GRAY, marginBottom: SPACING.TINY }}>ALLOCATION EFFECT</div>
+              <div style={{ color: BLOOMBERG.WHITE, fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD }}>
                 {formatPercent(value_added_analysis.value_added_decomposition.estimated_allocation_effect)}
               </div>
             </div>
             <div>
-              <div style={{ color: GRAY, marginBottom: '4px' }}>SELECTION EFFECT</div>
-              <div style={{ color: WHITE, fontSize: '12px', fontWeight: 'bold' }}>
+              <div style={{ color: BLOOMBERG.GRAY, marginBottom: SPACING.TINY }}>SELECTION EFFECT</div>
+              <div style={{ color: BLOOMBERG.WHITE, fontSize: TYPOGRAPHY.SUBHEADING, fontWeight: TYPOGRAPHY.BOLD }}>
                 {formatPercent(value_added_analysis.value_added_decomposition.estimated_selection_effect)}
               </div>
             </div>
           </div>
           {value_added_analysis.value_added_decomposition.note && (
-            <div style={{ color: GRAY, fontSize: '9px', marginTop: '8px', fontStyle: 'italic' }}>
+            <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.SMALL, marginTop: SPACING.SMALL, fontStyle: 'italic' }}>
               Note: {value_added_analysis.value_added_decomposition.note}
             </div>
           )}
@@ -233,35 +266,45 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
       </div>
 
       {/* Strengths & Improvements */}
-      <div style={{ padding: '0 12px 12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+      <div style={{ padding: `0 ${SPACING.MEDIUM} ${SPACING.MEDIUM}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.MEDIUM }}>
         {/* Strengths */}
         <div style={{
-          backgroundColor: PANEL_BG,
-          border: `1px solid ${GREEN}`,
-          padding: '12px'
+          backgroundColor: BLOOMBERG.PANEL_BG,
+          border: BORDERS.GREEN,
+          padding: SPACING.MEDIUM
         }}>
-          <div style={{ color: GREEN, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+          <div style={{
+            color: BLOOMBERG.GREEN,
+            fontSize: TYPOGRAPHY.DEFAULT,
+            fontWeight: TYPOGRAPHY.BOLD,
+            marginBottom: SPACING.SMALL
+          }}>
             KEY STRENGTHS
           </div>
-          <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '10px', color: WHITE }}>
+          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.WHITE }}>
             {active_management_assessment.key_strengths.map((strength, idx) => (
-              <li key={idx} style={{ marginBottom: '4px' }}>{strength}</li>
+              <li key={idx} style={{ marginBottom: SPACING.TINY }}>{strength}</li>
             ))}
           </ul>
         </div>
 
         {/* Areas for Improvement */}
         <div style={{
-          backgroundColor: PANEL_BG,
-          border: `1px solid ${YELLOW}`,
-          padding: '12px'
+          backgroundColor: BLOOMBERG.PANEL_BG,
+          border: `1px solid ${BLOOMBERG.YELLOW}`,
+          padding: SPACING.MEDIUM
         }}>
-          <div style={{ color: YELLOW, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+          <div style={{
+            color: BLOOMBERG.YELLOW,
+            fontSize: TYPOGRAPHY.DEFAULT,
+            fontWeight: TYPOGRAPHY.BOLD,
+            marginBottom: SPACING.SMALL
+          }}>
             AREAS FOR IMPROVEMENT
           </div>
-          <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '10px', color: WHITE }}>
+          <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.WHITE }}>
             {active_management_assessment.areas_for_improvement.map((area, idx) => (
-              <li key={idx} style={{ marginBottom: '4px' }}>{area}</li>
+              <li key={idx} style={{ marginBottom: SPACING.TINY }}>{area}</li>
             ))}
           </ul>
         </div>
@@ -269,18 +312,23 @@ const ActiveManagementView: React.FC<ActiveManagementViewProps> = ({ portfolioId
 
       {/* Recommendations */}
       {improvement_recommendations && improvement_recommendations.length > 0 && (
-        <div style={{ padding: '0 12px 12px' }}>
+        <div style={{ padding: `0 ${SPACING.MEDIUM} ${SPACING.MEDIUM}` }}>
           <div style={{
-            backgroundColor: PANEL_BG,
-            border: `1px solid ${CYAN}`,
-            padding: '12px'
+            backgroundColor: BLOOMBERG.PANEL_BG,
+            border: BORDERS.CYAN,
+            padding: SPACING.MEDIUM
           }}>
-            <div style={{ color: CYAN, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
+            <div style={{
+              color: BLOOMBERG.CYAN,
+              fontSize: TYPOGRAPHY.DEFAULT,
+              fontWeight: TYPOGRAPHY.BOLD,
+              marginBottom: SPACING.SMALL
+            }}>
               IMPROVEMENT RECOMMENDATIONS
             </div>
-            <ul style={{ margin: 0, paddingLeft: '16px', fontSize: '10px', color: WHITE }}>
+            <ul style={{ margin: 0, paddingLeft: SPACING.DEFAULT, fontSize: TYPOGRAPHY.BODY, color: BLOOMBERG.WHITE }}>
               {improvement_recommendations.map((rec, idx) => (
-                <li key={idx} style={{ marginBottom: '6px' }}>{rec}</li>
+                <li key={idx} style={{ marginBottom: SPACING.TINY }}>{rec}</li>
               ))}
             </ul>
           </div>
@@ -300,23 +348,37 @@ interface MetricCardProps {
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon, color, subtitle }) => {
-  const { PANEL_BG, GRAY, WHITE } = getBloombergColors();
-
   return (
     <div style={{
-      backgroundColor: PANEL_BG,
-      border: `1px solid ${GRAY}`,
-      padding: '12px'
+      backgroundColor: BLOOMBERG.PANEL_BG,
+      border: BORDERS.STANDARD,
+      padding: SPACING.MEDIUM
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-        <div style={{ color: GRAY, fontSize: '9px', fontWeight: 'bold' }}>{title}</div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: SPACING.SMALL
+      }}>
+        <div style={{
+          color: BLOOMBERG.GRAY,
+          fontSize: TYPOGRAPHY.SMALL,
+          fontWeight: TYPOGRAPHY.BOLD
+        }}>
+          {title}
+        </div>
         <div style={{ color }}>{icon}</div>
       </div>
-      <div style={{ color, fontSize: '16px', fontWeight: 'bold', marginBottom: '4px' }}>
+      <div style={{
+        color,
+        fontSize: TYPOGRAPHY.HEADING,
+        fontWeight: TYPOGRAPHY.BOLD,
+        marginBottom: SPACING.TINY
+      }}>
         {value}
       </div>
       {subtitle && (
-        <div style={{ color: GRAY, fontSize: '9px' }}>{subtitle}</div>
+        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.SMALL }}>{subtitle}</div>
       )}
     </div>
   );

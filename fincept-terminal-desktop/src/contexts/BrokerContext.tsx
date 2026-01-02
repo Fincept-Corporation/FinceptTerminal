@@ -40,7 +40,6 @@ function safeLocalStorageGet(key: string): string | null {
   try {
     return localStorage.getItem(key);
   } catch (error) {
-    console.warn(`[BrokerContext] Failed to read from localStorage (${key}):`, error);
     return null;
   }
 }
@@ -49,7 +48,6 @@ function safeLocalStorageSet(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
   } catch (error) {
-    console.warn(`[BrokerContext] Failed to write to localStorage (${key}):`, error);
   }
 }
 
@@ -72,7 +70,6 @@ async function retryConnect(
       return;
     } catch (error) {
       if (i === attempts - 1) throw error;
-      console.warn(`[BrokerContext] Connection attempt ${i + 1} failed, retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay * (i + 1))); // Exponential backoff
     }
   }
@@ -123,9 +120,6 @@ interface BrokerProviderProps {
 }
 
 export function BrokerProvider({ children }: BrokerProviderProps) {
-  console.log('[BrokerContext] ========================================');
-  console.log('[BrokerContext] BrokerProvider mounting...');
-  console.log('[BrokerContext] ========================================');
 
   const [activeBroker, setActiveBrokerState] = useState<string>(() => {
     return safeLocalStorageGet('active_broker') || 'kraken';
@@ -191,10 +185,8 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
   // Load configurations on mount
   useEffect(() => {
     const loadConfigurations = async () => {
-      console.log('[BrokerContext] loadConfigurations: Starting...');
 
       setIsLoading(true);
-      console.log('[BrokerContext] loadConfigurations: isLoading set to true');
 
       try {
         const configs = new Map<string, ProviderConfig>();
@@ -216,11 +208,9 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         setProviderConfigs(configs);
 
         // Initialize provider configs in Rust WebSocket backend
-        console.log('[BrokerContext] Initializing provider configs in Rust WebSocket backend...');
         for (const [providerId, config] of configs.entries()) {
           try {
             await websocketBridge.setConfig(config);
-            console.log(`[BrokerContext] ✓ Configured provider: ${providerId}`);
           } catch (error) {
             console.error(`[BrokerContext] ✗ Failed to configure provider ${providerId}:`, error);
           }
@@ -238,19 +228,14 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
           setTradingModeState(savedMode);
         }
 
-        console.log('[BrokerContext] loadConfigurations: Complete');
-        console.log('[BrokerContext] - Active broker:', savedBroker || 'kraken (default)');
-        console.log('[BrokerContext] - Trading mode:', savedMode || 'paper (default)');
       } catch (error) {
         console.error('[BrokerContext] Failed to load configurations:', error);
       } finally {
-        console.log('[BrokerContext] loadConfigurations: Complete - triggering initialization');
         setIsLoading(false);
 
         // Trigger initialization only once
         if (!hasInitializedRef.current) {
           hasInitializedRef.current = true;
-          console.log('[BrokerContext] Starting initial adapter initialization...');
           // Use queueMicrotask to avoid timing issues with React.Suspense boundaries
           queueMicrotask(() => initializeAdapters());
         }
@@ -267,7 +252,6 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
   ) => {
     try {
       if (real) {
-        console.log('[BrokerContext] Disconnecting real adapter...');
         try {
           await Promise.race([real.disconnect(), createTimeout(5000)]);
         } catch (err) {
@@ -275,7 +259,6 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         }
       }
       if (paper) {
-        console.log('[BrokerContext] Disconnecting paper adapter...');
         try {
           await Promise.race([paper.disconnect(), createTimeout(5000)]);
         } catch (err) {
@@ -289,7 +272,6 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
   // Initialize adapters function
   const initializeAdapters = useCallback(async () => {
-    console.log('[BrokerContext] initializeAdapters called');
 
     // Create new abort controller for this initialization
     abortControllerRef.current?.abort();
@@ -299,16 +281,12 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
     // Don't check isMountedRef here - it causes issues with lazy loading and Suspense
     // The abort signal is sufficient to prevent stale operations
     if (signal.aborted) {
-      console.log('[BrokerContext] initializeAdapters aborted by signal');
       return;
     }
 
     setIsConnecting(true);
 
     try {
-      console.log(`[BrokerContext] ========================================`);
-      console.log(`[BrokerContext] Initializing ${activeBroker} adapters...`);
-      console.log(`[BrokerContext] ========================================`);
 
       // Clean up old adapters first
       await cleanupAdapters(realAdapter, paperAdapter);
@@ -316,16 +294,12 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       if (signal.aborted) return;
 
       // Create real adapter
-      console.log(`[BrokerContext] Creating ${activeBroker} real adapter...`);
       const newRealAdapter = createBrokerAdapter(activeBroker);
 
-      console.log(`[BrokerContext] Connecting ${activeBroker} real adapter...`);
       try {
         await retryConnect(() => newRealAdapter.connect());
-        console.log(`[BrokerContext] [OK] ${activeBroker} real adapter connected`);
       } catch (connectError) {
         console.error(`[BrokerContext] [WARN] Failed to connect ${activeBroker} real adapter after retries:`, connectError);
-        console.log(`[BrokerContext] Continuing with disconnected adapter (market data will be unavailable)`);
       }
 
       if (signal.aborted) {
@@ -337,14 +311,11 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       setRealAdapter(newRealAdapter);
 
       // Create paper adapter (wrapping real adapter)
-      console.log(`[BrokerContext] Creating ${activeBroker} paper adapter...`);
       const portfolioId = paperPortfolioMode === 'unified'
         ? 'paper_global'
         : `paper_${activeBroker}`;
 
       const fees = getBrokerFees(activeBrokerMetadata);
-      console.log(`[BrokerContext] Portfolio ID: ${portfolioId} (mode: ${paperPortfolioMode})`);
-      console.log(`[BrokerContext] Fees: maker ${fees.maker}, taker ${fees.taker}`);
 
       const newPaperAdapter = createPaperTradingAdapter(
         {
@@ -373,10 +344,8 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
         return;
       }
 
-      console.log(`[BrokerContext] Connecting ${activeBroker} paper adapter...`);
       try {
         await retryConnect(() => newPaperAdapter.connect());
-        console.log(`[BrokerContext] [OK] ${activeBroker} paper adapter connected`);
       } catch (connectError) {
         console.error(`[BrokerContext] [WARN] Failed to connect paper adapter:`, connectError);
         throw connectError; // Paper adapter is critical
@@ -390,11 +359,6 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       // Update paper adapter state
       setPaperAdapter(newPaperAdapter);
 
-      console.log(`[BrokerContext] ========================================`);
-      console.log(`[BrokerContext] ${activeBroker} initialization complete!`);
-      console.log(`[BrokerContext] Real Adapter: ${newRealAdapter.isConnected() ? '[OK] CONNECTED' : '[FAIL] NOT CONNECTED'}`);
-      console.log(`[BrokerContext] Paper Adapter: ${newPaperAdapter.isConnected() ? '[OK] CONNECTED' : '[FAIL] NOT CONNECTED'}`);
-      console.log(`[BrokerContext] ========================================`);
     } catch (error) {
       if (signal.aborted) return;
 
@@ -416,7 +380,6 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       throw new Error(`Broker ${brokerId} is not available`);
     }
 
-    console.log(`[BrokerContext] Switching to broker: ${brokerId}`);
 
     // Abort any ongoing initialization
     abortControllerRef.current?.abort();
@@ -433,14 +396,12 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
   // Set trading mode
   const setTradingMode = useCallback((mode: 'live' | 'paper') => {
-    console.log(`[BrokerContext] Switching to ${mode} mode`);
     setTradingModeState(mode);
     safeLocalStorageSet('trading_mode', mode);
   }, []);
 
   // Set paper portfolio mode
   const setPaperPortfolioMode = useCallback(async (mode: 'separate' | 'unified') => {
-    console.log(`[BrokerContext] Switching paper portfolio mode to: ${mode}`);
 
     // Abort any ongoing initialization
     abortControllerRef.current?.abort();

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PortfolioSummary, portfolioService, PortfolioSnapshot } from '../../../../services/portfolioService';
-import { BLOOMBERG_COLORS, formatCurrency, formatPercent } from './utils';
+import { formatCurrency, formatPercent } from './utils';
+import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
 
 interface PerformanceViewProps {
   portfolioSummary: PortfolioSummary;
@@ -14,7 +15,6 @@ interface PerformanceDataPoint {
 }
 
 const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) => {
-  const { ORANGE, WHITE, RED, GREEN, GRAY, CYAN, YELLOW } = BLOOMBERG_COLORS;
   const currency = portfolioSummary.portfolio.currency;
   const [performanceData, setPerformanceData] = useState<PerformanceDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,16 +82,16 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
   if (loading) {
     return (
       <div style={{
-        padding: '40px',
+        height: '100%',
+        backgroundColor: BLOOMBERG.DARK_BG,
+        padding: SPACING.XLARGE,
         textAlign: 'center',
-        backgroundColor: 'rgba(255,255,255,0.02)',
-        border: `1px solid ${GRAY}`,
-        borderRadius: '4px'
+        fontFamily: TYPOGRAPHY.MONO
       }}>
-        <div style={{ color: ORANGE, fontSize: '14px', marginBottom: '8px' }}>
+        <div style={{ color: BLOOMBERG.ORANGE, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.SMALL }}>
           Loading performance data...
         </div>
-        <div style={{ color: GRAY, fontSize: '10px' }}>
+        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>
           Fetching portfolio snapshots from database
         </div>
       </div>
@@ -101,16 +101,16 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
   if (performanceData.length === 0) {
     return (
       <div style={{
-        padding: '40px',
+        height: '100%',
+        backgroundColor: BLOOMBERG.DARK_BG,
+        padding: SPACING.XLARGE,
         textAlign: 'center',
-        backgroundColor: 'rgba(255,255,255,0.02)',
-        border: `1px solid ${GRAY}`,
-        borderRadius: '4px'
+        fontFamily: TYPOGRAPHY.MONO
       }}>
-        <div style={{ color: GRAY, fontSize: '14px', marginBottom: '8px' }}>
+        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.SUBHEADING, marginBottom: SPACING.SMALL }}>
           No performance data available
         </div>
-        <div style={{ color: GRAY, fontSize: '10px' }}>
+        <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY }}>
           Portfolio snapshots will be created automatically as you use the application
         </div>
       </div>
@@ -127,13 +127,17 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
   // Scale functions
   const maxValue = Math.max(...performanceData.map(d => d.value));
   const minValue = Math.min(...performanceData.map(d => d.value));
-  const valueRange = maxValue - minValue;
+  const valueRange = maxValue - minValue || 1; // Prevent division by zero
 
   const xScale = (index: number) => {
+    // Handle single data point case
+    if (performanceData.length === 1) return chartWidth / 2;
     return (index / (performanceData.length - 1)) * innerWidth + padding.left;
   };
 
   const yScale = (value: number) => {
+    // Handle single data point or zero range case
+    if (valueRange === 0 || valueRange === 1) return chartHeight / 2;
     return chartHeight - padding.bottom - ((value - minValue) / valueRange) * innerHeight;
   };
 
@@ -158,12 +162,16 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
   const periodGain = latestValue - earliestValue;
 
   return (
-    <div>
+    <div style={{
+      height: '100%',
+      backgroundColor: BLOOMBERG.DARK_BG,
+      padding: SPACING.DEFAULT,
+      overflow: 'auto',
+      fontFamily: TYPOGRAPHY.MONO
+    }}>
       <div style={{
-        color: ORANGE,
-        fontSize: '12px',
-        fontWeight: 'bold',
-        marginBottom: '16px'
+        ...COMMON_STYLES.sectionHeader,
+        marginBottom: SPACING.LARGE
       }}>
         PERFORMANCE CHART ({performanceData.length} DAY{performanceData.length > 1 ? 'S' : ''})
       </div>
@@ -172,73 +180,75 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(5, 1fr)',
-        gap: '12px',
-        marginBottom: '20px'
+        gap: SPACING.DEFAULT,
+        marginBottom: SPACING.LARGE
       }}>
         <div style={{
-          padding: '10px',
-          backgroundColor: 'rgba(255,255,255,0.02)',
-          border: `1px solid ${GRAY}`,
-          borderRadius: '4px'
+          ...COMMON_STYLES.metricCard,
+          border: periodReturn >= 0 ? BORDERS.GREEN : BORDERS.RED
         }}>
-          <div style={{ color: GRAY, fontSize: '9px', marginBottom: '4px' }}>PERIOD RETURN</div>
+          <div style={COMMON_STYLES.dataLabel}>PERIOD RETURN</div>
           <div style={{
-            color: periodReturn >= 0 ? GREEN : RED,
-            fontSize: '14px',
-            fontWeight: 'bold'
+            color: periodReturn >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            fontSize: TYPOGRAPHY.SUBHEADING,
+            fontWeight: TYPOGRAPHY.BOLD
           }}>
             {formatPercent(periodReturn)}
           </div>
         </div>
 
         <div style={{
-          padding: '10px',
-          backgroundColor: 'rgba(255,255,255,0.02)',
-          border: `1px solid ${GRAY}`,
-          borderRadius: '4px'
+          ...COMMON_STYLES.metricCard,
+          border: periodGain >= 0 ? BORDERS.GREEN : BORDERS.RED
         }}>
-          <div style={{ color: GRAY, fontSize: '9px', marginBottom: '4px' }}>PERIOD GAIN</div>
+          <div style={COMMON_STYLES.dataLabel}>PERIOD GAIN</div>
           <div style={{
-            color: periodGain >= 0 ? GREEN : RED,
-            fontSize: '14px',
-            fontWeight: 'bold'
+            color: periodGain >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            fontSize: TYPOGRAPHY.SUBHEADING,
+            fontWeight: TYPOGRAPHY.BOLD
           }}>
             {formatCurrency(periodGain, currency)}
           </div>
         </div>
 
         <div style={{
-          padding: '10px',
-          backgroundColor: 'rgba(255,255,255,0.02)',
-          border: `1px solid ${GRAY}`,
-          borderRadius: '4px'
+          ...COMMON_STYLES.metricCard,
+          border: `1px solid ${BLOOMBERG.YELLOW}`
         }}>
-          <div style={{ color: GRAY, fontSize: '9px', marginBottom: '4px' }}>CURRENT VALUE</div>
-          <div style={{ color: YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
+          <div style={COMMON_STYLES.dataLabel}>CURRENT VALUE</div>
+          <div style={{
+            color: BLOOMBERG.YELLOW,
+            fontSize: TYPOGRAPHY.SUBHEADING,
+            fontWeight: TYPOGRAPHY.BOLD
+          }}>
             {formatCurrency(latestValue, currency)}
           </div>
         </div>
 
         <div style={{
-          padding: '10px',
-          backgroundColor: 'rgba(255,255,255,0.02)',
-          border: `1px solid ${GRAY}`,
-          borderRadius: '4px'
+          ...COMMON_STYLES.metricCard,
+          border: BORDERS.CYAN
         }}>
-          <div style={{ color: GRAY, fontSize: '9px', marginBottom: '4px' }}>START VALUE</div>
-          <div style={{ color: CYAN, fontSize: '14px', fontWeight: 'bold' }}>
+          <div style={COMMON_STYLES.dataLabel}>START VALUE</div>
+          <div style={{
+            color: BLOOMBERG.CYAN,
+            fontSize: TYPOGRAPHY.SUBHEADING,
+            fontWeight: TYPOGRAPHY.BOLD
+          }}>
             {formatCurrency(earliestValue, currency)}
           </div>
         </div>
 
         <div style={{
-          padding: '10px',
-          backgroundColor: 'rgba(255,255,255,0.02)',
-          border: `1px solid ${GRAY}`,
-          borderRadius: '4px'
+          ...COMMON_STYLES.metricCard,
+          border: BORDERS.ORANGE
         }}>
-          <div style={{ color: GRAY, fontSize: '9px', marginBottom: '4px' }}>VOLATILITY</div>
-          <div style={{ color: ORANGE, fontSize: '14px', fontWeight: 'bold' }}>
+          <div style={COMMON_STYLES.dataLabel}>VOLATILITY</div>
+          <div style={{
+            color: BLOOMBERG.ORANGE,
+            fontSize: TYPOGRAPHY.SUBHEADING,
+            fontWeight: TYPOGRAPHY.BOLD
+          }}>
             {((valueRange / earliestValue) * 100).toFixed(2)}%
           </div>
         </div>
@@ -247,10 +257,9 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
       {/* Chart */}
       <div style={{
         backgroundColor: 'rgba(0,0,0,0.3)',
-        border: `1px solid ${GRAY}`,
-        borderRadius: '4px',
-        padding: '16px',
-        marginBottom: '20px'
+        border: BORDERS.STANDARD,
+        padding: SPACING.DEFAULT,
+        marginBottom: SPACING.LARGE
       }}>
         <svg width={chartWidth} height={chartHeight}>
           {/* Grid lines */}
@@ -264,7 +273,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
                   y1={y}
                   x2={chartWidth - padding.right}
                   y2={y}
-                  stroke={GRAY}
+                  stroke={BLOOMBERG.BORDER}
                   strokeWidth="0.5"
                   strokeDasharray="4,4"
                   opacity="0.3"
@@ -273,9 +282,9 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
                   x={padding.left - 10}
                   y={y + 4}
                   textAnchor="end"
-                  fill={GRAY}
+                  fill={BLOOMBERG.GRAY}
                   fontSize="9"
-                  fontFamily="Consolas, monospace"
+                  fontFamily={TYPOGRAPHY.MONO}
                 >
                   {formatCurrency(value, currency)}
                 </text>
@@ -293,9 +302,9 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
                 x={x}
                 y={chartHeight - padding.bottom + 20}
                 textAnchor="middle"
-                fill={GRAY}
+                fill={BLOOMBERG.GRAY}
                 fontSize="8"
-                fontFamily="Consolas, monospace"
+                fontFamily={TYPOGRAPHY.MONO}
               >
                 {d.date.substring(5)}
               </text>
@@ -305,7 +314,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
           {/* Area fill */}
           <path
             d={areaPath}
-            fill={periodReturn >= 0 ? GREEN : RED}
+            fill={periodReturn >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
             opacity="0.1"
           />
 
@@ -313,7 +322,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
           <path
             d={linePath}
             fill="none"
-            stroke={periodReturn >= 0 ? GREEN : RED}
+            stroke={periodReturn >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
             strokeWidth="2"
           />
 
@@ -324,8 +333,8 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
               cx={xScale(i)}
               cy={yScale(d.value)}
               r="3"
-              fill={d.changePercent >= 0 ? GREEN : RED}
-              stroke="#000"
+              fill={d.changePercent >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}
+              stroke={BLOOMBERG.DARK_BG}
               strokeWidth="1"
             />
           ))}
@@ -336,7 +345,7 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
             y1={yScale(portfolioSummary.total_cost_basis)}
             x2={chartWidth - padding.right}
             y2={yScale(portfolioSummary.total_cost_basis)}
-            stroke={YELLOW}
+            stroke={BLOOMBERG.YELLOW}
             strokeWidth="2"
             strokeDasharray="8,4"
           />
@@ -344,10 +353,10 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
             x={chartWidth - padding.right - 10}
             y={yScale(portfolioSummary.total_cost_basis) - 8}
             textAnchor="end"
-            fill={YELLOW}
+            fill={BLOOMBERG.YELLOW}
             fontSize="10"
             fontWeight="bold"
-            fontFamily="Consolas, monospace"
+            fontFamily={TYPOGRAPHY.MONO}
           >
             COST BASIS
           </text>
@@ -357,10 +366,10 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
             x={chartWidth / 2}
             y={15}
             textAnchor="middle"
-            fill={ORANGE}
+            fill={BLOOMBERG.ORANGE}
             fontSize="12"
             fontWeight="bold"
-            fontFamily="Consolas, monospace"
+            fontFamily={TYPOGRAPHY.MONO}
           >
             PORTFOLIO VALUE OVER TIME
           </text>
@@ -369,12 +378,12 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
 
       {/* Performance Table */}
       <div style={{
-        color: ORANGE,
-        fontSize: '11px',
-        fontWeight: 'bold',
-        marginBottom: '8px',
-        paddingBottom: '4px',
-        borderBottom: `1px solid ${ORANGE}`
+        color: BLOOMBERG.ORANGE,
+        fontSize: TYPOGRAPHY.DEFAULT,
+        fontWeight: TYPOGRAPHY.BOLD,
+        marginBottom: SPACING.SMALL,
+        paddingBottom: SPACING.SMALL,
+        borderBottom: BORDERS.ORANGE
       }}>
         DAILY PERFORMANCE DATA
       </div>
@@ -384,19 +393,20 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1.2fr 1fr 1fr',
-          gap: '8px',
-          padding: '8px',
-          backgroundColor: 'rgba(255,165,0,0.1)',
-          fontSize: '10px',
-          fontWeight: 'bold',
+          gap: SPACING.SMALL,
+          padding: SPACING.SMALL,
+          backgroundColor: BLOOMBERG.HEADER_BG,
+          fontSize: TYPOGRAPHY.BODY,
+          fontWeight: TYPOGRAPHY.BOLD,
           position: 'sticky',
           top: 0,
-          zIndex: 1
+          zIndex: 1,
+          borderBottom: BORDERS.ORANGE
         }}>
-          <div style={{ color: WHITE }}>DATE</div>
-          <div style={{ color: WHITE, textAlign: 'right' }}>VALUE</div>
-          <div style={{ color: WHITE, textAlign: 'right' }}>CHANGE</div>
-          <div style={{ color: WHITE, textAlign: 'right' }}>CHANGE %</div>
+          <div style={{ color: BLOOMBERG.ORANGE }}>DATE</div>
+          <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>VALUE</div>
+          <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>CHANGE</div>
+          <div style={{ color: BLOOMBERG.ORANGE, textAlign: 'right' }}>CHANGE %</div>
         </div>
 
         {/* Table Rows */}
@@ -406,29 +416,29 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1.2fr 1fr 1fr',
-              gap: '8px',
-              padding: '8px',
-              backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-              borderLeft: `3px solid ${d.changePercent >= 0 ? GREEN : RED}`,
-              fontSize: '10px',
+              gap: SPACING.SMALL,
+              padding: SPACING.SMALL,
+              backgroundColor: index % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'transparent',
+              borderLeft: `3px solid ${d.changePercent >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
+              fontSize: TYPOGRAPHY.BODY,
               marginBottom: '2px'
             }}
           >
-            <div style={{ color: GRAY }}>{d.date}</div>
-            <div style={{ color: WHITE, textAlign: 'right', fontWeight: 'bold' }}>
+            <div style={{ color: BLOOMBERG.GRAY }}>{d.date}</div>
+            <div style={{ color: BLOOMBERG.WHITE, textAlign: 'right', fontWeight: TYPOGRAPHY.BOLD }}>
               {formatCurrency(d.value, currency)}
             </div>
             <div style={{
-              color: d.change >= 0 ? GREEN : RED,
+              color: d.change >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
               textAlign: 'right',
-              fontWeight: 'bold'
+              fontWeight: TYPOGRAPHY.BOLD
             }}>
               {formatCurrency(d.change, currency)}
             </div>
             <div style={{
-              color: d.changePercent >= 0 ? GREEN : RED,
+              color: d.changePercent >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
               textAlign: 'right',
-              fontWeight: 'bold'
+              fontWeight: TYPOGRAPHY.BOLD
             }}>
               {formatPercent(d.changePercent)}
             </div>
@@ -439,15 +449,14 @@ const PerformanceView: React.FC<PerformanceViewProps> = ({ portfolioSummary }) =
       {/* Info Note */}
       {performanceData.length < 7 && (
         <div style={{
-          marginTop: '16px',
-          padding: '12px',
-          backgroundColor: 'rgba(255,165,0,0.05)',
-          border: `1px solid ${ORANGE}`,
-          borderRadius: '4px',
-          fontSize: '9px',
-          color: GRAY
+          marginTop: SPACING.DEFAULT,
+          padding: SPACING.MEDIUM,
+          backgroundColor: 'rgba(255,136,0,0.05)',
+          border: BORDERS.ORANGE,
+          fontSize: TYPOGRAPHY.SMALL,
+          color: BLOOMBERG.GRAY
         }}>
-          <strong style={{ color: ORANGE }}>TIP:</strong> Portfolio snapshots are created automatically.
+          <strong style={{ color: BLOOMBERG.ORANGE }}>TIP:</strong> Portfolio snapshots are created automatically.
           More historical data will be available as you continue to use the application.
           Current data points: {performanceData.length}
         </div>

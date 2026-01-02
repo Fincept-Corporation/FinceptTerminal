@@ -1,5 +1,5 @@
 import React from 'react';
-import { getBloombergColors } from '../portfolio/utils';
+import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, createFocusHandlers } from '../bloombergStyles';
 
 interface CreatePortfolioModalProps {
   show: boolean;
@@ -26,85 +26,72 @@ const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
 }) => {
   if (!show) return null;
 
-  const { ORANGE, WHITE, GRAY, DARK_BG, PANEL_BG } = getBloombergColors();
-
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.8)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }}>
+    <div style={COMMON_STYLES.modalOverlay}>
       <div style={{
-        backgroundColor: DARK_BG,
-        border: `2px solid ${ORANGE}`,
-        padding: '24px',
-        minWidth: '400px'
+        ...COMMON_STYLES.modalPanel,
+        fontFamily: TYPOGRAPHY.MONO
       }}>
-        <div style={{ color: ORANGE, fontSize: '14px', fontWeight: 'bold', marginBottom: '16px' }}>
+        <div style={{
+          color: BLOOMBERG.ORANGE,
+          fontSize: TYPOGRAPHY.HEADING,
+          fontWeight: TYPOGRAPHY.BOLD,
+          marginBottom: SPACING.LARGE,
+          letterSpacing: TYPOGRAPHY.WIDE
+        }}>
           CREATE NEW PORTFOLIO
         </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+        <div style={{ marginBottom: SPACING.DEFAULT }}>
+          <label style={{
+            ...COMMON_STYLES.dataLabel,
+            display: 'block',
+            marginBottom: SPACING.SMALL
+          }}>
             PORTFOLIO NAME *
           </label>
           <input
             type="text"
             value={formState.name}
             onChange={(e) => onNameChange(e.target.value)}
-            style={{
-              width: '100%',
-              background: PANEL_BG,
-              border: `1px solid ${GRAY}`,
-              color: WHITE,
-              padding: '8px',
-              fontSize: '11px'
-            }}
+            style={COMMON_STYLES.inputField}
+            {...createFocusHandlers()}
             placeholder="My Portfolio"
           />
         </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+        <div style={{ marginBottom: SPACING.DEFAULT }}>
+          <label style={{
+            ...COMMON_STYLES.dataLabel,
+            display: 'block',
+            marginBottom: SPACING.SMALL
+          }}>
             OWNER *
           </label>
           <input
             type="text"
             value={formState.owner}
             onChange={(e) => onOwnerChange(e.target.value)}
-            style={{
-              width: '100%',
-              background: PANEL_BG,
-              border: `1px solid ${GRAY}`,
-              color: WHITE,
-              padding: '8px',
-              fontSize: '11px'
-            }}
+            style={COMMON_STYLES.inputField}
+            {...createFocusHandlers()}
             placeholder="John Doe"
           />
         </div>
 
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ color: GRAY, fontSize: '10px', display: 'block', marginBottom: '4px' }}>
+        <div style={{ marginBottom: SPACING.LARGE }}>
+          <label style={{
+            ...COMMON_STYLES.dataLabel,
+            display: 'block',
+            marginBottom: SPACING.SMALL
+          }}>
             CURRENCY
           </label>
           <select
             value={formState.currency}
             onChange={(e) => onCurrencyChange(e.target.value)}
             style={{
-              width: '100%',
-              background: PANEL_BG,
-              border: `1px solid ${GRAY}`,
-              color: WHITE,
-              padding: '8px',
-              fontSize: '11px'
+              ...COMMON_STYLES.inputField,
+              cursor: 'pointer'
             }}
           >
             <option value="USD">USD - US Dollar</option>
@@ -114,31 +101,29 @@ const CreatePortfolioModal: React.FC<CreatePortfolioModalProps> = ({
           </select>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: SPACING.MEDIUM, justifyContent: 'flex-end' }}>
           <button
             onClick={onClose}
             style={{
-              background: GRAY,
-              color: 'black',
-              border: 'none',
-              padding: '8px 16px',
-              fontSize: '10px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
+              ...COMMON_STYLES.buttonSecondary,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
             }}
           >
             CANCEL
           </button>
           <button
             onClick={onCreate}
-            style={{
-              background: ORANGE,
-              color: 'black',
-              border: 'none',
-              padding: '8px 16px',
-              fontSize: '10px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
+            style={COMMON_STYLES.buttonPrimary}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '0.85';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = '1';
             }}
           >
             CREATE

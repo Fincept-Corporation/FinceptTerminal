@@ -8,7 +8,6 @@ import { OrderRequest, UnifiedOrder, UnifiedPosition, BrokerType, OrderSide, Ord
 import { createPaperTradingAdapter } from '@/paper-trading';
 import type { IExchangeAdapter } from '@/brokers/crypto/types';
 import type { PaperTradingConfig } from '@/paper-trading/types';
-import { fyersAdapter } from '@/brokers/stocks/fyers';
 
 /**
  * Adapter bridge to make equity brokers compatible with crypto paper trading system
@@ -22,34 +21,37 @@ class EquityBrokerBridge implements Partial<IExchangeAdapter> {
    * Fetch ticker with real-time Fyers price
    */
   async fetchTicker(symbol: string): Promise<any> {
+
     // Try to fetch fresh price from Fyers if we have metadata
     const metadata = this.symbolMetadata.get(symbol);
     if (metadata) {
       try {
-        const fyersSymbol = `${metadata.exchange}:${metadata.originalSymbol}-EQ`;
-        const quotes = await fyersAdapter.market.getQuotes([fyersSymbol]);
+        // Use AuthManager to get authenticated Fyers adapter
+        const { authManager } = await import('../services/AuthManager');
+        const adapter = authManager.getAdapter('fyers');
 
-        if (quotes && quotes[fyersSymbol]) {
-          const quote = quotes[fyersSymbol];
-          const ltp = (typeof quote === 'object' && 'ltp' in quote ? quote.ltp : undefined) ||
-                      (typeof quote === 'object' && 'lp' in quote ? quote.lp : undefined) ||
-                      (typeof quote === 'number' ? quote : undefined);
-          if (ltp && ltp > 0) {
+        if (!adapter) {
+        } else {
+          const fyersSymbol = `${metadata.originalSymbol}-EQ`;
+          const quote = await adapter.getQuote(fyersSymbol, metadata.exchange);
+
+          if (quote && quote.lastPrice && quote.lastPrice > 0) {
+            const ltp = quote.lastPrice;
             this.lastPrices.set(symbol, ltp);
             return {
               symbol,
               last: ltp,
               bid: ltp * 0.999,
               ask: ltp * 1.001,
-              high: (typeof quote === 'object' && 'h' in quote ? quote.h : undefined) || ltp * 1.02,
-              low: (typeof quote === 'object' && 'l' in quote ? quote.l : undefined) || ltp * 0.98,
-              volume: (typeof quote === 'object' && 'v' in quote ? quote.v : undefined) || 1000000,
+              high: quote.high || ltp * 1.02,
+              low: quote.low || ltp * 0.98,
+              volume: quote.volume || 1000000,
             };
           }
         }
       } catch (error) {
-        console.error('[EquityBrokerBridge] Failed to fetch fresh price:', error);
       }
+    } else {
     }
 
     // Fallback to cached price
@@ -69,6 +71,7 @@ class EquityBrokerBridge implements Partial<IExchangeAdapter> {
    * Update price and store metadata for future fetches
    */
   updatePrice(symbol: string, price: number, exchange: string = 'NSE'): void {
+    // Update the price in the cache
     this.lastPrices.set(symbol, price);
 
     // Store metadata for future price fetches
@@ -77,6 +80,7 @@ class EquityBrokerBridge implements Partial<IExchangeAdapter> {
       exchange,
       originalSymbol: cleanSymbol,
     });
+
   }
 
   /**
@@ -91,7 +95,6 @@ class EquityBrokerBridge implements Partial<IExchangeAdapter> {
       const symbols = Array.from(this.symbolMetadata.keys());
       if (symbols.length === 0) return;
 
-      console.log('[EquityBrokerBridge] Updating prices for', symbols.length, 'symbols');
 
       for (const symbol of symbols) {
         try {
@@ -102,7 +105,6 @@ class EquityBrokerBridge implements Partial<IExchangeAdapter> {
       }
     }, intervalMs);
 
-    console.log('[EquityBrokerBridge] ✅ Started price updates (every', intervalMs, 'ms)');
   }
 
   /**
@@ -112,17 +114,14 @@ class EquityBrokerBridge implements Partial<IExchangeAdapter> {
     if (this.priceUpdateInterval) {
       clearInterval(this.priceUpdateInterval);
       this.priceUpdateInterval = null;
-      console.log('[EquityBrokerBridge] ⏹️ Stopped price updates');
     }
   }
 
   async connect(): Promise<void> {
-    console.log('[EquityBrokerBridge] Connected');
     this.startPriceUpdates(5000); // Update prices every 5 seconds
   }
 
   async disconnect(): Promise<void> {
-    console.log('[EquityBrokerBridge] Disconnected');
     this.stopPriceUpdates();
   }
 
@@ -196,17 +195,14 @@ export class PaperTradingIntegration {
       type: PluginType.PRE_ORDER,
       version: '3.1.0', // Updated to match paper trading system version
       execute: async (context: PluginContext): Promise<PluginResult> => {
-        console.log('[PaperTrading Plugin] Execute called, enabled:', this.enabled, 'type:', context.type);
 
         if (!this.enabled) {
-          console.log('[PaperTrading Plugin] ⏭️ Skipping - plugin not enabled');
           return { success: true };
         }
 
         // Intercept order and route to paper trading
         if (context.type === PluginType.PRE_ORDER) {
           const order = context.data as OrderRequest;
-          console.log('[PaperTrading Plugin] ✅ Intercepting order:', order);
 
           try {
             // Route to paper trading adapter
@@ -215,10 +211,8 @@ export class PaperTradingIntegration {
             // Cancel real order
             if (context.cancel) {
               context.cancel();
-              console.log('[PaperTrading Plugin] 🛑 Cancelled real broker order');
             }
 
-            console.log('[PaperTrading Plugin] ✅ Paper order result:', result);
 
             return {
               success: true,
@@ -243,14 +237,12 @@ export class PaperTradingIntegration {
       onEnable: async () => {
         this.enabled = true;
         await this.initializePaperAdapter();
-        console.log('[PaperTrading] ✅ Enabled - All orders will be paper traded');
       },
       onDisable: async () => {
         this.enabled = false;
         if (this.paperAdapter) {
           await this.paperAdapter.disconnect();
         }
-        console.log('[PaperTrading] ❌ Disabled - Resuming live trading');
       },
     });
   }
@@ -260,7 +252,6 @@ export class PaperTradingIntegration {
    */
   private async initializePaperAdapter(): Promise<void> {
     try {
-      console.log('[PaperTrading] Initializing adapter with config:', this.config);
 
       // Create paper trading adapter
       this.paperAdapter = createPaperTradingAdapter(this.config, this.bridgeAdapter as any);
@@ -268,7 +259,6 @@ export class PaperTradingIntegration {
       // Connect adapter
       await this.paperAdapter.connect();
 
-      console.log('[PaperTrading] ✅ Adapter initialized and connected');
     } catch (error) {
       console.error('[PaperTrading] ❌ Failed to initialize adapter:', error);
       throw error;
@@ -276,28 +266,31 @@ export class PaperTradingIntegration {
   }
 
   /**
-   * Fetch current market price from Fyers
+   * Fetch current market price from Fyers using AuthManager
    */
   private async fetchFyersPrice(symbol: string, exchange: string): Promise<number> {
     try {
-      // Format symbol for Fyers API (e.g., "NSE:SBIN-EQ")
-      const fyersSymbol = `${exchange}:${symbol}-EQ`;
 
-      console.log('[PaperTrading] Fetching price for:', fyersSymbol);
+      // Use AuthManager to get authenticated Fyers adapter
+      const { authManager } = await import('../services/AuthManager');
+      const adapter = authManager.getAdapter('fyers');
 
-      // Get quote from Fyers
-      const quotes = await fyersAdapter.market.getQuotes([fyersSymbol]);
-
-      if (quotes && quotes[fyersSymbol]) {
-        const quote = quotes[fyersSymbol];
-        const ltp = (typeof quote === 'object' && 'ltp' in quote ? quote.ltp : undefined) ||
-                    (typeof quote === 'object' && 'lp' in quote ? quote.lp : undefined) ||
-                    (typeof quote === 'number' ? quote : undefined);
-        console.log('[PaperTrading] ✅ Fetched LTP:', ltp);
-        return ltp || 0;
+      if (!adapter) {
+        return 0;
       }
 
-      console.warn('[PaperTrading] ⚠️ No quote data returned for', fyersSymbol);
+      // Format symbol for Fyers API (e.g., "SBIN-EQ")
+      const fyersSymbol = `${symbol}-EQ`;
+
+
+      // Get quote using the adapter's getQuote method
+      const quote = await adapter.getQuote(fyersSymbol, exchange);
+
+
+      if (quote && quote.lastPrice && quote.lastPrice > 0) {
+        return quote.lastPrice;
+      }
+
       return 0;
     } catch (error) {
       console.error('[PaperTrading] ❌ Failed to fetch price from Fyers:', error);
@@ -313,28 +306,42 @@ export class PaperTradingIntegration {
       throw new Error('Paper trading adapter not initialized');
     }
 
-    console.log('[PaperTrading] Executing paper order:', order);
 
-    // Fetch real-time price from Fyers
-    let currentPrice = order.price || 0;
+    let currentPrice = 0;
 
-    // For market orders or when price is not specified, fetch from Fyers
-    if (order.type === OrderType.MARKET || !currentPrice) {
+    // For market orders, ALWAYS fetch the current market price from Fyers
+    // For limit orders, use the specified limit price
+    if (order.type === OrderType.MARKET) {
       const fetchedPrice = await this.fetchFyersPrice(order.symbol, order.exchange);
 
       if (fetchedPrice > 0) {
         currentPrice = fetchedPrice;
-        console.log('[PaperTrading] ✅ Using Fyers LTP:', currentPrice);
       } else {
+        console.error('[PaperTrading] ❌ Failed to fetch market price for', order.symbol);
         throw new Error(`Failed to fetch market price for ${order.symbol}. Cannot execute market order.`);
+      }
+    } else if (order.type === OrderType.LIMIT) {
+      // For limit orders, use the specified price
+      currentPrice = order.price || 0;
+      if (currentPrice <= 0) {
+        throw new Error(`Invalid limit price for ${order.symbol}. Must specify a price for limit orders.`);
+      }
+    } else {
+      // For other order types (stop loss, etc.), try to fetch current price
+      const fetchedPrice = await this.fetchFyersPrice(order.symbol, order.exchange);
+      currentPrice = fetchedPrice > 0 ? fetchedPrice : (order.price || 0);
+      if (currentPrice <= 0) {
+        throw new Error(`Failed to determine execution price for ${order.symbol}.`);
       }
     }
 
-    // Update current price in bridge with exchange metadata
-    this.bridgeAdapter.updatePrice(order.symbol, currentPrice, order.exchange);
-
     // Convert equity order to paper trading format
     const symbol = `${order.symbol}/INR`; // Convert NSE:SBIN to SBIN/INR format
+
+    // Update current price in bridge with BOTH symbol formats
+    this.bridgeAdapter.updatePrice(order.symbol, currentPrice, order.exchange); // Original symbol
+    this.bridgeAdapter.updatePrice(symbol, currentPrice, order.exchange); // Paper trading format (SYMBOL/INR)
+
     const side = order.side === OrderSide.BUY ? 'buy' : 'sell';
 
     // Map order types
@@ -357,7 +364,7 @@ export class PaperTradingIntegration {
       orderType,
       side,
       order.quantity,
-      order.price || currentPrice, // Use fetched price for market orders
+      currentPrice, // Use the determined current price (market price for market orders, limit price for limit orders)
       {
         stopPrice: order.triggerPrice,
         leverage,
@@ -366,7 +373,6 @@ export class PaperTradingIntegration {
       }
     );
 
-    console.log('[PaperTrading] ✅ Order executed:', result);
     return result;
   }
 
@@ -382,13 +388,8 @@ export class PaperTradingIntegration {
       const balance = await this.paperAdapter.fetchBalance();
       const currency = this.config.currency || 'INR';
 
-      console.log('[PaperTrading] Balance object:', balance);
-      console.log('[PaperTrading] Looking for currency:', currency);
-      console.log('[PaperTrading] Total balance:', balance.total);
-      console.log('[PaperTrading] Balance for', currency, ':', balance.total?.[currency]);
 
       const balanceValue = balance.total?.[currency] || balance.total?.['USD'] || this.config.initialBalance;
-      console.log('[PaperTrading] Returning balance:', balanceValue);
 
       return balanceValue;
     } catch (error) {
@@ -424,14 +425,18 @@ export class PaperTradingIntegration {
         side: pos.side === 'long' ? OrderSide.BUY : OrderSide.SELL,
         value: pos.notional || (pos.contracts * pos.entryPrice),
       }));
-    } catch (error) {
+    } catch (error: any) {
+      // Silently return empty array if adapter not initialized (happens during startup)
+      if (error.message?.includes('not initialized')) {
+        return [];
+      }
       console.error('[PaperTrading] Failed to fetch positions:', error);
       return [];
     }
   }
 
   /**
-   * Get paper trading orders
+   * Get paper trading orders (both open and recently closed)
    */
   async getOrders(): Promise<UnifiedOrder[]> {
     if (!this.paperAdapter) {
@@ -439,7 +444,10 @@ export class PaperTradingIntegration {
     }
 
     try {
-      const orders = await this.paperAdapter.fetchOpenOrders();
+      // Get both open and closed orders to show order history
+      const openOrders = await this.paperAdapter.fetchOpenOrders();
+      const closedOrders = await this.paperAdapter.fetchClosedOrders();
+      const orders = [...openOrders, ...closedOrders];
 
       // Convert to unified format
       return orders.map((order: any) => ({
@@ -487,7 +495,6 @@ export class PaperTradingIntegration {
    * Reset paper account
    */
   async reset(initialBalance: number = 1000000): Promise<void> {
-    console.log('[PaperTrading] Resetting account with balance:', initialBalance, 'currency: INR');
 
     if (this.paperAdapter) {
       await this.paperAdapter.resetAccount();
@@ -496,12 +503,6 @@ export class PaperTradingIntegration {
     // Update config with INR currency
     this.config.initialBalance = initialBalance;
     this.config.currency = 'INR'; // Ensure INR is set
-
-    console.log('[PaperTrading] Config after reset:', {
-      initialBalance: this.config.initialBalance,
-      currency: this.config.currency,
-      portfolioId: this.config.portfolioId
-    });
 
     // Reinitialize if enabled
     if (this.enabled) {

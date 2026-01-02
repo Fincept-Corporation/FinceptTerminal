@@ -20,6 +20,13 @@ export class KiteStandardAdapter extends BaseBrokerAdapter {
     super('kite');
   }
 
+  // ==================== BROKER CAPABILITIES ====================
+
+  getSupportedExchanges(): string[] {
+    // Kite (Zerodha) supports Indian equity markets
+    return ['NSE', 'BSE', 'MCX', 'NFO', 'CDS', 'BFO', 'BCD'];
+  }
+
   async initialize(credentials: BrokerCredentials): Promise<boolean> {
     this.credentials = credentials;
     this.setStatus(BrokerStatus.CONNECTING);

@@ -125,12 +125,10 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   useEffect(() => {
     const initDatabase = async () => {
       try {
-        console.log('[Dashboard] Initializing database for caching...');
         await sqliteService.initialize();
         const healthCheck = await sqliteService.healthCheck();
         if (healthCheck.healthy) {
           setDbInitialized(true);
-          console.log('[Dashboard] [OK] SQLite database initialized and ready for caching');
         } else {
           console.warn('[Dashboard] Database not healthy:', healthCheck.message);
           setDbInitialized(true); // Allow dashboard to load anyway
@@ -173,7 +171,6 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
     const updateWidth = () => {
       if (containerRef.current) {
         const width = containerRef.current.offsetWidth;
-        console.log('[Dashboard] Container width updated:', width);
         setContainerWidth(width);
       }
     };

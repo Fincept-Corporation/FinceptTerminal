@@ -8,6 +8,7 @@ import { authManager } from '../services/AuthManager';
 import { webSocketManager } from '../services/WebSocketManager';
 import { FyersStandardAdapter } from '../adapters/FyersStandardAdapter';
 import { KiteStandardAdapter } from '../adapters/KiteStandardAdapter';
+import { AlpacaAdapter } from '../adapters/AlpacaAdapter';
 
 /**
  * Register all broker adapters with AuthManager and WebSocketManager
@@ -29,6 +30,12 @@ export function registerAllAdapters(): void {
     webSocketManager.registerAdapter('kite', kiteAdapter);
     console.log('[AdapterRegistry] ✓ Kite adapter registered with AuthManager and WebSocketManager');
 
+    // Register Alpaca adapter
+    const alpacaAdapter = new AlpacaAdapter();
+    authManager.registerAdapter('alpaca', alpacaAdapter);
+    webSocketManager.registerAdapter('alpaca', alpacaAdapter);
+    console.log('[AdapterRegistry] ✓ Alpaca adapter registered with AuthManager and WebSocketManager');
+
     console.log('[AdapterRegistry] All adapters registered successfully');
   } catch (error) {
     console.error('[AdapterRegistry] Failed to register adapters:', error);
@@ -42,6 +49,7 @@ export function registerAllAdapters(): void {
 export function areAdaptersRegistered(): boolean {
   const fyersAdapter = authManager.getAdapter('fyers');
   const kiteAdapter = authManager.getAdapter('kite');
+  const alpacaAdapter = authManager.getAdapter('alpaca');
 
-  return !!(fyersAdapter && kiteAdapter);
+  return !!(fyersAdapter && kiteAdapter && alpacaAdapter);
 }

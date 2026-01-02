@@ -1,6 +1,7 @@
+import { useTerminalTheme } from '@/contexts/ThemeContext';
 import React, { useState } from 'react';
 import { PortfolioSummary, portfolioService } from '../../../../services/portfolioService';
-import { BLOOMBERG_COLORS, formatCurrency, formatPercent } from './utils';
+import { formatCurrency, formatPercent } from './utils';
 import { Shield, Target, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
 
 interface AdvancedAnalyticsViewProps {
@@ -8,7 +9,7 @@ interface AdvancedAnalyticsViewProps {
 }
 
 const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolioSummary }) => {
-  const { ORANGE, WHITE, RED, GREEN, GRAY, CYAN, YELLOW, BLUE } = BLOOMBERG_COLORS;
+  const { colors } = useTerminalTheme();
   const currency = portfolioSummary.portfolio.currency;
 
   // State for each analytics module
@@ -81,7 +82,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
   return (
     <div>
       <div style={{
-        color: ORANGE,
+        color: colors.primary,
         fontSize: '12px',
         fontWeight: 'bold',
         marginBottom: '16px'
@@ -93,7 +94,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
         {/* RISK METRICS PANEL */}
         <div style={{
           backgroundColor: 'rgba(255,0,0,0.05)',
-          border: `1px solid ${RED}`,
+          border: `1px solid ${colors.alert}`,
           padding: '16px',
           borderRadius: '4px'
         }}>
@@ -103,7 +104,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             alignItems: 'center',
             marginBottom: '12px'
           }}>
-            <div style={{ color: RED, fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ color: colors.alert, fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Shield size={14} />
               RISK METRICS
             </div>
@@ -111,7 +112,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
               onClick={loadRiskMetrics}
               disabled={loadingRisk}
               style={{
-                background: loadingRisk ? GRAY : RED,
+                background: loadingRisk ? colors.textMuted : colors.alert,
                 color: 'white',
                 border: 'none',
                 padding: '4px 12px',
@@ -128,48 +129,48 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             <div style={{ display: 'grid', gap: '8px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div>
-                  <div style={{ color: GRAY, fontSize: '8px' }}>VaR (95%)</div>
-                  <div style={{ color: RED, fontSize: '12px', fontWeight: 'bold' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '8px' }}>VaR (95%)</div>
+                  <div style={{ color: colors.alert, fontSize: '12px', fontWeight: 'bold' }}>
                     {(riskMetrics.var_95 * 100).toFixed(2)}%
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: GRAY, fontSize: '8px' }}>CVaR (95%)</div>
-                  <div style={{ color: RED, fontSize: '12px', fontWeight: 'bold' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '8px' }}>CVaR (95%)</div>
+                  <div style={{ color: colors.alert, fontSize: '12px', fontWeight: 'bold' }}>
                     {(riskMetrics.cvar_95 * 100).toFixed(2)}%
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: GRAY, fontSize: '8px' }}>VOLATILITY</div>
-                  <div style={{ color: YELLOW, fontSize: '12px', fontWeight: 'bold' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '8px' }}>VOLATILITY</div>
+                  <div style={{ color: colors.warning, fontSize: '12px', fontWeight: 'bold' }}>
                     {(riskMetrics.volatility * 100).toFixed(2)}%
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: GRAY, fontSize: '8px' }}>DOWNSIDE VOL</div>
-                  <div style={{ color: ORANGE, fontSize: '12px', fontWeight: 'bold' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '8px' }}>DOWNSIDE VOL</div>
+                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold' }}>
                     {(riskMetrics.downside_volatility * 100).toFixed(2)}%
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: GRAY, fontSize: '8px' }}>MAX DRAWDOWN</div>
-                  <div style={{ color: RED, fontSize: '12px', fontWeight: 'bold' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '8px' }}>MAX DRAWDOWN</div>
+                  <div style={{ color: colors.alert, fontSize: '12px', fontWeight: 'bold' }}>
                     {(riskMetrics.max_drawdown * 100).toFixed(2)}%
                   </div>
                 </div>
                 <div>
-                  <div style={{ color: GRAY, fontSize: '8px' }}>SKEWNESS</div>
-                  <div style={{ color: CYAN, fontSize: '12px', fontWeight: 'bold' }}>
+                  <div style={{ color: colors.textMuted, fontSize: '8px' }}>SKEWNESS</div>
+                  <div style={{ color: colors.accent, fontSize: '12px', fontWeight: 'bold' }}>
                     {riskMetrics.skewness.toFixed(2)}
                   </div>
                 </div>
               </div>
-              <div style={{ marginTop: '8px', fontSize: '8px', color: GRAY, borderTop: `1px solid ${GRAY}`, paddingTop: '8px' }}>
+              <div style={{ marginTop: '8px', fontSize: '8px', color: colors.textMuted, borderTop: `1px solid ${colors.textMuted}`, paddingTop: '8px' }}>
                 VaR = Value at Risk | CVaR = Conditional VaR (Expected Shortfall)
               </div>
             </div>
           ) : (
-            <div style={{ textAlign: 'center', color: GRAY, fontSize: '10px', padding: '20px' }}>
+            <div style={{ textAlign: 'center', color: colors.textMuted, fontSize: '10px', padding: '20px' }}>
               Click CALCULATE to analyze portfolio risk
             </div>
           )}
@@ -178,7 +179,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
         {/* ASSET ALLOCATION PANEL */}
         <div style={{
           backgroundColor: 'rgba(0,255,255,0.05)',
-          border: `1px solid ${CYAN}`,
+          border: `1px solid ${colors.accent}`,
           padding: '16px',
           borderRadius: '4px'
         }}>
@@ -188,7 +189,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             alignItems: 'center',
             marginBottom: '12px'
           }}>
-            <div style={{ color: CYAN, fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ color: colors.accent, fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Target size={14} />
               ASSET ALLOCATION
             </div>
@@ -196,7 +197,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '12px' }}>
             <div>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '2px' }}>AGE</div>
+              <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>AGE</div>
               <input
                 type="number"
                 value={age}
@@ -204,23 +205,23 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: colors.text,
                   padding: '4px',
                   fontSize: '10px'
                 }}
               />
             </div>
             <div>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '2px' }}>RISK</div>
+              <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>RISK</div>
               <select
                 value={riskTolerance}
                 onChange={(e) => setRiskTolerance(e.target.value as any)}
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: colors.text,
                   padding: '4px',
                   fontSize: '10px'
                 }}
@@ -231,7 +232,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
               </select>
             </div>
             <div>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '2px' }}>YEARS TO RET</div>
+              <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>YEARS TO RET</div>
               <input
                 type="number"
                 value={yearsToRetirement}
@@ -239,8 +240,8 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: colors.text,
                   padding: '4px',
                   fontSize: '10px'
                 }}
@@ -253,7 +254,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             disabled={loadingAllocation}
             style={{
               width: '100%',
-              background: loadingAllocation ? GRAY : CYAN,
+              background: loadingAllocation ? colors.textMuted : colors.accent,
               color: 'black',
               border: 'none',
               padding: '6px',
@@ -268,17 +269,17 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
 
           {assetAllocation && (
             <div style={{ fontSize: '9px' }}>
-              <div style={{ color: GREEN, fontWeight: 'bold', marginBottom: '8px' }}>
+              <div style={{ color: colors.success, fontWeight: 'bold', marginBottom: '8px' }}>
                 RECOMMENDED ALLOCATION
               </div>
               <div style={{ display: 'grid', gap: '4px' }}>
-                <div style={{ color: GRAY }}>
-                  Total Equity: <span style={{ color: GREEN, fontWeight: 'bold' }}>{assetAllocation.summary.total_equity.toFixed(1)}%</span>
+                <div style={{ color: colors.textMuted }}>
+                  Total Equity: <span style={{ color: colors.success, fontWeight: 'bold' }}>{assetAllocation.summary.total_equity.toFixed(1)}%</span>
                 </div>
-                <div style={{ color: GRAY }}>
-                  Total Fixed Income: <span style={{ color: YELLOW, fontWeight: 'bold' }}>{assetAllocation.summary.total_fixed_income.toFixed(1)}%</span>
+                <div style={{ color: colors.textMuted }}>
+                  Total Fixed Income: <span style={{ color: colors.warning, fontWeight: 'bold' }}>{assetAllocation.summary.total_fixed_income.toFixed(1)}%</span>
                 </div>
-                <div style={{ fontSize: '8px', color: GRAY, marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${GRAY}` }}>
+                <div style={{ fontSize: '8px', color: colors.textMuted, marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${colors.textMuted}` }}>
                   Equity: {assetAllocation.equities.domestic.toFixed(1)}% Domestic, {assetAllocation.equities.international.toFixed(1)}% Intl
                 </div>
               </div>
@@ -289,7 +290,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
         {/* RETIREMENT PLANNING PANEL */}
         <div style={{
           backgroundColor: 'rgba(0,200,0,0.05)',
-          border: `1px solid ${GREEN}`,
+          border: `1px solid ${colors.success}`,
           padding: '16px',
           borderRadius: '4px'
         }}>
@@ -299,7 +300,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             alignItems: 'center',
             marginBottom: '12px'
           }}>
-            <div style={{ color: GREEN, fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ color: colors.success, fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <TrendingDown size={14} />
               RETIREMENT PLANNING
             </div>
@@ -307,7 +308,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
             <div>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '2px' }}>CURRENT AGE</div>
+              <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>CURRENT AGE</div>
               <input
                 type="number"
                 value={currentAge}
@@ -315,15 +316,15 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: colors.text,
                   padding: '4px',
                   fontSize: '10px'
                 }}
               />
             </div>
             <div>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '2px' }}>RETIREMENT AGE</div>
+              <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>RETIREMENT AGE</div>
               <input
                 type="number"
                 value={retirementAge}
@@ -331,15 +332,15 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: colors.text,
                   padding: '4px',
                   fontSize: '10px'
                 }}
               />
             </div>
             <div>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '2px' }}>CURRENT SAVINGS</div>
+              <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>CURRENT SAVINGS</div>
               <input
                 type="number"
                 value={currentSavings}
@@ -347,15 +348,15 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: colors.text,
                   padding: '4px',
                   fontSize: '10px'
                 }}
               />
             </div>
             <div>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '2px' }}>ANNUAL CONTRIB</div>
+              <div style={{ color: colors.textMuted, fontSize: '8px', marginBottom: '2px' }}>ANNUAL CONTRIB</div>
               <input
                 type="number"
                 value={annualContribution}
@@ -363,8 +364,8 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
                 style={{
                   width: '100%',
                   background: 'rgba(0,0,0,0.3)',
-                  border: `1px solid ${GRAY}`,
-                  color: WHITE,
+                  border: `1px solid ${colors.textMuted}`,
+                  color: colors.text,
                   padding: '4px',
                   fontSize: '10px'
                 }}
@@ -377,7 +378,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             disabled={loadingRetirement}
             style={{
               width: '100%',
-              background: loadingRetirement ? GRAY : GREEN,
+              background: loadingRetirement ? colors.textMuted : colors.success,
               color: 'black',
               border: 'none',
               padding: '6px',
@@ -393,22 +394,22 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
           {retirementPlan && (
             <div style={{ fontSize: '9px' }}>
               <div style={{ display: 'grid', gap: '4px' }}>
-                <div style={{ color: GRAY }}>
-                  Projected Savings: <span style={{ color: GREEN, fontWeight: 'bold' }}>
+                <div style={{ color: colors.textMuted }}>
+                  Projected Savings: <span style={{ color: colors.success, fontWeight: 'bold' }}>
                     {formatCurrency(retirementPlan.projected_savings, currency)}
                   </span>
                 </div>
-                <div style={{ color: GRAY }}>
-                  Annual Income (4%): <span style={{ color: YELLOW, fontWeight: 'bold' }}>
+                <div style={{ color: colors.textMuted }}>
+                  Annual Income (4%): <span style={{ color: colors.warning, fontWeight: 'bold' }}>
                     {formatCurrency(retirementPlan.annual_income_4pct_rule, currency)}
                   </span>
                 </div>
-                <div style={{ color: GRAY }}>
-                  Monthly Income: <span style={{ color: CYAN, fontWeight: 'bold' }}>
+                <div style={{ color: colors.textMuted }}>
+                  Monthly Income: <span style={{ color: colors.accent, fontWeight: 'bold' }}>
                     {formatCurrency(retirementPlan.monthly_income, currency)}
                   </span>
                 </div>
-                <div style={{ fontSize: '8px', color: GRAY, marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${GRAY}` }}>
+                <div style={{ fontSize: '8px', color: colors.textMuted, marginTop: '4px', paddingTop: '4px', borderTop: `1px solid ${colors.textMuted}` }}>
                   Years to retirement: {retirementPlan.years_to_retirement} | Assumes 7% return, 3% inflation
                 </div>
               </div>
@@ -419,7 +420,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
         {/* BEHAVIORAL BIASES PANEL */}
         <div style={{
           backgroundColor: 'rgba(255,165,0,0.05)',
-          border: `1px solid ${ORANGE}`,
+          border: `1px solid ${colors.primary}`,
           padding: '16px',
           borderRadius: '4px'
         }}>
@@ -429,7 +430,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             alignItems: 'center',
             marginBottom: '12px'
           }}>
-            <div style={{ color: ORANGE, fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <AlertTriangle size={14} />
               BEHAVIORAL BIASES
             </div>
@@ -437,7 +438,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
               onClick={loadBehavioralAnalysis}
               disabled={loadingBehavioral}
               style={{
-                background: loadingBehavioral ? GRAY : ORANGE,
+                background: loadingBehavioral ? colors.textMuted : colors.primary,
                 color: 'black',
                 border: 'none',
                 padding: '4px 12px',
@@ -454,7 +455,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
             <div>
               <div style={{
                 fontSize: '10px',
-                color: behavioralBiases.bias_count === 0 ? GREEN : YELLOW,
+                color: behavioralBiases.bias_count === 0 ? colors.success : colors.warning,
                 fontWeight: 'bold',
                 marginBottom: '8px'
               }}>
@@ -462,7 +463,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
               </div>
 
               {behavioralBiases.bias_count === 0 ? (
-                <div style={{ color: GRAY, fontSize: '9px' }}>
+                <div style={{ color: colors.textMuted, fontSize: '9px' }}>
                   No significant biases detected
                 </div>
               ) : (
@@ -472,8 +473,8 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
                       key={idx}
                       style={{
                         padding: '8px',
-                        backgroundColor: bias.severity === 'High' ? 'rgba(255,0,0,0.1)' : 'rgba(255,165,0,0.1)',
-                        border: `1px solid ${bias.severity === 'High' ? RED : ORANGE}`,
+                        backgroundColor: bias.severity === 'High' ? '`${colors.alert}1a`' : '`${colors.primary}1a`',
+                        border: `1px solid ${bias.severity === 'High' ? colors.alert : colors.primary}`,
                         borderRadius: '2px'
                       }}
                     >
@@ -482,18 +483,18 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
                         justifyContent: 'space-between',
                         marginBottom: '4px'
                       }}>
-                        <span style={{ color: WHITE, fontSize: '9px', fontWeight: 'bold' }}>
+                        <span style={{ color: colors.text, fontSize: '9px', fontWeight: 'bold' }}>
                           {bias.bias}
                         </span>
                         <span style={{
-                          color: bias.severity === 'High' ? RED : YELLOW,
+                          color: bias.severity === 'High' ? colors.alert : colors.warning,
                           fontSize: '8px',
                           fontWeight: 'bold'
                         }}>
                           {bias.severity}
                         </span>
                       </div>
-                      <div style={{ color: GRAY, fontSize: '8px' }}>
+                      <div style={{ color: colors.textMuted, fontSize: '8px' }}>
                         {bias.description}
                       </div>
                     </div>
@@ -502,7 +503,7 @@ const AdvancedAnalyticsView: React.FC<AdvancedAnalyticsViewProps> = ({ portfolio
               )}
             </div>
           ) : (
-            <div style={{ textAlign: 'center', color: GRAY, fontSize: '10px', padding: '20px' }}>
+            <div style={{ textAlign: 'center', color: colors.textMuted, fontSize: '10px', padding: '20px' }}>
               Click ANALYZE to detect behavioral biases
             </div>
           )}

@@ -64,6 +64,7 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
+    "ethers": "^5.7.2",
     "fyers-web-sdk-v3": "^1.3.1",
     "handsontable": "^16.2.0",
     "hyperformula": "^3.1.1",

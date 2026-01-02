@@ -50,45 +50,33 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
 
   async connect(): Promise<void> {
     try {
-      console.log('[PaperTradingAdapter] Starting connection...');
-      console.log('[PaperTradingAdapter] Real adapter connected:', this.realAdapter.isConnected());
 
       // Try to connect to real exchange for market data, but don't fail if it doesn't work
       if (!this.realAdapter.isConnected()) {
-        console.log('[PaperTradingAdapter] Attempting to connect real adapter for market data...');
         try {
           await this.realAdapter.connect();
-          console.log('[PaperTradingAdapter] [OK] Real adapter connected successfully');
         } catch (error) {
           console.warn('[PaperTradingAdapter] [WARN] Real adapter connection failed:', error);
-          console.log('[PaperTradingAdapter] Paper trading will work in offline mode (market data unavailable)');
           // Don't throw - continue with paper adapter in offline mode
         }
       } else {
-        console.log('[PaperTradingAdapter] Real adapter already connected, skipping');
       }
 
       // Initialize or load portfolio
-      console.log('[PaperTradingAdapter] Initializing portfolio...');
       await this.initializePortfolio();
-      console.log('[PaperTradingAdapter] Portfolio initialized');
 
       // Start order monitoring only if real adapter is connected
       // (Without real adapter, we can't get market prices for matching)
       if (this.realAdapter.isConnected() && this.paperConfig.enableRealtimeUpdates !== false) {
-        console.log('[PaperTradingAdapter] Starting order monitoring...');
         // Reduced from 1000ms to 200ms for more responsive limit order fills
         this.matchingEngine.startMonitoring(this.paperConfig.priceUpdateInterval || 200);
       } else {
-        console.log('[PaperTradingAdapter] Skipping order monitoring (real adapter not connected)');
       }
 
       this._isConnected = true;
       this._isAuthenticated = true; // Paper trading doesn't require real auth
       this.initialized = true;
 
-      console.log('[PaperTradingAdapter] [OK] Connection complete!');
-      console.log('[PaperTradingAdapter] Mode:', this.realAdapter.isConnected() ? 'ONLINE (with market data)' : 'OFFLINE (no market data)');
       this.emit('connected', { exchange: this.id });
       this.emit('authenticated', { exchange: this.id });
     } catch (error) {
@@ -115,13 +103,11 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
    * - Clears trade history
    */
   async resetAccount(): Promise<void> {
-    console.log('[PaperTradingAdapter] Resetting account...');
     const portfolioId = this.paperConfig.portfolioId;
 
     try {
       // 1. Close all open positions
       const openPositions = await paperTradingDatabase.getPortfolioPositions(portfolioId, 'open');
-      console.log(`[PaperTradingAdapter] Closing ${openPositions.length} open positions...`);
       for (const position of openPositions) {
         await paperTradingDatabase.updatePosition(position.id, {
           status: 'closed',
@@ -131,27 +117,23 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
 
       // 2. Cancel all pending orders
       const pendingOrders = await paperTradingDatabase.getPendingOrders(portfolioId);
-      console.log(`[PaperTradingAdapter] Cancelling ${pendingOrders.length} pending orders...`);
       for (const order of pendingOrders) {
         await paperTradingDatabase.updateOrder(order.id, { status: 'canceled' });
       }
 
       // 3. Delete all positions (to clean up)
-      console.log('[PaperTradingAdapter] Deleting all positions...');
       const allPositions = await paperTradingDatabase.getPortfolioPositions(portfolioId);
       for (const position of allPositions) {
         await paperTradingDatabase.deletePosition(position.id);
       }
 
       // 4. Delete all orders (to clean up)
-      console.log('[PaperTradingAdapter] Deleting all orders...');
       const allOrders = await paperTradingDatabase.getPortfolioOrders(portfolioId);
       for (const order of allOrders) {
         await paperTradingDatabase.deleteOrder(order.id);
       }
 
       // 5. Delete all trades (to clean up)
-      console.log('[PaperTradingAdapter] Deleting all trades...');
       const allTrades = await paperTradingDatabase.getPortfolioTrades(portfolioId);
       for (const trade of allTrades) {
         await paperTradingDatabase.deleteTrade(trade.id);
@@ -159,13 +141,11 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
 
       // 6. Reset balance to initial capital
       const initialBalance = this.paperConfig.initialBalance;
-      console.log(`[PaperTradingAdapter] Resetting balance to ${initialBalance}...`);
       await paperTradingDatabase.updatePortfolioBalance(portfolioId, initialBalance);
 
       // 7. Reinitialize balance manager
       this.balanceManager = new PaperTradingBalance(this.paperConfig);
 
-      console.log('[PaperTradingAdapter] [OK] Account reset complete!');
       this.emit('reset', { exchange: this.id, portfolioId });
     } catch (error) {
       console.error('[PaperTradingAdapter] [FAIL] Reset failed:', error);
@@ -182,7 +162,6 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
 
   private async initializePortfolio(): Promise<void> {
     // Check database health first
-    console.log('[PaperTradingAdapter] Checking database health...');
     const isHealthy = await paperTradingDatabase.checkHealth();
 
     if (!isHealthy) {
@@ -192,13 +171,11 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
       );
     }
 
-    console.log('[PaperTradingAdapter] Database health check passed');
 
     const existing = await paperTradingDatabase.getPortfolio(this.paperConfig.portfolioId);
 
     if (!existing) {
       // Create new portfolio
-      console.log('[PaperTradingAdapter] Creating new portfolio:', this.paperConfig.portfolioId);
       await paperTradingDatabase.createPortfolio({
         id: this.paperConfig.portfolioId,
         name: this.paperConfig.portfolioName,
@@ -208,9 +185,7 @@ export class PaperTradingAdapter extends BaseExchangeAdapter {
         marginMode: this.paperConfig.marginMode,
         leverage: this.paperConfig.defaultLeverage,
       });
-      console.log('[PaperTradingAdapter] Portfolio created successfully');
     } else {
-      console.log('[PaperTradingAdapter] Using existing portfolio:', this.paperConfig.portfolioId);
     }
   }
 

@@ -75,7 +75,6 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
       await i18n.changeLanguage(lng);
       setCurrentLanguage(lng);
       localStorage.setItem('i18nextLng', lng);
-      console.log(`Language changed to: ${lng}`);
     } catch (error) {
       console.error('Failed to change language:', error);
     }

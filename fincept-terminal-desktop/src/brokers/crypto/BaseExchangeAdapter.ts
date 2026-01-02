@@ -64,7 +64,6 @@ export abstract class BaseExchangeAdapter implements IExchangeAdapter {
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[${this.id}] Connection attempt ${attempt + 1}/${maxRetries + 1}...`);
 
         // Reduce timeout for faster failure detection
         const originalTimeout = this.exchange.timeout;
@@ -77,7 +76,6 @@ export abstract class BaseExchangeAdapter implements IExchangeAdapter {
 
         this._isConnected = true;
         this.emit('connected', { exchange: this.id });
-        console.log(`[${this.id}] [OK] Connected successfully`);
         return;
       } catch (error: any) {
         lastError = error;
@@ -106,7 +104,6 @@ export abstract class BaseExchangeAdapter implements IExchangeAdapter {
         }
 
         if (attempt < maxRetries) {
-          console.log(`[${this.id}] Retrying in ${retryDelay}ms...`);
           await new Promise(resolve => setTimeout(resolve, retryDelay));
         }
       }

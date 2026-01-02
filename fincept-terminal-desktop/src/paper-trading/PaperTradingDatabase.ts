@@ -28,13 +28,10 @@ export class PaperTradingDatabase {
    */
   async checkHealth(): Promise<boolean> {
     try {
-      console.log('[PaperTradingDatabase] Performing health check...');
       // Use dedicated health check command
       const result = await invoke<boolean>('db_check_health');
-      console.log('[PaperTradingDatabase] Health check result:', result);
 
       if (result) {
-        console.log('[PaperTradingDatabase] ✓ Database is healthy and accessible');
         return true;
       } else {
         console.error('[PaperTradingDatabase] ✗ Database health check returned false');

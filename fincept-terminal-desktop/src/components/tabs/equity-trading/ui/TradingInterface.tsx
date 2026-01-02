@@ -7,7 +7,7 @@ import { BrokerType, OrderSide, OrderType, ProductType } from '../core/types';
 import { useOrderExecution } from '../hooks/useOrderExecution';
 import { RoutingStrategy } from '../core/OrderRouter';
 import { integrationManager } from '../integrations/IntegrationManager';
-import { fyersAdapter } from '@/brokers/stocks/fyers';
+import SymbolAutocomplete from './SymbolAutocomplete';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {
@@ -48,6 +48,9 @@ const TradingInterface: React.FC<TradingInterfaceProps> = ({ orderExecution, act
   const [selectedBrokers, setSelectedBrokers] = useState<BrokerType[]>([]);
   const [isFetchingPrice, setIsFetchingPrice] = useState(false);
   const [lastFetchedSymbol, setLastFetchedSymbol] = useState('');
+  const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [priceChange, setPriceChange] = useState<number>(0);
+  const [priceChangePercent, setPriceChangePercent] = useState<number>(0);
 
   // Check paper trading status
   useEffect(() => {
@@ -80,27 +83,30 @@ const TradingInterface: React.FC<TradingInterfaceProps> = ({ orderExecution, act
 
       setIsFetchingPrice(true);
       try {
-        // Format symbol for Fyers API: NSE:SBIN-EQ
-        const fyersSymbol = `${exchange}:${symbol}-EQ`;
-        console.log('[TradingInterface] Fetching price for:', fyersSymbol);
+        console.log('[TradingInterface] Fetching price for:', symbol, exchange);
 
-        const quotes = await fyersAdapter.market.getQuotes([fyersSymbol]);
+        // Use AuthManager to get authenticated Fyers adapter
+        const { authManager } = await import('../services/AuthManager');
+        const adapter = authManager.getAdapter('fyers');
 
-        if (quotes && quotes[fyersSymbol]) {
-          const quote = quotes[fyersSymbol];
-          const ltp = (typeof quote === 'object' && 'ltp' in quote ? quote.ltp : undefined) ||
-                      (typeof quote === 'object' && 'lp' in quote ? quote.lp : undefined) ||
-                      (typeof quote === 'object' && 'v' in quote && typeof quote.v === 'object' && 'lp' in quote.v ? quote.v.lp : undefined) ||
-                      (typeof quote === 'number' ? quote : undefined);
-          if (ltp) {
-            setPrice(ltp.toFixed(2));
-            setLastFetchedSymbol(symbolKey);
-            console.log('[TradingInterface] ✅ Auto-filled price:', ltp);
-          } else {
-            console.warn('[TradingInterface] ⚠️ No LTP in quote data');
-          }
+        if (!adapter) {
+          console.warn('[TradingInterface] ⚠️ Fyers adapter not available');
+          setIsFetchingPrice(false);
+          return;
+        }
+
+        // Format symbol for Fyers API: SBIN-EQ
+        const fyersSymbol = `${symbol}-EQ`;
+        console.log('[TradingInterface] Requesting quote for:', fyersSymbol, 'on', exchange);
+
+        const quote = await adapter.getQuote(fyersSymbol, exchange);
+
+        if (quote && quote.lastPrice && quote.lastPrice > 0) {
+          setPrice(quote.lastPrice.toFixed(2));
+          setLastFetchedSymbol(symbolKey);
+          console.log('[TradingInterface] ✅ Auto-filled price:', quote.lastPrice);
         } else {
-          console.warn('[TradingInterface] ⚠️ No quote data for', fyersSymbol);
+          console.warn('[TradingInterface] ⚠️ No valid quote data for', fyersSymbol);
         }
       } catch (error) {
         console.error('[TradingInterface] ❌ Failed to fetch price:', error);
@@ -115,9 +121,57 @@ const TradingInterface: React.FC<TradingInterfaceProps> = ({ orderExecution, act
     return () => clearTimeout(timeoutId);
   }, [symbol, exchange, lastFetchedSymbol]);
 
+  // Continuous live price updates every 3 seconds for selected symbol
+  useEffect(() => {
+    if (!symbol || symbol.length < 2) {
+      setLivePrice(null);
+      return;
+    }
+
+    const updateLivePrice = async () => {
+      try {
+        const { authManager } = await import('../services/AuthManager');
+        const adapter = authManager.getAdapter('fyers');
+
+        if (!adapter) return;
+
+        const fyersSymbol = `${symbol}-EQ`;
+        const quote = await adapter.getQuote(fyersSymbol, exchange);
+
+        if (quote && quote.lastPrice && quote.lastPrice > 0) {
+          const prevPrice = livePrice;
+          setLivePrice(quote.lastPrice);
+
+          // Calculate price change
+          if (prevPrice && prevPrice > 0) {
+            const change = quote.lastPrice - prevPrice;
+            const changePercent = (change / prevPrice) * 100;
+            setPriceChange(change);
+            setPriceChangePercent(changePercent);
+          } else if (quote.open && quote.open > 0) {
+            const change = quote.lastPrice - quote.open;
+            const changePercent = (change / quote.open) * 100;
+            setPriceChange(change);
+            setPriceChangePercent(changePercent);
+          }
+        }
+      } catch (error) {
+        // Silent fail - don't spam console for live updates
+      }
+    };
+
+    // Initial fetch
+    updateLivePrice();
+
+    // Update every 3 seconds
+    const interval = setInterval(updateLivePrice, 3000);
+
+    return () => clearInterval(interval);
+  }, [symbol, exchange, livePrice]);
+
   const handleSymbolChange = (newSymbol: string) => {
     setSymbol(newSymbol);
-    onSymbolChange?.(newSymbol, exchange);
+    // Don't call onSymbolChange here - only call it when symbol is explicitly selected
   };
 
   const handleExchangeChange = (newExchange: string) => {
@@ -128,6 +182,22 @@ const TradingInterface: React.FC<TradingInterfaceProps> = ({ orderExecution, act
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validation
+    if (!symbol || !symbol.trim()) {
+      alert('Please enter a symbol');
+      return;
+    }
+
+    if (!quantity || parseInt(quantity) <= 0) {
+      alert('Please enter a valid quantity');
+      return;
+    }
+
+    if (orderType === OrderType.LIMIT && (!price || parseFloat(price) <= 0)) {
+      alert('Please enter a valid price for limit order');
+      return;
+    }
 
     const order = {
       symbol,
@@ -141,14 +211,20 @@ const TradingInterface: React.FC<TradingInterfaceProps> = ({ orderExecution, act
     };
 
     try {
+      console.log('[TradingInterface] Placing order:', order);
       await orderExecution.placeOrder(order, strategy, selectedBrokers.length > 0 ? selectedBrokers : undefined);
+
+      // Show success message
+      alert(`✅ Order placed successfully!\n${side} ${quantity} ${symbol} @ ${orderType === OrderType.MARKET ? 'Market Price' : '₹' + price}`);
+
       // Reset form
       setSymbol('');
       setQuantity('');
       setPrice('');
       setTriggerPrice('');
-    } catch (error) {
-      console.error('Order failed:', error);
+    } catch (error: any) {
+      console.error('[TradingInterface] Order failed:', error);
+      alert(`❌ Order failed: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -182,6 +258,57 @@ const TradingInterface: React.FC<TradingInterfaceProps> = ({ orderExecution, act
   return (
     <div style={{ height: '100%', overflow: 'auto' }}>
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Live Price Ticker */}
+        {symbol && livePrice && (
+          <div style={{
+            backgroundColor: BLOOMBERG.PANEL_BG,
+            border: `1px solid ${BLOOMBERG.BORDER}`,
+            padding: '12px',
+            borderRadius: '4px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, fontFamily: 'monospace' }}>
+                  {exchange}:{symbol}
+                </div>
+                <div style={{ fontSize: '20px', fontWeight: 700, color: BLOOMBERG.WHITE, fontFamily: 'monospace', marginTop: '4px' }}>
+                  ₹{livePrice.toFixed(2)}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  color: priceChange >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                  fontFamily: 'monospace'
+                }}>
+                  {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}
+                </div>
+                <div style={{
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  color: priceChangePercent >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                  fontFamily: 'monospace',
+                  marginTop: '2px'
+                }}>
+                  {priceChangePercent >= 0 ? '+' : ''}{priceChangePercent.toFixed(2)}%
+                </div>
+              </div>
+            </div>
+            <div style={{
+              fontSize: '8px',
+              color: BLOOMBERG.GRAY,
+              fontFamily: 'monospace',
+              textAlign: 'center'
+            }}>
+              ● LIVE • Updates every 3s
+            </div>
+          </div>
+        )}
+
         {/* Paper Trading Indicator */}
         {isPaperTrading && (
           <div style={{
@@ -219,18 +346,21 @@ const TradingInterface: React.FC<TradingInterfaceProps> = ({ orderExecution, act
           </div>
         )}
 
-        {/* Symbol */}
+        {/* Symbol with Autocomplete */}
         <div>
           <label style={labelStyle}>SYMBOL</label>
-          <input
-            type="text"
+          <SymbolAutocomplete
             value={symbol}
-            onChange={(e) => handleSymbolChange(e.target.value.toUpperCase())}
+            onChange={(value) => handleSymbolChange(value)}
+            onSelect={(selectedSymbol) => {
+              handleSymbolChange(selectedSymbol);
+              // Trigger symbol change event for quote panel
+              if (onSymbolChange) {
+                onSymbolChange(selectedSymbol, exchange);
+              }
+            }}
+            placeholder="Type to search... (e.g., RELIANCE, TATAMOTORS)"
             style={inputStyle}
-            placeholder="RELIANCE"
-            required
-            onFocus={(e) => e.target.style.borderColor = BLOOMBERG.ORANGE}
-            onBlur={(e) => e.target.style.borderColor = BLOOMBERG.BORDER}
           />
         </div>
 

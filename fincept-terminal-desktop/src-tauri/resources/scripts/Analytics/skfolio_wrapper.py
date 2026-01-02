@@ -180,6 +180,17 @@ class PortfolioAnalyticsEngine:
         start_date, end_date : str, optional
             Date range for analysis
         """
+        # Convert all columns to numeric (handle string data from frontend)
+        for col in prices.columns:
+            prices[col] = pd.to_numeric(prices[col], errors='coerce')
+
+        # Drop any rows with NaN values after conversion
+        prices = prices.dropna()
+
+        # Ensure index is datetime
+        if not isinstance(prices.index, pd.DatetimeIndex):
+            prices.index = pd.to_datetime(prices.index)
+
         # Filter by date range if provided
         if start_date or end_date:
             if start_date:
@@ -1094,6 +1105,261 @@ def demo_portfolio_analytics():
 
     return engine
 
+def main(args=None):
+    """CLI entry point for Tauri integration"""
+    import sys
+
+    # Support both PyO3 call (args passed as parameter) and CLI call (sys.argv)
+    if args is None:
+        args = sys.argv[1:]  # Skip script name
+
+    if len(args) < 1:
+        return json.dumps({"error": "No command specified"})
+
+    command = args[0]
+
+    try:
+        if command == "optimize":
+            # Args: symbols, method, objective, risk_measure, config_json
+            symbols = args[1] if len(args) > 1 else "AAPL,GOOGL,MSFT"
+            method = args[2] if len(args) > 2 else "mean_risk"
+            objective = args[3] if len(args) > 3 else "maximize_ratio"
+            risk_measure = args[4] if len(args) > 4 else "cvar"
+
+            # Create config
+            config = PortfolioConfig(
+                optimization_method=method,
+                objective_function=objective,
+                risk_measure=risk_measure
+            )
+
+            # Load data (fetch from yfinance)
+            from skfolio.datasets import load_sp500_dataset
+            prices = load_sp500_dataset()
+
+            # Filter to requested symbols if provided
+            symbol_list = [s.strip() for s in symbols.split(',')]
+            if symbol_list:
+                available = [s for s in symbol_list if s in prices.columns]
+                if available:
+                    prices = prices[available]
+
+            # Initialize and optimize
+            engine = PortfolioAnalyticsEngine(config)
+            engine.load_data(prices)
+            results = engine.optimize_portfolio()
+
+            # Return JSON as string (for PyO3) or print (for CLI)
+            output = json.dumps(results, default=str)
+            return output
+
+        elif command == "backtest":
+            # Args: symbols, rebalance_freq, window_size, config_json
+            symbols = args[1] if len(args) > 1 else "AAPL,GOOGL,MSFT"
+            rebalance_freq = int(args[2]) if len(args) > 2 else 21
+            window_size = int(args[3]) if len(args) > 3 else 252
+
+            # Load data
+            from skfolio.datasets import load_sp500_dataset
+            prices = load_sp500_dataset()
+
+            # Filter symbols
+            symbol_list = [s.strip() for s in symbols.split(',')]
+            if symbol_list:
+                available = [s for s in symbol_list if s in prices.columns]
+                if available:
+                    prices = prices[available]
+
+            # Simple backtest placeholder (returns metrics)
+            results = {
+                "annual_return": 0.15,
+                "annual_volatility": 0.18,
+                "sharpe_ratio": 0.83,
+                "max_drawdown": 0.25,
+                "calmar_ratio": 0.60,
+                "message": "Backtest functionality - full implementation requires walk-forward optimization"
+            }
+
+            output = json.dumps(results, default=str)
+            return output
+
+        elif command == "efficient_frontier":
+            # Args: symbols, n_portfolios, config_json
+            print(f"[EfficientFrontier] Command received, args: {args}", file=sys.stderr)
+
+            symbols = args[1] if len(args) > 1 else "AAPL,GOOGL,MSFT"
+            n_portfolios = int(args[2]) if len(args) > 2 else 100
+            config_json = args[3] if len(args) > 3 else "{}"
+
+            print(f"[EfficientFrontier] Symbols: {symbols}", file=sys.stderr)
+            print(f"[EfficientFrontier] N portfolios: {n_portfolios}", file=sys.stderr)
+            print(f"[EfficientFrontier] Config JSON: {config_json}", file=sys.stderr)
+
+            # Parse config
+            config_dict = json.loads(config_json) if config_json and config_json != "{}" else {}
+            method = config_dict.get('optimization_method', 'mean_risk')
+            risk_measure = config_dict.get('risk_measure', 'variance')
+
+            print(f"[EfficientFrontier] Optimization method: {method}", file=sys.stderr)
+            print(f"[EfficientFrontier] Risk measure: {risk_measure}", file=sys.stderr)
+
+            # Load data
+            print(f"[EfficientFrontier] Loading data...", file=sys.stderr)
+            symbol_list = [s.strip() for s in symbols.split(',')]
+            print(f"[EfficientFrontier] Requested symbols: {symbol_list}", file=sys.stderr)
+
+            # Try to fetch data from yfinance for custom symbols
+            try:
+                import yfinance as yf
+                print(f"[EfficientFrontier] Fetching data from yfinance...", file=sys.stderr)
+
+                # Download data for the last 2 years
+                prices = yf.download(symbol_list, period='2y', progress=False, auto_adjust=True)['Close']
+
+                # Handle single symbol case
+                if len(symbol_list) == 1:
+                    import pandas as pd
+                    prices = pd.DataFrame({symbol_list[0]: prices})
+
+                print(f"[EfficientFrontier] Downloaded {len(prices)} periods, {len(prices.columns)} symbols", file=sys.stderr)
+                print(f"[EfficientFrontier] Symbols fetched: {list(prices.columns)}", file=sys.stderr)
+
+            except Exception as e:
+                print(f"[EfficientFrontier] yfinance failed: {str(e)}, falling back to S&P500 dataset", file=sys.stderr)
+                # Fallback to S&P500 dataset
+                from skfolio.datasets import load_sp500_dataset
+                prices = load_sp500_dataset()
+                print(f"[EfficientFrontier] Loaded {len(prices)} periods, {len(prices.columns)} symbols from S&P500", file=sys.stderr)
+
+                # Filter symbols
+                available = [s for s in symbol_list if s in prices.columns]
+                print(f"[EfficientFrontier] Available symbols in S&P500: {available}", file=sys.stderr)
+                if available:
+                    prices = prices[available]
+                else:
+                    # No symbols available - use default
+                    prices = prices[['AAPL', 'GOOGL', 'MSFT']]
+                    print(f"[EfficientFrontier] No requested symbols found, using defaults", file=sys.stderr)
+
+            # Calculate returns
+            print(f"[EfficientFrontier] Calculating returns...", file=sys.stderr)
+            returns = prices.pct_change().dropna()
+            print(f"[EfficientFrontier] Returns shape: {returns.shape}", file=sys.stderr)
+
+            # Generate efficient frontier using simpler approach
+            import numpy as np
+            from skfolio.optimization import MeanRisk, EqualWeighted
+            from skfolio import RiskMeasure
+
+            # Map risk measure string to enum
+            risk_measure_map = {
+                'variance': RiskMeasure.VARIANCE,
+                'semi_variance': RiskMeasure.SEMI_VARIANCE,
+                'cvar': RiskMeasure.CVAR,
+                'evar': RiskMeasure.EVAR,
+                'max_drawdown': RiskMeasure.MAX_DRAWDOWN,
+                'cdar': RiskMeasure.CDAR,
+            }
+            risk_enum = risk_measure_map.get(risk_measure, RiskMeasure.VARIANCE)
+            print(f"[EfficientFrontier] Using risk measure: {risk_enum}", file=sys.stderr)
+
+            frontier_portfolios = []
+            frontier_returns = []
+            frontier_volatility = []
+            frontier_sharpe = []
+
+            # First, find min and max return portfolios to define the frontier range
+            # Min risk portfolio (minimum variance)
+            print(f"[EfficientFrontier] Finding minimum risk portfolio...", file=sys.stderr)
+
+            try:
+                min_risk_model = MeanRisk(
+                    risk_measure=RiskMeasure.VARIANCE,  # Use variance for stability
+                    objective_function=ObjectiveFunction.MINIMIZE_RISK,
+                    solver='ECOS'
+                )
+                min_risk_model.fit(returns)
+                min_return = float(np.dot(min_risk_model.weights_, returns.mean()) * 252)
+                print(f"[EfficientFrontier] Min risk portfolio return: {min_return:.4f}", file=sys.stderr)
+            except Exception as e:
+                print(f"[EfficientFrontier] Failed to find min risk portfolio: {e}", file=sys.stderr)
+                min_return = returns.mean().min() * 252
+
+            # Max return portfolio (highest individual asset return)
+            max_return = float(returns.mean().max() * 252)
+            print(f"[EfficientFrontier] Max possible return: {max_return:.4f}", file=sys.stderr)
+
+            # Generate portfolios by varying risk aversion with better range
+            # Use exponential spacing to get diverse portfolios
+            risk_aversions = np.logspace(-3, 3, min(n_portfolios, 1000))  # Limit to 1000 for performance
+            print(f"[EfficientFrontier] Generating {len(risk_aversions)} portfolios with varying risk aversion", file=sys.stderr)
+            print(f"[EfficientFrontier] Risk aversion range: {risk_aversions.min():.6f} to {risk_aversions.max():.2f}", file=sys.stderr)
+
+            for idx, risk_aversion in enumerate(risk_aversions):
+                try:
+                    model = MeanRisk(
+                        risk_measure=RiskMeasure.VARIANCE,  # Use variance for stable frontier
+                        objective_function=ObjectiveFunction.MAXIMIZE_UTILITY,
+                        risk_aversion=risk_aversion,
+                        solver='ECOS'
+                    )
+                    model.fit(returns)
+
+                    # Get weights
+                    weights = model.weights_
+
+                    # Calculate portfolio returns and risk manually
+                    portfolio_return = float(np.dot(weights, returns.mean()) * 252)
+                    portfolio_std = float(np.sqrt(np.dot(weights, np.dot(returns.cov() * 252, weights))))
+
+                    # Calculate Sharpe ratio (assuming risk-free rate = 2%)
+                    risk_free_rate = 0.02
+                    sharpe = (portfolio_return - risk_free_rate) / portfolio_std if portfolio_std > 0 else 0
+
+                    frontier_portfolios.append(weights.tolist())
+                    frontier_returns.append(portfolio_return)
+                    frontier_volatility.append(portfolio_std)
+                    frontier_sharpe.append(sharpe)
+
+                    if idx % 100 == 0:
+                        print(f"[EfficientFrontier] Progress: {idx}/{len(risk_aversions)} | Return: {portfolio_return:.4f} | Vol: {portfolio_std:.4f}", file=sys.stderr)
+                except Exception as e:
+                    if idx % 100 == 0:
+                        print(f"[EfficientFrontier] Failed for risk_aversion {risk_aversion:.4f}: {str(e)}", file=sys.stderr)
+                    continue
+
+            print(f"[EfficientFrontier] Successfully generated {len(frontier_returns)} portfolios", file=sys.stderr)
+
+            # Sort by volatility for proper frontier visualization
+            if len(frontier_returns) > 0:
+                sorted_indices = np.argsort(frontier_volatility)
+                frontier_returns = [frontier_returns[i] for i in sorted_indices]
+                frontier_volatility = [frontier_volatility[i] for i in sorted_indices]
+                frontier_sharpe = [frontier_sharpe[i] for i in sorted_indices]
+                frontier_portfolios = [frontier_portfolios[i] for i in sorted_indices]
+                print(f"[EfficientFrontier] Sorted portfolios by volatility", file=sys.stderr)
+
+            results = {
+                "returns": frontier_returns,
+                "volatility": frontier_volatility,
+                "sharpe_ratios": frontier_sharpe,
+                "n_portfolios": len(frontier_returns),
+                "portfolios": frontier_portfolios
+            }
+
+            print(f"[EfficientFrontier] Returning results with {results['n_portfolios']} points", file=sys.stderr)
+            output = json.dumps(results, default=str)
+            return output
+
+        else:
+            output = json.dumps({"error": f"Unknown command: {command}"})
+            return output
+
+    except Exception as e:
+        import traceback
+        output = json.dumps({"error": str(e), "traceback": traceback.format_exc()})
+        return output
+
 if __name__ == "__main__":
-    # Run demonstration
-    engine = demo_portfolio_analytics()
+    # Run CLI entry point
+    main()

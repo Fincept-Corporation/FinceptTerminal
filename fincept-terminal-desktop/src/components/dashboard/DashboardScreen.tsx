@@ -53,6 +53,7 @@ const ReportBuilderTab = React.lazy(() => import('@/components/tabs/ReportBuilde
 const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping/DataMappingTab'));
 const ExcelTab = React.lazy(() => import('@/components/tabs/ExcelTab'));
 const Visualization3DTab = React.lazy(() => import('@/components/tabs/Visualization3DTab'));
+const PolymarketTab = React.lazy(() => import('@/components/tabs/PolymarketTabEnhanced'));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -230,9 +231,7 @@ function FinxeptTerminalContent() {
         // Auto-start MCP servers that have auto_start enabled
         try {
           const { mcpManager } = await import('@/services/mcpManager');
-          console.log('[App] Starting MCP auto-start servers...');
           await mcpManager.startAutoStartServers();
-          console.log('[App] MCP servers auto-started successfully');
         } catch (mcpError) {
           console.warn('[App] MCP auto-start failed (this is OK if no servers are configured):', mcpError);
         }
@@ -563,6 +562,7 @@ function FinxeptTerminalContent() {
   const tradingMenuItems = [
     { label: 'Crypto Trading', shortcut: 'F9', action: () => setActiveTab('trading') },
     { label: 'Equity Trading', action: () => setActiveTab('equity-trading') },
+    { label: 'Polymarket', action: () => setActiveTab('polymarket') },
     { label: 'Derivatives Pricing', action: () => setActiveTab('derivatives') },
     { label: 'Portfolio', shortcut: 'F4', action: () => setActiveTab('portfolio') },
     { label: 'Backtesting', shortcut: 'F5', action: () => setActiveTab('backtesting') },
@@ -1105,6 +1105,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="equity-trading" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <EquityTradingTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="polymarket" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <PolymarketTab />
               </React.Suspense>
             </TabsContent>
             <TabsContent value="derivatives" className="h-full m-0 p-0">

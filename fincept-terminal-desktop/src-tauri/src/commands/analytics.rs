@@ -27,7 +27,7 @@ pub async fn execute_pyportfolioopt(
 ) -> Result<String, String> {
     let mut cmd_args = vec![command];
     cmd_args.extend(args);
-    let script_path = get_script_path(&app, "Analytics/pyportfolioOpt_wrapper.py")?;
+    let script_path = get_script_path(&app, "Analytics/pyportfolioopt_wrapper/core.py")?;
     python_runtime::execute_python_script(&script_path, cmd_args)
 }
 

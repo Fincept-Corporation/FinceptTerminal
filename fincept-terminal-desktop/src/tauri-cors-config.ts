@@ -23,7 +23,6 @@ declare global {
 export function initTauriCORS() {
   // Only configure in Tauri environment (production build)
   if (window.CORSFetch) {
-    console.log('🔧 Configuring Tauri CORS plugin...');
 
     window.CORSFetch.config({
       // Include all HTTPS requests to bypass CORS
@@ -39,9 +38,7 @@ export function initTauriCORS() {
       }
     });
 
-    console.log('[OK] Tauri CORS plugin configured successfully');
   } else {
-    console.log('ℹ️  CORSFetch not available (running in dev mode with Vite proxy)');
   }
 }
 

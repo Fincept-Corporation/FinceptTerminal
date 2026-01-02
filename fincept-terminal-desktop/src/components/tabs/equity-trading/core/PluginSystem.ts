@@ -82,8 +82,6 @@ export class PluginManager {
     this.plugins.set(plugin.id, plugin);
     this.hooks.get(plugin.type)?.add(plugin.id);
 
-    console.log(`[PluginManager] Registered plugin: ${plugin.name} (${plugin.type})`);
-
     if (plugin.enabled && plugin.onEnable) {
       await plugin.onEnable();
     }
@@ -119,7 +117,6 @@ export class PluginManager {
       await plugin.onEnable();
     }
 
-    console.log(`[PluginManager] Enabled plugin: ${plugin.name}`);
   }
 
   /**
@@ -135,7 +132,6 @@ export class PluginManager {
       await plugin.onDisable();
     }
 
-    console.log(`[PluginManager] Disabled plugin: ${plugin.name}`);
   }
 
   /**

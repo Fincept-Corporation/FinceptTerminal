@@ -1,6 +1,22 @@
 // CRITICAL: Must be first import to set up Buffer/process globals
 import './polyfills/init'
 
+// Suppress development warnings in console
+if (process.env.NODE_ENV === 'production') {
+  const originalWarn = console.warn;
+  console.warn = (...args) => {
+    const message = args[0]?.toString() || '';
+    // Suppress React DevTools and Three.js warnings
+    if (message.includes('Download the React DevTools') ||
+        message.includes('three.js') ||
+        message.includes('three.min.js') ||
+        message.includes('Multiple instances of Three.js')) {
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+}
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
@@ -33,7 +49,6 @@ try {
   const fastTradeAdapter = new FastTradeAdapter();
   backtestingRegistry.registerProvider(fastTradeAdapter);
 
-  console.log('[App] Registered backtesting providers:', backtestingRegistry.listProviders());
 } catch (error) {
   console.error('[App] Failed to register backtesting providers:', error);
 }

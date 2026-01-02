@@ -452,6 +452,60 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_monitor_alerts_triggered_at ON monitor_alerts(triggered_at DESC);
         CREATE INDEX IF NOT EXISTS idx_monitor_alerts_condition_id ON monitor_alerts(condition_id);
+
+        -- Portfolio Management tables
+        CREATE TABLE IF NOT EXISTS portfolios (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            owner TEXT NOT NULL,
+            currency TEXT DEFAULT 'USD',
+            description TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS portfolio_assets (
+            id TEXT PRIMARY KEY,
+            portfolio_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            quantity REAL NOT NULL,
+            avg_buy_price REAL NOT NULL,
+            first_purchase_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            last_updated TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS portfolio_transactions (
+            id TEXT PRIMARY KEY,
+            portfolio_id TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            transaction_type TEXT NOT NULL CHECK (transaction_type IN ('BUY', 'SELL', 'DIVIDEND', 'SPLIT')),
+            quantity REAL NOT NULL,
+            price REAL NOT NULL,
+            total_value REAL NOT NULL,
+            transaction_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            notes TEXT,
+            FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+            id TEXT PRIMARY KEY,
+            portfolio_id TEXT NOT NULL,
+            total_value REAL NOT NULL,
+            total_cost_basis REAL NOT NULL,
+            total_pnl REAL NOT NULL,
+            total_pnl_percent REAL NOT NULL,
+            snapshot_data TEXT NOT NULL,
+            snapshot_date TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_portfolio_assets_portfolio ON portfolio_assets(portfolio_id);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_assets_symbol ON portfolio_assets(symbol);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_portfolio ON portfolio_transactions(portfolio_id);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_date ON portfolio_transactions(transaction_date DESC);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_portfolio ON portfolio_snapshots(portfolio_id);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_date ON portfolio_snapshots(snapshot_date DESC);
         ",
     )?;
 

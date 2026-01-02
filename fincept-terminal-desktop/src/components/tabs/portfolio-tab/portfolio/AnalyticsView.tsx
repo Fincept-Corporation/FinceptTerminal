@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { PortfolioSummary, portfolioService } from '../../../../services/portfolioService';
-import { BLOOMBERG_COLORS, formatCurrency, formatPercent, formatLargeNumber } from './utils';
+import { formatCurrency, formatPercent, formatLargeNumber } from './utils';
 import { TrendingUp, Activity, PieChart, Target } from 'lucide-react';
+import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, GRID_TEMPLATES } from '../bloombergStyles';
 
 interface AnalyticsViewProps {
   portfolioSummary: PortfolioSummary;
 }
 
 const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
-  const { ORANGE, WHITE, RED, GREEN, GRAY, CYAN, YELLOW, BLUE } = BLOOMBERG_COLORS;
   const currency = portfolioSummary.portfolio.currency;
 
   // Advanced analytics state
@@ -74,63 +74,74 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
   };
 
   return (
-    <div>
+    <div style={{
+      height: '100%',
+      backgroundColor: BLOOMBERG.DARK_BG,
+      padding: SPACING.DEFAULT,
+      overflow: 'auto',
+      fontFamily: TYPOGRAPHY.MONO
+    }}>
+      {/* Section Header */}
       <div style={{
-        color: ORANGE,
-        fontSize: '12px',
-        fontWeight: 'bold',
-        marginBottom: '16px'
+        ...COMMON_STYLES.sectionHeader,
+        marginBottom: SPACING.LARGE
       }}>
         PORTFOLIO ANALYTICS DASHBOARD
       </div>
 
-      {/* Advanced Analytics Section */}
+      {/* Error Message */}
       {analyticsError && (
         <div style={{
-          backgroundColor: 'rgba(255,0,0,0.1)',
-          border: `1px solid ${RED}`,
-          padding: '12px',
-          marginBottom: '16px',
-          borderRadius: '4px',
-          color: RED,
-          fontSize: '10px'
+          backgroundColor: BLOOMBERG.PANEL_BG,
+          border: BORDERS.RED,
+          padding: SPACING.DEFAULT,
+          marginBottom: SPACING.LARGE,
+          color: BLOOMBERG.RED,
+          fontSize: TYPOGRAPHY.BODY
         }}>
           [WARN] {analyticsError}
         </div>
       )}
 
+      {/* Advanced Analytics Section */}
       {advancedMetrics && (
         <div style={{
-          backgroundColor: 'rgba(100,150,250,0.05)',
-          border: `1px solid ${BLUE}`,
-          padding: '16px',
-          marginBottom: '20px',
-          borderRadius: '4px'
+          backgroundColor: BLOOMBERG.PANEL_BG,
+          border: BORDERS.CYAN,
+          padding: SPACING.LARGE,
+          marginBottom: SPACING.LARGE,
         }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '12px'
+            marginBottom: SPACING.DEFAULT
           }}>
-            <div style={{ color: BLUE, fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Activity size={14} />
+            <div style={{
+              color: BLOOMBERG.CYAN,
+              fontSize: TYPOGRAPHY.DEFAULT,
+              fontWeight: TYPOGRAPHY.BOLD,
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.SMALL
+            }}>
+              <Activity size={14} color={BLOOMBERG.CYAN} />
               ADVANCED PORTFOLIO METRICS (Python-Powered)
             </div>
             <button
               onClick={loadOptimization}
               disabled={loadingOptimization}
               style={{
-                background: loadingOptimization ? GRAY : ORANGE,
-                color: 'black',
+                background: loadingOptimization ? BLOOMBERG.MUTED : BLOOMBERG.ORANGE,
+                color: BLOOMBERG.DARK_BG,
                 border: 'none',
-                padding: '4px 12px',
-                fontSize: '9px',
-                fontWeight: 'bold',
+                padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+                fontSize: TYPOGRAPHY.SMALL,
+                fontWeight: TYPOGRAPHY.BOLD,
                 cursor: loadingOptimization ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px'
+                gap: SPACING.SMALL
               }}
             >
               <Target size={10} />
@@ -138,45 +149,55 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
+          <div style={{ ...GRID_TEMPLATES.autoFit('120px'), marginTop: SPACING.DEFAULT }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '4px' }}>SHARPE RATIO</div>
-              <div style={{ color: GREEN, fontSize: '14px', fontWeight: 'bold' }}>
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.TINY, marginBottom: SPACING.SMALL }}>SHARPE RATIO</div>
+              <div style={{ color: BLOOMBERG.GREEN, fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD }}>
                 {advancedMetrics.sharpe_ratio?.toFixed(2) || 'N/A'}
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '4px' }}>VOLATILITY</div>
-              <div style={{ color: YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.TINY, marginBottom: SPACING.SMALL }}>VOLATILITY</div>
+              <div style={{ color: BLOOMBERG.YELLOW, fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD }}>
                 {(advancedMetrics.portfolio_volatility * 100)?.toFixed(2)}%
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '4px' }}>VaR (95%)</div>
-              <div style={{ color: RED, fontSize: '14px', fontWeight: 'bold' }}>
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.TINY, marginBottom: SPACING.SMALL }}>VaR (95%)</div>
+              <div style={{ color: BLOOMBERG.RED, fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD }}>
                 {(advancedMetrics.value_at_risk_95 * 100)?.toFixed(2)}%
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '4px' }}>MAX DRAWDOWN</div>
-              <div style={{ color: RED, fontSize: '14px', fontWeight: 'bold' }}>
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.TINY, marginBottom: SPACING.SMALL }}>MAX DRAWDOWN</div>
+              <div style={{ color: BLOOMBERG.RED, fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD }}>
                 {(advancedMetrics.max_drawdown * 100)?.toFixed(2)}%
               </div>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: GRAY, fontSize: '8px', marginBottom: '4px' }}>ANNUAL RETURN</div>
-              <div style={{ color: GREEN, fontSize: '14px', fontWeight: 'bold' }}>
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.TINY, marginBottom: SPACING.SMALL }}>ANNUAL RETURN</div>
+              <div style={{ color: BLOOMBERG.GREEN, fontSize: TYPOGRAPHY.HEADING, fontWeight: TYPOGRAPHY.BOLD }}>
                 {(advancedMetrics.portfolio_return * 100)?.toFixed(2)}%
               </div>
             </div>
           </div>
 
+          {/* Optimized Portfolio Section */}
           {optimizedPortfolio && (
-            <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${GRAY}` }}>
-              <div style={{ color: ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '8px' }}>
+            <div style={{
+              marginTop: SPACING.DEFAULT,
+              paddingTop: SPACING.DEFAULT,
+              borderTop: BORDERS.STANDARD
+            }}>
+              <div style={{
+                color: BLOOMBERG.ORANGE,
+                fontSize: TYPOGRAPHY.BODY,
+                fontWeight: TYPOGRAPHY.BOLD,
+                marginBottom: SPACING.MEDIUM
+              }}>
                 OPTIMIZED ALLOCATION (Max Sharpe Ratio)
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '8px' }}>
+              <div style={{ ...GRID_TEMPLATES.autoFit('120px') }}>
                 {portfolioSummary.holdings.map((holding, idx) => {
                   const currentWeight = holding.weight;
                   const optimalWeight = (optimizedPortfolio.optimal_weights[idx] * 100);
@@ -184,35 +205,46 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
 
                   return (
                     <div key={holding.id} style={{
-                      padding: '6px',
-                      backgroundColor: 'rgba(255,165,0,0.05)',
-                      border: `1px solid ${ORANGE}`,
-                      borderRadius: '2px'
+                      padding: SPACING.SMALL,
+                      backgroundColor: BLOOMBERG.DARK_BG,
+                      border: BORDERS.STANDARD,
                     }}>
-                      <div style={{ color: CYAN, fontSize: '9px', fontWeight: 'bold', marginBottom: '2px' }}>
+                      <div style={{
+                        color: BLOOMBERG.CYAN,
+                        fontSize: TYPOGRAPHY.SMALL,
+                        fontWeight: TYPOGRAPHY.BOLD,
+                        marginBottom: SPACING.TINY
+                      }}>
                         {holding.symbol}
                       </div>
-                      <div style={{ fontSize: '8px', color: GRAY }}>
+                      <div style={{ fontSize: TYPOGRAPHY.TINY, color: BLOOMBERG.GRAY }}>
                         Current: {currentWeight.toFixed(1)}%
                       </div>
-                      <div style={{ fontSize: '8px', color: YELLOW }}>
+                      <div style={{ fontSize: TYPOGRAPHY.TINY, color: BLOOMBERG.YELLOW }}>
                         Optimal: {optimalWeight.toFixed(1)}%
                       </div>
-                      <div style={{ fontSize: '8px', color: diff > 0 ? GREEN : diff < 0 ? RED : GRAY }}>
+                      <div style={{
+                        fontSize: TYPOGRAPHY.TINY,
+                        color: diff > 0 ? BLOOMBERG.GREEN : diff < 0 ? BLOOMBERG.RED : BLOOMBERG.GRAY
+                      }}>
                         {diff > 0 ? '↑' : diff < 0 ? '↓' : '='} {Math.abs(diff).toFixed(1)}%
                       </div>
                     </div>
                   );
                 })}
               </div>
-              <div style={{ marginTop: '8px', fontSize: '9px', color: GRAY }}>
-                Optimized Sharpe: <span style={{ color: GREEN, fontWeight: 'bold' }}>
+              <div style={{
+                marginTop: SPACING.MEDIUM,
+                fontSize: TYPOGRAPHY.SMALL,
+                color: BLOOMBERG.GRAY
+              }}>
+                Optimized Sharpe: <span style={{ color: BLOOMBERG.GREEN, fontWeight: TYPOGRAPHY.BOLD }}>
                   {optimizedPortfolio.sharpe_ratio?.toFixed(2)}
                 </span> |
-                Expected Return: <span style={{ color: GREEN, fontWeight: 'bold' }}>
+                Expected Return: <span style={{ color: BLOOMBERG.GREEN, fontWeight: TYPOGRAPHY.BOLD }}>
                   {(optimizedPortfolio.expected_return * 100)?.toFixed(2)}%
                 </span> |
-                Volatility: <span style={{ color: YELLOW, fontWeight: 'bold' }}>
+                Volatility: <span style={{ color: BLOOMBERG.YELLOW, fontWeight: TYPOGRAPHY.BOLD }}>
                   {(optimizedPortfolio.volatility * 100)?.toFixed(2)}%
                 </span>
               </div>
@@ -221,16 +253,16 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
         </div>
       )}
 
+      {/* Loading State */}
       {loadingMetrics && !advancedMetrics && (
         <div style={{
-          backgroundColor: 'rgba(100,150,250,0.05)',
-          border: `1px solid ${BLUE}`,
-          padding: '16px',
-          marginBottom: '20px',
-          borderRadius: '4px',
+          backgroundColor: BLOOMBERG.PANEL_BG,
+          border: BORDERS.CYAN,
+          padding: SPACING.LARGE,
+          marginBottom: SPACING.LARGE,
           textAlign: 'center',
-          color: CYAN,
-          fontSize: '10px'
+          color: BLOOMBERG.CYAN,
+          fontSize: TYPOGRAPHY.BODY
         }}>
           Loading advanced analytics...
         </div>
@@ -238,120 +270,142 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
 
       {/* Key Metrics Grid */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: '12px',
-        marginBottom: '20px'
+        ...GRID_TEMPLATES.fourColumn,
+        marginBottom: SPACING.LARGE
       }}>
         {/* Total Value Card */}
         <div style={{
-          backgroundColor: 'rgba(255,165,0,0.1)',
-          border: `1px solid ${ORANGE}`,
-          padding: '12px',
-          borderRadius: '4px'
+          ...COMMON_STYLES.metricCard,
+          border: BORDERS.ORANGE
         }}>
-          <div style={{ color: GRAY, fontSize: '9px', marginBottom: '4px' }}>TOTAL VALUE</div>
-          <div style={{ color: YELLOW, fontSize: '16px', fontWeight: 'bold' }}>
+          <div style={{ ...COMMON_STYLES.dataLabel }}>TOTAL VALUE</div>
+          <div style={{
+            color: BLOOMBERG.YELLOW,
+            fontSize: TYPOGRAPHY.LARGE,
+            fontWeight: TYPOGRAPHY.BOLD
+          }}>
             {formatLargeNumber(totalValue, currency)}
           </div>
-          <div style={{ color: GRAY, fontSize: '8px', marginTop: '2px' }}>
+          <div style={{
+            color: BLOOMBERG.GRAY,
+            fontSize: TYPOGRAPHY.TINY,
+            marginTop: SPACING.TINY
+          }}>
             {formatCurrency(totalValue, currency)}
           </div>
         </div>
 
         {/* Total P&L Card */}
         <div style={{
-          backgroundColor: totalPnL >= 0 ? 'rgba(0,200,0,0.1)' : 'rgba(255,0,0,0.1)',
-          border: `1px solid ${totalPnL >= 0 ? GREEN : RED}`,
-          padding: '12px',
-          borderRadius: '4px'
+          ...COMMON_STYLES.metricCard,
+          border: totalPnL >= 0 ? BORDERS.GREEN : BORDERS.RED
         }}>
-          <div style={{ color: GRAY, fontSize: '9px', marginBottom: '4px' }}>TOTAL P&L</div>
-          <div style={{ color: totalPnL >= 0 ? GREEN : RED, fontSize: '16px', fontWeight: 'bold' }}>
-            {formatLargeNumber(totalPnL, currency)}
+          <div style={{ ...COMMON_STYLES.dataLabel }}>TOTAL P&L</div>
+          <div style={{
+            color: totalPnL >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            fontSize: TYPOGRAPHY.LARGE,
+            fontWeight: TYPOGRAPHY.BOLD
+          }}>
+            {totalPnL >= 0 ? '+' : ''}{formatLargeNumber(totalPnL, currency)}
           </div>
-          <div style={{ color: totalPnL >= 0 ? GREEN : RED, fontSize: '10px', marginTop: '2px' }}>
+          <div style={{
+            color: totalPnL >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            fontSize: TYPOGRAPHY.BODY,
+            marginTop: SPACING.TINY
+          }}>
             {formatPercent(totalPnLPercent)}
           </div>
         </div>
 
         {/* Day Change Card */}
         <div style={{
-          backgroundColor: dayChange >= 0 ? 'rgba(0,200,0,0.1)' : 'rgba(255,0,0,0.1)',
-          border: `1px solid ${dayChange >= 0 ? GREEN : RED}`,
-          padding: '12px',
-          borderRadius: '4px'
+          ...COMMON_STYLES.metricCard,
+          border: dayChange >= 0 ? BORDERS.GREEN : BORDERS.RED
         }}>
-          <div style={{ color: GRAY, fontSize: '9px', marginBottom: '4px' }}>DAY CHANGE</div>
-          <div style={{ color: dayChange >= 0 ? GREEN : RED, fontSize: '16px', fontWeight: 'bold' }}>
-            {formatLargeNumber(dayChange, currency)}
+          <div style={{ ...COMMON_STYLES.dataLabel }}>DAY CHANGE</div>
+          <div style={{
+            color: dayChange >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            fontSize: TYPOGRAPHY.LARGE,
+            fontWeight: TYPOGRAPHY.BOLD
+          }}>
+            {dayChange >= 0 ? '+' : ''}{formatLargeNumber(dayChange, currency)}
           </div>
-          <div style={{ color: dayChange >= 0 ? GREEN : RED, fontSize: '10px', marginTop: '2px' }}>
+          <div style={{
+            color: dayChange >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+            fontSize: TYPOGRAPHY.BODY,
+            marginTop: SPACING.TINY
+          }}>
             {formatPercent(dayChangePercent)}
           </div>
         </div>
 
         {/* Positions Card */}
         <div style={{
-          backgroundColor: 'rgba(0,255,255,0.1)',
-          border: `1px solid ${CYAN}`,
-          padding: '12px',
-          borderRadius: '4px'
+          ...COMMON_STYLES.metricCard,
+          border: BORDERS.CYAN
         }}>
-          <div style={{ color: GRAY, fontSize: '9px', marginBottom: '4px' }}>POSITIONS</div>
-          <div style={{ color: CYAN, fontSize: '16px', fontWeight: 'bold' }}>
+          <div style={{ ...COMMON_STYLES.dataLabel }}>POSITIONS</div>
+          <div style={{
+            color: BLOOMBERG.CYAN,
+            fontSize: TYPOGRAPHY.LARGE,
+            fontWeight: TYPOGRAPHY.BOLD
+          }}>
             {positionsCount}
           </div>
-          <div style={{ color: GRAY, fontSize: '8px', marginTop: '2px' }}>
+          <div style={{
+            color: BLOOMBERG.GRAY,
+            fontSize: TYPOGRAPHY.TINY,
+            marginTop: SPACING.TINY
+          }}>
             Active Holdings
           </div>
         </div>
       </div>
 
       {/* Performance Section */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+      <div style={{ ...GRID_TEMPLATES.threeColumn, marginBottom: SPACING.LARGE }}>
         {/* Top Gainers */}
         <div>
           <div style={{
-            color: GREEN,
-            fontSize: '11px',
-            fontWeight: 'bold',
-            marginBottom: '8px',
-            paddingBottom: '4px',
-            borderBottom: `1px solid ${GREEN}`
+            color: BLOOMBERG.GREEN,
+            fontSize: TYPOGRAPHY.DEFAULT,
+            fontWeight: TYPOGRAPHY.BOLD,
+            marginBottom: SPACING.MEDIUM,
+            paddingBottom: SPACING.SMALL,
+            borderBottom: BORDERS.GREEN
           }}>
             TOP GAINERS
           </div>
           {topGainers.length === 0 ? (
-            <div style={{ color: GRAY, fontSize: '10px', padding: '8px' }}>No data</div>
+            <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY, padding: SPACING.MEDIUM }}>No data</div>
           ) : (
             topGainers.map(holding => (
               <div
                 key={holding.id}
                 style={{
-                  padding: '8px',
-                  marginBottom: '4px',
-                  backgroundColor: 'rgba(0,200,0,0.05)',
-                  borderLeft: `3px solid ${GREEN}`,
+                  padding: SPACING.MEDIUM,
+                  marginBottom: SPACING.SMALL,
+                  backgroundColor: BLOOMBERG.PANEL_BG,
+                  borderLeft: `3px solid ${BLOOMBERG.GREEN}`,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center'
                 }}
               >
                 <div>
-                  <div style={{ color: CYAN, fontSize: '10px', fontWeight: 'bold' }}>
+                  <div style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                     {holding.symbol}
                   </div>
-                  <div style={{ color: GRAY, fontSize: '8px' }}>
+                  <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.TINY }}>
                     {formatCurrency(holding.market_value, currency)}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: GREEN, fontSize: '10px', fontWeight: 'bold' }}>
-                    {formatPercent(holding.unrealized_pnl_percent)}
+                  <div style={{ color: BLOOMBERG.GREEN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
+                    +{formatPercent(holding.unrealized_pnl_percent)}
                   </div>
-                  <div style={{ color: GREEN, fontSize: '8px' }}>
-                    {formatCurrency(holding.unrealized_pnl, currency)}
+                  <div style={{ color: BLOOMBERG.GREEN, fontSize: TYPOGRAPHY.TINY }}>
+                    +{formatCurrency(holding.unrealized_pnl, currency)}
                   </div>
                 </div>
               </div>
@@ -362,44 +416,44 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
         {/* Top Losers */}
         <div>
           <div style={{
-            color: RED,
-            fontSize: '11px',
-            fontWeight: 'bold',
-            marginBottom: '8px',
-            paddingBottom: '4px',
-            borderBottom: `1px solid ${RED}`
+            color: BLOOMBERG.RED,
+            fontSize: TYPOGRAPHY.DEFAULT,
+            fontWeight: TYPOGRAPHY.BOLD,
+            marginBottom: SPACING.MEDIUM,
+            paddingBottom: SPACING.SMALL,
+            borderBottom: BORDERS.RED
           }}>
             TOP LOSERS
           </div>
           {topLosers.length === 0 ? (
-            <div style={{ color: GRAY, fontSize: '10px', padding: '8px' }}>No data</div>
+            <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY, padding: SPACING.MEDIUM }}>No data</div>
           ) : (
             topLosers.map(holding => (
               <div
                 key={holding.id}
                 style={{
-                  padding: '8px',
-                  marginBottom: '4px',
-                  backgroundColor: 'rgba(255,0,0,0.05)',
-                  borderLeft: `3px solid ${RED}`,
+                  padding: SPACING.MEDIUM,
+                  marginBottom: SPACING.SMALL,
+                  backgroundColor: BLOOMBERG.PANEL_BG,
+                  borderLeft: `3px solid ${BLOOMBERG.RED}`,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center'
                 }}
               >
                 <div>
-                  <div style={{ color: CYAN, fontSize: '10px', fontWeight: 'bold' }}>
+                  <div style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                     {holding.symbol}
                   </div>
-                  <div style={{ color: GRAY, fontSize: '8px' }}>
+                  <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.TINY }}>
                     {formatCurrency(holding.market_value, currency)}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: RED, fontSize: '10px', fontWeight: 'bold' }}>
+                  <div style={{ color: BLOOMBERG.RED, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                     {formatPercent(holding.unrealized_pnl_percent)}
                   </div>
-                  <div style={{ color: RED, fontSize: '8px' }}>
+                  <div style={{ color: BLOOMBERG.RED, fontSize: TYPOGRAPHY.TINY }}>
                     {formatCurrency(holding.unrealized_pnl, currency)}
                   </div>
                 </div>
@@ -411,46 +465,46 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
         {/* Largest Positions */}
         <div>
           <div style={{
-            color: BLUE,
-            fontSize: '11px',
-            fontWeight: 'bold',
-            marginBottom: '8px',
-            paddingBottom: '4px',
-            borderBottom: `1px solid ${BLUE}`
+            color: BLOOMBERG.CYAN,
+            fontSize: TYPOGRAPHY.DEFAULT,
+            fontWeight: TYPOGRAPHY.BOLD,
+            marginBottom: SPACING.MEDIUM,
+            paddingBottom: SPACING.SMALL,
+            borderBottom: BORDERS.CYAN
           }}>
             LARGEST POSITIONS
           </div>
           {largestPositions.length === 0 ? (
-            <div style={{ color: GRAY, fontSize: '10px', padding: '8px' }}>No data</div>
+            <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.BODY, padding: SPACING.MEDIUM }}>No data</div>
           ) : (
             largestPositions.map(holding => (
               <div
                 key={holding.id}
                 style={{
-                  padding: '8px',
-                  marginBottom: '4px',
-                  backgroundColor: 'rgba(100,150,250,0.05)',
-                  borderLeft: `3px solid ${BLUE}`,
+                  padding: SPACING.MEDIUM,
+                  marginBottom: SPACING.SMALL,
+                  backgroundColor: BLOOMBERG.PANEL_BG,
+                  borderLeft: `3px solid ${BLOOMBERG.CYAN}`,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center'
                 }}
               >
                 <div>
-                  <div style={{ color: CYAN, fontSize: '10px', fontWeight: 'bold' }}>
+                  <div style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                     {holding.symbol}
                   </div>
-                  <div style={{ color: GRAY, fontSize: '8px' }}>
+                  <div style={{ color: BLOOMBERG.GRAY, fontSize: TYPOGRAPHY.TINY }}>
                     Weight: {holding.weight.toFixed(1)}%
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ color: WHITE, fontSize: '10px', fontWeight: 'bold' }}>
+                  <div style={{ color: BLOOMBERG.WHITE, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                     {formatLargeNumber(holding.market_value, currency)}
                   </div>
                   <div style={{
-                    color: holding.unrealized_pnl >= 0 ? GREEN : RED,
-                    fontSize: '8px'
+                    color: holding.unrealized_pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                    fontSize: TYPOGRAPHY.TINY
                   }}>
                     {formatPercent(holding.unrealized_pnl_percent)}
                   </div>
@@ -462,14 +516,14 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
       </div>
 
       {/* Allocation Summary */}
-      <div style={{ marginTop: '20px' }}>
+      <div>
         <div style={{
-          color: ORANGE,
-          fontSize: '11px',
-          fontWeight: 'bold',
-          marginBottom: '12px',
-          paddingBottom: '4px',
-          borderBottom: `1px solid ${ORANGE}`
+          color: BLOOMBERG.ORANGE,
+          fontSize: TYPOGRAPHY.DEFAULT,
+          fontWeight: TYPOGRAPHY.BOLD,
+          marginBottom: SPACING.DEFAULT,
+          paddingBottom: SPACING.SMALL,
+          borderBottom: BORDERS.ORANGE
         }}>
           ALLOCATION BREAKDOWN
         </div>
@@ -477,55 +531,53 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ portfolioSummary }) => {
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-          gap: '8px'
+          gap: SPACING.MEDIUM
         }}>
           {portfolioSummary.holdings.map(holding => (
             <div
               key={holding.id}
               style={{
-                padding: '8px',
-                backgroundColor: 'rgba(255,255,255,0.02)',
-                border: `1px solid rgba(120,120,120,0.3)`,
-                borderRadius: '2px'
+                padding: SPACING.MEDIUM,
+                backgroundColor: BLOOMBERG.PANEL_BG,
+                border: BORDERS.STANDARD,
               }}
             >
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '4px'
+                marginBottom: SPACING.SMALL
               }}>
-                <span style={{ color: CYAN, fontSize: '10px', fontWeight: 'bold' }}>
+                <span style={{ color: BLOOMBERG.CYAN, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                   {holding.symbol}
                 </span>
-                <span style={{ color: YELLOW, fontSize: '10px', fontWeight: 'bold' }}>
+                <span style={{ color: BLOOMBERG.YELLOW, fontSize: TYPOGRAPHY.BODY, fontWeight: TYPOGRAPHY.BOLD }}>
                   {holding.weight.toFixed(1)}%
                 </span>
               </div>
               <div style={{
                 width: '100%',
                 height: '4px',
-                backgroundColor: 'rgba(120,120,120,0.3)',
-                borderRadius: '2px',
+                backgroundColor: BLOOMBERG.BORDER,
                 overflow: 'hidden'
               }}>
                 <div style={{
                   width: `${holding.weight}%`,
                   height: '100%',
-                  backgroundColor: YELLOW,
+                  backgroundColor: BLOOMBERG.YELLOW,
                   transition: 'width 0.3s'
                 }} />
               </div>
               <div style={{
-                marginTop: '4px',
+                marginTop: SPACING.SMALL,
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '8px',
-                color: GRAY
+                fontSize: TYPOGRAPHY.TINY,
+                color: BLOOMBERG.GRAY
               }}>
                 <span>{formatLargeNumber(holding.market_value, currency)}</span>
                 <span style={{
-                  color: holding.unrealized_pnl >= 0 ? GREEN : RED
+                  color: holding.unrealized_pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
                 }}>
                   {formatPercent(holding.unrealized_pnl_percent)}
                 </span>

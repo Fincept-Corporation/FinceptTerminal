@@ -3,6 +3,7 @@ pub mod market_data;
 pub mod polygon;
 pub mod yfinance;
 pub mod alphavantage;
+pub mod pmdarima;
 pub mod government_us;
 pub mod congress_gov;
 pub mod oecd;
@@ -63,6 +64,15 @@ pub mod agents;
 
 // Portfolio Analytics
 pub mod portfolio;
+
+// Portfolio Management (CRUD operations)
+pub mod portfolio_management;
+
+// skfolio - Advanced Portfolio Optimization
+pub mod skfolio;
+
+// PyPortfolioOpt - Portfolio Optimization with PyO3
+pub mod pyportfolioopt;
 
 // Technical Analysis
 pub mod technical_analysis;

@@ -28,9 +28,11 @@ interface PositionsPanelProps {
   positions: UnifiedPosition[];
   loading: boolean;
   onRefresh: () => void;
+  onClose?: (brokerId: string, symbol: string, quantity: number) => void;
+  realtimePrices?: Map<string, number>; // Real-time prices from WebSocket
 }
 
-const PositionsPanel: React.FC<PositionsPanelProps> = ({ positions, loading, onRefresh }) => {
+const PositionsPanel: React.FC<PositionsPanelProps> = ({ positions, loading, onRefresh, onClose, realtimePrices }) => {
   const getSideColor = (side: OrderSide) => {
     return side === OrderSide.BUY ? BLOOMBERG.GREEN : BLOOMBERG.RED;
   };
@@ -39,10 +41,43 @@ const PositionsPanel: React.FC<PositionsPanelProps> = ({ positions, loading, onR
     return pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED;
   };
 
-  const totalPnL = positions.reduce((sum, pos) => sum + pos.pnl, 0);
-  const totalValue = positions.reduce((sum, pos) => sum + pos.value, 0);
+  // Helper to get real-time LTP for a position
+  const getRealtimeLTP = (position: UnifiedPosition): number => {
+    if (realtimePrices && realtimePrices.has(position.symbol)) {
+      return realtimePrices.get(position.symbol)!;
+    }
+    return position.lastPrice;
+  };
+
+  // Helper to calculate real-time P&L
+  const getRealtimePnL = (position: UnifiedPosition): number => {
+    const ltp = getRealtimeLTP(position);
+    const quantity = Math.abs(position.quantity);
+    const avgPrice = position.averagePrice;
+
+    if (position.side === OrderSide.BUY) {
+      return (ltp - avgPrice) * quantity;
+    } else {
+      return (avgPrice - ltp) * quantity;
+    }
+  };
+
+  // Calculate totals with real-time prices
+  const totalPnL = positions.reduce((sum, pos) => {
+    const realtimePnL = realtimePrices ? getRealtimePnL(pos) : pos.pnl;
+    return sum + realtimePnL;
+  }, 0);
+
+  const totalValue = positions.reduce((sum, pos) => {
+    const ltp = getRealtimeLTP(pos);
+    return sum + (ltp * Math.abs(pos.quantity));
+  }, 0);
+
   const totalRealized = positions.reduce((sum, pos) => sum + pos.realizedPnl, 0);
-  const totalUnrealized = positions.reduce((sum, pos) => sum + pos.unrealizedPnl, 0);
+  const totalUnrealized = positions.reduce((sum, pos) => {
+    const realtimePnL = realtimePrices ? getRealtimePnL(pos) : pos.unrealizedPnl;
+    return sum + realtimePnL;
+  }, 0);
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', fontFamily: 'monospace' }}>
@@ -173,11 +208,26 @@ const PositionsPanel: React.FC<PositionsPanelProps> = ({ positions, loading, onR
                   letterSpacing: '0.5px',
                   textTransform: 'uppercase'
                 }}>P&L %</th>
+                {onClose && (
+                  <th style={{
+                    padding: '8px 12px',
+                    textAlign: 'center',
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    color: BLOOMBERG.GRAY,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase'
+                  }}>ACTIONS</th>
+                )}
               </tr>
             </thead>
             <tbody>
               {positions.map((position, idx) => {
-                const pnlPercent = (position.pnl / (position.averagePrice * Math.abs(position.quantity))) * 100;
+                // Use real-time prices if available
+                const ltp = getRealtimeLTP(position);
+                const currentPnL = realtimePrices ? getRealtimePnL(position) : position.pnl;
+                const currentValue = ltp * Math.abs(position.quantity);
+                const pnlPercent = (currentPnL / (position.averagePrice * Math.abs(position.quantity))) * 100;
 
                 return (
                   <tr
@@ -252,7 +302,7 @@ const PositionsPanel: React.FC<PositionsPanelProps> = ({ positions, loading, onR
                       color: BLOOMBERG.YELLOW,
                       textAlign: 'right'
                     }}>
-                      ₹{position.lastPrice.toFixed(2)}
+                      ₹{ltp.toFixed(2)}
                     </td>
                     <td style={{
                       padding: '10px 12px',
@@ -261,16 +311,16 @@ const PositionsPanel: React.FC<PositionsPanelProps> = ({ positions, loading, onR
                       color: BLOOMBERG.WHITE,
                       textAlign: 'right'
                     }}>
-                      ₹{position.value.toFixed(2)}
+                      ₹{currentValue.toFixed(2)}
                     </td>
                     <td style={{
                       padding: '10px 12px',
                       fontSize: '12px',
                       fontWeight: 700,
-                      color: getPnLColor(position.pnl),
+                      color: getPnLColor(currentPnL),
                       textAlign: 'right'
                     }}>
-                      {position.pnl >= 0 ? '+' : ''}₹{position.pnl.toFixed(2)}
+                      {currentPnL >= 0 ? '+' : ''}₹{currentPnL.toFixed(2)}
                     </td>
                     <td style={{
                       padding: '10px 12px',
@@ -285,10 +335,10 @@ const PositionsPanel: React.FC<PositionsPanelProps> = ({ positions, loading, onR
                       padding: '10px 12px',
                       fontSize: '11px',
                       fontWeight: 600,
-                      color: getPnLColor(position.unrealizedPnl),
+                      color: getPnLColor(currentPnL),
                       textAlign: 'right'
                     }}>
-                      {position.unrealizedPnl >= 0 ? '+' : ''}₹{position.unrealizedPnl.toFixed(2)}
+                      {currentPnL >= 0 ? '+' : ''}₹{currentPnL.toFixed(2)}
                     </td>
                     <td style={{
                       padding: '10px 12px',
@@ -308,6 +358,32 @@ const PositionsPanel: React.FC<PositionsPanelProps> = ({ positions, loading, onR
                       )}
                       {pnlPercent >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%
                     </td>
+                    {onClose && (
+                      <td style={{
+                        padding: '10px 12px',
+                        textAlign: 'center'
+                      }}>
+                        <button
+                          onClick={() => onClose(position.brokerId, position.symbol, position.quantity)}
+                          style={{
+                            padding: '4px 12px',
+                            backgroundColor: BLOOMBERG.RED,
+                            border: 'none',
+                            color: BLOOMBERG.WHITE,
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            fontFamily: 'monospace',
+                            letterSpacing: '0.5px',
+                            transition: 'opacity 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                        >
+                          CLOSE
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}

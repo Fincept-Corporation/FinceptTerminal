@@ -89,6 +89,23 @@ export class BrokerOrchestrator {
     return adapter;
   }
 
+  /**
+   * Get brokers that support a specific exchange
+   */
+  getBrokersForExchange(exchange: string): BrokerType[] {
+    const supportedBrokers: BrokerType[] = [];
+
+    for (const brokerId of this.activeBrokers) {
+      const adapter = authManager.getAdapter(brokerId);
+      if (adapter && adapter.supportsExchange(exchange)) {
+        supportedBrokers.push(brokerId);
+      }
+    }
+
+    console.log(`[Orchestrator] Brokers supporting ${exchange}:`, supportedBrokers);
+    return supportedBrokers;
+  }
+
   // ==================== PARALLEL ORDER EXECUTION ====================
 
   /**
@@ -294,10 +311,14 @@ export class BrokerOrchestrator {
       brokers: {
         fyers: { latency: -1 },
         kite: { latency: -1 },
+        alpaca: { latency: -1 },
       },
     };
 
-    const promises = this.getActiveBrokers().map(async (brokerId) => {
+    // CRITICAL: Only compare quotes from brokers that support this exchange
+    const supportedBrokers = this.getBrokersForExchange(exchange);
+
+    const promises = supportedBrokers.map(async (brokerId) => {
       const adapter = this.getAdapter(brokerId);
       if (!adapter) return { brokerId, quote: null, latency: -1 };
 
@@ -344,10 +365,14 @@ export class BrokerOrchestrator {
       brokers: {
         fyers: { latency: -1 },
         kite: { latency: -1 },
+        alpaca: { latency: -1 },
       },
     };
 
-    const promises = this.getActiveBrokers().map(async (brokerId) => {
+    // CRITICAL: Only compare depth from brokers that support this exchange
+    const supportedBrokers = this.getBrokersForExchange(exchange);
+
+    const promises = supportedBrokers.map(async (brokerId) => {
       const adapter = this.getAdapter(brokerId);
       if (!adapter) return { brokerId, depth: null, latency: -1 };
 

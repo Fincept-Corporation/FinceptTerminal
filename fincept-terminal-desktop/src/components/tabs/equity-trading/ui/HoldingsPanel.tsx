@@ -35,6 +35,19 @@ const HoldingsPanel: React.FC<HoldingsPanelProps> = ({ holdings, loading, onRefr
     return pnl >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED;
   };
 
+  const getCurrency = (brokerId: string) => {
+    return brokerId === 'alpaca' ? '$' : '₹';
+  };
+
+  // Group holdings by broker
+  const groupedHoldings = holdings.reduce((acc, holding) => {
+    if (!acc[holding.brokerId]) {
+      acc[holding.brokerId] = [];
+    }
+    acc[holding.brokerId].push(holding);
+    return acc;
+  }, {} as Record<string, UnifiedHolding[]>);
+
   const totalInvested = holdings.reduce((sum, h) => sum + h.investedValue, 0);
   const totalCurrent = holdings.reduce((sum, h) => sum + h.currentValue, 0);
   const totalPnL = holdings.reduce((sum, h) => sum + h.pnl, 0);
@@ -163,133 +176,155 @@ const HoldingsPanel: React.FC<HoldingsPanelProps> = ({ holdings, loading, onRefr
               </tr>
             </thead>
             <tbody>
-              {holdings.map((holding, idx) => {
-                const dayChange = holding.lastPrice - (holding.currentValue / holding.quantity);
-                const dayChangePercent = ((dayChange / (holding.currentValue / holding.quantity)) * 100) || 0;
-
-                return (
-                  <tr
-                    key={`${holding.brokerId}-${holding.id}-${idx}`}
-                    style={{
-                      borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                      backgroundColor: 'transparent',
-                      transition: 'background-color 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    <td style={{
-                      padding: '10px 12px',
+              {Object.entries(groupedHoldings).map(([brokerId, brokerHoldings]) => (
+                <React.Fragment key={brokerId}>
+                  {/* Broker Section Header */}
+                  <tr style={{ backgroundColor: BLOOMBERG.HEADER_BG }}>
+                    <td colSpan={11} style={{
+                      padding: '8px 12px',
                       fontSize: '10px',
                       fontWeight: 700,
                       color: BLOOMBERG.ORANGE,
+                      letterSpacing: '0.5px',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.3px'
+                      borderTop: `2px solid ${BLOOMBERG.BORDER}`,
+                      borderBottom: `1px solid ${BLOOMBERG.BORDER}`
                     }}>
-                      {holding.brokerId}
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: BLOOMBERG.WHITE,
-                      letterSpacing: '0.3px'
-                    }}>
-                      {holding.symbol}
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '9px',
-                      fontWeight: 600,
-                      color: BLOOMBERG.MUTED,
-                      letterSpacing: '0.3px'
-                    }}>
-                      {holding.isin || '-'}
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: BLOOMBERG.WHITE,
-                      textAlign: 'right'
-                    }}>
-                      {holding.quantity}
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: BLOOMBERG.CYAN,
-                      textAlign: 'right'
-                    }}>
-                      ₹{holding.averagePrice.toFixed(2)}
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: BLOOMBERG.YELLOW,
-                      textAlign: 'right'
-                    }}>
-                      ₹{holding.lastPrice.toFixed(2)}
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: BLOOMBERG.GRAY,
-                      textAlign: 'right'
-                    }}>
-                      ₹{holding.investedValue.toFixed(2)}
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: BLOOMBERG.WHITE,
-                      textAlign: 'right'
-                    }}>
-                      ₹{holding.currentValue.toFixed(2)}
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '12px',
-                      fontWeight: 700,
-                      color: getPnLColor(holding.pnl),
-                      textAlign: 'right'
-                    }}>
-                      {holding.pnl >= 0 ? '+' : ''}₹{holding.pnl.toFixed(2)}
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: getPnLColor(holding.pnlPercentage),
-                      textAlign: 'right',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'flex-end',
-                      gap: '4px'
-                    }}>
-                      {holding.pnlPercentage >= 0 ? (
-                        <TrendingUp size={12} />
-                      ) : (
-                        <TrendingDown size={12} />
-                      )}
-                      {holding.pnlPercentage >= 0 ? '+' : ''}{holding.pnlPercentage.toFixed(2)}%
-                    </td>
-                    <td style={{
-                      padding: '10px 12px',
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      color: getPnLColor(dayChange),
-                      textAlign: 'right'
-                    }}>
-                      {dayChange >= 0 ? '+' : ''}₹{dayChange.toFixed(2)} ({dayChangePercent >= 0 ? '+' : ''}{dayChangePercent.toFixed(2)}%)
+                      {brokerId.toUpperCase()} ({getCurrency(brokerId)} {brokerId === 'alpaca' ? 'USD' : 'INR'})
                     </td>
                   </tr>
-                );
-              })}
+
+                  {/* Holdings for this broker */}
+                  {brokerHoldings.map((holding, idx) => {
+                    const dayChange = holding.lastPrice - (holding.currentValue / holding.quantity);
+                    const dayChangePercent = ((dayChange / (holding.currentValue / holding.quantity)) * 100) || 0;
+                    const currency = getCurrency(holding.brokerId);
+
+                    return (
+                      <tr
+                        key={`${holding.brokerId}-${holding.id}-${idx}`}
+                        style={{
+                          borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+                          backgroundColor: 'transparent',
+                          transition: 'background-color 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          color: BLOOMBERG.ORANGE,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.3px'
+                        }}>
+                          {holding.brokerId}
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: BLOOMBERG.WHITE,
+                          letterSpacing: '0.3px'
+                        }}>
+                          {holding.symbol}
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '9px',
+                          fontWeight: 600,
+                          color: BLOOMBERG.MUTED,
+                          letterSpacing: '0.3px'
+                        }}>
+                          {holding.isin || '-'}
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: BLOOMBERG.WHITE,
+                          textAlign: 'right'
+                        }}>
+                          {holding.quantity}
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: BLOOMBERG.CYAN,
+                          textAlign: 'right'
+                        }}>
+                          {currency}{holding.averagePrice.toFixed(2)}
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: BLOOMBERG.YELLOW,
+                          textAlign: 'right'
+                        }}>
+                          {currency}{holding.lastPrice.toFixed(2)}
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: BLOOMBERG.GRAY,
+                          textAlign: 'right'
+                        }}>
+                          {currency}{holding.investedValue.toFixed(2)}
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: BLOOMBERG.WHITE,
+                          textAlign: 'right'
+                        }}>
+                          {currency}{holding.currentValue.toFixed(2)}
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          color: getPnLColor(holding.pnl),
+                          textAlign: 'right'
+                        }}>
+                          {holding.pnl >= 0 ? '+' : ''}{currency}{holding.pnl.toFixed(2)}
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          color: getPnLColor(holding.pnlPercentage),
+                          textAlign: 'right',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'flex-end',
+                          gap: '4px'
+                        }}>
+                          {holding.pnlPercentage >= 0 ? (
+                            <TrendingUp size={12} />
+                          ) : (
+                            <TrendingDown size={12} />
+                          )}
+                          {holding.pnlPercentage >= 0 ? '+' : ''}{holding.pnlPercentage.toFixed(2)}%
+                        </td>
+                        <td style={{
+                          padding: '10px 12px',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          color: getPnLColor(dayChange),
+                          textAlign: 'right'
+                        }}>
+                          {dayChange >= 0 ? '+' : ''}{currency}{dayChange.toFixed(2)} ({dayChangePercent >= 0 ? '+' : ''}{dayChangePercent.toFixed(2)}%)
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
             </tbody>
           </table>
         )}

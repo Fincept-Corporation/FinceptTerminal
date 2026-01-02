@@ -81,7 +81,6 @@ if (typeof window !== 'undefined') {
   }
 }
 
-console.log('[Polyfills] Initialized: Buffer, global, process, module');
 
 // Export to ensure this module runs
 export {};

@@ -31,10 +31,18 @@
     "dialog:allow-save",
     "fs:allow-read-file",
     "fs:allow-write-file",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-mkdir",
+    "fs:allow-appdata-read",
+    "fs:allow-appdata-write",
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-appdata-write-recursive",
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "**" }
+        { "path": "**" },
+        { "path": "$APPDATA/**" }
       ]
     },
     "updater:default",

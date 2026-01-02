@@ -3,11 +3,11 @@
  * Professional multi-broker trading interface for equities
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity, TrendingUp, TrendingDown, DollarSign, BarChart3,
   RefreshCw, Settings, Wifi, WifiOff, ChevronDown, ChevronUp,
-  Minimize2, Maximize2, Clock, AlertCircle, Target
+  Minimize2, Maximize2, Clock, AlertCircle, Target, RotateCcw, X
 } from 'lucide-react';
 import { useBrokerState } from './hooks/useBrokerState';
 import { useOrderExecution } from './hooks/useOrderExecution';
@@ -40,6 +40,7 @@ const BLOOMBERG = {
   DARK_BG: '#000000',
   PANEL_BG: '#0F0F0F',
   HEADER_BG: '#1A1A1A',
+  INPUT_BG: '#0A0A0A',
   CYAN: '#00E5FF',
   YELLOW: '#FFD700',
   BLUE: '#0088FF',
@@ -53,24 +54,26 @@ type SubTab = 'trading' | 'config' | 'comparison' | 'backtesting' | 'performance
 type TradingMode = 'live' | 'paper';
 
 // Helper function to safely get numeric value from stats
-const getStatValue = (stats: any, key: string, defaultValue: number = 0): number => {
+const getStatValue = (stats: any, key: string, defaultValue: number | undefined = 0): number => {
   const value = stats?.stats?.[key] ?? stats?.[key] ?? defaultValue;
-  return typeof value === 'number' ? value : defaultValue;
+  return typeof value === 'number' ? value : (defaultValue ?? 0);
 };
 
 const EquityTradingTab: React.FC = () => {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('trading');
-  const [selectedBrokers, setSelectedBrokers] = useState<BrokerType[]>(['fyers', 'kite']);
+  const [selectedBrokers, setSelectedBrokers] = useState<BrokerType[]>(['fyers', 'kite', 'alpaca']);
   const [tradingMode, setTradingMode] = useState<TradingMode>('paper');
   const [currentTime, setCurrentTime] = useState(new Date());
   const [isBottomPanelMinimized, setIsBottomPanelMinimized] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetAmount, setResetAmount] = useState('1000000');
 
   const brokerState = useBrokerState(selectedBrokers);
   const orderExecution = useOrderExecution();
 
   // Register adapters on component mount (runs once)
   useEffect(() => {
-    console.log('[EquityTradingTab] Registering broker adapters...');
     try {
       registerAllAdapters();
     } catch (error) {
@@ -82,15 +85,11 @@ const EquityTradingTab: React.FC = () => {
   useEffect(() => {
     const initializePaperTrading = async () => {
       try {
-        console.log('[EquityTradingTab] Initializing integration manager...');
         await integrationManager.initialize();
-        console.log('[EquityTradingTab] ✅ Integration manager initialized');
 
         // Auto-enable paper trading on mount
         if (!integrationManager.isPaperTradingEnabled()) {
-          console.log('[EquityTradingTab] Auto-enabling paper trading...');
           await integrationManager.enablePaperTrading();
-          console.log('[EquityTradingTab] ✅ Paper trading enabled automatically');
         }
       } catch (error) {
         console.error('[EquityTradingTab] ❌ Failed to initialize integration manager:', error);
@@ -99,6 +98,26 @@ const EquityTradingTab: React.FC = () => {
 
     initializePaperTrading();
   }, []);
+
+  // Handle paper trading account reset
+  const handleResetPaperTrading = async () => {
+    try {
+      const amount = parseFloat(resetAmount);
+      if (isNaN(amount) || amount <= 0) {
+        alert('Please enter a valid amount');
+        return;
+      }
+
+      await integrationManager.resetPaperAccount(amount);
+      setShowResetModal(false);
+
+      // Show success message
+      alert(`Paper trading account reset successfully!\nNew balance: ₹${amount.toLocaleString('en-IN')}`);
+    } catch (error: any) {
+      console.error('[EquityTradingTab] ❌ Failed to reset paper trading:', error);
+      alert(`Failed to reset account: ${error.message}`);
+    }
+  };
 
   // Update time
   useEffect(() => {
@@ -248,6 +267,55 @@ const EquityTradingTab: React.FC = () => {
             </button>
           </div>
 
+          {/* WebSocket Status for Paper Trading */}
+          {tradingMode === 'paper' && (
+            <>
+              <div style={{ height: '20px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: wsConnected ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                  animation: wsConnected ? 'pulse 2s infinite' : 'none',
+                }} />
+                <span style={{ color: wsConnected ? BLOOMBERG.GREEN : BLOOMBERG.GRAY, fontWeight: 600, fontSize: '9px' }}>
+                  {wsConnected ? 'RT DATA' : 'OFFLINE'}
+                </span>
+              </div>
+              <div style={{ height: '20px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
+              <button
+                onClick={() => setShowResetModal(true)}
+                style={{
+                  padding: '4px 10px',
+                  backgroundColor: BLOOMBERG.PANEL_BG,
+                  border: `1px solid ${BLOOMBERG.YELLOW}`,
+                  color: BLOOMBERG.YELLOW,
+                  cursor: 'pointer',
+                  fontSize: '9px',
+                  fontWeight: 700,
+                  transition: 'all 0.2s',
+                  outline: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  letterSpacing: '0.5px'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = BLOOMBERG.YELLOW;
+                  e.currentTarget.style.color = BLOOMBERG.DARK_BG;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = BLOOMBERG.PANEL_BG;
+                  e.currentTarget.style.color = BLOOMBERG.YELLOW;
+                }}
+              >
+                <RotateCcw size={12} />
+                RESET
+              </button>
+            </>
+          )}
+
           <div style={{ height: '20px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
 
           {/* Broker Status Indicators */}
@@ -288,6 +356,8 @@ const EquityTradingTab: React.FC = () => {
             tradingMode={tradingMode}
             isBottomPanelMinimized={isBottomPanelMinimized}
             setIsBottomPanelMinimized={setIsBottomPanelMinimized}
+            wsConnected={wsConnected}
+            setWsConnected={setWsConnected}
           />
         )}
 
@@ -351,6 +421,564 @@ const EquityTradingTab: React.FC = () => {
           </span>
         }
       />
+
+      {/* CSS Animation */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
+
+      {/* Reset Confirmation Modal */}
+      {showResetModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000,
+          fontFamily: 'monospace'
+        }}>
+          <div style={{
+            backgroundColor: BLOOMBERG.PANEL_BG,
+            border: `3px solid ${BLOOMBERG.ORANGE}`,
+            borderRadius: '8px',
+            padding: '30px',
+            maxWidth: '450px',
+            width: '90%',
+            boxShadow: `0 0 30px ${BLOOMBERG.ORANGE}50`
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, color: BLOOMBERG.ORANGE, fontSize: '16px', letterSpacing: '1px' }}>
+                RESET PAPER TRADING ACCOUNT
+              </h3>
+              <button
+                onClick={() => setShowResetModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: BLOOMBERG.GRAY,
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{
+              backgroundColor: BLOOMBERG.DARK_BG,
+              border: `1px solid ${BLOOMBERG.RED}`,
+              padding: '12px',
+              borderRadius: '4px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <AlertCircle size={20} color={BLOOMBERG.RED} />
+              <div style={{ color: BLOOMBERG.GRAY, fontSize: '11px', lineHeight: '1.5' }}>
+                This will <span style={{ color: BLOOMBERG.WHITE, fontWeight: 700 }}>close all positions</span>,{' '}
+                <span style={{ color: BLOOMBERG.WHITE, fontWeight: 700 }}>cancel all orders</span>, and{' '}
+                <span style={{ color: BLOOMBERG.WHITE, fontWeight: 700 }}>reset your balance</span>.
+                <br />
+                <span style={{ color: BLOOMBERG.RED, fontWeight: 700 }}>This action cannot be undone.</span>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '25px' }}>
+              <label style={{
+                display: 'block',
+                marginBottom: '10px',
+                color: BLOOMBERG.CYAN,
+                fontSize: '11px',
+                fontWeight: 700,
+                letterSpacing: '0.5px'
+              }}>
+                INITIAL BALANCE (₹)
+              </label>
+              <input
+                type="number"
+                value={resetAmount}
+                onChange={(e) => setResetAmount(e.target.value)}
+                placeholder="1000000"
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  backgroundColor: BLOOMBERG.DARK_BG,
+                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  color: BLOOMBERG.WHITE,
+                  borderRadius: '4px',
+                  fontFamily: 'monospace',
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  outline: 'none',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
+                onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
+              />
+              <div style={{ marginTop: '6px', fontSize: '9px', color: BLOOMBERG.GRAY }}>
+                Default: ₹10,00,000 (10 Lakhs)
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => setShowResetModal(false)}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: BLOOMBERG.PANEL_BG,
+                  border: `1px solid ${BLOOMBERG.BORDER}`,
+                  color: BLOOMBERG.WHITE,
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.2s',
+                  outline: 'none'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = BLOOMBERG.PANEL_BG}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={handleResetPaperTrading}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  backgroundColor: BLOOMBERG.ORANGE,
+                  border: 'none',
+                  color: BLOOMBERG.DARK_BG,
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  letterSpacing: '0.5px',
+                  transition: 'all 0.2s',
+                  outline: 'none'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                RESET ACCOUNT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Quote Data Panel Component
+const QuoteDataPanel: React.FC<{ symbol: string; exchange: string }> = ({ symbol, exchange }) => {
+  const [quote, setQuote] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchedSymbol, setSearchedSymbol] = useState('');
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const subscriptionIdRef = useRef<string | null>(null);
+  const [webSocketManager, setWebSocketManager] = useState<any>(null);
+
+  // Import WebSocket manager
+  useEffect(() => {
+    import('./services/WebSocketManager').then(module => {
+      setWebSocketManager(module.webSocketManager);
+    });
+  }, []);
+
+  const fetchQuote = async (symbolToFetch: string) => {
+    if (!symbolToFetch || symbolToFetch.length < 2) {
+      setError('Please enter a valid symbol');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const { authManager } = await import('./services/AuthManager');
+      const adapter = authManager.getAdapter('fyers');
+
+      if (!adapter) {
+        throw new Error('Fyers adapter not available');
+      }
+
+      const fyersSymbol = `${symbolToFetch.toUpperCase()}-EQ`;
+      console.log('[QuoteDataPanel] Fetching quote for:', fyersSymbol);
+
+      const quoteData = await adapter.getQuote(fyersSymbol, exchange);
+      setQuote(quoteData);
+      setSearchedSymbol(symbolToFetch.toUpperCase());
+      console.log('[QuoteDataPanel] Quote data:', quoteData);
+    } catch (err: any) {
+      console.error('[QuoteDataPanel] Error fetching quote:', err);
+      setError(err.message || 'Failed to fetch quote');
+      setQuote(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearch = () => {
+    fetchQuote(symbol);
+  };
+
+  const toggleAutoRefresh = () => {
+    setAutoRefresh(!autoRefresh);
+  };
+
+  // WebSocket subscription for real-time updates - DISABLED (use polling instead)
+  useEffect(() => {
+    if (!webSocketManager || !searchedSymbol) return;
+
+    const connectAndSubscribe = async () => {
+      try {
+        const { authManager } = await import('./services/AuthManager');
+
+        // Skip WebSocket if not authenticated
+        if (!authManager.isAuthenticated('fyers')) {
+          setWsConnected(false);
+          return;
+        }
+
+        const isConnected = webSocketManager.isConnectedTo('fyers');
+        if (!isConnected) {
+          await webSocketManager.connect('fyers');
+          setWsConnected(true);
+        } else {
+          setWsConnected(true);
+        }
+
+        if (subscriptionIdRef.current) {
+          webSocketManager.unsubscribeQuotes(subscriptionIdRef.current);
+          subscriptionIdRef.current = null;
+        }
+
+        const symbols = [{
+          symbol: `${searchedSymbol}-EQ`,
+          exchange: exchange
+        }];
+
+        const subId = webSocketManager.subscribeQuotes(
+          'fyers',
+          symbols,
+          (wsQuote: any) => {
+            setQuote((prevQuote: any) => ({
+              ...prevQuote,
+              lastPrice: wsQuote.lastPrice,
+              change: wsQuote.change,
+              changePercent: wsQuote.changePercent,
+              high: wsQuote.high,
+              low: wsQuote.low,
+              volume: wsQuote.volume,
+              bid: wsQuote.bid,
+              ask: wsQuote.ask,
+              timestamp: new Date(),
+            }));
+          }
+        );
+
+        subscriptionIdRef.current = subId;
+
+      } catch (error) {
+        setWsConnected(false);
+      }
+    };
+
+    connectAndSubscribe();
+
+    return () => {
+      if (subscriptionIdRef.current && webSocketManager) {
+        webSocketManager.unsubscribeQuotes(subscriptionIdRef.current);
+        subscriptionIdRef.current = null;
+      }
+    };
+  }, [webSocketManager, searchedSymbol, exchange]);
+
+  // Polling fallback (only when WebSocket not active)
+  useEffect(() => {
+    if (autoRefresh && searchedSymbol && !wsConnected) {
+      intervalRef.current = setInterval(() => {
+        fetchQuote(searchedSymbol);
+      }, 5000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [autoRefresh, searchedSymbol, exchange, wsConnected]);
+
+  return (
+    <div style={{
+      backgroundColor: BLOOMBERG.PANEL_BG,
+      border: `1px solid ${BLOOMBERG.BORDER}`,
+      borderRadius: '4px',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      <div style={{
+        padding: '8px 12px',
+        borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
+        backgroundColor: BLOOMBERG.HEADER_BG
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <TrendingUp size={14} color={BLOOMBERG.CYAN} />
+            <span style={{ fontSize: '11px', fontWeight: 700, color: BLOOMBERG.WHITE, letterSpacing: '0.5px' }}>
+              QUOTE DATA
+            </span>
+            {searchedSymbol && (
+              <span style={{ fontSize: '9px', color: BLOOMBERG.CYAN, fontWeight: 600 }}>
+                ({searchedSymbol})
+              </span>
+            )}
+            {wsConnected && (
+              <div style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: BLOOMBERG.GREEN,
+                animation: 'pulse 2s infinite',
+              }} />
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              onClick={handleSearch}
+              disabled={loading || !symbol}
+              style={{
+                padding: '4px 10px',
+                backgroundColor: BLOOMBERG.CYAN,
+                border: 'none',
+                color: BLOOMBERG.DARK_BG,
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: loading || !symbol ? 'not-allowed' : 'pointer',
+                borderRadius: '3px',
+                letterSpacing: '0.5px',
+                opacity: loading || !symbol ? 0.5 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              {loading ? <RefreshCw size={10} className="spin" /> : <TrendingUp size={10} />}
+              SEARCH
+            </button>
+            <button
+              onClick={toggleAutoRefresh}
+              disabled={!searchedSymbol || wsConnected}
+              style={{
+                padding: '4px 10px',
+                backgroundColor: autoRefresh ? BLOOMBERG.GREEN : BLOOMBERG.PANEL_BG,
+                border: `1px solid ${autoRefresh ? BLOOMBERG.GREEN : BLOOMBERG.BORDER}`,
+                color: autoRefresh ? BLOOMBERG.DARK_BG : BLOOMBERG.WHITE,
+                fontSize: '9px',
+                fontWeight: 700,
+                cursor: (!searchedSymbol || wsConnected) ? 'not-allowed' : 'pointer',
+                borderRadius: '3px',
+                letterSpacing: '0.5px',
+                opacity: (!searchedSymbol || wsConnected) ? 0.5 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+              title={wsConnected ? 'WebSocket active - real-time updates enabled' : 'Enable polling fallback'}
+            >
+              <RefreshCw size={10} />
+              {wsConnected ? 'LIVE' : 'AUTO'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
+        {!symbol || symbol.length < 2 ? (
+          <div style={{
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: BLOOMBERG.GRAY
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <TrendingUp size={48} color={BLOOMBERG.MUTED} style={{ margin: '0 auto 12px' }} />
+              <div style={{ fontSize: '12px', fontWeight: 600 }}>ENTER A SYMBOL</div>
+              <div style={{ fontSize: '10px', marginTop: '4px' }}>Type a symbol to view quote data</div>
+            </div>
+          </div>
+        ) : error ? (
+          <div style={{
+            padding: '12px',
+            backgroundColor: BLOOMBERG.INPUT_BG,
+            border: `1px solid ${BLOOMBERG.RED}`,
+            borderRadius: '4px',
+            color: BLOOMBERG.RED,
+            fontSize: '11px'
+          }}>
+            <AlertCircle size={16} style={{ marginBottom: '6px' }} />
+            <div>{error}</div>
+          </div>
+        ) : !quote ? (
+          <div style={{ textAlign: 'center', color: BLOOMBERG.GRAY, fontSize: '11px' }}>
+            Loading...
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* Symbol Header */}
+            <div style={{
+              padding: '12px',
+              backgroundColor: BLOOMBERG.INPUT_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              borderRadius: '4px'
+            }}>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: BLOOMBERG.WHITE, marginBottom: '4px' }}>
+                {symbol}
+              </div>
+              <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY }}>
+                {exchange} • EQUITY
+              </div>
+            </div>
+
+            {/* Last Price */}
+            <div style={{
+              padding: '12px',
+              backgroundColor: BLOOMBERG.INPUT_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              borderRadius: '4px'
+            }}>
+              <div style={{ fontSize: '9px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>LAST TRADED PRICE</div>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: BLOOMBERG.GREEN }}>
+                ₹{quote.lastPrice?.toFixed(2) || 'N/A'}
+              </div>
+              {quote.change !== undefined && (
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: quote.change >= 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED,
+                  marginTop: '4px'
+                }}>
+                  {quote.change >= 0 ? '+' : ''}{quote.change.toFixed(2)} ({quote.changePercent >= 0 ? '+' : ''}{quote.changePercent?.toFixed(2)}%)
+                </div>
+              )}
+            </div>
+
+            {/* OHLC */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '8px'
+            }}>
+              <div style={{
+                padding: '10px',
+                backgroundColor: BLOOMBERG.INPUT_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                borderRadius: '4px'
+              }}>
+                <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>OPEN</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: BLOOMBERG.WHITE }}>
+                  ₹{quote.open?.toFixed(2) || 'N/A'}
+                </div>
+              </div>
+              <div style={{
+                padding: '10px',
+                backgroundColor: BLOOMBERG.INPUT_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                borderRadius: '4px'
+              }}>
+                <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>HIGH</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: BLOOMBERG.GREEN }}>
+                  ₹{quote.high?.toFixed(2) || 'N/A'}
+                </div>
+              </div>
+              <div style={{
+                padding: '10px',
+                backgroundColor: BLOOMBERG.INPUT_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                borderRadius: '4px'
+              }}>
+                <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>LOW</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: BLOOMBERG.RED }}>
+                  ₹{quote.low?.toFixed(2) || 'N/A'}
+                </div>
+              </div>
+              <div style={{
+                padding: '10px',
+                backgroundColor: BLOOMBERG.INPUT_BG,
+                border: `1px solid ${BLOOMBERG.BORDER}`,
+                borderRadius: '4px'
+              }}>
+                <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>PREV CLOSE</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: BLOOMBERG.WHITE }}>
+                  ₹{quote.close?.toFixed(2) || 'N/A'}
+                </div>
+              </div>
+            </div>
+
+            {/* Volume & Bid/Ask */}
+            <div style={{
+              padding: '12px',
+              backgroundColor: BLOOMBERG.INPUT_BG,
+              border: `1px solid ${BLOOMBERG.BORDER}`,
+              borderRadius: '4px'
+            }}>
+              <div style={{ marginBottom: '8px' }}>
+                <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>VOLUME</div>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: BLOOMBERG.CYAN }}>
+                  {quote.volume ? quote.volume.toLocaleString('en-IN') : 'N/A'}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                <div>
+                  <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>BID</div>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: BLOOMBERG.GREEN }}>
+                    ₹{quote.bid?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginBottom: '4px' }}>ASK</div>
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: BLOOMBERG.RED }}>
+                    ₹{quote.ask?.toFixed(2) || 'N/A'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Timestamp */}
+            <div style={{
+              fontSize: '9px',
+              color: BLOOMBERG.GRAY,
+              textAlign: 'center',
+              paddingTop: '8px',
+              borderTop: `1px solid ${BLOOMBERG.BORDER}`
+            }}>
+              Last updated: {quote.timestamp ? new Date(quote.timestamp).toLocaleTimeString() : 'N/A'}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -363,7 +991,9 @@ const TradingView: React.FC<{
   tradingMode: TradingMode;
   isBottomPanelMinimized: boolean;
   setIsBottomPanelMinimized: (value: boolean) => void;
-}> = ({ brokerState, orderExecution, activeBrokers, tradingMode, isBottomPanelMinimized, setIsBottomPanelMinimized }) => {
+  wsConnected: boolean;
+  setWsConnected: (value: boolean) => void;
+}> = ({ brokerState, orderExecution, activeBrokers, tradingMode, isBottomPanelMinimized, setIsBottomPanelMinimized, wsConnected, setWsConnected }) => {
   const [selectedPanel, setSelectedPanel] = useState<'orders' | 'positions' | 'holdings' | 'stats'>('orders');
   const [selectedSymbol, setSelectedSymbol] = useState('');
   const [selectedExchange, setSelectedExchange] = useState('NSE');
@@ -373,6 +1003,167 @@ const TradingView: React.FC<{
   const [paperBalance, setPaperBalance] = useState(0);
   const [paperEquity, setPaperEquity] = useState(0);
   const [paperStats, setPaperStats] = useState<any>(null);
+  const [positionPrices, setPositionPrices] = useState<Map<string, number>>(new Map());
+  const subscriptionIdRef = useRef<string | null>(null);
+
+  // Import WebSocket manager at the top level
+  const [webSocketManager, setWebSocketManager] = useState<any>(null);
+
+  useEffect(() => {
+    import('./services/WebSocketManager').then(module => {
+      setWebSocketManager(module.webSocketManager);
+    });
+  }, []);
+
+  // Auto-connect to WebSocket and subscribe to position symbols for real-time price updates
+  useEffect(() => {
+    if (!webSocketManager || paperPositions.length === 0) {
+      return;
+    }
+
+    const connectAndSubscribe = async () => {
+      try {
+        const { authManager } = await import('./services/AuthManager');
+
+        // Check Fyers authentication - skip WebSocket if not authenticated
+        if (!authManager.isAuthenticated('fyers')) {
+          setWsConnected(false);
+          return;
+        }
+
+        const isConnected = webSocketManager.isConnectedTo('fyers');
+        if (!isConnected) {
+          await webSocketManager.connect('fyers');
+          setWsConnected(true);
+        } else {
+          setWsConnected(true);
+        }
+
+        if (subscriptionIdRef.current) {
+          webSocketManager.unsubscribeQuotes(subscriptionIdRef.current);
+          subscriptionIdRef.current = null;
+        }
+
+        const symbols = Array.from(
+          new Set(
+            paperPositions.map(pos => ({
+              symbol: `${pos.symbol}-EQ`,
+              exchange: pos.exchange || 'NSE'
+            }))
+          )
+        );
+
+        if (symbols.length === 0) return;
+
+        const subId = webSocketManager.subscribeQuotes(
+          'fyers',
+          symbols,
+          (quote: any) => {
+            const cleanSymbol = quote.symbol.replace('-EQ', '');
+            setPositionPrices(prev => {
+              const updated = new Map(prev);
+              updated.set(cleanSymbol, quote.lastPrice);
+              return updated;
+            });
+
+            import('./integrations/PaperTradingIntegration').then(({ paperTradingIntegration }) => {
+              if (paperTradingIntegration && paperTradingIntegration.isInitialized()) {
+                const bridge = (paperTradingIntegration as any).bridgeAdapter;
+                if (bridge) {
+                  bridge.updatePrice(cleanSymbol, quote.lastPrice, quote.exchange);
+                }
+              }
+            });
+          }
+        );
+
+        subscriptionIdRef.current = subId;
+
+      } catch (error) {
+        setWsConnected(false);
+      }
+    };
+
+    connectAndSubscribe();
+
+    return () => {
+      if (subscriptionIdRef.current && webSocketManager) {
+        webSocketManager.unsubscribeQuotes(subscriptionIdRef.current);
+        subscriptionIdRef.current = null;
+      }
+    };
+  }, [webSocketManager, tradingMode, paperPositions]);
+
+  // Polling fallback for paper trading when WebSocket is not available
+  useEffect(() => {
+    if (tradingMode !== 'paper' || paperPositions.length === 0 || wsConnected) {
+      return;
+    }
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { paperTradingIntegration } = await import('./integrations/PaperTradingIntegration');
+
+        if (!paperTradingIntegration || !paperTradingIntegration.isInitialized()) {
+          return;
+        }
+
+        const updatedPositions = await paperTradingIntegration.getPositions();
+
+        updatedPositions.forEach((pos: any) => {
+          setPositionPrices(prev => {
+            const updated = new Map(prev);
+            updated.set(pos.symbol, pos.lastPrice);
+            return updated;
+          });
+        });
+
+      } catch (error) {
+        // Silent error handling
+      }
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [tradingMode, paperPositions, wsConnected]);
+
+  // Handle closing a position by placing a reverse order
+  const handleClosePosition = async (brokerId: string, symbol: string, quantity: number) => {
+    try {
+
+      // Find the position to determine the side
+      const position = paperPositions.find(p => p.symbol === symbol);
+      if (!position) {
+        return;
+      }
+
+      // Determine opposite side (close BUY with SELL, close SELL with BUY)
+      const oppositeSide = position.side === 'BUY' ? 'SELL' : 'BUY';
+
+
+      // Place a market order to close the position
+      const orderRequest = {
+        symbol: symbol,
+        exchange: position.exchange || 'NSE',
+        side: oppositeSide as any, // Will be converted to OrderSide in placeOrder
+        type: 'MARKET' as any,
+        quantity: Math.abs(quantity),
+        product: position.product || 'CNC' as any,
+        validity: 'DAY' as any
+      };
+
+
+      const result = await orderExecution.placeOrder(orderRequest);
+
+      if (result.success) {
+        // Refresh positions after a short delay
+        setTimeout(() => {
+          brokerState.fetchPositions();
+        }, 1000);
+      } else {
+      }
+    } catch (error) {
+    }
+  };
 
   // Fetch paper trading data when paper trading is enabled
   useEffect(() => {
@@ -380,24 +1171,22 @@ const TradingView: React.FC<{
       if (tradingMode === 'paper') {
         // Check if paper trading is enabled
         const isPaperEnabled = integrationManager.isPaperTradingEnabled();
-        console.log('[EquityTradingTab] Paper trading enabled:', isPaperEnabled);
 
         if (!isPaperEnabled) {
-          console.log('[EquityTradingTab] Paper trading not enabled, skipping fetch');
           return;
         }
 
         // Check if paper trading is initialized
         const isInitialized = integrationManager.isPaperTradingInitialized();
-        console.log('[EquityTradingTab] Paper trading initialized:', isInitialized);
 
         if (!isInitialized) {
-          console.log('[EquityTradingTab] Paper trading not initialized yet, will retry...');
           return;
         }
 
+        // Small delay to ensure initialization is complete (handles React StrictMode double-render)
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         try {
-          console.log('[EquityTradingTab] Fetching paper trading data...');
 
           // Fetch data independently to avoid one failure affecting others
           let positions: any[] = [];
@@ -407,40 +1196,26 @@ const TradingView: React.FC<{
 
           try {
             positions = await integrationManager.getPaperPositions() || [];
-            console.log('[EquityTradingTab] ✅ Positions fetched:', positions.length);
           } catch (err) {
-            console.error('[EquityTradingTab] ❌ Failed to fetch positions:', err);
           }
 
           try {
             orders = await integrationManager.getPaperOrders() || [];
-            console.log('[EquityTradingTab] ✅ Orders fetched:', orders.length);
           } catch (err) {
-            console.error('[EquityTradingTab] ❌ Failed to fetch orders:', err);
           }
 
           try {
             balanceValue = await integrationManager.getPaperBalance() || 0;
-            console.log('[EquityTradingTab] ✅ Balance fetched:', balanceValue);
           } catch (err) {
             console.error('[EquityTradingTab] ❌ Failed to fetch balance:', err);
           }
 
           try {
             stats = await integrationManager.getPaperStatistics();
-            console.log('[EquityTradingTab] ✅ Stats fetched:', stats);
           } catch (err) {
             console.error('[EquityTradingTab] ❌ Failed to fetch stats:', err);
             // Stats failure is non-critical
           }
-
-          console.log('[EquityTradingTab] Paper data fetched:', {
-            positionsCount: positions?.length || 0,
-            ordersCount: orders?.length || 0,
-            balance: balanceValue,
-            balanceType: typeof balanceValue,
-            stats: stats
-          });
 
           setPaperPositions(positions || []);
           setPaperOrders(orders || []);
@@ -451,10 +1226,8 @@ const TradingView: React.FC<{
           // If balance is still 0, try to get initial balance from stats or use default
           if (numericBalance === 0) {
             numericBalance = stats?.initialBalance || 1000000; // 10 lakhs default
-            console.log('[EquityTradingTab] Balance was 0, using initial balance:', numericBalance);
           }
 
-          console.log('[EquityTradingTab] Setting balance to:', numericBalance);
           setPaperBalance(numericBalance);
 
           // Calculate equity: balance + unrealized P&L
@@ -465,7 +1238,6 @@ const TradingView: React.FC<{
           }, 0);
 
           const totalEquity = numericBalance + unrealizedPnL;
-          console.log('[EquityTradingTab] Setting equity to:', totalEquity, '(balance:', numericBalance, '+ unrealizedPnL:', unrealizedPnL, ')');
           setPaperEquity(totalEquity);
 
           setPaperStats(stats || null);
@@ -501,7 +1273,7 @@ const TradingView: React.FC<{
   const allHoldings = brokerState.getAllHoldings();
 
   // Calculate P&L based on trading mode
-  const paperPnL = paperStats ? (paperStats.totalPnL || 0) : 0;
+  const paperPnL = paperStats ? getStatValue(paperStats, 'totalPnL', 0) : 0;
   const totalPnL = tradingMode === 'paper' ? paperPnL : livePnL;
 
   // Use appropriate data based on trading mode
@@ -513,14 +1285,6 @@ const TradingView: React.FC<{
   const paperReturn = initialBalance > 0
     ? ((paperEquity - initialBalance) / initialBalance) * 100
     : 0;
-
-  console.log('[EquityTradingTab] Calculated values:', {
-    paperEquity,
-    initialBalance,
-    paperReturn,
-    totalPnL,
-    paperStats
-  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -577,8 +1341,8 @@ const TradingView: React.FC<{
             <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '2px' }}>SHARPE RATIO</div>
             <div style={{ color: BLOOMBERG.PURPLE, fontWeight: 600 }}>
               {(() => {
-                const sharpe = getStatValue(paperStats, 'sharpeRatio', null);
-                return sharpe !== null ? sharpe.toFixed(2) : 'N/A';
+                const sharpe = paperStats?.sharpeRatio ?? paperStats?.stats?.sharpeRatio;
+                return (sharpe !== null && sharpe !== undefined && typeof sharpe === 'number') ? sharpe.toFixed(2) : 'N/A';
               })()}
             </div>
           </div>
@@ -686,51 +1450,11 @@ const TradingView: React.FC<{
           </div>
         </div>
 
-        {/* Right Column: Market Depth */}
-        <div style={{
-          backgroundColor: BLOOMBERG.PANEL_BG,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
-          borderRadius: '4px',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          <div style={{
-            padding: '8px 12px',
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-            backgroundColor: BLOOMBERG.HEADER_BG
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Activity size={14} color={BLOOMBERG.PURPLE} />
-              <span style={{ fontSize: '11px', fontWeight: 700, color: BLOOMBERG.WHITE, letterSpacing: '0.5px' }}>
-                MARKET DEPTH
-              </span>
-            </div>
-          </div>
-          <div style={{ flex: 1, overflow: 'hidden' }}>
-            {selectedSymbol ? (
-              <MarketDepthChart
-                brokerId={depthBroker}
-                symbol={selectedSymbol}
-                exchange={selectedExchange}
-              />
-            ) : (
-              <div style={{
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: BLOOMBERG.GRAY
-              }}>
-                <div style={{ textAlign: 'center' }}>
-                  <Activity size={48} color={BLOOMBERG.MUTED} style={{ margin: '0 auto 12px' }} />
-                  <div style={{ fontSize: '12px', fontWeight: 600 }}>SELECT A SYMBOL</div>
-                  <div style={{ fontSize: '10px', marginTop: '4px' }}>Enter a symbol to view market depth</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        {/* Right Column: Quote Data */}
+        <QuoteDataPanel
+          symbol={selectedSymbol}
+          exchange={selectedExchange}
+        />
       </div>
 
       {/* Bottom Panel: Orders/Positions/Holdings - Bloomberg Style */}
@@ -755,7 +1479,7 @@ const TradingView: React.FC<{
               { id: 'orders' as const, label: 'ORDERS', count: allOrders.length },
               { id: 'positions' as const, label: 'POSITIONS', count: allPositions.length },
               { id: 'holdings' as const, label: 'HOLDINGS', count: allHoldings.length },
-              ...(tradingMode === 'paper' ? [{ id: 'stats' as const, label: 'STATS', count: paperStats?.totalTrades || 0 }] : [])
+              { id: 'stats' as const, label: 'STATS', count: tradingMode === 'paper' ? (paperStats?.totalTrades || 0) : 0 }
             ].map(tab => {
               const isActive = selectedPanel === tab.id;
               return (
@@ -887,6 +1611,8 @@ const TradingView: React.FC<{
                 positions={allPositions}
                 loading={brokerState.loading.positions}
                 onRefresh={brokerState.fetchPositions}
+                onClose={tradingMode === 'paper' ? handleClosePosition : undefined}
+                realtimePrices={tradingMode === 'paper' ? positionPrices : undefined}
               />
             )}
 
@@ -898,7 +1624,7 @@ const TradingView: React.FC<{
               />
             )}
 
-            {selectedPanel === 'stats' && tradingMode === 'paper' && (
+            {selectedPanel === 'stats' && (
               <div style={{
                 padding: '16px',
                 display: 'grid',
@@ -938,8 +1664,8 @@ const TradingView: React.FC<{
                       <span style={{ color: BLOOMBERG.GRAY }}>Sharpe Ratio</span>
                       <span style={{ color: BLOOMBERG.PURPLE, fontWeight: 600 }}>
                         {(() => {
-                          const sharpe = getStatValue(paperStats, 'sharpeRatio', null);
-                          return sharpe !== null ? sharpe.toFixed(2) : 'N/A';
+                          const sharpe = paperStats?.sharpeRatio ?? paperStats?.stats?.sharpeRatio;
+                          return (sharpe !== null && sharpe !== undefined && typeof sharpe === 'number') ? sharpe.toFixed(2) : 'N/A';
                         })()}
                       </span>
                     </div>
@@ -947,8 +1673,8 @@ const TradingView: React.FC<{
                       <span style={{ color: BLOOMBERG.GRAY }}>Max Drawdown</span>
                       <span style={{ color: BLOOMBERG.RED, fontWeight: 600 }}>
                         {(() => {
-                          const dd = getStatValue(paperStats, 'maxDrawdown', null);
-                          return dd !== null ? `${dd.toFixed(2)}%` : 'N/A';
+                          const dd = paperStats?.maxDrawdown ?? paperStats?.stats?.maxDrawdown;
+                          return (dd !== null && dd !== undefined && typeof dd === 'number') ? `${dd.toFixed(2)}%` : 'N/A';
                         })()}
                       </span>
                     </div>

@@ -35,7 +35,6 @@ const injectGlobalsPlugin = (): Plugin => ({
           globalThis.process = window.process;
           globalThis.module = window.module;
 
-          console.log('[Polyfills] Emergency globals injected (process, global, module, Buffer will be loaded by vite-plugin-node-polyfills)');
         `,
         injectTo: 'head-prepend',
       }

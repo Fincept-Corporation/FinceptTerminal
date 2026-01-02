@@ -118,7 +118,7 @@ gs-quant==1.4.67
 rateslib==2.1.1
 fortitudo.tech==1.2
 cvxopt==1.3.2
-FinQuant==0.7.0
+finquant-enhanced
 vnpy==4.3.0
 talipp==2.7.0
 py_vollib==1.0.1
@@ -128,3 +128,4 @@ statsmodels==0.14.6
 pypme==0.6.2
 pmdarima==2.1.1
 functime==0.1.10
+PyPortfolioOpt==1.5.6

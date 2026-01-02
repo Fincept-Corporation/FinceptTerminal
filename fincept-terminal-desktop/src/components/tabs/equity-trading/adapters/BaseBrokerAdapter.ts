@@ -31,6 +31,22 @@ export abstract class BaseBrokerAdapter {
     this.brokerId = brokerId;
   }
 
+  // ==================== BROKER CAPABILITIES ====================
+
+  /**
+   * Get list of exchanges supported by this broker
+   * Must be implemented by each broker adapter
+   */
+  abstract getSupportedExchanges(): string[];
+
+  /**
+   * Check if broker supports a specific exchange
+   */
+  supportsExchange(exchange: string): boolean {
+    const supported = this.getSupportedExchanges();
+    return supported.includes(exchange.toUpperCase());
+  }
+
   // ==================== AUTHENTICATION ====================
 
   /**

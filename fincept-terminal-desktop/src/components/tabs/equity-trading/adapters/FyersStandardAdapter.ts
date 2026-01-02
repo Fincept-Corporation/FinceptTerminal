@@ -54,6 +54,13 @@ export class FyersStandardAdapter extends BaseBrokerAdapter {
     this.dataWebSocket = new FyersDataWebSocket();
   }
 
+  // ==================== BROKER CAPABILITIES ====================
+
+  getSupportedExchanges(): string[] {
+    // Fyers supports Indian equity markets
+    return ['NSE', 'BSE', 'MCX', 'NFO', 'CDS', 'BFO'];
+  }
+
   async initialize(credentials: BrokerCredentials): Promise<boolean> {
     console.log('[FyersStandardAdapter] Initialize called with credentials:', {
       hasApiKey: !!credentials.apiKey,

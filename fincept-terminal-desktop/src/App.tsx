@@ -109,7 +109,6 @@ const App: React.FC = () => {
               currentScreen !== 'paymentSuccess' &&
               currentScreen !== 'pricing' &&
               currentScreen !== 'dashboard') {
-            console.log('User has paid plan, navigating to dashboard');
             setCurrentScreen('dashboard');
           }
         }
