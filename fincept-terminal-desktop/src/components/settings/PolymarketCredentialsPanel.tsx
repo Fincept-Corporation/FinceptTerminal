@@ -157,11 +157,11 @@ export const PolymarketCredentialsPanel: React.FC = () => {
 
   const generateAPICredentials = async (address: string) => {
     try {
-      // Import ethers dynamically
-      const { ethers } = await import('ethers');
+      // Import ethers dynamically (v6 API)
+      const { BrowserProvider } = await import('ethers');
 
-      const provider = new ethers.providers.Web3Provider(window.ethereum as any);
-      const signer = provider.getSigner();
+      const provider = new BrowserProvider(window.ethereum as any);
+      const signer = await provider.getSigner();
 
       // EIP-712 domain and types for Polymarket
       const domain = {
@@ -185,8 +185,8 @@ export const PolymarketCredentialsPanel: React.FC = () => {
         message: 'Please sign the message in MetaMask...'
       });
 
-      // Request signature from user
-      const signature = await signer._signTypedData(domain, types, value);
+      // Request signature from user (v6 API uses signTypedData)
+      const signature = await signer.signTypedData(domain, types, value);
 
       setTestResult({
         success: true,

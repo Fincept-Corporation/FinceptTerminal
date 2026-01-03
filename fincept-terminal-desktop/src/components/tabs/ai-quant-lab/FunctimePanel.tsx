@@ -2,9 +2,10 @@
  * Functime Analytics Panel - Time Series Forecasting
  * Bloomberg Professional Design
  * Integrated with functime library via PyO3
+ * Enhanced with portfolio integration and yfinance data fetching
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -24,15 +25,35 @@ import {
   Clock,
   Layers,
   GitBranch,
-  Database
+  Database,
+  Briefcase,
+  Search,
+  AlertTriangle,
+  Waves,
+  BarChart3,
+  History,
+  Shuffle,
+  Shield
 } from 'lucide-react';
 import {
   functimeService,
   type ForecastResult,
   type ForecastConfig,
   type PreprocessConfig,
-  type FullPipelineResponse
+  type FullPipelineResponse,
+  type AnomalyDetectionConfig,
+  type SeasonalityConfig,
+  type ConfidenceIntervalsConfig,
+  type BacktestConfig
 } from '@/services/aiQuantLab/functimeService';
+import {
+  portfolioFunctimeService,
+  type PortfolioPriceData,
+  type PortfolioForecastResult,
+  type PortfolioAnomalyResult,
+  type PortfolioSeasonalityResult
+} from '@/services/aiQuantLab/portfolioFunctimeService';
+import { portfolioService, type Portfolio } from '@/services/portfolioService';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {
@@ -96,12 +117,30 @@ interface ForecastAnalysisResult {
   };
 }
 
+// Data source types
+type DataSourceType = 'manual' | 'portfolio' | 'symbol';
+
+// Analysis mode types
+type AnalysisMode = 'forecast' | 'anomaly' | 'seasonality' | 'backtest';
+
 export function FunctimePanel() {
   const [isFunctimeAvailable, setIsFunctimeAvailable] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<ForecastAnalysisResult | null>(null);
   const [dataInput, setDataInput] = useState(JSON.stringify(SAMPLE_DATA, null, 2));
+
+  // Data source configuration
+  const [dataSourceType, setDataSourceType] = useState<DataSourceType>('manual');
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const [selectedPortfolioId, setSelectedPortfolioId] = useState<string>('');
+  const [symbolInput, setSymbolInput] = useState('AAPL');
+  const [historicalDays, setHistoricalDays] = useState(365);
+  const [priceDataLoading, setPriceDataLoading] = useState(false);
+  const [priceData, setPriceData] = useState<PortfolioPriceData | null>(null);
+
+  // Analysis mode
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('forecast');
 
   // Forecast configuration
   const [selectedModel, setSelectedModel] = useState('linear');
@@ -116,8 +155,29 @@ export function FunctimePanel() {
     forecast: true,
     metrics: true,
     summary: true,
-    chart: true
+    chart: true,
+    dataSource: true,
+    anomaly: true,
+    seasonality: true,
+    backtest: true
   });
+
+  // Anomaly detection state
+  const [anomalyMethod, setAnomalyMethod] = useState<'zscore' | 'iqr' | 'isolation_forest'>('zscore');
+  const [anomalyThreshold, setAnomalyThreshold] = useState(3.0);
+  const [anomalyResult, setAnomalyResult] = useState<PortfolioAnomalyResult | null>(null);
+
+  // Seasonality state
+  const [seasonalityResult, setSeasonalityResult] = useState<PortfolioSeasonalityResult | null>(null);
+
+  // Expandable table state
+  const [forecastTableExpanded, setForecastTableExpanded] = useState(false);
+  const INITIAL_ROWS = 10;
+  const EXPANDED_ROWS = 50;
+
+  // Advanced models
+  const advancedModels = functimeService.getAdvancedModels();
+  const anomalyMethods = functimeService.getAnomalyMethods();
 
   const models = functimeService.getAvailableModels();
   const frequencies = functimeService.getAvailableFrequencies();
@@ -125,7 +185,20 @@ export function FunctimePanel() {
   // Check functime availability on mount
   useEffect(() => {
     checkFunctimeStatus();
+    loadPortfolios();
   }, []);
+
+  const loadPortfolios = async () => {
+    try {
+      const portfolioList = await portfolioFunctimeService.getAvailablePortfolios();
+      setPortfolios(portfolioList);
+      if (portfolioList.length > 0 && !selectedPortfolioId) {
+        setSelectedPortfolioId(portfolioList[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load portfolios:', err);
+    }
+  };
 
   const checkFunctimeStatus = async () => {
     try {
@@ -138,6 +211,149 @@ export function FunctimePanel() {
       setIsFunctimeAvailable(false);
       setError('Failed to check functime status');
     }
+  };
+
+  // Load data based on source type
+  const loadDataFromSource = useCallback(async () => {
+    if (dataSourceType === 'manual') {
+      return; // Data already in dataInput
+    }
+
+    setPriceDataLoading(true);
+    setError(null);
+
+    try {
+      if (dataSourceType === 'portfolio' && selectedPortfolioId) {
+        const summary = await portfolioFunctimeService.getPortfolioSummary(selectedPortfolioId);
+        if (!summary || summary.holdings.length === 0) {
+          setError('Portfolio has no holdings');
+          return;
+        }
+
+        const data = await portfolioFunctimeService.fetchHistoricalPrices(
+          summary.holdings,
+          historicalDays
+        );
+
+        if (data) {
+          setPriceData(data);
+          setDataInput(JSON.stringify(data.panelData, null, 2));
+        } else {
+          setError('Failed to fetch historical data for portfolio');
+        }
+      } else if (dataSourceType === 'symbol' && symbolInput) {
+        const data = await portfolioFunctimeService.fetchSymbolData(symbolInput, historicalDays);
+        if (data) {
+          setDataInput(JSON.stringify(data, null, 2));
+          setPriceData({
+            panelData: data,
+            assets: [symbolInput],
+            nDataPoints: data.length,
+            startDate: data[0]?.time || '',
+            endDate: data[data.length - 1]?.time || ''
+          });
+        } else {
+          setError(`Failed to fetch data for ${symbolInput}`);
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data');
+    } finally {
+      setPriceDataLoading(false);
+    }
+  }, [dataSourceType, selectedPortfolioId, symbolInput, historicalDays]);
+
+  // Run analysis based on mode
+  const runAnalysis = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const data = JSON.parse(dataInput);
+
+      if (analysisMode === 'forecast') {
+        await runForecast();
+      } else if (analysisMode === 'anomaly') {
+        await runAnomalyDetection(data);
+      } else if (analysisMode === 'seasonality') {
+        await runSeasonalityAnalysis(data);
+      } else if (analysisMode === 'backtest') {
+        // For backtest, we use the forecast function with more settings
+        await runForecast();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Analysis failed');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Anomaly detection
+  const runAnomalyDetection = async (data: any[]) => {
+    const config: AnomalyDetectionConfig = {
+      method: anomalyMethod,
+      threshold: anomalyThreshold
+    };
+
+    const result = await functimeService.detectAnomalies(data, config);
+
+    if (!result.success) {
+      setError(result.error || 'Anomaly detection failed');
+      return;
+    }
+
+    // Format result for portfolio view
+    const anomalies: Record<string, any> = {};
+    if (result.results) {
+      Object.entries(result.results).forEach(([symbol, data]) => {
+        const anomalyList = data.anomalies?.filter((a: any) => a.is_anomaly) || [];
+        anomalies[symbol] = {
+          count: data.n_anomalies,
+          rate: data.anomaly_rate,
+          dates: anomalyList.map((a: any) => a.time),
+          values: anomalyList.map((a: any) => a.value)
+        };
+      });
+    }
+
+    setAnomalyResult({
+      success: true,
+      portfolio: portfolios.find(p => p.id === selectedPortfolioId) || {} as Portfolio,
+      anomalies
+    });
+  };
+
+  // Seasonality analysis
+  const runSeasonalityAnalysis = async (data: any[]) => {
+    const config: SeasonalityConfig = {
+      operation: 'metrics'
+    };
+
+    const result = await functimeService.analyzeSeasonality(data, config);
+
+    if (!result.success) {
+      setError(result.error || 'Seasonality analysis failed');
+      return;
+    }
+
+    // Format result
+    const seasonality: Record<string, any> = {};
+    if (result.metrics) {
+      Object.entries(result.metrics).forEach(([symbol, metrics]) => {
+        seasonality[symbol] = {
+          period: metrics.detected_period || 0,
+          strength: metrics.seasonal_strength,
+          is_seasonal: metrics.is_seasonal,
+          trend_strength: metrics.trend_strength
+        };
+      });
+    }
+
+    setSeasonalityResult({
+      success: true,
+      portfolio: portfolios.find(p => p.id === selectedPortfolioId) || {} as Portfolio,
+      seasonality
+    });
   };
 
   const runForecast = async () => {
@@ -263,25 +479,244 @@ export function FunctimePanel() {
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-auto p-4 space-y-4">
-          {/* Data Input */}
-          <div>
-            <label className="block text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
-              PANEL DATA (JSON)
-            </label>
-            <textarea
-              value={dataInput}
-              onChange={(e) => setDataInput(e.target.value)}
-              className="w-full h-32 p-3 rounded text-xs font-mono resize-none"
-              style={{
-                backgroundColor: BLOOMBERG.DARK_BG,
-                color: BLOOMBERG.WHITE,
-                border: `1px solid ${BLOOMBERG.BORDER}`
-              }}
-              placeholder='[{"entity_id": "A", "time": "2024-01-01", "value": 100}, ...]'
-            />
+          {/* Data Source Selection */}
+          <div
+            className="rounded overflow-hidden"
+            style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
+          >
+            <button
+              onClick={() => toggleSection('dataSource')}
+              className="w-full px-3 py-2 flex items-center justify-between"
+              style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+            >
+              <div className="flex items-center gap-2">
+                <Database size={14} color={BLOOMBERG.CYAN} />
+                <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+                  Data Source
+                </span>
+              </div>
+              {expandedSections.dataSource ? (
+                <ChevronUp size={14} color={BLOOMBERG.GRAY} />
+              ) : (
+                <ChevronDown size={14} color={BLOOMBERG.GRAY} />
+              )}
+            </button>
+
+            {expandedSections.dataSource && (
+              <div className="p-3 space-y-3">
+                {/* Source Type Selection */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setDataSourceType('manual')}
+                    className={`flex-1 px-2 py-1.5 rounded text-xs font-mono ${dataSourceType === 'manual' ? 'border-2' : ''}`}
+                    style={{
+                      backgroundColor: dataSourceType === 'manual' ? BLOOMBERG.HEADER_BG : BLOOMBERG.DARK_BG,
+                      borderColor: BLOOMBERG.ORANGE,
+                      color: dataSourceType === 'manual' ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY
+                    }}
+                  >
+                    Manual
+                  </button>
+                  <button
+                    onClick={() => setDataSourceType('portfolio')}
+                    className={`flex-1 px-2 py-1.5 rounded text-xs font-mono ${dataSourceType === 'portfolio' ? 'border-2' : ''}`}
+                    style={{
+                      backgroundColor: dataSourceType === 'portfolio' ? BLOOMBERG.HEADER_BG : BLOOMBERG.DARK_BG,
+                      borderColor: BLOOMBERG.ORANGE,
+                      color: dataSourceType === 'portfolio' ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY
+                    }}
+                  >
+                    <Briefcase size={12} className="inline mr-1" />
+                    Portfolio
+                  </button>
+                  <button
+                    onClick={() => setDataSourceType('symbol')}
+                    className={`flex-1 px-2 py-1.5 rounded text-xs font-mono ${dataSourceType === 'symbol' ? 'border-2' : ''}`}
+                    style={{
+                      backgroundColor: dataSourceType === 'symbol' ? BLOOMBERG.HEADER_BG : BLOOMBERG.DARK_BG,
+                      borderColor: BLOOMBERG.ORANGE,
+                      color: dataSourceType === 'symbol' ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY
+                    }}
+                  >
+                    <Search size={12} className="inline mr-1" />
+                    Symbol
+                  </button>
+                </div>
+
+                {/* Portfolio Selection */}
+                {dataSourceType === 'portfolio' && (
+                  <div>
+                    <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                      SELECT PORTFOLIO
+                    </label>
+                    <select
+                      value={selectedPortfolioId}
+                      onChange={(e) => setSelectedPortfolioId(e.target.value)}
+                      className="w-full p-2 rounded text-xs font-mono"
+                      style={{
+                        backgroundColor: BLOOMBERG.DARK_BG,
+                        color: BLOOMBERG.WHITE,
+                        border: `1px solid ${BLOOMBERG.BORDER}`
+                      }}
+                    >
+                      {portfolios.length === 0 ? (
+                        <option value="">No portfolios found</option>
+                      ) : (
+                        portfolios.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
+
+                {/* Symbol Input */}
+                {dataSourceType === 'symbol' && (
+                  <div>
+                    <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                      TICKER SYMBOL
+                    </label>
+                    <input
+                      type="text"
+                      value={symbolInput}
+                      onChange={(e) => setSymbolInput(e.target.value.toUpperCase())}
+                      placeholder="AAPL"
+                      className="w-full p-2 rounded text-xs font-mono"
+                      style={{
+                        backgroundColor: BLOOMBERG.DARK_BG,
+                        color: BLOOMBERG.WHITE,
+                        border: `1px solid ${BLOOMBERG.BORDER}`
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Historical Days */}
+                {dataSourceType !== 'manual' && (
+                  <div>
+                    <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                      HISTORICAL DAYS
+                    </label>
+                    <input
+                      type="number"
+                      min={30}
+                      max={1825}
+                      value={historicalDays}
+                      onChange={(e) => setHistoricalDays(parseInt(e.target.value) || 365)}
+                      className="w-full p-2 rounded text-xs font-mono"
+                      style={{
+                        backgroundColor: BLOOMBERG.DARK_BG,
+                        color: BLOOMBERG.WHITE,
+                        border: `1px solid ${BLOOMBERG.BORDER}`
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Load Data Button */}
+                {dataSourceType !== 'manual' && (
+                  <button
+                    onClick={loadDataFromSource}
+                    disabled={priceDataLoading}
+                    className="w-full py-2 rounded font-bold text-xs uppercase flex items-center justify-center gap-2"
+                    style={{ backgroundColor: BLOOMBERG.CYAN, color: BLOOMBERG.DARK_BG }}
+                  >
+                    {priceDataLoading ? (
+                      <>
+                        <RefreshCw size={12} className="animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <Database size={12} />
+                        Fetch Data
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* Data Info */}
+                {priceData && dataSourceType !== 'manual' && (
+                  <div className="p-2 rounded text-xs font-mono" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+                    <div className="flex justify-between" style={{ color: BLOOMBERG.GRAY }}>
+                      <span>Assets:</span>
+                      <span style={{ color: BLOOMBERG.CYAN }}>{priceData.assets.length}</span>
+                    </div>
+                    <div className="flex justify-between" style={{ color: BLOOMBERG.GRAY }}>
+                      <span>Data Points:</span>
+                      <span style={{ color: BLOOMBERG.WHITE }}>{priceData.nDataPoints}</span>
+                    </div>
+                    <div className="flex justify-between" style={{ color: BLOOMBERG.GRAY }}>
+                      <span>Range:</span>
+                      <span style={{ color: BLOOMBERG.WHITE }}>{priceData.startDate} to {priceData.endDate}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Model Configuration */}
+          {/* Analysis Mode Tabs */}
+          <div className="flex gap-1 p-1 rounded" style={{ backgroundColor: BLOOMBERG.HEADER_BG }}>
+            <button
+              onClick={() => setAnalysisMode('forecast')}
+              className={`flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1`}
+              style={{
+                backgroundColor: analysisMode === 'forecast' ? BLOOMBERG.ORANGE : 'transparent',
+                color: analysisMode === 'forecast' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+              }}
+            >
+              <TrendingUp size={12} />
+              Forecast
+            </button>
+            <button
+              onClick={() => setAnalysisMode('anomaly')}
+              className={`flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1`}
+              style={{
+                backgroundColor: analysisMode === 'anomaly' ? BLOOMBERG.ORANGE : 'transparent',
+                color: analysisMode === 'anomaly' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+              }}
+            >
+              <AlertTriangle size={12} />
+              Anomaly
+            </button>
+            <button
+              onClick={() => setAnalysisMode('seasonality')}
+              className={`flex-1 px-2 py-1.5 rounded text-xs font-mono flex items-center justify-center gap-1`}
+              style={{
+                backgroundColor: analysisMode === 'seasonality' ? BLOOMBERG.ORANGE : 'transparent',
+                color: analysisMode === 'seasonality' ? BLOOMBERG.DARK_BG : BLOOMBERG.GRAY
+              }}
+            >
+              <Waves size={12} />
+              Season
+            </button>
+          </div>
+
+          {/* Data Input - Only for Manual */}
+          {dataSourceType === 'manual' && (
+            <div>
+              <label className="block text-xs font-mono mb-2" style={{ color: BLOOMBERG.GRAY }}>
+                PANEL DATA (JSON)
+              </label>
+              <textarea
+                value={dataInput}
+                onChange={(e) => setDataInput(e.target.value)}
+                className="w-full h-32 p-3 rounded text-xs font-mono resize-none"
+                style={{
+                  backgroundColor: BLOOMBERG.DARK_BG,
+                  color: BLOOMBERG.WHITE,
+                  border: `1px solid ${BLOOMBERG.BORDER}`
+                }}
+                placeholder='[{"entity_id": "A", "time": "2024-01-01", "value": 100}, ...]'
+              />
+            </div>
+          )}
+
+          {/* Model Configuration - Shown for forecast mode */}
+          {analysisMode === 'forecast' && (
           <div
             className="rounded overflow-hidden"
             style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
@@ -436,12 +871,95 @@ export function FunctimePanel() {
               </div>
             )}
           </div>
+          )}
+
+          {/* Anomaly Detection Configuration */}
+          {analysisMode === 'anomaly' && (
+          <div
+            className="rounded overflow-hidden"
+            style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
+          >
+            <div
+              className="px-3 py-2 flex items-center gap-2"
+              style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+            >
+              <AlertTriangle size={14} color={BLOOMBERG.YELLOW} />
+              <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+                Anomaly Detection Settings
+              </span>
+            </div>
+            <div className="p-3 space-y-3">
+              <div>
+                <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  DETECTION METHOD
+                </label>
+                <select
+                  value={anomalyMethod}
+                  onChange={(e) => setAnomalyMethod(e.target.value as 'zscore' | 'iqr' | 'isolation_forest')}
+                  className="w-full p-2 rounded text-xs font-mono"
+                  style={{
+                    backgroundColor: BLOOMBERG.DARK_BG,
+                    color: BLOOMBERG.WHITE,
+                    border: `1px solid ${BLOOMBERG.BORDER}`
+                  }}
+                >
+                  <option value="zscore">Z-Score</option>
+                  <option value="iqr">IQR (Interquartile Range)</option>
+                  <option value="isolation_forest">Isolation Forest</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-mono mb-1" style={{ color: BLOOMBERG.GRAY }}>
+                  THRESHOLD
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min={1}
+                  max={5}
+                  value={anomalyThreshold}
+                  onChange={(e) => setAnomalyThreshold(parseFloat(e.target.value) || 3.0)}
+                  className="w-full p-2 rounded text-xs font-mono"
+                  style={{
+                    backgroundColor: BLOOMBERG.DARK_BG,
+                    color: BLOOMBERG.WHITE,
+                    border: `1px solid ${BLOOMBERG.BORDER}`
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+          )}
+
+          {/* Seasonality Analysis Configuration */}
+          {analysisMode === 'seasonality' && (
+          <div
+            className="rounded overflow-hidden"
+            style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}
+          >
+            <div
+              className="px-3 py-2 flex items-center gap-2"
+              style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+            >
+              <Waves size={14} color={BLOOMBERG.CYAN} />
+              <span className="text-xs font-bold uppercase" style={{ color: BLOOMBERG.WHITE }}>
+                Seasonality Analysis
+              </span>
+            </div>
+            <div className="p-3">
+              <p className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                Analyzes time series for seasonal patterns, trend strength, and periodicity.
+                Uses FFT and ACF for automatic period detection.
+              </p>
+            </div>
+          </div>
+          )}
         </div>
 
         {/* Run Button */}
         <div className="p-4 border-t" style={{ borderColor: BLOOMBERG.BORDER }}>
           <button
-            onClick={runForecast}
+            onClick={runAnalysis}
             disabled={isLoading}
             className="w-full py-3 rounded font-bold text-sm uppercase flex items-center justify-center gap-2 disabled:opacity-50"
             style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
@@ -449,12 +967,14 @@ export function FunctimePanel() {
             {isLoading ? (
               <>
                 <RefreshCw size={16} className="animate-spin" />
-                FORECASTING...
+                {analysisMode === 'forecast' ? 'FORECASTING...' :
+                 analysisMode === 'anomaly' ? 'DETECTING...' : 'ANALYZING...'}
               </>
             ) : (
               <>
                 <Play size={16} />
-                RUN FORECAST
+                {analysisMode === 'forecast' ? 'RUN FORECAST' :
+                 analysisMode === 'anomaly' ? 'DETECT ANOMALIES' : 'ANALYZE SEASONALITY'}
               </>
             )}
           </button>
@@ -473,13 +993,133 @@ export function FunctimePanel() {
           </div>
         )}
 
-        {!analysisResult && !error && (
+        {!analysisResult && !anomalyResult && !seasonalityResult && !error && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <LineChart size={64} color={BLOOMBERG.MUTED} className="mx-auto mb-4" />
               <p className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
-                Configure model and click "Run Forecast" to see predictions
+                {analysisMode === 'forecast'
+                  ? 'Configure model and click "Run Forecast" to see predictions'
+                  : analysisMode === 'anomaly'
+                  ? 'Click "Detect Anomalies" to find outliers in your data'
+                  : 'Click "Analyze Seasonality" to discover patterns'}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Anomaly Detection Results */}
+        {anomalyResult && anomalyResult.success && anomalyResult.anomalies && (
+          <div className="space-y-4">
+            <div
+              className="rounded overflow-hidden"
+              style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+            >
+              <div
+                className="px-4 py-3 flex items-center gap-2"
+                style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+              >
+                <AlertTriangle size={16} color={BLOOMBERG.YELLOW} />
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                  Anomaly Detection Results
+                </span>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {Object.entries(anomalyResult.anomalies).map(([symbol, data]) => (
+                    <div
+                      key={symbol}
+                      className="p-3 rounded"
+                      style={{ backgroundColor: BLOOMBERG.DARK_BG }}
+                    >
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-bold" style={{ color: BLOOMBERG.CYAN }}>
+                          {symbol}
+                        </span>
+                        <span
+                          className="text-xs px-2 py-0.5 rounded"
+                          style={{
+                            backgroundColor: data.count > 0 ? BLOOMBERG.RED : BLOOMBERG.GREEN,
+                            color: BLOOMBERG.WHITE
+                          }}
+                        >
+                          {data.count} anomalies
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                        <div>Rate: {(data.rate * 100).toFixed(2)}%</div>
+                        {data.dates?.length > 0 && (
+                          <div className="mt-1">
+                            Latest: {data.dates[data.dates.length - 1]}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Seasonality Results */}
+        {seasonalityResult && seasonalityResult.success && seasonalityResult.seasonality && (
+          <div className="space-y-4">
+            <div
+              className="rounded overflow-hidden"
+              style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}` }}
+            >
+              <div
+                className="px-4 py-3 flex items-center gap-2"
+                style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+              >
+                <Waves size={16} color={BLOOMBERG.CYAN} />
+                <span className="text-xs font-bold uppercase tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                  Seasonality Analysis Results
+                </span>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {Object.entries(seasonalityResult.seasonality).map(([symbol, data]) => (
+                    <div
+                      key={symbol}
+                      className="p-3 rounded"
+                      style={{ backgroundColor: BLOOMBERG.DARK_BG }}
+                    >
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-bold" style={{ color: BLOOMBERG.CYAN }}>
+                          {symbol}
+                        </span>
+                        <span
+                          className="text-xs px-2 py-0.5 rounded"
+                          style={{
+                            backgroundColor: data.is_seasonal ? BLOOMBERG.GREEN : BLOOMBERG.MUTED,
+                            color: BLOOMBERG.WHITE
+                          }}
+                        >
+                          {data.is_seasonal ? 'Seasonal' : 'Non-Seasonal'}
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono space-y-1" style={{ color: BLOOMBERG.GRAY }}>
+                        <div className="flex justify-between">
+                          <span>Period:</span>
+                          <span style={{ color: BLOOMBERG.WHITE }}>{data.period} days</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Seasonal Strength:</span>
+                          <span style={{ color: BLOOMBERG.ORANGE }}>{(data.strength * 100).toFixed(1)}%</span>
+                        </div>
+                        {data.trend_strength !== undefined && (
+                          <div className="flex justify-between">
+                            <span>Trend Strength:</span>
+                            <span style={{ color: BLOOMBERG.GREEN }}>{(data.trend_strength * 100).toFixed(1)}%</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -682,7 +1322,7 @@ export function FunctimePanel() {
                         </tr>
                       </thead>
                       <tbody>
-                        {analysisResult.forecast.slice(0, 20).map((row, idx) => (
+                        {analysisResult.forecast.slice(0, forecastTableExpanded ? EXPANDED_ROWS : INITIAL_ROWS).map((row, idx) => (
                           <tr
                             key={idx}
                             style={{
@@ -702,13 +1342,24 @@ export function FunctimePanel() {
                         ))}
                       </tbody>
                     </table>
-                    {analysisResult.forecast.length > 20 && (
-                      <div
-                        className="px-3 py-2 text-xs font-mono text-center"
-                        style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.GRAY }}
+                    {analysisResult.forecast.length > INITIAL_ROWS && (
+                      <button
+                        onClick={() => setForecastTableExpanded(!forecastTableExpanded)}
+                        className="w-full px-3 py-2 text-xs font-mono text-center flex items-center justify-center gap-2 hover:opacity-80 transition-opacity"
+                        style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.ORANGE }}
                       >
-                        + {analysisResult.forecast.length - 20} more rows
-                      </div>
+                        {forecastTableExpanded ? (
+                          <>
+                            <ChevronUp size={12} />
+                            Show Less ({INITIAL_ROWS} rows)
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown size={12} />
+                            Show More ({Math.min(analysisResult.forecast.length, EXPANDED_ROWS)} of {analysisResult.forecast.length} rows)
+                          </>
+                        )}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -781,11 +1432,19 @@ function MetricCard({
   );
 }
 
-// Forecast Chart Component - SVG-based line chart
+// Forecast Chart Component - Interactive SVG-based line chart with tooltips
 interface ChartDataPoint {
   time: string;
   value: number;
   type: 'historical' | 'forecast';
+  entity_id?: string;
+}
+
+interface TooltipState {
+  visible: boolean;
+  x: number;
+  y: number;
+  data: ChartDataPoint | null;
 }
 
 function ForecastChart({
@@ -797,6 +1456,11 @@ function ForecastChart({
   forecastData: ForecastResult[];
   height?: number;
 }) {
+  const [tooltip, setTooltip] = useState<TooltipState>({ visible: false, x: 0, y: 0, data: null });
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panOffset, setPanOffset] = useState(0);
+  const svgRef = React.useRef<SVGSVGElement>(null);
+
   const chartData = useMemo(() => {
     const historical: ChartDataPoint[] = historicalData.map(d => ({
       time: d.time,
@@ -807,7 +1471,8 @@ function ForecastChart({
     const forecast: ChartDataPoint[] = forecastData.map(d => ({
       time: d.time,
       value: d.value,
-      type: 'forecast' as const
+      type: 'forecast' as const,
+      entity_id: d.entity_id
     }));
 
     return [...historical, ...forecast];
@@ -826,7 +1491,8 @@ function ForecastChart({
     );
   }
 
-  const width = 800;
+  const baseWidth = 800;
+  const width = baseWidth * zoomLevel;
   const padding = { top: 20, right: 60, bottom: 40, left: 60 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
@@ -883,152 +1549,266 @@ function ForecastChart({
     arr.findIndex(t => t.index === item.index) === index && item.label
   );
 
+  // Handle mouse events for interactive tooltips
+  const handleMouseEnter = (data: ChartDataPoint, x: number, y: number) => {
+    setTooltip({ visible: true, x, y, data });
+  };
+
+  const handleMouseLeave = () => {
+    setTooltip({ visible: false, x: 0, y: 0, data: null });
+  };
+
+  // Zoom controls
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 3));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1));
+  const handleResetZoom = () => { setZoomLevel(1); setPanOffset(0); };
+
   return (
-    <div className="w-full overflow-x-auto">
-      <svg
-        width="100%"
-        height={height}
-        viewBox={`0 0 ${width} ${height}`}
-        preserveAspectRatio="xMidYMid meet"
-        style={{ backgroundColor: BLOOMBERG.DARK_BG }}
-      >
-        {/* Grid lines */}
-        {yTicks.map((tick, i) => (
-          <line
-            key={i}
-            x1={padding.left}
-            y1={tick.y}
-            x2={width - padding.right}
-            y2={tick.y}
-            stroke={BLOOMBERG.BORDER}
-            strokeWidth={1}
-            strokeDasharray="4,4"
-          />
-        ))}
-
-        {/* Forecast region background */}
-        {forecastData.length > 0 && (
-          <rect
-            x={xScale(historicalEndIndex)}
-            y={padding.top}
-            width={chartWidth - xScale(historicalEndIndex) + padding.left}
-            height={chartHeight}
-            fill={BLOOMBERG.ORANGE}
-            opacity={0.05}
-          />
-        )}
-
-        {/* Vertical line at forecast start */}
-        {forecastData.length > 0 && historicalData.length > 0 && (
-          <line
-            x1={xScale(historicalEndIndex)}
-            y1={padding.top}
-            x2={xScale(historicalEndIndex)}
-            y2={height - padding.bottom}
-            stroke={BLOOMBERG.ORANGE}
-            strokeWidth={1}
-            strokeDasharray="6,4"
-            opacity={0.6}
-          />
-        )}
-
-        {/* Historical line */}
-        {historicalPath && (
-          <path
-            d={historicalPath}
-            fill="none"
-            stroke={BLOOMBERG.CYAN}
-            strokeWidth={2}
-          />
-        )}
-
-        {/* Forecast line */}
-        {forecastPath && (
-          <path
-            d={forecastPath}
-            fill="none"
-            stroke={BLOOMBERG.ORANGE}
-            strokeWidth={2}
-            strokeDasharray="6,3"
-          />
-        )}
-
-        {/* Historical data points */}
-        {historicalData.map((d, i) => (
-          <circle
-            key={`hist-${i}`}
-            cx={xScale(i)}
-            cy={yScale(d.value)}
-            r={3}
-            fill={BLOOMBERG.CYAN}
-          />
-        ))}
-
-        {/* Forecast data points */}
-        {forecastData.map((d, i) => (
-          <circle
-            key={`forecast-${i}`}
-            cx={xScale(historicalData.length + i)}
-            cy={yScale(d.value)}
-            r={4}
-            fill={BLOOMBERG.ORANGE}
-            stroke={BLOOMBERG.DARK_BG}
-            strokeWidth={1}
-          />
-        ))}
-
-        {/* Y-axis labels */}
-        {yTicks.map((tick, i) => (
-          <text
-            key={i}
-            x={padding.left - 10}
-            y={tick.y + 4}
-            textAnchor="end"
-            fontSize={10}
-            fontFamily="monospace"
-            fill={BLOOMBERG.GRAY}
+    <div className="w-full">
+      {/* Zoom Controls */}
+      <div className="flex justify-end gap-2 mb-2">
+        <button
+          onClick={handleZoomOut}
+          className="px-2 py-1 rounded text-xs font-mono"
+          style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+          disabled={zoomLevel <= 1}
+        >
+          −
+        </button>
+        <span className="px-2 py-1 text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+          {Math.round(zoomLevel * 100)}%
+        </span>
+        <button
+          onClick={handleZoomIn}
+          className="px-2 py-1 rounded text-xs font-mono"
+          style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+          disabled={zoomLevel >= 3}
+        >
+          +
+        </button>
+        {zoomLevel !== 1 && (
+          <button
+            onClick={handleResetZoom}
+            className="px-2 py-1 rounded text-xs font-mono"
+            style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.ORANGE, border: `1px solid ${BLOOMBERG.BORDER}` }}
           >
-            {tick.value.toFixed(2)}
-          </text>
-        ))}
-
-        {/* X-axis labels */}
-        {xLabels.map((item, i) => (
-          <text
-            key={i}
-            x={xScale(item.index)}
-            y={height - padding.bottom + 20}
-            textAnchor="middle"
-            fontSize={10}
-            fontFamily="monospace"
-            fill={BLOOMBERG.GRAY}
-          >
-            {item.label}
-          </text>
-        ))}
-
-        {/* Legend */}
-        <g transform={`translate(${width - padding.right - 120}, ${padding.top})`}>
-          <rect x={0} y={0} width={120} height={50} fill={BLOOMBERG.PANEL_BG} rx={4} />
-          <line x1={10} y1={15} x2={35} y2={15} stroke={BLOOMBERG.CYAN} strokeWidth={2} />
-          <text x={42} y={18} fontSize={10} fontFamily="monospace" fill={BLOOMBERG.WHITE}>Historical</text>
-          <line x1={10} y1={35} x2={35} y2={35} stroke={BLOOMBERG.ORANGE} strokeWidth={2} strokeDasharray="6,3" />
-          <text x={42} y={38} fontSize={10} fontFamily="monospace" fill={BLOOMBERG.WHITE}>Forecast</text>
-        </g>
-
-        {/* Forecast label */}
-        {forecastData.length > 0 && historicalData.length > 0 && (
-          <text
-            x={xScale(historicalEndIndex) + 5}
-            y={padding.top + 15}
-            fontSize={10}
-            fontFamily="monospace"
-            fill={BLOOMBERG.ORANGE}
-          >
-            ▼ Forecast
-          </text>
+            Reset
+          </button>
         )}
-      </svg>
+      </div>
+
+      {/* Chart Container with horizontal scroll */}
+      <div className="overflow-x-auto" style={{ position: 'relative' }}>
+        <svg
+          ref={svgRef}
+          width={width}
+          height={height}
+          viewBox={`0 0 ${width} ${height}`}
+          style={{ backgroundColor: BLOOMBERG.DARK_BG, minWidth: baseWidth }}
+        >
+          {/* Grid lines */}
+          {yTicks.map((tick, i) => (
+            <line
+              key={i}
+              x1={padding.left}
+              y1={tick.y}
+              x2={width - padding.right}
+              y2={tick.y}
+              stroke={BLOOMBERG.BORDER}
+              strokeWidth={1}
+              strokeDasharray="4,4"
+            />
+          ))}
+
+          {/* Forecast region background */}
+          {forecastData.length > 0 && (
+            <rect
+              x={xScale(historicalEndIndex)}
+              y={padding.top}
+              width={chartWidth - xScale(historicalEndIndex) + padding.left}
+              height={chartHeight}
+              fill={BLOOMBERG.ORANGE}
+              opacity={0.05}
+            />
+          )}
+
+          {/* Vertical line at forecast start */}
+          {forecastData.length > 0 && historicalData.length > 0 && (
+            <line
+              x1={xScale(historicalEndIndex)}
+              y1={padding.top}
+              x2={xScale(historicalEndIndex)}
+              y2={height - padding.bottom}
+              stroke={BLOOMBERG.ORANGE}
+              strokeWidth={1}
+              strokeDasharray="6,4"
+              opacity={0.6}
+            />
+          )}
+
+          {/* Historical line */}
+          {historicalPath && (
+            <path
+              d={historicalPath}
+              fill="none"
+              stroke={BLOOMBERG.CYAN}
+              strokeWidth={2}
+            />
+          )}
+
+          {/* Forecast line */}
+          {forecastPath && (
+            <path
+              d={forecastPath}
+              fill="none"
+              stroke={BLOOMBERG.ORANGE}
+              strokeWidth={2}
+              strokeDasharray="6,3"
+            />
+          )}
+
+          {/* Historical data points - Interactive */}
+          {historicalData.map((d, i) => {
+            const cx = xScale(i);
+            const cy = yScale(d.value);
+            const dataPoint: ChartDataPoint = { time: d.time, value: d.value, type: 'historical' };
+            return (
+              <g key={`hist-${i}`}>
+                {/* Larger invisible hit area */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={12}
+                  fill="transparent"
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={() => handleMouseEnter(dataPoint, cx, cy)}
+                  onMouseLeave={handleMouseLeave}
+                />
+                {/* Visible point */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={tooltip.data?.time === d.time && tooltip.data?.type === 'historical' ? 6 : 3}
+                  fill={BLOOMBERG.CYAN}
+                  style={{ transition: 'r 0.15s ease', pointerEvents: 'none' }}
+                />
+              </g>
+            );
+          })}
+
+          {/* Forecast data points - Interactive */}
+          {forecastData.map((d, i) => {
+            const cx = xScale(historicalData.length + i);
+            const cy = yScale(d.value);
+            const dataPoint: ChartDataPoint = { time: d.time, value: d.value, type: 'forecast', entity_id: d.entity_id };
+            return (
+              <g key={`forecast-${i}`}>
+                {/* Larger invisible hit area */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={12}
+                  fill="transparent"
+                  style={{ cursor: 'pointer' }}
+                  onMouseEnter={() => handleMouseEnter(dataPoint, cx, cy)}
+                  onMouseLeave={handleMouseLeave}
+                />
+                {/* Visible point */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={tooltip.data?.time === d.time && tooltip.data?.type === 'forecast' ? 7 : 4}
+                  fill={BLOOMBERG.ORANGE}
+                  stroke={BLOOMBERG.DARK_BG}
+                  strokeWidth={1}
+                  style={{ transition: 'r 0.15s ease', pointerEvents: 'none' }}
+                />
+              </g>
+            );
+          })}
+
+          {/* Y-axis labels */}
+          {yTicks.map((tick, i) => (
+            <text
+              key={i}
+              x={padding.left - 10}
+              y={tick.y + 4}
+              textAnchor="end"
+              fontSize={10}
+              fontFamily="monospace"
+              fill={BLOOMBERG.GRAY}
+            >
+              {tick.value.toFixed(2)}
+            </text>
+          ))}
+
+          {/* X-axis labels */}
+          {xLabels.map((item, i) => (
+            <text
+              key={i}
+              x={xScale(item.index)}
+              y={height - padding.bottom + 20}
+              textAnchor="middle"
+              fontSize={10}
+              fontFamily="monospace"
+              fill={BLOOMBERG.GRAY}
+            >
+              {item.label}
+            </text>
+          ))}
+
+          {/* Legend */}
+          <g transform={`translate(${width - padding.right - 120}, ${padding.top})`}>
+            <rect x={0} y={0} width={120} height={50} fill={BLOOMBERG.PANEL_BG} rx={4} />
+            <line x1={10} y1={15} x2={35} y2={15} stroke={BLOOMBERG.CYAN} strokeWidth={2} />
+            <text x={42} y={18} fontSize={10} fontFamily="monospace" fill={BLOOMBERG.WHITE}>Historical</text>
+            <line x1={10} y1={35} x2={35} y2={35} stroke={BLOOMBERG.ORANGE} strokeWidth={2} strokeDasharray="6,3" />
+            <text x={42} y={38} fontSize={10} fontFamily="monospace" fill={BLOOMBERG.WHITE}>Forecast</text>
+          </g>
+
+          {/* Forecast label */}
+          {forecastData.length > 0 && historicalData.length > 0 && (
+            <text
+              x={xScale(historicalEndIndex) + 5}
+              y={padding.top + 15}
+              fontSize={10}
+              fontFamily="monospace"
+              fill={BLOOMBERG.ORANGE}
+            >
+              ▼ Forecast
+            </text>
+          )}
+        </svg>
+
+        {/* Tooltip */}
+        {tooltip.visible && tooltip.data && (
+          <div
+            className="absolute pointer-events-none px-3 py-2 rounded shadow-lg z-50"
+            style={{
+              left: Math.min(tooltip.x + 10, width - 180),
+              top: Math.max(tooltip.y - 60, 10),
+              backgroundColor: BLOOMBERG.PANEL_BG,
+              border: `1px solid ${tooltip.data.type === 'forecast' ? BLOOMBERG.ORANGE : BLOOMBERG.CYAN}`,
+              minWidth: 160
+            }}
+          >
+            <div className="text-xs font-mono font-bold mb-1" style={{ color: tooltip.data.type === 'forecast' ? BLOOMBERG.ORANGE : BLOOMBERG.CYAN }}>
+              {tooltip.data.type === 'forecast' ? '📈 FORECAST' : '📊 HISTORICAL'}
+            </div>
+            <div className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+              Date: <span style={{ color: BLOOMBERG.WHITE }}>{tooltip.data.time.split('T')[0]}</span>
+            </div>
+            <div className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+              Value: <span style={{ color: BLOOMBERG.GREEN, fontWeight: 'bold' }}>{tooltip.data.value.toFixed(4)}</span>
+            </div>
+            {tooltip.data.entity_id && (
+              <div className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                Entity: <span style={{ color: BLOOMBERG.CYAN }}>{tooltip.data.entity_id}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

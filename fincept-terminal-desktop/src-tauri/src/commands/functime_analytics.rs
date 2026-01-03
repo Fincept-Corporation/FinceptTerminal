@@ -184,3 +184,237 @@ pub async fn functime_full_pipeline(
     let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
     python_runtime::execute_python_script(&script_path, args)
 }
+
+// ============================================================================
+// ADVANCED FUNCTIME COMMANDS
+// ============================================================================
+
+/// Advanced forecasting with additional models (naive, ses, holt, theta, croston, xgboost, catboost)
+#[tauri::command]
+pub async fn functime_advanced_forecast(
+    app: tauri::AppHandle,
+    data_json: String,
+    model: Option<String>,
+    horizon: Option<i32>,
+    frequency: Option<String>,
+    seasonal_period: Option<i32>,
+    alpha: Option<f64>,
+    beta: Option<f64>,
+    theta: Option<f64>,
+    lags: Option<i32>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "data": data_json,
+        "model": model.unwrap_or_else(|| "naive".to_string()),
+        "horizon": horizon.unwrap_or(7),
+        "frequency": frequency.unwrap_or_else(|| "1d".to_string()),
+        "seasonal_period": seasonal_period.unwrap_or(7),
+        "alpha": alpha.unwrap_or(0.3),
+        "beta": beta.unwrap_or(0.1),
+        "theta": theta.unwrap_or(2.0),
+        "lags": lags.unwrap_or(10)
+    });
+
+    let args = vec!["advanced_forecast".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+/// Ensemble forecasting combining multiple models
+#[tauri::command]
+pub async fn functime_ensemble(
+    app: tauri::AppHandle,
+    data_json: String,
+    models: Option<Vec<String>>,
+    weights: Option<Vec<f64>>,
+    horizon: Option<i32>,
+    frequency: Option<String>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "data": data_json,
+        "models": models.unwrap_or_else(|| vec!["naive".to_string(), "ses".to_string(), "linear".to_string()]),
+        "weights": weights,
+        "horizon": horizon.unwrap_or(7),
+        "frequency": frequency.unwrap_or_else(|| "1d".to_string())
+    });
+
+    let args = vec!["ensemble".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+/// Automatic ensemble with weight optimization
+#[tauri::command]
+pub async fn functime_auto_ensemble(
+    app: tauri::AppHandle,
+    data_json: String,
+    horizon: Option<i32>,
+    frequency: Option<String>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "data": data_json,
+        "horizon": horizon.unwrap_or(7),
+        "frequency": frequency.unwrap_or_else(|| "1d".to_string())
+    });
+
+    let args = vec!["auto_ensemble".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+/// Anomaly detection in time series
+#[tauri::command]
+pub async fn functime_anomaly_detection(
+    app: tauri::AppHandle,
+    data_json: String,
+    method: Option<String>,
+    threshold: Option<f64>,
+    window_size: Option<i32>,
+    contamination: Option<f64>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "data": data_json,
+        "method": method.unwrap_or_else(|| "zscore".to_string()),
+        "threshold": threshold.unwrap_or(3.0),
+        "window_size": window_size.unwrap_or(10),
+        "contamination": contamination.unwrap_or(0.1)
+    });
+
+    let args = vec!["anomaly_detection".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+/// Seasonality analysis (decomposition, strength, detection)
+#[tauri::command]
+pub async fn functime_seasonality(
+    app: tauri::AppHandle,
+    data_json: String,
+    // Accept both parameter naming conventions from frontend
+    operation: Option<String>,
+    analysis_type: Option<String>,
+    period: Option<i32>,
+    method: Option<String>,
+    max_period: Option<i32>,
+    robust: Option<bool>,
+    model: Option<String>,
+    model_type: Option<String>,
+) -> Result<String, String> {
+    // Use 'operation' if provided, fall back to 'analysis_type', then default
+    let op = operation
+        .or(analysis_type)
+        .unwrap_or_else(|| "decompose".to_string());
+
+    // Use 'model' if provided, fall back to 'model_type', then default
+    let model_val = model
+        .or(model_type)
+        .unwrap_or_else(|| "additive".to_string());
+
+    let params = serde_json::json!({
+        "data": data_json,
+        "operation": op,
+        "period": period,
+        "method": method.unwrap_or_else(|| "fft".to_string()),
+        "max_period": max_period.unwrap_or(365),
+        "robust": robust.unwrap_or(true),
+        "model_type": model_val
+    });
+
+    let args = vec!["seasonality".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+/// Calculate confidence intervals for forecasts
+#[tauri::command]
+pub async fn functime_confidence_intervals(
+    app: tauri::AppHandle,
+    data_json: String,
+    method: Option<String>,
+    confidence_level: Option<f64>,
+    horizon: Option<i32>,
+    n_bootstrap: Option<i32>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "data": data_json,
+        "method": method.unwrap_or_else(|| "bootstrap".to_string()),
+        "confidence_level": confidence_level.unwrap_or(0.95),
+        "horizon": horizon.unwrap_or(7),
+        "n_bootstrap": n_bootstrap.unwrap_or(100)
+    });
+
+    let args = vec!["confidence_intervals".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+/// Feature importance analysis for ML models
+#[tauri::command]
+pub async fn functime_feature_importance(
+    app: tauri::AppHandle,
+    data_json: String,
+    model: Option<String>,
+    method: Option<String>,
+    lags: Option<i32>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "data": data_json,
+        "model": model.unwrap_or_else(|| "lightgbm".to_string()),
+        "method": method.unwrap_or_else(|| "shap".to_string()),
+        "lags": lags.unwrap_or(10)
+    });
+
+    let args = vec!["feature_importance".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+/// Advanced cross-validation with model evaluation
+#[tauri::command]
+pub async fn functime_advanced_cv(
+    app: tauri::AppHandle,
+    data_json: String,
+    model: Option<String>,
+    cv_method: Option<String>,
+    n_splits: Option<i32>,
+    horizon: Option<i32>,
+    gap: Option<i32>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "data": data_json,
+        "model": model.unwrap_or_else(|| "linear".to_string()),
+        "cv_method": cv_method.unwrap_or_else(|| "expanding".to_string()),
+        "n_splits": n_splits.unwrap_or(5),
+        "horizon": horizon.unwrap_or(7),
+        "gap": gap.unwrap_or(0)
+    });
+
+    let args = vec!["advanced_cv".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+/// Strategy backtesting for forecasting models
+#[tauri::command]
+pub async fn functime_backtest(
+    app: tauri::AppHandle,
+    data_json: String,
+    model: Option<String>,
+    strategy: Option<String>,
+    initial_capital: Option<f64>,
+    horizon: Option<i32>,
+    refit_frequency: Option<i32>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "data": data_json,
+        "model": model.unwrap_or_else(|| "linear".to_string()),
+        "strategy": strategy.unwrap_or_else(|| "long_only".to_string()),
+        "initial_capital": initial_capital.unwrap_or(10000.0),
+        "horizon": horizon.unwrap_or(7),
+        "refit_frequency": refit_frequency.unwrap_or(30)
+    });
+
+    let args = vec!["backtest".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}

@@ -3,6 +3,8 @@ Fortitudo.tech Advanced Functions Wrapper
 ==========================================
 Entropy pooling, exposure stacking, and visualization
 
+Includes fallback implementations using NumPy/SciPy for Python 3.14+ compatibility.
+
 Usage:
     python advanced.py
 """
@@ -12,9 +14,114 @@ import pandas as pd
 import json
 from typing import Dict, Any, Optional, Tuple
 import warnings
-import fortitudo.tech as ft
 
 warnings.filterwarnings('ignore')
+
+# Try to import fortitudo.tech, fallback to pure implementations
+try:
+    import fortitudo.tech as ft
+    FORTITUDO_AVAILABLE = True
+except ImportError:
+    FORTITUDO_AVAILABLE = False
+    ft = None
+
+
+# ============================================================================
+# FALLBACK IMPLEMENTATIONS (Pure NumPy/SciPy)
+# ============================================================================
+
+def _fallback_entropy_pooling(
+    p: np.ndarray,
+    A: np.ndarray,
+    b: np.ndarray,
+    G: Optional[np.ndarray] = None,
+    h: Optional[np.ndarray] = None,
+    method: str = 'L-BFGS-B'
+) -> np.ndarray:
+    """
+    Fallback entropy pooling using scipy optimization.
+
+    Minimizes KL divergence D(q||p) subject to constraints Aq = b, Gq <= h
+    """
+    from scipy.optimize import minimize
+
+    n = len(p.flatten())
+    p_flat = p.flatten()
+
+    # Objective: KL divergence D(q||p) = sum(q * log(q/p))
+    def objective(q):
+        q = np.maximum(q, 1e-10)  # Avoid log(0)
+        return np.sum(q * (np.log(q) - np.log(p_flat)))
+
+    def gradient(q):
+        q = np.maximum(q, 1e-10)
+        return np.log(q) - np.log(p_flat) + 1
+
+    # Constraints
+    constraints = []
+
+    # Equality constraints: Aq = b
+    if A is not None and b is not None:
+        for i in range(A.shape[0]):
+            constraints.append({
+                'type': 'eq',
+                'fun': lambda q, i=i: A[i] @ q - b.flatten()[i]
+            })
+
+    # Inequality constraints: Gq <= h
+    if G is not None and h is not None:
+        for i in range(G.shape[0]):
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda q, i=i: h.flatten()[i] - G[i] @ q
+            })
+
+    # Bounds: probabilities must be positive
+    bounds = [(1e-10, 1.0) for _ in range(n)]
+
+    # Initial guess: prior probabilities
+    x0 = p_flat.copy()
+
+    # Optimize
+    result = minimize(
+        objective,
+        x0,
+        method=method,
+        jac=gradient,
+        bounds=bounds,
+        constraints=constraints,
+        options={'maxiter': 1000}
+    )
+
+    # Normalize result
+    q = result.x
+    q = np.maximum(q, 0)
+    q = q / q.sum()
+
+    return q.reshape(-1, 1)
+
+
+def _fallback_exposure_stacking(
+    L: int,
+    sample_portfolios: np.ndarray
+) -> np.ndarray:
+    """
+    Fallback exposure stacking implementation.
+
+    Simple mean aggregation of sample portfolios as approximation.
+    For full implementation, see SSRN paper 4709317.
+    """
+    # Simple approximation: weighted average
+    # In practice, this should use cross-validation partitioning
+    n_assets, n_samples = sample_portfolios.shape
+
+    # Use mean as a simple approximation
+    stacked = sample_portfolios.mean(axis=1)
+
+    # Normalize to sum to 1
+    stacked = stacked / stacked.sum()
+
+    return stacked
 
 
 def apply_entropy_pooling(
@@ -41,13 +148,6 @@ def apply_entropy_pooling(
 
     Returns:
         Posterior probability vector, shape (S, 1)
-
-    Example:
-        >>> # 100 scenarios, probabilities must sum to 1
-        >>> p_prior = np.ones((100, 1)) / 100
-        >>> A = np.ones((1, 100))  # Sum constraint
-        >>> b = np.array([[1.0]])
-        >>> p_post = apply_entropy_pooling(p_prior, A, b)
     """
     # Ensure correct shapes
     if prior_probabilities.ndim == 1:
@@ -57,16 +157,25 @@ def apply_entropy_pooling(
     if inequality_constraints_h is not None and inequality_constraints_h.ndim == 1:
         inequality_constraints_h = inequality_constraints_h.reshape(-1, 1)
 
-    posterior = ft.entropy_pooling(
-        p=prior_probabilities,
-        A=equality_constraints_A,
-        b=equality_constraints_b,
-        G=inequality_constraints_G,
-        h=inequality_constraints_h,
-        method=method
-    )
-
-    return posterior
+    if FORTITUDO_AVAILABLE:
+        posterior = ft.entropy_pooling(
+            p=prior_probabilities,
+            A=equality_constraints_A,
+            b=equality_constraints_b,
+            G=inequality_constraints_G,
+            h=inequality_constraints_h,
+            method=method
+        )
+        return posterior
+    else:
+        return _fallback_entropy_pooling(
+            prior_probabilities,
+            equality_constraints_A,
+            equality_constraints_b,
+            inequality_constraints_G,
+            inequality_constraints_h,
+            method
+        )
 
 
 def apply_entropy_pooling_simple(
@@ -136,20 +245,23 @@ def calculate_exposure_stacking(
     n_assets, n_samples = sample_portfolios.shape
 
     # Calculate exposure stacking portfolio
-    stacked_weights = ft.exposure_stacking(L=n_partitions, sample_portfolios=sample_portfolios)
+    if FORTITUDO_AVAILABLE:
+        stacked_weights = ft.exposure_stacking(L=n_partitions, sample_portfolios=sample_portfolios)
+    else:
+        stacked_weights = _fallback_exposure_stacking(n_partitions, sample_portfolios)
 
     # Calculate statistics
     mean_weights = sample_portfolios.mean(axis=1)
     std_weights = sample_portfolios.std(axis=1)
 
     return {
-        'stacked_weights': stacked_weights.tolist(),
+        'stacked_weights': stacked_weights.tolist() if hasattr(stacked_weights, 'tolist') else list(stacked_weights),
         'mean_sample_weights': mean_weights.tolist(),
         'std_sample_weights': std_weights.tolist(),
         'n_assets': n_assets,
         'n_samples': n_samples,
         'n_partitions': n_partitions,
-        'weights_sum': float(stacked_weights.sum())
+        'weights_sum': float(np.sum(stacked_weights))
     }
 
 
@@ -178,19 +290,35 @@ def plot_volatility_surface(
         import matplotlib
         matplotlib.use('Agg')  # Non-interactive backend
         import matplotlib.pyplot as plt
-
-        fig, ax = ft.plot_vol_surface(
-            index=scenario_index,
-            vol_surface=vol_surface_data,
-            figsize=figsize,
-            zoom=zoom
-        )
-
-        if save_path:
-            fig.savefig(save_path, dpi=150, bbox_inches='tight')
+        from mpl_toolkits.mplot3d import Axes3D
 
         # Extract surface for statistics
         surface = vol_surface_data[scenario_index].reshape(5, 7)
+
+        if FORTITUDO_AVAILABLE:
+            fig, ax = ft.plot_vol_surface(
+                index=scenario_index,
+                vol_surface=vol_surface_data,
+                figsize=figsize,
+                zoom=zoom
+            )
+        else:
+            # Fallback: create our own 3D plot
+            fig = plt.figure(figsize=figsize if figsize else (10, 8))
+            ax = fig.add_subplot(111, projection='3d')
+
+            strikes = np.arange(7)
+            maturities = np.arange(5)
+            X, Y = np.meshgrid(strikes, maturities)
+
+            ax.plot_surface(X, Y, surface, cmap='viridis', alpha=0.8)
+            ax.set_xlabel('Strike')
+            ax.set_ylabel('Maturity')
+            ax.set_zlabel('Volatility')
+            ax.set_title(f'Volatility Surface (Scenario {scenario_index})')
+
+        if save_path:
+            fig.savefig(save_path, dpi=150, bbox_inches='tight')
 
         plt.close(fig)
 

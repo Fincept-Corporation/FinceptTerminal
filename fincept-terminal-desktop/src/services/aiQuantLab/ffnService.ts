@@ -109,6 +109,71 @@ export interface AssetComparisonResponse {
   error?: string;
 }
 
+export interface PortfolioOptimizationResponse {
+  success: boolean;
+  method?: string;
+  weights?: Record<string, number>;
+  portfolio_stats?: {
+    total_return: number;
+    cagr: number;
+    volatility: number;
+    sharpe_ratio: number;
+    sortino_ratio: number;
+    max_drawdown: number;
+    calmar_ratio?: number;
+  };
+  asset_contributions?: Record<string, {
+    weight: number;
+    volatility: number;
+    return: number;
+    risk_contribution: number;
+  }>;
+  correlation_matrix?: Record<string, Record<string, number>>;
+  portfolio_prices?: Record<string, number>;
+  error?: string;
+}
+
+export interface BenchmarkComparisonResponse {
+  success: boolean;
+  portfolio_name?: string;
+  benchmark_name?: string;
+  portfolio_stats?: {
+    total_return: number;
+    cagr: number;
+    volatility: number;
+    sharpe_ratio: number;
+    sortino_ratio: number;
+    max_drawdown: number;
+    calmar_ratio?: number;
+  };
+  benchmark_stats?: {
+    total_return: number;
+    cagr: number;
+    volatility: number;
+    sharpe_ratio: number;
+    sortino_ratio: number;
+    max_drawdown: number;
+    calmar_ratio?: number;
+  };
+  relative_metrics?: {
+    alpha?: number;
+    beta?: number;
+    correlation?: number;
+    tracking_error?: number;
+    information_ratio?: number;
+    up_capture?: number;
+    down_capture?: number;
+  };
+  rebased_portfolio?: Record<string, number>;
+  rebased_benchmark?: Record<string, number>;
+  date_range?: {
+    start: string;
+    end: string;
+    data_points: number;
+  };
+  error?: string;
+}
+
 export interface FullAnalysisResponse {
   success: boolean;
   performance?: PerformanceMetrics | Record<string, PerformanceMetrics>;
@@ -341,6 +406,66 @@ class FFNService {
       return JSON.parse(result);
     } catch (error) {
       console.error('[FFNService] fullAnalysis error:', error);
+      return {
+        success: false,
+        error: String(error)
+      };
+    }
+  }
+
+  /**
+   * Portfolio optimization - calculate optimal weights
+   * @param prices - Price data with multiple assets
+   * @param method - Optimization method: 'erc', 'inv_vol', 'mean_var', 'equal'
+   * @param riskFreeRate - Risk-free rate for calculations
+   * @param weightBounds - Min/max weight bounds [min, max]
+   */
+  async portfolioOptimization(
+    prices: PriceData,
+    method?: 'erc' | 'inv_vol' | 'mean_var' | 'equal',
+    riskFreeRate?: number,
+    weightBounds?: [number, number]
+  ): Promise<PortfolioOptimizationResponse> {
+    try {
+      const result = await invoke<string>('ffn_portfolio_optimization', {
+        pricesJson: JSON.stringify(prices),
+        method: method || 'erc',
+        riskFreeRate: riskFreeRate || 0,
+        weightBounds: weightBounds || [0, 1]
+      });
+      return JSON.parse(result);
+    } catch (error) {
+      console.error('[FFNService] portfolioOptimization error:', error);
+      return {
+        success: false,
+        error: String(error)
+      };
+    }
+  }
+
+  /**
+   * Benchmark comparison - compare portfolio against a benchmark
+   * @param prices - Portfolio price data
+   * @param benchmarkPrices - Benchmark price data
+   * @param benchmarkName - Name of the benchmark (e.g., 'SPY', 'QQQ')
+   * @param riskFreeRate - Risk-free rate for calculations
+   */
+  async benchmarkComparison(
+    prices: PriceData,
+    benchmarkPrices: PriceData,
+    benchmarkName?: string,
+    riskFreeRate?: number
+  ): Promise<BenchmarkComparisonResponse> {
+    try {
+      const result = await invoke<string>('ffn_benchmark_comparison', {
+        pricesJson: JSON.stringify(prices),
+        benchmarkPricesJson: JSON.stringify(benchmarkPrices),
+        benchmarkName: benchmarkName || 'Benchmark',
+        riskFreeRate: riskFreeRate || 0
+      });
+      return JSON.parse(result);
+    } catch (error) {
+      console.error('[FFNService] benchmarkComparison error:', error);
       return {
         success: false,
         error: String(error)
