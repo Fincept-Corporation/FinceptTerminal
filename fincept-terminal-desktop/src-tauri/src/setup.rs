@@ -210,7 +210,14 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
     #[cfg(target_os = "linux")]
     {
-        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.12.7+20240107-x86_64-unknown-linux-gnu-install_only.tar.gz");
+        // Detect architecture (x86_64 or ARM)
+        let arch = std::env::consts::ARCH;
+        let platform = if arch == "aarch64" {
+            "aarch64-unknown-linux-gnu-install_only"
+        } else {
+            "x86_64-unknown-linux-gnu-install_only"
+        };
+        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.12.7+20240107-{}.tar.gz", platform);
         let tar_path = python_dir.join("python.tar.gz");
 
         let mut cmd = Command::new("curl");
@@ -233,18 +240,12 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
     #[cfg(target_os = "macos")]
     {
-        // Check if Apple Silicon or Intel
-        let arch = std::env::consts::ARCH;
-        let platform = if arch == "aarch64" {
-            "aarch64-apple-darwin-install_only"
-        } else {
-            "x86_64-apple-darwin-install_only"
-        };
-        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.12.7+20240107-{}.tar.gz", platform);
-        let tar_path = python_dir.join("python.tar.gz");
+        // Download official Python.org universal2 installer
+        let download_url = format!("https://www.python.org/ftp/python/{}/python-{}-macos11.pkg", PYTHON_VERSION, PYTHON_VERSION);
+        let pkg_path = python_dir.join("python.pkg");
 
         let mut cmd = Command::new("curl");
-        cmd.args(&["-L", "-o", tar_path.to_str().unwrap(), &download_url]);
+        cmd.args(&["-L", "-o", pkg_path.to_str().unwrap(), &download_url]);
         let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -252,13 +253,45 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
         emit_progress(app, "python", 60, "Extracting Python...", false);
 
-        let mut cmd = Command::new("tar");
-        cmd.args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=1"]);
+        // Extract pkg without installing (using pkgutil)
+        let expanded_dir = python_dir.join("expanded");
+        std::fs::create_dir_all(&expanded_dir)
+            .map_err(|e| format!("Failed to create expanded dir: {}", e))?;
+
+        let mut cmd = Command::new("pkgutil");
+        cmd.args(&["--expand", pkg_path.to_str().unwrap(), expanded_dir.to_str().unwrap()]);
         let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
-        let _ = std::fs::remove_file(&tar_path);
+
+        // Extract the Python framework payload
+        let payload_path = expanded_dir.join("Python_Framework.pkg/Payload");
+        if payload_path.exists() {
+            let mut cmd = Command::new("tar");
+            cmd.args(&["-xzf", payload_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap()]);
+            cmd.output().map_err(|e| format!("Payload extract failed: {}", e))?;
+        }
+
+        // Cleanup
+        let _ = std::fs::remove_file(&pkg_path);
+        let _ = std::fs::remove_dir_all(&expanded_dir);
+
+        // Python is now in python_dir/Library/Frameworks/Python.framework/Versions/3.12/
+        // Create a symlink for easier access
+        let framework_python = python_dir.join(format!("Library/Frameworks/Python.framework/Versions/{}/bin/python3", &PYTHON_VERSION[..4]));
+        let bin_dir = python_dir.join("bin");
+        std::fs::create_dir_all(&bin_dir)
+            .map_err(|e| format!("Failed to create bin dir: {}", e))?;
+
+        if framework_python.exists() {
+            let target_python = bin_dir.join("python3");
+            #[cfg(target_os = "macos")]
+            {
+                use std::os::unix::fs::symlink;
+                let _ = symlink(&framework_python, &target_python);
+            }
+        }
     }
 
     // Enable pip by modifying python312._pth (Windows only)
@@ -305,6 +338,17 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
     // Install pip
     let python_exe = if cfg!(target_os = "windows") {
         python_dir.join("python.exe")
+    } else if cfg!(target_os = "macos") {
+        // macOS: Python is in Framework structure or symlinked to bin/
+        let bin_python = python_dir.join("bin/python3");
+        let framework_python = python_dir.join(format!("Library/Frameworks/Python.framework/Versions/{}/bin/python3", &PYTHON_VERSION[..4]));
+        if bin_python.exists() {
+            bin_python
+        } else if framework_python.exists() {
+            framework_python
+        } else {
+            return Err("Python executable not found after installation".to_string());
+        }
     } else {
         python_dir.join("bin/python3")
     };
