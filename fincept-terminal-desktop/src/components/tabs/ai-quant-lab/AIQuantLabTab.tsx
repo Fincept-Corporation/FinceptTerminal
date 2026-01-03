@@ -34,6 +34,7 @@ import { BacktestingPanel } from './BacktestingPanel';
 import { LiveSignalsPanel } from './LiveSignalsPanel';
 import { FFNAnalyticsPanel } from './FFNAnalyticsPanel';
 import { FunctimePanel } from './FunctimePanel';
+import { FortitudoPanel } from './FortitudoPanel';
 import { StatusBar } from './StatusBar';
 
 // Bloomberg Professional Color Palette - Consistent across all tabs
@@ -55,7 +56,7 @@ const BLOOMBERG = {
   MUTED: '#4A4A4A'
 };
 
-type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'ffn_analytics' | 'functime';
+type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'ffn_analytics' | 'functime' | 'fortitudo';
 
 export default function AIQuantLabTab() {
   // State
@@ -198,7 +199,8 @@ export default function AIQuantLabTab() {
     { id: 'backtesting', label: 'BACKTESTING', icon: BarChart3, description: 'Strategy validation & analysis' },
     { id: 'live_signals', label: 'LIVE SIGNALS', icon: Activity, description: 'Real-time predictions' },
     { id: 'ffn_analytics', label: 'FFN ANALYTICS', icon: TrendingUp, description: 'Portfolio performance & risk metrics' },
-    { id: 'functime', label: 'FUNCTIME', icon: Zap, description: 'ML time series forecasting' }
+    { id: 'functime', label: 'FUNCTIME', icon: Zap, description: 'ML time series forecasting' },
+    { id: 'fortitudo', label: 'FORTITUDO', icon: Database, description: 'VaR, CVaR, option pricing, entropy pooling' }
   ];
 
   const bothInitialized = qlibStatus.initialized && rdAgentStatus.initialized;
@@ -320,11 +322,13 @@ export default function AIQuantLabTab() {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-hidden relative">
-        {/* FFN Analytics and Functime are always available - independent of Qlib/RDAgent */}
+        {/* FFN Analytics, Functime, and Fortitudo are always available - independent of Qlib/RDAgent */}
         {activeView === 'ffn_analytics' ? (
           <FFNAnalyticsPanel />
         ) : activeView === 'functime' ? (
           <FunctimePanel />
+        ) : activeView === 'fortitudo' ? (
+          <FortitudoPanel />
         ) : !bothAvailable ? (
           <InstallationGuide />
         ) : !bothInitialized ? (

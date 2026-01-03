@@ -82,6 +82,90 @@ if FUNCTIME_AVAILABLE:
     except ImportError as e:
         print(f"Warning: Could not import local modules: {e}", file=sys.stderr)
 
+# Import advanced modules
+try:
+    from advanced_models import (
+        naive_forecast, seasonal_naive_forecast, drift_forecast,
+        ses_forecast, holt_forecast, theta_forecast,
+        croston_forecast, xgboost_forecast, catboost_forecast
+    )
+    ADVANCED_MODELS_AVAILABLE = True
+except ImportError as e:
+    ADVANCED_MODELS_AVAILABLE = False
+    print(f"Warning: Could not import advanced_models: {e}", file=sys.stderr)
+
+try:
+    from ensemble import (
+        ensemble_mean, ensemble_median, ensemble_trimmed_mean,
+        ensemble_weighted, ensemble_stacking, auto_ensemble
+    )
+    ENSEMBLE_AVAILABLE = True
+except ImportError as e:
+    ENSEMBLE_AVAILABLE = False
+    print(f"Warning: Could not import ensemble: {e}", file=sys.stderr)
+
+try:
+    from anomaly_detection import (
+        detect_zscore, detect_iqr, detect_grubbs,
+        detect_isolation_forest, detect_lof,
+        detect_residual_anomalies, detect_change_points
+    )
+    ANOMALY_AVAILABLE = True
+except ImportError as e:
+    ANOMALY_AVAILABLE = False
+    print(f"Warning: Could not import anomaly_detection: {e}", file=sys.stderr)
+
+try:
+    from seasonality import (
+        detect_seasonal_period, decompose_stl, decompose_classical,
+        seasonally_adjust, calculate_seasonality_metrics
+    )
+    SEASONALITY_AVAILABLE = True
+except ImportError as e:
+    SEASONALITY_AVAILABLE = False
+    print(f"Warning: Could not import seasonality: {e}", file=sys.stderr)
+
+try:
+    from confidence_intervals import (
+        bootstrap_prediction_intervals, residual_prediction_intervals,
+        quantile_prediction_intervals, conformal_prediction_intervals,
+        monte_carlo_intervals
+    )
+    CONFIDENCE_AVAILABLE = True
+except ImportError as e:
+    CONFIDENCE_AVAILABLE = False
+    print(f"Warning: Could not import confidence_intervals: {e}", file=sys.stderr)
+
+try:
+    from feature_importance import (
+        calculate_permutation_importance, calculate_model_importance,
+        calculate_shap_importance, analyze_lag_importance, sensitivity_analysis
+    )
+    FEATURE_IMPORTANCE_AVAILABLE = True
+except ImportError as e:
+    FEATURE_IMPORTANCE_AVAILABLE = False
+    print(f"Warning: Could not import feature_importance: {e}", file=sys.stderr)
+
+try:
+    from advanced_cv import (
+        blocked_time_series_cv, purged_kfold_cv, combinatorial_purged_cv,
+        walk_forward_validation, nested_cv, get_cv_splits
+    )
+    ADVANCED_CV_AVAILABLE = True
+except ImportError as e:
+    ADVANCED_CV_AVAILABLE = False
+    print(f"Warning: Could not import advanced_cv: {e}", file=sys.stderr)
+
+try:
+    from backtesting import (
+        walk_forward_backtest, compare_models_backtest,
+        rolling_origin_evaluation, performance_attribution, backtest_summary
+    )
+    BACKTESTING_AVAILABLE = True
+except ImportError as e:
+    BACKTESTING_AVAILABLE = False
+    print(f"Warning: Could not import backtesting: {e}", file=sys.stderr)
+
 
 def parse_panel_data_json(data_json: str) -> "pl.DataFrame":
     """Parse JSON data into Polars DataFrame for functime panel data format"""
@@ -232,6 +316,14 @@ def check_status() -> Dict[str, Any]:
         "polars_available": POLARS_AVAILABLE,
         "lightgbm_available": LIGHTGBM_AVAILABLE,
         "functime_cloud_available": FUNCTIME_CLOUD_AVAILABLE,
+        "advanced_models_available": ADVANCED_MODELS_AVAILABLE,
+        "ensemble_available": ENSEMBLE_AVAILABLE,
+        "anomaly_available": ANOMALY_AVAILABLE,
+        "seasonality_available": SEASONALITY_AVAILABLE,
+        "confidence_available": CONFIDENCE_AVAILABLE,
+        "feature_importance_available": FEATURE_IMPORTANCE_AVAILABLE,
+        "advanced_cv_available": ADVANCED_CV_AVAILABLE,
+        "backtesting_available": BACKTESTING_AVAILABLE,
         "message": "Time series forecasting ready (sklearn backend)" if FUNCTIME_AVAILABLE else "scikit-learn or polars not installed"
     }
 
@@ -628,7 +720,8 @@ def full_forecast_pipeline(params: Dict[str, Any]) -> Dict[str, Any]:
         if preprocess_method and preprocess_method != 'none':
             preprocessing_info = {"method": preprocess_method, "note": "Preprocessing not applied - using raw data"}
 
-        # Simple train/test split by taking last test_size rows per entity
+        # Train/test split: Hold out test_size rows per entity for evaluation
+        # We train on earlier data, make predictions for the test period, and compare
         train_data = processed_data
         test_data = None
 
@@ -654,41 +747,52 @@ def full_forecast_pipeline(params: Dict[str, Any]) -> Dict[str, Any]:
             train_data = processed_data
             print(f"Warning: Could not split data: {e}", file=sys.stderr)
 
-        # Run forecast
+        # Calculate evaluation metrics BEFORE generating the final forecast
+        # We need to predict on the test period using the training data
+        metrics = None
+        if test_data is not None and len(test_data) > 0:
+            try:
+                # Get actual test values
+                y_true_values = test_data['value'].to_numpy()
+
+                # For evaluation, we predict for test_size periods from training data
+                eval_forecast_result = run_forecast({
+                    'data': serialize_to_json(train_data.to_dicts()),
+                    'model': model_type,
+                    'horizon': min(test_size, len(y_true_values)),  # Match test size
+                    'frequency': freq
+                })
+
+                if eval_forecast_result.get('success'):
+                    forecast_list = eval_forecast_result.get('forecast', [])
+                    if len(forecast_list) > 0:
+                        y_pred_values = np.array([f['value'] for f in forecast_list])
+
+                        if len(y_pred_values) > 0 and len(y_true_values) > 0:
+                            min_len = min(len(y_true_values), len(y_pred_values))
+                            y_true = y_true_values[:min_len]
+                            y_pred = y_pred_values[:min_len]
+
+                            mae = float(np.mean(np.abs(y_true - y_pred)))
+                            rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
+                            # SMAPE
+                            smape = float(np.mean(2 * np.abs(y_true - y_pred) / (np.abs(y_true) + np.abs(y_pred) + 1e-8)) * 100)
+
+                            metrics = {
+                                'mae': mae,
+                                'rmse': rmse,
+                                'smape': smape
+                            }
+            except Exception as e:
+                print(f"Warning: Could not calculate metrics: {e}", file=sys.stderr)
+
+        # Now run forecast on FULL data for actual future predictions
         forecast_result = run_forecast({
-            'data': serialize_to_json(train_data.to_dicts()),
+            'data': serialize_to_json(processed_data.to_dicts()),
             'model': model_type,
             'horizon': fh,
             'frequency': freq
         })
-
-        # Calculate metrics if we have test data
-        metrics = None
-        if test_data is not None and len(test_data) > 0 and forecast_result.get('success'):
-            try:
-                forecast_list = forecast_result.get('forecast', [])
-                if len(forecast_list) > 0:
-                    # Simple MAE/RMSE calculation
-                    y_true_values = test_data['value'].to_numpy()
-                    y_pred_values = np.array([f['value'] for f in forecast_list[:len(y_true_values)]])
-
-                    if len(y_pred_values) > 0 and len(y_true_values) > 0:
-                        min_len = min(len(y_true_values), len(y_pred_values))
-                        y_true = y_true_values[:min_len]
-                        y_pred = y_pred_values[:min_len]
-
-                        mae = float(np.mean(np.abs(y_true - y_pred)))
-                        rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
-                        # SMAPE
-                        smape = float(np.mean(2 * np.abs(y_true - y_pred) / (np.abs(y_true) + np.abs(y_pred) + 1e-8)) * 100)
-
-                        metrics = {
-                            'mae': mae,
-                            'rmse': rmse,
-                            'smape': smape
-                        }
-            except Exception as e:
-                print(f"Warning: Could not calculate metrics: {e}", file=sys.stderr)
 
         return {
             "success": True,
@@ -712,6 +816,484 @@ def full_forecast_pipeline(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ============================================================================
+# ADVANCED MODELS COMMAND HANDLERS
+# ============================================================================
+
+def run_advanced_forecast(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Run advanced forecasting models (naive, SES, Holt, Theta, Croston, XGBoost, CatBoost)"""
+    if not ADVANCED_MODELS_AVAILABLE:
+        return {"success": False, "error": "Advanced models not available"}
+
+    try:
+        data = parse_panel_data_json(params['data'])
+        model_type = params.get('model', 'naive')
+        fh = params.get('horizon', 7)
+        freq = params.get('frequency', '1d')
+
+        model_params = params.get('model_params', {})
+
+        if model_type == 'naive':
+            result = naive_forecast(data, fh=fh, freq=freq)
+        elif model_type == 'seasonal_naive':
+            seasonal_period = model_params.get('seasonal_period', 7)
+            result = seasonal_naive_forecast(data, fh=fh, seasonal_period=seasonal_period, freq=freq)
+        elif model_type == 'drift':
+            result = drift_forecast(data, fh=fh, freq=freq)
+        elif model_type == 'ses':
+            alpha = model_params.get('alpha')
+            result = ses_forecast(data, fh=fh, alpha=alpha, freq=freq)
+        elif model_type == 'holt':
+            alpha = model_params.get('alpha')
+            beta = model_params.get('beta')
+            result = holt_forecast(data, fh=fh, alpha=alpha, beta=beta, freq=freq)
+        elif model_type == 'theta':
+            result = theta_forecast(data, fh=fh, freq=freq)
+        elif model_type == 'croston':
+            alpha = model_params.get('alpha', 0.1)
+            result = croston_forecast(data, fh=fh, alpha=alpha, freq=freq)
+        elif model_type == 'xgboost':
+            n_lags = model_params.get('n_lags', 10)
+            xgb_params = model_params.get('xgb_params', {})
+            result = xgboost_forecast(data, fh=fh, n_lags=n_lags, xgb_params=xgb_params, freq=freq)
+        elif model_type == 'catboost':
+            n_lags = model_params.get('n_lags', 10)
+            cat_params = model_params.get('cat_params', {})
+            result = catboost_forecast(data, fh=fh, n_lags=n_lags, cat_params=cat_params, freq=freq)
+        else:
+            return {"success": False, "error": f"Unknown advanced model: {model_type}"}
+
+        return result
+    except Exception as e:
+        import traceback
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
+
+
+# ============================================================================
+# ENSEMBLE COMMAND HANDLERS
+# ============================================================================
+
+def run_ensemble(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Run ensemble forecasting"""
+    if not ENSEMBLE_AVAILABLE:
+        return {"success": False, "error": "Ensemble methods not available"}
+
+    try:
+        forecasts_json = params.get('forecasts', [])
+        method = params.get('method', 'mean')
+
+        # Parse forecasts - each should be a list of {entity_id, time, value}
+        if isinstance(forecasts_json, str):
+            forecasts_json = json.loads(forecasts_json)
+
+        forecasts = [pl.DataFrame(fc) for fc in forecasts_json]
+
+        if method == 'mean':
+            result = ensemble_mean(forecasts)
+        elif method == 'median':
+            result = ensemble_median(forecasts)
+        elif method == 'trimmed_mean':
+            trim_pct = params.get('trim_pct', 0.1)
+            result = ensemble_trimmed_mean(forecasts, trim_pct=trim_pct)
+        elif method == 'weighted':
+            weights = params.get('weights')
+            result = ensemble_weighted(forecasts, weights=weights)
+        elif method == 'stacking':
+            y_train = parse_panel_data_json(params['y_train'])
+            result = ensemble_stacking(forecasts, y_train)
+        else:
+            return {"success": False, "error": f"Unknown ensemble method: {method}"}
+
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def run_auto_ensemble(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Run automatic ensemble selection and combination"""
+    if not ENSEMBLE_AVAILABLE:
+        return {"success": False, "error": "Ensemble methods not available"}
+
+    try:
+        data = parse_panel_data_json(params['data'])
+        fh = params.get('horizon', 7)
+        freq = params.get('frequency', '1d')
+        n_best = params.get('n_best', 3)
+
+        result = auto_ensemble(data, fh=fh, freq=freq, n_best=n_best)
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# ANOMALY DETECTION COMMAND HANDLERS
+# ============================================================================
+
+def run_anomaly_detection(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Run anomaly detection on time series"""
+    if not ANOMALY_AVAILABLE:
+        return {"success": False, "error": "Anomaly detection not available"}
+
+    try:
+        data = parse_panel_data_json(params['data'])
+        method = params.get('method', 'zscore')
+
+        if method == 'zscore':
+            threshold = params.get('threshold', 3.0)
+            result = detect_zscore(data, threshold=threshold)
+        elif method == 'iqr':
+            multiplier = params.get('multiplier', 1.5)
+            result = detect_iqr(data, k=multiplier)
+        elif method == 'grubbs':
+            alpha = params.get('alpha', 0.05)
+            result = detect_grubbs(data, alpha=alpha)
+        elif method == 'isolation_forest':
+            contamination = params.get('contamination', 0.05)
+            result = detect_isolation_forest(data, contamination=contamination)
+        elif method == 'lof':
+            n_neighbors = params.get('n_neighbors', 20)
+            contamination = params.get('contamination', 0.05)
+            result = detect_lof(data, n_neighbors=n_neighbors, contamination=contamination)
+        elif method == 'residual':
+            threshold = params.get('threshold', 3.0)
+            result = detect_residual_anomalies(data, threshold=threshold)
+        elif method == 'change_points':
+            n_bkps = params.get('n_bkps', 5)
+            result = detect_change_points(data, n_bkps=n_bkps)
+        else:
+            return {"success": False, "error": f"Unknown anomaly method: {method}"}
+
+        # Restructure result to match frontend expectations
+        # Frontend expects: { results: { entity_id: { anomalies: [...], n_anomalies, anomaly_rate } } }
+        if result.get('success') and 'data' in result:
+            # Group anomalies by entity_id
+            all_data = result.get('data', [])
+            anomalies_list = result.get('anomalies', [])
+
+            # Group by entity_id
+            entities_results = {}
+            for item in all_data:
+                entity_id = item.get('entity_id', 'default')
+                if entity_id not in entities_results:
+                    entities_results[entity_id] = {
+                        'anomalies': [],
+                        'n_anomalies': 0,
+                        'anomaly_rate': 0.0,
+                        'total_points': 0
+                    }
+                entities_results[entity_id]['total_points'] += 1
+                if item.get('is_anomaly'):
+                    entities_results[entity_id]['anomalies'].append(item)
+                    entities_results[entity_id]['n_anomalies'] += 1
+
+            # Calculate anomaly rate per entity
+            for entity_id, entity_data in entities_results.items():
+                if entity_data['total_points'] > 0:
+                    entity_data['anomaly_rate'] = entity_data['n_anomalies'] / entity_data['total_points']
+                del entity_data['total_points']  # Remove temp field
+
+            return {
+                'success': True,
+                'method': result.get('method', method),
+                'results': entities_results
+            }
+
+        return result
+    except Exception as e:
+        import traceback
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
+
+
+# ============================================================================
+# SEASONALITY COMMAND HANDLERS
+# ============================================================================
+
+def run_seasonality_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Run seasonality analysis on time series"""
+    if not SEASONALITY_AVAILABLE:
+        return {"success": False, "error": "Seasonality analysis not available"}
+
+    try:
+        data = parse_panel_data_json(params['data'])
+        # Support both 'operation' and 'analysis_type' parameter names
+        operation = params.get('operation') or params.get('analysis_type', 'decompose')
+
+        # Map analysis_type values to operation values
+        operation_map = {
+            'decompose': 'decompose_stl',
+            'detect': 'detect_period',
+            'strength': 'metrics',
+            'adjust': 'adjust',
+        }
+        operation = operation_map.get(operation, operation)
+
+        period = params.get('period')
+        model_type = params.get('model_type', 'additive')
+
+        if operation == 'detect_period':
+            method = params.get('method', 'fft')
+            max_period = params.get('max_period', 365)
+            result = detect_seasonal_period(data, method=method, max_period=max_period)
+        elif operation == 'decompose_stl':
+            robust = params.get('robust', True)
+            result = decompose_stl(data, period=period, robust=robust)
+        elif operation == 'decompose_classical':
+            result = decompose_classical(data, period=period, model=model_type)
+        elif operation == 'adjust':
+            method = params.get('method', 'stl')
+            result = seasonally_adjust(data, period=period, method=method)
+        elif operation == 'metrics':
+            result = calculate_seasonality_metrics(data, period=period)
+        else:
+            return {"success": False, "error": f"Unknown seasonality operation: {operation}"}
+
+        return result
+    except Exception as e:
+        import traceback
+        return {"success": False, "error": str(e), "traceback": traceback.format_exc()}
+
+
+# ============================================================================
+# CONFIDENCE INTERVALS COMMAND HANDLERS
+# ============================================================================
+
+def run_confidence_intervals(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate prediction/confidence intervals"""
+    if not CONFIDENCE_AVAILABLE:
+        return {"success": False, "error": "Confidence intervals not available"}
+
+    try:
+        method = params.get('method', 'monte_carlo')
+        confidence_levels = params.get('confidence_levels', [0.80, 0.95])
+
+        if method == 'bootstrap':
+            data = parse_panel_data_json(params['data'])
+            fh = params.get('horizon', 7)
+            freq = params.get('frequency', '1d')
+            n_bootstrap = params.get('n_bootstrap', 100)
+
+            # Need a forecaster - create a simple one
+            def simple_forecaster(y_train, fh, freq):
+                last_value = y_train['value'].to_list()[-1]
+                last_time = y_train['time'].to_list()[-1]
+                delta = timedelta(days=1)
+                forecast = []
+                for i in range(1, fh + 1):
+                    forecast.append({
+                        'entity_id': y_train['entity_id'].to_list()[0],
+                        'time': last_time + (delta * i),
+                        'value': last_value
+                    })
+                return {'forecast': forecast}
+
+            result = bootstrap_prediction_intervals(
+                data, simple_forecaster, fh=fh,
+                n_bootstrap=n_bootstrap, confidence_levels=confidence_levels, freq=freq
+            )
+        elif method == 'residual':
+            data = parse_panel_data_json(params['data'])
+            forecast = parse_panel_data_json(params['forecast'])
+            y_validation = parse_panel_data_json(params['y_validation']) if 'y_validation' in params else None
+            result = residual_prediction_intervals(data, forecast, y_validation, confidence_levels)
+        elif method == 'quantile':
+            data = parse_panel_data_json(params['data'])
+            fh = params.get('horizon', 7)
+            lags = params.get('lags', 10)
+            quantiles = params.get('quantiles', [0.025, 0.10, 0.50, 0.90, 0.975])
+            freq = params.get('frequency', '1d')
+            result = quantile_prediction_intervals(data, fh=fh, lags=lags, quantiles=quantiles, freq=freq)
+        elif method == 'conformal':
+            data = parse_panel_data_json(params['data'])
+            forecast = parse_panel_data_json(params['forecast'])
+            calibration_size = params.get('calibration_size', 50)
+            result = conformal_prediction_intervals(data, forecast, calibration_size, confidence_levels)
+        elif method == 'monte_carlo':
+            data = parse_panel_data_json(params['data'])
+            fh = params.get('horizon', 7)
+            n_simulations = params.get('n_simulations', 1000)
+            model = params.get('model', 'random_walk')
+            freq = params.get('frequency', '1d')
+            result = monte_carlo_intervals(data, fh=fh, n_simulations=n_simulations, model=model,
+                                          confidence_levels=confidence_levels, freq=freq)
+        else:
+            return {"success": False, "error": f"Unknown interval method: {method}"}
+
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# FEATURE IMPORTANCE COMMAND HANDLERS
+# ============================================================================
+
+def run_feature_importance(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Calculate feature importance for time series"""
+    if not FEATURE_IMPORTANCE_AVAILABLE:
+        return {"success": False, "error": "Feature importance not available"}
+
+    try:
+        data = parse_panel_data_json(params['data'])
+        method = params.get('method', 'permutation')
+        n_lags = params.get('n_lags', 10)
+
+        if method == 'permutation':
+            n_repeats = params.get('n_repeats', 10)
+            model_type = params.get('model_type', 'ridge')
+            result = calculate_permutation_importance(data, n_lags=n_lags, n_repeats=n_repeats, model_type=model_type)
+        elif method == 'model':
+            model_type = params.get('model_type', 'ridge')
+            result = calculate_model_importance(data, n_lags=n_lags, model_type=model_type)
+        elif method == 'shap':
+            max_samples = params.get('max_samples', 100)
+            result = calculate_shap_importance(data, n_lags=n_lags, max_samples=max_samples)
+        elif method == 'lag_analysis':
+            max_lags = params.get('max_lags', 20)
+            result = analyze_lag_importance(data, max_lags=max_lags)
+        elif method == 'sensitivity':
+            fh = params.get('horizon', 10)
+            perturbation_pct = params.get('perturbation_pct', 0.05)
+            freq = params.get('frequency', '1d')
+
+            # Need a forecaster for sensitivity
+            def simple_forecaster(y_train, fh, freq):
+                last_value = y_train['value'].to_list()[-1]
+                last_time = y_train['time'].to_list()[-1]
+                delta = timedelta(days=1)
+                forecast = []
+                for i in range(1, fh + 1):
+                    forecast.append({
+                        'entity_id': y_train['entity_id'].to_list()[0],
+                        'time': last_time + (delta * i),
+                        'value': last_value
+                    })
+                return {'forecast': forecast}
+
+            result = sensitivity_analysis(data, simple_forecaster, fh=fh,
+                                         perturbation_pct=perturbation_pct, freq=freq)
+        else:
+            return {"success": False, "error": f"Unknown importance method: {method}"}
+
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# ADVANCED CROSS-VALIDATION COMMAND HANDLERS
+# ============================================================================
+
+def run_advanced_cv(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Run advanced cross-validation methods"""
+    if not ADVANCED_CV_AVAILABLE:
+        return {"success": False, "error": "Advanced CV not available"}
+
+    try:
+        data = parse_panel_data_json(params['data'])
+        method = params.get('method', 'walk_forward')
+
+        if method == 'blocked':
+            n_splits = params.get('n_splits', 5)
+            test_size = params.get('test_size', 1)
+            gap = params.get('gap', 0)
+            result = blocked_time_series_cv(data, n_splits=n_splits, test_size=test_size, gap=gap)
+        elif method == 'purged':
+            n_splits = params.get('n_splits', 5)
+            embargo_pct = params.get('embargo_pct', 0.01)
+            purge_pct = params.get('purge_pct', 0.01)
+            result = purged_kfold_cv(data, n_splits=n_splits, embargo_pct=embargo_pct, purge_pct=purge_pct)
+        elif method == 'combinatorial':
+            n_test_splits = params.get('n_test_splits', 2)
+            n_groups = params.get('n_groups', 6)
+            embargo_pct = params.get('embargo_pct', 0.01)
+            result = combinatorial_purged_cv(data, n_test_splits=n_test_splits,
+                                            n_groups=n_groups, embargo_pct=embargo_pct)
+        elif method == 'walk_forward':
+            initial_train_size = params.get('initial_train_size', 100)
+            test_size = params.get('test_size', 1)
+            step_size = params.get('step_size', 1)
+            anchored = params.get('anchored', False)
+            result = walk_forward_validation(data, initial_train_size=initial_train_size,
+                                            test_size=test_size, step_size=step_size, anchored=anchored)
+        elif method == 'nested':
+            outer_splits = params.get('outer_splits', 5)
+            inner_splits = params.get('inner_splits', 3)
+            test_size = params.get('test_size', 1)
+            result = nested_cv(data, outer_splits=outer_splits, inner_splits=inner_splits, test_size=test_size)
+        else:
+            return {"success": False, "error": f"Unknown CV method: {method}"}
+
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# BACKTESTING COMMAND HANDLERS
+# ============================================================================
+
+def run_backtest(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Run backtesting on time series"""
+    if not BACKTESTING_AVAILABLE:
+        return {"success": False, "error": "Backtesting not available"}
+
+    try:
+        data = parse_panel_data_json(params['data'])
+        operation = params.get('operation', 'walk_forward')
+        freq = params.get('frequency', '1d')
+
+        # Create a simple forecaster
+        def simple_forecaster(y_train, fh, freq):
+            last_value = y_train['value'].to_list()[-1]
+            last_time = y_train['time'].to_list()[-1]
+            delta = timedelta(days=1)
+            forecast = []
+            for i in range(1, fh + 1):
+                forecast.append({
+                    'entity_id': y_train['entity_id'].to_list()[0],
+                    'time': last_time + (delta * i),
+                    'value': last_value
+                })
+            return {'forecast': forecast}
+
+        if operation == 'walk_forward':
+            initial_train_size = params.get('initial_train_size', 100)
+            test_size = params.get('test_size', 1)
+            step_size = params.get('step_size', 1)
+            horizons = params.get('horizons')
+            retrain = params.get('retrain', True)
+            result = walk_forward_backtest(data, simple_forecaster, initial_train_size=initial_train_size,
+                                          test_size=test_size, step_size=step_size,
+                                          horizons=horizons, freq=freq, retrain=retrain)
+        elif operation == 'compare_models':
+            initial_train_size = params.get('initial_train_size', 100)
+            test_size = params.get('test_size', 1)
+            step_size = params.get('step_size', 5)
+            # Use simple forecasters for comparison
+            forecasters = {'naive': simple_forecaster}
+            result = compare_models_backtest(data, forecasters, initial_train_size=initial_train_size,
+                                            test_size=test_size, step_size=step_size, freq=freq)
+        elif operation == 'rolling_origin':
+            min_train_size = params.get('min_train_size', 50)
+            max_train_size = params.get('max_train_size')
+            test_size = params.get('test_size', 1)
+            result = rolling_origin_evaluation(data, simple_forecaster, min_train_size=min_train_size,
+                                              max_train_size=max_train_size, test_size=test_size, freq=freq)
+        elif operation == 'attribution':
+            backtest_results = params.get('backtest_results', {})
+            result = performance_attribution(backtest_results)
+        elif operation == 'summary':
+            backtest_results = params.get('backtest_results', {})
+            result = backtest_summary(backtest_results)
+        else:
+            return {"success": False, "error": f"Unknown backtest operation: {operation}"}
+
+        return result
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
 
@@ -724,6 +1306,23 @@ COMMANDS = {
     "add_features": add_features,
     "seasonal_period": get_seasonal_period,
     "full_pipeline": full_forecast_pipeline,
+    # Advanced models
+    "advanced_forecast": run_advanced_forecast,
+    # Ensemble methods
+    "ensemble": run_ensemble,
+    "auto_ensemble": run_auto_ensemble,
+    # Anomaly detection
+    "anomaly_detection": run_anomaly_detection,
+    # Seasonality analysis
+    "seasonality": run_seasonality_analysis,
+    # Confidence intervals
+    "confidence_intervals": run_confidence_intervals,
+    # Feature importance
+    "feature_importance": run_feature_importance,
+    # Advanced cross-validation
+    "advanced_cv": run_advanced_cv,
+    # Backtesting
+    "backtest": run_backtest,
 }
 
 

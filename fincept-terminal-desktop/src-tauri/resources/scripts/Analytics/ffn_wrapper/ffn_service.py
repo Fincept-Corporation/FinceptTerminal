@@ -444,6 +444,279 @@ def risk_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
         return {"success": False, "error": str(e)}
 
 
+def portfolio_optimization(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Calculate optimal portfolio weights using various methods"""
+    if not FFN_AVAILABLE:
+        return {"success": False, "error": "FFN library not available"}
+
+    try:
+        prices = parse_prices_json(params['prices'])
+        method = params.get('method', 'erc')  # erc, inv_vol, mean_var, equal
+        rf = params.get('risk_free_rate', 0.0)
+        weight_bounds = params.get('weight_bounds', [0.0, 1.0])
+
+        if not isinstance(prices, pd.DataFrame):
+            return {"success": False, "error": "Multiple assets required for portfolio optimization"}
+
+        if len(prices.columns) < 2:
+            return {"success": False, "error": "At least 2 assets required for portfolio optimization"}
+
+        # Calculate returns
+        returns = ffn.to_returns(prices).dropna()
+
+        if len(returns) < 10:
+            return {"success": False, "error": "Insufficient data for portfolio optimization (need at least 10 data points)"}
+
+        # Calculate weights based on method
+        weights = None
+        method_name = ""
+
+        if method == 'equal':
+            # Equal weight
+            n_assets = len(prices.columns)
+            weights = np.array([1.0 / n_assets] * n_assets)
+            method_name = "Equal Weight"
+
+        elif method == 'inv_vol':
+            # Inverse volatility weights
+            weights = ffn.calc_inv_vol_weights(returns)
+            method_name = "Inverse Volatility"
+
+        elif method == 'erc':
+            # Equal Risk Contribution
+            try:
+                weights = ffn.calc_erc_weights(
+                    returns,
+                    covar_method='ledoit-wolf',
+                    risk_parity_method='ccd',
+                    maximum_iterations=100,
+                    tolerance=1e-8
+                )
+                method_name = "Equal Risk Contribution (ERC)"
+            except Exception as e:
+                # Fallback to inverse volatility if ERC fails
+                weights = ffn.calc_inv_vol_weights(returns)
+                method_name = "Inverse Volatility (ERC fallback)"
+
+        elif method == 'mean_var':
+            # Mean-Variance optimization (Maximum Sharpe)
+            try:
+                weights = ffn.calc_mean_var_weights(
+                    returns,
+                    weight_bounds=tuple(weight_bounds),
+                    rf=rf,
+                    covar_method='ledoit-wolf'
+                )
+                method_name = "Mean-Variance (Max Sharpe)"
+            except Exception as e:
+                # Fallback to inverse volatility if mean-var fails
+                weights = ffn.calc_inv_vol_weights(returns)
+                method_name = "Inverse Volatility (Mean-Var fallback)"
+
+        else:
+            return {"success": False, "error": f"Unknown optimization method: {method}"}
+
+        # Apply weight bounds and normalize
+        weights = np.clip(weights, weight_bounds[0], weight_bounds[1])
+        weights = weights / weights.sum()
+
+        # Create weights dict
+        weights_dict = {col: float(w) for col, w in zip(prices.columns, weights)}
+
+        # Calculate portfolio returns
+        portfolio_returns = (returns * weights).sum(axis=1)
+        portfolio_prices = ffn.to_price_index(portfolio_returns, start=100)
+
+        # Calculate portfolio stats
+        portfolio_stats = {
+            'total_return': float(ffn.calc_total_return(portfolio_prices)),
+            'cagr': float(ffn.calc_cagr(portfolio_prices)),
+            'volatility': float(portfolio_returns.std() * np.sqrt(252)),
+            'sharpe_ratio': float(ffn.calc_sharpe(portfolio_returns, rf=rf, nperiods=252, annualize=True)),
+            'sortino_ratio': float(ffn.calc_sortino_ratio(portfolio_returns, rf=rf, nperiods=252, annualize=True)),
+            'max_drawdown': float(ffn.calc_max_drawdown(portfolio_prices)),
+            'calmar_ratio': float(ffn.calc_calmar_ratio(portfolio_prices)) if ffn.calc_calmar_ratio(portfolio_prices) is not None else None,
+        }
+
+        # Calculate individual asset contributions
+        asset_contributions = {}
+        total_portfolio_vol = portfolio_returns.std() * np.sqrt(252)
+
+        for i, col in enumerate(prices.columns):
+            asset_return = returns[col]
+            asset_weight = weights[i]
+
+            # Marginal contribution to volatility (simplified)
+            asset_vol = asset_return.std() * np.sqrt(252)
+            contribution = asset_weight * asset_vol / total_portfolio_vol if total_portfolio_vol > 0 else 0
+
+            asset_contributions[col] = {
+                'weight': float(asset_weight),
+                'volatility': float(asset_vol),
+                'return': float(asset_return.mean() * 252),  # Annualized
+                'risk_contribution': float(contribution * asset_weight)
+            }
+
+        # Calculate correlation matrix
+        correlation = returns.corr()
+        correlation_dict = {col: {str(idx): float(val) for idx, val in correlation[col].items()}
+                          for col in correlation.columns}
+
+        return {
+            "success": True,
+            "method": method_name,
+            "weights": weights_dict,
+            "portfolio_stats": portfolio_stats,
+            "asset_contributions": asset_contributions,
+            "correlation_matrix": correlation_dict,
+            "portfolio_prices": {str(k): float(v) for k, v in portfolio_prices.tail(252).items()}
+        }
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def benchmark_comparison(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Compare portfolio/asset performance against a benchmark"""
+    if not FFN_AVAILABLE:
+        return {"success": False, "error": "FFN library not available"}
+
+    try:
+        prices = parse_prices_json(params['prices'])
+        benchmark_prices = parse_prices_json(params['benchmark_prices'])
+        benchmark_name = params.get('benchmark_name', 'Benchmark')
+        rf = params.get('risk_free_rate', 0.0)
+
+        # Handle single asset prices
+        if isinstance(prices, pd.DataFrame):
+            portfolio_prices = prices.iloc[:, 0]
+            portfolio_name = prices.columns[0]
+        else:
+            portfolio_prices = prices
+            portfolio_name = "Portfolio"
+
+        if isinstance(benchmark_prices, pd.DataFrame):
+            benchmark_prices = benchmark_prices.iloc[:, 0]
+
+        # Align dates
+        common_dates = portfolio_prices.index.intersection(benchmark_prices.index)
+        if len(common_dates) < 10:
+            return {"success": False, "error": "Insufficient overlapping dates between portfolio and benchmark"}
+
+        portfolio_prices = portfolio_prices.loc[common_dates].sort_index()
+        benchmark_prices = benchmark_prices.loc[common_dates].sort_index()
+
+        # Calculate returns
+        portfolio_returns = ffn.to_returns(portfolio_prices).dropna()
+        benchmark_returns = ffn.to_returns(benchmark_prices).dropna()
+
+        # Helper for safe float conversion
+        def safe_float(val):
+            if val is None:
+                return None
+            try:
+                if pd.isna(val):
+                    return None
+                return float(val)
+            except:
+                return None
+
+        # Calculate performance metrics for both
+        portfolio_stats = {
+            'total_return': safe_float(ffn.calc_total_return(portfolio_prices)),
+            'cagr': safe_float(ffn.calc_cagr(portfolio_prices)),
+            'volatility': safe_float(portfolio_returns.std() * np.sqrt(252)),
+            'sharpe_ratio': safe_float(ffn.calc_sharpe(portfolio_returns, rf=rf, nperiods=252, annualize=True)),
+            'sortino_ratio': safe_float(ffn.calc_sortino_ratio(portfolio_returns, rf=rf, nperiods=252, annualize=True)),
+            'max_drawdown': safe_float(ffn.calc_max_drawdown(portfolio_prices)),
+            'calmar_ratio': safe_float(ffn.calc_calmar_ratio(portfolio_prices)),
+        }
+
+        benchmark_stats = {
+            'total_return': safe_float(ffn.calc_total_return(benchmark_prices)),
+            'cagr': safe_float(ffn.calc_cagr(benchmark_prices)),
+            'volatility': safe_float(benchmark_returns.std() * np.sqrt(252)),
+            'sharpe_ratio': safe_float(ffn.calc_sharpe(benchmark_returns, rf=rf, nperiods=252, annualize=True)),
+            'sortino_ratio': safe_float(ffn.calc_sortino_ratio(benchmark_returns, rf=rf, nperiods=252, annualize=True)),
+            'max_drawdown': safe_float(ffn.calc_max_drawdown(benchmark_prices)),
+            'calmar_ratio': safe_float(ffn.calc_calmar_ratio(benchmark_prices)),
+        }
+
+        # Calculate alpha and beta
+        beta = None
+        alpha = None
+        correlation = None
+        try:
+            # Calculate beta (covariance / variance of benchmark)
+            covariance = portfolio_returns.cov(benchmark_returns)
+            benchmark_variance = benchmark_returns.var()
+            if benchmark_variance > 0:
+                beta = safe_float(covariance / benchmark_variance)
+                # Alpha = portfolio return - (risk-free + beta * (benchmark return - risk-free))
+                portfolio_annual_return = portfolio_returns.mean() * 252
+                benchmark_annual_return = benchmark_returns.mean() * 252
+                alpha = safe_float(portfolio_annual_return - (rf + beta * (benchmark_annual_return - rf)))
+            correlation = safe_float(portfolio_returns.corr(benchmark_returns))
+        except Exception:
+            pass
+
+        # Calculate excess returns
+        excess_returns = portfolio_returns - benchmark_returns
+        tracking_error = safe_float(excess_returns.std() * np.sqrt(252))
+        information_ratio = None
+        if tracking_error and tracking_error > 0:
+            information_ratio = safe_float((excess_returns.mean() * 252) / tracking_error)
+
+        # Up/down capture ratios
+        up_capture = None
+        down_capture = None
+        try:
+            up_periods = benchmark_returns > 0
+            down_periods = benchmark_returns < 0
+
+            if up_periods.sum() > 0:
+                up_capture = safe_float(
+                    portfolio_returns[up_periods].mean() / benchmark_returns[up_periods].mean()
+                )
+            if down_periods.sum() > 0:
+                down_capture = safe_float(
+                    portfolio_returns[down_periods].mean() / benchmark_returns[down_periods].mean()
+                )
+        except Exception:
+            pass
+
+        # Rebase both to 100 for comparison chart
+        rebased_portfolio = ffn.rebase(portfolio_prices, 100)
+        rebased_benchmark = ffn.rebase(benchmark_prices, 100)
+
+        return {
+            "success": True,
+            "portfolio_name": portfolio_name,
+            "benchmark_name": benchmark_name,
+            "portfolio_stats": portfolio_stats,
+            "benchmark_stats": benchmark_stats,
+            "relative_metrics": {
+                "alpha": alpha,
+                "beta": beta,
+                "correlation": correlation,
+                "tracking_error": tracking_error,
+                "information_ratio": information_ratio,
+                "up_capture": up_capture,
+                "down_capture": down_capture,
+            },
+            "rebased_portfolio": {str(k): float(v) for k, v in rebased_portfolio.tail(252).items()},
+            "rebased_benchmark": {str(k): float(v) for k, v in rebased_benchmark.tail(252).items()},
+            "date_range": {
+                "start": str(common_dates[0]),
+                "end": str(common_dates[-1]),
+                "data_points": len(common_dates)
+            }
+        }
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def full_analysis(params: Dict[str, Any]) -> Dict[str, Any]:
     """Full portfolio analysis combining all metrics"""
     if not FFN_AVAILABLE:
@@ -574,6 +847,8 @@ COMMANDS = {
     "compare_assets": compare_assets,
     "risk_metrics": risk_metrics,
     "full_analysis": full_analysis,
+    "portfolio_optimization": portfolio_optimization,
+    "benchmark_comparison": benchmark_comparison,
 }
 
 

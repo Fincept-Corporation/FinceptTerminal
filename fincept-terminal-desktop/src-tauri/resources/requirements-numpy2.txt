@@ -92,7 +92,8 @@ loguru>=0.6.0
 pydantic-settings>=2.0.0
 fire>=0.4.0
 dill>=0.3.0
-ruamel.yaml>=0.17.38
+# Use ruamel.yaml version with pre-built wheels (avoid C extension build issues)
+ruamel.yaml>=0.17.38,<0.18.0
 python-redis-lock>=4.0.0
 setuptools-scm>=8.0.0
 tables>=3.8.0

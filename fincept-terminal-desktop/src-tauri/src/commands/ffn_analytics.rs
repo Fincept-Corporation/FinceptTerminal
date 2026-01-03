@@ -152,3 +152,46 @@ pub async fn ffn_full_analysis(
     let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
     python_runtime::execute_python_script(&script_path, args)
 }
+
+/// Portfolio optimization - calculate optimal weights using various methods
+#[tauri::command]
+pub async fn ffn_portfolio_optimization(
+    app: tauri::AppHandle,
+    prices_json: String,
+    method: Option<String>,
+    risk_free_rate: Option<f64>,
+    weight_bounds: Option<Vec<f64>>,
+) -> Result<String, String> {
+    let bounds = weight_bounds.unwrap_or_else(|| vec![0.0, 1.0]);
+    let params = serde_json::json!({
+        "prices": prices_json,
+        "method": method.unwrap_or_else(|| "erc".to_string()),
+        "risk_free_rate": risk_free_rate.unwrap_or(0.0),
+        "weight_bounds": bounds
+    });
+
+    let args = vec!["portfolio_optimization".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+/// Benchmark comparison - compare portfolio against a benchmark
+#[tauri::command]
+pub async fn ffn_benchmark_comparison(
+    app: tauri::AppHandle,
+    prices_json: String,
+    benchmark_prices_json: String,
+    benchmark_name: Option<String>,
+    risk_free_rate: Option<f64>,
+) -> Result<String, String> {
+    let params = serde_json::json!({
+        "prices": prices_json,
+        "benchmark_prices": benchmark_prices_json,
+        "benchmark_name": benchmark_name.unwrap_or_else(|| "Benchmark".to_string()),
+        "risk_free_rate": risk_free_rate.unwrap_or(0.0)
+    });
+
+    let args = vec!["benchmark_comparison".to_string(), params.to_string()];
+    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
