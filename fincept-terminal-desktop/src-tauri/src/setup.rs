@@ -393,7 +393,8 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
         // Move bun from nested folder to bun/ root and make executable
         let nested_bun = bun_dir.join("bun-linux-x64/bun");
         let target_bun = bun_dir.join("bin/bun");
-        std::fs::create_dir_all(bun_dir.join("bin"))?;
+        std::fs::create_dir_all(bun_dir.join("bin"))
+            .map_err(|e| format!("Failed to create bin dir: {}", e))?;
 
         if nested_bun.exists() {
             std::fs::copy(&nested_bun, &target_bun)
@@ -401,9 +402,12 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
 
             // Make executable
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&target_bun)?.permissions();
+            let mut perms = std::fs::metadata(&target_bun)
+                .map_err(|e| format!("Failed to get metadata: {}", e))?
+                .permissions();
             perms.set_mode(0o755);
-            std::fs::set_permissions(&target_bun, perms)?;
+            std::fs::set_permissions(&target_bun, perms)
+                .map_err(|e| format!("Failed to set permissions: {}", e))?;
 
             let _ = std::fs::remove_dir_all(bun_dir.join("bun-linux-x64"));
         }
@@ -435,7 +439,8 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
         // Move bun from nested folder to bun/ root and make executable
         let nested_bun = bun_dir.join("bun-darwin-aarch64/bun");
         let target_bun = bun_dir.join("bin/bun");
-        std::fs::create_dir_all(bun_dir.join("bin"))?;
+        std::fs::create_dir_all(bun_dir.join("bin"))
+            .map_err(|e| format!("Failed to create bin dir: {}", e))?;
 
         if nested_bun.exists() {
             std::fs::copy(&nested_bun, &target_bun)
@@ -443,9 +448,12 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
 
             // Make executable
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&target_bun)?.permissions();
+            let mut perms = std::fs::metadata(&target_bun)
+                .map_err(|e| format!("Failed to get metadata: {}", e))?
+                .permissions();
             perms.set_mode(0o755);
-            std::fs::set_permissions(&target_bun, perms)?;
+            std::fs::set_permissions(&target_bun, perms)
+                .map_err(|e| format!("Failed to set permissions: {}", e))?;
 
             let _ = std::fs::remove_dir_all(bun_dir.join("bun-darwin-aarch64"));
         }
