@@ -242,7 +242,7 @@ const ForumTab: React.FC = () => {
       }
 
       if (response?.success && response.data) {
-        const posts = response.data.posts || [];
+        const posts = (response.data as any).posts || [];
         console.log('[Forum] Fetched posts:', posts.length);
         const formattedPosts = posts.map(convertApiPostToUIFormat);
         setForumPosts(formattedPosts);
@@ -615,17 +615,17 @@ const ForumTab: React.FC = () => {
       setTimeout(async () => {
         const post = forumPosts.find(p => p.id === selectedPostId);
         if (post) {
-          handlePostClick(post);
+          handleViewPost(post);
         } else {
           // Try to fetch the post details directly
           try {
             const { apiKey, deviceId } = getApiCredentials();
             const response = await ForumApiService.getPostDetails(selectedPostId, apiKey, deviceId);
             if (response.success && response.data) {
-              const apiPost = response.data.data?.post || response.data.post;
+              const apiPost = (response.data as any).data?.post || (response.data as any).post;
               const post = convertApiPostToUIFormat(apiPost);
               setSelectedPost(post);
-              const comments = (response.data.data?.comments || response.data.comments || []).map(convertApiCommentToUIFormat);
+              const comments = ((response.data as any).data?.comments || (response.data as any).comments || []).map(convertApiCommentToUIFormat);
               setPostComments(comments);
               setShowPostDetail(true);
             }
