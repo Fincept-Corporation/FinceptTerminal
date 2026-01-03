@@ -163,60 +163,102 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
     std::fs::create_dir_all(&python_dir)
         .map_err(|e| format!("Failed to create Python dir: {}", e))?;
 
-    // Download Python embeddable package
-    let download_url = if cfg!(target_os = "windows") {
-        format!("https://www.python.org/ftp/python/{}/python-{}-embed-amd64.zip", PYTHON_VERSION, PYTHON_VERSION)
-    } else {
-        return Err("Auto-install only supported on Windows. Install Python manually.".to_string());
-    };
-
+    // Download Python
     emit_progress(app, "python", 20, "Downloading Python...", false);
 
-    // Download using PowerShell
-    let zip_path = python_dir.join("python.zip");
-    let mut cmd = Command::new("powershell");
-    cmd.args(&[
-        "-Command",
-        &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", download_url, zip_path.display())
-    ]);
     #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
+    {
+        let download_url = format!("https://www.python.org/ftp/python/{}/python-{}-embed-amd64.zip", PYTHON_VERSION, PYTHON_VERSION);
+        let zip_path = python_dir.join("python.zip");
 
-    let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
-    if !output.status.success() {
-        return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
-    }
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-Command",
+            &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", download_url, zip_path.display())
+        ]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
-    emit_progress(app, "python", 60, "Extracting Python...", false);
-
-    // Extract
-    let mut cmd = Command::new("powershell");
-    cmd.args(&[
-        "-Command",
-        &format!("Expand-Archive -Path '{}' -DestinationPath '{}' -Force", zip_path.display(), python_dir.display())
-    ]);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
-    if !output.status.success() {
-        return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
-    }
-
-    // Delete zip
-    let _ = std::fs::remove_file(&zip_path);
-
-    // Enable pip by modifying python312._pth
-    let pth_file = python_dir.join("python312._pth");
-    if pth_file.exists() {
-        if let Ok(content) = std::fs::read_to_string(&pth_file) {
-            let new_content = content.replace("#import site", "import site");
-            let _ = std::fs::write(&pth_file, new_content);
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
-    } else {
-        // Create _pth file if it doesn't exist
-        let pth_content = "python312.zip\n.\n\nimport site\n";
-        let _ = std::fs::write(&pth_file, pth_content);
+
+        emit_progress(app, "python", 60, "Extracting Python...", false);
+
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-Command",
+            &format!("Expand-Archive -Path '{}' -DestinationPath '{}' -Force", zip_path.display(), python_dir.display())
+        ]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+        let _ = std::fs::remove_file(&zip_path);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-{}.linux-x86_64-install_only.tar.gz", PYTHON_VERSION);
+        let tar_path = python_dir.join("python.tar.gz");
+
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", tar_path.to_str().unwrap(), &download_url]);
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        emit_progress(app, "python", 60, "Extracting Python...", false);
+
+        let mut cmd = Command::new("tar");
+        cmd.args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=1"]);
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+        let _ = std::fs::remove_file(&tar_path);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-{}.macos-aarch64-install_only.tar.gz", PYTHON_VERSION);
+        let tar_path = python_dir.join("python.tar.gz");
+
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", tar_path.to_str().unwrap(), &download_url]);
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        emit_progress(app, "python", 60, "Extracting Python...", false);
+
+        let mut cmd = Command::new("tar");
+        cmd.args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=1"]);
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+        let _ = std::fs::remove_file(&tar_path);
+    }
+
+    // Enable pip by modifying python312._pth (Windows only)
+    #[cfg(target_os = "windows")]
+    {
+        let pth_file = python_dir.join("python312._pth");
+        if pth_file.exists() {
+            if let Ok(content) = std::fs::read_to_string(&pth_file) {
+                let new_content = content.replace("#import site", "import site");
+                let _ = std::fs::write(&pth_file, new_content);
+            }
+        } else {
+            // Create _pth file if it doesn't exist
+            let pth_content = "python312.zip\n.\n\nimport site\n";
+            let _ = std::fs::write(&pth_file, pth_content);
+        }
     }
 
     // Download and install pip
@@ -225,16 +267,32 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
     let get_pip_url = "https://bootstrap.pypa.io/get-pip.py";
     let get_pip_path = python_dir.join("get-pip.py");
 
-    let mut cmd = Command::new("powershell");
-    cmd.args(&[
-        "-Command",
-        &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", get_pip_url, get_pip_path.display())
-    ]);
+    // Download get-pip.py
     #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
+    {
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-Command",
+            &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", get_pip_url, get_pip_path.display())
+        ]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
+    }
 
-    let python_exe = python_dir.join("python.exe");
+    #[cfg(not(target_os = "windows"))]
+    {
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", get_pip_path.to_str().unwrap(), get_pip_url]);
+        cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
+    }
+
+    // Install pip
+    let python_exe = if cfg!(target_os = "windows") {
+        python_dir.join("python.exe")
+    } else {
+        python_dir.join("bin/python3")
+    };
+
     let mut cmd = Command::new(&python_exe);
     cmd.arg(get_pip_path.to_str().unwrap());
     #[cfg(target_os = "windows")]
@@ -263,18 +321,18 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
     std::fs::create_dir_all(&bun_dir)
         .map_err(|e| format!("Failed to create Bun dir: {}", e))?;
 
-    if cfg!(target_os = "windows") {
+    emit_progress(app, "bun", 30, "Downloading Bun...", false);
+
+    #[cfg(target_os = "windows")]
+    {
         let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-windows-x64.zip", BUN_VERSION);
         let zip_path = bun_dir.join("bun.zip");
-
-        emit_progress(app, "bun", 30, "Downloading Bun...", false);
 
         let mut cmd = Command::new("powershell");
         cmd.args(&[
             "-Command",
             &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", download_url, zip_path.display())
         ]);
-        #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
         let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
@@ -289,7 +347,6 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
             "-Command",
             &format!("Expand-Archive -Path '{}' -DestinationPath '{}' -Force", zip_path.display(), bun_dir.display())
         ]);
-        #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
         let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
@@ -306,11 +363,92 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
         if nested_bun.exists() && !target_bun.exists() {
             std::fs::copy(&nested_bun, &target_bun)
                 .map_err(|e| format!("Failed to copy bun.exe: {}", e))?;
-            // Clean up nested directory
             let _ = std::fs::remove_dir_all(bun_dir.join("bun-windows-x64"));
         }
-    } else {
-        return Err("Auto-install only supported on Windows. Install Bun manually.".to_string());
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION);
+        let zip_path = bun_dir.join("bun.zip");
+
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", zip_path.to_str().unwrap(), &download_url]);
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        emit_progress(app, "bun", 70, "Extracting Bun...", false);
+
+        let mut cmd = Command::new("unzip");
+        cmd.args(&["-o", zip_path.to_str().unwrap(), "-d", bun_dir.to_str().unwrap()]);
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        let _ = std::fs::remove_file(&zip_path);
+
+        // Move bun from nested folder to bun/ root and make executable
+        let nested_bun = bun_dir.join("bun-linux-x64/bun");
+        let target_bun = bun_dir.join("bin/bun");
+        std::fs::create_dir_all(bun_dir.join("bin"))?;
+
+        if nested_bun.exists() {
+            std::fs::copy(&nested_bun, &target_bun)
+                .map_err(|e| format!("Failed to copy bun: {}", e))?;
+
+            // Make executable
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&target_bun)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&target_bun, perms)?;
+
+            let _ = std::fs::remove_dir_all(bun_dir.join("bun-linux-x64"));
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-aarch64.zip", BUN_VERSION);
+        let zip_path = bun_dir.join("bun.zip");
+
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", zip_path.to_str().unwrap(), &download_url]);
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        emit_progress(app, "bun", 70, "Extracting Bun...", false);
+
+        let mut cmd = Command::new("unzip");
+        cmd.args(&["-o", zip_path.to_str().unwrap(), "-d", bun_dir.to_str().unwrap()]);
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        let _ = std::fs::remove_file(&zip_path);
+
+        // Move bun from nested folder to bun/ root and make executable
+        let nested_bun = bun_dir.join("bun-darwin-aarch64/bun");
+        let target_bun = bun_dir.join("bin/bun");
+        std::fs::create_dir_all(bun_dir.join("bin"))?;
+
+        if nested_bun.exists() {
+            std::fs::copy(&nested_bun, &target_bun)
+                .map_err(|e| format!("Failed to copy bun: {}", e))?;
+
+            // Make executable
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&target_bun)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&target_bun, perms)?;
+
+            let _ = std::fs::remove_dir_all(bun_dir.join("bun-darwin-aarch64"));
+        }
     }
 
     emit_progress(app, "bun", 100, "Bun installed", false);
