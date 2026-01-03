@@ -1,4 +1,5 @@
 // Tauri commands module
+pub mod news;
 pub mod market_data;
 pub mod polygon;
 pub mod yfinance;

@@ -323,14 +323,8 @@ async fn ws_set_config(
     state: tauri::State<'_, WebSocketState>,
     config: websocket::types::ProviderConfig,
 ) -> Result<(), String> {
-    eprintln!("[ws_set_config] Called with provider: {}", config.name);
-    eprintln!("[ws_set_config] URL: {}", config.url);
-    eprintln!("[ws_set_config] Enabled: {}", config.enabled);
-
     let manager = state.manager.read().await;
     manager.set_config(config.clone());
-
-    eprintln!("[ws_set_config] ✓ Config set for provider: {}", config.name);
     Ok(())
 }
 
@@ -801,6 +795,9 @@ pub fn run() {
             monitor_get_alerts,
             monitor_load_conditions,
             execute_python_script,
+            commands::news::fetch_all_rss_news,
+            commands::news::get_rss_feed_count,
+            commands::news::get_active_sources,
             commands::market_data::get_market_quote,
             commands::market_data::get_market_quotes,
             commands::market_data::get_period_returns,

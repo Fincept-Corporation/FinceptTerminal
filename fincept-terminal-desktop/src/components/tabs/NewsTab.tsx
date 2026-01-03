@@ -24,6 +24,7 @@ const NewsTab: React.FC = () => {
   const [newsArticles, setNewsArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeSources, setActiveSources] = useState<string[]>([]);
+  const [feedCount, setFeedCount] = useState(9);
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [showWebView, setShowWebView] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(10); // minutes
@@ -37,11 +38,12 @@ const NewsTab: React.FC = () => {
   const recordCurrentData = async () => {
     if (newsArticles.length > 0) {
       try {
+        const sources = await getActiveSources();
         const recordData = {
           articles: newsArticles,
           totalCount: newsArticles.length,
           alertCount: newsArticles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length,
-          sources: getActiveSources(),
+          sources: sources,
           timestamp: new Date().toISOString(),
           filter: activeFilter
         };
@@ -62,11 +64,15 @@ const NewsTab: React.FC = () => {
   const handleRefresh = async () => {
     setLoading(true);
     try {
-      // Force refresh to bypass cache
-      const articles = await fetchNewsWithCache(true);
+      const [articles, sources, count] = await Promise.all([
+        fetchNewsWithCache(true),
+        getActiveSources(),
+        getRSSFeedCount()
+      ]);
       setNewsArticles(articles);
       setAlertCount(articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length);
-      setActiveSources(getActiveSources());
+      setActiveSources(sources);
+      setFeedCount(count);
       setNewsUpdateCount(prev => prev + 1);
 
       // Record data if recording is active
@@ -76,7 +82,7 @@ const NewsTab: React.FC = () => {
             articles: articles,
             totalCount: articles.length,
             alertCount: articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length,
-            sources: getActiveSources(),
+            sources: sources,
             timestamp: new Date().toISOString(),
             filter: activeFilter
           };
@@ -127,10 +133,15 @@ const NewsTab: React.FC = () => {
     const loadNews = async () => {
       setLoading(true);
       try {
-        const articles = await fetchNewsWithCache();
+        const [articles, sources, count] = await Promise.all([
+          fetchNewsWithCache(),
+          getActiveSources(),
+          getRSSFeedCount()
+        ]);
         setNewsArticles(articles);
         setAlertCount(articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length);
-        setActiveSources(getActiveSources());
+        setActiveSources(sources);
+        setFeedCount(count);
         setNewsUpdateCount(prev => prev + 1);
 
         // Record data if recording is active
@@ -140,7 +151,7 @@ const NewsTab: React.FC = () => {
               articles: articles,
               totalCount: articles.length,
               alertCount: articles.filter(a => a.priority === 'FLASH' || a.priority === 'URGENT').length,
-              sources: getActiveSources(),
+              sources: sources,
               timestamp: new Date().toISOString(),
               filter: activeFilter
             };
@@ -267,7 +278,7 @@ const NewsTab: React.FC = () => {
           <span style={{ color: colors.text }}>|</span>
           <span style={{ color: colors.warning }}>{t('header.alerts')}: {alertCount}</span>
           <span style={{ color: colors.text }}>|</span>
-          <span style={{ color: colors.secondary }}>● {getRSSFeedCount()} {t('header.sources')}</span>
+          <span style={{ color: colors.secondary }}>● {feedCount} {t('header.sources')}</span>
           <span style={{ color: colors.text }}>|</span>
           <TimezoneSelector compact />
           <span style={{ color: colors.text }}>|</span>
@@ -469,7 +480,7 @@ const NewsTab: React.FC = () => {
 
             {loading && newsArticles.length === 0 ? (
               <div style={{ color: colors.warning, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
-                Loading news from {getRSSFeedCount()} RSS feeds...
+                Loading news from {feedCount} RSS feeds...
               </div>
             ) : filteredNews.length === 0 ? (
               <div style={{ color: colors.textMuted, fontSize: '10px', textAlign: 'center', padding: '20px' }}>
@@ -1015,7 +1026,7 @@ const NewsTab: React.FC = () => {
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', gap: '16px' }}>
-            <span>FinceptTerminal Professional News v1.0.0 | Real-time from {getRSSFeedCount()} RSS feeds</span>
+            <span>FinceptTerminal Professional News v1.0.0 | Real-time from {feedCount} RSS feeds</span>
             <span>Articles: {newsArticles.length} | Filter: {activeFilter} | Updates: {newsUpdateCount}</span>
           </div>
           <div style={{ display: 'flex', gap: '16px' }}>

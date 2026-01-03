@@ -215,7 +215,6 @@ export default defineConfig({
         configure: (proxy, options) => {
           proxy.on('proxyReq', (proxyReq, req, res) => {
             proxyReq.setHeader('skip_zrok_interstitial', '1');
-            console.log('Proxying request:', req.method, req.url, '-> https://finceptbackend.share.zrok.io' + req.url.replace('/api', ''));
           });
         }
       }

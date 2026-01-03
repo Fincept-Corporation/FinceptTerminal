@@ -241,8 +241,9 @@ const ForumTab: React.FC = () => {
         }
       }
 
-      if (response?.success && response.data?.data) {
-        const posts = response.data.data.posts || [];
+      if (response?.success && response.data) {
+        const posts = response.data.posts || [];
+        console.log('[Forum] Fetched posts:', posts.length);
         const formattedPosts = posts.map(convertApiPostToUIFormat);
         setForumPosts(formattedPosts);
 
@@ -605,6 +606,35 @@ const ForumTab: React.FC = () => {
   useEffect(() => {
     fetchCategories();
     fetchForumStats();
+
+    // Check if navigated from dashboard widget with post ID
+    const selectedPostId = localStorage.getItem('forum_selected_post_id');
+    if (selectedPostId) {
+      localStorage.removeItem('forum_selected_post_id');
+      // Find and open the post
+      setTimeout(async () => {
+        const post = forumPosts.find(p => p.id === selectedPostId);
+        if (post) {
+          handlePostClick(post);
+        } else {
+          // Try to fetch the post details directly
+          try {
+            const { apiKey, deviceId } = getApiCredentials();
+            const response = await ForumApiService.getPostDetails(selectedPostId, apiKey, deviceId);
+            if (response.success && response.data) {
+              const apiPost = response.data.data?.post || response.data.post;
+              const post = convertApiPostToUIFormat(apiPost);
+              setSelectedPost(post);
+              const comments = (response.data.data?.comments || response.data.comments || []).map(convertApiCommentToUIFormat);
+              setPostComments(comments);
+              setShowPostDetail(true);
+            }
+          } catch (err) {
+            console.error('Failed to load post:', err);
+          }
+        }
+      }, 1000);
+    }
   }, []);
 
   // Fetch posts when category or sort changes

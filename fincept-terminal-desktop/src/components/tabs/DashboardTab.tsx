@@ -34,21 +34,14 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
     type: 'indices',
     title: 'Global Indices - Top 12',
     config: {},
-    layout: { i: 'indices-1', x: 0, y: 0, w: 4, h: 5, minW: 3, minH: 4 }
-  },
-  {
-    id: 'crypto-1',
-    type: 'crypto',
-    title: 'Cryptocurrency Markets',
-    config: {},
-    layout: { i: 'crypto-1', x: 4, y: 0, w: 4, h: 5, minW: 3, minH: 4 }
+    layout: { i: 'indices-1', x: 0, y: 0, w: 6, h: 5, minW: 3, minH: 4 }
   },
   {
     id: 'news-1',
     type: 'news',
     title: 'Market News',
     config: { newsCategory: 'MARKETS', newsLimit: 5 },
-    layout: { i: 'news-1', x: 8, y: 0, w: 4, h: 5, minW: 2, minH: 3 }
+    layout: { i: 'news-1', x: 6, y: 0, w: 6, h: 5, minW: 2, minH: 3 }
   },
   // Row 2 - Forex, Commodities, Tech News
   {
@@ -68,15 +61,15 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
   {
     id: 'news-2',
     type: 'news',
-    title: 'Tech News',
-    config: { newsCategory: 'TECH', newsLimit: 5 },
+    title: 'SEC Press Releases',
+    config: { newsCategory: 'REGULATORY', newsLimit: 5 },
     layout: { i: 'news-2', x: 6, y: 5, w: 3, h: 4, minW: 2, minH: 3 }
   },
   {
     id: 'news-3',
     type: 'news',
-    title: 'Earnings News',
-    config: { newsCategory: 'EARNINGS', newsLimit: 5 },
+    title: 'Crypto News',
+    config: { newsCategory: 'CRYPTO', newsLimit: 5 },
     layout: { i: 'news-3', x: 9, y: 5, w: 3, h: 4, minW: 2, minH: 3 }
   },
   // Row 3 - Forum, Maritime Intelligence, and Tech Stocks
@@ -287,6 +280,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             categoryName={widget.config?.forumCategoryName}
             limit={widget.config?.forumLimit}
             onRemove={() => handleRemoveWidget(widget.id)}
+            onNavigateToTab={onNavigateToTab}
           />
         );
       case 'crypto':

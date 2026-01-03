@@ -70,7 +70,6 @@ pub fn get_python_path_for_library(app: &tauri::AppHandle, library_name: Option<
         install_dir.join(format!("{}/bin/python3", venv_name))
     };
 
-    eprintln!("[PYTHON] Library: {:?}, Using venv: {}, Path: {}", library_name, venv_name, python_exe.display());
 
     // Check if venv Python exists
     if python_exe.exists() {
@@ -96,7 +95,6 @@ pub fn get_python_path_for_library(app: &tauri::AppHandle, library_name: Option<
 
         if let Ok(output) = Command::new(system_python).arg("--version").output() {
             if output.status.success() {
-                eprintln!("[PYTHON] Warning: Using system Python as fallback");
                 return Ok(PathBuf::from(system_python));
             }
         }

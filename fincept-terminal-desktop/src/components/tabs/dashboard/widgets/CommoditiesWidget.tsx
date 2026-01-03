@@ -55,15 +55,37 @@ export const CommoditiesWidget: React.FC<CommoditiesWidgetProps> = ({ id, onRemo
   const formatChange = (value: number) => value >= 0 ? `+${value.toFixed(2)}` : value.toFixed(2);
   const formatPercent = (value: number) => value >= 0 ? `+${value.toFixed(2)}%` : `${value.toFixed(2)}%`;
 
+  const SkeletonRow = () => (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '2fr 1fr 1fr 1fr',
+      gap: '4px',
+      fontSize: '9px',
+      padding: '2px 0',
+      borderBottom: `1px solid rgba(120,120,120,0.3)`
+    }}>
+      <div style={{ backgroundColor: 'rgba(120,120,120,0.3)', height: '12px', borderRadius: '2px', animation: 'pulse 1.5s infinite' }}></div>
+      <div style={{ backgroundColor: 'rgba(120,120,120,0.3)', height: '12px', borderRadius: '2px', animation: 'pulse 1.5s infinite', animationDelay: '0.1s' }}></div>
+      <div style={{ backgroundColor: 'rgba(120,120,120,0.3)', height: '12px', borderRadius: '2px', animation: 'pulse 1.5s infinite', animationDelay: '0.2s' }}></div>
+      <div style={{ backgroundColor: 'rgba(120,120,120,0.3)', height: '12px', borderRadius: '2px', animation: 'pulse 1.5s infinite', animationDelay: '0.3s' }}></div>
+    </div>
+  );
+
   return (
     <BaseWidget
       id={id}
       title={t('widgets.commodities')}
       onRemove={onRemove}
       onRefresh={loadQuotes}
-      isLoading={loading}
+      isLoading={false}
       error={error}
     >
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.4; }
+          50% { opacity: 0.8; }
+        }
+      `}</style>
       <div style={{ padding: '4px' }}>
         <div style={{
           display: 'grid',
@@ -81,7 +103,11 @@ export const CommoditiesWidget: React.FC<CommoditiesWidgetProps> = ({ id, onRemo
           <div style={{ textAlign: 'right' }}>{t('widgets.change')}</div>
           <div style={{ textAlign: 'right' }}>{t('widgets.percentChange')}</div>
         </div>
-        {quotes.map((quote, index) => (
+        {loading && quotes.length === 0 ? (
+          <>
+            {TOP_COMMODITIES.map((_, idx) => <SkeletonRow key={idx} />)}
+          </>
+        ) : quotes.map((quote, index) => (
           <div
             key={index}
             style={{

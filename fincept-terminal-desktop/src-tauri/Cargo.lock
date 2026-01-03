@@ -1707,6 +1707,7 @@ dependencies = [
  "pin-project",
  "printpdf",
  "pyo3",
+ "quick-xml 0.37.5",
  "r2d2",
  "r2d2_sqlite",
  "rayon",

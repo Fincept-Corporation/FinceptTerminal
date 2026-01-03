@@ -25,6 +25,7 @@ interface ForumWidgetProps {
   categoryName?: string;
   limit?: number;
   onRemove?: () => void;
+  onNavigateToTab?: (tabName: string, postId?: string) => void;
 }
 
 export const ForumWidget: React.FC<ForumWidgetProps> = ({
@@ -32,7 +33,8 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
   categoryId,
   categoryName = 'Recent Posts',
   limit = 5,
-  onRemove
+  onRemove,
+  onNavigateToTab
 }) => {
   const { t } = useTranslation('dashboard');
   const [posts, setPosts] = useState<ForumPost[]>([]);
@@ -49,9 +51,9 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
 
       console.log('[ForumWidget] Loading posts with:', { categoryId, limit, apiKey: !!apiKey, deviceId: !!deviceId });
 
-      // If no categoryId is provided, default to category 1 (like ForumTab does)
+      // If no categoryId is provided, default to category 3 (Crypto Corner - has posts)
       // The backend requires a category ID, there is no "get all posts" endpoint
-      const targetCategoryId = categoryId || 1;
+      const targetCategoryId = categoryId || 3;
 
       const response = await ForumApiService.getPostsByCategory(targetCategoryId, 'latest', limit, apiKey, deviceId);
 
@@ -105,11 +107,19 @@ export const ForumWidget: React.FC<ForumWidgetProps> = ({
         {posts.map((post, index) => (
           <div
             key={post.id}
+            onClick={() => {
+              localStorage.setItem('forum_selected_post_id', post.id);
+              onNavigateToTab?.('Forum');
+            }}
             style={{
               marginBottom: '8px',
               paddingBottom: '8px',
-              borderBottom: index < posts.length - 1 ? `1px solid ${BLOOMBERG_GRAY}` : 'none'
+              borderBottom: index < posts.length - 1 ? `1px solid ${BLOOMBERG_GRAY}` : 'none',
+              cursor: 'pointer',
+              transition: 'opacity 0.2s'
             }}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
           >
             <div style={{ color: BLOOMBERG_WHITE, fontSize: '10px', fontWeight: 'bold', marginBottom: '2px', lineHeight: '1.2' }}>
               {post.title.substring(0, 60)}{post.title.length > 60 ? '...' : ''}
