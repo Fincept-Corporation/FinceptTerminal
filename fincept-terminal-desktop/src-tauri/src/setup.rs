@@ -533,16 +533,17 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
 async fn install_uv(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
     emit_progress(app, "uv", 0, "Installing UV package manager...", false);
 
-    let pip_exe = if cfg!(target_os = "windows") {
-        install_dir.join("python/Scripts/pip.exe")
+    // Use python -m pip instead of pip directly (more reliable)
+    let python_exe = if cfg!(target_os = "windows") {
+        install_dir.join("python/python.exe")
     } else if cfg!(target_os = "macos") {
-        install_dir.join("python/Versions/3.12/bin/pip3")
+        install_dir.join("python/Versions/3.12/bin/python3")
     } else {
-        install_dir.join("python/bin/pip")
+        install_dir.join("python/bin/python3")
     };
 
-    let mut cmd = Command::new(&pip_exe);
-    cmd.args(&["install", "uv"]);
+    let mut cmd = Command::new(&python_exe);
+    cmd.args(&["-m", "pip", "install", "uv"]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
