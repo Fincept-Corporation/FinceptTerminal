@@ -210,7 +210,7 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
     #[cfg(target_os = "linux")]
     {
-        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-{}.linux-x86_64-install_only.tar.gz", PYTHON_VERSION);
+        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.12.7+20240107-x86_64-unknown-linux-gnu-install_only.tar.gz");
         let tar_path = python_dir.join("python.tar.gz");
 
         let mut cmd = Command::new("curl");
@@ -233,7 +233,14 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
     #[cfg(target_os = "macos")]
     {
-        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-{}.macos-aarch64-install_only.tar.gz", PYTHON_VERSION);
+        // Check if Apple Silicon or Intel
+        let arch = std::env::consts::ARCH;
+        let platform = if arch == "aarch64" {
+            "aarch64-apple-darwin-install_only"
+        } else {
+            "x86_64-apple-darwin-install_only"
+        };
+        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.12.7+20240107-{}.tar.gz", platform);
         let tar_path = python_dir.join("python.tar.gz");
 
         let mut cmd = Command::new("curl");
@@ -424,7 +431,15 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
 
     #[cfg(target_os = "macos")]
     {
-        let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-aarch64.zip", BUN_VERSION);
+        // Detect Apple Silicon (M1/M2) vs Intel
+        let arch = std::env::consts::ARCH;
+        let (bun_arch, nested_folder) = if arch == "aarch64" {
+            ("aarch64", "bun-darwin-aarch64")
+        } else {
+            ("x64", "bun-darwin-x64")
+        };
+
+        let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-{}.zip", BUN_VERSION, bun_arch);
         let zip_path = bun_dir.join("bun.zip");
 
         let mut cmd = Command::new("curl");
@@ -446,7 +461,7 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
         let _ = std::fs::remove_file(&zip_path);
 
         // Move bun from nested folder to bun/ root and make executable
-        let nested_bun = bun_dir.join("bun-darwin-aarch64/bun");
+        let nested_bun = bun_dir.join(format!("{}/bun", nested_folder));
         let target_bun = bun_dir.join("bin/bun");
         std::fs::create_dir_all(bun_dir.join("bin"))
             .map_err(|e| format!("Failed to create bin dir: {}", e))?;
@@ -464,7 +479,7 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
             std::fs::set_permissions(&target_bun, perms)
                 .map_err(|e| format!("Failed to set permissions: {}", e))?;
 
-            let _ = std::fs::remove_dir_all(bun_dir.join("bun-darwin-aarch64"));
+            let _ = std::fs::remove_dir_all(bun_dir.join(nested_folder));
         }
     }
 
