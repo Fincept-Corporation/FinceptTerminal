@@ -1,13 +1,13 @@
-// setup.rs - Clean setup for Python, Bun, and UV package manager
+// setup.rs - Simplified Python and Bun setup
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
-use std::fs;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -25,16 +25,12 @@ pub struct SetupProgress {
 pub struct SetupStatus {
     pub python_installed: bool,
     pub bun_installed: bool,
-    pub uv_installed: bool,
     pub packages_installed: bool,
-    pub packages_numpy1_installed: bool,
-    pub packages_numpy2_installed: bool,
     pub needs_setup: bool,
 }
 
 const PYTHON_VERSION: &str = "3.12.7";
 const BUN_VERSION: &str = "1.1.0";
-const UV_VERSION: &str = "0.9.18";
 
 fn emit_progress(app: &AppHandle, step: &str, progress: u8, message: &str, is_error: bool) {
     let _ = app.emit("setup-progress", SetupProgress {
@@ -46,15 +42,12 @@ fn emit_progress(app: &AppHandle, step: &str, progress: u8, message: &str, is_er
     eprintln!("[SETUP] [{}] {}% - {}", step, progress, message);
 }
 
-/// Detect if running in dev mode
 fn is_dev_mode() -> bool {
     cfg!(debug_assertions)
 }
 
-/// Get installation directory based on mode
 fn get_install_dir(app: &AppHandle) -> Result<PathBuf, String> {
     if is_dev_mode() {
-        // Dev mode: use OS-specific user directory (no admin needed)
         let base_dir = if cfg!(target_os = "windows") {
             std::env::var("LOCALAPPDATA")
                 .map(PathBuf::from)
@@ -64,14 +57,12 @@ fn get_install_dir(app: &AppHandle) -> Result<PathBuf, String> {
                 .map(|h| PathBuf::from(h).join("Library/Application Support"))
                 .unwrap_or_else(|_| PathBuf::from("/tmp"))
         } else {
-            // Linux
             std::env::var("HOME")
                 .map(|h| PathBuf::from(h).join(".local/share"))
                 .unwrap_or_else(|_| PathBuf::from("/tmp"))
         };
         Ok(base_dir.join("fincept-dev"))
     } else {
-        // Production: use app resource directory
         app.path().resource_dir()
             .map_err(|e| format!("Failed to get resource dir: {}", e))
     }
@@ -108,7 +99,7 @@ fn check_bun(install_dir: &PathBuf) -> (bool, Option<String>) {
     let bun_exe = if cfg!(target_os = "windows") {
         install_dir.join("bun/bun.exe")
     } else {
-        install_dir.join("bun/bun")
+        install_dir.join("bun/bin/bun")
     };
 
     if !bun_exe.exists() {
@@ -129,647 +120,390 @@ fn check_bun(install_dir: &PathBuf) -> (bool, Option<String>) {
     (false, None)
 }
 
-/// Check UV installation
-fn check_uv(install_dir: &PathBuf) -> bool {
-    let uv_exe = if cfg!(target_os = "windows") {
-        install_dir.join("python/Scripts/uv.exe")
-    } else {
-        install_dir.join("python/bin/uv")
-    };
-    uv_exe.exists()
-}
-
-/// Check if packages are installed (either environment)
+/// Check if Python packages are installed in both venvs
 fn check_packages(install_dir: &PathBuf) -> bool {
-    check_packages_numpy1(install_dir) || check_packages_numpy2(install_dir)
-}
-
-/// Check NumPy 1.x venv
-fn check_packages_numpy1(install_dir: &PathBuf) -> bool {
-    let venv_python = if cfg!(target_os = "windows") {
+    let venv1_python = if cfg!(target_os = "windows") {
         install_dir.join("venv-numpy1/Scripts/python.exe")
     } else {
         install_dir.join("venv-numpy1/bin/python3")
     };
 
-    if !venv_python.exists() {
-        return false;
-    }
-
-    let mut cmd = Command::new(&venv_python);
-    cmd.args(&["-c", "import gluonts, yfinance, numpy"]);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    cmd.output().map(|o| o.status.success()).unwrap_or(false)
-}
-
-/// Check NumPy 2.x venv
-fn check_packages_numpy2(install_dir: &PathBuf) -> bool {
-    let venv_python = if cfg!(target_os = "windows") {
+    let venv2_python = if cfg!(target_os = "windows") {
         install_dir.join("venv-numpy2/Scripts/python.exe")
     } else {
         install_dir.join("venv-numpy2/bin/python3")
     };
 
-    if !venv_python.exists() {
+    if !venv1_python.exists() || !venv2_python.exists() {
+        eprintln!("[SETUP] Venvs don't exist - need to install packages");
         return false;
     }
 
-    let mut cmd = Command::new(&venv_python);
-    cmd.args(&["-c", "import vnpy, edgartools, numpy"]);
+    // Check numpy1 venv for key packages
+    let mut cmd1 = Command::new(&venv1_python);
+    cmd1.args(&["-c", "import numpy, pandas, vectorbt, backtesting, gluonts"]);
     #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd1.creation_flags(CREATE_NO_WINDOW);
+    let check1 = cmd1.output().map(|o| o.status.success()).unwrap_or(false);
 
-    cmd.output().map(|o| o.status.success()).unwrap_or(false)
+    if !check1 {
+        eprintln!("[SETUP] NumPy 1.x venv packages check failed - need to reinstall");
+    }
+
+    // Check numpy2 venv for key packages
+    let mut cmd2 = Command::new(&venv2_python);
+    cmd2.args(&["-c", "import numpy, pandas, yfinance, vnpy"]);
+    #[cfg(target_os = "windows")]
+    cmd2.creation_flags(CREATE_NO_WINDOW);
+    let check2 = cmd2.output().map(|o| o.status.success()).unwrap_or(false);
+
+    if !check2 {
+        eprintln!("[SETUP] NumPy 2.x venv packages check failed - need to reinstall");
+    }
+
+    check1 && check2
 }
 
-
-/// Download file with progress
-async fn download_file(url: &str, dest: &PathBuf, app: &AppHandle, step: &str) -> Result<(), String> {
-    use reqwest;
-    use std::io::Write;
-    use std::time::Duration;
-
-    emit_progress(app, step, 10, &format!("Downloading {}", url.split('/').last().unwrap_or("file")), false);
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(300))
-        .build()
-        .map_err(|e| format!("Failed to create client: {}", e))?;
-
-    let response = client.get(url).send().await
-        .map_err(|e| format!("Download failed: {}", e))?;
-
-    let bytes = response.bytes().await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
-
-    let mut file = fs::File::create(dest)
-        .map_err(|e| format!("Failed to create file: {}", e))?;
-
-    file.write_all(&bytes)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
-
-    emit_progress(app, step, 30, "Download complete", false);
-    Ok(())
-}
-
-/// Install Python (all platforms)
+/// Install Python
 async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
     emit_progress(app, "python", 0, "Installing Python...", false);
 
     let python_dir = install_dir.join("python");
-    fs::create_dir_all(&python_dir)
-        .map_err(|e| format!("Failed to create python dir: {}", e))?;
+    std::fs::create_dir_all(&python_dir)
+        .map_err(|e| format!("Failed to create Python dir: {}", e))?;
 
-    let temp_dir = std::env::temp_dir();
+    // Download Python
+    emit_progress(app, "python", 20, "Downloading Python...", false);
 
     #[cfg(target_os = "windows")]
     {
-        // Windows: Download embedded Python ZIP
-        let url = "https://www.python.org/ftp/python/3.12.7/python-3.12.7-embed-amd64.zip";
-        let zip_path = temp_dir.join("python.zip");
-        download_file(url, &zip_path, app, "python").await?;
+        let download_url = format!("https://www.python.org/ftp/python/{}/python-{}-embed-amd64.zip", PYTHON_VERSION, PYTHON_VERSION);
+        let zip_path = python_dir.join("python.zip");
 
-        emit_progress(app, "python", 40, "Extracting Python...", false);
-        extract_zip(&zip_path, &python_dir)?;
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-Command",
+            &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", download_url, zip_path.display())
+        ]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
-        // Enable site-packages
-        let pth_file = python_dir.join("python312._pth");
-        if pth_file.exists() {
-            let mut content = fs::read_to_string(&pth_file)
-                .map_err(|e| format!("Failed to read _pth: {}", e))?;
-            content = content.replace("#import site", "import site");
-            content.push_str("\nLib\\site-packages\n");
-            fs::write(&pth_file, content)
-                .map_err(|e| format!("Failed to write _pth: {}", e))?;
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
 
-        fs::remove_file(zip_path).ok();
+        emit_progress(app, "python", 60, "Extracting Python...", false);
+
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-Command",
+            &format!("Expand-Archive -Path '{}' -DestinationPath '{}' -Force", zip_path.display(), python_dir.display())
+        ]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+        let _ = std::fs::remove_file(&zip_path);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-{}.linux-x86_64-install_only.tar.gz", PYTHON_VERSION);
+        let tar_path = python_dir.join("python.tar.gz");
+
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", tar_path.to_str().unwrap(), &download_url]);
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        emit_progress(app, "python", 60, "Extracting Python...", false);
+
+        let mut cmd = Command::new("tar");
+        cmd.args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=1"]);
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+        let _ = std::fs::remove_file(&tar_path);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-{}.macos-aarch64-install_only.tar.gz", PYTHON_VERSION);
+        let tar_path = python_dir.join("python.tar.gz");
+
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", tar_path.to_str().unwrap(), &download_url]);
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        emit_progress(app, "python", 60, "Extracting Python...", false);
+
+        let mut cmd = Command::new("tar");
+        cmd.args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=1"]);
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+        let _ = std::fs::remove_file(&tar_path);
+    }
+
+    // Enable pip by modifying python312._pth (Windows only)
+    #[cfg(target_os = "windows")]
+    {
+        let pth_file = python_dir.join("python312._pth");
+        if pth_file.exists() {
+            if let Ok(content) = std::fs::read_to_string(&pth_file) {
+                let new_content = content.replace("#import site", "import site");
+                let _ = std::fs::write(&pth_file, new_content);
+            }
+        } else {
+            // Create _pth file if it doesn't exist
+            let pth_content = "python312.zip\n.\n\nimport site\n";
+            let _ = std::fs::write(&pth_file, pth_content);
+        }
+    }
+
+    // Download and install pip
+    emit_progress(app, "python", 80, "Installing pip...", false);
+
+    let get_pip_url = "https://bootstrap.pypa.io/get-pip.py";
+    let get_pip_path = python_dir.join("get-pip.py");
+
+    // Download get-pip.py
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-Command",
+            &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", get_pip_url, get_pip_path.display())
+        ]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
     }
 
     #[cfg(not(target_os = "windows"))]
     {
-        // macOS/Linux: Download standalone Python
-        let url = if cfg!(target_os = "macos") {
-            if cfg!(target_arch = "aarch64") {
-                "https://github.com/indygreg/python-build-standalone/releases/download/20241016/cpython-3.12.7+20241016-aarch64-apple-darwin-install_only_stripped.tar.gz"
-            } else {
-                "https://github.com/indygreg/python-build-standalone/releases/download/20241016/cpython-3.12.7+20241016-x86_64-apple-darwin-install_only_stripped.tar.gz"
-            }
-        } else {
-            if cfg!(target_arch = "aarch64") {
-                "https://github.com/indygreg/python-build-standalone/releases/download/20241016/cpython-3.12.7+20241016-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"
-            } else {
-                "https://github.com/indygreg/python-build-standalone/releases/download/20241016/cpython-3.12.7+20241016-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
-            }
-        };
-
-        let tar_path = temp_dir.join("python.tar.gz");
-        download_file(url, &tar_path, app, "python").await?;
-
-        emit_progress(app, "python", 40, "Extracting Python...", false);
-        Command::new("tar")
-            .args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=1"])
-            .output()
-            .map_err(|e| format!("Failed to extract: {}", e))?;
-
-        let python_exe = python_dir.join("bin/python3");
-        if python_exe.exists() {
-            Command::new("chmod").args(&["+x", python_exe.to_str().unwrap()]).output().ok();
-        }
-
-        fs::remove_file(tar_path).ok();
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", get_pip_path.to_str().unwrap(), get_pip_url]);
+        cmd.output().map_err(|e| format!("Failed to download get-pip.py: {}", e))?;
     }
 
-    emit_progress(app, "python", 60, "Python extracted", false);
+    // Install pip
+    let python_exe = if cfg!(target_os = "windows") {
+        python_dir.join("python.exe")
+    } else {
+        python_dir.join("bin/python3")
+    };
 
-    // Verify
-    let (installed, version) = check_python(install_dir);
-    if !installed {
-        return Err("Python verification failed".to_string());
+    let mut cmd = Command::new(&python_exe);
+    cmd.arg(get_pip_path.to_str().unwrap());
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd.output().map_err(|e| format!("Failed to install pip: {}", e))?;
+
+    eprintln!("[SETUP] [Python] pip install stdout: {}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("[SETUP] [Python] pip install stderr: {}", String::from_utf8_lossy(&output.stderr));
+
+    if !output.status.success() {
+        return Err(format!("Pip install failed: {}", String::from_utf8_lossy(&output.stderr)));
     }
 
-    emit_progress(app, "python", 70, &format!("Python {} verified", version.unwrap_or_default()), false);
+    let _ = std::fs::remove_file(&get_pip_path);
+
+    emit_progress(app, "python", 100, "Python installed", false);
     Ok(())
 }
 
-/// Extract ZIP (Windows only)
-#[cfg(target_os = "windows")]
-fn extract_zip(zip_path: &PathBuf, dest_dir: &PathBuf) -> Result<(), String> {
-    use zip::ZipArchive;
-    use std::io::copy;
-
-    let file = fs::File::open(zip_path)
-        .map_err(|e| format!("Failed to open ZIP: {}", e))?;
-    let mut archive = ZipArchive::new(file)
-        .map_err(|e| format!("Failed to read ZIP: {}", e))?;
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)
-            .map_err(|e| format!("Failed to read entry: {}", e))?;
-        let outpath = match file.enclosed_name() {
-            Some(path) => dest_dir.join(path),
-            None => continue,
-        };
-
-        if file.name().ends_with('/') {
-            fs::create_dir_all(&outpath)
-                .map_err(|e| format!("Failed to create dir: {}", e))?;
-        } else {
-            if let Some(p) = outpath.parent() {
-                fs::create_dir_all(p)
-                    .map_err(|e| format!("Failed to create parent: {}", e))?;
-            }
-            let mut outfile = fs::File::create(&outpath)
-                .map_err(|e| format!("Failed to create file: {}", e))?;
-            copy(&mut file, &mut outfile)
-                .map_err(|e| format!("Failed to extract: {}", e))?;
-        }
-    }
-    Ok(())
-}
-
-/// Detect CPU features to determine which Bun build to use
-#[cfg(target_os = "linux")]
-fn detect_cpu_features() -> bool {
-    // Check if CPU supports AVX2 (required for standard Bun build)
-    // Returns true if AVX2 is supported, false otherwise
-
-    // Method 1: Check /proc/cpuinfo
-    if let Ok(cpuinfo) = fs::read_to_string("/proc/cpuinfo") {
-        // Look for avx2 in the flags line
-        for line in cpuinfo.lines() {
-            if line.starts_with("flags") || line.starts_with("Features") {
-                let has_avx2 = line.contains("avx2");
-                eprintln!("[SETUP] [bun] CPU flags found: {}", if has_avx2 { "AVX2 supported" } else { "AVX2 NOT supported" });
-                return has_avx2;
-            }
-        }
-    }
-
-    // Method 2: Try using lscpu command
-    if let Ok(output) = Command::new("lscpu").output() {
-        let lscpu_output = String::from_utf8_lossy(&output.stdout);
-        if lscpu_output.contains("avx2") {
-            eprintln!("[SETUP] [bun] CPU check (lscpu): AVX2 supported");
-            return true;
-        }
-    }
-
-    eprintln!("[SETUP] [bun] CPU check: Could not detect AVX2, using baseline build for safety");
-    false
-}
-
-/// Install Bun (all platforms)
+/// Install Bun
 async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
     emit_progress(app, "bun", 0, "Installing Bun...", false);
 
     let bun_dir = install_dir.join("bun");
-    fs::create_dir_all(&bun_dir)
-        .map_err(|e| format!("Failed to create bun dir: {}", e))?;
+    std::fs::create_dir_all(&bun_dir)
+        .map_err(|e| format!("Failed to create Bun dir: {}", e))?;
 
-    let temp_dir = std::env::temp_dir();
+    emit_progress(app, "bun", 30, "Downloading Bun...", false);
 
     #[cfg(target_os = "windows")]
     {
-        let url = if cfg!(target_arch = "aarch64") {
-            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-windows-aarch64.zip", BUN_VERSION)
-        } else {
-            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-windows-x64.zip", BUN_VERSION)
-        };
+        let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-windows-x64.zip", BUN_VERSION);
+        let zip_path = bun_dir.join("bun.zip");
 
-        let zip_path = temp_dir.join("bun.zip");
-        download_file(&url, &zip_path, app, "bun").await?;
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-Command",
+            &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", download_url, zip_path.display())
+        ]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
 
-        emit_progress(app, "bun", 40, "Extracting Bun...", false);
-        let temp_extract = temp_dir.join("bun_temp");
-        fs::create_dir_all(&temp_extract).ok();
-        extract_zip(&zip_path, &temp_extract)?;
-
-        // Move bun.exe from nested folder to bun_dir
-        if let Ok(entries) = fs::read_dir(&temp_extract) {
-            for entry in entries.flatten() {
-                let bun_exe = entry.path().join("bun.exe");
-                if bun_exe.exists() {
-                    fs::copy(&bun_exe, bun_dir.join("bun.exe"))
-                        .map_err(|e| format!("Failed to copy bun.exe: {}", e))?;
-                    break;
-                }
-            }
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
 
-        fs::remove_file(zip_path).ok();
-        fs::remove_dir_all(temp_extract).ok();
+        emit_progress(app, "bun", 70, "Extracting Bun...", false);
+
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-Command",
+            &format!("Expand-Archive -Path '{}' -DestinationPath '{}' -Force", zip_path.display(), bun_dir.display())
+        ]);
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        let _ = std::fs::remove_file(&zip_path);
+
+        // Move bun.exe from nested folder to bun/ root
+        let nested_bun = bun_dir.join("bun-windows-x64/bun.exe");
+        let target_bun = bun_dir.join("bun.exe");
+
+        if nested_bun.exists() && !target_bun.exists() {
+            std::fs::copy(&nested_bun, &target_bun)
+                .map_err(|e| format!("Failed to copy bun.exe: {}", e))?;
+            let _ = std::fs::remove_dir_all(bun_dir.join("bun-windows-x64"));
+        }
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(target_os = "linux")]
     {
-        // Determine the best Bun build URL based on platform and architecture
-        let urls = if cfg!(target_os = "macos") {
-            if cfg!(target_arch = "aarch64") {
-                vec![format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-aarch64.zip", BUN_VERSION)]
-            } else {
-                vec![format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-x64.zip", BUN_VERSION)]
-            }
-        } else {
-            // Linux
-            if cfg!(target_arch = "aarch64") {
-                vec![format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-aarch64.zip", BUN_VERSION)]
-            } else {
-                // For x64 Linux, detect CPU features and choose appropriate build
-                #[cfg(target_os = "linux")]
-                {
-                    let has_avx2 = detect_cpu_features();
+        let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION);
+        let zip_path = bun_dir.join("bun.zip");
 
-                    if has_avx2 {
-                        // CPU supports AVX2, use standard build (faster) with baseline as fallback
-                        eprintln!("[SETUP] [bun] CPU supports AVX2, using optimized build");
-                        vec![
-                            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION),
-                            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64-baseline.zip", BUN_VERSION),
-                        ]
-                    } else {
-                        // CPU doesn't support AVX2 or detection failed, use baseline build
-                        eprintln!("[SETUP] [bun] Using baseline build for compatibility");
-                        vec![
-                            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64-baseline.zip", BUN_VERSION),
-                            format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION),
-                        ]
-                    }
-                }
-
-                #[cfg(not(target_os = "linux"))]
-                {
-                    // Fallback for other Unix-like systems
-                    vec![
-                        format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64-baseline.zip", BUN_VERSION),
-                        format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-linux-x64.zip", BUN_VERSION),
-                    ]
-                }
-            }
-        };
-
-        let zip_path = temp_dir.join("bun.zip");
-        let mut download_success = false;
-
-        // Try each URL until one works
-        for (idx, url) in urls.iter().enumerate() {
-            eprintln!("[SETUP] [bun] Attempting download from: {}", url);
-            match download_file(&url, &zip_path, app, "bun").await {
-                Ok(_) => {
-                    eprintln!("[SETUP] [bun] Downloaded successfully to: {}", zip_path.display());
-                    download_success = true;
-                    break;
-                }
-                Err(e) => {
-                    eprintln!("[SETUP] [bun] Download failed (attempt {}/{}): {}", idx + 1, urls.len(), e);
-                    if idx < urls.len() - 1 {
-                        eprintln!("[SETUP] [bun] Trying alternative URL...");
-                    }
-                }
-            }
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", zip_path.to_str().unwrap(), &download_url]);
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
 
-        if !download_success {
-            return Err("Failed to download Bun from any available source".to_string());
+        emit_progress(app, "bun", 70, "Extracting Bun...", false);
+
+        let mut cmd = Command::new("unzip");
+        cmd.args(&["-o", zip_path.to_str().unwrap(), "-d", bun_dir.to_str().unwrap()]);
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
 
-        emit_progress(app, "bun", 40, "Extracting Bun...", false);
+        let _ = std::fs::remove_file(&zip_path);
 
-        let temp_extract = temp_dir.join("bun_temp");
-        fs::create_dir_all(&temp_extract)
-            .map_err(|e| format!("Failed to create temp extract dir: {}", e))?;
+        // Move bun from nested folder to bun/ root and make executable
+        let nested_bun = bun_dir.join("bun-linux-x64/bun");
+        let target_bun = bun_dir.join("bin/bun");
+        std::fs::create_dir_all(bun_dir.join("bin"))
+            .map_err(|e| format!("Failed to create bin dir: {}", e))?;
 
-        eprintln!("[SETUP] [bun] Extracting to: {}", temp_extract.display());
+        if nested_bun.exists() {
+            std::fs::copy(&nested_bun, &target_bun)
+                .map_err(|e| format!("Failed to copy bun: {}", e))?;
 
-        // Check if unzip is available
-        let unzip_check = Command::new("which").arg("unzip").output();
-        if unzip_check.is_err() || !unzip_check.unwrap().status.success() {
-            eprintln!("[SETUP] [bun] WARNING: unzip command not found, trying fallback");
-            // Try using tar if unzip is not available (some minimal Linux systems)
-            let tar_result = Command::new("tar")
-                .args(&["-xf", zip_path.to_str().unwrap(), "-C", temp_extract.to_str().unwrap()])
-                .output();
+            // Make executable
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&target_bun)
+                .map_err(|e| format!("Failed to get metadata: {}", e))?
+                .permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&target_bun, perms)
+                .map_err(|e| format!("Failed to set permissions: {}", e))?;
 
-            if tar_result.is_err() {
-                return Err("Neither unzip nor tar available for extraction".to_string());
-            }
-        } else {
-            let output = Command::new("unzip")
-                .args(&["-o", zip_path.to_str().unwrap(), "-d", temp_extract.to_str().unwrap()])
-                .output()
-                .map_err(|e| format!("Failed to run unzip: {}", e))?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                eprintln!("[SETUP] [bun] Unzip stderr: {}", stderr);
-                return Err(format!("Unzip failed: {}", stderr));
-            }
+            let _ = std::fs::remove_dir_all(bun_dir.join("bun-linux-x64"));
         }
-
-        eprintln!("[SETUP] [bun] Extraction complete, searching for executable...");
-
-        // Find and move bun executable from nested folder
-        fn find_bun_executable(dir: &PathBuf, depth: usize) -> Option<PathBuf> {
-            eprintln!("[SETUP] [bun] Searching in: {} (depth: {})", dir.display(), depth);
-
-            if depth > 5 {
-                return None; // Prevent infinite recursion
-            }
-
-            if let Ok(entries) = fs::read_dir(dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    eprintln!("[SETUP] [bun] Found: {}", path.display());
-
-                    if path.is_file() {
-                        if let Some(filename) = path.file_name() {
-                            if filename == "bun" {
-                                eprintln!("[SETUP] [bun] ✓ Found bun executable at: {}", path.display());
-                                return Some(path);
-                            }
-                        }
-                    } else if path.is_dir() {
-                        if let Some(found) = find_bun_executable(&path, depth + 1) {
-                            return Some(found);
-                        }
-                    }
-                }
-            }
-            None
-        }
-
-        if let Some(bun_file) = find_bun_executable(&temp_extract, 0) {
-            let bun_dest = bun_dir.join("bun");
-            eprintln!("[SETUP] [bun] Copying from {} to {}", bun_file.display(), bun_dest.display());
-
-            fs::copy(&bun_file, &bun_dest)
-                .map_err(|e| format!("Failed to copy bun from {} to {}: {}", bun_file.display(), bun_dest.display(), e))?;
-
-            eprintln!("[SETUP] [bun] Setting executable permissions...");
-            let chmod_output = Command::new("chmod")
-                .args(&["+x", bun_dest.to_str().unwrap()])
-                .output();
-
-            match chmod_output {
-                Ok(output) => {
-                    if !output.status.success() {
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        eprintln!("[SETUP] [bun] chmod stderr: {}", stderr);
-                    } else {
-                        eprintln!("[SETUP] [bun] ✓ Executable permissions set");
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[SETUP] [bun] chmod error: {}", e);
-                }
-            }
-        } else {
-            // List what we found in temp_extract for debugging
-            eprintln!("[SETUP] [bun] ERROR: Bun executable not found. Contents of temp_extract:");
-            if let Ok(entries) = fs::read_dir(&temp_extract) {
-                for entry in entries.flatten() {
-                    eprintln!("[SETUP] [bun]   - {}", entry.path().display());
-                }
-            }
-            return Err("Bun executable not found in archive".to_string());
-        }
-
-        fs::remove_file(zip_path).ok();
-        fs::remove_dir_all(temp_extract).ok();
     }
 
-    emit_progress(app, "bun", 60, "Bun extracted", false);
+    #[cfg(target_os = "macos")]
+    {
+        let download_url = format!("https://github.com/oven-sh/bun/releases/download/bun-v{}/bun-darwin-aarch64.zip", BUN_VERSION);
+        let zip_path = bun_dir.join("bun.zip");
 
-    // Verify
-    eprintln!("[SETUP] [bun] Verifying installation...");
-    let bun_path = if cfg!(target_os = "windows") {
-        install_dir.join("bun/bun.exe")
-    } else {
-        install_dir.join("bun/bun")
-    };
-    eprintln!("[SETUP] [bun] Checking path: {}", bun_path.display());
-    eprintln!("[SETUP] [bun] File exists: {}", bun_path.exists());
-
-    let (installed, version) = check_bun(install_dir);
-    if !installed {
-        eprintln!("[SETUP] [bun] ERROR: Verification failed!");
-        eprintln!("[SETUP] [bun] Expected path: {}", bun_path.display());
-
-        // Try running bun directly to see what error we get
-        if bun_path.exists() {
-            eprintln!("[SETUP] [bun] File exists but verification failed. Trying to run it...");
-            let test_cmd = Command::new(&bun_path).arg("--version").output();
-            let mut is_sigill = false;
-
-            match test_cmd {
-                Ok(output) => {
-                    let status_str = format!("{}", output.status);
-                    eprintln!("[SETUP] [bun] Exit code: {}", status_str);
-                    eprintln!("[SETUP] [bun] Stdout: {}", String::from_utf8_lossy(&output.stdout));
-                    eprintln!("[SETUP] [bun] Stderr: {}", String::from_utf8_lossy(&output.stderr));
-
-                    // Check if it's a SIGILL error (illegal instruction)
-                    if status_str.contains("SIGILL") || status_str.contains("signal: 4") {
-                        eprintln!("[SETUP] [bun] SIGILL detected - binary incompatible with CPU");
-                        is_sigill = true;
-                    }
-                }
-                Err(e) => {
-                    eprintln!("[SETUP] [bun] Failed to execute: {}", e);
-                }
-            }
-
-            // Check file permissions
-            #[cfg(not(target_os = "windows"))]
-            {
-                let metadata = std::fs::metadata(&bun_path);
-                if let Ok(meta) = metadata {
-                    use std::os::unix::fs::PermissionsExt;
-                    let permissions = meta.permissions();
-                    eprintln!("[SETUP] [bun] File permissions: {:o}", permissions.mode());
-                }
-            }
-
-            if is_sigill {
-                return Err("Bun verification failed - CPU incompatibility detected. The downloaded binary requires newer CPU instructions (AVX2) that your system doesn't support. This usually happens in virtualized environments. Please report this issue.".to_string());
-            }
+        let mut cmd = Command::new("curl");
+        cmd.args(&["-L", "-o", zip_path.to_str().unwrap(), &download_url]);
+        let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
 
-        return Err("Bun verification failed - executable exists but cannot run".to_string());
+        emit_progress(app, "bun", 70, "Extracting Bun...", false);
+
+        let mut cmd = Command::new("unzip");
+        cmd.args(&["-o", zip_path.to_str().unwrap(), "-d", bun_dir.to_str().unwrap()]);
+        let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+        }
+
+        let _ = std::fs::remove_file(&zip_path);
+
+        // Move bun from nested folder to bun/ root and make executable
+        let nested_bun = bun_dir.join("bun-darwin-aarch64/bun");
+        let target_bun = bun_dir.join("bin/bun");
+        std::fs::create_dir_all(bun_dir.join("bin"))
+            .map_err(|e| format!("Failed to create bin dir: {}", e))?;
+
+        if nested_bun.exists() {
+            std::fs::copy(&nested_bun, &target_bun)
+                .map_err(|e| format!("Failed to copy bun: {}", e))?;
+
+            // Make executable
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&target_bun)
+                .map_err(|e| format!("Failed to get metadata: {}", e))?
+                .permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&target_bun, perms)
+                .map_err(|e| format!("Failed to set permissions: {}", e))?;
+
+            let _ = std::fs::remove_dir_all(bun_dir.join("bun-darwin-aarch64"));
+        }
     }
 
-    eprintln!("[SETUP] [bun] ✓ Verification successful: {}", version.as_ref().unwrap_or(&"unknown".to_string()));
-    emit_progress(app, "bun", 70, &format!("Bun {} verified", version.unwrap_or_default()), false);
+    emit_progress(app, "bun", 100, "Bun installed", false);
     Ok(())
 }
 
-/// Install UV binary (all platforms)
+/// Install UV package manager
 async fn install_uv(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
     emit_progress(app, "uv", 0, "Installing UV package manager...", false);
 
-    let temp_dir = std::env::temp_dir();
+    let pip_exe = if cfg!(target_os = "windows") {
+        install_dir.join("python/Scripts/pip.exe")
+    } else {
+        install_dir.join("python/bin/pip")
+    };
 
+    let mut cmd = Command::new(&pip_exe);
+    cmd.args(&["install", "uv"]);
     #[cfg(target_os = "windows")]
-    {
-        let url = if cfg!(target_arch = "aarch64") {
-            format!("https://github.com/astral-sh/uv/releases/download/{}/uv-aarch64-pc-windows-msvc.zip", UV_VERSION)
-        } else {
-            format!("https://github.com/astral-sh/uv/releases/download/{}/uv-x86_64-pc-windows-msvc.zip", UV_VERSION)
-        };
+    cmd.creation_flags(CREATE_NO_WINDOW);
 
-        let zip_path = temp_dir.join("uv.zip");
-        download_file(&url, &zip_path, app, "uv").await?;
+    eprintln!("[SETUP] Installing UV: {:?}", cmd);
+    let output = cmd.output().map_err(|e| format!("Failed to install UV: {}", e))?;
 
-        emit_progress(app, "uv", 40, "Extracting UV...", false);
+    eprintln!("[SETUP] UV stdout: {}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("[SETUP] UV stderr: {}", String::from_utf8_lossy(&output.stderr));
 
-        let scripts_dir = install_dir.join("python/Scripts");
-        fs::create_dir_all(&scripts_dir)
-            .map_err(|e| format!("Failed to create Scripts dir: {}", e))?;
-
-        use zip::ZipArchive;
-        use std::io::copy;
-
-        let file = fs::File::open(&zip_path)
-            .map_err(|e| format!("Failed to open uv ZIP: {}", e))?;
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| format!("Failed to read uv ZIP: {}", e))?;
-
-        let mut found = false;
-        for i in 0..archive.len() {
-            let mut zip_file = archive.by_index(i)
-                .map_err(|e| format!("Failed to read ZIP entry: {}", e))?;
-
-            if zip_file.name().ends_with("uv.exe") {
-                let uv_dest = scripts_dir.join("uv.exe");
-                let mut dest_file = fs::File::create(&uv_dest)
-                    .map_err(|e| format!("Failed to create uv.exe: {}", e))?;
-                copy(&mut zip_file, &mut dest_file)
-                    .map_err(|e| format!("Failed to extract uv.exe: {}", e))?;
-                found = true;
-                break;
-            }
-        }
-
-        if !found {
-            return Err("uv.exe not found in archive".to_string());
-        }
-
-        fs::remove_file(zip_path).ok();
+    if !output.status.success() {
+        return Err(format!("UV installation failed: {}", String::from_utf8_lossy(&output.stderr)));
     }
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        let url = if cfg!(target_os = "macos") {
-            if cfg!(target_arch = "aarch64") {
-                format!("https://github.com/astral-sh/uv/releases/download/{}/uv-aarch64-apple-darwin.tar.gz", UV_VERSION)
-            } else {
-                format!("https://github.com/astral-sh/uv/releases/download/{}/uv-x86_64-apple-darwin.tar.gz", UV_VERSION)
-            }
-        } else {
-            if cfg!(target_arch = "aarch64") {
-                format!("https://github.com/astral-sh/uv/releases/download/{}/uv-aarch64-unknown-linux-gnu.tar.gz", UV_VERSION)
-            } else {
-                format!("https://github.com/astral-sh/uv/releases/download/{}/uv-x86_64-unknown-linux-gnu.tar.gz", UV_VERSION)
-            }
-        };
-
-        let tar_path = temp_dir.join("uv.tar.gz");
-        download_file(&url, &tar_path, app, "uv").await?;
-
-        emit_progress(app, "uv", 40, "Extracting UV...", false);
-
-        let bin_dir = install_dir.join("python/bin");
-        fs::create_dir_all(&bin_dir)
-            .map_err(|e| format!("Failed to create bin dir: {}", e))?;
-
-        let temp_extract_dir = temp_dir.join("uv_extract");
-        fs::create_dir_all(&temp_extract_dir)
-            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
-
-        Command::new("tar")
-            .args(&["-xzf", tar_path.to_str().unwrap(), "-C", temp_extract_dir.to_str().unwrap()])
-            .output()
-            .map_err(|e| format!("Failed to extract uv: {}", e))?;
-
-        let mut found = false;
-        if let Ok(entries) = fs::read_dir(&temp_extract_dir) {
-            for entry in entries.flatten() {
-                let uv_file = entry.path().join("uv");
-                if uv_file.exists() {
-                    let uv_dest = bin_dir.join("uv");
-                    fs::copy(&uv_file, &uv_dest)
-                        .map_err(|e| format!("Failed to copy uv: {}", e))?;
-                    Command::new("chmod").args(&["+x", uv_dest.to_str().unwrap()]).output().ok();
-                    found = true;
-                    break;
-                }
-            }
-        }
-
-        if !found {
-            return Err("uv binary not found in archive".to_string());
-        }
-
-        fs::remove_file(tar_path).ok();
-        fs::remove_dir_all(temp_extract_dir).ok();
-    }
-
-    emit_progress(app, "uv", 60, "UV extracted", false);
-
-    // Verify
-    if !check_uv(install_dir) {
-        return Err("UV verification failed".to_string());
-    }
-
-    emit_progress(app, "uv", 70, "UV verified", false);
+    emit_progress(app, "uv", 100, "UV installed", false);
     Ok(())
 }
 
-/// Install NumPy 1.x venv packages
-async fn install_packages_numpy1(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
-    emit_progress(app, "packages-np1", 0, "Installing NumPy 1.x packages...", false);
+/// Create virtual environment using UV
+async fn create_venv(app: &AppHandle, install_dir: &PathBuf, venv_name: &str) -> Result<(), String> {
+    emit_progress(app, "venv", 0, &format!("Creating {}...", venv_name), false);
 
     let python_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/python.exe")
@@ -783,61 +517,45 @@ async fn install_packages_numpy1(app: &AppHandle, install_dir: &PathBuf) -> Resu
         install_dir.join("python/bin/uv")
     };
 
-    let venv_path = install_dir.join("venv-numpy1");
-    let requirements_path = app.path()
-        .resolve("resources/requirements-numpy1.txt", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| format!("Failed to find requirements-numpy1.txt: {}", e))?;
+    let venv_path = install_dir.join(venv_name);
 
-    eprintln!("[SETUP] [NumPy1] Creating venv at: {}", venv_path.display());
-    emit_progress(app, "packages-np1", 10, "Creating venv...", false);
-
-    // Create venv
     let mut cmd = Command::new(&uv_exe);
-    cmd.args(&["venv", "--python", python_exe.to_str().unwrap(), venv_path.to_str().unwrap()]);
+    cmd.args(&[
+        "venv",
+        venv_path.to_str().unwrap(),
+        "--python", python_exe.to_str().unwrap()
+    ]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("Failed to create venv: {}", e))?;
-    if !output.status.success() {
-        return Err(format!("venv creation failed: {}", String::from_utf8_lossy(&output.stderr)));
-    }
+    eprintln!("[SETUP] Creating venv: {:?}", cmd);
+    let output = cmd.output().map_err(|e| format!("Failed to create {}: {}", venv_name, e))?;
 
-    emit_progress(app, "packages-np1", 30, "Installing packages...", false);
-
-    // Install packages
-    let venv_python = if cfg!(target_os = "windows") {
-        venv_path.join("Scripts/python.exe")
-    } else {
-        venv_path.join("bin/python3")
-    };
-
-    let mut cmd = Command::new(&uv_exe);
-    cmd.args(&["pip", "install", "--python", venv_python.to_str().unwrap(), "-r", requirements_path.to_str().unwrap()]);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    eprintln!("[SETUP] [NumPy1] Running: {:?}", cmd);
-    let output = cmd.output().map_err(|e| format!("Failed to install packages: {}", e))?;
-
-    eprintln!("[SETUP] [NumPy1] stdout: {}", String::from_utf8_lossy(&output.stdout));
-    eprintln!("[SETUP] [NumPy1] stderr: {}", String::from_utf8_lossy(&output.stderr));
+    eprintln!("[SETUP] Venv stdout: {}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("[SETUP] Venv stderr: {}", String::from_utf8_lossy(&output.stderr));
 
     if !output.status.success() {
-        return Err(format!("NumPy 1.x installation failed: {}", String::from_utf8_lossy(&output.stderr)));
+        return Err(format!("{} creation failed: {}", venv_name, String::from_utf8_lossy(&output.stderr)));
     }
 
-    emit_progress(app, "packages-np1", 100, "NumPy 1.x complete", false);
+    emit_progress(app, "venv", 100, &format!("{} created", venv_name), false);
     Ok(())
 }
 
-/// Install NumPy 2.x venv packages
-async fn install_packages_numpy2(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
-    emit_progress(app, "packages-np2", 0, "Installing NumPy 2.x packages...", false);
+/// Install Python packages in a specific venv using UV
+async fn install_packages_in_venv(
+    app: &AppHandle,
+    install_dir: &PathBuf,
+    venv_name: &str,
+    requirements_file: &str,
+    progress_label: &str
+) -> Result<(), String> {
+    emit_progress(app, "packages", 0, &format!("Installing {} packages...", progress_label), false);
 
-    let python_exe = if cfg!(target_os = "windows") {
-        install_dir.join("python/python.exe")
+    let venv_python = if cfg!(target_os = "windows") {
+        install_dir.join(format!("{}/Scripts/python.exe", venv_name))
     } else {
-        install_dir.join("python/bin/python3")
+        install_dir.join(format!("{}/bin/python3", venv_name))
     };
 
     let uv_exe = if cfg!(target_os = "windows") {
@@ -846,50 +564,32 @@ async fn install_packages_numpy2(app: &AppHandle, install_dir: &PathBuf) -> Resu
         install_dir.join("python/bin/uv")
     };
 
-    let venv_path = install_dir.join("venv-numpy2");
     let requirements_path = app.path()
-        .resolve("resources/requirements-numpy2.txt", tauri::path::BaseDirectory::Resource)
-        .map_err(|e| format!("Failed to find requirements-numpy2.txt: {}", e))?;
+        .resolve(&format!("resources/{}", requirements_file), tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("Failed to find {}: {}", requirements_file, e))?;
 
-    eprintln!("[SETUP] [NumPy2] Creating venv at: {}", venv_path.display());
-    emit_progress(app, "packages-np2", 10, "Creating venv...", false);
+    emit_progress(app, "packages", 20, &format!("Installing {} packages with UV...", progress_label), false);
 
-    // Create venv
     let mut cmd = Command::new(&uv_exe);
-    cmd.args(&["venv", "--python", python_exe.to_str().unwrap(), venv_path.to_str().unwrap()]);
+    cmd.args(&[
+        "pip", "install",
+        "--python", venv_python.to_str().unwrap(),
+        "-r", requirements_path.to_str().unwrap()
+    ]);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
-    let output = cmd.output().map_err(|e| format!("Failed to create venv: {}", e))?;
-    if !output.status.success() {
-        return Err(format!("venv creation failed: {}", String::from_utf8_lossy(&output.stderr)));
-    }
+    eprintln!("[SETUP] Installing {} packages: {:?}", progress_label, cmd);
+    let output = cmd.output().map_err(|e| format!("Failed to install {} packages: {}", progress_label, e))?;
 
-    emit_progress(app, "packages-np2", 30, "Installing packages...", false);
-
-    // Install packages
-    let venv_python = if cfg!(target_os = "windows") {
-        venv_path.join("Scripts/python.exe")
-    } else {
-        venv_path.join("bin/python3")
-    };
-
-    let mut cmd = Command::new(&uv_exe);
-    cmd.args(&["pip", "install", "--python", venv_python.to_str().unwrap(), "-r", requirements_path.to_str().unwrap()]);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-
-    eprintln!("[SETUP] [NumPy2] Running: {:?}", cmd);
-    let output = cmd.output().map_err(|e| format!("Failed to install packages: {}", e))?;
-
-    eprintln!("[SETUP] [NumPy2] stdout: {}", String::from_utf8_lossy(&output.stdout));
-    eprintln!("[SETUP] [NumPy2] stderr: {}", String::from_utf8_lossy(&output.stderr));
+    eprintln!("[SETUP] {} stdout: {}", progress_label, String::from_utf8_lossy(&output.stdout));
+    eprintln!("[SETUP] {} stderr: {}", progress_label, String::from_utf8_lossy(&output.stderr));
 
     if !output.status.success() {
-        return Err(format!("NumPy 2.x installation failed: {}", String::from_utf8_lossy(&output.stderr)));
+        return Err(format!("{} package installation failed: {}", progress_label, String::from_utf8_lossy(&output.stderr)));
     }
 
-    emit_progress(app, "packages-np2", 100, "NumPy 2.x complete", false);
+    emit_progress(app, "packages", 100, &format!("{} packages installed", progress_label), false);
     Ok(())
 }
 
@@ -900,91 +600,97 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
 
     let (python_installed, _) = check_python(&install_dir);
     let (bun_installed, _) = check_bun(&install_dir);
-    let uv_installed = check_uv(&install_dir);
-    let packages_numpy1_installed = check_packages_numpy1(&install_dir);
-    let packages_numpy2_installed = check_packages_numpy2(&install_dir);
-    let packages_installed = packages_numpy1_installed && packages_numpy2_installed;
+    let packages_installed = check_packages(&install_dir);
 
-    let needs_setup = !python_installed || !bun_installed || !uv_installed || !packages_numpy1_installed || !packages_numpy2_installed;
+    let needs_setup = !python_installed || !bun_installed || !packages_installed;
 
     Ok(SetupStatus {
         python_installed,
         bun_installed,
-        uv_installed,
         packages_installed,
-        packages_numpy1_installed,
-        packages_numpy2_installed,
         needs_setup,
     })
 }
 
 /// Run complete setup
 #[tauri::command]
-pub async fn run_setup(app: AppHandle) -> Result<(), String> {
-    // Prevent concurrent setup runs
+pub async fn run_setup(app: AppHandle) -> Result<String, String> {
+    // Check if setup is already running
     {
-        let mut running = SETUP_RUNNING.lock().unwrap();
-        if *running {
+        let mut lock = SETUP_RUNNING.lock().unwrap();
+        if *lock {
             return Err("Setup already running".to_string());
         }
-        *running = true;
-    }
+        *lock = true;
+    } // Lock dropped here
 
-    let result = run_setup_internal(app).await;
+    let result = async {
+        let install_dir = get_install_dir(&app)?;
+        std::fs::create_dir_all(&install_dir)
+            .map_err(|e| format!("Failed to create install dir: {}", e))?;
 
-    // Release lock
-    *SETUP_RUNNING.lock().unwrap() = false;
-    result
-}
+        eprintln!("[SETUP] Install directory: {}", install_dir.display());
+        emit_progress(&app, "init", 0, "Starting setup...", false);
 
-async fn run_setup_internal(app: AppHandle) -> Result<(), String> {
-    let install_dir = get_install_dir(&app)?;
-    eprintln!("[SETUP] Install directory: {}", install_dir.display());
-    eprintln!("[SETUP] Dev mode: {}", is_dev_mode());
+        // Python
+        let (python_installed, python_version) = check_python(&install_dir);
+        if !python_installed {
+            install_python(&app, &install_dir).await?;
+        } else {
+            eprintln!("[SETUP] Python already installed: {}", python_version.unwrap_or_default());
+            emit_progress(&app, "python", 100, "Python already installed", false);
+        }
 
-    fs::create_dir_all(&install_dir)
-        .map_err(|e| format!("Failed to create install dir: {}", e))?;
+        // Bun
+        let (bun_installed, bun_version) = check_bun(&install_dir);
+        if !bun_installed {
+            install_bun(&app, &install_dir).await?;
+        } else {
+            eprintln!("[SETUP] Bun already installed: {}", bun_version.unwrap_or_default());
+            emit_progress(&app, "bun", 100, "Bun already installed", false);
+        }
 
-    let status = check_setup_status(app.clone())?;
-
-    // Step 1: Install Python
-    if !status.python_installed {
-        install_python(&app, &install_dir).await?;
-        emit_progress(&app, "python", 100, "Python complete", false);
-    } else {
-        emit_progress(&app, "python", 100, "Python already installed", false);
-    }
-
-    // Step 2: Install Bun
-    if !status.bun_installed {
-        install_bun(&app, &install_dir).await?;
-        emit_progress(&app, "bun", 100, "Bun complete", false);
-    } else {
-        emit_progress(&app, "bun", 100, "Bun already installed", false);
-    }
-
-    // Step 3: Install UV
-    if !status.uv_installed {
+        // UV (fast package manager)
         install_uv(&app, &install_dir).await?;
-        emit_progress(&app, "uv", 100, "UV complete", false);
-    } else {
-        emit_progress(&app, "uv", 100, "UV already installed", false);
-    }
 
-    // Step 4: Install NumPy 1.x packages
-    if !status.packages_numpy1_installed {
-        install_packages_numpy1(&app, &install_dir).await?;
-    } else {
-        emit_progress(&app, "packages-np1", 100, "NumPy 1.x already installed", false);
-    }
+        // Create venvs and install packages
+        if !check_packages(&install_dir) {
+            // Create venv-numpy1 for NumPy 1.x libraries
+            emit_progress(&app, "venv", 0, "Creating NumPy 1.x environment...", false);
+            create_venv(&app, &install_dir, "venv-numpy1").await?;
 
-    // Step 5: Install NumPy 2.x packages
-    if !status.packages_numpy2_installed {
-        install_packages_numpy2(&app, &install_dir).await?;
-    } else {
-        emit_progress(&app, "packages-np2", 100, "NumPy 2.x already installed", false);
-    }
+            // Install numpy1 packages
+            install_packages_in_venv(
+                &app,
+                &install_dir,
+                "venv-numpy1",
+                "requirements-numpy1.txt",
+                "NumPy 1.x"
+            ).await?;
 
-    emit_progress(&app, "complete", 100, "Setup complete! Both environments ready", false);
-    Ok(())
+            // Create venv-numpy2 for NumPy 2.x libraries
+            emit_progress(&app, "venv", 50, "Creating NumPy 2.x environment...", false);
+            create_venv(&app, &install_dir, "venv-numpy2").await?;
+
+            // Install numpy2 packages
+            install_packages_in_venv(
+                &app,
+                &install_dir,
+                "venv-numpy2",
+                "requirements-numpy2.txt",
+                "NumPy 2.x"
+            ).await?;
+        } else {
+            eprintln!("[SETUP] Packages already installed in both venvs");
+            emit_progress(&app, "packages", 100, "Packages already installed", false);
+        }
+
+        emit_progress(&app, "complete", 100, "Setup complete!", false);
+        Ok("Setup complete".to_string())
+    }.await;
+
+    let mut lock = SETUP_RUNNING.lock().unwrap();
+    *lock = false;
+
+    result
 }

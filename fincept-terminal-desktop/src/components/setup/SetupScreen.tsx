@@ -1,7 +1,8 @@
-// SetupScreen.tsx - First-time setup screen with progress tracking
+// SetupScreen.tsx - Bloomberg-style setup screen for embedded Python
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { Loader2, CheckCircle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface SetupProgress {
   step: string;
@@ -13,14 +14,31 @@ interface SetupProgress {
 interface SetupStatus {
   python_installed: boolean;
   bun_installed: boolean;
-  python_version: string | null;
-  bun_version: string | null;
+  packages_installed: boolean;
   needs_setup: boolean;
 }
 
 interface SetupScreenProps {
   onSetupComplete: () => void;
 }
+
+// Bloomberg Professional Color Palette
+const BLOOMBERG = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  GRAY: '#787878',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  CYAN: '#00E5FF',
+  YELLOW: '#FFD700',
+  BLUE: '#0088FF',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+  MUTED: '#4A4A4A'
+};
 
 const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
   const [isChecking, setIsChecking] = useState(true);
@@ -47,12 +65,10 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
       setSetupStatus(status);
 
       if (!status.needs_setup) {
-        // Already set up, proceed to app
         setTimeout(() => onSetupComplete(), 1000);
       } else {
-        // Need to run setup
         setIsChecking(false);
-        runSetup();
+        // Don't auto-run setup, let user trigger it
       }
     } catch (err) {
       console.error('Failed to check setup status:', err);
@@ -67,7 +83,6 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
       setCurrentStep(progress.step);
       setCurrentMessage(progress.message);
 
-      // Add to logs for transparency
       if (progress.message) {
         setInstallationLogs(prev => [...prev, `[${progress.step}] ${progress.message}`]);
       }
@@ -77,7 +92,6 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
         return;
       }
 
-      // Update progress for each step
       switch (progress.step) {
         case 'python':
           setPythonProgress(progress.progress);
@@ -94,7 +108,6 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
       }
     });
 
-    // Cleanup listener on unmount
     return () => {
       unlisten();
     };
@@ -113,7 +126,6 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
   };
 
   const retrySetup = () => {
-    console.log('[SetupScreen] Retry button clicked');
     setError(null);
     setPythonProgress(0);
     setBunProgress(0);
@@ -128,15 +140,18 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
 
   if (isChecking) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
         <div className="text-center space-y-6">
-          <div className="relative">
-            <div className="w-20 h-20 border-4 border-zinc-800 rounded-full mx-auto"></div>
-            <div className="w-20 h-20 border-4 border-t-emerald-500 rounded-full animate-spin absolute top-0 left-1/2 transform -translate-x-1/2"></div>
+          <div className="relative inline-block">
+            <Loader2 className="w-16 h-16 animate-spin" style={{ color: BLOOMBERG.ORANGE }} />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white mb-2">Fincept Terminal</h2>
-            <p className="text-zinc-400">Checking system requirements...</p>
+            <h2 className="text-2xl font-bold tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+              FINCEPT TERMINAL
+            </h2>
+            <p className="text-sm font-mono mt-2" style={{ color: BLOOMBERG.GRAY }}>
+              CHECKING SYSTEM REQUIREMENTS...
+            </p>
           </div>
         </div>
       </div>
@@ -144,121 +159,175 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-8">
-      <div className="max-w-2xl w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center p-8" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
+      <div className="max-w-4xl w-full space-y-6">
         {/* Header */}
-        <div className="text-center space-y-4">
-          <h1 className="text-4xl font-bold text-white">Welcome to Fincept Terminal</h1>
-          <p className="text-zinc-400 text-lg">
-            Setting up your environment for the first time...
+        <div className="text-center space-y-3 pb-6 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+          <div className="inline-block px-4 py-2 rounded" style={{ backgroundColor: BLOOMBERG.ORANGE }}>
+            <h1 className="text-2xl font-bold tracking-wider" style={{ color: BLOOMBERG.DARK_BG }}>
+              FINCEPT TERMINAL
+            </h1>
+          </div>
+          <p className="text-sm font-mono tracking-wide" style={{ color: BLOOMBERG.GRAY }}>
+            FIRST-TIME SETUP | INSTALLING EMBEDDED RUNTIME
           </p>
           {setupStatus && !setupStatus.needs_setup && (
-            <p className="text-emerald-500 text-sm">[OK] System is ready!</p>
+            <p className="text-xs font-mono" style={{ color: BLOOMBERG.GREEN }}>
+              [OK] SYSTEM READY
+            </p>
           )}
         </div>
 
+        {/* Begin Setup Button */}
+        {!isInstalling && setupStatus?.needs_setup && (
+          <div className="text-center">
+            <button
+              onClick={runSetup}
+              className="px-8 py-4 rounded font-bold text-sm tracking-wider transition-all"
+              style={{
+                backgroundColor: BLOOMBERG.ORANGE,
+                color: BLOOMBERG.DARK_BG
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              BEGIN SETUP
+            </button>
+          </div>
+        )}
+
         {/* Setup Progress */}
-        {(isInstalling || setupStatus?.needs_setup) && (
-          <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-8 space-y-6">
+        {isInstalling && (
+          <div className="rounded border" style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}>
             {/* Python Installation */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    pythonProgress === 100 ? 'bg-emerald-500 scale-110' :
-                    pythonProgress > 0 ? 'bg-blue-500 animate-pulse' : 'bg-zinc-800'
-                  }`}>
-                    {pythonProgress === 100 ? '[OK]' : '1'}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-white font-semibold">Python 3.12.7</h3>
-                    <p className="text-zinc-500 text-sm">
-                      {setupStatus?.python_installed
-                        ? `Installed: ${setupStatus.python_version}`
-                        : 'Required for analytics and data processing'}
+            <div className="p-6 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-4">
+                  {pythonProgress === 100 ? (
+                    <CheckCircle className="w-6 h-6" style={{ color: BLOOMBERG.GREEN }} />
+                  ) : pythonProgress > 0 ? (
+                    <Loader2 className="w-6 h-6 animate-spin" style={{ color: BLOOMBERG.ORANGE }} />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full border-2 flex items-center justify-center" style={{ borderColor: BLOOMBERG.MUTED }}>
+                      <span className="text-xs font-bold" style={{ color: BLOOMBERG.MUTED }}>1</span>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-sm font-bold tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                      PYTHON 3.12.7 EMBEDDED RUNTIME
+                    </h3>
+                    <p className="text-xs font-mono mt-1" style={{ color: BLOOMBERG.GRAY }}>
+                      {setupStatus?.python_installed ? 'INSTALLED' : 'DOWNLOADING & EXTRACTING'}
                     </p>
                   </div>
                 </div>
-                <span className="text-zinc-400 text-sm font-mono">{pythonProgress}%</span>
+                <span className="text-xs font-mono tabular-nums" style={{ color: BLOOMBERG.ORANGE }}>
+                  {pythonProgress}%
+                </span>
               </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ backgroundColor: BLOOMBERG.BORDER }}>
                 <div
-                  className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all duration-500 ease-out"
-                  style={{ width: `${pythonProgress}%` }}
+                  className="h-full transition-all duration-500"
+                  style={{
+                    width: `${pythonProgress}%`,
+                    backgroundColor: pythonProgress === 100 ? BLOOMBERG.GREEN : BLOOMBERG.ORANGE
+                  }}
                 />
               </div>
               {currentStep === 'python' && currentMessage && (
-                <div className="flex items-center space-x-2 text-sm">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                  <p className="text-blue-300 font-medium animate-fade-in">{currentMessage}</p>
+                <div className="flex items-center space-x-2 mt-2">
+                  <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: BLOOMBERG.ORANGE }} />
+                  <p className="text-xs font-mono" style={{ color: BLOOMBERG.CYAN }}>
+                    {currentMessage}
+                  </p>
                 </div>
               )}
             </div>
 
             {/* Bun Installation */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    bunProgress === 100 ? 'bg-emerald-500 scale-110' :
-                    bunProgress > 0 ? 'bg-blue-500 animate-pulse' : 'bg-zinc-800'
-                  }`}>
-                    {bunProgress === 100 ? '[OK]' : '2'}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-white font-semibold">Bun v1.1.0</h3>
-                    <p className="text-zinc-500 text-sm">
-                      {setupStatus?.bun_installed
-                        ? `Installed: ${setupStatus.bun_version}`
-                        : 'Required for MCP servers (bunx)'}
+            <div className="p-6 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-4">
+                  {bunProgress === 100 ? (
+                    <CheckCircle className="w-6 h-6" style={{ color: BLOOMBERG.GREEN }} />
+                  ) : bunProgress > 0 ? (
+                    <Loader2 className="w-6 h-6 animate-spin" style={{ color: BLOOMBERG.ORANGE }} />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full border-2 flex items-center justify-center" style={{ borderColor: BLOOMBERG.MUTED }}>
+                      <span className="text-xs font-bold" style={{ color: BLOOMBERG.MUTED }}>2</span>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-sm font-bold tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                      BUN v1.1.0 RUNTIME
+                    </h3>
+                    <p className="text-xs font-mono mt-1" style={{ color: BLOOMBERG.GRAY }}>
+                      {setupStatus?.bun_installed ? 'INSTALLED' : 'JAVASCRIPT RUNTIME FOR MCP SERVERS'}
                     </p>
                   </div>
                 </div>
-                <span className="text-zinc-400 text-sm font-mono">{bunProgress}%</span>
+                <span className="text-xs font-mono tabular-nums" style={{ color: BLOOMBERG.ORANGE }}>
+                  {bunProgress}%
+                </span>
               </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ backgroundColor: BLOOMBERG.BORDER }}>
                 <div
-                  className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all duration-500 ease-out"
-                  style={{ width: `${bunProgress}%` }}
+                  className="h-full transition-all duration-500"
+                  style={{
+                    width: `${bunProgress}%`,
+                    backgroundColor: bunProgress === 100 ? BLOOMBERG.GREEN : BLOOMBERG.ORANGE
+                  }}
                 />
               </div>
               {currentStep === 'bun' && currentMessage && (
-                <div className="flex items-center space-x-2 text-sm">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                  <p className="text-blue-300 font-medium animate-fade-in">{currentMessage}</p>
+                <div className="flex items-center space-x-2 mt-2">
+                  <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: BLOOMBERG.ORANGE }} />
+                  <p className="text-xs font-mono" style={{ color: BLOOMBERG.CYAN }}>
+                    {currentMessage}
+                  </p>
                 </div>
               )}
             </div>
 
-            {/* Python Packages Installation */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-                    packagesProgress === 100 ? 'bg-emerald-500 scale-110' :
-                    packagesProgress > 0 ? 'bg-blue-500 animate-pulse' : 'bg-zinc-800'
-                  }`}>
-                    {packagesProgress === 100 ? '[OK]' : '3'}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-white font-semibold">Python Libraries</h3>
-                    <p className="text-zinc-500 text-sm">
-                      Installing pandas, numpy, yfinance, and more...
+            {/* Python Packages */}
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-4">
+                  {packagesProgress === 100 ? (
+                    <CheckCircle className="w-6 h-6" style={{ color: BLOOMBERG.GREEN }} />
+                  ) : packagesProgress > 0 ? (
+                    <Loader2 className="w-6 h-6 animate-spin" style={{ color: BLOOMBERG.ORANGE }} />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full border-2 flex items-center justify-center" style={{ borderColor: BLOOMBERG.MUTED }}>
+                      <span className="text-xs font-bold" style={{ color: BLOOMBERG.MUTED }}>3</span>
+                    </div>
+                  )}
+                  <div>
+                    <h3 className="text-sm font-bold tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                      PYTHON LIBRARIES | NUMPY 2.x
+                    </h3>
+                    <p className="text-xs font-mono mt-1" style={{ color: BLOOMBERG.GRAY }}>
+                      NUMPY, PANDAS, TORCH, VNPY, LANGCHAIN, +80 PACKAGES
                     </p>
                   </div>
                 </div>
-                <span className="text-zinc-400 text-sm font-mono">{packagesProgress}%</span>
+                <span className="text-xs font-mono tabular-nums" style={{ color: BLOOMBERG.ORANGE }}>
+                  {packagesProgress}%
+                </span>
               </div>
-              <div className="w-full bg-zinc-800 rounded-full h-2 overflow-hidden">
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ backgroundColor: BLOOMBERG.BORDER }}>
                 <div
-                  className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full transition-all duration-500 ease-out"
-                  style={{ width: `${packagesProgress}%` }}
+                  className="h-full transition-all duration-500"
+                  style={{
+                    width: `${packagesProgress}%`,
+                    backgroundColor: packagesProgress === 100 ? BLOOMBERG.GREEN : BLOOMBERG.ORANGE
+                  }}
                 />
               </div>
               {currentStep === 'packages' && currentMessage && (
-                <div className="flex items-center space-x-2 text-sm">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                  <p className="text-blue-300 font-medium animate-fade-in">
+                <div className="flex items-center space-x-2 mt-2">
+                  <div className="w-1 h-1 rounded-full animate-pulse" style={{ backgroundColor: BLOOMBERG.ORANGE }} />
+                  <p className="text-xs font-mono" style={{ color: BLOOMBERG.CYAN }}>
                     {currentMessage}
                   </p>
                 </div>
@@ -269,85 +338,97 @@ const SetupScreen: React.FC<SetupScreenProps> = ({ onSetupComplete }) => {
 
         {/* Error Display */}
         {error && (
-          <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4 space-y-3">
-            <div className="flex items-start space-x-3">
-              <span className="text-red-500 text-xl">[WARN]</span>
+          <div className="rounded border p-6" style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.RED }}>
+            <div className="flex items-start space-x-4 mb-4">
+              <AlertCircle className="w-6 h-6 flex-shrink-0" style={{ color: BLOOMBERG.RED }} />
               <div className="flex-1">
-                <h4 className="text-red-500 font-semibold">Setup Error</h4>
-                <p className="text-red-300 text-sm mt-1">{error}</p>
+                <h4 className="text-sm font-bold tracking-wide mb-2" style={{ color: BLOOMBERG.RED }}>
+                  SETUP ERROR
+                </h4>
+                <p className="text-xs font-mono" style={{ color: BLOOMBERG.WHITE }}>
+                  {error}
+                </p>
               </div>
             </div>
             <button
               onClick={retrySetup}
-              className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition-colors"
+              className="w-full py-3 rounded font-bold text-xs tracking-wider transition-colors"
+              style={{
+                backgroundColor: BLOOMBERG.RED,
+                color: BLOOMBERG.WHITE
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
             >
-              Retry Setup
+              RETRY SETUP
             </button>
           </div>
         )}
 
         {/* Info Box */}
         {!error && (
-          <div className="bg-blue-900/20 border border-blue-500/50 rounded-lg p-4 space-y-3">
-            <div className="flex items-start space-x-3">
-              <svg
-                className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <div className="flex-1 space-y-2">
-                <p className="text-blue-300 text-sm">
-                  <strong>Note:</strong> This is a one-time setup process. The application will download and install the necessary runtimes for optimal performance.
+          <div className="rounded border p-6" style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}>
+            <div className="space-y-3 text-xs font-mono">
+              <div className="flex items-start space-x-2">
+                <span style={{ color: BLOOMBERG.ORANGE }}>[INFO]</span>
+                <p style={{ color: BLOOMBERG.WHITE }}>
+                  ONE-TIME SETUP: INSTALLING EMBEDDED PYTHON + NUMPY 2.x COMPATIBLE LIBRARIES
                 </p>
-                <p className="text-blue-200 text-sm font-medium">
-                   This process may take a few minutes to complete. On older CPUs, it might take longer.
+              </div>
+              <div className="flex items-start space-x-2">
+                <span style={{ color: BLOOMBERG.CYAN }}>[TIME]</span>
+                <p style={{ color: BLOOMBERG.GRAY }}>
+                  ESTIMATED: 5-15 MINUTES DEPENDING ON NETWORK SPEED AND CPU
                 </p>
-                <p className="text-yellow-300 text-sm font-semibold">
-                  [WARN]️ Please do not close the application during installation. Wait for the process to complete.
+              </div>
+              <div className="flex items-start space-x-2">
+                <span style={{ color: BLOOMBERG.YELLOW }}>[WARN]</span>
+                <p style={{ color: BLOOMBERG.YELLOW }}>
+                  DO NOT CLOSE APPLICATION DURING INSTALLATION
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Installation Logs (Collapsible) */}
+        {/* Installation Logs */}
         {isInstalling && installationLogs.length > 0 && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+          <div className="rounded border overflow-hidden" style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.BORDER }}>
             <button
               onClick={() => setShowLogs(!showLogs)}
-              className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-zinc-800 transition-colors"
+              className="w-full px-6 py-4 flex items-center justify-between transition-colors"
+              style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = BLOOMBERG.HEADER_BG}
             >
-              <div className="flex items-center space-x-2">
-                <svg
-                  className={`w-4 h-4 text-zinc-400 transition-transform ${showLogs ? 'rotate-90' : ''}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-                <span className="text-white font-medium">Installation Logs</span>
-                <span className="text-zinc-500 text-sm">({installationLogs.length} entries)</span>
+              <div className="flex items-center space-x-3">
+                {showLogs ? (
+                  <ChevronUp className="w-4 h-4" style={{ color: BLOOMBERG.ORANGE }} />
+                ) : (
+                  <ChevronDown className="w-4 h-4" style={{ color: BLOOMBERG.ORANGE }} />
+                )}
+                <span className="text-xs font-bold tracking-wide" style={{ color: BLOOMBERG.WHITE }}>
+                  INSTALLATION LOGS
+                </span>
+                <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                  ({installationLogs.length})
+                </span>
               </div>
-              <span className="text-zinc-500 text-xs">Click to {showLogs ? 'hide' : 'show'}</span>
+              <span className="text-xs font-mono" style={{ color: BLOOMBERG.GRAY }}>
+                {showLogs ? 'HIDE' : 'SHOW'}
+              </span>
             </button>
             {showLogs && (
-              <div className="border-t border-zinc-800 bg-black/40 p-4 max-h-64 overflow-y-auto font-mono text-xs">
-                {installationLogs.map((log, index) => (
+              <div className="border-t p-4 max-h-64 overflow-y-auto font-mono text-xs" style={{ borderColor: BLOOMBERG.BORDER, backgroundColor: BLOOMBERG.DARK_BG }}>
+                {installationLogs.map((log, idx) => (
                   <div
-                    key={index}
-                    className="text-zinc-400 py-0.5 hover:bg-zinc-800/50 px-2 rounded animate-fade-in"
+                    key={idx}
+                    className="py-1 px-2 rounded hover:bg-opacity-50 transition-colors"
+                    style={{ color: BLOOMBERG.GRAY }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                   >
-                    <span className="text-zinc-600 mr-2">{index + 1}.</span>
-                    {log}
+                    <span style={{ color: BLOOMBERG.MUTED }}>[{idx + 1}]</span> {log}
                   </div>
                 ))}
               </div>

@@ -2,10 +2,40 @@
 use std::path::PathBuf;
 use tauri::Manager;
 
+/// NumPy 1.x compatible libraries (use venv-numpy1)
+const NUMPY1_LIBRARIES: &[&str] = &[
+    "vectorbt",
+    "backtesting",
+    "gluonts",
+    "functime",
+    "PyPortfolioOpt",
+    "pyqlib",
+    "rdagent",
+    "gs-quant",
+];
+
+/// Determine which venv to use based on library name
+fn get_venv_for_library(library_name: Option<&str>) -> &'static str {
+    if let Some(lib) = library_name {
+        // Check if library requires NumPy 1.x
+        if NUMPY1_LIBRARIES.iter().any(|&numpy1_lib| lib.contains(numpy1_lib)) {
+            return "venv-numpy1";
+        }
+    }
+    // Default to NumPy 2.x venv
+    "venv-numpy2"
+}
+
 /// Get the Python executable path from app installation directory
+/// Supports dual-venv setup for NumPy 1.x and 2.x compatibility
 /// In production: Uses installed Python from setup.rs
 /// In development: Uses %LOCALAPPDATA%/fincept-dev (matches setup.rs)
 pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    get_python_path_for_library(app, None)
+}
+
+/// Get Python path for a specific library (switches between numpy1 and numpy2 venvs)
+pub fn get_python_path_for_library(app: &tauri::AppHandle, library_name: Option<&str>) -> Result<PathBuf, String> {
     // Get install directory (same logic as setup.rs)
     let install_dir = if cfg!(debug_assertions) {
         // Dev mode: use OS-specific user directory
@@ -30,28 +60,33 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
             .map_err(|e| format!("Failed to get resource directory: {}", e))?
     };
 
-    // Platform-specific Python executable location
+    // Determine which venv to use based on library
+    let venv_name = get_venv_for_library(library_name);
+
+    // Platform-specific Python executable location in venv
     let python_exe = if cfg!(target_os = "windows") {
-        install_dir.join("python").join("python.exe")
+        install_dir.join(format!("{}/Scripts/python.exe", venv_name))
     } else {
-        install_dir.join("python").join("bin").join("python3")
+        install_dir.join(format!("{}/bin/python3", venv_name))
     };
 
-    // DEVELOPMENT MODE: Use bundled Python (where packages are installed)
+    eprintln!("[PYTHON] Library: {:?}, Using venv: {}, Path: {}", library_name, venv_name, python_exe.display());
+
+    // Check if venv Python exists
+    if python_exe.exists() {
+        // Strip the \\?\ prefix that can cause issues on Windows
+        let path_str = python_exe.to_string_lossy().to_string();
+        let clean_path = if path_str.starts_with(r"\\?\") {
+            PathBuf::from(&path_str[4..])
+        } else {
+            python_exe.clone()
+        };
+        return Ok(clean_path);
+    }
+
+    // Fallback to system Python in dev mode only
     #[cfg(debug_assertions)]
     {
-        // Check bundled Python first (has all packages installed)
-        if python_exe.exists() {
-            let path_str = python_exe.to_string_lossy().to_string();
-            let clean_path = if path_str.starts_with(r"\\?\") {
-                PathBuf::from(&path_str[4..])
-            } else {
-                python_exe.clone()
-            };
-            return Ok(clean_path);
-        }
-
-        // Fallback to system Python if bundled not found
         use std::process::Command;
         let system_python = if cfg!(target_os = "windows") {
             "python"
@@ -61,22 +96,10 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
         if let Ok(output) = Command::new(system_python).arg("--version").output() {
             if output.status.success() {
+                eprintln!("[PYTHON] Warning: Using system Python as fallback");
                 return Ok(PathBuf::from(system_python));
             }
         }
-    }
-
-    // PRODUCTION MODE: Check bundled Python
-    #[cfg(not(debug_assertions))]
-    if python_exe.exists() {
-        // Strip the \\?\ prefix that can cause issues on Windows
-        let path_str = python_exe.to_string_lossy().to_string();
-        let clean_path = if path_str.starts_with(r"\\?\") {
-            PathBuf::from(&path_str[4..])
-        } else {
-            python_exe
-        };
-        return Ok(clean_path);
     }
 
     // If we get here, Python is not available
@@ -85,9 +108,9 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         The Python runtime is required to run analytics and data processing features.\n\n\
         Troubleshooting steps:\n\
         1. Run the setup wizard from the application to install Python\n\
-        2. If setup fails, ensure Microsoft Visual C++ Redistributable is installed:\n\
+        2. Ensure both venv-numpy1 and venv-numpy2 are created\n\
+        3. If setup fails, ensure Microsoft Visual C++ Redistributable is installed:\n\
            Download from: https://aka.ms/vs/17/release/vc_redist.x64.exe\n\
-        3. Alternatively, install Python 3.12 manually from: https://www.python.org/downloads/\n\
         4. Restart the application after installation",
         python_exe.display()
     ))

@@ -449,7 +449,7 @@ async fn ws_reconnect(
 /// Add monitoring condition
 #[tauri::command]
 async fn monitor_add_condition(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     state: tauri::State<'_, WebSocketState>,
     condition: websocket::services::monitoring::MonitorCondition,
 ) -> Result<i64, String> {
@@ -496,7 +496,7 @@ async fn monitor_add_condition(
 /// Get all monitoring conditions
 #[tauri::command]
 async fn monitor_get_conditions(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
 ) -> Result<Vec<websocket::services::monitoring::MonitorCondition>, String> {
     let pool = database::pool::get_pool().map_err(|e| e.to_string())?;
     let conn = pool.get().map_err(|e| e.to_string())?;
@@ -530,7 +530,7 @@ async fn monitor_get_conditions(
 /// Delete monitoring condition
 #[tauri::command]
 async fn monitor_delete_condition(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     state: tauri::State<'_, WebSocketState>,
     id: i64,
 ) -> Result<(), String> {
@@ -552,7 +552,7 @@ async fn monitor_delete_condition(
 /// Get recent alerts
 #[tauri::command]
 async fn monitor_get_alerts(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     limit: i64,
 ) -> Result<Vec<websocket::services::monitoring::MonitorAlert>, String> {
     use rusqlite::params;
