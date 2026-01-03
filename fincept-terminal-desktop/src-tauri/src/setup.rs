@@ -72,6 +72,8 @@ fn get_install_dir(app: &AppHandle) -> Result<PathBuf, String> {
 fn check_python(install_dir: &PathBuf) -> (bool, Option<String>) {
     let python_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/python.exe")
+    } else if cfg!(target_os = "macos") {
+        install_dir.join("python/Versions/3.12/bin/python3")
     } else {
         install_dir.join("python/bin/python3")
     };
@@ -567,12 +569,16 @@ async fn create_venv(app: &AppHandle, install_dir: &PathBuf, venv_name: &str) ->
 
     let python_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/python.exe")
+    } else if cfg!(target_os = "macos") {
+        install_dir.join("python/Versions/3.12/bin/python3")
     } else {
         install_dir.join("python/bin/python3")
     };
 
     let uv_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/Scripts/uv.exe")
+    } else if cfg!(target_os = "macos") {
+        install_dir.join("python/Versions/3.12/bin/uv")
     } else {
         install_dir.join("python/bin/uv")
     };
@@ -620,6 +626,8 @@ async fn install_packages_in_venv(
 
     let uv_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/Scripts/uv.exe")
+    } else if cfg!(target_os = "macos") {
+        install_dir.join("python/Versions/3.12/bin/uv")
     } else {
         install_dir.join("python/bin/uv")
     };
