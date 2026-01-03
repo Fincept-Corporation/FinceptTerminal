@@ -278,7 +278,7 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
             // Also check what was actually extracted
             eprintln!("[SETUP] Checking extracted files...");
-            if let Ok(entries) = std::fs::read_dir(python_dir) {
+            if let Ok(entries) = std::fs::read_dir(&python_dir) {
                 for entry in entries.flatten() {
                     eprintln!("[SETUP]   - {:?}", entry.path());
                 }
