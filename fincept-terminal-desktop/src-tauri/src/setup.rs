@@ -255,6 +255,7 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
         // Extract pkg without installing (using pkgutil)
         let expanded_dir = python_dir.join("expanded");
+        let _ = std::fs::remove_dir_all(&expanded_dir);
         std::fs::create_dir_all(&expanded_dir)
             .map_err(|e| format!("Failed to create expanded dir: {}", e))?;
 
