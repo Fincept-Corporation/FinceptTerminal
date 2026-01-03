@@ -122,6 +122,53 @@ fn check_bun(install_dir: &PathBuf) -> (bool, Option<String>) {
     (false, None)
 }
 
+/// Check LLVM installation (macOS only, needed for llvmlite/numba)
+#[cfg(target_os = "macos")]
+fn check_llvm() -> (bool, Option<String>) {
+    // Check if llvm@14 is installed via Homebrew
+    let mut cmd = Command::new("brew");
+    cmd.args(&["--prefix", "llvm@14"]);
+
+    if let Ok(output) = cmd.output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            return (true, Some(path));
+        }
+    }
+
+    (false, None)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn check_llvm() -> (bool, Option<String>) {
+    // LLVM not needed on Windows/Linux for our use case
+    (true, Some("Not required".to_string()))
+}
+
+/// Check TA-Lib installation (needed for ta-lib Python wrapper)
+#[cfg(target_os = "macos")]
+fn check_talib() -> (bool, Option<String>) {
+    // Check if ta-lib is installed via Homebrew
+    let mut cmd = Command::new("brew");
+    cmd.args(&["--prefix", "ta-lib"]);
+
+    if let Ok(output) = cmd.output() {
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            return (true, Some(path));
+        }
+    }
+
+    (false, None)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn check_talib() -> (bool, Option<String>) {
+    // For Windows/Linux, check if ta-lib headers are available
+    // This is a simplified check - may need platform-specific logic
+    (true, Some("Check manually".to_string()))
+}
+
 /// Check if Python packages are installed in both venvs
 fn check_packages(install_dir: &PathBuf) -> bool {
     let venv1_python = if cfg!(target_os = "windows") {
@@ -531,6 +578,83 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
     Ok(())
 }
 
+/// Install LLVM (macOS only, needed for llvmlite/numba)
+#[cfg(target_os = "macos")]
+async fn install_llvm(app: &AppHandle) -> Result<(), String> {
+    emit_progress(app, "llvm", 0, "Installing LLVM...", false);
+
+    // First check if Homebrew is installed
+    let brew_check = Command::new("which").arg("brew").output();
+
+    if brew_check.is_err() || !brew_check.unwrap().status.success() {
+        return Err("Homebrew is not installed. Please install Homebrew first: https://brew.sh".to_string());
+    }
+
+    emit_progress(app, "llvm", 20, "Installing LLVM via Homebrew...", false);
+
+    // Install LLVM using Homebrew
+    let mut cmd = Command::new("brew");
+    cmd.args(&["install", "llvm@14"]);
+
+    eprintln!("[SETUP] Installing LLVM: {:?}", cmd);
+    let output = cmd.output().map_err(|e| format!("Failed to install LLVM: {}", e))?;
+
+    eprintln!("[SETUP] LLVM stdout: {}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("[SETUP] LLVM stderr: {}", String::from_utf8_lossy(&output.stderr));
+
+    if !output.status.success() {
+        return Err(format!("LLVM installation failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+
+    emit_progress(app, "llvm", 100, "LLVM installed", false);
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn install_llvm(_app: &AppHandle) -> Result<(), String> {
+    // LLVM not needed on Windows/Linux
+    Ok(())
+}
+
+/// Install TA-Lib (needed for ta-lib Python wrapper)
+#[cfg(target_os = "macos")]
+async fn install_talib(app: &AppHandle) -> Result<(), String> {
+    emit_progress(app, "talib", 0, "Installing TA-Lib...", false);
+
+    // First check if Homebrew is installed
+    let brew_check = Command::new("which").arg("brew").output();
+
+    if brew_check.is_err() || !brew_check.unwrap().status.success() {
+        return Err("Homebrew is not installed. Please install Homebrew first: https://brew.sh".to_string());
+    }
+
+    emit_progress(app, "talib", 20, "Installing TA-Lib via Homebrew...", false);
+
+    // Install TA-Lib using Homebrew
+    let mut cmd = Command::new("brew");
+    cmd.args(&["install", "ta-lib"]);
+
+    eprintln!("[SETUP] Installing TA-Lib: {:?}", cmd);
+    let output = cmd.output().map_err(|e| format!("Failed to install TA-Lib: {}", e))?;
+
+    eprintln!("[SETUP] TA-Lib stdout: {}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("[SETUP] TA-Lib stderr: {}", String::from_utf8_lossy(&output.stderr));
+
+    if !output.status.success() {
+        return Err(format!("TA-Lib installation failed: {}", String::from_utf8_lossy(&output.stderr)));
+    }
+
+    emit_progress(app, "talib", 100, "TA-Lib installed", false);
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn install_talib(_app: &AppHandle) -> Result<(), String> {
+    // For Windows/Linux, TA-Lib needs to be installed manually
+    eprintln!("[SETUP] TA-Lib installation on Windows/Linux requires manual setup");
+    Ok(())
+}
+
 /// Install UV package manager
 async fn install_uv(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String> {
     emit_progress(app, "uv", 0, "Installing UV package manager...", false);
@@ -575,17 +699,33 @@ async fn create_venv(app: &AppHandle, install_dir: &PathBuf, venv_name: &str) ->
         install_dir.join("python/bin/python3")
     };
 
-    let uv_exe = if cfg!(target_os = "windows") {
-        install_dir.join("python/Scripts/uv.exe")
+    // Find UV executable - check multiple possible locations
+    let uv_candidates = if cfg!(target_os = "windows") {
+        vec![install_dir.join("python/Scripts/uv.exe")]
     } else if cfg!(target_os = "macos") {
-        install_dir.join("python/Versions/3.12/bin/uv")
+        vec![
+            install_dir.join("python/Versions/3.12/bin/uv"),
+            install_dir.join("python/bin/uv"),
+        ]
     } else {
-        install_dir.join("python/bin/uv")
+        vec![install_dir.join("python/bin/uv")]
     };
+
+    let uv_exe = uv_candidates.iter().find(|p| p.exists());
 
     let venv_path = install_dir.join(venv_name);
 
-    let mut cmd = Command::new(&uv_exe);
+    let mut cmd = if let Some(uv_path) = uv_exe {
+        eprintln!("[SETUP] Using UV at: {:?}", uv_path);
+        Command::new(uv_path)
+    } else {
+        // Fallback to python -m uv if uv binary not found
+        eprintln!("[SETUP] UV binary not found, using python -m uv");
+        let mut cmd = Command::new(&python_exe);
+        cmd.arg("-m").arg("uv");
+        cmd
+    };
+
     cmd.args(&[
         "venv",
         venv_path.to_str().unwrap(),
@@ -618,19 +758,33 @@ async fn install_packages_in_venv(
 ) -> Result<(), String> {
     emit_progress(app, "packages", 0, &format!("Installing {} packages...", progress_label), false);
 
+    let python_exe = if cfg!(target_os = "windows") {
+        install_dir.join("python/python.exe")
+    } else if cfg!(target_os = "macos") {
+        install_dir.join("python/Versions/3.12/bin/python3")
+    } else {
+        install_dir.join("python/bin/python3")
+    };
+
     let venv_python = if cfg!(target_os = "windows") {
         install_dir.join(format!("{}/Scripts/python.exe", venv_name))
     } else {
         install_dir.join(format!("{}/bin/python3", venv_name))
     };
 
-    let uv_exe = if cfg!(target_os = "windows") {
-        install_dir.join("python/Scripts/uv.exe")
+    // Find UV executable - check multiple possible locations
+    let uv_candidates = if cfg!(target_os = "windows") {
+        vec![install_dir.join("python/Scripts/uv.exe")]
     } else if cfg!(target_os = "macos") {
-        install_dir.join("python/Versions/3.12/bin/uv")
+        vec![
+            install_dir.join("python/Versions/3.12/bin/uv"),
+            install_dir.join("python/bin/uv"),
+        ]
     } else {
-        install_dir.join("python/bin/uv")
+        vec![install_dir.join("python/bin/uv")]
     };
+
+    let uv_exe = uv_candidates.iter().find(|p| p.exists());
 
     let requirements_path = app.path()
         .resolve(&format!("resources/{}", requirements_file), tauri::path::BaseDirectory::Resource)
@@ -638,7 +792,37 @@ async fn install_packages_in_venv(
 
     emit_progress(app, "packages", 20, &format!("Installing {} packages with UV...", progress_label), false);
 
-    let mut cmd = Command::new(&uv_exe);
+    let mut cmd = if let Some(uv_path) = uv_exe {
+        eprintln!("[SETUP] Using UV at: {:?}", uv_path);
+        Command::new(uv_path)
+    } else {
+        // Fallback to python -m uv if uv binary not found
+        eprintln!("[SETUP] UV binary not found, using python -m uv");
+        let mut cmd = Command::new(&python_exe);
+        cmd.arg("-m").arg("uv");
+        cmd
+    };
+
+    // On macOS, set LLVM and TA-Lib environment variables for package builds
+    #[cfg(target_os = "macos")]
+    {
+        if let (true, Some(llvm_path)) = check_llvm() {
+            eprintln!("[SETUP] Setting LLVM environment variables for package build");
+            cmd.env("LLVM_CONFIG", format!("{}/bin/llvm-config", llvm_path));
+        }
+
+        if let (true, Some(talib_path)) = check_talib() {
+            eprintln!("[SETUP] Setting TA-Lib environment variables for package build");
+            cmd.env("TA_INCLUDE_PATH", format!("{}/include", talib_path));
+            cmd.env("TA_LIBRARY_PATH", format!("{}/lib", talib_path));
+            // Also set compiler flags to help find the headers
+            let cflags = format!("-I{}/include", talib_path);
+            let ldflags = format!("-L{}/lib", talib_path);
+            cmd.env("CFLAGS", &cflags);
+            cmd.env("LDFLAGS", &ldflags);
+        }
+    }
+
     cmd.args(&[
         "pip", "install",
         "--python", venv_python.to_str().unwrap(),
@@ -668,8 +852,15 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
 
     let (python_installed, _) = check_python(&install_dir);
     let (bun_installed, _) = check_bun(&install_dir);
+    let (llvm_installed, _) = check_llvm();
+    let (talib_installed, _) = check_talib();
     let packages_installed = check_packages(&install_dir);
 
+    // On macOS, LLVM and TA-Lib are required for full package installation
+    #[cfg(target_os = "macos")]
+    let needs_setup = !python_installed || !bun_installed || !llvm_installed || !talib_installed || !packages_installed;
+
+    #[cfg(not(target_os = "macos"))]
     let needs_setup = !python_installed || !bun_installed || !packages_installed;
 
     Ok(SetupStatus {
@@ -716,6 +907,24 @@ pub async fn run_setup(app: AppHandle) -> Result<String, String> {
         } else {
             eprintln!("[SETUP] Bun already installed: {}", bun_version.unwrap_or_default());
             emit_progress(&app, "bun", 100, "Bun already installed", false);
+        }
+
+        // LLVM (macOS only, needed for llvmlite/numba in financial packages)
+        let (llvm_installed, llvm_path) = check_llvm();
+        if !llvm_installed {
+            install_llvm(&app).await?;
+        } else {
+            eprintln!("[SETUP] LLVM already installed: {}", llvm_path.unwrap_or_default());
+            emit_progress(&app, "llvm", 100, "LLVM already installed", false);
+        }
+
+        // TA-Lib (needed for ta-lib Python wrapper used by vnpy)
+        let (talib_installed, talib_path) = check_talib();
+        if !talib_installed {
+            install_talib(&app).await?;
+        } else {
+            eprintln!("[SETUP] TA-Lib already installed: {}", talib_path.unwrap_or_default());
+            emit_progress(&app, "talib", 100, "TA-Lib already installed", false);
         }
 
         // UV (fast package manager)
