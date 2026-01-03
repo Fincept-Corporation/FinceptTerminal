@@ -290,23 +290,6 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
         // Cleanup
         let _ = std::fs::remove_file(&pkg_path);
         let _ = std::fs::remove_dir_all(&temp_extract);
-
-        // Python is now in python_dir/Library/Frameworks/Python.framework/Versions/3.12/
-        // Create a symlink for easier access
-        let framework_python = python_dir.join(format!("Library/Frameworks/Python.framework/Versions/{}/bin/python3", &PYTHON_VERSION[..4]));
-        let bin_dir = python_dir.join("bin");
-        std::fs::create_dir_all(&bin_dir)
-            .map_err(|e| format!("Failed to create bin dir: {}", e))?;
-
-        if framework_python.exists() {
-            let target_python = bin_dir.join("python3");
-            #[cfg(target_os = "macos")]
-            {
-                use std::os::unix::fs::symlink;
-                let _ = std::fs::remove_file(&target_python); // Remove if exists
-                let _ = symlink(framework_python, &target_python);
-            }
-        }
     }
 
     // Enable pip by modifying python312._pth (Windows only)
@@ -354,15 +337,15 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
     let python_exe = if cfg!(target_os = "windows") {
         python_dir.join("python.exe")
     } else if cfg!(target_os = "macos") {
-        // macOS: Python is in Framework structure or symlinked to bin/
+        // macOS: Python extracted from .pkg has Versions/3.12/bin/python3
+        let versions_python = python_dir.join(format!("Versions/{}/bin/python3", &PYTHON_VERSION[..4]));
         let bin_python = python_dir.join("bin/python3");
-        let framework_python = python_dir.join(format!("Library/Frameworks/Python.framework/Versions/{}/bin/python3", &PYTHON_VERSION[..4]));
-        if bin_python.exists() {
+        if versions_python.exists() {
+            versions_python
+        } else if bin_python.exists() {
             bin_python
-        } else if framework_python.exists() {
-            framework_python
         } else {
-            return Err("Python executable not found after installation".to_string());
+            return Err(format!("Python executable not found. Checked:\n  - {:?}\n  - {:?}", versions_python, bin_python));
         }
     } else {
         python_dir.join("bin/python3")
