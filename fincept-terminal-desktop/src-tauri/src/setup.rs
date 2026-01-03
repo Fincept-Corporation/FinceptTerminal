@@ -253,30 +253,35 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
         emit_progress(app, "python", 60, "Extracting Python...", false);
 
-        // Extract pkg without installing (using pkgutil)
-        let expanded_dir = python_dir.join("expanded");
-        let _ = std::fs::remove_dir_all(&expanded_dir);
-        std::fs::create_dir_all(&expanded_dir)
-            .map_err(|e| format!("Failed to create expanded dir: {}", e))?;
+        // Extract pkg using xar (works better than pkgutil)
+        let temp_extract = std::env::temp_dir().join(format!("fincept_py_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_extract);
+        std::fs::create_dir_all(&temp_extract)
+            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
 
-        let mut cmd = Command::new("pkgutil");
-        cmd.args(&["--expand", pkg_path.to_str().unwrap(), expanded_dir.to_str().unwrap()]);
+        let mut cmd = Command::new("xar");
+        cmd.args(&["-xf", pkg_path.to_str().unwrap(), "-C", temp_extract.to_str().unwrap()]);
         let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
 
-        // Extract the Python framework payload
-        let payload_path = expanded_dir.join("Python_Framework.pkg/Payload");
+        // Find and extract Python Framework payload
+        let payload_path = temp_extract.join("Python_Framework.pkg/Payload");
         if payload_path.exists() {
             let mut cmd = Command::new("tar");
             cmd.args(&["-xzf", payload_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap()]);
-            cmd.output().map_err(|e| format!("Payload extract failed: {}", e))?;
+            let output = cmd.output().map_err(|e| format!("Payload extract failed: {}", e))?;
+            if !output.status.success() {
+                return Err(format!("Payload extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+            }
+        } else {
+            return Err("Python Framework payload not found in pkg".to_string());
         }
 
         // Cleanup
         let _ = std::fs::remove_file(&pkg_path);
-        let _ = std::fs::remove_dir_all(&expanded_dir);
+        let _ = std::fs::remove_dir_all(&temp_extract);
 
         // Python is now in python_dir/Library/Frameworks/Python.framework/Versions/3.12/
         // Create a symlink for easier access
