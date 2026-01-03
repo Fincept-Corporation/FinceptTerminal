@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
+
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -273,6 +274,7 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
             "-Command",
             &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", download_url, zip_path.display())
         ]);
+        #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
         let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
@@ -287,6 +289,7 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
             "-Command",
             &format!("Expand-Archive -Path '{}' -DestinationPath '{}' -Force", zip_path.display(), bun_dir.display())
         ]);
+        #[cfg(target_os = "windows")]
         cmd.creation_flags(CREATE_NO_WINDOW);
 
         let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
