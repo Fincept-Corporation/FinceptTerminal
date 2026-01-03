@@ -270,10 +270,18 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
         let payload_path = temp_extract.join("Python_Framework.pkg/Payload");
         if payload_path.exists() {
             let mut cmd = Command::new("tar");
-            cmd.args(&["-xzf", payload_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap()]);
+            cmd.args(&["-xzf", payload_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=0"]);
             let output = cmd.output().map_err(|e| format!("Payload extract failed: {}", e))?;
             if !output.status.success() {
                 return Err(format!("Payload extract failed: {}", String::from_utf8_lossy(&output.stderr)));
+            }
+
+            // Also check what was actually extracted
+            eprintln!("[SETUP] Checking extracted files...");
+            if let Ok(entries) = std::fs::read_dir(python_dir) {
+                for entry in entries.flatten() {
+                    eprintln!("[SETUP]   - {:?}", entry.path());
+                }
             }
         } else {
             return Err("Python Framework payload not found in pkg".to_string());
