@@ -497,10 +497,11 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
 
         let _ = std::fs::remove_file(&zip_path);
 
-        // Move bun from nested folder to bun/ root and make executable
+        // Move bun from nested folder to bun/bin/ and make executable
         let nested_bun = bun_dir.join("bun-linux-x64/bun");
-        let target_bun = bun_dir.join("bin/bun");
-        std::fs::create_dir_all(bun_dir.join("bin"))
+        let bin_dir = bun_dir.join("bin");
+        let target_bun = bin_dir.join("bun");
+        std::fs::create_dir_all(&bin_dir)
             .map_err(|e| format!("Failed to create bin dir: {}", e))?;
 
         if nested_bun.exists() {
