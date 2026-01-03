@@ -535,6 +535,8 @@ async fn install_uv(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String
 
     let pip_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/Scripts/pip.exe")
+    } else if cfg!(target_os = "macos") {
+        install_dir.join("python/Versions/3.12/bin/pip3")
     } else {
         install_dir.join("python/bin/pip")
     };
