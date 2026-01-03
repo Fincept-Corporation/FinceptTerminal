@@ -63,6 +63,9 @@ talipp==2.7.0
 # Financial modeling
 py_vollib==1.0.1
 pypme==0.6.2
+# Use specific llvmlite/numba versions with pre-built wheels for macOS
+llvmlite==0.43.0
+numba==0.60.0
 financepy==1.0.1
 ffn==1.1.2
 fortitudo.tech==1.2
