@@ -63,7 +63,7 @@ impl BinanceAdapter {
         let high = data.get("h")?.as_str()?.parse::<f64>().ok();
         let low = data.get("l")?.as_str()?.parse::<f64>().ok();
         let volume = data.get("v")?.as_str()?.parse::<f64>().ok();
-        let quote_volume = data.get("q")?.as_str()?.parse::<f64>().ok();
+        let _quote_volume = data.get("q")?.as_str()?.parse::<f64>().ok();
 
         // Calculate change percent
         let change_percent = if let Some(open_price) = open {

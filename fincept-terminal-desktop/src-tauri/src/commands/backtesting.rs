@@ -174,6 +174,7 @@ pub async fn kill_lean_process(
  * Execute Python backtesting provider
  *
  * Runs a Python provider script with given command and arguments.
+ * Automatically selects the correct Python venv based on provider.
  */
 #[tauri::command]
 pub async fn execute_python_backtest(
@@ -182,8 +183,8 @@ pub async fn execute_python_backtest(
     args: String,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
-    // Use the central get_python_path utility which handles dev/prod mode correctly
-    let python_path = python::get_python_path(&app)?;
+    // Use library-specific Python path (switches between numpy1/numpy2 venvs)
+    let python_path = python::get_python_path_for_library(&app, Some(&provider))?;
 
     // Build script path - handle both dev and production
     let script_relative_path = format!(
