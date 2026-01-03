@@ -295,7 +295,8 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
             #[cfg(target_os = "macos")]
             {
                 use std::os::unix::fs::symlink;
-                let _ = symlink(&framework_python, &target_python);
+                let _ = std::fs::remove_file(&target_python); // Remove if exists
+                let _ = symlink(framework_python, &target_python);
             }
         }
     }
