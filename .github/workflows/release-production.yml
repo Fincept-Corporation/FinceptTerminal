@@ -110,11 +110,6 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=6144
         with:
           projectPath: fincept-terminal-desktop
-          tagName: ${{ github.ref_name }}
-          releaseName: 'FinceptTerminal ${{ github.ref_name }}'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: false
-          prerelease: false
           args: ${{ matrix.args }}
           includeUpdaterJson: true
 
@@ -127,10 +122,22 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
           # Find and validate artifacts
-          if [[ "${{ matrix.platform }}" == "macos-latest" ]]; then
+          if [[ "${{ matrix.platform }}" == "macos-14" ]] || [[ "${{ matrix.platform }}" == "macos-15-intel" ]]; then
             SUFFIX="macOS-${{ matrix.arch }}"
             ARTIFACT=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -type f 2>/dev/null | head -1)
-            [ -f "$ARTIFACT" ] && cp "$ARTIFACT" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.dmg" || { echo "Error: DMG not found"; exit 1; }
+            if [ -f "$ARTIFACT" ]; then
+              cp "$ARTIFACT" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.dmg"
+              echo "Found DMG: $ARTIFACT"
+            else
+              echo "Warning: DMG not found, checking for .app bundle"
+              APP_BUNDLE=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.app" -type d 2>/dev/null | head -1)
+              if [ -d "$APP_BUNDLE" ]; then
+                echo "Found .app bundle, creating tarball: $APP_BUNDLE"
+                tar -czf "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.app.tar.gz" -C "$(dirname "$APP_BUNDLE")" "$(basename "$APP_BUNDLE")"
+              else
+                echo "Error: No macOS artifacts found"; exit 1;
+              fi
+            fi
 
           elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
             SUFFIX="Linux-x64"
@@ -189,8 +196,8 @@ jobs:
         run: |
           mkdir -p release-files
 
-          find all-artifacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" \) -exec cp {} release-files/ \;
-          find all-artifacts -type f \( -name "latest.json" -o -name "*.tar.gz" -o -name "*.tar.gz.sig" -o -name "*.zip" -o -name "*.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || echo "No updater files found"
+          find all-artifacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.app.tar.gz" \) -exec cp {} release-files/ \;
+          find all-artifacts -type f \( -name "latest.json" -o -name "*.tar.gz.sig" -o -name "*.zip" -o -name "*.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || echo "No updater files found"
 
           echo "=== Release Files ==="
           ls -lh release-files/
@@ -203,8 +210,22 @@ jobs:
           ls -1 release-files/ >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Check if release exists
+        id: check_release
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          if gh release view "$TAG_NAME" > /dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Release $TAG_NAME already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Release $TAG_NAME does not exist"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create Release
-        if: steps.organize.outputs.file_count > 0
+        if: steps.organize.outputs.file_count > 0 && steps.check_release.outputs.exists == 'false'
         id: create_release
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
@@ -218,8 +239,8 @@ jobs:
           ## Downloads
 
           ### macOS
-          - **Apple Silicon (M1/M2/M3)**: \`FinceptTerminal-v${VERSION}-macOS-arm64.dmg\`
-          - **Intel**: \`FinceptTerminal-v${VERSION}-macOS-x64.dmg\`
+          - **Apple Silicon (M1/M2/M3)**: \`FinceptTerminal-v${VERSION}-macOS-arm64.dmg\` or \`.app.tar.gz\`
+          - **Intel**: \`FinceptTerminal-v${VERSION}-macOS-x64.dmg\` or \`.app.tar.gz\`
 
           ### Linux
           - **AppImage (Universal)**: \`FinceptTerminal-v${VERSION}-Linux-x64.AppImage\`
@@ -230,7 +251,7 @@ jobs:
 
           ## Installation
 
-          - **macOS**: Open .dmg and drag to Applications
+          - **macOS**: Open .dmg and drag to Applications, or extract .app.tar.gz
           - **Linux**: \`chmod +x *.AppImage && ./FinceptTerminal*.AppImage\`
           - **Windows**: Run the .msi installer
 
@@ -251,18 +272,36 @@ jobs:
           gh release create "$TAG_NAME" \
             --title "FinceptTerminal ${TAG_NAME}" \
             --notes-file release_notes.md \
-            --latest \
-            release-files/* || \
-          gh release upload "$TAG_NAME" release-files/* --clobber
+            --draft \
+            release-files/*
 
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload to existing release
+        if: steps.organize.outputs.file_count > 0 && steps.check_release.outputs.exists == 'true'
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          echo "Uploading artifacts to existing release $TAG_NAME"
+          gh release upload "$TAG_NAME" release-files/* --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish release
+        if: steps.organize.outputs.file_count > 0 && steps.check_release.outputs.exists == 'false'
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          echo "Publishing release $TAG_NAME"
+          gh release edit "$TAG_NAME" --draft=false --latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Update README with download links
+        if: steps.check_release.outputs.exists == 'false'
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
-          TAG_NAME="${{ steps.create_release.outputs.tag_name }}"
+          TAG_NAME="${{ github.ref_name }}"
           REPO_URL="https://github.com/${{ github.repository }}"
 
           cat << EOF > download_section.md
@@ -298,13 +337,15 @@ jobs:
           rm -f download_section.md
 
       - name: Commit README updates
+        if: steps.check_release.outputs.exists == 'false'
         run: |
+          TAG_NAME="${{ github.ref_name }}"
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
           git add README.md fincept-terminal-desktop/README.md 2>/dev/null || true
 
           if ! git diff --cached --quiet; then
-            git commit -m "Update download links for ${{ steps.create_release.outputs.tag_name }}"
+            git commit -m "Update download links for ${TAG_NAME}"
             git push origin HEAD:main || echo "Warning: Could not push README updates"
           fi
         env:
