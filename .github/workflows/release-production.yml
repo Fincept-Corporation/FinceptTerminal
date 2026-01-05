@@ -69,6 +69,11 @@ jobs:
         with:
           workspaces: './fincept-terminal-desktop/src-tauri -> target'
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
