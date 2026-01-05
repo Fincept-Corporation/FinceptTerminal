@@ -42,12 +42,9 @@ jobs:
         if: matrix.platform == 'ubuntu-20.04'
         run: |
           sudo apt-get update
-          # Install webkit2gtk - try 4.1 first (Ubuntu 22.04+), fall back to 4.0 (Ubuntu 20.04)
           sudo apt-get install -y libwebkit2gtk-4.1-dev || sudo apt-get install -y libwebkit2gtk-4.0-dev
           sudo apt-get install -y libjavascriptcoregtk-4.1-dev || sudo apt-get install -y libjavascriptcoregtk-4.0-dev
-          # Install soup - try 3.0 first (newer), fall back to 2.4 (older)
           sudo apt-get install -y libsoup-3.0-dev || sudo apt-get install -y libsoup2.4-dev
-          # Install remaining dependencies
           sudo apt-get install -y \
             build-essential \
             curl \
@@ -80,15 +77,14 @@ jobs:
       - name: Verify project structure and resources
         run: |
           echo "Verifying project structure..."
-          ls -la fincept-terminal-desktop/
-          ls -la fincept-terminal-desktop/src-tauri/
-          ls -la fincept-terminal-desktop/src-tauri/resources/
-          echo "Checking requirements.txt exists..."
-          if [ ! -f "fincept-terminal-desktop/src-tauri/resources/requirements.txt" ]; then
-            echo "Error: requirements.txt not found!"
+          if [ ! -f "fincept-terminal-desktop/src-tauri/resources/requirements-numpy1.txt" ]; then
+            echo "Error: requirements-numpy1.txt not found!"
             exit 1
           fi
-          echo "Checking scripts directory exists..."
+          if [ ! -f "fincept-terminal-desktop/src-tauri/resources/requirements-numpy2.txt" ]; then
+            echo "Error: requirements-numpy2.txt not found!"
+            exit 1
+          fi
           if [ ! -d "fincept-terminal-desktop/src-tauri/resources/scripts" ]; then
             echo "Error: scripts directory not found!"
             exit 1
@@ -99,12 +95,6 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
         working-directory: ./fincept-terminal-desktop
-
-      # NOTE: Python and Bun are NOT bundled in the app
-      # They are downloaded and installed on first run via setup.rs
-      # Only requirements.txt and scripts are bundled as resources
-      # See: fincept-terminal-desktop/src-tauri/src/setup.rs for installation logic
-      # See: fincept-terminal-desktop/src-tauri/src/utils/python.rs for runtime path resolution
 
       - name: Build the app with updater
         uses: tauri-apps/tauri-action@v0
@@ -122,49 +112,36 @@ jobs:
           args: ${{ matrix.args }}
           includeUpdaterJson: true
 
-      - name: Prepare artifacts with proper naming
+      - name: Validate and prepare artifacts
         id: prepare
         run: |
           mkdir -p release-artifacts
 
-          # Get version for consistent naming
-          if [ -f "fincept-terminal-desktop/src-tauri/Cargo.toml" ]; then
-            VERSION=$(grep '^version = ' fincept-terminal-desktop/src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
-          else
-            VERSION="1.0.0"
-          fi
-
+          VERSION=$(grep '^version = ' fincept-terminal-desktop/src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-          # Find and rename artifacts based on platform
+          # Find and validate artifacts
           if [[ "${{ matrix.platform }}" == "macos-latest" ]]; then
-            # macOS builds
-            if [[ "${{ matrix.arch }}" == "arm64" ]]; then
-              SUFFIX="macOS-arm64"
-            else
-              SUFFIX="macOS-x64"
-            fi
-
-            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.dmg \; 2>/dev/null && echo "[OK] Found .dmg" || echo "[WARN] No .dmg found"
+            SUFFIX="macOS-${{ matrix.arch }}"
+            ARTIFACT=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -type f 2>/dev/null | head -1)
+            [ -f "$ARTIFACT" ] && cp "$ARTIFACT" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.dmg" || { echo "Error: DMG not found"; exit 1; }
 
           elif [[ "${{ matrix.platform }}" == "ubuntu-20.04" ]]; then
-            # Linux builds
             SUFFIX="Linux-x64"
-            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.AppImage \; 2>/dev/null && echo "[OK] Found .AppImage" || echo "[WARN] No .AppImage found"
-            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.deb" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.deb \; 2>/dev/null && echo "[OK] Found .deb" || echo "[WARN] No .deb found"
-            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.rpm" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.rpm \; 2>/dev/null && echo "[OK] Found .rpm" || echo "[WARN] No .rpm found"
+            APPIMAGE=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -type f 2>/dev/null | head -1)
+            DEB=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.deb" -type f 2>/dev/null | head -1)
+            [ -f "$APPIMAGE" ] && cp "$APPIMAGE" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.AppImage" || { echo "Error: AppImage not found"; exit 1; }
+            [ -f "$DEB" ] && cp "$DEB" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.deb" || echo "Warning: DEB not found"
 
           elif [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
-            # Windows builds
             SUFFIX="Windows-x64"
-            find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.msi" -exec cp {} release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.msi \; 2>/dev/null && echo "[OK] Found .msi" || echo "[WARN] No .msi found"
+            MSI=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.msi" -type f 2>/dev/null | head -1)
+            [ -f "$MSI" ] && cp "$MSI" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.msi" || { echo "Error: MSI not found"; exit 1; }
           fi
 
-          # List what we found
           echo "=== Release Artifacts ==="
-          ls -la release-artifacts/ || echo "No artifacts prepared"
+          ls -lh release-artifacts/
 
-          # Set output for later steps
           artifact_count=$(find release-artifacts -type f | wc -l)
           echo "artifact_count=$artifact_count" >> $GITHUB_OUTPUT
         shell: bash
@@ -182,8 +159,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
-      actions: read
 
     steps:
       - name: Checkout repository
@@ -192,15 +167,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Get version from Cargo.toml
+      - name: Get version
         id: get_version
         run: |
-          if [ -f "fincept-terminal-desktop/src-tauri/Cargo.toml" ]; then
-            VERSION=$(grep '^version = ' fincept-terminal-desktop/src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          else
-            echo "version=1.0.0" >> $GITHUB_OUTPUT
-          fi
+          VERSION=$(grep '^version = ' fincept-terminal-desktop/src-tauri/Cargo.toml | head -n1 | cut -d '"' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -212,76 +183,54 @@ jobs:
         run: |
           mkdir -p release-files
 
-          # Move all files to release-files directory
-          find all-artifacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) -exec cp {} release-files/ \;
-
-          # Also copy updater files (latest.json and .sig files)
-          find all-artifacts -type f \( -name "latest.json" -o -name "*.tar.gz" -o -name "*.tar.gz.sig" -o -name "*.zip" -o -name "*.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || true
+          find all-artifacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" \) -exec cp {} release-files/ \;
+          find all-artifacts -type f \( -name "latest.json" -o -name "*.tar.gz" -o -name "*.tar.gz.sig" -o -name "*.zip" -o -name "*.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || echo "No updater files found"
 
           echo "=== Release Files ==="
-          ls -la release-files/
+          ls -lh release-files/
 
-          # Check if we have files
           file_count=$(find release-files -type f | wc -l)
+          [ "$file_count" -eq 0 ] && { echo "Error: No release files found"; exit 1; }
           echo "file_count=$file_count" >> $GITHUB_OUTPUT
 
-          # Create file list for release notes
           echo "FILES_LIST<<EOF" >> $GITHUB_OUTPUT
           ls -1 release-files/ >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create/Update Release
+      - name: Create Release
         if: steps.organize.outputs.file_count > 0
         id: create_release
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
           TAG_NAME="${{ github.ref_name }}"
-          RELEASE_NAME="FinceptTerminal ${TAG_NAME}"
 
-          # Create release notes
           cat << EOF > release_notes.md
           # FinceptTerminal ${TAG_NAME}
 
-          **Auto-Update Enabled** - This release includes automatic update support via Tauri updater.
-
-          Built from commit \`${{ github.sha }}\`
+          **Auto-Update Enabled** - Existing users will be notified automatically.
 
           ## Downloads
 
-          Choose the right version for your operating system:
-
           ### macOS
-          - **Apple Silicon (M1/M2/M3)**: Download \`FinceptTerminal-v${VERSION}-macOS-arm64.dmg\`
-          - **Intel**: Download \`FinceptTerminal-v${VERSION}-macOS-x64.dmg\`
+          - **Apple Silicon (M1/M2/M3)**: \`FinceptTerminal-v${VERSION}-macOS-arm64.dmg\`
+          - **Intel**: \`FinceptTerminal-v${VERSION}-macOS-x64.dmg\`
 
           ### Linux
-          - **AppImage (Universal)**: Download \`FinceptTerminal-v${VERSION}-Linux-x64.AppImage\`
-          - **Debian/Ubuntu (.deb)**: Download \`FinceptTerminal-v${VERSION}-Linux-x64.deb\`
-          - **Fedora/RHEL (.rpm)**: Download \`FinceptTerminal-v${VERSION}-Linux-x64.rpm\`
+          - **AppImage (Universal)**: \`FinceptTerminal-v${VERSION}-Linux-x64.AppImage\`
+          - **Debian/Ubuntu**: \`FinceptTerminal-v${VERSION}-Linux-x64.deb\`
 
           ### Windows
-          - **Windows Installer**: Download \`FinceptTerminal-v${VERSION}-Windows-x64.msi\`
+          - **Installer**: \`FinceptTerminal-v${VERSION}-Windows-x64.msi\`
 
-          ## Auto-Update
+          ## Installation
 
-          This release includes Tauri's built-in auto-updater. Existing users will be notified of this update automatically.
-
-          ## Installation Instructions
-
-          - **macOS**: Open the .dmg file and drag FinceptTerminal to Applications
-          - **Linux AppImage**: Make executable (\`chmod +x\`) and run
-          - **Linux Debian**: Install with \`sudo dpkg -i filename.deb\`
+          - **macOS**: Open .dmg and drag to Applications
+          - **Linux**: \`chmod +x *.AppImage && ./FinceptTerminal*.AppImage\`
           - **Windows**: Run the .msi installer
 
-          ## Python & Bun Installation
+          ## First Launch
 
-          Python and Bun are **NOT** bundled with the app to keep download size small.
-          On first launch, the app will:
-          - Download Python 3.12 (embedded/standalone)
-          - Download Bun 1.1.0 (optimized for your CPU)
-          - Install required Python packages from requirements.txt
-
-          This happens automatically and takes 2-5 minutes depending on your internet connection.
+          Python 3.12 and Bun are downloaded automatically (2-5 minutes).
 
           ---
 
@@ -290,158 +239,67 @@ jobs:
           ${{ steps.organize.outputs.FILES_LIST }}
           \`\`\`
 
-          **Build Information:**
-          - Commit: ${{ github.sha }}
-          - Build Date: $(date -u +"%Y-%m-%d %H:%M UTC")
-          - Workflow Run: [#${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          **Build:** [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
           EOF
 
-          # Create or update release
           gh release create "$TAG_NAME" \
-            --title "$RELEASE_NAME" \
+            --title "FinceptTerminal ${TAG_NAME}" \
             --notes-file release_notes.md \
             --latest \
             release-files/* || \
           gh release upload "$TAG_NAME" release-files/* --clobber
 
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update README with direct download links
+      - name: Update README with download links
         run: |
           VERSION="${{ steps.get_version.outputs.version }}"
           TAG_NAME="${{ steps.create_release.outputs.tag_name }}"
           REPO_URL="https://github.com/${{ github.repository }}"
-          CURRENT_DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          SHORT_SHA="${{ github.sha }}"
-          SHORT_SHA=${SHORT_SHA:0:7}
 
           cat << EOF > download_section.md
           ## Download Latest Release
 
-          **Version:** \`${TAG_NAME}\` | **Commit:** \`${SHORT_SHA}\` | **Released:** ${CURRENT_DATE}
+          **Version:** \`${TAG_NAME}\` | **Released:** $(date -u +"%Y-%m-%d")
 
-          ### Direct Downloads - Click to Download Immediately
+          | Platform | Architecture | Download |
+          |----------|-------------|----------|
+          | **macOS** | Apple Silicon | [Download](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-macOS-arm64.dmg) |
+          | **macOS** | Intel | [Download](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-macOS-x64.dmg) |
+          | **Linux** | x64 (AppImage) | [Download](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Linux-x64.AppImage) |
+          | **Linux** | x64 (Debian) | [Download](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Linux-x64.deb) |
+          | **Windows** | x64 | [Download](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Windows-x64.msi) |
 
-          | Platform | Architecture | Direct Download |
-          |----------|-------------|----------------|
-          | **macOS** | Apple Silicon (ARM64) | [Download .dmg](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-macOS-arm64.dmg) |
-          | **macOS** | Intel (x64) | [Download .dmg](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-macOS-x64.dmg) |
-          | **Linux** | x64 (AppImage) | [Download .AppImage](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Linux-x64.AppImage) |
-          | **Linux** | x64 (Debian/Ubuntu) | [Download .deb](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Linux-x64.deb) |
-          | **Linux** | x64 (Fedora/RHEL) | [Download .rpm](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Linux-x64.rpm) |
-          | **Windows** | x64 | [Download .msi](${REPO_URL}/releases/download/${TAG_NAME}/FinceptTerminal-v${VERSION}-Windows-x64.msi) |
-
-          > **One-Click Downloads** - These links will start downloading immediately - no GitHub login required.
-          >
-          > **Auto-Updates Enabled** - The app will automatically notify you of future updates.
-
-          ### Build Status & Info
-
-          ![Build Status](https://github.com/${{ github.repository }}/actions/workflows/release-production.yml/badge.svg)
-          ![Latest Release](https://img.shields.io/github/v/release/${{ github.repository }}?label=Latest%20Release)
-          ![Downloads](https://img.shields.io/github/downloads/${{ github.repository }}/total?label=Total%20Downloads)
-
-          **Release Page:** [View all releases and changelogs](${REPO_URL}/releases)
-
-          ---
+          [View All Releases](${REPO_URL}/releases)
           EOF
 
-      - name: Update README files
-        run: |
-          # Function to update a README file
-          update_readme() {
-            local README_PATH="$1"
-
-            if [ ! -f "$README_PATH" ]; then
-              echo "[WARN] README not found: $README_PATH"
-              return
-            fi
-
-            # Update or add download section
-            if grep -q "<!-- DOWNLOAD_SECTION_START -->" "$README_PATH" && grep -q "<!-- DOWNLOAD_SECTION_END -->" "$README_PATH"; then
-              echo "[INFO] Updating existing download section in $README_PATH..."
+          # Update README if markers exist
+          for README in "README.md" "fincept-terminal-desktop/README.md"; do
+            if [ -f "$README" ] && grep -q "<!-- DOWNLOAD_SECTION_START -->" "$README"; then
               awk '
                 /<!-- DOWNLOAD_SECTION_START -->/ {
-                  print $0
-                  print ""
-                  system("cat download_section.md")
-                  while (getline > 0 && !/<!-- DOWNLOAD_SECTION_END -->/) continue
-                  print "<!-- DOWNLOAD_SECTION_END -->"
-                  next
+                  print; print ""; system("cat download_section.md");
+                  while (getline && !/<!-- DOWNLOAD_SECTION_END -->/) continue;
+                  print "<!-- DOWNLOAD_SECTION_END -->"; next
                 }
                 { print }
-              ' "$README_PATH" > temp_readme.md
-              mv temp_readme.md "$README_PATH"
-            else
-              echo "[INFO] Adding new download section to $README_PATH..."
-              if grep -q "^# " "$README_PATH"; then
-                awk '
-                  /^# / && !inserted {
-                    print $0
-                    print ""
-                    print "<!-- DOWNLOAD_SECTION_START -->"
-                    print ""
-                    system("cat download_section.md")
-                    print ""
-                    print "<!-- DOWNLOAD_SECTION_END -->"
-                    print ""
-                    inserted = 1
-                    next
-                  }
-                  { print }
-                ' "$README_PATH" > temp_readme.md
-                mv temp_readme.md "$README_PATH"
-              fi
+              ' "$README" > temp.md && mv temp.md "$README"
             fi
-          }
-
-          # Update both README files
-          update_readme "README.md"
-          update_readme "fincept-terminal-desktop/README.md"
+          done
 
           rm -f download_section.md
 
-      - name: Commit and push README changes
+      - name: Commit README updates
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action Bot"
-
-          # Add both README files
           git add README.md fincept-terminal-desktop/README.md 2>/dev/null || true
 
-          if git diff --cached --quiet; then
-            echo "[INFO] No changes to commit"
-          else
-            git commit -m "Auto-update download links for ${{ steps.create_release.outputs.tag_name }}
-
-            Updated direct download links for:
-            - macOS (ARM64 & x64)
-            - Linux (AppImage & .deb)
-            - Windows (x64)
-
-            Release: ${{ steps.create_release.outputs.tag_name }}
-            All downloads are one-click with no GitHub login required"
-
-            # Push with retries
-            for i in {1..5}; do
-              if git push; then
-                echo "[OK] Successfully pushed README updates"
-                break
-              else
-                echo "[WARN] Push failed, attempt $i/5"
-                if [ $i -lt 5 ]; then
-                  echo "[INFO] Pulling latest changes and retrying..."
-                  git pull --rebase origin main
-                  sleep $((i * 2))
-                else
-                  echo "[ERROR] Failed to push README after 5 attempts"
-                  exit 1
-                fi
-              fi
-            done
+          if ! git diff --cached --quiet; then
+            git commit -m "Update download links for ${{ steps.create_release.outputs.tag_name }}"
+            git push origin HEAD:main || echo "Warning: Could not push README updates"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

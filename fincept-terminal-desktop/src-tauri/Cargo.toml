@@ -1,10 +1,10 @@
 [package]
 name = "fincept-terminal-desktop"
-version = "3.0.12"
+version = "3.0.15"
 description = "Professional-grade financial analysis platform with AI-powered insights and real-time market data"
 authors = ["Fincept Corporation <support@fincept.in>"]
 edition = "2021"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 homepage = "https://product.fincept.in"
 repository = "https://github.com/Fincept-Corporation/FinceptTerminal"
 

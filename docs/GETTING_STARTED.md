@@ -58,16 +58,16 @@ Fincept Terminal is an **open-source financial analysis platform** that aims to 
 Before starting, verify you have these installed:
 
 ```bash
-# Check Node.js (need 18+)
-node --version
-# If not installed: Download from https://nodejs.org/
+# Check Bun (need 1.0+)
+bun --version
+# If not installed: Download from https://bun.sh/
 
 # Check Rust (need 1.70+)
 rustc --version
 cargo --version
 # If not installed: https://www.rust-lang.org/tools/install
 
-# Check Python (need 3.8+)
+# Check Python (need 3.11+)
 python --version
 # or
 python3 --version
@@ -77,9 +77,9 @@ git --version
 ```
 
 **Don't have these?** Install them in this order:
-1. Node.js LTS: https://nodejs.org/
+1. Bun: https://bun.sh/ (replaces Node.js/npm)
 2. Rust: https://www.rust-lang.org/tools/install
-3. Python: https://www.python.org/downloads/
+3. Python 3.11+: https://www.python.org/downloads/
 4. Git: https://git-scm.com/downloads
 
 ### Setup in 5 Commands
@@ -87,21 +87,18 @@ git --version
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Fincept-Corporation/FinceptTerminal.git
-cd FinceptTerminal
+cd FinceptTerminal/fincept-terminal-desktop
 
-# 2. Navigate to the main app
-cd fincept-terminal-desktop
+# 2. Install dependencies with Bun
+bun install
 
-# 3. Install Node dependencies
-npm install
-
-# 4. Build Rust backend (first time only)
+# 3. Build Rust backend (first time only - optional)
 cd src-tauri
 cargo build
 cd ..
 
-# 5. Run the app!
-npm run tauri dev
+# 4. Run the app!
+bun run tauri:dev
 ```
 
 **Expected Result:** Fincept Terminal window should open, showing the login screen.
@@ -343,9 +340,9 @@ touch MyNewTab.tsx
 # Add to tabs array
 
 # 4. Test
-npm run dev  # Frontend only (faster for UI work)
+bun run dev  # Frontend only (faster for UI work)
 # or
-npm run tauri dev  # Full app
+bun run tauri:dev  # Full app
 ```
 
 ### Workflow 3: Fix a Bug
@@ -355,7 +352,7 @@ npm run tauri dev  # Full app
 git checkout -b fix/issue-123-market-data-error
 
 # 2. Reproduce the bug
-npm run tauri dev
+bun run tauri:dev
 
 # 3. Fix the issue
 # Edit relevant files
@@ -379,9 +376,9 @@ git push origin fix/issue-123-market-data-error
 ### Workflow 4: Update Dependencies
 
 ```bash
-# Update Node packages
+# Update Bun packages
 cd fincept-terminal-desktop
-npm update
+bun update
 
 # Update Rust crates
 cd src-tauri
@@ -389,7 +386,7 @@ cargo update
 
 # Test everything still works
 cd ..
-npm run tauri build
+bun run tauri:build
 ```
 
 ---
@@ -501,28 +498,27 @@ font-size: 9px   /* Dense data tables */
 | Browser console error      | Check React components in `src/components/`           |
 | Build fails                | Check `package.json` and `Cargo.toml` dependencies    |
 | Python script fails        | Test script directly: `python script.py command args` |
-| App won't start            | Check both `npm install` and `cargo build` succeeded  |
+| App won't start            | Check both `bun install` and `cargo build` succeeded  |
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Issue: `npm install` fails
+### Issue: `bun install` fails
 
-**Symptoms:** Errors during `npm install`, missing modules
+**Symptoms:** Errors during `bun install`, missing modules
 
 **Solutions:**
 ```bash
 # Try clearing cache
-npm cache clean --force
-rm -rf node_modules package-lock.json
-npm install
+rm -rf node_modules bun.lockb
+bun install
 
-# Check Node version (need 18+)
-node --version
+# Check Bun version (need 1.0+)
+bun --version
 
-# Try with legacy peer deps flag
-npm install --legacy-peer-deps
+# Update Bun
+bun upgrade
 ```
 
 ### Issue: Tauri won't build
@@ -573,11 +569,11 @@ python C:/full/path/to/script.py command args
 
 # Restart dev server
 # Stop current process (Ctrl+C)
-npm run dev
+bun run dev
 
 # Clear Vite cache
 rm -rf node_modules/.vite
-npm run dev
+bun run dev
 ```
 
 ### Issue: Data not loading in Markets tab
@@ -601,7 +597,7 @@ python resources/scripts/yfinance_data.py quote AAPL
 **Solutions:**
 ```bash
 # Check TypeScript compilation
-npm run build
+bun run build
 
 # Install VS Code extensions:
 # - ESLint
@@ -772,7 +768,7 @@ lsof -ti:1420 | xargs kill -9
 
 ## 📊 Project Metrics & Impact
 
-### Current Status (as of 2025)
+### Current Status (as of 2026)
 - ⭐ **376+ GitHub Stars**
 - 🔧 **Active Development:** Daily commits
 - 🌍 **Contributors:** Growing community

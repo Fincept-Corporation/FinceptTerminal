@@ -1,8 +1,9 @@
 {
   "name": "fincept-terminal-desktop",
   "private": true,
-  "version": "3.0.12",
+  "version": "3.0.15",
   "type": "module",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

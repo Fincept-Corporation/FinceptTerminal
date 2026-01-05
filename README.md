@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)
@@ -18,7 +18,7 @@
 
 State-of-the-art financial intelligence platform with CFA-level analytics, AI automation, and unlimited data connectivity.
 
-[📥 Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases) • [📚 Docs](docs/) • [💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) • [💬 Discord](https://discord.gg/ae87a8ygbN)
+[📥 Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases) • [📚 Docs](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs) • [💬 Discussions](https://github.com/Fincept-Corporation/FinceptTerminal/discussions) • [💬 Discord](https://discord.gg/ae87a8ygbN)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -38,7 +38,7 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 | 🔗 **Cross-Domain** | Integrate supply chain → portfolio • Geopolitics → equity • Maritime → macro • Your data, your way | [Workflow System](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor) |
 | 🎨 **Workflows** | Visual node editor • Python agents • MCP tools • No-code automation | [Custom Nodes](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor) • [MCP Servers](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
 | 🚢 **Intelligence** | 3D maritime tracking • Satellite monitoring • Geopolitical frameworks • Trade route analysis | [Maritime Tab](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs) |
-| 💰 **Pricing** | 100% Free & Open Source (MIT License) | [Full Repository](https://github.com/Fincept-Corporation/FinceptTerminal) |
+| 💰 **Pricing** | Free & Open Source (AGPL-3.0) • Commercial licenses available | [Full Repository](https://github.com/Fincept-Corporation/FinceptTerminal) • [Commercial License](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md) |
 
 ---
 
@@ -182,8 +182,8 @@ bun install && bun run tauri:dev
 
 ## 🛣️ What's Next
 
-**Q1 2025:** Enhanced real-time streaming • Advanced backtesting • Options strategy builder • 50+ AI agents
-**Q2 2025:** Paper trading • Multi-portfolio management • Mobile app • Social trading
+**Q1 2026:** Enhanced real-time streaming • Advanced backtesting • Options strategy builder • 50+ AI agents
+**Q2 2026:** Paper trading • Multi-portfolio management • Mobile app • Social trading
 **Future:** Institutional features • Programmatic API • ML training UI • White-label solutions
 
 ---
@@ -202,9 +202,26 @@ We're building the future of financial analysis—together.
 
 ## 📜 License
 
-**MIT License** • Free Forever • No Restrictions
+**Dual Licensed: AGPL-3.0 (Open Source) + Commercial**
 
-© 2024-2025 Fincept Corporation
+### Open Source (AGPL-3.0)
+- ✅ Free for personal, educational, and non-commercial use
+- ✅ Requires sharing modifications when distributed or used as network service
+- ✅ Full source code transparency
+
+### Commercial License
+- 💼 Required for proprietary/SaaS use without open-sourcing modifications
+- 📞 Contact: **support@fincept.in**
+- 📄 Details: [Commercial License Guide](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+
+### Trademarks
+"Fincept Terminal" and "Fincept" are trademarks of Fincept Corporation.
+See [Trademark Guidelines](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
+
+### Contributors
+By contributing, you agree to our [Contributor License Agreement](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
+
+© 2025-2026 Fincept Corporation. All rights reserved.
 
 ---
 
