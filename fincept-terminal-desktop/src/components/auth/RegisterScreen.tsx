@@ -5,23 +5,19 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, User, Mail, Phone, Lock, Key, ChevronDown, Check, X } from "lucide-react";
+import { ArrowLeft, User, Mail, Lock, Key, Check, X } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import PhoneInput, { getCountryCallingCode as getCallingCode } from 'react-phone-number-input';
+import 'react-phone-number-input/style.css';
+import './phone-input.css';
 
 interface RegisterScreenProps {
   onNavigate: (screen: Screen) => void;
 }
 
 type RegisterStep = 'form' | 'otp-verification';
-
-interface Country {
-  name: string;
-  code: string;
-  dialCode: string;
-  flag: string;
-}
 
 const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
   const { signup, verifyOtp, session } = useAuth();
@@ -31,18 +27,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     firstName: "",
     lastName: "",
     email: "",
-    phone: "",
-    countryCode: "+1", // Default to US
     password: "",
     confirmPassword: ""
   });
+  const [phoneNumber, setPhoneNumber] = useState<string | undefined>();
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [isVerificationComplete, setIsVerificationComplete] = useState(false);
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [isCountryDropdownOpen, setIsCountryDropdownOpen] = useState(false);
-  const [countrySearchTerm, setCountrySearchTerm] = useState("");
 
   // Password validation state
   const [passwordValidation, setPasswordValidation] = useState({
@@ -52,43 +44,6 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     hasNumber: false,
     hasSpecialChar: false
   });
-
-  // Fetch countries data from REST Countries API
-  useEffect(() => {
-    const fetchCountries = async () => {
-      try {
-        const response = await fetch('https://restcountries.com/v3.1/all?fields=name,cca2,idd,flag');
-        const data = await response.json();
-
-        const formattedCountries: Country[] = data
-          .filter((country: any) => country.idd?.root && country.idd?.suffixes?.length > 0)
-          .map((country: any) => ({
-            name: country.name.common,
-            code: country.cca2,
-            dialCode: country.idd.root + (country.idd.suffixes[0] || ''),
-            flag: country.flag
-          }))
-          .sort((a: Country, b: Country) => a.name.localeCompare(b.name));
-
-        setCountries(formattedCountries);
-      } catch (error) {
-        console.error('Failed to fetch countries:', error);
-        // Fallback to common countries if API fails
-        setCountries([
-          { name: "United States", code: "US", dialCode: "+1", flag: "🇺🇸" },
-          { name: "United Kingdom", code: "GB", dialCode: "+44", flag: "🇬🇧" },
-          { name: "Canada", code: "CA", dialCode: "+1", flag: "🇨🇦" },
-          { name: "India", code: "IN", dialCode: "+91", flag: "🇮🇳" },
-          { name: "Australia", code: "AU", dialCode: "+61", flag: "🇦🇺" },
-          { name: "Germany", code: "DE", dialCode: "+49", flag: "🇩🇪" },
-          { name: "France", code: "FR", dialCode: "+33", flag: "🇫🇷" },
-          { name: "Japan", code: "JP", dialCode: "+81", flag: "🇯🇵" },
-        ]);
-      }
-    };
-
-    fetchCountries();
-  }, []);
 
   // Handle navigation after successful authentication
   useEffect(() => {
@@ -122,18 +77,10 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     }
   };
 
-  const handleCountrySelect = (country: Country) => {
-    setFormData(prev => ({ ...prev, countryCode: country.dialCode }));
-    setIsCountryDropdownOpen(false);
-    setCountrySearchTerm("");
+  const handlePhoneChange = (value: string | undefined) => {
+    setPhoneNumber(value);
+    if (error) setError("");
   };
-
-  const filteredCountries = countries.filter(country =>
-    country.name.toLowerCase().includes(countrySearchTerm.toLowerCase()) ||
-    country.dialCode.includes(countrySearchTerm)
-  );
-
-  const selectedCountry = countries.find(country => country.dialCode === formData.countryCode);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,14 +110,22 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
       const username = `${formData.firstName.trim()}${formData.lastName.trim()}`.toLowerCase();
       console.log('Generated username:', username);
 
-      // Get selected country name
-      const selectedCountry = countries.find(country => country.dialCode === formData.countryCode);
+      // Parse phone number if provided
+      let parsedPhone: any = null;
+      if (phoneNumber) {
+        try {
+          const { parsePhoneNumber } = await import('libphonenumber-js');
+          parsedPhone = parsePhoneNumber(phoneNumber);
+        } catch (err) {
+          console.error('Failed to parse phone number:', err);
+        }
+      }
 
       // Prepare additional registration data
       const additionalData = {
-        phone: formData.phone || undefined,
-        country_code: formData.countryCode,
-        country: selectedCountry?.name || undefined
+        phone: parsedPhone?.nationalNumber || phoneNumber || undefined,
+        country_code: parsedPhone ? `+${parsedPhone.countryCallingCode}` : undefined,
+        country: parsedPhone?.country || undefined
       };
 
       const result = await signup(username, formData.email, formData.password, additionalData);
@@ -245,14 +200,22 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     try {
       const username = `${formData.firstName.trim()}${formData.lastName.trim()}`.toLowerCase();
 
-      // Get selected country name
-      const selectedCountry = countries.find(country => country.dialCode === formData.countryCode);
+      // Parse phone number if provided
+      let parsedPhone: any = null;
+      if (phoneNumber) {
+        try {
+          const { parsePhoneNumber } = await import('libphonenumber-js');
+          parsedPhone = parsePhoneNumber(phoneNumber);
+        } catch (err) {
+          console.error('Failed to parse phone number:', err);
+        }
+      }
 
       // Prepare additional registration data
       const additionalData = {
-        phone: formData.phone || undefined,
-        country_code: formData.countryCode,
-        country: selectedCountry?.name || undefined
+        phone: parsedPhone?.nationalNumber || phoneNumber || undefined,
+        country_code: parsedPhone ? `+${parsedPhone.countryCallingCode}` : undefined,
+        country: parsedPhone?.country || undefined
       };
 
       const result = await signup(username, formData.email, formData.password, additionalData);
@@ -361,65 +324,36 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
           <div className="space-y-1">
             <Label htmlFor="phone" className="text-white text-xs">
-              {t('register.phoneLabel')}
+              {t('register.phoneLabel')} <span className="text-zinc-500">(Optional)</span>
             </Label>
-            <div className="flex gap-2">
-              {/* Country Code Dropdown */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsCountryDropdownOpen(!isCountryDropdownOpen)}
-                  className="bg-zinc-800 border border-zinc-600 text-white h-9 px-2.5 text-sm rounded flex items-center gap-1 hover:bg-zinc-700 focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 min-w-[75px]"
-                  disabled={isLoading}
-                >
-                  <span className="text-base">{selectedCountry?.flag || "🌍"}</span>
-                  <span className="text-xs">{formData.countryCode}</span>
-                  <ChevronDown className="h-3 w-3" />
-                </button>
-
-                {isCountryDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 w-80 bg-zinc-800 border border-zinc-600 rounded-lg shadow-lg z-50 max-h-60 overflow-hidden">
-                    <div className="p-2">
-                      <Input
-                        type="text"
-                        placeholder={t('register.searchCountries')}
-                        value={countrySearchTerm}
-                        onChange={(e) => setCountrySearchTerm(e.target.value)}
-                        className="bg-zinc-700 border-zinc-600 text-white placeholder-zinc-500 h-8 text-sm"
-                      />
-                    </div>
-                    <div className="overflow-y-auto max-h-48">
-                      {filteredCountries.slice(0, 50).map((country) => (
-                        <button
-                          key={country.code}
-                          type="button"
-                          onClick={() => handleCountrySelect(country)}
-                          className="w-full px-3 py-2 text-left hover:bg-zinc-700 flex items-center gap-2 text-sm text-white"
-                        >
-                          <span className="text-base">{country.flag}</span>
-                          <span className="flex-1">{country.name}</span>
-                          <span className="text-zinc-400">{country.dialCode}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Phone Number Input */}
-              <div className="flex-1 relative">
-                <Phone className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-                <Input
-                  id="phone"
-                  type="tel"
-                  placeholder={t('register.phonePlaceholder')}
-                  value={formData.phone}
-                  onChange={(e) => handleChange("phone", e.target.value)}
-                  className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
+            <PhoneInput
+              international
+              defaultCountry="US"
+              value={phoneNumber}
+              onChange={handlePhoneChange}
+              disabled={isLoading}
+              placeholder={t('register.phonePlaceholder')}
+              className="phone-input-custom"
+              style={{
+                '--PhoneInput-color--focus': '#71717a',
+                '--PhoneInputInternationalIconPhone-opacity': '0.8',
+                '--PhoneInputInternationalIconGlobe-opacity': '0.65',
+                '--PhoneInputCountrySelect-marginRight': '0.35em',
+                '--PhoneInputCountrySelectArrow-width': '0.3em',
+                '--PhoneInputCountrySelectArrow-marginLeft': '0.35em',
+                '--PhoneInputCountrySelectArrow-borderWidth': '1px',
+                '--PhoneInputCountrySelectArrow-opacity': '0.45',
+                '--PhoneInputCountrySelectArrow-color': 'currentColor',
+                '--PhoneInputCountrySelectArrow-color--focus': 'currentColor',
+                '--PhoneInputCountrySelectArrow-transform': 'rotate(45deg)',
+                '--PhoneInputCountryFlag-aspectRatio': '1.5',
+                '--PhoneInputCountryFlag-height': '1em',
+                '--PhoneInputCountryFlag-borderWidth': '1px',
+                '--PhoneInputCountryFlag-borderColor': 'rgba(0,0,0,0.5)',
+                '--PhoneInputCountryFlag-borderColor--focus': 'currentColor',
+                '--PhoneInputCountryFlag-backgroundColor--loading': 'rgba(0,0,0,0.1)'
+              } as any}
+            />
           </div>
 
           <div className="space-y-1">
@@ -530,14 +464,6 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
             </button>
           </p>
         </div>
-
-        {/* Close dropdown when clicking outside */}
-        {isCountryDropdownOpen && (
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setIsCountryDropdownOpen(false)}
-          />
-        )}
       </div>
     );
   }

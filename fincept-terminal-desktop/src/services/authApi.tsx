@@ -538,10 +538,10 @@ export class AuthUtils {
   static getAccountTypeDisplay(accountType: string): string {
     const typeMap: Record<string, string> = {
       'free': 'Free',
-      'starter': 'Starter',
-      'professional': 'Professional',
-      'enterprise': 'Enterprise',
-      'unlimited': 'Unlimited'
+      'basic': 'Basic',
+      'standard': 'Standard',
+      'pro': 'Pro',
+      'enterprise': 'Enterprise'
     };
     return typeMap[accountType] || accountType;
   }

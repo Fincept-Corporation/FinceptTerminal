@@ -1,0 +1,105 @@
+/* Custom styles for react-phone-number-input to match our dark theme */
+
+.phone-input-custom {
+  width: 100%;
+}
+
+.phone-input-custom .PhoneInputInput {
+  background-color: #27272a; /* bg-zinc-800 */
+  border: 1px solid #52525b; /* border-zinc-600 */
+  color: white;
+  padding: 0.5rem 0.75rem;
+  height: 2.25rem; /* h-9 */
+  font-size: 0.875rem; /* text-sm */
+  border-radius: 0.375rem;
+  width: 100%;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.phone-input-custom .PhoneInputInput::placeholder {
+  color: #71717a; /* text-zinc-500 */
+}
+
+.phone-input-custom .PhoneInputInput:focus {
+  border-color: #71717a; /* border-zinc-500 */
+  ring: 1px;
+  ring-color: #71717a;
+}
+
+.phone-input-custom .PhoneInputInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.phone-input-custom .PhoneInputCountry {
+  background-color: #27272a; /* bg-zinc-800 */
+  border: 1px solid #52525b; /* border-zinc-600 */
+  border-radius: 0.375rem;
+  padding: 0 0.5rem;
+  margin-right: 0.5rem;
+  height: 2.25rem; /* h-9 */
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.phone-input-custom .PhoneInputCountry:hover {
+  background-color: #3f3f46; /* hover:bg-zinc-700 */
+}
+
+.phone-input-custom .PhoneInputCountry:focus {
+  border-color: #71717a; /* border-zinc-500 */
+  outline: none;
+  ring: 1px;
+  ring-color: #71717a;
+}
+
+.phone-input-custom .PhoneInputCountryIcon {
+  width: 1.5em;
+  height: 1em;
+}
+
+.phone-input-custom .PhoneInputCountryIcon--border {
+  background-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+
+.phone-input-custom .PhoneInputCountrySelectArrow {
+  color: #a1a1aa; /* text-zinc-400 */
+  width: 0.3em;
+  height: 0.3em;
+  border-style: solid;
+  border-color: currentColor;
+  border-top-width: 0;
+  border-bottom-width: 1px;
+  border-left-width: 0;
+  border-right-width: 1px;
+  transform: rotate(45deg);
+  margin-left: 0.5em;
+}
+
+/* Country select dropdown */
+.PhoneInputCountrySelect {
+  position: absolute;
+  z-index: 50;
+  background-color: #27272a; /* bg-zinc-800 */
+  border: 1px solid #52525b; /* border-zinc-600 */
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+  max-height: 15rem;
+  overflow-y: auto;
+  margin-top: 0.25rem;
+}
+
+.PhoneInputCountrySelect option {
+  color: white;
+  padding: 0.5rem 0.75rem;
+  background-color: #27272a;
+}
+
+.PhoneInputCountrySelect option:hover,
+.PhoneInputCountrySelect option:focus {
+  background-color: #3f3f46; /* hover:bg-zinc-700 */
+}

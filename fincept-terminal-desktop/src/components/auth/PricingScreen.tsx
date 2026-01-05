@@ -103,9 +103,9 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
     if (availablePlans.length > 0 && !selectedPlan) {
       const currentPlanId = (session?.subscription as any)?.data?.subscription?.plan?.plan_id ||
                             session?.subscription?.subscription?.plan?.plan_id;
-      // Don't auto-select if user already has current plan, otherwise select starter
+      // Don't auto-select if user already has current plan, otherwise select basic
       if (!currentPlanId) {
-        setSelectedPlan('starter_20');
+        setSelectedPlan('basic');
       }
     }
   }, [availablePlans.length, selectedPlan, session?.subscription]);
@@ -117,14 +117,10 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
   const getPlanIcon = (planId: string) => {
     const iconMap: Record<string, React.ReactNode> = {
       'free': <Shield className="w-4 h-4" />,
-      'basic': <Shield className="w-4 h-4" />,
-      'standard': <Star className="w-4 h-4" />,
+      'basic': <Star className="w-4 h-4" />,
+      'standard': <Zap className="w-4 h-4" />,
       'pro': <Crown className="w-4 h-4" />,
-      'enterprise': <Zap className="w-4 h-4" />,
-      'starter_20': <Star className="w-4 h-4" />,
-      'professional_49': <Zap className="w-4 h-4" />,
-      'enterprise_99': <Crown className="w-4 h-4" />,
-      'unlimited_199': <Rocket className="w-4 h-4" />
+      'enterprise': <Rocket className="w-4 h-4" />
     };
     return iconMap[planId] || <Shield className="w-4 h-4" />;
   };
@@ -260,7 +256,7 @@ const handleSelectPlan = async () => {
     return (
       <div
         key={plan.plan_id}
-        onClick={() => !isCurrentPlan && handlePlanClick(plan.plan_id)}
+        onClick={() => handlePlanClick(plan.plan_id)}
         className={`
           relative rounded-lg border-2 p-4 transition-all duration-200 flex flex-col
           ${isCurrentPlan
@@ -386,15 +382,6 @@ const handleSelectPlan = async () => {
                 'Retry'
               )}
             </Button>
-            {userType === 'existing' && (
-              <Button
-                onClick={handleContinueWithFree}
-                variant="outline"
-                className="w-full bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500"
-              >
-                Continue with Free Plan
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -541,31 +528,9 @@ const handleSelectPlan = async () => {
               </div>
 
               <div className="flex gap-3">
-                {userType === 'existing' && !hasActiveSubscription && (
-                  <Button
-                    onClick={handleContinueWithFree}
-                    variant="outline"
-                    className="bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500 px-4 py-2 text-sm transition-colors"
-                    disabled={isLoading}
-                  >
-                    Stay Free
-                  </Button>
-                )}
-
-                {hasActiveSubscription && (
-                  <Button
-                    onClick={onProceedToDashboard}
-                    variant="outline"
-                    className="bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700 hover:border-zinc-500 px-4 py-2 text-sm transition-colors"
-                    disabled={isLoading}
-                  >
-                    Keep Current Plan
-                  </Button>
-                )}
-
                 <Button
-                  onClick={handleSelectPlan}
-                  disabled={!selectedPlan || isLoading || isCurrentPlanSelected}
+                  onClick={selectedPlan === 'free' ? handleContinueWithFree : handleSelectPlan}
+                  disabled={!selectedPlan || isLoading}
                   className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2 text-sm transition-colors disabled:opacity-50"
                 >
                   {isLoading ? (
@@ -573,12 +538,10 @@ const handleSelectPlan = async () => {
                       <Loader2 className="w-3 h-3 animate-spin mr-2" />
                       Processing...
                     </div>
-                  ) : isCurrentPlanSelected ? (
-                    'Current Plan'
-                  ) : hasActiveSubscription ? (
-                    `Change to ${selectedPlanData?.name || 'Plan'}`
+                  ) : selectedPlan === 'free' ? (
+                    'Continue with Free'
                   ) : (
-                    `Start Free Trial - ${selectedPlanData?.name || 'Plan'}`
+                    `Proceed with ${selectedPlanData?.name || 'Plan'}`
                   )}
                 </Button>
               </div>
