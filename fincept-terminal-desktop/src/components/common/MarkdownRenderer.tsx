@@ -37,7 +37,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, style = {}
     return (
       <div style={markdownStyles}>
         <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm as any]}
         components={{
           // Headings
           h1: ({ children }) => (

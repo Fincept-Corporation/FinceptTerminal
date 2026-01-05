@@ -123,9 +123,11 @@ const ForumTab: React.FC = () => {
 
   // Convert API post to UI format
   const convertApiPostToUIFormat = (apiPost: APIForumPost): ForumPost => {
-    const voteScore = apiPost.likes - apiPost.dislikes;
+    const likes = apiPost.likes || 0;
+    const dislikes = apiPost.dislikes || 0;
+    const voteScore = likes - dislikes;
     const sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = voteScore > 10 ? 'BULLISH' : voteScore < -5 ? 'BEARISH' : 'NEUTRAL';
-    const priority: 'HOT' | 'TRENDING' | 'NORMAL' = apiPost.likes > 300 ? 'HOT' : apiPost.likes > 150 ? 'TRENDING' : 'NORMAL';
+    const priority: 'HOT' | 'TRENDING' | 'NORMAL' = likes > 300 ? 'HOT' : likes > 150 ? 'TRENDING' : 'NORMAL';
 
     const tagMatches = apiPost.content.match(/#\w+/g) || [];
     const tags = tagMatches.slice(0, 5).map(tag => tag.substring(1));
@@ -137,15 +139,15 @@ const ForumTab: React.FC = () => {
       title: apiPost.title,
       content: apiPost.content,
       category: apiPost.category_name?.toUpperCase() || 'GENERAL',
-      categoryId: apiPost.category_id,
+      categoryId: apiPost.category_id || 0,
       tags: tags.length > 0 ? tags : ['DISCUSSION'],
       views: apiPost.views || 0,
       replies: apiPost.reply_count || 0,
-      likes: apiPost.likes || 0,
-      dislikes: apiPost.dislikes || 0,
+      likes,
+      dislikes,
       sentiment,
       priority,
-      verified: apiPost.likes > 100
+      verified: likes > 100
     };
   };
 

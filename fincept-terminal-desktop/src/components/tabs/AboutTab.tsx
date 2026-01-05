@@ -268,7 +268,7 @@ const AboutTab: React.FC = () => {
         </div>
       </div>
 
-      <TabFooter />
+      <TabFooter tabName="About" />
     </div>
   );
 };
