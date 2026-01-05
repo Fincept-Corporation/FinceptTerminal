@@ -36,6 +36,8 @@ const ProfileTab: React.FC = () => {
   const [usageData, setUsageData] = useState<any>(null);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   useEffect(() => {
     fetchSectionData();
@@ -62,21 +64,27 @@ const ProfileTab: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    if (confirm('Logout from Fincept Terminal?')) {
-      await logout();
-    }
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
   };
 
   const handleRegenerateKey = async () => {
     if (!session?.api_key) return;
-    if (confirm('Regenerate API Key? Your old key will be invalidated.')) {
-      setLoading(true);
-      const result = await UserApiService.regenerateApiKey(session.api_key);
-      setLoading(false);
-      if (result.success) {
-        alert('API Key regenerated successfully!');
-        await refreshUserData();
-      }
+    setShowRegenerateConfirm(true);
+  };
+
+  const confirmRegenerateKey = async () => {
+    if (!session?.api_key) return;
+    setShowRegenerateConfirm(false);
+    setLoading(true);
+    const result = await UserApiService.regenerateApiKey(session.api_key);
+    setLoading(false);
+    if (result.success) {
+      await refreshUserData();
     }
   };
 
@@ -214,6 +222,158 @@ const ProfileTab: React.FC = () => {
         ]}
         statusInfo={`Last Updated: ${new Date().toLocaleTimeString()}`}
       />
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: COLORS.PANEL_BG,
+            border: `2px solid ${COLORS.ORANGE}`,
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%'
+          }}>
+            <div style={{
+              color: COLORS.ORANGE,
+              fontSize: '14px',
+              fontWeight: 'bold',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <LogOut size={18} />
+              CONFIRM LOGOUT
+            </div>
+            <div style={{
+              color: COLORS.MUTED,
+              fontSize: '11px',
+              marginBottom: '16px'
+            }}>
+              Are you sure you want to logout from Fincept Terminal?
+            </div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: COLORS.HEADER_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  color: COLORS.WHITE,
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontFamily: 'monospace'
+                }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={confirmLogout}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: COLORS.RED,
+                  border: 'none',
+                  color: COLORS.WHITE,
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  fontWeight: 'bold'
+                }}
+              >
+                LOGOUT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Regenerate API Key Confirmation Modal */}
+      {showRegenerateConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: COLORS.PANEL_BG,
+            border: `2px solid ${COLORS.ORANGE}`,
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%'
+          }}>
+            <div style={{
+              color: COLORS.ORANGE,
+              fontSize: '14px',
+              fontWeight: 'bold',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Key size={18} />
+              REGENERATE API KEY
+            </div>
+            <div style={{
+              color: COLORS.MUTED,
+              fontSize: '11px',
+              marginBottom: '16px'
+            }}>
+              Your current API key will be invalidated. Are you sure you want to continue?
+            </div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowRegenerateConfirm(false)}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: COLORS.HEADER_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  color: COLORS.WHITE,
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontFamily: 'monospace'
+                }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={confirmRegenerateKey}
+                disabled={loading}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: COLORS.ORANGE,
+                  border: 'none',
+                  color: COLORS.WHITE,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  fontWeight: 'bold',
+                  opacity: loading ? 0.5 : 1
+                }}
+              >
+                {loading ? 'REGENERATING...' : 'CONFIRM'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -336,46 +496,58 @@ const SecuritySection: React.FC<{
   showApiKey: boolean;
   setShowApiKey: (show: boolean) => void;
 }> = ({ session, onRegenerateKey, loading, showApiKey, setShowApiKey }) => {
+  const { refreshUserData } = useAuth();
   const apiKey = session?.api_key || '';
   const [mfaLoading, setMfaLoading] = React.useState(false);
   const [showPasswordPrompt, setShowPasswordPrompt] = React.useState(false);
   const [password, setPassword] = React.useState('');
+  const [statusMessage, setStatusMessage] = React.useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const handleEnableMFA = async () => {
     if (!session?.api_key) return;
-    if (confirm('Enable Multi-Factor Authentication? You will receive OTP codes via email for login.')) {
-      setMfaLoading(true);
-      const result = await UserApiService.enableMFA(session.api_key);
-      setMfaLoading(false);
-      if (result.success) {
-        alert('MFA enabled successfully! You will receive OTP codes via email during login.');
-        window.location.reload(); // Refresh to update MFA status
-      } else {
-        alert(`Failed to enable MFA: ${result.error}`);
-      }
+    setMfaLoading(true);
+    setStatusMessage(null);
+    const result = await UserApiService.enableMFA(session.api_key);
+    setMfaLoading(false);
+    if (result.success) {
+      setStatusMessage({ type: 'success', text: 'MFA enabled! You will receive OTP codes via email during login.' });
+      setTimeout(async () => {
+        await refreshUserData();
+        setStatusMessage(null);
+      }, 2000);
+    } else {
+      setStatusMessage({ type: 'error', text: result.error || 'Failed to enable MFA' });
+      setTimeout(() => setStatusMessage(null), 3000);
     }
   };
 
   const handleDisableMFA = async () => {
     if (!session?.api_key) return;
     setShowPasswordPrompt(true);
+    setStatusMessage(null);
   };
 
   const confirmDisableMFA = async () => {
     if (!password) {
-      alert('Please enter your password to disable MFA.');
+      setStatusMessage({ type: 'error', text: 'Please enter your password' });
+      setTimeout(() => setStatusMessage(null), 3000);
       return;
     }
     setMfaLoading(true);
+    setStatusMessage(null);
     const result = await UserApiService.disableMFA(session.api_key, password);
     setMfaLoading(false);
     setShowPasswordPrompt(false);
     setPassword('');
     if (result.success) {
-      alert('MFA disabled successfully!');
-      window.location.reload(); // Refresh to update MFA status
+      setStatusMessage({ type: 'success', text: 'MFA disabled successfully!' });
+      setTimeout(async () => {
+        await refreshUserData();
+        setStatusMessage(null);
+      }, 2000);
     } else {
-      alert(`Failed to disable MFA: ${result.error}`);
+      setStatusMessage({ type: 'error', text: result.error || 'Failed to disable MFA' });
+      setTimeout(() => setStatusMessage(null), 3000);
     }
   };
 
@@ -436,6 +608,21 @@ const SecuritySection: React.FC<{
 
       <DataPanel title="SECURITY STATUS" icon={<Shield size={16} />}>
         <div style={{ padding: '8px 0' }}>
+          {/* Status Message */}
+          {statusMessage && (
+            <div style={{
+              padding: '8px 12px',
+              backgroundColor: statusMessage.type === 'success' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+              border: `1px solid ${statusMessage.type === 'success' ? COLORS.GREEN : COLORS.RED}`,
+              color: statusMessage.type === 'success' ? COLORS.GREEN : COLORS.RED,
+              fontSize: '10px',
+              marginBottom: '12px',
+              fontFamily: 'monospace'
+            }}>
+              {statusMessage.text}
+            </div>
+          )}
+
           <SecurityRow
             label="EMAIL VERIFICATION"
             enabled={session?.user_info?.is_verified}

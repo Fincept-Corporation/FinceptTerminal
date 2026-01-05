@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { CommandBar } from '@/components/command-bar';
 
 // Eagerly loaded tabs (needed immediately)
 import ForumTab from '@/components/tabs/ForumTab';
@@ -964,9 +965,8 @@ function FinxeptTerminalContent() {
           {/* Left: Branding & Status Info */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ backgroundColor: '#ea580c', color: 'white', padding: '2px 5px', fontSize: '8px', fontWeight: 'bold' }}>FINXEPT PROFESSIONAL</span>
-            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>{t('labels.enterCommand')}</span>
             <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
-            <span style={{ color: '#a3a3a3', fontSize: '9px' }}>{t('labels.search')}</span>
+            <CommandBar onExecuteCommand={setActiveTab} />
             <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
             <HeaderTimeDisplay />
             <div style={{ width: '1px', height: '14px', backgroundColor: '#525252' }}></div>
