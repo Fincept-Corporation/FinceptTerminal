@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AuthApiService } from '@/services/authApi';
 import { PaymentApiService } from '@/services/paymentApi';
+import { UserApiService } from '@/services/userApi';
 
 // Response types to match your API
 export interface LoginResponse {
@@ -131,7 +132,7 @@ interface AuthContextType {
   isFirstTimeUser: boolean;
   availablePlans: SubscriptionPlan[];
   isLoadingPlans: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; mfa_required?: boolean }>;
   signup: (
     username: string,
     email: string,
@@ -141,6 +142,7 @@ interface AuthContextType {
     country_code?: string
   ) => Promise<{ success: boolean; error?: string }>;
   verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
+  verifyMfaAndLogin: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   setupGuestAccess: () => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   checkApiConnectivity: () => Promise<boolean>;
@@ -484,7 +486,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
   };
 
   // Login function
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string; mfa_required?: boolean }> => {
     try {
       const result = await AuthApiService.login({ email, password }) as ApiResponse;
 
@@ -497,6 +499,15 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
       // Backend returns: { success: true, data: { api_key: "..." } }
       // But makeApiRequest wraps it again, so we need to check result.data.data
       const apiData = (result.data as any)?.data || result.data;
+
+      // Check if MFA is required
+      if (result.success && apiData && apiData.mfa_required) {
+        return {
+          success: false,
+          mfa_required: true,
+          error: 'MFA verification required'
+        };
+      }
 
       if (result.success && apiData && apiData.api_key) {
         const apiKey = apiData.api_key;
@@ -635,6 +646,61 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     }
   };
 
+  // Verify MFA and complete login
+  const verifyMfaAndLogin = async (email: string, otp: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const result = await UserApiService.verifyMFA(email, otp) as ApiResponse;
+
+      // Backend returns: { success: true, data: { api_key: "..." } }
+      const apiData = (result.data as any)?.data || result.data;
+
+      if (result.success && apiData && apiData.api_key) {
+        const apiKey = apiData.api_key;
+
+        const [userProfile, userSubscription] = await Promise.all([
+          fetchUserProfile(apiKey),
+          fetchUserSubscription(apiKey)
+        ]);
+
+        const newSession: SessionData = {
+          authenticated: true,
+          user_type: 'registered',
+          api_key: apiKey,
+          device_id: generateDeviceId(),
+          user_info: userProfile ? {
+            username: userProfile.username,
+            email: userProfile.email,
+            account_type: userProfile.account_type,
+            credit_balance: userProfile.credit_balance,
+            is_verified: userProfile.is_verified,
+            mfa_enabled: userProfile.mfa_enabled
+          } : {
+            email: email,
+            account_type: 'free',
+            credit_balance: 0
+          },
+          subscription: userSubscription || undefined
+        };
+
+        setSession(newSession);
+        saveSession(newSession);
+        setIsFirstTimeUser(checkIsFirstTimeUser());
+
+        return { success: true };
+      } else {
+        return {
+          success: false,
+          error: result.error || result.message || 'MFA verification failed'
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'MFA verification failed'
+      };
+    }
+  };
+
   // Forgot password function
   const forgotPassword = async (email: string): Promise<{ success: boolean; error?: string }> => {
     try {
@@ -754,6 +820,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     login,
     signup,
     verifyOtp,
+    verifyMfaAndLogin,
     setupGuestAccess,
     logout,
     checkApiConnectivity,

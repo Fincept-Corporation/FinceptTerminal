@@ -337,6 +337,47 @@ const SecuritySection: React.FC<{
   setShowApiKey: (show: boolean) => void;
 }> = ({ session, onRegenerateKey, loading, showApiKey, setShowApiKey }) => {
   const apiKey = session?.api_key || '';
+  const [mfaLoading, setMfaLoading] = React.useState(false);
+  const [showPasswordPrompt, setShowPasswordPrompt] = React.useState(false);
+  const [password, setPassword] = React.useState('');
+
+  const handleEnableMFA = async () => {
+    if (!session?.api_key) return;
+    if (confirm('Enable Multi-Factor Authentication? You will receive OTP codes via email for login.')) {
+      setMfaLoading(true);
+      const result = await UserApiService.enableMFA(session.api_key);
+      setMfaLoading(false);
+      if (result.success) {
+        alert('MFA enabled successfully! You will receive OTP codes via email during login.');
+        window.location.reload(); // Refresh to update MFA status
+      } else {
+        alert(`Failed to enable MFA: ${result.error}`);
+      }
+    }
+  };
+
+  const handleDisableMFA = async () => {
+    if (!session?.api_key) return;
+    setShowPasswordPrompt(true);
+  };
+
+  const confirmDisableMFA = async () => {
+    if (!password) {
+      alert('Please enter your password to disable MFA.');
+      return;
+    }
+    setMfaLoading(true);
+    const result = await UserApiService.disableMFA(session.api_key, password);
+    setMfaLoading(false);
+    setShowPasswordPrompt(false);
+    setPassword('');
+    if (result.success) {
+      alert('MFA disabled successfully!');
+      window.location.reload(); // Refresh to update MFA status
+    } else {
+      alert(`Failed to disable MFA: ${result.error}`);
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -399,12 +440,147 @@ const SecuritySection: React.FC<{
             label="EMAIL VERIFICATION"
             enabled={session?.user_info?.is_verified}
           />
-          <SecurityRow
-            label="TWO-FACTOR AUTHENTICATION"
-            enabled={session?.user_info?.mfa_enabled}
-          />
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '10px 0',
+            borderBottom: `1px solid ${COLORS.BORDER}`
+          }}>
+            <span style={{ color: COLORS.WHITE, fontSize: '11px' }}>MULTI-FACTOR AUTHENTICATION (EMAIL-BASED)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{
+                  color: session?.user_info?.mfa_enabled ? COLORS.GREEN : COLORS.RED,
+                  fontSize: '11px',
+                  fontWeight: 'bold'
+                }}>
+                  {session?.user_info?.mfa_enabled ? 'ENABLED' : 'DISABLED'}
+                </span>
+                {session?.user_info?.mfa_enabled ? (
+                  <CheckCircle size={14} color={COLORS.GREEN} />
+                ) : (
+                  <AlertCircle size={14} color={COLORS.RED} />
+                )}
+              </div>
+              <button
+                onClick={session?.user_info?.mfa_enabled ? handleDisableMFA : handleEnableMFA}
+                disabled={mfaLoading}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: session?.user_info?.mfa_enabled ? COLORS.RED : COLORS.GREEN,
+                  border: 'none',
+                  color: COLORS.WHITE,
+                  cursor: mfaLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '10px',
+                  fontFamily: 'monospace',
+                  fontWeight: 'bold',
+                  opacity: mfaLoading ? 0.5 : 1
+                }}
+              >
+                {mfaLoading ? 'PROCESSING...' : (session?.user_info?.mfa_enabled ? 'DISABLE' : 'ENABLE')}
+              </button>
+            </div>
+          </div>
         </div>
       </DataPanel>
+
+      {/* Password Prompt Modal for Disabling MFA */}
+      {showPasswordPrompt && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: COLORS.PANEL_BG,
+            border: `2px solid ${COLORS.ORANGE}`,
+            padding: '24px',
+            maxWidth: '400px',
+            width: '90%'
+          }}>
+            <div style={{
+              color: COLORS.ORANGE,
+              fontSize: '14px',
+              fontWeight: 'bold',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <Shield size={18} />
+              DISABLE MULTI-FACTOR AUTHENTICATION
+            </div>
+            <div style={{
+              color: COLORS.MUTED,
+              fontSize: '11px',
+              marginBottom: '16px'
+            }}>
+              Please enter your password to confirm disabling MFA:
+            </div>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && confirmDisableMFA()}
+              placeholder="Enter your password"
+              style={{
+                width: '100%',
+                padding: '10px',
+                backgroundColor: COLORS.HEADER_BG,
+                border: `1px solid ${COLORS.BORDER}`,
+                color: COLORS.WHITE,
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                marginBottom: '16px'
+              }}
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowPasswordPrompt(false);
+                  setPassword('');
+                }}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: COLORS.HEADER_BG,
+                  border: `1px solid ${COLORS.BORDER}`,
+                  color: COLORS.WHITE,
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  fontFamily: 'monospace'
+                }}
+              >
+                CANCEL
+              </button>
+              <button
+                onClick={confirmDisableMFA}
+                disabled={mfaLoading}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: COLORS.RED,
+                  border: 'none',
+                  color: COLORS.WHITE,
+                  cursor: mfaLoading ? 'not-allowed' : 'pointer',
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  fontWeight: 'bold',
+                  opacity: mfaLoading ? 0.5 : 1
+                }}
+              >
+                {mfaLoading ? 'PROCESSING...' : 'CONFIRM DISABLE'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -187,6 +187,42 @@ export class UserApiService {
   }
 
   // ========================
+  // MFA (Multi-Factor Authentication)
+  // ========================
+
+  static async enableMFA(apiKey: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/mfa/enable', 'POST', apiKey);
+  }
+
+  static async disableMFA(apiKey: string, password: string): Promise<ApiResponse> {
+    return makeApiRequest('/user/mfa/disable', 'POST', apiKey, { password });
+  }
+
+  static async verifyMFA(email: string, otp: string): Promise<ApiResponse> {
+    // No API key required - called after initial login
+    try {
+      const response = await fetch(getApiEndpoint('/user/verify-mfa'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+      });
+      const data = await response.json();
+      return {
+        success: response.ok,
+        data,
+        error: response.ok ? undefined : data.detail || 'MFA verification failed',
+        status_code: response.status,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error',
+        status_code: 500,
+      };
+    }
+  }
+
+  // ========================
   // NEWSLETTER
   // ========================
 

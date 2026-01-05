@@ -1,11 +1,11 @@
 // File: src/components/auth/LoginScreen.tsx
-// User login screen with email/password authentication and guest access
+// User login screen with email/password authentication, MFA support, and guest access
 
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, Shield } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,7 @@ interface LoginScreenProps {
 }
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
-  const { login, setupGuestAccess } = useAuth();
+  const { login, setupGuestAccess, verifyMfaAndLogin } = useAuth();
   const { t } = useTranslation('auth');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -23,6 +23,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [error, setError] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,8 +42,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
 
       if (result.success) {
         // App.tsx useEffect will handle navigation based on account_type
+      } else if (result.mfa_required) {
+        // MFA is required, show MFA input
+        setMfaRequired(true);
+        setError("");
       } else {
-
         // Provide user-friendly error messages
         const errorMessage = result.error || 'Login failed. Please check your credentials.';
 
@@ -72,6 +77,32 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleMfaVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!mfaCode) {
+      setError('Please enter the MFA code sent to your email.');
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const result = await verifyMfaAndLogin(email, mfaCode);
+
+      if (result.success) {
+        // App.tsx useEffect will handle navigation based on account_type
+      } else {
+        setError(result.error || 'Invalid MFA code. Please check your email and try again.');
+      }
+    } catch (err) {
+      setError('MFA verification failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleGuestAccess = async () => {
     setIsGuestLoading(true);
     setError("");
@@ -91,6 +122,81 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
     }
   };
 
+  // MFA Verification Screen
+  if (mfaRequired) {
+    return (
+      <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Shield className="h-6 w-6 text-blue-400" />
+            <h2 className="text-white text-2xl font-light">Two-Factor Authentication</h2>
+          </div>
+          <p className="text-zinc-400 text-xs leading-5">
+            A verification code has been sent to your email. Please enter it below to complete login.
+          </p>
+        </div>
+
+        <form onSubmit={handleMfaVerify} className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="mfaCode" className="text-white text-xs">
+              Verification Code
+            </Label>
+            <Input
+              id="mfaCode"
+              type="text"
+              placeholder="Enter 6-digit code"
+              value={mfaCode}
+              onChange={(e) => {
+                setMfaCode(e.target.value);
+                if (error) setError("");
+              }}
+              className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 text-center tracking-widest text-lg"
+              disabled={isLoading}
+              maxLength={6}
+              autoComplete="one-time-code"
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="text-red-400 text-xs bg-red-900/20 border border-red-900/50 rounded p-2">
+              {error}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 pt-1">
+            <Button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 text-sm font-normal transition-colors disabled:opacity-50"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <div className="flex items-center justify-center">
+                  <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin mr-1.5"></div>
+                  Verifying...
+                </div>
+              ) : 'Verify & Login'}
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMfaRequired(false);
+                setMfaCode("");
+                setError("");
+              }}
+              className="text-zinc-400 hover:text-zinc-300 text-xs transition-colors"
+              disabled={isLoading}
+            >
+              ← Back to login
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  // Regular Login Screen
   return (
     <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
       <div className="mb-6">
@@ -228,4 +334,4 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
   );
 };
 
-export default LoginScreen
+export default LoginScreen;
