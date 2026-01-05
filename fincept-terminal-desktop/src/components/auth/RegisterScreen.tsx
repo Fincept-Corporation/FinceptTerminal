@@ -111,24 +111,23 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
       console.log('Generated username:', username);
 
       // Parse phone number if provided
-      let parsedPhone: any = null;
+      let phone = '';
+      let country = '';
+      let countryCode = '';
+
       if (phoneNumber) {
         try {
           const { parsePhoneNumber } = await import('libphonenumber-js');
-          parsedPhone = parsePhoneNumber(phoneNumber);
+          const parsed = parsePhoneNumber(phoneNumber);
+          phone = parsed.nationalNumber;
+          country = parsed.country || '';
+          countryCode = `+${parsed.countryCallingCode}`;
         } catch (err) {
           console.error('Failed to parse phone number:', err);
         }
       }
 
-      // Prepare additional registration data
-      const additionalData = {
-        phone: parsedPhone?.nationalNumber || phoneNumber || undefined,
-        country_code: parsedPhone ? `+${parsedPhone.countryCallingCode}` : undefined,
-        country: parsedPhone?.country || undefined
-      };
-
-      const result = await signup(username, formData.email, formData.password, additionalData);
+      const result = await signup(username, formData.email, formData.password, phone, country, countryCode);
 
       if (result.success) {
         console.log('Registration successful, OTP sent to:', formData.email);
@@ -201,24 +200,23 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
       const username = `${formData.firstName.trim()}${formData.lastName.trim()}`.toLowerCase();
 
       // Parse phone number if provided
-      let parsedPhone: any = null;
+      let phone = '';
+      let country = '';
+      let countryCode = '';
+
       if (phoneNumber) {
         try {
           const { parsePhoneNumber } = await import('libphonenumber-js');
-          parsedPhone = parsePhoneNumber(phoneNumber);
+          const parsed = parsePhoneNumber(phoneNumber);
+          phone = parsed.nationalNumber;
+          country = parsed.country || '';
+          countryCode = `+${parsed.countryCallingCode}`;
         } catch (err) {
           console.error('Failed to parse phone number:', err);
         }
       }
 
-      // Prepare additional registration data
-      const additionalData = {
-        phone: parsedPhone?.nationalNumber || phoneNumber || undefined,
-        country_code: parsedPhone ? `+${parsedPhone.countryCallingCode}` : undefined,
-        country: parsedPhone?.country || undefined
-      };
-
-      const result = await signup(username, formData.email, formData.password, additionalData);
+      const result = await signup(username, formData.email, formData.password, phone, country, countryCode);
 
       if (result.success) {
         setError(""); // Clear any previous errors

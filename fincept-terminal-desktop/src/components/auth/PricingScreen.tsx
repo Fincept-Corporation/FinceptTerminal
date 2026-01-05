@@ -101,14 +101,11 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
   // Separate effect to set default selection when plans are loaded
   useEffect(() => {
     if (availablePlans.length > 0 && !selectedPlan) {
-      const currentPlanId = (session?.subscription as any)?.data?.subscription?.plan?.plan_id ||
-                            session?.subscription?.subscription?.plan?.plan_id;
-      // Don't auto-select if user already has current plan, otherwise select basic
-      if (!currentPlanId) {
-        setSelectedPlan('basic');
-      }
+      const currentPlanId = session?.user_info?.account_type || 'free';
+      // Auto-select user's current plan
+      setSelectedPlan(currentPlanId);
     }
-  }, [availablePlans.length, selectedPlan, session?.subscription]);
+  }, [availablePlans.length, selectedPlan, session?.user_info?.account_type]);
 
   const getAnnualPrice = (monthlyPrice: number) => {
     return monthlyPrice * 10; // 2 months free when billed annually

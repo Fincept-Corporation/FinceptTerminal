@@ -136,11 +136,9 @@ interface AuthContextType {
     username: string,
     email: string,
     password: string,
-    additionalData?: {
-      phone?: string;
-      country_code?: string;
-      country?: string;
-    }
+    phone?: string,
+    country?: string,
+    country_code?: string
   ) => Promise<{ success: boolean; error?: string }>;
   verifyOtp: (email: string, otp: string) => Promise<{ success: boolean; error?: string }>;
   setupGuestAccess: () => Promise<{ success: boolean; error?: string }>;
@@ -553,20 +551,19 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     username: string,
     email: string,
     password: string,
-    additionalData?: {
-      phone?: string;
-      country_code?: string;
-      country?: string;
-    }
+    phone?: string,
+    country?: string,
+    country_code?: string
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       const result = await AuthApiService.register({
         username,
         email,
         password,
-        ...(additionalData?.phone && { phone: additionalData.phone }),
-        ...(additionalData?.country_code && { country_code: additionalData.country_code }),
-        ...(additionalData?.country && { country: additionalData.country })
+        phone: phone || null,
+        country: country || null,
+        country_code: country_code || null,
+        preferred_currency: 'USD'
       }) as ApiResponse;
 
       if (result.success) {

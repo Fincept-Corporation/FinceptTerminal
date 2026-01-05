@@ -32,9 +32,10 @@ interface RegisterRequest {
   username: string;
   email: string;
   password: string;
-  phone?: string;
-  country_code?: string;
-  country?: string;
+  phone?: string | null;
+  country?: string | null;
+  country_code?: string | null;
+  preferred_currency?: string | null;
 }
 
 interface VerifyOtpRequest {

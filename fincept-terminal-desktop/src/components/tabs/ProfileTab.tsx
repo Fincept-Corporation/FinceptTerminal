@@ -1,985 +1,557 @@
+// File: src/components/tabs/ProfileTab.tsx
+// Bloomberg-style Professional Profile & Account Management Interface
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigation } from '@/contexts/NavigationContext';
 import { UserApiService } from '@/services/userApi';
-import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { useTranslation } from 'react-i18next';
+import { TabHeader } from '@/components/common/TabHeader';
 import { TabFooter } from '@/components/common/TabFooter';
+import {
+  User, CreditCard, Activity, Shield, Key, RefreshCw,
+  LogOut, Crown, Zap, FileText, CheckCircle, AlertCircle, Eye, EyeOff, BarChart
+} from 'lucide-react';
 
-type ProfileScreen = 'overview' | 'usage' | 'payments' | 'subscriptions' | 'support' | 'settings';
+// Bloomberg Professional Color Palette
+const COLORS = {
+  ORANGE: '#ea580c',
+  WHITE: '#ffffff',
+  RED: '#ef4444',
+  GREEN: '#10b981',
+  GRAY: '#6b7280',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0a0a0a',
+  HEADER_BG: '#1a1a1a',
+  CYAN: '#06b6d4',
+  YELLOW: '#eab308',
+  BORDER: '#262626',
+  MUTED: '#737373'
+};
+
+type Section = 'overview' | 'usage' | 'security' | 'billing';
 
 const ProfileTab: React.FC = () => {
-  const { colors } = useTerminalTheme();
-  const { t } = useTranslation('profile');
-  const { session, logout } = useAuth();
-  const navigation = useNavigation();
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [currentScreen, setCurrentScreen] = useState<ProfileScreen>('overview');
+  const { session, logout, refreshUserData } = useAuth();
+  const [activeSection, setActiveSection] = useState<Section>('overview');
   const [loading, setLoading] = useState(false);
-
-  // Data states
   const [usageData, setUsageData] = useState<any>(null);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
-  const [subscriptions, setSubscriptions] = useState<any[]>([]);
-  const [supportTickets, setSupportTickets] = useState<any[]>([]);
-  const [detailedUsage, setDetailedUsage] = useState<any>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+    fetchSectionData();
+  }, [activeSection, session]);
 
-  // F11 fullscreen toggle
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen();
-      }
-    }
-  };
-
-  const fetchData = async (showNotification = false) => {
+  const fetchSectionData = async () => {
     if (!session?.api_key) return;
-
     setLoading(true);
     try {
-      if (currentScreen === 'usage') {
-        if (session.user_type === 'guest') {
-          const result = await UserApiService.getGuestUsage(session.api_key || '');
-          if (result.success) setUsageData(result.data);
-        } else {
-          const result = await UserApiService.getUserUsage(session.api_key || '');
-          if (result.success) setUsageData(result.data);
-
-          const detailedResult = await UserApiService.getUsageDetails(session.api_key || '');
-          if (detailedResult.success) setDetailedUsage(detailedResult.data);
-        }
-      } else if (currentScreen === 'payments') {
-        const result = await UserApiService.getPaymentHistory(session.api_key || '', 1, 20);
-        if (result.success) setPaymentHistory(result.data?.payments || result.data || []);
-      } else if (currentScreen === 'subscriptions') {
-        const result = await UserApiService.getUserSubscriptions(session.api_key || '');
-        if (result.success) setSubscriptions(result.data?.subscriptions || result.data || []);
-      } else if (currentScreen === 'support') {
-        const result = await UserApiService.getUserTickets(session.api_key || '');
-        if (result.success) setSupportTickets(result.data?.tickets || result.data || []);
-      }
-
-      if (showNotification) {
-        alert('[OK] Profile data refreshed successfully!');
+      if (activeSection === 'usage') {
+        const result = session.user_type === 'guest'
+          ? await UserApiService.getGuestUsage(session.api_key)
+          : await UserApiService.getUserUsage(session.api_key);
+        if (result.success) setUsageData(result.data);
+      } else if (activeSection === 'billing') {
+        const result = await UserApiService.getPaymentHistory(session.api_key, 1, 10);
+        if (result.success) setPaymentHistory(result.data?.payments || []);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
-      if (showNotification) {
-        alert('[FAIL] Failed to refresh data. Please try again.');
-      }
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch data based on current screen
-  useEffect(() => {
-    fetchData();
-  }, [currentScreen, session]);
-
-  const logoutUser = async () => {
-    if (confirm('Are you sure you want to logout?')) {
+  const handleLogout = async () => {
+    if (confirm('Logout from Fincept Terminal?')) {
       await logout();
     }
   };
 
-  const regenerateApiKey = async () => {
+  const handleRegenerateKey = async () => {
     if (!session?.api_key) return;
-    if (confirm('Are you sure you want to regenerate your API key? Your old key will be invalidated.')) {
+    if (confirm('Regenerate API Key? Your old key will be invalidated.')) {
       setLoading(true);
-      const result = await UserApiService.regenerateApiKey(session.api_key || '');
+      const result = await UserApiService.regenerateApiKey(session.api_key);
       setLoading(false);
       if (result.success) {
-        alert(`New API Key: ${result.data?.new_api_key || 'Check your profile'}\n\nPlease save this key securely. You will need to re-login.`);
-        await logout();
-      } else {
-        alert(`Failed to regenerate API key: ${result.error}`);
+        alert('API Key regenerated successfully!');
+        await refreshUserData();
       }
     }
   };
 
-  const extendSession = async () => {
-    if (!session?.api_key) return;
-    setLoading(true);
-    const result = await UserApiService.extendGuestSession(session.api_key || '');
-    setLoading(false);
-    if (result.success) {
-      alert('Session extended successfully!');
-    } else {
-      alert(`Failed to extend session: ${result.error}`);
-    }
-  };
+  const accountType = session?.user_info?.account_type || 'free';
+  const credits = session?.user_info?.credit_balance || 0;
+  const username = session?.user_info?.username || session?.user_info?.email || 'User';
+  const email = session?.user_info?.email || 'N/A';
+  const apiKey = session?.api_key || '';
 
-  const cancelSubscription = async () => {
-    if (!session?.api_key) return;
-    if (confirm('Are you sure you want to cancel your subscription? It will remain active until the end of the billing period.')) {
-      setLoading(true);
-      const result = await UserApiService.cancelSubscription(session.api_key || '');
-      setLoading(false);
-      if (result.success) {
-        alert('Subscription cancelled successfully. It will remain active until the end of your billing period.');
-      } else {
-        alert(`Failed to cancel subscription: ${result.error}`);
-      }
-    }
-  };
-
-  const deleteAccount = async () => {
-    if (!session?.api_key) return;
-    const confirmation = prompt('This action cannot be undone. Type "DELETE MY ACCOUNT" to confirm:');
-    if (confirmation === 'DELETE MY ACCOUNT') {
-      setLoading(true);
-      const result = await UserApiService.deleteUserAccount(session.api_key || '', { confirm: true });
-      setLoading(false);
-      if (result.success) {
-        alert('Your account has been deleted.');
-        await logout();
-      } else {
-        alert(`Failed to delete account: ${result.error}`);
-      }
-    }
-  };
-
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const formatCurrency = (amount: number) => {
-    return `$${(amount / 100).toFixed(2)}`;
-  };
-
-  // Guest Profile View
-  const renderGuestProfile = () => {
-    const displayDeviceId = session?.device_id?.substring(0, 30) + "..." || 'Unknown';
-    const requestsToday = session?.requests_today || usageData?.requests_today || 0;
-    const dailyLimit = session?.daily_limit || usageData?.daily_limit || 50;
-    const remaining = Math.max(0, dailyLimit - requestsToday);
-    const usagePercent = (requestsToday / dailyLimit) * 100;
-
-    return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: colors.background, overflow: 'hidden' }}>
-        {/* Header */}
-        <div style={{ backgroundColor: colors.panel, borderBottom: `1px solid ${colors.textMuted}`, padding: '4px 8px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
-            <span style={{ color: colors.primary, fontWeight: 'bold' }}>{t('guestProfile')}</span>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.textMuted }}>{t('requests')}:</span>
-            <span style={{ color: colors.accent }}>{requestsToday}/{dailyLimit}</span>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.textMuted }}>{t('remaining')}:</span>
-            <span style={{ color: remaining > 10 ? colors.secondary : colors.alert }}>{remaining}</span>
-            <button
-              onClick={() => fetchData(true)}
-              disabled={loading}
-              style={{
-                marginLeft: 'auto',
-                padding: '2px 8px',
-                backgroundColor: colors.primary,
-                color: colors.background,
-                border: 'none',
-                borderRadius: '2px',
-                fontSize: '11px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontWeight: 'bold',
-                opacity: loading ? 0.5 : 1
-              }}
-            >
-              {loading ? t('loading') : t('refresh')}
-            </button>
-          </div>
-        </div>
-
-        {/* Function Keys Bar */}
-        <div style={{ backgroundColor: colors.panel, borderBottom: `1px solid ${colors.textMuted}`, padding: '2px 4px', flexShrink: 0 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '2px' }}>
-            {[
-              { key: "F1", label: t('overview'), screen: "overview" },
-              { key: "F2", label: t('usage'), screen: "usage" },
-              { key: "F3", label: t('settings'), screen: "settings" },
-              { key: "F4", label: t('refresh'), action: 'refresh' },
-              { key: "F5", label: t('pricing'), action: 'pricing' },
-              { key: "F6", label: t('logout'), action: 'logout' }
-            ].map(item => (
-              <button key={item.key}
-                onClick={() => {
-                  if (item.action === 'refresh') window.location.reload();
-                  else if (item.action === 'extend') extendSession();
-                  else if (item.action === 'pricing') navigation.navigateToPricing();
-                  else if (item.action === 'logout') logoutUser();
-                  else if (item.screen) setCurrentScreen(item.screen as ProfileScreen);
-                }}
-                disabled={loading && (item.action === 'extend' || item.action === 'refresh')}
-                style={{
-                  backgroundColor: currentScreen === item.screen ? colors.primary : colors.background,
-                  border: `1px solid ${colors.textMuted}`,
-                  color: currentScreen === item.screen ? colors.background : colors.text,
-                  padding: '2px 4px',
-                  fontSize: '12px',
-                  height: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: currentScreen === item.screen ? 'bold' : 'normal',
-                  cursor: 'pointer'
-                }}>
-                <span style={{ color: colors.warning }}>{item.key}:</span>
-                <span style={{ marginLeft: '2px' }}>{item.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '4px', backgroundColor: '#050505' }}>
-          {currentScreen === 'overview' && (
-            <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
-              {/* Left Column */}
-              <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', overflow: 'auto' }}>
-                <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-                  {t('sessionInformation')}
-                </div>
-                <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-
-                <div style={{ marginBottom: '8px', fontSize: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                    <span style={{ color: colors.textMuted }}>{t('accountType')}:</span>
-                    <span style={{ color: colors.warning, fontWeight: 'bold' }}>{t('guest')}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                    <span style={{ color: colors.textMuted }}>{t('sessionExpires')}:</span>
-                    <span style={{ color: colors.alert }}>{session?.expires_at ? formatDate(session.expires_at) : 'N/A'}</span>
-                  </div>
-                  <div style={{ marginBottom: '2px', paddingTop: '4px', borderTop: `1px solid ${colors.textMuted}` }}>
-                    <span style={{ color: colors.textMuted }}>{t('deviceId')}:</span>
-                    <div style={{ color: colors.text, fontSize: '11px', marginTop: '2px', wordBreak: 'break-all' }}>
-                      {displayDeviceId}
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: '2px', paddingTop: '4px', borderTop: `1px solid ${colors.textMuted}` }}>
-                    <span style={{ color: colors.textMuted }}>{t('apiKey')}:</span>
-                    <div style={{ color: colors.text, fontSize: '11px', marginTop: '2px', wordBreak: 'break-all' }}>
-                      {session?.api_key ? `${session.api_key.substring(0, 40)}...` : 'N/A'}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '12px' }}>
-                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-                    {t('dailyUsageStats')}
-                  </div>
-                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-
-                  <div style={{ fontSize: '12px', marginBottom: '6px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <span style={{ color: colors.textMuted }}>{t('todaysRequests')}:</span>
-                      <span style={{ color: colors.text, fontWeight: 'bold' }}>{requestsToday}/{dailyLimit}</span>
-                    </div>
-                    <div style={{ backgroundColor: colors.background, height: '6px', marginBottom: '4px', border: `1px solid ${colors.textMuted}` }}>
-                      <div style={{
-                        width: `${usagePercent}%`,
-                        height: '100%',
-                        backgroundColor: remaining > 10 ? colors.secondary : colors.alert,
-                        transition: 'width 0.3s'
-                      }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <span style={{ color: colors.textMuted }}>{t('remaining')}:</span>
-                      <span style={{ color: remaining > 10 ? colors.secondary : colors.alert, fontWeight: 'bold' }}>{remaining}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: colors.textMuted }}>{t('status')}:</span>
-                      <span style={{ color: colors.secondary }}>{t('active')}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column */}
-              <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', overflow: 'auto' }}>
-                <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-                  {t('upgradeToFullAccess')}
-                </div>
-                <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-
-                <div style={{ fontSize: '12px', color: colors.text, lineHeight: '1.4', marginBottom: '8px' }}>
-                  <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '4px' }}>
-                    {t('createAccountUnlock')}:
-                  </div>
-                  <div style={{ marginLeft: '8px' }}>
-                    <div>- {t('unlimitedApiRequests')}</div>
-                    <div>- {t('permanentApiKey')}</div>
-                    <div>- {t('allDatabaseAccess')}</div>
-                    <div>- {t('premiumFeatures')}</div>
-                    <div>- {t('dataMarketplace')}</div>
-                    <div>- {t('advancedAnalytics')}</div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => navigation.navigateToPricing()}
-                  style={{
-                    width: '100%',
-                    padding: '6px',
-                    backgroundColor: colors.primary,
-                    border: 'none',
-                    color: colors.background,
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {t('viewPricingPlans')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {currentScreen === 'usage' && renderUsageScreen()}
-          {currentScreen === 'settings' && renderGuestSettingsScreen()}
-        </div>
-
-        {/* Status Bar */}
-        <div style={{ borderTop: `1px solid ${colors.textMuted}`, backgroundColor: colors.panel, padding: '2px 8px', fontSize: '11px', color: colors.textMuted, flexShrink: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>FinceptTerminal v3.0.11 | Guest Session</span>
-            <span>Device: {session?.device_id?.substring(0, 20) || 'UNKNOWN'} | Status: {loading ? 'UPDATING' : 'READY'}</span>
-          </div>
-        </div>
+  const headerActions = (
+    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div style={{
+        padding: '6px 12px',
+        backgroundColor: COLORS.PANEL_BG,
+        border: `1px solid ${COLORS.BORDER}`,
+        fontFamily: 'monospace',
+        fontSize: '11px'
+      }}>
+        <span style={{ color: COLORS.MUTED }}>CREDITS: </span>
+        <span style={{ color: COLORS.CYAN, fontWeight: 'bold' }}>{credits.toLocaleString()}</span>
       </div>
-    );
-  };
-
-  // Registered User Profile View
-  const renderUserProfile = () => {
-    const userInfo = session?.user_info;
-    const accountType = userInfo?.account_type || 'free';
-    const hasSubscription = (session?.subscription as any)?.data?.has_subscription || session?.subscription?.has_subscription;
-    const subscriptionPlan = (session?.subscription as any)?.data?.subscription?.plan || session?.subscription?.subscription?.plan;
-    const subscriptionStatus = (session?.subscription as any)?.data?.subscription?.status || session?.subscription?.subscription?.status;
-    const creditBalance = userInfo?.credit_balance ?? 0;
-
-    const accountTypeColor = {
-      free: colors.textMuted,
-      starter: colors.info,
-      professional: colors.purple,
-      enterprise: colors.primary,
-      unlimited: colors.warning
-    }[accountType] || colors.text;
-
-    const totalRequests = usageData?.total_requests || 0;
-    const todayRequests = usageData?.requests_today || usageData?.today_requests || 0;
-
-    return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: colors.background, overflow: 'hidden' }}>
-        {/* Header */}
-        <div style={{ backgroundColor: colors.panel, borderBottom: `1px solid ${colors.textMuted}`, padding: '4px 8px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', marginBottom: '2px' }}>
-            <span style={{ color: colors.primary, fontWeight: 'bold' }}>FINCEPT TERMINAL PROFILE</span>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.accent, fontWeight: 'bold' }}>
-              {userInfo?.username?.toUpperCase() || userInfo?.email?.split('@')[0]?.toUpperCase() || 'USER'}
-            </span>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.text }}>{currentTime.toISOString().replace('T', ' ').substring(0, 19)} UTC</span>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.textMuted }}>CREDITS:</span>
-            <span style={{ color: creditBalance > 0 ? colors.secondary : colors.alert, fontWeight: 'bold' }}>
-              {creditBalance.toFixed(2)}
-            </span>
-            <span style={{ color: colors.text }}>|</span>
-            <span style={{ color: colors.textMuted }}>PLAN:</span>
-            <span style={{ color: accountTypeColor, fontWeight: 'bold' }}>{accountType.toUpperCase()}</span>
-            <button
-              onClick={() => fetchData(true)}
-              disabled={loading}
-              style={{
-                marginLeft: 'auto',
-                padding: '3px 12px',
-                backgroundColor: colors.primary,
-                color: colors.background,
-                border: 'none',
-                borderRadius: '3px',
-                fontSize: '11px',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                fontWeight: 'bold',
-                opacity: loading ? 0.5 : 1
-              }}
-            >
-              {loading ? 'LOADING...' : '↻ REFRESH'}
-            </button>
-          </div>
-        </div>
-
-        {/* Function Keys Bar */}
-        <div style={{ backgroundColor: colors.panel, borderBottom: `1px solid ${colors.textMuted}`, padding: '2px 4px', flexShrink: 0 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '2px' }}>
-            {[
-              { key: "F1", label: "OVERVIEW", screen: "overview" },
-              { key: "F2", label: "USAGE", screen: "usage" },
-              { key: "F3", label: "PAYMENTS", screen: "payments" },
-              { key: "F4", label: "SUBS", screen: "subscriptions" },
-              { key: "F5", label: "SUPPORT", screen: "support" },
-              { key: "F6", label: "SETTINGS", screen: "settings" },
-              { key: "F7", label: "CREDITS", action: 'pricing' },
-              { key: "F8", label: "REGEN", action: 'regen' },
-              { key: "F9", label: "", screen: "" },
-              { key: "F10", label: "", screen: "" },
-              { key: "F11", label: "FULL", action: 'fullscreen' },
-              { key: "F12", label: "LOGOUT", action: 'logout' }
-            ].map(item => (
-              <button key={item.key}
-                onClick={() => {
-                  if (item.action === 'logout') logoutUser();
-                  else if (item.action === 'pricing') navigation.navigateToPricing();
-                  else if (item.action === 'regen') regenerateApiKey();
-                  else if (item.action === 'fullscreen') toggleFullscreen();
-                  else if (item.screen) setCurrentScreen(item.screen as ProfileScreen);
-                }}
-                disabled={!item.label || (loading && item.action === 'regen')}
-                style={{
-                  backgroundColor: currentScreen === item.screen ? colors.primary : colors.background,
-                  border: `1px solid ${colors.textMuted}`,
-                  color: currentScreen === item.screen ? colors.background : colors.text,
-                  padding: '2px 4px',
-                  fontSize: '12px',
-                  height: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: currentScreen === item.screen ? 'bold' : 'normal',
-                  cursor: item.label ? 'pointer' : 'default',
-                  opacity: item.label ? 1 : 0.3
-                }}>
-                <span style={{ color: colors.warning }}>{item.key}:</span>
-                {item.label && <span style={{ marginLeft: '2px' }}>{item.label}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '4px', backgroundColor: '#050505' }}>
-          {currentScreen === 'overview' && (
-            <div style={{ display: 'flex', gap: '4px', height: '100%' }}>
-              {/* Left Column */}
-              <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', overflow: 'auto' }}>
-                {/* Credits Section */}
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-                    CREDIT BALANCE
-                  </div>
-                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <div style={{ color: colors.text, fontSize: '24px', fontWeight: 'bold' }}>
-                      {creditBalance.toFixed(2)}
-                    </div>
-                    <button
-                      onClick={() => navigation.navigateToPricing()}
-                      style={{
-                        padding: '4px 8px',
-                        backgroundColor: colors.secondary,
-                        border: 'none',
-                        color: colors.background,
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      ADD CREDITS
-                    </button>
-                  </div>
-                  <div style={{ color: colors.textMuted, fontSize: '11px' }}>
-                    Available for API calls and premium features
-                  </div>
-                </div>
-
-                {/* Account Details */}
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-                    ACCOUNT DETAILS
-                  </div>
-                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-                  <div style={{ fontSize: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <span style={{ color: colors.textMuted }}>Username:</span>
-                      <span style={{ color: colors.text, fontWeight: 'bold' }}>{userInfo?.username || 'N/A'}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <span style={{ color: colors.textMuted }}>Email:</span>
-                      <span style={{ color: colors.text }}>{userInfo?.email || 'N/A'}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <span style={{ color: colors.textMuted }}>Account Type:</span>
-                      <span style={{ color: accountTypeColor, fontWeight: 'bold' }}>{accountType.toUpperCase()}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <span style={{ color: colors.textMuted }}>Member Since:</span>
-                      <span style={{ color: colors.text }}>{formatDate((userInfo as any)?.created_at)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: colors.textMuted }}>User ID:</span>
-                      <span style={{ color: colors.textMuted, fontSize: '11px' }}>#{(userInfo as any)?.id || 'N/A'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* API Key */}
-                <div>
-                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-                    API AUTHENTICATION
-                  </div>
-                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-                  <div style={{ fontSize: '12px' }}>
-                    <div style={{ color: colors.textMuted, marginBottom: '2px' }}>API Key:</div>
-                    <div style={{ backgroundColor: colors.background, padding: '4px', marginBottom: '4px', border: `1px solid ${colors.textMuted}`, fontSize: '11px', wordBreak: 'break-all', color: colors.text }}>
-                      {session?.api_key || 'No API key available'}
-                    </div>
-                    <button
-                      onClick={regenerateApiKey}
-                      disabled={loading}
-                      style={{
-                        padding: '4px 8px',
-                        backgroundColor: colors.background,
-                        border: `1px solid ${colors.purple}`,
-                        color: colors.purple,
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        width: '100%'
-                      }}
-                    >
-                      REGENERATE API KEY
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column */}
-              <div style={{ flex: 1, backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', overflow: 'auto' }}>
-                {/* Subscription Info */}
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-                    SUBSCRIPTION STATUS
-                  </div>
-                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-                  {hasSubscription && subscriptionPlan ? (
-                    <div style={{ fontSize: '12px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                        <span style={{ color: colors.textMuted }}>Plan:</span>
-                        <span style={{ color: colors.secondary, fontWeight: 'bold' }}>{subscriptionPlan.name}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                        <span style={{ color: colors.textMuted }}>Price:</span>
-                        <span style={{ color: colors.text }}>${subscriptionPlan.price_usd / 100}/mo</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                        <span style={{ color: colors.textMuted }}>API Calls:</span>
-                        <span style={{ color: colors.accent, fontWeight: 'bold' }}>
-                          {subscriptionPlan.api_calls_limit === -1 ? 'UNLIMITED' :
-                            subscriptionPlan.api_calls_limit != null ? subscriptionPlan.api_calls_limit.toLocaleString() : 'N/A'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <span style={{ color: colors.textMuted }}>Status:</span>
-                        <span style={{ color: colors.secondary, fontWeight: 'bold' }}>{subscriptionStatus?.toUpperCase()}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <button
-                          onClick={cancelSubscription}
-                          disabled={loading}
-                          style={{
-                            flex: 1,
-                            padding: '4px',
-                            backgroundColor: colors.background,
-                            border: `1px solid ${colors.alert}`,
-                            color: colors.alert,
-                            fontSize: '11px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          CANCEL
-                        </button>
-                        <button
-                          onClick={() => navigation.navigateToPricing()}
-                          style={{
-                            flex: 1,
-                            padding: '4px',
-                            backgroundColor: colors.background,
-                            border: `1px solid ${colors.info}`,
-                            color: colors.info,
-                            fontSize: '11px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          CHANGE
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '12px' }}>
-                      <div style={{ color: colors.warning, marginBottom: '4px', fontWeight: 'bold' }}>No active subscription</div>
-                      <div style={{ color: colors.text, marginBottom: '6px', lineHeight: '1.4' }}>
-                        <div>- Unlimited API requests</div>
-                        <div>- Priority support</div>
-                        <div>- Advanced features</div>
-                        <div>- Data marketplace access</div>
-                      </div>
-                      <button
-                        onClick={() => navigation.navigateToPricing()}
-                        style={{
-                          width: '100%',
-                          padding: '6px',
-                          backgroundColor: colors.primary,
-                          border: 'none',
-                          color: colors.background,
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        VIEW PLANS
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Usage Stats Quick View */}
-                <div>
-                  <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-                    API USAGE SUMMARY
-                  </div>
-                  <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-                  <div style={{ fontSize: '12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                      <span style={{ color: colors.textMuted }}>Total Requests:</span>
-                      <span style={{ color: colors.text }}>{totalRequests.toLocaleString()}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: colors.textMuted }}>Today's Requests:</span>
-                      <span style={{ color: colors.accent }}>{todayRequests}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {currentScreen === 'usage' && renderUsageScreen()}
-          {currentScreen === 'payments' && renderPaymentsScreen()}
-          {currentScreen === 'subscriptions' && renderSubscriptionsScreen()}
-          {currentScreen === 'support' && renderSupportScreen()}
-          {currentScreen === 'settings' && renderSettingsScreen()}
-        </div>
-
-        {/* Status Bar */}
-        <div style={{ borderTop: `1px solid ${colors.textMuted}`, backgroundColor: colors.panel, padding: '2px 8px', fontSize: '11px', color: colors.textMuted, flexShrink: 0 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span>FinceptTerminal v3.0.11 | User: {userInfo?.username || 'N/A'}</span>
-            <span>Account: {accountType.toUpperCase()} | Requests: {todayRequests.toLocaleString()} | Status: {loading ? 'UPDATING' : 'READY'}</span>
-          </div>
-        </div>
+      <div style={{
+        padding: '6px 12px',
+        backgroundColor: COLORS.PANEL_BG,
+        border: `1px solid ${COLORS.BORDER}`,
+        fontFamily: 'monospace',
+        fontSize: '11px'
+      }}>
+        <span style={{ color: COLORS.MUTED }}>PLAN: </span>
+        <span style={{ color: COLORS.ORANGE, fontWeight: 'bold' }}>{accountType.toUpperCase()}</span>
       </div>
-    );
-  };
-
-  const renderUsageScreen = () => {
-    return (
-      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
-        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-          API USAGE STATISTICS
-        </div>
-        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-        {loading ? (
-          <div style={{ color: colors.textMuted, fontSize: '12px' }}>Loading usage data...</div>
-        ) : usageData ? (
-          <div style={{ fontSize: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-              <span style={{ color: colors.textMuted }}>Total Requests:</span>
-              <span style={{ color: colors.text, fontWeight: 'bold' }}>{usageData.total_requests?.toLocaleString() || 'N/A'}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-              <span style={{ color: colors.textMuted }}>Today's Requests:</span>
-              <span style={{ color: colors.accent, fontWeight: 'bold' }}>{usageData.requests_today || usageData.today_requests || 0}</span>
-            </div>
-            {detailedUsage && (
-              <>
-                <div style={{ borderTop: `1px solid ${colors.textMuted}`, marginTop: '6px', paddingTop: '6px' }}>
-                  <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '4px' }}>Detailed Usage</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                    <span style={{ color: colors.textMuted }}>This Month:</span>
-                    <span style={{ color: colors.text }}>{detailedUsage.this_month?.toLocaleString() || 'N/A'}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: colors.textMuted }}>Last 30 Days:</span>
-                    <span style={{ color: colors.text }}>{detailedUsage.last_30_days?.toLocaleString() || 'N/A'}</span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <div style={{ color: colors.textMuted, fontSize: '12px' }}>No usage data available</div>
-        )}
-      </div>
-    );
-  };
-
-  const renderPaymentsScreen = () => {
-    return (
-      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
-        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-          PAYMENT HISTORY
-        </div>
-        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-        {loading ? (
-          <div style={{ color: colors.textMuted, fontSize: '12px' }}>Loading payment history...</div>
-        ) : paymentHistory.length > 0 ? (
-          paymentHistory.map((payment: any, idx: number) => (
-            <div key={idx} style={{
-              backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-              borderLeft: `2px solid ${colors.secondary}`,
-              paddingLeft: '4px',
-              marginBottom: '4px',
-              fontSize: '12px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                <span style={{ color: colors.textMuted }}>Amount:</span>
-                <span style={{ color: colors.secondary, fontWeight: 'bold' }}>
-                  {formatCurrency(payment.amount || payment.amount_paid || 0)}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1px' }}>
-                <span style={{ color: colors.textMuted }}>Date:</span>
-                <span style={{ color: colors.text }}>{formatDate(payment.created_at || payment.payment_date)}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: colors.textMuted }}>Status:</span>
-                <span style={{ color: payment.status === 'completed' ? colors.secondary : colors.warning, fontWeight: 'bold' }}>
-                  {payment.status?.toUpperCase() || 'N/A'}
-                </span>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div style={{ color: colors.textMuted, fontSize: '12px' }}>No payment history found</div>
-        )}
-      </div>
-    );
-  };
-
-  const renderSubscriptionsScreen = () => {
-    return (
-      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
-        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-          DATABASE SUBSCRIPTIONS
-        </div>
-        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-        {loading ? (
-          <div style={{ color: colors.textMuted, fontSize: '12px' }}>Loading subscriptions...</div>
-        ) : subscriptions.length > 0 ? (
-          subscriptions.map((sub: any, idx: number) => (
-            <div key={idx} style={{
-              backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-              borderLeft: `2px solid ${colors.purple}`,
-              paddingLeft: '4px',
-              marginBottom: '4px',
-              fontSize: '12px'
-            }}>
-              <div style={{ color: colors.purple, fontWeight: 'bold', marginBottom: '1px' }}>
-                {sub.database_name || sub.name || 'Unknown Database'}
-              </div>
-              <div style={{ color: colors.textMuted }}>
-                Subscribed: {formatDate(sub.subscribed_at || sub.created_at)}
-              </div>
-            </div>
-          ))
-        ) : (
-          <div style={{ color: colors.textMuted, fontSize: '12px' }}>No database subscriptions found</div>
-        )}
-      </div>
-    );
-  };
-
-  const renderSupportScreen = () => {
-    return (
-      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
-        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-          SUPPORT TICKETS
-        </div>
-        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-        {loading ? (
-          <div style={{ color: colors.textMuted, fontSize: '12px' }}>Loading tickets...</div>
-        ) : supportTickets.length > 0 ? (
-          supportTickets.map((ticket: any, idx: number) => (
-            <div key={idx} style={{
-              backgroundColor: idx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-              borderLeft: `2px solid ${colors.info}`,
-              paddingLeft: '4px',
-              marginBottom: '4px',
-              fontSize: '12px'
-            }}>
-              <div style={{ color: colors.info, fontWeight: 'bold', marginBottom: '1px' }}>
-                #{ticket.id} - {ticket.subject}
-              </div>
-              <div style={{ color: colors.textMuted, marginBottom: '2px', fontSize: '11px' }}>
-                {ticket.description?.substring(0, 100)}...
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: colors.textMuted }}>Status:</span>
-                <span style={{ color: ticket.status === 'closed' ? colors.secondary : colors.warning, fontWeight: 'bold' }}>
-                  {ticket.status?.toUpperCase()}
-                </span>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div>
-            <div style={{ color: colors.textMuted, fontSize: '12px', marginBottom: '6px' }}>No support tickets found</div>
-            <button
-              onClick={() => alert('Create ticket feature coming soon')}
-              style={{
-                padding: '6px',
-                backgroundColor: colors.info,
-                border: 'none',
-                color: colors.background,
-                fontSize: '12px',
-                fontWeight: 'bold',
-                cursor: 'pointer'
-              }}
-            >
-              CREATE NEW TICKET
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderSettingsScreen = () => {
-    return (
-      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
-        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-          ACCOUNT SETTINGS - DANGER ZONE
-        </div>
-        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-        <div style={{ fontSize: '12px' }}>
-          <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '4px' }}>WARNING</div>
-          <div style={{ color: colors.textMuted, marginBottom: '8px', lineHeight: '1.4' }}>
-            Deleting your account is permanent and cannot be undone. All your data, subscriptions, payment history, and API access will be permanently removed.
-          </div>
-          <button
-            onClick={deleteAccount}
-            disabled={loading}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: colors.alert,
-              border: 'none',
-              color: colors.text,
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            DELETE ACCOUNT PERMANENTLY
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  const renderGuestSettingsScreen = () => {
-    return (
-      <div style={{ backgroundColor: colors.panel, border: `1px solid ${colors.textMuted}`, padding: '4px', height: '100%', overflow: 'auto' }}>
-        <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '4px' }}>
-          SESSION SETTINGS - DANGER ZONE
-        </div>
-        <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
-        <div style={{ fontSize: '12px' }}>
-          <div style={{ color: colors.warning, fontWeight: 'bold', marginBottom: '4px' }}>WARNING</div>
-          <div style={{ color: colors.textMuted, marginBottom: '8px', lineHeight: '1.4' }}>
-            Deleting your guest session will remove all your data. This action cannot be undone.
-          </div>
-          <button
-            onClick={async () => {
-              if (confirm('Are you sure you want to delete your guest session?')) {
-                if (session?.api_key) {
-                  setLoading(true);
-                  const result = await UserApiService.deleteGuestSession(session.api_key || '');
-                  setLoading(false);
-                  if (result.success) {
-                    alert('Guest session deleted successfully.');
-                    await logout();
-                  } else {
-                    alert(`Failed to delete session: ${result.error}`);
-                  }
-                }
-              }
-            }}
-            disabled={loading}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: colors.alert,
-              border: 'none',
-              color: colors.text,
-              fontSize: '12px',
-              fontWeight: 'bold',
-              cursor: 'pointer'
-            }}
-          >
-            DELETE SESSION PERMANENTLY
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // Main render
-  if (!session) {
-    return (
-      <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background, color: colors.text }}>
-        <div style={{ textAlign: 'center', fontSize: '12px' }}>
-          <div style={{ color: colors.alert, marginBottom: '8px', fontWeight: 'bold' }}>NO SESSION</div>
-          <div style={{ color: colors.textMuted }}>Unable to load profile</div>
-        </div>
-      </div>
-    );
-  }
-
-  const profileContent = session.user_type === 'guest' ? renderGuestProfile() : renderUserProfile();
+      <button
+        onClick={() => fetchSectionData()}
+        style={{
+          padding: '6px 12px',
+          backgroundColor: COLORS.HEADER_BG,
+          border: `1px solid ${COLORS.BORDER}`,
+          color: COLORS.WHITE,
+          cursor: 'pointer',
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}
+      >
+        <RefreshCw size={12} />
+        REFRESH
+      </button>
+    </div>
+  );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {profileContent}
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: COLORS.DARK_BG,
+      fontFamily: 'Consolas, "Courier New", monospace'
+    }}>
+      <TabHeader
+        title="PROFILE & ACCOUNT"
+        subtitle={`${username} | ${email}`}
+        icon={<User size={20} />}
+        actions={headerActions}
+      />
+
+      {/* Navigation Bar */}
+      <div style={{
+        borderBottom: `1px solid ${COLORS.BORDER}`,
+        backgroundColor: COLORS.HEADER_BG,
+        display: 'flex',
+        gap: '0',
+        flexShrink: 0
+      }}>
+        {[
+          { id: 'overview', label: 'OVERVIEW', icon: User },
+          { id: 'usage', label: 'USAGE & CREDITS', icon: Activity },
+          { id: 'security', label: 'SECURITY', icon: Shield },
+          { id: 'billing', label: 'BILLING', icon: CreditCard },
+        ].map(section => (
+          <button
+            key={section.id}
+            onClick={() => setActiveSection(section.id as Section)}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: activeSection === section.id ? COLORS.PANEL_BG : 'transparent',
+              border: 'none',
+              borderBottom: activeSection === section.id ? `2px solid ${COLORS.ORANGE}` : '2px solid transparent',
+              color: activeSection === section.id ? COLORS.ORANGE : COLORS.MUTED,
+              cursor: 'pointer',
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              transition: 'all 0.2s'
+            }}
+          >
+            {React.createElement(section.icon, { size: 14 })}
+            {section.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content Area */}
+      <div style={{
+        flex: 1,
+        overflow: 'auto',
+        padding: '16px',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        {activeSection === 'overview' && <OverviewSection session={session} onLogout={handleLogout} />}
+        {activeSection === 'usage' && <UsageSection usageData={usageData} loading={loading} session={session} />}
+        {activeSection === 'security' && (
+          <SecuritySection
+            session={session}
+            onRegenerateKey={handleRegenerateKey}
+            loading={loading}
+            showApiKey={showApiKey}
+            setShowApiKey={setShowApiKey}
+          />
+        )}
+        {activeSection === 'billing' && <BillingSection paymentHistory={paymentHistory} loading={loading} />}
+      </div>
 
       <TabFooter
         tabName="PROFILE"
         leftInfo={[
-          { label: `Type: ${session.user_type?.toUpperCase()}`, color: colors.textMuted },
-          { label: `Screen: ${currentScreen?.toUpperCase()}`, color: colors.textMuted },
+          { label: 'USER', value: username, color: COLORS.CYAN },
+          { label: 'TYPE', value: session?.user_type?.toUpperCase(), color: COLORS.WHITE }
         ]}
-        statusInfo={session.user_info?.email || 'Guest Session'}
-        backgroundColor={colors.panel}
-        borderColor={colors.textMuted}
+        statusInfo={`Last Updated: ${new Date().toLocaleTimeString()}`}
       />
     </div>
   );
 };
+
+// Overview Section
+const OverviewSection: React.FC<{ session: any; onLogout: () => void }> = ({ session, onLogout }) => {
+  const accountType = session?.user_info?.account_type || 'free';
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      {/* Account Info */}
+      <DataPanel title="ACCOUNT INFORMATION" icon={<User size={16} />}>
+        <DataRow label="USERNAME" value={session?.user_info?.username || 'N/A'} />
+        <DataRow label="EMAIL" value={session?.user_info?.email || 'N/A'} />
+        <DataRow label="USER TYPE" value={session?.user_type?.toUpperCase() || 'N/A'} />
+        <DataRow label="ACCOUNT TYPE" value={accountType.toUpperCase()} valueColor={COLORS.ORANGE} />
+        <DataRow
+          label="EMAIL VERIFIED"
+          value={session?.user_info?.is_verified ? 'YES' : 'NO'}
+          valueColor={session?.user_info?.is_verified ? COLORS.GREEN : COLORS.RED}
+        />
+        <DataRow
+          label="2FA ENABLED"
+          value={session?.user_info?.mfa_enabled ? 'YES' : 'NO'}
+          valueColor={session?.user_info?.mfa_enabled ? COLORS.GREEN : COLORS.RED}
+        />
+      </DataPanel>
+
+      {/* Credits & Balance */}
+      <DataPanel title="CREDITS & BALANCE" icon={<Zap size={16} />}>
+        <div style={{ padding: '20px 0', textAlign: 'center', borderBottom: `1px solid ${COLORS.BORDER}` }}>
+          <div style={{ fontSize: '36px', color: COLORS.CYAN, fontWeight: 'bold', marginBottom: '8px' }}>
+            {(session?.user_info?.credit_balance || 0).toLocaleString()}
+          </div>
+          <div style={{ fontSize: '11px', color: COLORS.MUTED }}>AVAILABLE CREDITS</div>
+        </div>
+        <div style={{ padding: '12px 0' }}>
+          <DataRow label="PLAN" value={accountType.toUpperCase()} valueColor={COLORS.ORANGE} />
+          {session?.user_type === 'guest' && (
+            <>
+              <DataRow label="DAILY LIMIT" value={session?.daily_limit?.toString() || '0'} />
+              <DataRow label="REQUESTS TODAY" value={session?.requests_today?.toString() || '0'} />
+            </>
+          )}
+        </div>
+      </DataPanel>
+
+      {/* Quick Actions */}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <DataPanel title="QUICK ACTIONS" icon={<Activity size={16} />}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', padding: '8px 0' }}>
+            <ActionButton label="REFRESH DATA" onClick={() => window.location.reload()} />
+            <ActionButton label="UPGRADE PLAN" onClick={() => {}} />
+            <ActionButton label="SETTINGS" onClick={() => {}} />
+            <ActionButton label="LOGOUT" onClick={onLogout} danger />
+          </div>
+        </DataPanel>
+      </div>
+    </div>
+  );
+};
+
+// Usage Section
+const UsageSection: React.FC<{ usageData: any; loading: boolean; session: any }> = ({ usageData, loading, session }) => {
+  const credits = session?.user_info?.credit_balance || 0;
+  const dailyLimit = session?.daily_limit || 0;
+  const requestsToday = session?.requests_today || 0;
+  const usagePercent = dailyLimit > 0 ? (requestsToday / dailyLimit) * 100 : 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <DataPanel title="CREDIT BALANCE" icon={<Zap size={16} />}>
+        <div style={{ padding: '20px 0', textAlign: 'center' }}>
+          <div style={{ fontSize: '48px', color: COLORS.CYAN, fontWeight: 'bold', marginBottom: '8px' }}>
+            {credits.toLocaleString()}
+          </div>
+          <div style={{ fontSize: '11px', color: COLORS.MUTED }}>AVAILABLE CREDITS</div>
+        </div>
+      </DataPanel>
+
+      {session?.user_type === 'guest' && (
+        <DataPanel title="DAILY USAGE LIMIT" icon={<Activity size={16} />}>
+          <div style={{ padding: '12px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '11px' }}>
+              <span style={{ color: COLORS.MUTED }}>REQUESTS TODAY</span>
+              <span style={{ color: COLORS.WHITE, fontWeight: 'bold' }}>
+                {requestsToday} / {dailyLimit}
+              </span>
+            </div>
+            <div style={{ height: '8px', backgroundColor: COLORS.HEADER_BG, position: 'relative' }}>
+              <div style={{
+                height: '100%',
+                width: `${usagePercent}%`,
+                backgroundColor: usagePercent >= 90 ? COLORS.RED : COLORS.GREEN,
+                transition: 'width 0.3s'
+              }} />
+            </div>
+          </div>
+        </DataPanel>
+      )}
+
+      {usageData && (
+        <DataPanel title="USAGE STATISTICS" icon={<BarChart size={16} />}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', padding: '12px 0' }}>
+            <StatBox label="TOTAL REQUESTS" value={usageData.total_requests || 0} />
+            <StatBox label="THIS MONTH" value={usageData.month_requests || 0} />
+            <StatBox label="THIS WEEK" value={usageData.week_requests || 0} />
+          </div>
+        </DataPanel>
+      )}
+    </div>
+  );
+};
+
+// Security Section
+const SecuritySection: React.FC<{
+  session: any;
+  onRegenerateKey: () => void;
+  loading: boolean;
+  showApiKey: boolean;
+  setShowApiKey: (show: boolean) => void;
+}> = ({ session, onRegenerateKey, loading, showApiKey, setShowApiKey }) => {
+  const apiKey = session?.api_key || '';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <DataPanel title="API KEY MANAGEMENT" icon={<Key size={16} />}>
+        <div style={{ padding: '12px 0' }}>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <div style={{
+              flex: 1,
+              padding: '10px',
+              backgroundColor: COLORS.HEADER_BG,
+              border: `1px solid ${COLORS.BORDER}`,
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              color: COLORS.MUTED,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {showApiKey ? apiKey : apiKey.slice(0, 20) + '•'.repeat(Math.max(0, apiKey.length - 20))}
+            </div>
+            <button
+              onClick={() => setShowApiKey(!showApiKey)}
+              style={{
+                padding: '10px 16px',
+                backgroundColor: COLORS.HEADER_BG,
+                border: `1px solid ${COLORS.BORDER}`,
+                color: COLORS.WHITE,
+                cursor: 'pointer',
+                fontSize: '11px',
+                fontFamily: 'monospace'
+              }}
+            >
+              {showApiKey ? <><EyeOff size={12} /> HIDE</> : <><Eye size={12} /> SHOW</>}
+            </button>
+            <button
+              onClick={onRegenerateKey}
+              disabled={loading}
+              style={{
+                padding: '10px 16px',
+                backgroundColor: COLORS.ORANGE,
+                border: `1px solid ${COLORS.ORANGE}`,
+                color: COLORS.WHITE,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                opacity: loading ? 0.5 : 1
+              }}
+            >
+              {loading ? 'REGENERATING...' : 'REGENERATE'}
+            </button>
+          </div>
+          <div style={{ fontSize: '10px', color: COLORS.MUTED }}>
+            ⚠ Keep your API key secure. Never share it publicly.
+          </div>
+        </div>
+      </DataPanel>
+
+      <DataPanel title="SECURITY STATUS" icon={<Shield size={16} />}>
+        <div style={{ padding: '8px 0' }}>
+          <SecurityRow
+            label="EMAIL VERIFICATION"
+            enabled={session?.user_info?.is_verified}
+          />
+          <SecurityRow
+            label="TWO-FACTOR AUTHENTICATION"
+            enabled={session?.user_info?.mfa_enabled}
+          />
+        </div>
+      </DataPanel>
+    </div>
+  );
+};
+
+// Billing Section
+const BillingSection: React.FC<{ paymentHistory: any[]; loading: boolean }> = ({ paymentHistory, loading }) => {
+  return (
+    <DataPanel title="PAYMENT HISTORY" icon={<FileText size={16} />}>
+      {loading ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: COLORS.MUTED }}>LOADING...</div>
+      ) : paymentHistory.length === 0 ? (
+        <div style={{ padding: '40px', textAlign: 'center', color: COLORS.MUTED }}>NO PAYMENT HISTORY</div>
+      ) : (
+        <table style={{ width: '100%', fontSize: '11px', fontFamily: 'monospace', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${COLORS.BORDER}` }}>
+              <th style={{ padding: '8px', textAlign: 'left', color: COLORS.MUTED }}>DATE</th>
+              <th style={{ padding: '8px', textAlign: 'left', color: COLORS.MUTED }}>PLAN</th>
+              <th style={{ padding: '8px', textAlign: 'right', color: COLORS.MUTED }}>AMOUNT</th>
+              <th style={{ padding: '8px', textAlign: 'right', color: COLORS.MUTED }}>STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {paymentHistory.map((payment, index) => (
+              <tr key={index} style={{ borderBottom: `1px solid ${COLORS.BORDER}` }}>
+                <td style={{ padding: '8px', color: COLORS.WHITE }}>
+                  {new Date(payment.created_at).toLocaleDateString()}
+                </td>
+                <td style={{ padding: '8px', color: COLORS.WHITE }}>
+                  {payment.plan_name || 'PURCHASE'}
+                </td>
+                <td style={{ padding: '8px', textAlign: 'right', color: COLORS.CYAN, fontWeight: 'bold' }}>
+                  ${payment.amount}
+                </td>
+                <td style={{
+                  padding: '8px',
+                  textAlign: 'right',
+                  color: payment.status === 'success' ? COLORS.GREEN : COLORS.RED,
+                  fontWeight: 'bold'
+                }}>
+                  {payment.status.toUpperCase()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </DataPanel>
+  );
+};
+
+// Helper Components
+const DataPanel: React.FC<{ title: string; icon: React.ReactNode; children: React.ReactNode }> = ({ title, icon, children }) => (
+  <div style={{
+    backgroundColor: COLORS.PANEL_BG,
+    border: `1px solid ${COLORS.BORDER}`,
+    padding: '16px'
+  }}>
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      marginBottom: '12px',
+      paddingBottom: '8px',
+      borderBottom: `1px solid ${COLORS.BORDER}`
+    }}>
+      <span style={{ color: COLORS.ORANGE }}>{icon}</span>
+      <span style={{ color: COLORS.WHITE, fontSize: '12px', fontWeight: 'bold' }}>{title}</span>
+    </div>
+    {children}
+  </div>
+);
+
+const DataRow: React.FC<{ label: string; value: string; valueColor?: string }> = ({ label, value, valueColor }) => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '6px 0',
+    fontSize: '11px',
+    borderBottom: `1px solid ${COLORS.BORDER}`
+  }}>
+    <span style={{ color: COLORS.MUTED }}>{label}</span>
+    <span style={{ color: valueColor || COLORS.WHITE, fontWeight: 'bold' }}>{value}</span>
+  </div>
+);
+
+const ActionButton: React.FC<{ label: string; onClick: () => void; danger?: boolean }> = ({ label, onClick, danger }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: '12px',
+      backgroundColor: COLORS.HEADER_BG,
+      border: `1px solid ${COLORS.BORDER}`,
+      color: danger ? COLORS.RED : COLORS.WHITE,
+      cursor: 'pointer',
+      fontSize: '10px',
+      fontFamily: 'monospace',
+      fontWeight: 'bold',
+      transition: 'all 0.2s'
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.backgroundColor = COLORS.BORDER;
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.backgroundColor = COLORS.HEADER_BG;
+    }}
+  >
+    {label}
+  </button>
+);
+
+const StatBox: React.FC<{ label: string; value: number }> = ({ label, value }) => (
+  <div style={{
+    padding: '12px',
+    backgroundColor: COLORS.HEADER_BG,
+    border: `1px solid ${COLORS.BORDER}`,
+    textAlign: 'center'
+  }}>
+    <div style={{ fontSize: '24px', color: COLORS.CYAN, fontWeight: 'bold' }}>{value.toLocaleString()}</div>
+    <div style={{ fontSize: '10px', color: COLORS.MUTED, marginTop: '4px' }}>{label}</div>
+  </div>
+);
+
+const SecurityRow: React.FC<{ label: string; enabled: boolean }> = ({ label, enabled }) => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '10px 0',
+    borderBottom: `1px solid ${COLORS.BORDER}`
+  }}>
+    <span style={{ color: COLORS.WHITE, fontSize: '11px' }}>{label}</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <span style={{
+        color: enabled ? COLORS.GREEN : COLORS.RED,
+        fontSize: '11px',
+        fontWeight: 'bold'
+      }}>
+        {enabled ? 'ENABLED' : 'DISABLED'}
+      </span>
+      {enabled ? (
+        <CheckCircle size={14} color={COLORS.GREEN} />
+      ) : (
+        <AlertCircle size={14} color={COLORS.RED} />
+      )}
+    </div>
+  </div>
+);
 
 export default ProfileTab;
