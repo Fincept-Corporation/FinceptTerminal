@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
@@ -12,7 +12,7 @@
 
 Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Automatisierung und unbegrenzter Datenkonnektivität.
 
-[📥 Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 Dokumente](docs/)•[💬 Diskussionen](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 Zwietracht](https://discord.gg/ae87a8ygbN)
+[📥 Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 Dokumente](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 Diskussionen](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 Zwietracht](https://discord.gg/ae87a8ygbN)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -32,7 +32,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 | 🔗**Domänenübergreifend** | Integrieren Sie Lieferkette → Portfolio • Geopolitik → Eigenkapital • Maritim → Makro • Ihre Daten, auf Ihre Weise                                 | [Workflow-System](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                                           |
 | 🎨**Arbeitsabläufe**      | Visueller Knoteneditor • Python-Agenten • MCP-Tools • Automatisierung ohne Code                                                                    | [Benutzerdefinierte Knoten](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP-Server](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
 | 🚢**Intelligenz**         | 3D-Seeverfolgung • Satellitenüberwachung • Geopolitische Rahmenbedingungen • Handelsroutenanalyse                                                  | [Registerkarte „Maritime“.](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                             |
-| 💰**Preise**              | 100% Free & Open Source (MIT License)                                                                                                              | [Vollständiges Repository](https://github.com/Fincept-Corporation/FinceptTerminal)                                                                                                                                                                                                     |
+| 💰**Preise**              | Kostenlos und Open Source (AGPL-3.0) • Kommerzielle Lizenzen verfügbar                                                                             | [Vollständiges Repository](https://github.com/Fincept-Corporation/FinceptTerminal)•[Kommerzielle Lizenz](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)                                                                                  |
 
 * * *
 
@@ -127,7 +127,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 **Aktienanalyse**
 
 -   Globale Aktienanalyse • Finanzvisualisierung
--   Analystenziele • Bewertungskennzahlen
+-   Analyst targets • Valuation metrics
 
 </td>
 </tr>
@@ -185,11 +185,11 @@ bun install && bun run tauri:dev
 
 ## 🛣️ Was kommt als nächstes?
 
-**Q1 2025:**Verbessertes Echtzeit-Streaming • Erweitertes Backtesting • Optionsstrategie-Builder • Über 50 KI-Agenten**2025:**Papierhandel • Multi-Portfolio-Management • Mobile App • Social Trading**Zukunft:**Institutionelle Funktionen • Programmatische API • Benutzeroberfläche für ML-Training • White-Label-Lösungen
+**Q1 2026:**Verbessertes Echtzeit-Streaming • Erweitertes Backtesting • Optionsstrategie-Builder • Über 50 KI-Agenten**2026:**Papierhandel • Multi-Portfolio-Management • Mobile App • Social Trading**Zukunft:**Institutionelle Funktionen • Programmatische API • Benutzeroberfläche für ML-Training • White-Label-Lösungen
 
 * * *
 
-## 🤝 Mitwirken
+## 🤝 Mitmachen
 
 Wir gestalten die Zukunft der Finanzanalyse – gemeinsam.
 
@@ -203,9 +203,30 @@ Wir gestalten die Zukunft der Finanzanalyse – gemeinsam.
 
 ## 📜 Lizenz
 
-**MIT License**• Für immer kostenlos. • Keine Einschränkungen
+**Doppellizenz: AGPL-3.0 (Open Source) + kommerziell**
 
-© 2024-2025 Fincept Corporation
+### Open Source (AGPL-3.0)
+
+-   ✅ Kostenlos für den persönlichen, pädagogischen und nichtkommerziellen Gebrauch
+-   ✅ Erfordert Freigabeänderungen, wenn es verteilt oder als Netzwerkdienst verwendet wird
+-   ✅ Volle Transparenz des Quellcodes
+
+### Kommerzielle Lizenz
+
+-   💼 Erforderlich für proprietäre/SaaS-Nutzung ohne Open-Source-Änderungen
+-   📞 Kontakt:**[support@fincept.in](mailto:support@fincept.in)**
+-   📄 Einzelheiten:[Leitfaden für kommerzielle Lizenzen](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+
+### Marken
+
+„Fincept Terminal“ und „Fincept“ sind Marken der Fincept Corporation.
+Sehen[Markenrichtlinien](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
+
+### Mitwirkende
+
+Indem Sie einen Beitrag leisten, stimmen Sie unserem zu[Lizenzvereinbarung für Mitwirkende](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
+
+© 2025-2026 Fincept Corporation. Alle Rechte vorbehalten.
 
 * * *
 

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
@@ -12,7 +12,7 @@
 
 CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨단 금융 인텔리전스 플랫폼입니다.
 
-[📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 문서](docs/)•[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 불화](https://discord.gg/ae87a8ygbN)
+[📥 다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 문서](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 토론](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 불화](https://discord.gg/ae87a8ygbN)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -30,9 +30,9 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 | 🤖**AI 에이전트** | 20명 이상의 투자자 페르소나(Buffett, Dalio, Graham) • 헤지펀드 전략(Bridgewater, Citadel, Renaissance) • 현지 LLM 지원 | [AI 에이전트](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/agents)                                                                                                                            |
 | 🌐**데이터 액세스** | 100개 이상의 커넥터(DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • 맞춤형 API 매퍼 • 데이터 제한 없음               | [데이터 어댑터](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                     |
 | 🔗**교차 도메인**  | 공급망 통합 → 포트폴리오 • 지정학 → 형평성 • 해양 → 거시적 • 귀하의 데이터를 귀하의 방식으로                                         | [워크플로우 시스템](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                             |
-| 🎨**워크플로우**   | 시각적 노드 편집기 • Python 에이전트 • MCP 도구 • 코드 없는 자동화                                                     | [사용자 정의 노드](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP 서버](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
+| 🎨**워크플로**    | 시각적 노드 편집기 • Python 에이전트 • MCP 도구 • 코드 없는 자동화                                                     | [사용자 정의 노드](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP 서버](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
 | 🚢**지능**      | 3D 해상 추적 • 위성 모니터링 • 지정학적 프레임워크 • 무역 경로 분석                                                        | [해양 탭](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                              |
-| 💰**가격**      | 100% 무료 및 오픈 소스(MIT 라이선스)                                                                         | [전체 저장소](https://github.com/Fincept-Corporation/FinceptTerminal)                                                                                                                                                                                                   |
+| 💰**가격**      | 무료 및 오픈 소스(AGPL-3.0) • 상용 라이센스 사용 가능                                                              | [전체 저장소](https://github.com/Fincept-Corporation/FinceptTerminal)•[상업용 라이센스](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)                                                                                           |
 
 * * *
 
@@ -185,7 +185,7 @@ bun install && bun run tauri:dev
 
 ## 🛣️ 다음은 무엇입니까?
 
-**2025년 1분기:**향상된 실시간 스트리밍 • 고급 백테스팅 • 옵션 전략 빌더 • 50개 이상의 AI 에이전트**2025년:**서류 거래 • 다중 포트폴리오 관리 • 모바일 앱 • 소셜 트레이딩**미래:**기관 기능 • 프로그래밍 방식 API • ML 교육 UI • 화이트 라벨 솔루션
+**2026년 1분기:**향상된 실시간 스트리밍 • 고급 백테스팅 • 옵션 전략 빌더 • 50개 이상의 AI 에이전트**2026년:**서류 거래 • 다중 포트폴리오 관리 • 모바일 앱 • 소셜 트레이딩**미래:**기관 기능 • 프로그래밍 방식 API • ML 교육 UI • 화이트 라벨 솔루션
 
 * * *
 
@@ -201,11 +201,32 @@ bun install && bun run tauri:dev
 
 * * *
 
-## 📜 라이선스
+## 📜 라이센스
 
-**내 라이센스**• 영원히 무료 • 제한 없음
+**이중 라이센스: AGPL-3.0(오픈 소스) + 상업용**
 
-© 2024-2025 핀셉트 코퍼레이션
+### 오픈 소스(AGPL-3.0)
+
+-   ✅ 개인, 교육 및 비상업적 용도로는 무료입니다.
+-   ✅ 네트워크 서비스로 배포 또는 사용 시 공유 수정 필요
+-   ✅ 전체 소스 코드 투명성
+
+### 상업용 라이센스
+
+-   💼 오픈 소스 수정 없이 독점/SaaS 사용에 필요
+-   📞 연락처:**[support@fincept.in](mailto:support@fincept.in)**
+-   📄 세부정보:[상용 라이센스 가이드](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+
+### 상표
+
+"Fincept Terminal" 및 "Fincept"는 Fincept Corporation의 상표입니다.
+보다[상표 지침](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
+
+### 기여자
+
+기여함으로써 귀하는 당사에 동의하게 됩니다.[기여자 라이센스 계약](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
+
+© 2025-2026 핀셉트 코퍼레이션. 모든 권리 보유.
 
 * * *
 
