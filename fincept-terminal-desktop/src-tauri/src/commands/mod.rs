@@ -114,6 +114,9 @@ pub mod ai_quant_lab;
 // FFN Analytics - Portfolio Performance Analysis
 pub mod ffn_analytics;
 
+// Fortitudo.tech Analytics - Portfolio Risk Analytics
+pub mod fortitudo_analytics;
+
 // Functime Analytics - Time Series Forecasting
 pub mod functime_analytics;
 

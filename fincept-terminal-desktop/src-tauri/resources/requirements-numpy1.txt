@@ -103,7 +103,8 @@ loguru>=0.6.0
 nbconvert>=7.0.0
 pydantic-settings>=2.0.0
 python-redis-lock>=4.0.0
-ruamel.yaml>=0.17.38
+# Use ruamel.yaml version with pre-built wheels (avoid C extension build issues)
+ruamel.yaml>=0.17.38,<0.18.0
 nbformat>=5.0.0
 pandarallel>=1.6.0
 rich>=13.0.0
