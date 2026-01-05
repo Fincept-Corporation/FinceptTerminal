@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE.txt)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-C06524)](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/LICENSE)[![Tauri](https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri)](https://tauri.app/)[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178C6?logo=typescript)](https://www.typescriptlang.org/)[![Rust](https://img.shields.io/badge/Rust-1.70+-CE422B?logo=rust)](https://www.rust-lang.org/)[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)[![Hits](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal.svg?label=Visits)](https://hits.sh/github.com/Fincept-Corporation/FinceptTerminal/)
 
 [![Twitter](https://img.shields.io/badge/-Twitter-1DA1F2?style=flat-square&logo=twitter&logoColor=white)](https://twitter.com/intent/tweet?text=Check%20out%20FinceptTerminal&url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![LinkedIn](https://img.shields.io/badge/-LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Facebook](https://img.shields.io/badge/-Facebook-1877F2?style=flat-square&logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https%3A//github.com/Fincept-Corporation/FinceptTerminal/)[![Reddit](https://img.shields.io/badge/-Reddit-FF4500?style=flat-square&logo=reddit&logoColor=white)](https://www.reddit.com/submit?url=https%3A//github.com/Fincept-Corporation/FinceptTerminal/&title=FinceptTerminal)[![WhatsApp](https://img.shields.io/badge/-WhatsApp-25D366?style=flat-square&logo=whatsapp&logoColor=white)](https://api.whatsapp.com/send?text=Check%20out%20FinceptTerminal%3A%20https%3A//github.com/Fincept-Corporation/FinceptTerminal/)
 
@@ -12,7 +12,7 @@
 
 最先进的金融情报平台，具有 CFA 级分析、人工智能自动化和无限数据连接。
 
-[📥 下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 文档](docs/)•[💬 讨论](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 不和谐](https://discord.gg/ae87a8ygbN)
+[📥 下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases)•[📚 文档](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/docs)•[💬 讨论](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)•[💬 不和谐](https://discord.gg/ae87a8ygbN)
 
 ![Fincept Terminal](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Geopolitics.png)
 
@@ -32,7 +32,7 @@
 | 🔗**跨域**     | 整合供应链 → 产品组合 • 地缘政治 → 股权 • 海事 → 宏观 • 您的数据，您的方式                                | [工作流程系统](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                            |
 | 🎨**工作流程**   | 可视化节点编辑器 • Python 代理 • MCP 工具 • 无代码自动化                                        | [自定义节点](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[MCP服务器](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
 | 🚢**智力**     | 3D 海上跟踪 • 卫星监测 • 地缘政治框架 • 贸易路线分析                                              | [海事标签](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                          |
-| 💰**定价**     | 100% 免费和开源（MIT 许可证）                                                           | [完整的存储库](https://github.com/Fincept-Corporation/FinceptTerminal)                                                                                                                                                                                               |
+| 💰**定价**     | 免费和开源 (AGPL-3.0) • 提供商业许可证                                                    | [完整的存储库](https://github.com/Fincept-Corporation/FinceptTerminal)•[商业许可](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)                                                                                           |
 
 * * *
 
@@ -185,7 +185,7 @@ bun install && bun run tauri:dev
 
 ## 🛣️ 接下来是什么
 
-**2025 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2025 年：**模拟交易 • 多投资组合管理 • 移动应用程序 • 社交交易**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
+**2026 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2026：**模拟交易 • 多投资组合管理 • 移动应用程序 • 社交交易**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
 
 * * *
 
@@ -203,9 +203,30 @@ bun install && bun run tauri:dev
 
 ## 📜 许可证
 
-**我的许可证**• 永久免费 • 无限制
+**双重许可：AGPL-3.0（开源）+商业**
 
-© 2024-2025 Fincept 公司
+### 开源 (AGPL-3.0)
+
+-   ✅ 免费供个人、教育和非商业用途
+-   ✅ 分发或用作网络服务时需要共享修改
+-   ✅ 源代码完全透明
+
+### 商业许可
+
+-   💼 专有/SaaS 使用所需，无需开源修改
+-   📞 联系方式：**[support@fincept.in](mailto:support@fincept.in)**
+-   📄 详情：[商业许可指南](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
+
+### 商标
+
+“Fincept Terminal”和“Fincept”是Fincept Corporation 的商标。
+看[商标指南](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/TRADEMARK.md).
+
+### 贡献者
+
+通过贡献，您同意我们的[贡献者许可协议](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/CLA.md).
+
+© 2025-2026 Fincept 公司。版权所有。
 
 * * *
 
