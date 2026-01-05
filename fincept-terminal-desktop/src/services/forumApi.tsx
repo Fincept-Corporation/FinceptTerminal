@@ -27,13 +27,13 @@ export interface ForumPost {
   title: string;
   content: string;
   author_display_name: string;
-  category_id: number;
+  category_id?: number;
   category_name: string;
   likes: number;
-  dislikes: number;
+  dislikes?: number;
   reply_count: number;
   views: number;
-  is_pinned: boolean;
+  is_pinned?: boolean;
   created_at: string;
   updated_at: string;
 }

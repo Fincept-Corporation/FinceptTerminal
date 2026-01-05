@@ -227,20 +227,6 @@ export const CommandBar: React.FC<CommandBarProps> = ({ onExecuteCommand }) => {
         </div>
       )}
 
-      {/* Help Text */}
-      {!showSuggestions && input.trim().length === 0 && (
-        <div style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          marginTop: '4px',
-          color: '#666',
-          fontSize: '9px',
-          fontFamily: 'Consolas, "Courier New", monospace'
-        }}>
-          Type a command (e.g., DASH, MKTS, PORT) or use F1-F12 shortcuts
-        </div>
-      )}
     </div>
   );
 };

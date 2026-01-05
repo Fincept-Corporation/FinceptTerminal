@@ -26,6 +26,26 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ---
 
+<!-- DOWNLOAD_SECTION_START -->
+
+## 📥 Download Latest Release
+
+**Version:** `v3.0.15` | **Released:** 2026-01-05
+
+| Platform | Architecture | Download |
+|----------|-------------|----------|
+| **macOS** | Apple Silicon | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.15/FinceptTerminal-v3.0.15-macOS-arm64.dmg) |
+| **macOS** | Intel | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.15/FinceptTerminal-v3.0.15-macOS-x64.dmg) |
+| **Linux** | x64 (AppImage) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.15/FinceptTerminal-v3.0.15-Linux-x64.AppImage) |
+| **Linux** | x64 (Debian) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.15/FinceptTerminal-v3.0.15-Linux-x64.deb) |
+| **Windows** | x64 | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.0.15/FinceptTerminal-v3.0.15-Windows-x64.msi) |
+
+[View All Releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+<!-- DOWNLOAD_SECTION_END -->
+
+---
+
 ## 🎯 What Sets Us Apart
 
 **Fincept Terminal** is an open-source financial platform built for those who refuse to be limited by traditional software. We compete on **analytics depth** and **data accessibility**—not on insider info or exclusive feeds.
