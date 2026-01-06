@@ -36,9 +36,9 @@ pub fn get_python_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 /// Get Python path for a specific library (switches between numpy1 and numpy2 venvs)
 pub fn get_python_path_for_library(app: &tauri::AppHandle, library_name: Option<&str>) -> Result<PathBuf, String> {
-    // Get install directory (same logic as setup.rs)
+    // Get install directory - MUST match setup.rs get_install_dir()
     let install_dir = if cfg!(debug_assertions) {
-        // Dev mode: use OS-specific user directory
+        // Dev mode: use LOCALAPPDATA/fincept-dev
         let base_dir = if cfg!(target_os = "windows") {
             std::env::var("LOCALAPPDATA")
                 .map(PathBuf::from)
@@ -54,10 +54,9 @@ pub fn get_python_path_for_library(app: &tauri::AppHandle, library_name: Option<
         };
         base_dir.join("fincept-dev")
     } else {
-        // Production: use app resource directory
-        app.path()
-            .resource_dir()
-            .map_err(|e| format!("Failed to get resource directory: {}", e))?
+        // Production: use app data directory
+        app.path().app_data_dir()
+            .map_err(|e| format!("Failed to get app data dir: {}", e))?
     };
 
     // Determine which venv to use based on library
@@ -115,11 +114,10 @@ pub fn get_python_path_for_library(app: &tauri::AppHandle, library_name: Option<
 }
 
 /// Get the Bun executable path from app installation directory
-/// In production: Uses installed Bun from setup.rs
-/// In development: Uses %LOCALAPPDATA%/fincept-dev (matches setup.rs)
 pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    // Get install directory (same logic as setup.rs)
+    // Get install directory - MUST match setup.rs get_install_dir()
     let install_dir = if cfg!(debug_assertions) {
+        // Dev mode: use LOCALAPPDATA/fincept-dev
         let base_dir = if cfg!(target_os = "windows") {
             std::env::var("LOCALAPPDATA")
                 .map(PathBuf::from)
@@ -135,9 +133,9 @@ pub fn get_bundled_bun_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         };
         base_dir.join("fincept-dev")
     } else {
-        app.path()
-            .resource_dir()
-            .map_err(|e| format!("Failed to get resource directory: {}", e))?
+        // Production: use app data directory
+        app.path().app_data_dir()
+            .map_err(|e| format!("Failed to get app data dir: {}", e))?
     };
 
     // Platform-specific Bun executable location

@@ -1,7 +1,7 @@
 {
   "name": "fincept-terminal-desktop",
   "private": true,
-  "version": "3.0.16",
+  "version": "3.1.0",
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "scripts": {
@@ -11,6 +11,7 @@
     "tauri": "tauri",
     "tauri:dev": "bun run tauri dev",
     "tauri:build": "bun run tauri build",
+    "tauri:build:msstore": "bun run tauri build --config src-tauri/tauri.microsoftstore.conf.json",
     "bump-version": "bun scripts/bump-version.js"
   },
   "dependencies": {
