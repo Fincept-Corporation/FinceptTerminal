@@ -5,12 +5,10 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyModule};
 use std::path::PathBuf;
 use std::sync::Mutex;
-use once_cell::sync::Lazy;
+use once_cell::sync::OnceCell;
 
-// Global Python runtime instance (singleton)
-static PYTHON_RUNTIME: Lazy<Mutex<PythonRuntime>> = Lazy::new(|| {
-    Mutex::new(PythonRuntime::new().expect("Failed to initialize Python runtime"))
-});
+// Global Python runtime instance (singleton) - initialized ONLY after setup completes
+static PYTHON_RUNTIME: OnceCell<Mutex<PythonRuntime>> = OnceCell::new();
 
 pub struct PythonRuntime {
     // Flag to track if heavy libraries are preloaded
@@ -26,6 +24,16 @@ impl PythonRuntime {
         Ok(Self {
             preloaded: false,
         })
+    }
+
+    /// Initialize the global runtime (call AFTER setup completes)
+    pub fn initialize_global() -> Result<(), String> {
+        PYTHON_RUNTIME.get_or_try_init(|| {
+            PythonRuntime::new()
+                .map(Mutex::new)
+                .map_err(|e| format!("Failed to initialize Python runtime: {}", e))
+        })?;
+        Ok(())
     }
 
     /// Preload heavy dependencies (pandas, numpy) to cache them
@@ -125,9 +133,10 @@ impl PythonRuntime {
     }
 }
 
-/// Get the global Python runtime instance
-pub fn get_runtime() -> &'static Mutex<PythonRuntime> {
-    &PYTHON_RUNTIME
+/// Get the global Python runtime instance (returns None if not initialized)
+pub fn get_runtime() -> Result<&'static Mutex<PythonRuntime>, String> {
+    PYTHON_RUNTIME.get()
+        .ok_or_else(|| "Python runtime not initialized. Please run setup first.".to_string())
 }
 
 /// Execute a Python script (public API)
@@ -135,7 +144,7 @@ pub fn execute_python_script(
     script_path: &PathBuf,
     args: Vec<String>,
 ) -> Result<String, String> {
-    let mut runtime = get_runtime()
+    let mut runtime = get_runtime()?
         .lock()
         .map_err(|e| format!("Failed to lock Python runtime: {}", e))?;
 
@@ -152,7 +161,7 @@ pub fn execute_python_script(
 
 /// Execute Python code directly (public API)
 pub fn execute_python_code(code: &str) -> Result<String, String> {
-    let runtime = get_runtime()
+    let runtime = get_runtime()?
         .lock()
         .map_err(|e| format!("Failed to lock Python runtime: {}", e))?;
 

@@ -972,6 +972,15 @@ pub async fn run_setup(app: AppHandle) -> Result<String, String> {
         }
 
         emit_progress(&app, "complete", 100, "Setup complete!", false);
+
+        // Initialize Python runtime NOW that Python is installed
+        eprintln!("[SETUP] Initializing Python runtime...");
+        if let Err(e) = crate::python_runtime::PythonRuntime::initialize_global() {
+            eprintln!("[SETUP] Warning: Failed to initialize Python runtime: {}", e);
+        } else {
+            eprintln!("[SETUP] Python runtime initialized successfully");
+        }
+
         Ok("Setup complete".to_string())
     }.await;
 
