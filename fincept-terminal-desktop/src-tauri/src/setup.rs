@@ -872,6 +872,16 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
     #[cfg(not(target_os = "macos"))]
     let needs_setup = !python_installed || !bun_installed || !packages_installed;
 
+    // Initialize Python runtime if setup is already complete (for app restarts)
+    if !needs_setup && python_installed {
+        eprintln!("[SETUP] Python already installed, initializing runtime...");
+        if let Err(e) = crate::python_runtime::PythonRuntime::initialize_global() {
+            eprintln!("[SETUP] Warning: Failed to initialize Python runtime: {}", e);
+        } else {
+            eprintln!("[SETUP] Python runtime initialized successfully");
+        }
+    }
+
     Ok(SetupStatus {
         python_installed,
         bun_installed,
