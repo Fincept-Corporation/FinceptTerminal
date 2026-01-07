@@ -3,7 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::services::gics_service::{MarketCapCategory, PeerIdentificationService};
+// Note: GICS service types available if needed for future peer discovery
+// use crate::services::gics_service::{MarketCapCategory, PeerIdentificationService};
 use crate::services::comparative_service::{
     ComparativeService, PercentileRanking, ValuationStatus,
     ValuationMetrics, ProfitabilityMetrics, GrowthMetrics, LeverageMetrics,
