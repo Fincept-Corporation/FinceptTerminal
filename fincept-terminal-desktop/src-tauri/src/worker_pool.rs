@@ -214,16 +214,33 @@ impl WorkerPool {
 
         eprintln!("[Worker {}] Process spawned, PID: {:?}", worker_id, process.id());
 
-        // Wait a bit for worker to start listening (minimal delay)
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        // Wait for worker to start listening with retry logic
+        // Python worker creates server socket, so we need to wait for it
+        let mut socket: Option<LocalSocketStream> = None;
+        let max_retries = 50;  // 5 seconds total (50 * 100ms)
 
-        // Connect to worker's socket
-        let socket = LocalSocketStream::connect(
-            socket_name.to_ns_name::<GenericNamespaced>()
-                .map_err(|e| format!("Failed to create socket name: {}", e))?
-        ).map_err(|e| format!("Failed to connect to worker {}: {}", worker_id, e))?;
+        for attempt in 0..max_retries {
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-        eprintln!("[Worker {}] Connected to socket", worker_id);
+            match LocalSocketStream::connect(
+                socket_name.to_ns_name::<GenericNamespaced>()
+                    .map_err(|e| format!("Failed to create socket name: {}", e))?
+            ) {
+                Ok(s) => {
+                    socket = Some(s);
+                    eprintln!("[Worker {}] Connected to socket after {} attempts", worker_id, attempt + 1);
+                    break;
+                }
+                Err(e) => {
+                    if attempt == max_retries - 1 {
+                        return Err(format!("Failed to connect to worker {} after {} attempts: {}", worker_id, max_retries, e));
+                    }
+                    // Continue retrying silently
+                }
+            }
+        }
+
+        let socket = socket.ok_or_else(|| format!("Failed to connect to worker {}", worker_id))?;
 
         Ok(Worker {
             process,
