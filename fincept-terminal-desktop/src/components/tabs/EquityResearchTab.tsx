@@ -4,6 +4,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries, BarSeries } from 'lightweight-charts';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Area } from 'recharts';
 import { ProChartWithToolkit } from './trading/charts/ProChartWithToolkit';
+import { FinancialAnalysisPanel } from './equity-research/components/FinancialAnalysisPanel';
+import { PeerComparisonPanel } from './equity-research/components/PeerComparisonPanel';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 
@@ -743,7 +745,7 @@ const EquityResearchTab: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [chartPeriod, setChartPeriod] = useState<'1M' | '3M' | '6M' | '1Y' | '5Y'>('6M');
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'analysis' | 'technicals' | 'news'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'financials' | 'analysis' | 'technicals' | 'peers' | 'news'>('overview');
   const [fontSize, setFontSize] = useState(12);
   const [selectedMetrics, setSelectedMetrics] = useState<string[]>(['Total Revenue', 'Gross Profit', 'Operating Income', 'Net Income', 'EBITDA', 'Basic EPS', 'Diluted EPS']);
   const [showYearsCount, setShowYearsCount] = useState(4);
@@ -1433,7 +1435,7 @@ const EquityResearchTab: React.FC = () => {
           display: 'flex',
           gap: '1px',
         }}>
-          {(['overview', 'financials', 'analysis', 'technicals', 'news'] as const).map((tab) => (
+          {(['overview', 'financials', 'analysis', 'technicals', 'peers', 'news'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -2291,6 +2293,13 @@ const EquityResearchTab: React.FC = () => {
         {/* Analysis Tab */}
         {activeTab === 'analysis' && (
           <div style={{ padding: '0 8px 8px 8px' }}>
+            {/* Financial Analysis Panel - CFA-Compliant Analysis */}
+            <div style={{ marginBottom: '8px' }}>
+              <FinancialAnalysisPanel
+                ticker={currentSymbol}
+                companyName={stockInfo?.company_name || currentSymbol}
+              />
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               {/* Financial Health */}
               <div style={{
@@ -2618,6 +2627,13 @@ const EquityResearchTab: React.FC = () => {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Peers Tab */}
+        {activeTab === 'peers' && (
+          <div style={{ padding: '8px' }}>
+            <PeerComparisonPanel initialSymbol={currentSymbol} />
           </div>
         )}
 
