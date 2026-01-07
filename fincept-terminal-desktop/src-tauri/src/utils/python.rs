@@ -226,8 +226,8 @@ pub fn get_script_path(app: &tauri::AppHandle, script_name: &str) -> Result<Path
     ))
 }
 
-/// Execute Python script with PyO3 embedded runtime
-/// This is the primary execution method - fast, embedded, no subprocess
+/// Execute Python script with worker pool
+/// This is the primary execution method - fast, persistent workers, no subprocess spawning
 pub fn execute_python_script_simple(
     app: &tauri::AppHandle,
     script_relative_path: &str,
@@ -236,6 +236,6 @@ pub fn execute_python_script_simple(
     let script_path = get_script_path(app, script_relative_path)?;
     let args_vec: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
-    // Execute with PyO3
+    // Execute with worker pool (sync wrapper)
     crate::python_runtime::execute_python_script(&script_path, args_vec)
 }

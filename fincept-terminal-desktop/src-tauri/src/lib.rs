@@ -18,6 +18,7 @@ mod utils;
 mod setup;
 mod database;
 mod python_runtime;
+mod worker_pool;
 mod websocket;
 mod barter_integration;
 // mod finscript; // TODO: Implement FinScript module
