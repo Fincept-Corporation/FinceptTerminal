@@ -180,16 +180,26 @@ class PythonWorker:
                 'data': error_msg
             }
 
+    def handle_task_completion(self, future):
+        """Callback when a task completes - sends response back"""
+        try:
+            response = future.result()
+            self.send_message(response)
+            print(f"[Worker {self.worker_id}] Task {response['task_id']} completed and sent", file=sys.stderr, flush=True)
+        except Exception as e:
+            print(f"[Worker {self.worker_id}] ERROR sending response: {e}", file=sys.stderr, flush=True)
+            traceback.print_exc()
+
     def run(self):
-        """Main worker loop - handles requests sequentially but executes them in thread pool"""
+        """Main worker loop - handles multiple concurrent requests via thread pool"""
         try:
             self.connect_socket()
 
-            print(f"[Worker {self.worker_id}] Ready to accept tasks (thread pool active)", file=sys.stderr, flush=True)
+            print(f"[Worker {self.worker_id}] Ready to accept tasks (thread pool with {self.num_threads} threads)", file=sys.stderr, flush=True)
 
             while self.running:
                 try:
-                    # Read task from socket (sequential - one at a time)
+                    # Read task from socket (can handle multiple tasks)
                     task = self.read_message()
 
                     if task is None:
@@ -198,15 +208,13 @@ class PythonWorker:
 
                     print(f"[Worker {self.worker_id}] Received task: {task.get('task_id')}", file=sys.stderr, flush=True)
 
-                    # Submit execution to thread pool (runs in background)
-                    # But wait for result since we need to send response back immediately
+                    # Submit execution to thread pool (runs in background - NO BLOCKING)
                     future = self.executor.submit(self.execute_script, task)
-                    response = future.result()  # Wait for completion
 
-                    # Send response back
-                    self.send_message(response)
+                    # Add callback to send response when done (non-blocking)
+                    future.add_done_callback(self.handle_task_completion)
 
-                    print(f"[Worker {self.worker_id}] Task completed and sent", file=sys.stderr, flush=True)
+                    print(f"[Worker {self.worker_id}] Task submitted to thread pool", file=sys.stderr, flush=True)
 
                 except KeyboardInterrupt:
                     print(f"[Worker {self.worker_id}] Interrupted", file=sys.stderr, flush=True)
@@ -217,6 +225,7 @@ class PythonWorker:
 
         finally:
             # Shutdown thread pool
+            print(f"[Worker {self.worker_id}] Shutting down thread pool...", file=sys.stderr, flush=True)
             self.executor.shutdown(wait=True)
 
             if self.socket:

@@ -10,6 +10,7 @@ pub async fn calculate_portfolio_metrics(
     returns_data: String,
     weights: Option<String>,
     risk_free_rate: Option<f64>,
+    is_active_tab: Option<bool>,
 ) -> Result<String, String> {
     let mut args = vec!["calculate_metrics".to_string(), returns_data];
 
@@ -24,7 +25,11 @@ pub async fn calculate_portfolio_metrics(
     }
 
     let script_path = get_script_path(&app, "Analytics/portfolioManagement/portfolio_analytics.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+
+    // Calculate priority: active tab = HIGH (0), inactive = NORMAL (1)
+    let priority = if is_active_tab.unwrap_or(false) { 0 } else { 1 };
+
+    python_runtime::execute_python_script_async_with_priority(&script_path, args, priority).await
 }
 
 /// Optimize portfolio weights
@@ -87,6 +92,7 @@ pub async fn get_portfolio_overview(
         returns_data.clone(),
         weights.clone(),
         None,
+        None,  // is_active_tab
     ).await?;
 
     let optimization = optimize_portfolio(

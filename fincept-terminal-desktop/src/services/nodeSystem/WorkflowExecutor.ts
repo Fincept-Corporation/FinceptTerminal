@@ -31,6 +31,7 @@ import {
 import { NodeRegistry } from './NodeRegistry';
 import { ExecutionContext } from './ExecutionContext';
 import { WorkflowDataProxy } from './WorkflowDataProxy';
+import { ContextFactory } from './ContextFactory';
 import { DirectedGraph } from './DirectedGraph';
 import {
   isDirty,
@@ -477,23 +478,24 @@ export class WorkflowExecutor {
       // Get node type
       const nodeType = NodeRegistry.getNodeType(node.type, node.typeVersion);
 
-      // Create execution context
-      const context = new ExecutionContext(
-        workflowDataProxy,
+      // Create execution context using ContextFactory
+      // This automatically selects the right context type (Execute, Poll, Trigger, Trading, etc.)
+      const context = ContextFactory.createContext({
+        workflow: workflowDataProxy,
         node,
         inputData,
         runData,
-        0, // runIndex
-        this.executionId,
-        this.workflow.id || ''
-      );
+        runIndex: 0,
+        executionId: this.executionId,
+        workflowId: this.workflow.id || '',
+      });
 
       // Execute node
       if (!nodeType.execute) {
         throw new Error(`Node type ${node.type} does not have an execute function`);
       }
 
-      const result = await nodeType.execute.call(context);
+      const result = await nodeType.execute.call(context as any);
 
       const executionTime = Date.now() - startTime;
 

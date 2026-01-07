@@ -2,11 +2,12 @@
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use tokio::sync::{Mutex, Semaphore};
+use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::sync::{Mutex, Semaphore, mpsc};
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::GenericNamespaced;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::BinaryHeap;
 use std::io::{Read, Write};
 
 #[cfg(target_os = "windows")]
@@ -15,8 +16,8 @@ use std::os::windows::process::CommandExt;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-const NUM_WORKERS: usize = 1;  // Single process with multi-threading inside Python
-const NUM_THREADS: usize = 4;  // Number of Python threads for parallel execution
+const NUM_WORKERS: usize = 2;  // Two Python processes
+const NUM_THREADS: usize = 4;  // Number of concurrent scripts per process
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerTask {
@@ -24,6 +25,36 @@ pub struct WorkerTask {
     pub script_path: String,
     pub args: Vec<String>,
     pub venv: String,  // "venv-numpy1" or "venv-numpy2"
+    pub priority: u8,  // 0=HIGH, 1=NORMAL, 2=LOW
+}
+
+// Priority wrapper for BinaryHeap (min-heap based on priority)
+#[derive(Debug, Clone)]
+struct PrioritizedTask {
+    task: WorkerTask,
+    sequence: u64,  // For FIFO within same priority
+}
+
+impl PartialEq for PrioritizedTask {
+    fn eq(&self, other: &Self) -> bool {
+        self.task.priority == other.task.priority && self.sequence == other.sequence
+    }
+}
+
+impl Eq for PrioritizedTask {}
+
+impl PartialOrd for PrioritizedTask {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for PrioritizedTask {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // Reverse order for min-heap (lower priority value = higher priority)
+        other.task.priority.cmp(&self.task.priority)
+            .then_with(|| self.sequence.cmp(&other.sequence))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,8 +71,9 @@ struct Worker {
 
 pub struct WorkerPool {
     workers: Arc<Mutex<Vec<Worker>>>,
-    task_queue: Arc<Mutex<VecDeque<WorkerTask>>>,
-    semaphore: Arc<Semaphore>,
+    task_sender: mpsc::UnboundedSender<PrioritizedTask>,
+    response_senders: Arc<Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<WorkerResponse>>>>,
+    sequence_counter: Arc<AtomicU64>,
     socket_name: String,
 }
 
@@ -95,25 +127,42 @@ impl WorkerPool {
 
     /// Initialize the worker pool
     pub async fn new(python_base_path: PathBuf) -> Result<Self, String> {
-        eprintln!("[WorkerPool] Initializing with {} workers", NUM_WORKERS);
+        eprintln!("[WorkerPool] Initializing with {} workers, {} threads each", NUM_WORKERS, NUM_THREADS);
 
-        // Create socket name
+        // Create socket name base
         let socket_name = format!("fincept-worker-{}", std::process::id());
-        eprintln!("[WorkerPool] Socket name: {}", socket_name);
+        eprintln!("[WorkerPool] Socket name base: {}", socket_name);
 
-        // Start single worker process with multi-threading
-        eprintln!("[WorkerPool] Starting single worker process with {} threads", NUM_THREADS);
+        // Start multiple worker processes
+        let mut workers_vec = Vec::new();
+        for i in 0..NUM_WORKERS {
+            let worker_socket = format!("{}-{}", socket_name, i);
+            eprintln!("[WorkerPool] Starting worker {} with {} threads", i, NUM_THREADS);
 
-        // Use venv-numpy2 as default (has most modern libraries)
-        let worker = Self::spawn_worker(0, &python_base_path, "venv-numpy2", &socket_name).await?;
-        let workers = vec![worker];
+            // Use venv-numpy2 as default (has most modern libraries)
+            let worker = Self::spawn_worker(i, &python_base_path, "venv-numpy2", &worker_socket).await?;
+            workers_vec.push(worker);
+        }
+
+        let workers = Arc::new(Mutex::new(workers_vec));
+
+        // Create priority queue channel
+        let (task_sender, task_receiver) = mpsc::unbounded_channel::<PrioritizedTask>();
+        let response_senders = Arc::new(Mutex::new(std::collections::HashMap::new()));
+        let sequence_counter = Arc::new(AtomicU64::new(0));
 
         eprintln!("[WorkerPool] All {} workers started successfully", NUM_WORKERS);
 
+        // Spawn queue processor task
+        let workers_clone = workers.clone();
+        let response_senders_clone = response_senders.clone();
+        tokio::spawn(Self::process_queue(task_receiver, workers_clone, response_senders_clone));
+
         Ok(WorkerPool {
-            workers: Arc::new(Mutex::new(workers)),
-            task_queue: Arc::new(Mutex::new(VecDeque::new())),
-            semaphore: Arc::new(Semaphore::new(NUM_WORKERS)),
+            workers,
+            task_sender,
+            response_senders,
+            sequence_counter,
             socket_name,
         })
     }
@@ -182,56 +231,125 @@ impl WorkerPool {
         })
     }
 
+    /// Process the priority queue - distributes tasks to available workers
+    async fn process_queue(
+        mut task_receiver: mpsc::UnboundedReceiver<PrioritizedTask>,
+        workers: Arc<Mutex<Vec<Worker>>>,
+        response_senders: Arc<Mutex<std::collections::HashMap<String, tokio::sync::oneshot::Sender<WorkerResponse>>>>,
+    ) {
+        let mut priority_queue: BinaryHeap<PrioritizedTask> = BinaryHeap::new();
+        let mut worker_index = 0;  // Round-robin worker selection
+
+        eprintln!("[WorkerPool] Queue processor started with {} workers", NUM_WORKERS);
+
+        // Spawn response reader tasks for each worker
+        for i in 0..NUM_WORKERS {
+            let workers_clone = workers.clone();
+            let response_senders_clone = response_senders.clone();
+
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+
+                    let mut workers_lock = workers_clone.lock().await;
+                    if i >= workers_lock.len() {
+                        break;
+                    }
+
+                    let worker = &mut workers_lock[i];
+
+                    // Try to read response (non-blocking check)
+                    let mut len_buf = [0u8; 4];
+                    if worker.socket.read_exact(&mut len_buf).is_ok() {
+                        let response_len = u32::from_le_bytes(len_buf) as usize;
+                        let mut response_buf = vec![0u8; response_len];
+
+                        if worker.socket.read_exact(&mut response_buf).is_ok() {
+                            if let Ok(response) = rmp_serde::from_slice::<WorkerResponse>(&response_buf) {
+                                eprintln!("[WorkerPool] Worker {} completed task {}: {}", i, response.task_id, response.status);
+
+                                // Send response back to caller
+                                let mut senders = response_senders_clone.lock().await;
+                                if let Some(sender) = senders.remove(&response.task_id) {
+                                    let _ = sender.send(response);
+                                }
+                            }
+                        }
+                    }
+
+                    drop(workers_lock);
+                }
+            });
+        }
+
+        loop {
+            tokio::select! {
+                Some(new_task) = task_receiver.recv() => {
+                    // Add new task to priority queue
+                    priority_queue.push(new_task);
+                }
+                _ = tokio::time::sleep(tokio::time::Duration::from_millis(1)) => {
+                    // Try to dispatch tasks to workers
+                    if let Some(prioritized_task) = priority_queue.pop() {
+                        let task = prioritized_task.task;
+
+                        eprintln!("[WorkerPool] Dispatching task {} (priority {}) to worker {}", task.task_id, task.priority, worker_index);
+
+                        // Send task to next worker (round-robin)
+                        let mut workers_lock = workers.lock().await;
+                        if worker_index < workers_lock.len() {
+                            let worker = &mut workers_lock[worker_index];
+
+                            // Serialize and send task
+                            if let Ok(task_bytes) = rmp_serde::to_vec(&task) {
+                                let len_bytes = (task_bytes.len() as u32).to_le_bytes();
+
+                                if worker.socket.write_all(&len_bytes).is_ok()
+                                    && worker.socket.write_all(&task_bytes).is_ok()
+                                    && worker.socket.flush().is_ok() {
+                                    eprintln!("[WorkerPool] Task {} sent to worker {}", task.task_id, worker_index);
+
+                                    // Round-robin to next worker
+                                    worker_index = (worker_index + 1) % NUM_WORKERS;
+                                } else {
+                                    eprintln!("[WorkerPool] Failed to send task {} to worker {}", task.task_id, worker_index);
+                                }
+                            }
+                        }
+                        drop(workers_lock);
+                    }
+                }
+            }
+        }
+    }
+
     /// Execute a task using the worker pool
     pub async fn execute_task(&self, task: WorkerTask) -> Result<WorkerResponse, String> {
-        // Acquire semaphore permit (blocks if all workers busy)
-        let permit = self.semaphore.acquire().await
-            .map_err(|e| format!("Failed to acquire worker: {}", e))?;
+        let task_id = task.task_id.clone();
 
-        // Get the single worker
-        let mut workers = self.workers.lock().await;
-        let worker = &mut workers[0];
+        eprintln!("[WorkerPool] Queuing task {} with priority {}", task_id, task.priority);
 
-        eprintln!("[WorkerPool] Executing task {}", task.task_id);
+        // Create response channel
+        let (response_tx, response_rx) = tokio::sync::oneshot::channel();
 
-        // Serialize task to MessagePack
-        let task_bytes = rmp_serde::to_vec(&task)
-            .map_err(|e| format!("Failed to serialize task: {}", e))?;
+        {
+            let mut senders = self.response_senders.lock().await;
+            senders.insert(task_id.clone(), response_tx);
+        }
 
-        // Send task length + task data
-        let len_bytes = (task_bytes.len() as u32).to_le_bytes();
+        // Add task to priority queue
+        let sequence = self.sequence_counter.fetch_add(1, Ordering::Relaxed);
+        let prioritized_task = PrioritizedTask {
+            task,
+            sequence,
+        };
 
-        worker.socket.write_all(&len_bytes)
-            .map_err(|e| format!("Failed to send task length: {}", e))?;
-        worker.socket.write_all(&task_bytes)
-            .map_err(|e| format!("Failed to send task: {}", e))?;
-        worker.socket.flush()
-            .map_err(|e| format!("Failed to flush socket: {}", e))?;
+        self.task_sender.send(prioritized_task)
+            .map_err(|e| format!("Failed to queue task: {}", e))?;
 
-        eprintln!("[WorkerPool] Task sent, waiting for response...");
-
-        // Read response length
-        let mut len_buf = [0u8; 4];
-        worker.socket.read_exact(&mut len_buf)
-            .map_err(|e| format!("Failed to read response length: {}", e))?;
-        let response_len = u32::from_le_bytes(len_buf) as usize;
-
-        eprintln!("[WorkerPool] Response length: {} bytes", response_len);
-
-        // Read response data
-        let mut response_buf = vec![0u8; response_len];
-        worker.socket.read_exact(&mut response_buf)
-            .map_err(|e| format!("Failed to read response: {}", e))?;
-
-        // Deserialize response
-        let response: WorkerResponse = rmp_serde::from_slice(&response_buf)
-            .map_err(|e| format!("Failed to deserialize response: {}", e))?;
-
-        eprintln!("[WorkerPool] Task {} completed with status: {}", task.task_id, response.status);
-
-        // Release permit
-        drop(permit);
-        drop(workers);
+        // Wait for response
+        let response = response_rx.await
+            .map_err(|e| format!("Failed to receive response: {}", e))?;
 
         Ok(response)
     }
@@ -286,11 +404,22 @@ pub async fn execute_python_script(
     args: Vec<String>,
     venv: &str,
 ) -> Result<String, String> {
+    execute_python_script_with_priority(script_path, args, venv, 1).await  // Default to NORMAL priority
+}
+
+/// Execute a Python script using the worker pool with custom priority
+pub async fn execute_python_script_with_priority(
+    script_path: PathBuf,
+    args: Vec<String>,
+    venv: &str,
+    priority: u8,
+) -> Result<String, String> {
     let task = WorkerTask {
         task_id: uuid::Uuid::new_v4().to_string(),
         script_path: script_path.to_string_lossy().to_string(),
         args,
         venv: venv.to_string(),
+        priority,
     };
 
     let pool_mutex = get_worker_pool().await?;

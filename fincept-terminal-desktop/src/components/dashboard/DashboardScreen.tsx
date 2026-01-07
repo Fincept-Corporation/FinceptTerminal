@@ -56,6 +56,7 @@ const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping/D
 const ExcelTab = React.lazy(() => import('@/components/tabs/ExcelTab'));
 const Visualization3DTab = React.lazy(() => import('@/components/tabs/Visualization3DTab'));
 const PolymarketTab = React.lazy(() => import('@/components/tabs/PolymarketTabEnhanced'));
+const TradeVisualizationTab = React.lazy(() => import('@/components/tabs/TradeVisualizationTab'));
 
 // Loading fallback component for lazy-loaded tabs
 const TabLoadingFallback = () => (
@@ -575,6 +576,7 @@ function FinxeptTerminalContent() {
     { label: 'AI Assistant', shortcut: 'F10', action: () => setActiveTab('chat') },
     { label: 'Agent Config', action: () => setActiveTab('agents') },
     { label: 'MCP Servers', action: () => setActiveTab('mcp'), separator: true },
+    { label: 'Trade Visualization', action: () => setActiveTab('trade-viz') },
     { label: 'Excel Workbook', action: () => setActiveTab('excel') },
     { label: 'Node Editor', action: () => setActiveTab('nodes') },
     { label: 'Code Editor', action: () => setActiveTab('code') },
@@ -1035,6 +1037,11 @@ function FinxeptTerminalContent() {
             <TabsContent value="geopolitics" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <GeopoliticsTab />
+              </React.Suspense>
+            </TabsContent>
+            <TabsContent value="trade-viz" className="h-full m-0 p-0">
+              <React.Suspense fallback={<TabLoadingFallback />}>
+                <TradeVisualizationTab />
               </React.Suspense>
             </TabsContent>
             <TabsContent value="chat" className="h-full m-0 p-0">

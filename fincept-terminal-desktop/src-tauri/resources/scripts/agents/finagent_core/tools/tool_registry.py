@@ -133,11 +133,11 @@ class ToolRegistry:
         """Register built-in Agno toolkits"""
         try:
             # Web search toolkit
-            from agno.tools.duckduckgo import DuckDuckGoTools
-            self.register_toolkit("web_search", DuckDuckGoTools())
+            from agno.tools.duckduckgo import DuckDuckGo
+            self.register_toolkit("web_search", DuckDuckGo())
             logger.info("Registered DuckDuckGo search toolkit")
         except ImportError:
-            logger.warning("DuckDuckGo toolkit not available")
+            logger.warning("DuckDuckGo toolkit not available. Install: pip install 'agno[duckduckgo]'")
 
         try:
             # File tools
@@ -148,12 +148,12 @@ class ToolRegistry:
             logger.warning("File tools not available")
 
         try:
-            # Python tools
-            from agno.tools.python import PythonTools
-            self.register_toolkit("python_tools", PythonTools())
-            logger.info("Registered Python tools")
+            # Shell tools
+            from agno.tools.shell import ShellTools
+            self.register_toolkit("shell_tools", ShellTools())
+            logger.info("Registered shell tools")
         except ImportError:
-            logger.warning("Python tools not available")
+            logger.warning("Shell tools not available")
 
     def _register_financial_tools(self):
         """Register custom financial analysis tools"""
@@ -258,14 +258,14 @@ class ToolRegistry:
             """
             try:
                 import json
-                from agno.tools.duckduckgo import DuckDuckGoTools
+                from agno.tools.duckduckgo import DuckDuckGo
 
-                search = DuckDuckGoTools()
-                # This is a placeholder - actual implementation would use the search
+                search = DuckDuckGo()
+                results = search.search(query, max_results=max_results)
                 return json.dumps({
                     "query": query,
-                    "results": [],
-                    "note": "News search functionality"
+                    "results": results if results else [],
+                    "count": len(results) if results else 0
                 })
             except Exception as e:
                 return json.dumps({"error": str(e)})

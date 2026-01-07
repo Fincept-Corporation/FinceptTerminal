@@ -1761,7 +1761,20 @@ pub fn run() {
             commands::database::db_get_recent_excel_files,
             commands::database::db_create_excel_snapshot,
             commands::database::db_get_excel_snapshots,
-            commands::database::db_delete_excel_snapshot
+            commands::database::db_delete_excel_snapshot,
+            // Alpha Arena Bridge Commands
+            commands::alpha_arena_bridge::paper_trading_create_portfolio,
+            commands::alpha_arena_bridge::paper_trading_get_portfolio,
+            commands::alpha_arena_bridge::paper_trading_update_balance,
+            commands::alpha_arena_bridge::paper_trading_get_positions,
+            commands::alpha_arena_bridge::paper_trading_create_position,
+            commands::alpha_arena_bridge::paper_trading_update_position,
+            commands::alpha_arena_bridge::paper_trading_create_order,
+            commands::alpha_arena_bridge::paper_trading_get_orders,
+            commands::alpha_arena_bridge::paper_trading_update_order,
+            commands::alpha_arena_bridge::paper_trading_create_trade,
+            commands::alpha_arena_bridge::paper_trading_get_trades,
+            commands::alpha_arena_bridge::alpha_arena_record_decision
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

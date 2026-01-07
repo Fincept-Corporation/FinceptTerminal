@@ -9,14 +9,24 @@ pub async fn execute_python_script_async(
     script_path: &PathBuf,
     args: Vec<String>,
 ) -> Result<String, String> {
+    execute_python_script_async_with_priority(script_path, args, 1).await  // Default to NORMAL
+}
+
+/// Execute a Python script with custom priority (async version)
+pub async fn execute_python_script_async_with_priority(
+    script_path: &PathBuf,
+    args: Vec<String>,
+    priority: u8,
+) -> Result<String, String> {
     // Determine venv based on script path or library requirements
     let venv = determine_venv_for_script(script_path);
 
-    // Use worker pool
-    crate::worker_pool::execute_python_script(
+    // Use worker pool with priority
+    crate::worker_pool::execute_python_script_with_priority(
         script_path.clone(),
         args,
         venv,
+        priority,
     ).await
 }
 

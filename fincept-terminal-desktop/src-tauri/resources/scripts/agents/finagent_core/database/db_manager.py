@@ -64,7 +64,7 @@ class DatabaseManager:
     def _create_sqlite_db(self, db_file: Optional[str] = None, **kwargs):
         """Create SQLite database"""
         try:
-            from agno.database import SqliteDb
+            from agno.storage.agent.sqlite import SqliteAgentStorage
 
             if not db_file:
                 # Default database location
@@ -73,16 +73,16 @@ class DatabaseManager:
                 db_file = str(db_path)
 
             logger.info(f"Creating SQLite database at: {db_file}")
-            return SqliteDb(db_file=db_file, **kwargs)
+            return SqliteAgentStorage(table_name="agents", db_file=db_file)
 
         except ImportError:
-            logger.error("Agno SQLite support not available")
+            logger.error("Agno SQLite support not available. Install: pip install agno")
             raise
 
     def _create_postgres_db(self, url: Optional[str] = None, **kwargs):
         """Create PostgreSQL database"""
         try:
-            from agno.database import PostgresDb
+            from agno.storage.agent.postgres import PostgresAgentStorage
 
             if not url:
                 # Try to get from environment
@@ -95,22 +95,23 @@ class DatabaseManager:
                 )
 
             logger.info(f"Creating PostgreSQL database connection")
-            return PostgresDb(url=url, **kwargs)
+            return PostgresAgentStorage(table_name="agents", db_url=url)
 
         except ImportError:
-            logger.error("Agno PostgreSQL support not installed. Install: pip install agno[postgres]")
+            logger.error("Agno PostgreSQL support not installed. Install: pip install 'agno[postgres]'")
             raise
 
     def _create_memory_db(self):
         """Create in-memory database (for testing)"""
         try:
-            from agno.database import InMemoryDb
+            # Agno doesn't have InMemoryDb, use SQLite in-memory instead
+            from agno.storage.agent.sqlite import SqliteAgentStorage
 
             logger.info("Creating in-memory database")
-            return InMemoryDb()
+            return SqliteAgentStorage(table_name="agents", db_file=":memory:")
 
         except ImportError:
-            logger.error("Agno InMemoryDb not available")
+            logger.error("Agno SQLite support not available")
             raise
 
     def close(self):

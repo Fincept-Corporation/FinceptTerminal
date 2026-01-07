@@ -1,8 +1,8 @@
 # Agno Core Requirements
 # Install with: pip install -r requirements.txt
 
-# Core Agno Framework
-agno>=1.0.0
+# Core Agno Framework (Latest version as of Jan 2026)
+agno>=2.3.23
 
 # LLM Provider Support
 openai>=1.0.0
