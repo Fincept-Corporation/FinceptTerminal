@@ -20,6 +20,26 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 * * *
 
+<!-- DOWNLOAD_SECTION_START -->
+
+## 📥 Descargar la última versión
+
+**Versión:**`v3.1.1`\|**Liberado:**2026-01-06
+
+| Plataforma   | Arquitectura               | Descargar                                                                                                                              |
+| ------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **macos**    | Silicio de manzana         | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macos**    | Intel                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **linux**    | x64 (Imagen de aplicación) | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **linux**    | x64 (Debian)               | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **ventanas** | hshch                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+
+[Ver todos los lanzamientos](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+<!-- DOWNLOAD_SECTION_END -->
+
+* * *
+
 ## 🎯 Lo que nos diferencia
 
 **Terminal Fincept**es una plataforma financiera de código abierto creada para aquellos que se niegan a verse limitados por el software tradicional. Competimos en**profundidad analítica**y**accesibilidad a los datos**—No en información privilegiada ni en feeds exclusivos.

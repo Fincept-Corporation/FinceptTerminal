@@ -20,6 +20,26 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 
 * * *
 
+<!-- DOWNLOAD_SECTION_START -->
+
+## 📥 최신 릴리스 다운로드
+
+**버전:**`v3.1.1`\|**출시된:**2026-01-06
+
+| 플랫폼       | 건축학       | 다운로드                                                                                                                              |
+| --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| **macOS** | 애플실리콘     | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macOS** | 인텔        | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **리눅스**   | x64(앱이미지) | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **리눅스**   | x64(데비안)  | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **윈도우**   | 쉿         | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+
+[모든 릴리스 보기](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+<!-- DOWNLOAD_SECTION_END -->
+
+* * *
+
 ## 🎯 우리를 차별화하는 요소
 
 **핀셉트 터미널**전통적인 소프트웨어의 제한을 거부하는 사람들을 위해 구축된 오픈 소스 금융 플랫폼입니다. 우리는 경쟁합니다**분석 깊이**그리고**데이터 접근성**—내부자 정보나 독점 피드가 아닙니다.

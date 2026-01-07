@@ -20,6 +20,26 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 * * *
 
+<!-- DOWNLOAD_SECTION_START -->
+
+## 📥 Laden Sie die neueste Version herunter
+
+**Version:**`v3.1.1`\|**Freigegeben:**2026-01-06
+
+| Plattform   | Architektur    | Herunterladen                                                                                                                              |
+| ----------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **macOS**   | Apple Silicon  | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macOS**   | Intel          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **Linux**   | x64 (AppImage) | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **Linux**   | x64 (Debian)   | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **Windows** | hshch          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+
+[Alle Veröffentlichungen anzeigen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+<!-- DOWNLOAD_SECTION_END -->
+
+* * *
+
 ## 🎯 Was uns auszeichnet
 
 **Fincept-Terminal**ist eine Open-Source-Finanzplattform, die für diejenigen entwickelt wurde, die sich nicht durch traditionelle Software einschränken lassen. Wir konkurrieren weiter**Analysetiefe**Und**Datenzugänglichkeit**– nicht auf Insiderinformationen oder exklusiven Feeds.
@@ -67,7 +87,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 </td>
 <td width="50%" valign="top">
 
-### **🤖 KI-gestützte Automatisierung**
+### **🤖 AI-Powered Automation**
 
 ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png)
 
@@ -127,7 +147,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 **Aktienanalyse**
 
 -   Globale Aktienanalyse • Finanzvisualisierung
--   Analyst targets • Valuation metrics
+-   Analystenziele • Bewertungskennzahlen
 
 </td>
 </tr>

@@ -20,6 +20,26 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 * * *
 
+<!-- DOWNLOAD_SECTION_START -->
+
+## 📥 Téléchargez la dernière version
+
+**Version:**`v3.1.1`\|**Libéré:**2026-01-06
+
+| Plate-forme  | Architecture   | Télécharger                                                                                                                              |
+| ------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **macOS**    | Pomme Silicium | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macOS**    | Intel          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **Linux**    | x64 (AppImage) | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **Linux**    | x64 (Debian)   | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **Fenêtres** | hshch          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+
+[Voir toutes les versions](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+<!-- DOWNLOAD_SECTION_END -->
+
+* * *
+
 ## 🎯 Ce qui nous distingue
 
 **Terminal Fincept**est une plateforme financière open source conçue pour ceux qui refusent d'être limités par les logiciels traditionnels. Nous sommes en compétition sur**profondeur d'analyse**et**accessibilité des données**– pas sur les informations privilégiées ou les flux exclusifs.
@@ -31,7 +51,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 | 🌐**Accès aux données** | Plus de 100 connecteurs (DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • Mappeur d'API personnalisé • Aucune restriction de données                   | [Adaptateurs de données](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                      |
 | 🔗**Inter-domaine**     | Intégrer la chaîne d'approvisionnement → portefeuille • Géopolitique → actions • Maritime → macro • Vos données, à votre façon                        | [Système de flux de travail](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                            |
 | 🎨**Flux de travail**   | Éditeur de nœuds visuels • Agents Python • Outils MCP • Automatisation sans code                                                                      | [Nœuds personnalisés](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[Serveurs MCP](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
-| 🚢**Intelligence**      | Suivi maritime 3D • Surveillance par satellite • Cadres géopolitiques • Analyse des routes commerciales                                               | [Onglet Maritime](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                                   |
+| 🚢**Intelligence**      | 3D maritime tracking • Satellite monitoring • Geopolitical frameworks • Trade route analysis                                                          | [Onglet Maritime](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                                   |
 | 💰**Tarifs**            | Gratuit et Open Source (AGPL-3.0) • Licences commerciales disponibles                                                                                 | [Référentiel complet](https://github.com/Fincept-Corporation/FinceptTerminal)•[Licence commerciale](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)                                                                                   |
 
 * * *
@@ -127,7 +147,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 **Recherche sur les actions**
 
 -   Analyse des actions mondiales • Visualisation des données financières
--   Analyst targets • Valuation metrics
+-   Cibles des analystes • Indicateurs de valorisation
 
 </td>
 </tr>
@@ -150,7 +170,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 ## 🔗 La fonctionnalité qui tue : l'intelligence inter-domaines
 
-**Unlike traditional terminals where each module is isolated, Fincept Terminal lets you integrate data across ALL domains:**
+**Contrairement aux terminaux traditionnels où chaque module est isolé, Fincept Terminal vous permet d'intégrer des données dans TOUS les domaines :**
 
     Supply Chain Data → Portfolio Optimization
     Shipping Volumes → GDP Forecasts → Equity Positions

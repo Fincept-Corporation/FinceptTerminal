@@ -20,6 +20,26 @@
 
 * * *
 
+<!-- DOWNLOAD_SECTION_START -->
+
+## 📥 Download Latest Release
+
+**संस्करण:**`v3.1.1`\|**जारी किया:**2026-01-06
+
+| प्लैटफ़ॉर्म   | Architecture   | Download                                                                                                                              |
+| ------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **मैक ओएस**   | एप्पल सिलिकॉन  | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **मैक ओएस**   | इंटेल          | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **लिनक्स**    | x64 (AppImage) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **लिनक्स**    | x64 (डेबियन)   | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **खिड़कियाँ** | hshch          | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+
+[सभी रिलीज़ देखें](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+<!-- DOWNLOAD_SECTION_END -->
+
+* * *
+
 ## 🎯क्या हमें अलग करता है
 
 **फिनसेप्ट टर्मिनल**एक खुला स्रोत वित्तीय मंच है जो उन लोगों के लिए बनाया गया है जो पारंपरिक सॉफ्टवेयर तक सीमित होने से इनकार करते हैं। हम प्रतिस्पर्धा करते हैं**विश्लेषणात्मक गहराई**और**डेटा पहुंच**-अंदरूनी जानकारी या विशेष फ़ीड पर नहीं।

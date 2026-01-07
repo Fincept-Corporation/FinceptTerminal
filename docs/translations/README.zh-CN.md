@@ -20,6 +20,26 @@
 
 * * *
 
+<!-- DOWNLOAD_SECTION_START -->
+
+## 📥 下载最新版本
+
+**版本：**`v3.1.1`\|**发布：**2026-01-06
+
+| 平台        | 建筑学         | 下载                                                                                                                              |
+| --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **macOS** | 苹果硅         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macOS** | 英特尔         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **Linux** | x64（应用程序图像） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **Linux** | x64（Debian） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **视窗**    | 哈什奇         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+
+[查看所有版本](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
+
+<!-- DOWNLOAD_SECTION_END -->
+
+* * *
+
 ## 🎯 是什么让我们与众不同
 
 **金融终端**是一个为那些拒绝受传统软件限制的人打造的开源金融平台。我们竞争的是**分析深度**和**数据可访问性**- 不在内部信息或独家提要中。
