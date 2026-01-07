@@ -444,29 +444,6 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
         </div>
       )}
 
-      {/* Instructions */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: `${BLOOMBERG.PANEL_BG}E6`,
-          border: `1px solid ${BLOOMBERG.BORDER}`,
-          borderRadius: '20px',
-          padding: '8px 16px',
-          fontSize: '10px',
-          color: BLOOMBERG.GRAY,
-          display: 'flex',
-          gap: '16px',
-          backdropFilter: 'blur(10px)'
-        }}
-      >
-        <span>🖱️ Drag to Pan</span>
-        <span>🔍 Scroll to Zoom</span>
-        <span>👆 Click to Select</span>
-        <span>⟲ Reset View</span>
-      </div>
 
       {/* Right side table */}
       <div
