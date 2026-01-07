@@ -48,6 +48,7 @@ fn is_dev_mode() -> bool {
 
 fn get_install_dir(app: &AppHandle) -> Result<PathBuf, String> {
     if is_dev_mode() {
+        // Dev mode: use OS-specific user directory
         let base_dir = if cfg!(target_os = "windows") {
             std::env::var("LOCALAPPDATA")
                 .map(PathBuf::from)
@@ -63,8 +64,15 @@ fn get_install_dir(app: &AppHandle) -> Result<PathBuf, String> {
         };
         Ok(base_dir.join("fincept-dev"))
     } else {
-        app.path().resource_dir()
-            .map_err(|e| format!("Failed to get resource dir: {}", e))
+        // Production: use app data directory (writable, persists across updates)
+        // Windows: C:\Users\<Username>\AppData\Roaming\com.fincept.terminal\
+        // macOS: ~/Library/Application Support/com.fincept.terminal/
+        // Linux: ~/.local/share/com.fincept.terminal/
+        let app_data_dir = app.path().app_data_dir()
+            .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+        eprintln!("[SETUP] Production install directory: {:?}", app_data_dir);
+        Ok(app_data_dir)
     }
 }
 
@@ -232,7 +240,7 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
         let mut cmd = Command::new("powershell");
         cmd.args(&[
             "-Command",
-            &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", download_url, zip_path.display())
+            &format!("Invoke-WebRequest -Uri '{}' -OutFile \"{}\"", download_url, zip_path.display())
         ]);
         cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -438,7 +446,7 @@ async fn install_bun(app: &AppHandle, install_dir: &PathBuf) -> Result<(), Strin
         let mut cmd = Command::new("powershell");
         cmd.args(&[
             "-Command",
-            &format!("Invoke-WebRequest -Uri '{}' -OutFile '{}'", download_url, zip_path.display())
+            &format!("Invoke-WebRequest -Uri '{}' -OutFile \"{}\"", download_url, zip_path.display())
         ]);
         cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -864,6 +872,28 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
     #[cfg(not(target_os = "macos"))]
     let needs_setup = !python_installed || !bun_installed || !packages_installed;
 
+    // Initialize worker pool in background if setup is already complete (non-blocking)
+    if !needs_setup && python_installed {
+        eprintln!("[SETUP] Python already installed, initializing worker pool in background...");
+        let app_clone = app.clone();
+        std::thread::spawn(move || {
+            let install_dir = match get_install_dir(&app_clone) {
+                Ok(dir) => dir,
+                Err(e) => {
+                    eprintln!("[SETUP] Failed to get install dir: {}", e);
+                    return;
+                }
+            };
+
+            if let Err(e) = crate::python_runtime::initialize_global(install_dir) {
+                eprintln!("[SETUP] Warning: Failed to initialize worker pool: {}", e);
+            } else {
+                eprintln!("[SETUP] Worker pool initialized successfully in background");
+            }
+        });
+        eprintln!("[SETUP] Worker pool initialization started in background (non-blocking)");
+    }
+
     Ok(SetupStatus {
         python_installed,
         bun_installed,
@@ -964,6 +994,19 @@ pub async fn run_setup(app: AppHandle) -> Result<String, String> {
         }
 
         emit_progress(&app, "complete", 100, "Setup complete!", false);
+
+        // Initialize worker pool in background (non-blocking)
+        eprintln!("[SETUP] Initializing worker pool in background...");
+        let app_clone = app.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = crate::python_runtime::initialize_global(install_dir.clone()) {
+                eprintln!("[SETUP] Warning: Failed to initialize worker pool: {}", e);
+            } else {
+                eprintln!("[SETUP] Worker pool initialized successfully in background");
+            }
+        });
+        eprintln!("[SETUP] Worker pool initialization started in background (non-blocking)");
+
         Ok("Setup complete".to_string())
     }.await;
 

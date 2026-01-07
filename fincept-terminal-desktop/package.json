@@ -1,15 +1,17 @@
 {
   "name": "fincept-terminal-desktop",
   "private": true,
-  "version": "3.0.12",
+  "version": "3.1.0",
   "type": "module",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsc && cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "bun run tauri dev",
     "tauri:build": "bun run tauri build",
+    "tauri:build:msstore": "bun run tauri build --config src-tauri/tauri.microsoftstore.conf.json",
     "bump-version": "bun scripts/bump-version.js"
   },
   "dependencies": {
@@ -122,6 +124,7 @@
     "baseline-browser-mapping": "^2.8.32",
     "browserify-zlib": "^0.2.0",
     "buffer": "^6.0.3",
+    "cross-env": "^10.1.0",
     "http-proxy-agent": "^7.0.2",
     "https-browserify": "^1.0.0",
     "https-proxy-agent": "^7.0.6",

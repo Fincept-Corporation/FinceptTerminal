@@ -1,38 +1,49 @@
-// PyO3-based Python Runtime Module
-// Replaces subprocess execution with embedded Python interpreter
+// Python Runtime Module - Worker Pool Integration
+// Provides backward-compatible API using worker pool instead of PyO3
 
-use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyModule};
 use std::path::PathBuf;
-use std::sync::Mutex;
-use once_cell::sync::Lazy;
 
-// Global Python runtime instance (singleton)
-static PYTHON_RUNTIME: Lazy<Mutex<PythonRuntime>> = Lazy::new(|| {
-    Mutex::new(PythonRuntime::new().expect("Failed to initialize Python runtime"))
-});
+/// Execute a Python script using the worker pool (async version)
+/// This is the primary execution method - fast, persistent workers, no subprocess spawning
+pub async fn execute_python_script_async(
+    script_path: &PathBuf,
+    args: Vec<String>,
+) -> Result<String, String> {
+    // Determine venv based on script path or library requirements
+    let venv = determine_venv_for_script(script_path);
 
-pub struct PythonRuntime {
-    // Flag to track if heavy libraries are preloaded
-    preloaded: bool,
+    // Use worker pool
+    crate::worker_pool::execute_python_script(
+        script_path.clone(),
+        args,
+        venv,
+    ).await
 }
 
-impl PythonRuntime {
-    /// Initialize the Python runtime
-    pub fn new() -> PyResult<Self> {
-        // Initialize Python interpreter (only happens once)
-        pyo3::prepare_freethreaded_python();
+/// Execute a Python script using the worker pool (blocking sync wrapper)
+/// Backward-compatible sync API that internally uses async runtime
+pub fn execute_python_script(
+    script_path: &PathBuf,
+    args: Vec<String>,
+) -> Result<String, String> {
+    // Get or create a tokio runtime handle
+    let handle = tokio::runtime::Handle::try_current()
+        .ok();
 
-        Ok(Self {
-            preloaded: false,
-        })
-    }
-
-    /// Preload heavy dependencies (pandas, numpy) to cache them
-    pub fn preload_dependencies(&mut self) -> PyResult<()> {
-        if self.preloaded {
-            return Ok(());
+    match handle {
+        Some(h) => {
+            // We're already in a tokio runtime, use block_in_place
+            tokio::task::block_in_place(|| {
+                h.block_on(execute_python_script_async(script_path, args))
+            })
         }
+        None => {
+            // No runtime, create one temporarily
+            let rt = tokio::runtime::Runtime::new()
+                .map_err(|e| format!("Failed to create runtime: {}", e))?;
+            rt.block_on(execute_python_script_async(script_path, args))
+        }
+ feature/peer-comparison-and-technicals-fix
 
         Python::with_gil(|py| {
             // Preload common heavy libraries
@@ -137,40 +148,94 @@ impl PythonRuntime {
 
             Ok(String::new())
         })
+      main
     }
 }
 
-/// Get the global Python runtime instance
-pub fn get_runtime() -> &'static Mutex<PythonRuntime> {
-    &PYTHON_RUNTIME
+/// Execute Python code directly (for simple calculations)
+/// Note: This spawns a temporary Python process since workers are script-based
+pub async fn execute_python_code(code: &str) -> Result<String, String> {
+    // For inline code execution, we need to write to a temp file
+    // or use a dedicated eval worker (future enhancement)
+    use std::io::Write;
+
+    let temp_dir = std::env::temp_dir();
+    let script_path = temp_dir.join(format!("temp_code_{}.py", uuid::Uuid::new_v4()));
+
+    // Write code to temp file with main() wrapper
+    let wrapped_code = format!(
+        r#"
+import json
+
+def main(args):
+    {}
+    # Return result if available
+    if 'result' in locals():
+        return json.dumps({{"result": result}})
+    return json.dumps({{"result": None}})
+
+if __name__ == '__main__':
+    import sys
+    print(main(sys.argv[1:]))
+"#,
+        code
+    );
+
+    let mut file = std::fs::File::create(&script_path)
+        .map_err(|e| format!("Failed to create temp script: {}", e))?;
+    file.write_all(wrapped_code.as_bytes())
+        .map_err(|e| format!("Failed to write temp script: {}", e))?;
+    drop(file);
+
+    // Execute using worker pool
+    let result = execute_python_script_async(&script_path, vec![]).await;
+
+    // Clean up temp file
+    let _ = std::fs::remove_file(&script_path);
+
+    result
 }
 
-/// Execute a Python script (public API)
-pub fn execute_python_script(
-    script_path: &PathBuf,
-    args: Vec<String>,
-) -> Result<String, String> {
-    let mut runtime = get_runtime()
-        .lock()
-        .map_err(|e| format!("Failed to lock Python runtime: {}", e))?;
+/// Determine which venv to use based on script path
+fn determine_venv_for_script(script_path: &PathBuf) -> &'static str {
+    let path_str = script_path.to_string_lossy().to_lowercase();
 
-    // Preload dependencies on first use
-    if !runtime.preloaded {
-        runtime.preload_dependencies()
-            .map_err(|e| format!("Failed to preload dependencies: {}", e))?;
+    // NumPy 1.x libraries
+    if path_str.contains("vectorbt")
+        || path_str.contains("backtesting")
+        || path_str.contains("gluonts")
+        || path_str.contains("functime")
+        || path_str.contains("pyportfolioopt")
+        || path_str.contains("pyqlib")
+        || path_str.contains("rdagent")
+        || path_str.contains("gs-quant")
+    {
+        return "venv-numpy1";
     }
 
-    // Execute script
-    runtime.execute_script(script_path, args)
-        .map_err(|e| format!("Python execution failed: {}", e))
+    // Default to NumPy 2.x
+    "venv-numpy2"
 }
 
-/// Execute Python code directly (public API)
-pub fn execute_python_code(code: &str) -> Result<String, String> {
-    let runtime = get_runtime()
-        .lock()
-        .map_err(|e| format!("Failed to lock Python runtime: {}", e))?;
+/// Initialize worker pool (async version)
+pub async fn initialize_global_async(python_base_path: PathBuf) -> Result<(), String> {
+    crate::worker_pool::initialize_worker_pool(python_base_path).await
+}
 
-    runtime.execute_code(code)
-        .map_err(|e| format!("Python execution failed: {}", e))
+/// Initialize worker pool (blocking sync wrapper)
+pub fn initialize_global(python_base_path: PathBuf) -> Result<(), String> {
+    let handle = tokio::runtime::Handle::try_current().ok();
+
+    match handle {
+        Some(h) => {
+            tokio::task::block_in_place(|| {
+                h.block_on(initialize_global_async(python_base_path))
+            })
+        }
+        None => {
+            let rt = tokio::runtime::Runtime::new()
+                .map_err(|e| format!("Failed to create runtime: {}", e))?;
+            rt.block_on(initialize_global_async(python_base_path))
+        }
+    }
 }

@@ -1,13 +1,27 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "bundle": {
+    "active": true,
+    "targets": ["msi"],
+    "createUpdaterArtifacts": false,
     "windows": {
-      "signCommand": "powershell -ExecutionPolicy Bypass -File sign-wrapper.ps1 %1",
+      "signCommand": {
+        "cmd": "cmd",
+        "args": ["/C", "C:\\windowsdisk\\finceptTerminal\\fincept-terminal-desktop\\src-tauri\\sign.bat", "%1"]
+      },
       "digestAlgorithm": "sha256",
       "timestampUrl": "http://timestamp.digicert.com",
       "webviewInstallMode": {
         "type": "offlineInstaller"
+      },
+      "wix": {
+        "language": "en-US"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "active": false
     }
   }
 }

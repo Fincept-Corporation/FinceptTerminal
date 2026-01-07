@@ -22,6 +22,7 @@ import NewsTab from '@/components/tabs/NewsTab';
 import WatchlistTab from '@/components/tabs/WatchlistTab';
 import ChatTab from '@/components/tabs/ChatTab';
 import ProfileTab from '@/components/tabs/ProfileTab';
+import AboutTab from '@/components/tabs/AboutTab';
 import MarketplaceTab from '@/components/tabs/MarketplaceTab';
 import PortfolioTab from '@/components/tabs/portfolio-tab/PortfolioTab';
 import DocsTab from '@/components/tabs/docs/DocsTab';
@@ -602,7 +603,7 @@ function FinxeptTerminalContent() {
     { label: 'Documentation', action: () => setActiveTab('docs') },
     { label: 'Support Tickets', action: () => setActiveTab('support') },
     { label: 'Keyboard Shortcuts', shortcut: 'Ctrl+/', action: 'show_shortcuts', separator: true },
-    { label: 'About Fincept', action: 'show_about' },
+    { label: 'About Fincept', action: () => setActiveTab('about') },
     { label: 'Check for Updates', action: 'check_updates' },
     { label: 'Logout', icon: <LogOut size={12} />, action: 'logout', separator: true }
   ];
@@ -1047,6 +1048,9 @@ function FinxeptTerminalContent() {
             </TabsContent>
             <TabsContent value="profile" className="h-full m-0 p-0">
               <ProfileTab />
+            </TabsContent>
+            <TabsContent value="about" className="h-full m-0 p-0">
+              <AboutTab />
             </TabsContent>
             <TabsContent value="marketplace" className="h-full m-0 p-0">
               <MarketplaceTab />

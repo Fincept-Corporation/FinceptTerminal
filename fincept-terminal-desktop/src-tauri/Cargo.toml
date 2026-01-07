@@ -1,10 +1,10 @@
 [package]
 name = "fincept-terminal-desktop"
-version = "3.0.12"
+version = "3.1.0"
 description = "Professional-grade financial analysis platform with AI-powered insights and real-time market data"
 authors = ["Fincept Corporation <support@fincept.in>"]
 edition = "2021"
-license = "MIT"
+license = "AGPL-3.0-or-later"
 homepage = "https://product.fincept.in"
 repository = "https://github.com/Fincept-Corporation/FinceptTerminal"
 
@@ -49,8 +49,9 @@ which = "7.0"
 printpdf = "0.7"
 flate2 = "1.0"  # For tar.gz extraction (macOS/Linux)
 tar = "0.4"  # For tar archive extraction
-pyo3 = { version = "0.23", features = ["auto-initialize"] }
 hashbrown = "0.15"  # Faster HashMap alternative
+interprocess = { version = "2.2", features = ["tokio"] }  # Unix domain sockets IPC
+rmp-serde = "1.3"  # MessagePack serialization
 ahash = "0.8"  # Fast hashing for orderbook
 smallvec = "1.13"  # Stack-allocated vectors for small arrays
 

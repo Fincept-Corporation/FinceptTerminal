@@ -1,195 +1,163 @@
-# Add New Python Data Source
+# Adding a New Data Source
 
-## Quick Guide for Adding Financial APIs
+Quick guide to add a new data source from Python to Frontend.
 
-### Step 1: Choose Your Data Source
+## Step 1: Create Python Script
 
-**Good options for beginners:**
-- Alpha Vantage (stocks, forex)
-- Twelve Data (stocks, crypto)
-- Financial Modeling Prep (stocks, financials)
-- CoinGecko (cryptocurrency)
-- FRED (economic data)
-
-### Step 2: Create Your Data Source File
-
-1. Navigate to: `fincept_terminal/Agents/src/tools/`
-2. Create new file: `your_source_name.py`
-3. Use this template:
+Location: `src-tauri/resources/scripts/your_source_data.py`
 
 ```python
-"""
-Your Source Name Data Fetcher
-Fetches data from [API Name]
-Returns structured data for analysis
-"""
+import sys
 
-import requests
-import os
-from typing import Dict, Any, List
-from .api import get_financial_data
+def main():
+    if len(sys.argv) < 2:
+        print("Error: No command provided")
+        return
 
-# ===== DATA SOURCES REQUIRED =====
-# INPUT:
-#   - ticker symbols (array)
-#   - API_KEY (environment variable)
-#   - data_type (string): "quote", "historical", etc.
-#
-# OUTPUT:
-#   - Financial data (prices, volume, etc.)
-#   - Analysis results (metrics, indicators)
-#
-# PARAMETERS:
-#   - period: "daily", "weekly", "monthly"
-#   - limit: Number of records to fetch
+    command = sys.argv[1]
 
-API_KEY = os.environ.get('YOUR_SOURCE_API_KEY', '')
-BASE_URL = "https://api.example.com"
+    if command == "get_data":
+        # Your data fetching logic
+        result = fetch_some_data()
+        print(result)  # Output to stdout
 
-def fetch_stock_data(symbol: str, data_type: str = "quote") -> Dict[str, Any]:
-    """Fetch stock data from API"""
+    elif command == "search":
+        query = sys.argv[2] if len(sys.argv) > 2 else ""
+        # Your search logic
+        print(search_results)
 
-    if not API_KEY:
-        return {"error": "API key not configured"}
-
-    try:
-        # Make API request
-        url = f"{BASE_URL}/stock/{data_type}"
-        params = {
-            "symbol": symbol,
-            "apikey": API_KEY
-        }
-
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-
-        data = response.json()
-
-        # Format the response
-        return {
-            "symbol": symbol,
-            "price": data.get("price", 0),
-            "volume": data.get("volume", 0),
-            "change": data.get("change", 0),
-            "timestamp": data.get("timestamp")
-        }
-
-    except requests.exceptions.RequestException as e:
-        return {"error": f"Network error: {str(e)}"}
-    except Exception as e:
-        return {"error": str(e)}
-
-def get_multiple_symbols(symbols: List[str]) -> Dict[str, Any]:
-    """Fetch data for multiple symbols"""
-    results = {}
-
-    for symbol in symbols:
-        data = fetch_stock_data(symbol)
-        results[symbol] = data
-
-    return results
+if __name__ == "__main__":
+    main()
 ```
 
-### Step 3: Test Your Code
+**Key Points:**
+- Accept commands via `sys.argv`
+- Print results to stdout (JSON recommended)
+- Handle errors gracefully
 
-```python
-# Test with a single symbol
-result = fetch_stock_data("AAPL")
-print(result)
+## Step 2: Create Rust Bridge
 
-# Test with multiple symbols
-symbols = ["AAPL", "GOOGL", "MSFT"]
-results = get_multiple_symbols(symbols)
-print(results)
+Location: `src-tauri/src/commands/your_source.rs`
+
+```rust
+use std::process::Command;
+use crate::utils::python::{get_python_path, get_script_path};
+
+/// Execute your data source Python script
+#[tauri::command]
+pub async fn execute_your_source_command(
+    app: tauri::AppHandle,
+    command: String,
+    args: Vec<String>,
+) -> Result<String, String> {
+    let python_path = get_python_path(&app)?;
+    let script_path = get_script_path(&app, "your_source_data.py")?;
+
+    if !script_path.exists() {
+        return Err(format!("Script not found at: {}", script_path.display()));
+    }
+
+    let mut cmd_args = vec![script_path.to_string_lossy().to_string(), command];
+    cmd_args.extend(args);
+
+    let output = Command::new(&python_path)
+        .args(&cmd_args)
+        .output()
+        .map_err(|e| format!("Failed to execute command: {}", e))?;
+
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    } else {
+        Err(String::from_utf8_lossy(&output.stderr).to_string())
+    }
+}
+
+/// Get specific data (wrapper for convenience)
+#[tauri::command]
+pub async fn get_your_source_data(
+    app: tauri::AppHandle,
+    param: String,
+) -> Result<String, String> {
+    execute_your_source_command(app, "get_data".to_string(), vec![param]).await
+}
 ```
 
-### Step 4: Add Documentation
+## Step 3: Register Module
 
-Add to your file:
-- What API it connects to
-- How to get API key
-- Available data types
-- Example usage
+**File: `src-tauri/src/commands/mod.rs`**
 
-### Step 5: Update Agent Files
-
-Add your new data source to relevant agents:
-
-```python
-# In agent files like warren_buffett_agent.py
-from .tools.your_source_name import fetch_stock_data
-
-# Use in analysis
-data = fetch_stock_data(ticker)
+```rust
+pub mod your_source;
 ```
 
-### Step 6: Create Pull Request
+## Step 4: Register Commands
 
-1. **Commit your changes:**
-```bash
-git add your_source_name.py
-git commit -m "Add [API Name] data source"
+**File: `src-tauri/src/lib.rs`**
+
+Add to the `invoke_handler!` macro:
+
+```rust
+.invoke_handler(tauri::generate_handler![
+    // ... other commands
+    commands::your_source::execute_your_source_command,
+    commands::your_source::get_your_source_data,
+])
 ```
 
-2. **Push and create PR:**
-```bash
-git push origin main
-# Go to GitHub and create Pull Request
+## Step 5: Call from Frontend
+
+**React/TypeScript:**
+
+```typescript
+import { invoke } from '@tauri-apps/api/core';
+
+// Generic command
+const result = await invoke('execute_your_source_command', {
+  command: 'get_data',
+  args: ['param1', 'param2']
+});
+
+// Specific wrapper function
+const data = await invoke('get_your_source_data', {
+  param: 'some_value'
+});
+
+console.log(JSON.parse(result));
 ```
 
-### PR Template:
+## Flow Diagram
 
-```markdown
-## Description
-Add [API Name] data source for [type of data]
-
-## Data Source Information
-- **API Provider**: [Company Name]
-- **Free Tier**: Yes/No (describe limits)
-- **Documentation**: [link to docs]
-- **Data Types**: [list what you implemented]
-
-## Testing
-- [x] Tested with valid symbols
-- [x] Tested error handling
-- [x] Verified output format
-
-## Usage Example
-```python
-from your_source_name import fetch_stock_data
-result = fetch_stock_data("AAPL")
 ```
+Frontend (React)
+    ↓ invoke('command_name', {args})
+Rust Bridge (Tauri Command)
+    ↓ Execute Python with args
+Python Script (Data Source)
+    ↓ Fetch data from API/DB
+Python Script
+    ↓ Print to stdout
+Rust Bridge
+    ↓ Capture output
+Frontend
+    ↓ Receive JSON result
 ```
 
-## Requirements Checklist
+## Tips
 
-- [ ] File created in `Agents/src/tools/`
-- [ ] API key uses environment variable
-- [ ] Error handling implemented
-- [ ] Data returned in consistent format
-- [ ] Documentation added
-- [ ] Code tested successfully
-- [ ] Pull request created
+- **Return JSON** from Python for easy parsing
+- **Error handling**: Python errors go to stderr, Rust catches them
+- **Testing**: Test Python script standalone first
+- **Compile**: Run `cargo check` after adding Rust files
+- **Hot reload**: Frontend changes hot-reload, backend needs restart
 
-## Need Help?
+## Example Full Flow
 
-- Check existing files for examples
-- Ask in GitHub Issues
-- Include your code and error messages
+1. Python script fetches stock data from API
+2. Rust command calls Python with symbol parameter
+3. Python returns JSON: `{"price": 150.25, "volume": 1000000}`
+4. Rust receives stdout and returns to frontend
+5. React component displays the data
 
-## Common API Sources
+---
 
-**Stock Market Data:**
-- Alpha Vantage: Free 500 calls/day
-- Twelve Data: Free 800 calls/day
-- Financial Modeling Prep: Free 250 calls/day
-
-**Cryptocurrency:**
-- CoinGecko: No API key needed
-- CoinMarketCap: Free tier available
-
-**Economic Data:**
-- FRED: Federal Reserve data
-- World Bank: Global economic indicators
-
-Start with a simple API that doesn't require complex authentication. Build confidence, then tackle more complex data sources!
+**All 42 data sources follow this exact pattern!**

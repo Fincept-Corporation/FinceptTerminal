@@ -123,9 +123,11 @@ const ForumTab: React.FC = () => {
 
   // Convert API post to UI format
   const convertApiPostToUIFormat = (apiPost: APIForumPost): ForumPost => {
-    const voteScore = apiPost.likes - apiPost.dislikes;
+    const likes = apiPost.likes || 0;
+    const dislikes = apiPost.dislikes || 0;
+    const voteScore = likes - dislikes;
     const sentiment: 'BULLISH' | 'BEARISH' | 'NEUTRAL' = voteScore > 10 ? 'BULLISH' : voteScore < -5 ? 'BEARISH' : 'NEUTRAL';
-    const priority: 'HOT' | 'TRENDING' | 'NORMAL' = apiPost.likes > 300 ? 'HOT' : apiPost.likes > 150 ? 'TRENDING' : 'NORMAL';
+    const priority: 'HOT' | 'TRENDING' | 'NORMAL' = likes > 300 ? 'HOT' : likes > 150 ? 'TRENDING' : 'NORMAL';
 
     const tagMatches = apiPost.content.match(/#\w+/g) || [];
     const tags = tagMatches.slice(0, 5).map(tag => tag.substring(1));
@@ -137,15 +139,15 @@ const ForumTab: React.FC = () => {
       title: apiPost.title,
       content: apiPost.content,
       category: apiPost.category_name?.toUpperCase() || 'GENERAL',
-      categoryId: apiPost.category_id,
+      categoryId: apiPost.category_id || 0,
       tags: tags.length > 0 ? tags : ['DISCUSSION'],
       views: apiPost.views || 0,
       replies: apiPost.reply_count || 0,
-      likes: apiPost.likes || 0,
-      dislikes: apiPost.dislikes || 0,
+      likes,
+      dislikes,
       sentiment,
       priority,
-      verified: apiPost.likes > 100
+      verified: likes > 100
     };
   };
 
@@ -213,43 +215,59 @@ const ForumTab: React.FC = () => {
     try {
       const categoryId = activeCategory === 'ALL' ? null : categories.find(c => c.name === activeCategory)?.id || null;
 
-      // Try to load from cache first (unless forcing refresh)
-      if (!forceRefresh) {
-        const cachedPosts = await sqliteService.getCachedForumPosts(categoryId, sortBy, 5);
-        if (cachedPosts) {
-          console.log('[Forum] Loaded posts from cache');
-          setForumPosts(cachedPosts);
-          setIsLoading(false);
-          return;
-        }
-      }
+      // Skip cache for now to test API
+      console.log('[Forum] Fetching posts - Category:', activeCategory, 'ID:', categoryId, 'Sort:', sortBy);
 
       // Fetch from API
       const { apiKey, deviceId } = getApiCredentials();
       let response;
 
       if (activeCategory === 'ALL') {
-        if (sortBy === 'popular') {
-          response = await ForumApiService.getTrendingPosts(20, 'week', apiKey, deviceId);
-        } else {
-          const firstCategoryId = categories.find(c => c.name !== 'ALL')?.id || 1;
-          response = await ForumApiService.getPostsByCategory(firstCategoryId, sortBy, 20, apiKey, deviceId);
+        // Fetch from all categories by getting from each
+        const allPosts: any[] = [];
+        for (const cat of categories.filter(c => c.id !== undefined)) {
+          const catResponse = await ForumApiService.getPostsByCategory(cat.id, sortBy, 20, apiKey, deviceId);
+          if (catResponse?.success && catResponse.data) {
+            const posts = (catResponse.data as any).data?.posts || [];
+            allPosts.push(...posts);
+          }
         }
+        // Create fake response structure
+        response = {
+          success: true,
+          data: {
+            data: {
+              posts: allPosts
+            }
+          }
+        };
       } else {
         if (categoryId) {
           response = await ForumApiService.getPostsByCategory(categoryId, sortBy, 20, apiKey, deviceId);
         }
       }
 
-      if (response?.success && response.data) {
-        const posts = (response.data as any).posts || [];
-        console.log('[Forum] Fetched posts:', posts.length);
-        const formattedPosts = posts.map(convertApiPostToUIFormat);
-        setForumPosts(formattedPosts);
+      console.log('[Forum] API Response:', JSON.stringify(response, null, 2));
 
-        // Cache the formatted posts
-        await sqliteService.cacheForumPosts(categoryId, sortBy, formattedPosts);
-        console.log('[Forum] Cached posts');
+      if (response?.success && response.data) {
+        const responseData = response.data as any;
+        const posts = responseData.data?.posts || [];
+        console.log('[Forum] Extracted posts:', posts.length, posts);
+
+        if (posts.length > 0) {
+          const formattedPosts = posts.map(convertApiPostToUIFormat);
+          console.log('[Forum] Formatted posts:', formattedPosts);
+          setForumPosts(formattedPosts);
+
+          // Cache the formatted posts
+          await sqliteService.cacheForumPosts(categoryId, sortBy, formattedPosts);
+          console.log('[Forum] Cached posts');
+        } else {
+          console.warn('[Forum] No posts in response');
+          setForumPosts([]);
+        }
+      } else {
+        console.warn('[Forum] Invalid response structure:', response);
       }
     } catch (error) {
       // Silently fail - backend may not be available
