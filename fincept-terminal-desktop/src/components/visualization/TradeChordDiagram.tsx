@@ -1,7 +1,8 @@
 // File: src/components/visualization/TradeChordDiagram.tsx
-// Professional Chord Diagram Visualization for Global Trade Flows
+// Professional Interactive Chord Diagram with Zoom, Pan, and Smart Label Positioning
 
 import React, { useEffect, useRef, useState } from 'react';
+import * as d3 from 'd3';
 import type { ChordData } from '@/services/tradeService';
 
 // Bloomberg Professional Color Palette
@@ -28,293 +29,392 @@ interface TradeChordDiagramProps {
 }
 
 export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredPartner, setHoveredPartner] = useState<number | null>(null);
+  const [selectedPartner, setSelectedPartner] = useState<number | null>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; content: string } | null>(null);
 
   const formatCurrency = (value: number) => {
     if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
     if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
     if (value >= 1e6) return `$${(value / 1e6).toFixed(2)}M`;
+    if (value >= 1e3) return `$${(value / 1e3).toFixed(2)}K`;
     return `$${value.toFixed(2)}`;
   };
 
   useEffect(() => {
-    if (!canvasRef.current || !data) return;
+    if (!svgRef.current || !containerRef.current || !data) return;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const container = containerRef.current;
+    const svg = d3.select(svgRef.current);
 
-    // Set canvas size
-    const container = canvas.parentElement;
-    if (!container) return;
+    // Clear previous content
+    svg.selectAll('*').remove();
 
+    // Get dimensions
     const width = container.clientWidth;
     const height = container.clientHeight;
-    const dpr = window.devicePixelRatio || 1;
-
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-    ctx.scale(dpr, dpr);
-
-    // Clear canvas
-    ctx.fillStyle = BLOOMBERG.DARK_BG;
-    ctx.fillRect(0, 0, width, height);
-
-    // Calculate dimensions
     const centerX = width / 2;
     const centerY = height / 2;
-    const radius = Math.min(width, height) * 0.35;
+    const baseRadius = Math.min(width, height) * 0.3;
+
+    // Set up SVG
+    svg.attr('width', width).attr('height', height);
+
+    // Create zoom behavior
+    const zoom = d3.zoom<SVGSVGElement, unknown>()
+      .scaleExtent([0.5, 5])
+      .on('zoom', (event) => {
+        g.attr('transform', event.transform.toString());
+      });
+
+    svg.call(zoom as any);
+
+    // Main group for zoom/pan
+    const g = svg.append('g');
 
     // Prepare data
-    type PartnerDisplay = {
+    type PartnerData = {
       name: string;
-      export: number;
-      import: number;
-      total: number;
+      exportValue: number;
+      importValue: number;
+      totalTrade: number;
       isSource: boolean;
+      index: number;
     };
 
-    const partners: PartnerDisplay[] = [
-      { name: data.country_name, export: 0, import: 0, total: data.total_trade, isSource: true },
-      ...data.partners.map(p => ({
+    const partners: PartnerData[] = [
+      {
+        name: data.country_name,
+        exportValue: data.total_export,
+        importValue: data.total_import,
+        totalTrade: data.total_trade,
+        isSource: true,
+        index: 0
+      },
+      ...data.partners.map((p, idx) => ({
         name: p.partner_name,
-        export: p.export_value,
-        import: p.import_value,
-        total: p.total_trade,
-        isSource: false
+        exportValue: p.export_value,
+        importValue: p.import_value,
+        totalTrade: p.total_trade,
+        isSource: false,
+        index: idx + 1
       }))
     ];
 
-    const totalTrade = data.partners.reduce((sum, p) => sum + p.total_trade, 0);
+    const totalTrade = d3.sum(partners, p => p.totalTrade);
 
-    // Calculate angles for each partner
-    const angles: { start: number; end: number; partner: typeof partners[0] }[] = [];
-    let currentAngle = -Math.PI / 2; // Start at top
-
-    partners.forEach((partner) => {
-      const proportion = partner.total / (totalTrade + data.total_trade);
+    // Calculate angles
+    let currentAngle = -Math.PI / 2;
+    const arcs = partners.map(partner => {
+      const proportion = partner.totalTrade / totalTrade;
       const angleSpan = proportion * Math.PI * 2;
-      angles.push({
-        start: currentAngle,
-        end: currentAngle + angleSpan,
-        partner
-      });
+      const arc = {
+        partner,
+        startAngle: currentAngle,
+        endAngle: currentAngle + angleSpan,
+        midAngle: currentAngle + angleSpan / 2
+      };
       currentAngle += angleSpan;
+      return arc;
     });
 
-    // Draw arcs (country segments)
-    angles.forEach((angle, idx) => {
-      const isHovered = idx === hoveredPartner;
-      const isSource = angle.partner.isSource;
+    // Create arc generator
+    const arcGenerator = d3.arc<any>()
+      .innerRadius(baseRadius)
+      .outerRadius((d: any) => {
+        const isHovered = d.partner.index === hoveredPartner;
+        const isSelected = d.partner.index === selectedPartner;
+        return baseRadius + (isSelected ? 30 : isHovered ? 25 : 20);
+      })
+      .startAngle((d: any) => d.startAngle)
+      .endAngle((d: any) => d.endAngle);
 
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, angle.start, angle.end);
-      ctx.arc(centerX, centerY, radius + (isHovered ? 25 : 20), angle.end, angle.start, true);
-      ctx.closePath();
+    // Draw arcs
+    const arcGroup = g.append('g').attr('class', 'arcs');
 
-      // Color based on type
-      if (isSource) {
-        ctx.fillStyle = isHovered ? BLOOMBERG.ORANGE : `${BLOOMBERG.ORANGE}CC`;
-      } else {
-        ctx.fillStyle = isHovered ? BLOOMBERG.CYAN : `${BLOOMBERG.CYAN}80`;
-      }
-      ctx.fill();
-
-      // Border
-      ctx.strokeStyle = BLOOMBERG.BORDER;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    });
+    arcGroup.selectAll('path')
+      .data(arcs)
+      .join('path')
+      .attr('d', arcGenerator as any)
+      .attr('transform', `translate(${centerX},${centerY})`)
+      .attr('fill', (d: any) => {
+        if (d.partner.isSource) return BLOOMBERG.ORANGE;
+        return BLOOMBERG.CYAN;
+      })
+      .attr('fill-opacity', (d: any) => {
+        const isHovered = d.partner.index === hoveredPartner;
+        const isSelected = d.partner.index === selectedPartner;
+        if (isSelected) return 1;
+        if (isHovered) return 0.9;
+        return 0.7;
+      })
+      .attr('stroke', BLOOMBERG.BORDER)
+      .attr('stroke-width', 1.5)
+      .style('cursor', 'pointer')
+      .on('mouseenter', function(event, d: any) {
+        setHoveredPartner(d.partner.index);
+        const tooltipContent = d.partner.isSource
+          ? `${d.partner.name}\nTotal Trade: ${formatCurrency(d.partner.totalTrade)}\nExports: ${formatCurrency(d.partner.exportValue)}\nImports: ${formatCurrency(d.partner.importValue)}`
+          : `${d.partner.name}\nTotal: ${formatCurrency(d.partner.totalTrade)}\nExports to ${data.country_name}: ${formatCurrency(d.partner.exportValue)}\nImports from ${data.country_name}: ${formatCurrency(d.partner.importValue)}`;
+        setTooltip({ x: event.pageX, y: event.pageY, content: tooltipContent });
+      })
+      .on('mouseleave', function() {
+        setHoveredPartner(null);
+        setTooltip(null);
+      })
+      .on('click', function(event, d: any) {
+        event.stopPropagation();
+        setSelectedPartner(d.partner.index === selectedPartner ? null : d.partner.index);
+      });
 
     // Draw chords (trade flows)
+    const chordGroup = g.append('g').attr('class', 'chords');
+
     data.partners.forEach((partner, idx) => {
-      const sourceAngle = angles[0]; // Source country
-      const targetAngle = angles[idx + 1]; // Partner country
+      const sourceArc = arcs[0];
+      const targetArc = arcs[idx + 1];
 
-      if (!sourceAngle || !targetAngle) return;
+      if (!sourceArc || !targetArc) return;
 
-      const sourceMid = (sourceAngle.start + sourceAngle.end) / 2;
-      const targetMid = (targetAngle.start + targetAngle.end) / 2;
-
-      // Export chord (source to target)
+      // Export chord (green)
       if (partner.export_value > 0) {
-        drawChord(
-          ctx,
-          centerX,
-          centerY,
-          radius,
-          sourceMid,
-          targetMid,
-          BLOOMBERG.GREEN,
-          partner.export_value / totalTrade,
-          idx === hoveredPartner
+        const path = createChordPath(
+          centerX, centerY, baseRadius,
+          sourceArc.midAngle, targetArc.midAngle
         );
+
+        const thickness = Math.max(1, (partner.export_value / totalTrade) * 25);
+        const isHighlighted = hoveredPartner === idx + 1 || selectedPartner === idx + 1;
+
+        chordGroup.append('path')
+          .attr('d', path)
+          .attr('stroke', BLOOMBERG.GREEN)
+          .attr('stroke-width', isHighlighted ? thickness * 1.5 : thickness)
+          .attr('stroke-opacity', isHighlighted ? 0.9 : 0.4)
+          .attr('fill', 'none')
+          .attr('stroke-linecap', 'round')
+          .style('pointer-events', 'none');
       }
 
-      // Import chord (target to source)
+      // Import chord (red)
       if (partner.import_value > 0) {
-        drawChord(
-          ctx,
-          centerX,
-          centerY,
-          radius,
-          targetMid,
-          sourceMid,
-          BLOOMBERG.RED,
-          partner.import_value / totalTrade,
-          idx === hoveredPartner
+        const path = createChordPath(
+          centerX, centerY, baseRadius,
+          targetArc.midAngle, sourceArc.midAngle
         );
+
+        const thickness = Math.max(1, (partner.import_value / totalTrade) * 25);
+        const isHighlighted = hoveredPartner === idx + 1 || selectedPartner === idx + 1;
+
+        chordGroup.append('path')
+          .attr('d', path)
+          .attr('stroke', BLOOMBERG.RED)
+          .attr('stroke-width', isHighlighted ? thickness * 1.5 : thickness)
+          .attr('stroke-opacity', isHighlighted ? 0.9 : 0.4)
+          .attr('fill', 'none')
+          .attr('stroke-linecap', 'round')
+          .style('pointer-events', 'none');
       }
     });
 
-    // Draw labels
-    ctx.fillStyle = BLOOMBERG.WHITE;
-    ctx.font = '11px "Segoe UI", sans-serif';
-    ctx.textBaseline = 'middle';
+    // Smart label positioning to avoid collisions
+    const labelGroup = g.append('g').attr('class', 'labels');
+    const labelRadius = baseRadius + 45;
+    const minLabelDistance = 18; // Minimum pixels between labels
 
-    angles.forEach((angle, idx) => {
-      const midAngle = (angle.start + angle.end) / 2;
-      const labelRadius = radius + 35;
-      const x = centerX + Math.cos(midAngle) * labelRadius;
-      const y = centerY + Math.sin(midAngle) * labelRadius;
+    // Calculate initial label positions
+    const labelPositions = arcs.map(arc => ({
+      arc,
+      x: centerX + Math.cos(arc.midAngle) * labelRadius,
+      y: centerY + Math.sin(arc.midAngle) * labelRadius,
+      angle: arc.midAngle
+    }));
 
-      // Adjust text alignment based on position
-      const isLeft = midAngle > Math.PI / 2 && midAngle < (3 * Math.PI) / 2;
-      ctx.textAlign = isLeft ? 'right' : 'left';
+    // Adjust positions to avoid collisions (simple repulsion)
+    for (let iteration = 0; iteration < 50; iteration++) {
+      let adjusted = false;
+      for (let i = 0; i < labelPositions.length; i++) {
+        for (let j = i + 1; j < labelPositions.length; j++) {
+          const pos1 = labelPositions[i];
+          const pos2 = labelPositions[j];
+          const dx = pos2.x - pos1.x;
+          const dy = pos2.y - pos1.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // Draw label
-      const isHovered = idx === hoveredPartner;
-      ctx.fillStyle = isHovered ? BLOOMBERG.ORANGE : angle.partner.isSource ? BLOOMBERG.YELLOW : BLOOMBERG.WHITE;
-      ctx.font = isHovered ? 'bold 12px "Segoe UI"' : '11px "Segoe UI"';
-      ctx.fillText(angle.partner.name, x, y);
+          if (distance < minLabelDistance && distance > 0) {
+            adjusted = true;
+            const angle = Math.atan2(dy, dx);
+            const targetDistance = minLabelDistance;
+            const force = (targetDistance - distance) / 2;
+
+            pos1.x -= Math.cos(angle) * force;
+            pos1.y -= Math.sin(angle) * force;
+            pos2.x += Math.cos(angle) * force;
+            pos2.y += Math.sin(angle) * force;
+          }
+        }
+      }
+      if (!adjusted) break;
+    }
+
+    // Draw labels with leader lines
+    labelPositions.forEach((pos, idx) => {
+      const arcMidX = centerX + Math.cos(pos.arc.midAngle) * (baseRadius + 25);
+      const arcMidY = centerY + Math.sin(pos.arc.midAngle) * (baseRadius + 25);
+
+      // Leader line
+      labelGroup.append('line')
+        .attr('x1', arcMidX)
+        .attr('y1', arcMidY)
+        .attr('x2', pos.x)
+        .attr('y2', pos.y)
+        .attr('stroke', BLOOMBERG.MUTED)
+        .attr('stroke-width', 0.5)
+        .attr('stroke-dasharray', '2,2')
+        .attr('opacity', 0.5);
+
+      // Text background for better readability
+      const text = pos.arc.partner.name;
+      const textAlign = pos.angle > Math.PI / 2 && pos.angle < (3 * Math.PI) / 2 ? 'end' : 'start';
+
+      labelGroup.append('text')
+        .attr('x', pos.x)
+        .attr('y', pos.y)
+        .attr('text-anchor', textAlign)
+        .attr('dominant-baseline', 'middle')
+        .attr('font-size', '11px')
+        .attr('font-weight', pos.arc.partner.isSource ? '700' : '400')
+        .attr('font-family', '"Segoe UI", sans-serif')
+        .attr('fill', pos.arc.partner.isSource ? BLOOMBERG.YELLOW : BLOOMBERG.WHITE)
+        .attr('stroke', BLOOMBERG.DARK_BG)
+        .attr('stroke-width', 3)
+        .attr('paint-order', 'stroke')
+        .text(text.length > 15 ? text.substring(0, 15) + '...' : text)
+        .style('cursor', 'pointer')
+        .on('click', function() {
+          setSelectedPartner(pos.arc.partner.index === selectedPartner ? null : pos.arc.partner.index);
+        });
     });
 
-  }, [data, hoveredPartner]);
+    // Add zoom controls
+    const controlsGroup = svg.append('g').attr('class', 'zoom-controls');
 
-  const drawChord = (
-    ctx: CanvasRenderingContext2D,
+    // Zoom in button
+    controlsGroup.append('rect')
+      .attr('x', 20)
+      .attr('y', 20)
+      .attr('width', 32)
+      .attr('height', 32)
+      .attr('rx', 4)
+      .attr('fill', BLOOMBERG.PANEL_BG)
+      .attr('stroke', BLOOMBERG.BORDER)
+      .style('cursor', 'pointer')
+      .on('click', function() {
+        svg.transition().duration(300).call(zoom.scaleBy as any, 1.3);
+      });
+
+    controlsGroup.append('text')
+      .attr('x', 36)
+      .attr('y', 40)
+      .attr('text-anchor', 'middle')
+      .attr('fill', BLOOMBERG.WHITE)
+      .attr('font-size', '20px')
+      .attr('font-weight', 'bold')
+      .text('+')
+      .style('pointer-events', 'none');
+
+    // Zoom out button
+    controlsGroup.append('rect')
+      .attr('x', 20)
+      .attr('y', 60)
+      .attr('width', 32)
+      .attr('height', 32)
+      .attr('rx', 4)
+      .attr('fill', BLOOMBERG.PANEL_BG)
+      .attr('stroke', BLOOMBERG.BORDER)
+      .style('cursor', 'pointer')
+      .on('click', function() {
+        svg.transition().duration(300).call(zoom.scaleBy as any, 0.7);
+      });
+
+    controlsGroup.append('text')
+      .attr('x', 36)
+      .attr('y', 80)
+      .attr('text-anchor', 'middle')
+      .attr('fill', BLOOMBERG.WHITE)
+      .attr('font-size', '20px')
+      .attr('font-weight', 'bold')
+      .text('−')
+      .style('pointer-events', 'none');
+
+    // Reset button
+    controlsGroup.append('rect')
+      .attr('x', 20)
+      .attr('y', 100)
+      .attr('width', 32)
+      .attr('height', 32)
+      .attr('rx', 4)
+      .attr('fill', BLOOMBERG.PANEL_BG)
+      .attr('stroke', BLOOMBERG.BORDER)
+      .style('cursor', 'pointer')
+      .on('click', function() {
+        svg.transition().duration(500).call(
+          zoom.transform as any,
+          d3.zoomIdentity
+        );
+        setSelectedPartner(null);
+      });
+
+    controlsGroup.append('text')
+      .attr('x', 36)
+      .attr('y', 120)
+      .attr('text-anchor', 'middle')
+      .attr('fill', BLOOMBERG.WHITE)
+      .attr('font-size', '16px')
+      .text('⟲')
+      .style('pointer-events', 'none');
+
+    // Click on background to deselect
+    svg.on('click', function() {
+      setSelectedPartner(null);
+    });
+
+  }, [data, hoveredPartner, selectedPartner]);
+
+  // Helper function to create smooth chord paths
+  const createChordPath = (
     centerX: number,
     centerY: number,
     radius: number,
     startAngle: number,
-    endAngle: number,
-    color: string,
-    thickness: number,
-    isHovered: boolean
-  ) => {
+    endAngle: number
+  ): string => {
     const startX = centerX + Math.cos(startAngle) * radius;
     const startY = centerY + Math.sin(startAngle) * radius;
     const endX = centerX + Math.cos(endAngle) * radius;
     const endY = centerY + Math.sin(endAngle) * radius;
 
-    // Control points for bezier curve (towards center)
-    const controlOffset = radius * 0.3;
+    // Control points for smooth bezier curve
+    const controlOffset = radius * 0.25;
     const control1X = centerX + Math.cos(startAngle) * controlOffset;
     const control1Y = centerY + Math.sin(startAngle) * controlOffset;
     const control2X = centerX + Math.cos(endAngle) * controlOffset;
     const control2Y = centerY + Math.sin(endAngle) * controlOffset;
 
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.bezierCurveTo(control1X, control1Y, control2X, control2Y, endX, endY);
-
-    // Style
-    ctx.strokeStyle = isHovered ? color : `${color}60`;
-    ctx.lineWidth = isHovered ? Math.max(3, thickness * 20) : Math.max(1, thickness * 15);
-    ctx.stroke();
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !data) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    const radius = Math.min(rect.width, rect.height) * 0.35;
-
-    // Check if mouse is over any arc
-    const dx = x - centerX;
-    const dy = y - centerY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const angle = Math.atan2(dy, dx);
-
-    if (distance >= radius && distance <= radius + 25) {
-      // Mouse is in arc region
-      type PartnerDisplay = {
-        name: string;
-        export: number;
-        import: number;
-        total: number;
-        isSource: boolean;
-      };
-
-      const partners: PartnerDisplay[] = [
-        { name: data.country_name, export: 0, import: 0, total: data.total_trade, isSource: true },
-        ...data.partners.map(p => ({
-          name: p.partner_name,
-          export: p.export_value,
-          import: p.import_value,
-          total: p.total_trade,
-          isSource: false
-        }))
-      ];
-
-      const totalTrade = data.partners.reduce((sum, p) => sum + p.total_trade, 0);
-      let currentAngle = -Math.PI / 2;
-
-      for (let i = 0; i < partners.length; i++) {
-        const partner = partners[i];
-        const partnerTotalTrade = partner.isSource ? data.total_trade : partner.total;
-        const proportion = partnerTotalTrade / (totalTrade + data.total_trade);
-        const angleSpan = proportion * Math.PI * 2;
-        const endAngle = currentAngle + angleSpan;
-
-        let normalizedAngle = angle;
-        if (normalizedAngle < currentAngle) normalizedAngle += Math.PI * 2;
-
-        if (normalizedAngle >= currentAngle && normalizedAngle < endAngle) {
-          setHoveredPartner(i);
-
-          // Show tooltip
-          const tooltipContent = partner.isSource
-            ? `${data.country_name}\nTotal Trade: ${formatCurrency(data.total_trade)}`
-            : `${partner.name}\nExports: ${formatCurrency(partner.export)}\nImports: ${formatCurrency(partner.import)}\nTotal: ${formatCurrency(partner.total)}`;
-
-          setTooltip({ x: e.clientX, y: e.clientY, content: tooltipContent });
-          return;
-        }
-
-        currentAngle = endAngle;
-      }
-    }
-
-    setHoveredPartner(null);
-    setTooltip(null);
-  };
-
-  const handleMouseLeave = () => {
-    setHoveredPartner(null);
-    setTooltip(null);
+    return `M ${startX} ${startY} C ${control1X} ${control1Y}, ${control2X} ${control2Y}, ${endX} ${endY}`;
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <canvas
-        ref={canvasRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <svg
+        ref={svgRef}
         style={{
           width: '100%',
           height: '100%',
-          cursor: hoveredPartner !== null ? 'pointer' : 'default'
+          backgroundColor: BLOOMBERG.DARK_BG,
+          cursor: 'grab'
         }}
       />
 
@@ -326,21 +426,47 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
             left: tooltip.x + 10,
             top: tooltip.y + 10,
             backgroundColor: BLOOMBERG.PANEL_BG,
-            border: `1px solid ${BLOOMBERG.ORANGE}`,
-            padding: '8px 12px',
-            borderRadius: '4px',
-            fontSize: '11px',
+            border: `2px solid ${BLOOMBERG.ORANGE}`,
+            padding: '10px 14px',
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: '500',
             color: BLOOMBERG.WHITE,
             pointerEvents: 'none',
             zIndex: 10000,
             whiteSpace: 'pre-line',
-            boxShadow: `0 4px 12px ${BLOOMBERG.DARK_BG}80`,
-            fontFamily: '"Segoe UI", sans-serif'
+            boxShadow: `0 8px 24px ${BLOOMBERG.DARK_BG}CC`,
+            fontFamily: '"Segoe UI", sans-serif',
+            backdropFilter: 'blur(10px)'
           }}
         >
           {tooltip.content}
         </div>
       )}
+
+      {/* Instructions */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: `${BLOOMBERG.PANEL_BG}E6`,
+          border: `1px solid ${BLOOMBERG.BORDER}`,
+          borderRadius: '20px',
+          padding: '8px 16px',
+          fontSize: '10px',
+          color: BLOOMBERG.GRAY,
+          display: 'flex',
+          gap: '16px',
+          backdropFilter: 'blur(10px)'
+        }}
+      >
+        <span>🖱️ Drag to Pan</span>
+        <span>🔍 Scroll to Zoom</span>
+        <span>👆 Click to Select</span>
+        <span>⟲ Reset View</span>
+      </div>
 
       {/* Right side table */}
       <div
@@ -348,13 +474,14 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
           position: 'absolute',
           right: '20px',
           top: '20px',
-          backgroundColor: BLOOMBERG.PANEL_BG,
+          backgroundColor: `${BLOOMBERG.PANEL_BG}F2`,
           border: `1px solid ${BLOOMBERG.BORDER}`,
-          borderRadius: '4px',
+          borderRadius: '8px',
           padding: '12px',
           maxWidth: '320px',
           maxHeight: 'calc(100% - 40px)',
-          overflowY: 'auto'
+          overflowY: 'auto',
+          backdropFilter: 'blur(10px)'
         }}
       >
         <div style={{
@@ -372,16 +499,27 @@ export const TradeChordDiagram: React.FC<TradeChordDiagramProps> = ({ data }) =>
           <div
             key={partner.partner_id}
             style={{
-              padding: '8px',
+              padding: '10px',
               marginBottom: '6px',
-              backgroundColor: hoveredPartner === idx + 1 ? `${BLOOMBERG.ORANGE}20` : 'transparent',
-              border: `1px solid ${hoveredPartner === idx + 1 ? BLOOMBERG.ORANGE : 'transparent'}`,
-              borderRadius: '2px',
+              backgroundColor: selectedPartner === idx + 1
+                ? `${BLOOMBERG.ORANGE}30`
+                : hoveredPartner === idx + 1
+                  ? `${BLOOMBERG.CYAN}20`
+                  : 'transparent',
+              border: `1px solid ${
+                selectedPartner === idx + 1
+                  ? BLOOMBERG.ORANGE
+                  : hoveredPartner === idx + 1
+                    ? BLOOMBERG.CYAN
+                    : 'transparent'
+              }`,
+              borderRadius: '4px',
               cursor: 'pointer',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={() => setHoveredPartner(idx + 1)}
             onMouseLeave={() => setHoveredPartner(null)}
+            onClick={() => setSelectedPartner(idx + 1 === selectedPartner ? null : idx + 1)}
           >
             <div style={{
               fontSize: '11px',
