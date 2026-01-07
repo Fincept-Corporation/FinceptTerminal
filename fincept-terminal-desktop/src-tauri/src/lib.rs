@@ -21,6 +21,7 @@ mod python_runtime;
 mod worker_pool;
 mod websocket;
 mod barter_integration;
+mod services;
 // mod finscript; // TODO: Implement FinScript module
 
 // MCP Server Process with communication channels
@@ -1774,7 +1775,29 @@ pub fn run() {
             commands::alpha_arena_bridge::paper_trading_update_order,
             commands::alpha_arena_bridge::paper_trading_create_trade,
             commands::alpha_arena_bridge::paper_trading_get_trades,
-            commands::alpha_arena_bridge::alpha_arena_record_decision
+            commands::alpha_arena_bridge::alpha_arena_record_decision,
+            // Financial Statement Analysis - CFA-compliant analysis via PyO3
+            commands::financial_analysis::analyze_income_statement,
+            commands::financial_analysis::analyze_balance_sheet,
+            commands::financial_analysis::analyze_cash_flow,
+            commands::financial_analysis::analyze_financial_statements,
+            commands::financial_analysis::get_financial_key_metrics,
+            commands::financial_analysis::analyze_financial_json,
+            // Peer Comparison & Benchmarking Commands
+            commands::peer_commands::find_peers,
+            commands::peer_commands::compare_peers,
+            commands::peer_commands::get_sector_benchmarks,
+            commands::peer_commands::calculate_peer_percentiles,
+            // Stock Screener Commands
+            commands::screener_commands::execute_stock_screen,
+            commands::screener_commands::get_value_screen,
+            commands::screener_commands::get_growth_screen,
+            commands::screener_commands::get_dividend_screen,
+            commands::screener_commands::get_momentum_screen,
+            commands::screener_commands::save_custom_screen,
+            commands::screener_commands::load_custom_screens,
+            commands::screener_commands::delete_custom_screen,
+            commands::screener_commands::get_available_metrics
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

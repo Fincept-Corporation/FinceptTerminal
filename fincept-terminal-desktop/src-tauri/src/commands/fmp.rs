@@ -1,6 +1,7 @@
 // FMP (Financial Modeling Prep) data commands based on OpenBB fmp provider
 use crate::utils::python::get_script_path;
 use crate::python_runtime;
+use crate::database::operations;
 
 /// Execute FMP Python script command
 #[tauri::command]
@@ -9,6 +10,33 @@ pub async fn execute_fmp_command(
     command: String,
     args: Vec<String>,
 ) -> Result<String, String> {
+    // Try to get FMP API key from database in this priority:
+    // 1. credentials table (service_name = "FMP")
+    // 2. settings table (key = "FINANCIAL_MODELING_PREP_API_KEY")
+    // 3. environment variables
+    let api_key = match operations::get_credential_by_service("FMP") {
+        Ok(Some(credential)) => {
+            credential.api_key.unwrap_or_default()
+        },
+        _ => {
+            // Try settings table (where Settings UI saves it)
+            match operations::get_setting("FINANCIAL_MODELING_PREP_API_KEY") {
+                Ok(Some(key)) => key,
+                _ => {
+                    // Fall back to environment variables
+                    std::env::var("FMP_API_KEY")
+                        .or_else(|_| std::env::var("FINANCIAL_MODELING_PREP_API_KEY"))
+                        .unwrap_or_default()
+                }
+            }
+        }
+    };
+
+    // Set the API key as environment variable if found
+    if !api_key.is_empty() {
+        std::env::set_var("FMP_API_KEY", &api_key);
+    }
+
     // Build command arguments
     let mut cmd_args = vec![command];
     cmd_args.extend(args);

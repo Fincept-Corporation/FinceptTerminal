@@ -734,9 +734,18 @@ class FMPDataWrapper:
             return {"error": FMPError("financial_statements", str(e)).to_dict()}
 
 
-def main():
-    """Main function for CLI interface"""
-    if len(sys.argv) < 2:
+def main(args=None):
+    """Main function for CLI interface
+
+    Args:
+        args: List of command-line arguments (when called from Rust).
+              If None, will use sys.argv for standalone execution.
+    """
+    # Handle both Rust invocation (args passed as parameter) and standalone CLI (sys.argv)
+    if args is None:
+        args = sys.argv[1:]  # Skip script name
+
+    if len(args) < 1:
         print(json.dumps({
             "error": "Usage: python fmp_data.py <command> [args...]",
             "commands": [
@@ -764,55 +773,55 @@ def main():
             ],
             "note": "FMP API key required. Set FMP_API_KEY environment variable or pass to wrapper constructor."
         }))
-        sys.exit(1)
+        return json.dumps({"error": "No command provided"})
 
-    command = sys.argv[1]
+    command = args[0]
     wrapper = FMPDataWrapper()
 
     try:
         if command == "equity_quote":
-            symbols = sys.argv[2] if len(sys.argv) > 2 else None
+            symbols = args[1] if len(args) > 1 else None
             result = wrapper.get_equity_quote(symbols)
 
         elif command == "company_profile":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
+            symbol = args[1] if len(args) > 1 else None
             result = wrapper.get_company_profile(symbol)
 
         elif command == "historical_prices":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            start_date = sys.argv[3] if len(sys.argv) > 3 else None
-            end_date = sys.argv[4] if len(sys.argv) > 4 else None
-            interval = sys.argv[5] if len(sys.argv) > 5 else "1d"
+            symbol = args[1] if len(args) > 1 else None
+            start_date = args[2] if len(args) > 2 else None
+            end_date = args[3] if len(args) > 3 else None
+            interval = args[4] if len(args) > 4 else "1d"
             result = wrapper.get_historical_prices(symbol, start_date, end_date, interval)
 
         elif command == "income_statement":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            period = sys.argv[3] if len(sys.argv) > 3 else "annual"
-            limit = int(sys.argv[4]) if len(sys.argv) > 4 else 10
+            symbol = args[1] if len(args) > 1 else None
+            period = args[2] if len(args) > 2 else "annual"
+            limit = int(args[3]) if len(args) > 3 else 10
             result = wrapper.get_income_statement(symbol, period, limit)
 
         elif command == "balance_sheet":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            period = sys.argv[3] if len(sys.argv) > 3 else "annual"
-            limit = int(sys.argv[4]) if len(sys.argv) > 4 else 10
+            symbol = args[1] if len(args) > 1 else None
+            period = args[2] if len(args) > 2 else "annual"
+            limit = int(args[3]) if len(args) > 3 else 10
             result = wrapper.get_balance_sheet(symbol, period, limit)
 
         elif command == "cash_flow_statement":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            period = sys.argv[3] if len(sys.argv) > 3 else "annual"
-            limit = int(sys.argv[4]) if len(sys.argv) > 4 else 10
+            symbol = args[1] if len(args) > 1 else None
+            period = args[2] if len(args) > 2 else "annual"
+            limit = int(args[3]) if len(args) > 3 else 10
             result = wrapper.get_cash_flow_statement(symbol, period, limit)
 
         elif command == "financial_ratios":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            period = sys.argv[3] if len(sys.argv) > 3 else "annual"
-            limit = int(sys.argv[4]) if len(sys.argv) > 4 else 10
+            symbol = args[1] if len(args) > 1 else None
+            period = args[2] if len(args) > 2 else "annual"
+            limit = int(args[3]) if len(args) > 3 else 10
             result = wrapper.get_financial_ratios(symbol, period, limit)
 
         elif command == "key_metrics":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            period = sys.argv[3] if len(sys.argv) > 3 else "annual"
-            limit = int(sys.argv[4]) if len(sys.argv) > 4 else 10
+            symbol = args[1] if len(args) > 1 else None
+            period = args[2] if len(args) > 2 else "annual"
+            limit = int(args[3]) if len(args) > 3 else 10
             result = wrapper.get_key_metrics(symbol, period, limit)
 
         elif command == "market_snapshots":
@@ -822,25 +831,25 @@ def main():
             result = wrapper.get_treasury_rates()
 
         elif command == "etf_info":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
+            symbol = args[1] if len(args) > 1 else None
             result = wrapper.get_etf_info(symbol)
 
         elif command == "etf_holdings":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
+            symbol = args[1] if len(args) > 1 else None
             result = wrapper.get_etf_holdings(symbol)
 
         elif command == "crypto_list":
             result = wrapper.get_crypto_list()
 
         elif command == "crypto_historical":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            start_date = sys.argv[3] if len(sys.argv) > 3 else None
-            end_date = sys.argv[4] if len(sys.argv) > 4 else None
+            symbol = args[1] if len(args) > 1 else None
+            start_date = args[2] if len(args) > 2 else None
+            end_date = args[3] if len(args) > 3 else None
             result = wrapper.get_crypto_historical(symbol, start_date, end_date)
 
         elif command == "company_news":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            limit = int(sys.argv[3]) if len(sys.argv) > 3 else 50
+            symbol = args[1] if len(args) > 1 else None
+            limit = int(args[2]) if len(args) > 2 else 50
             result = wrapper.get_company_news(symbol, limit)
 
         elif command == "general_news":
@@ -850,33 +859,37 @@ def main():
             result = wrapper.get_economic_calendar()
 
         elif command == "insider_trading":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            limit = int(sys.argv[3]) if len(sys.argv) > 3 else 100
+            symbol = args[1] if len(args) > 1 else None
+            limit = int(args[2]) if len(args) > 2 else 100
             result = wrapper.get_insider_trading(symbol, limit)
 
         elif command == "institutional_ownership":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            limit = int(sys.argv[3]) if len(sys.argv) > 3 else 100
+            symbol = args[1] if len(args) > 1 else None
+            limit = int(args[2]) if len(args) > 2 else 100
             result = wrapper.get_institutional_ownership(symbol, limit)
 
         elif command == "company_overview":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
+            symbol = args[1] if len(args) > 1 else None
             result = wrapper.get_company_overview(symbol)
 
         elif command == "financial_statements":
-            symbol = sys.argv[2] if len(sys.argv) > 2 else None
-            period = sys.argv[3] if len(sys.argv) > 3 else "annual"
-            limit = int(sys.argv[4]) if len(sys.argv) > 4 else 5
+            symbol = args[1] if len(args) > 1 else None
+            period = args[2] if len(args) > 2 else "annual"
+            limit = int(args[3]) if len(args) > 3 else 5
             result = wrapper.get_financial_statements(symbol, period, limit)
 
         else:
             result = {"error": FMPError(command, f"Unknown command: {command}").to_dict()}
 
-        print(json.dumps(result, indent=2))
+        # Return JSON string for Rust consumption
+        return json.dumps(result, indent=2)
 
     except Exception as e:
-        print(json.dumps({"error": FMPError(command, str(e)).to_dict()}, indent=2))
+        error_result = {"error": FMPError(command, str(e)).to_dict()}
+        return json.dumps(error_result, indent=2)
 
 
 if __name__ == "__main__":
-    main()
+    # When run standalone, print the result
+    output = main()
+    print(output)

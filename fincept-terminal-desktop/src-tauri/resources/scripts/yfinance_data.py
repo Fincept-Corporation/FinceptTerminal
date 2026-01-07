@@ -180,6 +180,97 @@ def get_batch_quotes(symbols):
             results.append(quote)
     return results
 
+def get_company_profile(symbol):
+    """Get company profile data formatted for peer comparison"""
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+
+        if not info or 'symbol' not in info:
+            return {"error": f"No data found for symbol: {symbol}"}
+
+        # Format data to match FMP structure
+        profile = {
+            "symbol": info.get("symbol", symbol),
+            "companyName": info.get("longName", info.get("shortName", "")),
+            "sector": info.get("sector", ""),
+            "industry": info.get("industry", ""),
+            "website": info.get("website", ""),
+            "description": info.get("longBusinessSummary", ""),
+            "exchange": info.get("exchange", ""),
+            "country": info.get("country", ""),
+            "city": info.get("city", ""),
+            "address": info.get("address1", ""),
+            "phone": info.get("phone", ""),
+            "marketCap": info.get("marketCap", 0),
+            "employees": info.get("fullTimeEmployees", 0),
+            "currency": info.get("currency", "USD"),
+            "beta": info.get("beta", 0),
+            "price": info.get("currentPrice", info.get("regularMarketPrice", 0)),
+            "changes": info.get("regularMarketChangePercent", 0),
+        }
+
+        return profile
+    except Exception as e:
+        return {"error": str(e)}
+
+def get_financial_ratios(symbol):
+    """Get financial ratios formatted for peer comparison"""
+    try:
+        ticker = yf.Ticker(symbol)
+        info = ticker.info
+
+        if not info or 'symbol' not in info:
+            return {"error": f"No data found for symbol: {symbol}"}
+
+        # Calculate free cash flow per share
+        free_cashflow = info.get("freeCashflow", 0)
+        shares_outstanding = info.get("sharesOutstanding", 1)
+        fcf_per_share = free_cashflow / shares_outstanding if shares_outstanding else 0
+
+        ratios = {
+            "symbol": symbol,
+            "peRatio": info.get("trailingPE", 0),
+            "forwardPE": info.get("forwardPE", 0),
+            "priceToBook": info.get("priceToBook", 0),
+            "priceToSales": info.get("priceToSalesTrailing12Months", 0),
+            "pegRatio": info.get("trailingPegRatio", 0),
+            "debtToEquity": info.get("debtToEquity", 0),
+            "returnOnEquity": info.get("returnOnEquity", 0),
+            "returnOnAssets": info.get("returnOnAssets", 0),
+            "profitMargin": info.get("profitMargins", 0),
+            "operatingMargin": info.get("operatingMargins", 0),
+            "grossMargin": info.get("grossMargins", 0),
+            "currentRatio": info.get("currentRatio", 0),
+            "quickRatio": info.get("quickRatio", 0),
+            "dividendYield": info.get("dividendYield", 0),
+            "revenuePerShare": info.get("revenuePerShare", 0),
+            "bookValuePerShare": info.get("bookValue", 0),
+            "freeCashFlowPerShare": fcf_per_share,
+        }
+
+        return ratios
+    except Exception as e:
+        return {"error": str(e)}
+
+def get_multiple_profiles(symbols):
+    """Get company profiles for multiple symbols"""
+    results = []
+    for symbol in symbols:
+        profile = get_company_profile(symbol)
+        if profile and "error" not in profile:
+            results.append(profile)
+    return results
+
+def get_multiple_ratios(symbols):
+    """Get financial ratios for multiple symbols"""
+    results = []
+    for symbol in symbols:
+        ratios = get_financial_ratios(symbol)
+        if ratios and "error" not in ratios:
+            results.append(ratios)
+    return results
+
 def main(args=None):
     # Support both PyO3 (args parameter) and subprocess (sys.argv)
     if args is None:
@@ -226,6 +317,34 @@ def main(args=None):
         else:
             symbol = args[1]
             result = get_financials(symbol)
+
+    elif command == "company_profile":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py company_profile <symbol>"}
+        else:
+            symbol = args[1]
+            result = get_company_profile(symbol)
+
+    elif command == "financial_ratios":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py financial_ratios <symbol>"}
+        else:
+            symbol = args[1]
+            result = get_financial_ratios(symbol)
+
+    elif command == "multiple_profiles":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py multiple_profiles <symbol1,symbol2,...>"}
+        else:
+            symbols = args[1].split(",")
+            result = get_multiple_profiles(symbols)
+
+    elif command == "multiple_ratios":
+        if len(args) < 2:
+            result = {"error": "Usage: python yfinance_data.py multiple_ratios <symbol1,symbol2,...>"}
+        else:
+            symbols = args[1].split(",")
+            result = get_multiple_ratios(symbols)
 
     else:
         result = {"error": f"Unknown command: {command}"}
