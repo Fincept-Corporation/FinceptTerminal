@@ -70,14 +70,28 @@ class TradeService {
   // private logger = loggerService.createLogger('TradeService');
 
   /**
-   * Get API key from localStorage
+   * Get API key from session storage (AuthContext)
    */
   private getApiKey(): string {
-    const apiKey = localStorage.getItem('fincept_api_key');
-    if (!apiKey) {
-      console.warn('[TradeService] No API key found in localStorage');
+    try {
+      const sessionData = localStorage.getItem('fincept_session');
+      if (!sessionData) {
+        console.warn('[TradeService] No session found in localStorage');
+        return '';
+      }
+
+      const session = JSON.parse(sessionData);
+      const apiKey = session.api_key;
+
+      if (!apiKey) {
+        console.warn('[TradeService] No API key found in session');
+      }
+
+      return apiKey || '';
+    } catch (error) {
+      console.error('[TradeService] Failed to retrieve API key from session:', error);
+      return '';
     }
-    return apiKey || '';
   }
 
   /**
