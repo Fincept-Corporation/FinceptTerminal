@@ -52,6 +52,21 @@ impl PythonRuntime {
         args: Vec<String>,
     ) -> PyResult<String> {
         Python::with_gil(|py| {
+            // Set environment variables for Python script access
+            // Check if FMP_API_KEY is already set, if not, try to get it from Rust environment
+            let os_module = py.import("os")?;
+            let environ = os_module.getattr("environ")?;
+
+            // Get FMP_API_KEY from Rust environment if available
+            if let Ok(api_key) = std::env::var("FMP_API_KEY") {
+                environ.set_item("FMP_API_KEY", api_key)?;
+            } else {
+                // Try alternative environment variable names
+                if let Ok(api_key) = std::env::var("FINANCIAL_MODELING_PREP_API_KEY") {
+                    environ.set_item("FMP_API_KEY", api_key)?;
+                }
+            }
+
             // Read the Python script
             let script_code = std::fs::read_to_string(script_path)
                 .map_err(|e| PyErr::new::<pyo3::exceptions::PyIOError, _>(

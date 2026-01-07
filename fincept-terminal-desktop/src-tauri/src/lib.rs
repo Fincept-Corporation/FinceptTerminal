@@ -20,6 +20,7 @@ mod database;
 mod python_runtime;
 mod websocket;
 mod barter_integration;
+mod services;
 // mod finscript; // TODO: Implement FinScript module
 
 // MCP Server Process with communication channels
@@ -1760,7 +1761,29 @@ pub fn run() {
             commands::database::db_get_recent_excel_files,
             commands::database::db_create_excel_snapshot,
             commands::database::db_get_excel_snapshots,
-            commands::database::db_delete_excel_snapshot
+            commands::database::db_delete_excel_snapshot,
+            // Financial Statement Analysis - CFA-compliant analysis via PyO3
+            commands::financial_analysis::analyze_income_statement,
+            commands::financial_analysis::analyze_balance_sheet,
+            commands::financial_analysis::analyze_cash_flow,
+            commands::financial_analysis::analyze_financial_statements,
+            commands::financial_analysis::get_financial_key_metrics,
+            commands::financial_analysis::analyze_financial_json,
+            // Peer Comparison & Benchmarking Commands
+            commands::peer_commands::find_peers,
+            commands::peer_commands::compare_peers,
+            commands::peer_commands::get_sector_benchmarks,
+            commands::peer_commands::calculate_peer_percentiles,
+            // Stock Screener Commands
+            commands::screener_commands::execute_stock_screen,
+            commands::screener_commands::get_value_screen,
+            commands::screener_commands::get_growth_screen,
+            commands::screener_commands::get_dividend_screen,
+            commands::screener_commands::get_momentum_screen,
+            commands::screener_commands::save_custom_screen,
+            commands::screener_commands::load_custom_screens,
+            commands::screener_commands::delete_custom_screen,
+            commands::screener_commands::get_available_metrics
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

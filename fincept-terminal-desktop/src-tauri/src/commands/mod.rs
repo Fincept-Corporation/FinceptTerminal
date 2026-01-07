@@ -122,3 +122,10 @@ pub mod functime_analytics;
 
 // High-Performance OrderBook Processing
 pub mod orderbook;
+pub mod financial_analysis;
+
+// Peer Comparison & Benchmarking - GICS-based peer analysis
+pub mod peer_commands;
+
+// Stock Screener - Advanced equity screening
+pub mod screener_commands;
