@@ -1,0 +1,60 @@
+{
+  "title": "CONFIGURACIÓN",
+  "credentials": {
+    "title": "GESTIÓN DE CREDENCIALES API",
+    "description": "Administrar claves API y credenciales para servicios externos",
+    "apiKey": "Clave API",
+    "enterValue": "Ingrese valor..."
+  },
+  "terminal": {
+    "title": "APARIENCIA DEL TERMINAL",
+    "description": "Personalice la apariencia visual de su terminal",
+    "fontFamily": "FAMILIA DE FUENTE",
+    "currentSettings": "CONFIGURACIÓN ACTUAL"
+  },
+  "terminalConfig": {
+    "title": "CONFIGURACIÓN DE DISEÑO DE PESTAÑAS",
+    "headerTabs": "PESTAÑAS DE ENCABEZADO (BARRA PRINCIPAL)",
+    "headerTabsDesc": "Arrastre para reordenar. Estas pestañas aparecen en la navegación principal del encabezado.",
+    "toolbarSections": "SECCIONES DEL MENÚ DE HERRAMIENTAS",
+    "newSection": "NUEVA SECCIÓN",
+    "deleteSection": "ELIMINAR",
+    "moveTo": "MOVER A ▼",
+    "resetToDefault": "RESTABLECER A PREDETERMINADO",
+    "noTabsInSection": "No hay pestañas en esta sección",
+    "tip": "CONSEJO: Arrastre pestañas para reordenarlas. Use los botones de flecha para mover pestañas entre el encabezado y las secciones del menú. Los cambios se guardan automáticamente."
+  },
+  "llm": {
+    "title": "CONFIGURACIÓN LLM",
+    "description": "Configurar modelos y proveedores de IA",
+    "connected": "CONECTADO",
+    "disconnected": "DESCONECTADO",
+    "provider": "[ES] AI PROVIDER",
+    "globalSettings": "[ES] GLOBAL AI SETTINGS",
+    "temperature": "[ES] TEMPERATURE",
+    "maxTokens": "[ES] MAX TOKENS",
+    "systemPrompt": "[ES] SYSTEM PROMPT",
+    "modelLibrary": "[ES] MODEL LIBRARY",
+    "multiModelConfigs": "[ES] Multi-model configs"
+  },
+  "buttons": {
+    "save": "GUARDAR",
+    "cancel": "CANCELAR",
+    "add": "AGREGAR"
+  },
+  "sidebar": {
+    "credentials": "[ES] API Credentials",
+    "llm": "[ES] LLM Configuration",
+    "dataSources": "[ES] Data Sources",
+    "backtesting": "[ES] Backtesting",
+    "tabLayout": "[ES] Tab Layout",
+    "appearance": "[ES] Appearance",
+    "language": "[ES] Language",
+    "polymarket": "[ES] Polymarket API"
+  },
+  "footer": {
+    "database": "[ES] Database: SQLite",
+    "storage": "[ES] Storage: File-based",
+    "secureStorage": "[ES] All data stored securely in fincept_terminal.db"
+  }
+}

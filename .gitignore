@@ -43,11 +43,16 @@ fincept-terminal-desktop/CLAUDE.md
 .env
 .env.local
 .env.*.local
-settings.json
-watchlist_settings.json
+# Exclude app config settings but allow i18n translation files
+/settings.json
+/watchlist_settings.json
 fincept_terminal/settings.json
 fincept_terminal/watchlist_settings.json
 fincept_terminal/fyers_session_config.json
+fincept-terminal-desktop/settings.json
+fincept-terminal-desktop/watchlist_settings.json
+# Allow i18n translation files
+!fincept-terminal-desktop/public/locales/**/settings.json
 
 # Tauri signing keys - NEVER commit these!
 *.key

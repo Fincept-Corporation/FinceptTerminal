@@ -1,0 +1,60 @@
+{
+  "title": "SETTINGS",
+  "sidebar": {
+    "credentials": "API Credentials",
+    "polymarket": "Polymarket API",
+    "llm": "LLM Configuration",
+    "dataSources": "Data Sources",
+    "backtesting": "Backtesting",
+    "tabLayout": "Tab Layout",
+    "appearance": "Appearance",
+    "language": "Language"
+  },
+  "credentials": {
+    "title": "API CREDENTIALS MANAGEMENT",
+    "description": "Manage API keys and credentials for external services",
+    "apiKey": "API Key",
+    "enterValue": "Enter value..."
+  },
+  "terminal": {
+    "title": "TERMINAL APPEARANCE",
+    "description": "Customize the visual appearance of your terminal",
+    "fontFamily": "FONT FAMILY",
+    "currentSettings": "CURRENT SETTINGS"
+  },
+  "terminalConfig": {
+    "title": "TAB LAYOUT CONFIGURATION",
+    "headerTabs": "HEADER TABS (MAIN TAB BAR)",
+    "headerTabsDesc": "Drag to reorder. These tabs appear in the main header navigation.",
+    "toolbarSections": "TOOLBAR MENU SECTIONS",
+    "newSection": "NEW SECTION",
+    "deleteSection": "DELETE",
+    "moveTo": "MOVE TO ▼",
+    "resetToDefault": "RESET TO DEFAULT",
+    "noTabsInSection": "No tabs in this section",
+    "tip": "TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+  },
+  "llm": {
+    "title": "LLM CONFIGURATION",
+    "description": "Configure AI models and providers",
+    "connected": "CONNECTED",
+    "disconnected": "DISCONNECTED",
+    "provider": "AI PROVIDER",
+    "globalSettings": "GLOBAL AI SETTINGS",
+    "temperature": "TEMPERATURE",
+    "maxTokens": "MAX TOKENS",
+    "systemPrompt": "SYSTEM PROMPT",
+    "modelLibrary": "MODEL LIBRARY",
+    "multiModelConfigs": "Multi-model configs"
+  },
+  "buttons": {
+    "save": "SAVE",
+    "cancel": "CANCEL",
+    "add": "ADD"
+  },
+  "footer": {
+    "database": "Database: SQLite",
+    "storage": "Storage: File-based",
+    "secureStorage": "All data stored securely in fincept_terminal.db"
+  }
+}
