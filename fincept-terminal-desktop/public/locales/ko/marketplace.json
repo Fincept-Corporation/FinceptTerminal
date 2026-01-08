@@ -1,38 +1,35 @@
 {
-    "title": "마켓플레이스",
-    "header": {
-        "browse": "둘러보기",
-        "myItems": "내 항목",
-        "cart": "장바구니"
-    },
-    "categories": {
-        "all": "전체",
-        "indicators": "지표",
-        "strategies": "전략",
-        "datasets": "데이터셋",
-        "tools": "도구"
-    },
-    "buttons": {
-        "buy": "구매",
-        "addToCart": "장바구니에 추가",
-        "install": "설치",
-        "preview": "미리보기"
-    },
-    "product": {
-        "price": "가격",
-        "rating": "평점",
-        "downloads": "다운로드",
-        "author": "작성자",
-        "version": "버전"
-    },
-    "cart": {
-        "total": "합계",
-        "checkout": "결제",
-        "empty": "장바구니가 비어있습니다"
-    },
-    "messages": {
-        "addedToCart": "장바구니에 추가됨",
-        "purchased": "구매 완료",
-        "installed": "설치 완료"
-    }
+  "title": "마켓플레이스",
+  "header": {
+    "browse": "둘러보기",
+    "myPurchases": "[KO] MY PURCHASES",
+    "upload": "[KO] UPLOAD",
+    "myDatasets": "[KO] MY DATASETS",
+    "analytics": "[KO] ANALYTICS",
+    "pricing": "[KO] PRICING",
+    "datasetsAvailable": "[KO] Datasets Available",
+    "myUploads": "[KO] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "장바구니에 추가",
+    "inCart": "[KO] ✓ IN CART",
+    "viewDetails": "[KO] VIEW DETAILS",
+    "backToMarketplace": "[KO] BACK TO MARKETPLACE",
+    "loading": "[KO] ⟳ LOADING...",
+    "refresh": "[KO] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "평점",
+    "description": "[KO] PRODUCT DESCRIPTION",
+    "users": "[KO] USERS"
+  },
+  "cart": {
+    "empty": "장바구니가 비어있습니다",
+    "title": "[KO] SHOPPING CART",
+    "items": "[KO] items"
+  },
+  "guest": {
+    "title": "[KO] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[KO] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

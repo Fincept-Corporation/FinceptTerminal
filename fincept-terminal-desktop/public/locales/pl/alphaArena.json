@@ -1,46 +1,9 @@
 {
-    "title": "ALPHA ARENA",
-    "header": {
-        "competition": "KONKURS",
-        "leaderboard": "RANKING",
-        "decisions": "DECYZJE",
-        "cycles": "CYKLE"
-    },
-    "buttons": {
-        "start": "START",
-        "stop": "STOP",
-        "refresh": "ODŚWIEŻ",
-        "create": "UTWÓRZ KONKURS"
-    },
-    "form": {
-        "competitionName": "Nazwa konkursu",
-        "symbol": "Symbol",
-        "mode": "Tryb handlu",
-        "models": "Wybierz modele",
-        "apiKeys": "Klucze API"
-    },
-    "modes": {
-        "baseline": "Bazowy",
-        "monk": "Monk",
-        "situational": "Sytuacyjny",
-        "maxLeverage": "Maks. dźwignia"
-    },
-    "leaderboard": {
-        "rank": "Pozycja",
-        "model": "Model",
-        "pnl": "Z/S",
-        "trades": "Transakcje",
-        "winRate": "% wygranych"
-    },
-    "status": {
-        "running": "DZIAŁA",
-        "stopped": "ZATRZYMANY",
-        "waiting": "OCZEKUJE",
-        "error": "BŁĄD"
-    },
-    "messages": {
-        "competitionStarted": "Konkurs rozpoczęty",
-        "competitionStopped": "Konkurs zatrzymany",
-        "noCompetition": "Brak aktywnego konkursu"
-    }
+  "title": "ALPHA ARENA",
+  "header": {
+    "competition": "KONKURS"
+  },
+  "buttons": {
+    "create": "UTWÓRZ KONKURS"
+  }
 }

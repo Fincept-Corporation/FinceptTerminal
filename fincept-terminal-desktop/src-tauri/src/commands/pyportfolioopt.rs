@@ -1,6 +1,4 @@
-// PyPortfolioOpt - Portfolio Optimization using PyO3
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
+// PyPortfolioOpt - Portfolio Optimization using Worker Pool
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -120,28 +118,29 @@ pub struct RiskDecomposition {
     pub portfolio_volatility: f64,
 }
 
-/// Initialize PyPortfolioOpt Python module
-fn init_pyportfolioopt_module(py: Python<'_>) -> PyResult<Bound<'_, pyo3::types::PyModule>> {
-    let sys = py.import("sys")?;
-    let path = sys.getattr("path")?;
+/// Execute PyPortfolioOpt operation via worker pool
+async fn execute_pyportfolioopt_operation(
+    app: tauri::AppHandle,
+    operation: &str,
+    data: serde_json::Value,
+) -> Result<String, String> {
+    let script_path = crate::utils::python::get_script_path(
+        &app,
+        "Analytics/pyportfolioopt_wrapper/worker_handler.py"
+    )?;
 
-    // Add the pyportfolioopt_wrapper directory to Python path
-    let script_path = std::env::current_dir()
-        .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?
-        .join("resources")
-        .join("scripts")
-        .join("Analytics")
-        .join("pyportfolioopt_wrapper");
+    let data_json = serde_json::to_string(&data)
+        .map_err(|e| format!("Failed to serialize data: {}", e))?;
 
-    path.call_method1("insert", (0, script_path.to_str().unwrap()))?;
+    let args = vec![operation.to_string(), data_json];
 
-    // Import the core module
-    py.import("core")
+    crate::python_runtime::execute_python_script(&script_path, args)
 }
 
 /// Optimize portfolio using PyPortfolioOpt
 #[tauri::command]
 pub async fn pyportfolioopt_optimize(
+    app: tauri::AppHandle,
     prices_json: String,
     config: PyPortfolioOptConfig,
 ) -> Result<String, String> {
@@ -149,431 +148,132 @@ pub async fn pyportfolioopt_optimize(
     println!("[PyPortfolioOpt] Prices JSON length: {} bytes", prices_json.len());
     println!("[PyPortfolioOpt] Config: {:?}", config);
 
-    Python::with_gil(|py| {
-        println!("[PyPortfolioOpt] Python GIL acquired");
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "config": config
+    });
 
-        // Import the module
-        println!("[PyPortfolioOpt] Initializing pyportfolioopt module...");
-        let module = init_pyportfolioopt_module(py)
-            .map_err(|e| {
-                let err_msg = format!("Failed to import pyportfolioopt module: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-        println!("[PyPortfolioOpt] Module initialized successfully");
+    let result = execute_pyportfolioopt_operation(app, "optimize", data).await?;
 
-        // Get the PyPortfolioOptAnalyticsEngine class
-        println!("[PyPortfolioOpt] Getting PyPortfolioOptAnalyticsEngine class...");
-        let engine_class = module.getattr("PyPortfolioOptAnalyticsEngine")
-            .map_err(|e| {
-                let err_msg = format!("Failed to get PyPortfolioOptAnalyticsEngine: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-        println!("[PyPortfolioOpt] Got engine class successfully");
-
-        // Create config dict
-        println!("[PyPortfolioOpt] Creating config dictionary...");
-        let config_dict = PyDict::new(py);
-        config_dict.set_item("optimization_method", config.optimization_method.clone())
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("objective", config.objective.clone())
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("expected_returns_method", config.expected_returns_method.clone())
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("risk_model_method", config.risk_model_method.clone())
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("risk_free_rate", config.risk_free_rate)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("risk_aversion", config.risk_aversion)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("market_neutral", config.market_neutral)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("weight_bounds", config.weight_bounds)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("gamma", config.gamma)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("span", config.span)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("frequency", config.frequency)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("delta", config.delta)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("shrinkage_target", config.shrinkage_target.clone())
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("beta", config.beta)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("tau", config.tau)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("linkage_method", config.linkage_method.clone())
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("distance_metric", config.distance_metric.clone())
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("total_portfolio_value", config.total_portfolio_value)
-            .map_err(|e| e.to_string())?;
-
-        // Get PyPortfolioOptConfig class
-        let config_class = module.getattr("PyPortfolioOptConfig")
-            .map_err(|e| format!("Failed to get PyPortfolioOptConfig: {}", e))?;
-
-        // Create config object
-        let config_obj = config_class.call((), Some(&config_dict))
-            .map_err(|e| format!("Failed to create config: {}", e))?;
-
-        // Create engine instance
-        println!("[PyPortfolioOpt] Creating engine instance...");
-        let engine = engine_class.call1((config_obj,))
-            .map_err(|e| {
-                let err_msg = format!("Failed to create engine: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-        println!("[PyPortfolioOpt] Engine created successfully");
-
-        // Parse prices JSON
-        println!("[PyPortfolioOpt] Importing pandas...");
-        let pandas = py.import("pandas")
-            .map_err(|e| {
-                let err_msg = format!("Failed to import pandas: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-
-        println!("[PyPortfolioOpt] Parsing prices JSON...");
-        let prices_df = pandas.getattr("read_json")
-            .map_err(|e| {
-                let err_msg = format!("Failed to get read_json: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?
-            .call1((prices_json,))
-            .map_err(|e| {
-                let err_msg = format!("Failed to parse prices JSON: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-        println!("[PyPortfolioOpt] Prices JSON parsed successfully");
-
-        // Load data
-        println!("[PyPortfolioOpt] Loading data into engine...");
-        engine.call_method1("load_data", (prices_df,))
-            .map_err(|e| {
-                let err_msg = format!("Failed to load data: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-        println!("[PyPortfolioOpt] Data loaded successfully");
-
-        // Optimize portfolio
-        println!("[PyPortfolioOpt] Running portfolio optimization...");
-        let weights = engine.call_method0("optimize_portfolio")
-            .map_err(|e| {
-                let err_msg = format!("Failed to optimize: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-        println!("[PyPortfolioOpt] Optimization completed");
-
-        // Get performance metrics
-        println!("[PyPortfolioOpt] Getting performance metrics...");
-        let performance = engine.call_method0("portfolio_performance")
-            .map_err(|e| {
-                let err_msg = format!("Failed to get performance: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-        println!("[PyPortfolioOpt] Performance metrics retrieved");
-
-        // Extract results
-        println!("[PyPortfolioOpt] Extracting weights...");
-        let weights_dict: HashMap<String, f64> = weights.extract()
-            .map_err(|e| {
-                let err_msg = format!("Failed to extract weights: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-        println!("[PyPortfolioOpt] Weights extracted: {} assets", weights_dict.len());
-
-        println!("[PyPortfolioOpt] Extracting performance tuple...");
-        let perf_tuple: (f64, f64, f64) = performance.extract()
-            .map_err(|e| {
-                let err_msg = format!("Failed to extract performance: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-        println!("[PyPortfolioOpt] Performance: return={}, vol={}, sharpe={}", perf_tuple.0, perf_tuple.1, perf_tuple.2);
-
-        let result = OptimizationResult {
-            weights: weights_dict,
-            performance_metrics: PerformanceMetrics {
-                expected_annual_return: perf_tuple.0,
-                annual_volatility: perf_tuple.1,
-                sharpe_ratio: perf_tuple.2,
-            },
-        };
-
-        println!("[PyPortfolioOpt] Serializing result...");
-        let json_result = serde_json::to_string(&result)
-            .map_err(|e| {
-                let err_msg = format!("Failed to serialize result: {}", e);
-                println!("[PyPortfolioOpt] ERROR: {}", err_msg);
-                err_msg
-            })?;
-
-        println!("[PyPortfolioOpt] SUCCESS! Result length: {} bytes", json_result.len());
-        Ok(json_result)
-    })
+    println!("[PyPortfolioOpt] SUCCESS! Result length: {} bytes", result.len());
+    Ok(result)
 }
 
 /// Generate efficient frontier
 #[tauri::command]
 pub async fn pyportfolioopt_efficient_frontier(
+    app: tauri::AppHandle,
     prices_json: String,
     config: PyPortfolioOptConfig,
     num_points: i32,
 ) -> Result<String, String> {
-    Python::with_gil(|py| {
-        let module = init_pyportfolioopt_module(py)
-            .map_err(|e| format!("Failed to import module: {}", e))?;
-        let engine_class = module.getattr("PyPortfolioOptAnalyticsEngine")
-            .map_err(|e| format!("Failed to get engine class: {}", e))?;
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "config": config,
+        "num_points": num_points
+    });
 
-        // Create config
-        let config_dict = PyDict::new(py);
-        config_dict.set_item("optimization_method", config.optimization_method)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("objective", config.objective)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("expected_returns_method", config.expected_returns_method)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("risk_model_method", config.risk_model_method)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("risk_free_rate", config.risk_free_rate)
-            .map_err(|e| e.to_string())?;
-        config_dict.set_item("weight_bounds", config.weight_bounds)
-            .map_err(|e| e.to_string())?;
-
-        let config_class = module.getattr("PyPortfolioOptConfig")
-            .map_err(|e| format!("Failed to get config class: {}", e))?;
-        let config_obj = config_class.call((), Some(&config_dict))
-            .map_err(|e| format!("Failed to create config: {}", e))?;
-
-        // Create engine
-        let engine = engine_class.call1((config_obj,))
-            .map_err(|e| format!("Failed to create engine: {}", e))?;
-
-        // Load data
-        let pandas = py.import("pandas")
-            .map_err(|e| format!("Failed to import pandas: {}", e))?;
-        let prices_df = pandas.getattr("read_json")
-            .map_err(|e| format!("Failed to get read_json: {}", e))?
-            .call1((prices_json,))
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
-        engine.call_method1("load_data", (prices_df,))
-            .map_err(|e| format!("Failed to load data: {}", e))?;
-
-        // Generate efficient frontier
-        let frontier_data = engine.call_method1("generate_efficient_frontier", (num_points,))
-            .map_err(|e| format!("Failed to generate frontier: {}", e))?;
-
-        // Extract results
-        let returns: Vec<f64> = frontier_data.get_item("returns")
-            .map_err(|e| format!("Failed to get returns: {}", e))?
-            .extract()
-            .map_err(|e| format!("Failed to extract returns: {}", e))?;
-        let volatility: Vec<f64> = frontier_data.get_item("volatility")
-            .map_err(|e| format!("Failed to get volatility: {}", e))?
-            .extract()
-            .map_err(|e| format!("Failed to extract volatility: {}", e))?;
-        let sharpe_ratios: Vec<f64> = frontier_data.get_item("sharpe_ratios")
-            .map_err(|e| format!("Failed to get sharpe_ratios: {}", e))?
-            .extract()
-            .map_err(|e| format!("Failed to extract sharpe_ratios: {}", e))?;
-
-        let result = EfficientFrontierData {
-            returns,
-            volatility,
-            sharpe_ratios,
-            num_points: num_points as usize,
-        };
-
-        serde_json::to_string(&result)
-            .map_err(|e| format!("Failed to serialize: {}", e))
-    })
+    execute_pyportfolioopt_operation(app, "efficient_frontier", data).await
 }
 
 /// Calculate discrete allocation
 #[tauri::command]
 pub async fn pyportfolioopt_discrete_allocation(
+    app: tauri::AppHandle,
     prices_json: String,
     weights: HashMap<String, f64>,
     total_portfolio_value: f64,
 ) -> Result<String, String> {
-    Python::with_gil(|py| {
-        let module = init_pyportfolioopt_module(py)
-            .map_err(|e| format!("Failed to import module: {}", e))?;
-        let engine_class = module.getattr("PyPortfolioOptAnalyticsEngine")
-            .map_err(|e| format!("Failed to get engine class: {}", e))?;
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "weights": weights,
+        "total_portfolio_value": total_portfolio_value
+    });
 
-        // Create default config
-        let config_class = module.getattr("PyPortfolioOptConfig")
-            .map_err(|e| format!("Failed to get config class: {}", e))?;
-        let config_obj = config_class.call0()
-            .map_err(|e| format!("Failed to create config: {}", e))?;
-
-        // Create engine
-        let engine = engine_class.call1((config_obj,))
-            .map_err(|e| format!("Failed to create engine: {}", e))?;
-
-        // Load data
-        let pandas = py.import("pandas")
-            .map_err(|e| format!("Failed to import pandas: {}", e))?;
-        let prices_df = pandas.getattr("read_json")
-            .map_err(|e| format!("Failed to get read_json: {}", e))?
-            .call1((prices_json,))
-            .map_err(|e| format!("Failed to parse JSON: {}", e))?;
-        engine.call_method1("load_data", (prices_df,))
-            .map_err(|e| format!("Failed to load data: {}", e))?;
-
-        // Set weights manually
-        let weights_dict = PyDict::new(py);
-        for (asset, weight) in weights.iter() {
-            weights_dict.set_item(asset, weight)
-                .map_err(|e| format!("Failed to set weight for {}: {}", asset, e))?;
-        }
-        engine.setattr("weights", weights_dict)
-            .map_err(|e| format!("Failed to set weights: {}", e))?;
-
-        // Calculate discrete allocation
-        let kwargs = PyDict::new(py);
-        kwargs.set_item("total_portfolio_value", total_portfolio_value)
-            .map_err(|e| format!("Failed to set total_portfolio_value: {}", e))?;
-        let allocation_result = engine.call_method(
-            "discrete_allocation",
-            (),
-            Some(&kwargs),
-        ).map_err(|e| format!("Failed to calculate allocation: {}", e))?;
-
-        // Extract results
-        let allocation: HashMap<String, i32> = allocation_result
-            .get_item("allocation")
-            .map_err(|e| format!("Failed to get allocation: {}", e))?
-            .extract()
-            .map_err(|e| format!("Failed to extract allocation: {}", e))?;
-        let leftover_cash: f64 = allocation_result.get_item("leftover_cash")
-            .map_err(|e| format!("Failed to get leftover_cash: {}", e))?
-            .extract()
-            .map_err(|e| format!("Failed to extract leftover_cash: {}", e))?;
-        let total_value: f64 = allocation_result.get_item("total_value")
-            .map_err(|e| format!("Failed to get total_value: {}", e))?
-            .extract()
-            .map_err(|e| format!("Failed to extract total_value: {}", e))?;
-        let allocated_value: f64 = allocation_result.get_item("allocated_value")
-            .map_err(|e| format!("Failed to get allocated_value: {}", e))?
-            .extract()
-            .map_err(|e| format!("Failed to extract allocated_value: {}", e))?;
-
-        let result = DiscreteAllocation {
-            allocation,
-            leftover_cash,
-            total_value,
-            allocated_value,
-        };
-
-        serde_json::to_string(&result)
-            .map_err(|e| format!("Failed to serialize: {}", e))
-    })
+    execute_pyportfolioopt_operation(app, "discrete_allocation", data).await
 }
 
 /// Run backtest (stub - simplified for now)
 #[tauri::command]
 pub async fn pyportfolioopt_backtest(
-    _prices_json: String,
-    _config: PyPortfolioOptConfig,
+    app: tauri::AppHandle,
+    prices_json: String,
+    config: PyPortfolioOptConfig,
     _rebalance_frequency: i32,
     _lookback_period: i32,
 ) -> Result<String, String> {
-    // Simplified stub - implement full backtest later
-    let result = BacktestResults {
-        annual_return: 0.12,
-        annual_volatility: 0.15,
-        sharpe_ratio: 0.8,
-        max_drawdown: -0.10,
-        calmar_ratio: 1.2,
-    };
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "config": config
+    });
 
-    serde_json::to_string(&result)
-        .map_err(|e| format!("Failed to serialize: {}", e))
+    execute_pyportfolioopt_operation(app, "backtest", data).await
 }
 
 /// Calculate risk decomposition (stub - simplified for now)
 #[tauri::command]
 pub async fn pyportfolioopt_risk_decomposition(
-    _prices_json: String,
-    _weights: HashMap<String, f64>,
-    _config: PyPortfolioOptConfig,
+    app: tauri::AppHandle,
+    prices_json: String,
+    weights: HashMap<String, f64>,
+    config: PyPortfolioOptConfig,
 ) -> Result<String, String> {
-    // Simplified stub
-    let result = RiskDecomposition {
-        marginal_contribution: HashMap::new(),
-        component_contribution: HashMap::new(),
-        percentage_contribution: HashMap::new(),
-        portfolio_volatility: 0.15,
-    };
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "weights": weights,
+        "config": config
+    });
 
-    serde_json::to_string(&result)
-        .map_err(|e| format!("Failed to serialize: {}", e))
+    execute_pyportfolioopt_operation(app, "risk_decomposition", data).await
 }
 
 /// Black-Litterman optimization (stub - simplified for now)
 #[tauri::command]
 pub async fn pyportfolioopt_black_litterman(
-    _prices_json: String,
-    _views: HashMap<String, f64>,
-    _view_confidences: Option<Vec<f64>>,
-    _market_caps_json: Option<String>,
-    _config: PyPortfolioOptConfig,
+    app: tauri::AppHandle,
+    prices_json: String,
+    views: HashMap<String, f64>,
+    view_confidences: Option<Vec<f64>>,
+    market_caps_json: Option<String>,
+    config: PyPortfolioOptConfig,
 ) -> Result<String, String> {
-    // Simplified stub
-    let result = OptimizationResult {
-        weights: HashMap::new(),
-        performance_metrics: PerformanceMetrics {
-            expected_annual_return: 0.12,
-            annual_volatility: 0.15,
-            sharpe_ratio: 0.8,
-        },
-    };
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "views": views,
+        "view_confidences": view_confidences,
+        "market_caps_json": market_caps_json,
+        "config": config
+    });
 
-    serde_json::to_string(&result)
-        .map_err(|e| format!("Failed to serialize: {}", e))
+    execute_pyportfolioopt_operation(app, "black_litterman", data).await
 }
 
 /// HRP optimization (stub - simplified for now)
 #[tauri::command]
 pub async fn pyportfolioopt_hrp(
-    _prices_json: String,
-    _config: PyPortfolioOptConfig,
+    app: tauri::AppHandle,
+    prices_json: String,
+    config: PyPortfolioOptConfig,
 ) -> Result<String, String> {
-    // Simplified stub
-    let result = OptimizationResult {
-        weights: HashMap::new(),
-        performance_metrics: PerformanceMetrics {
-            expected_annual_return: 0.12,
-            annual_volatility: 0.15,
-            sharpe_ratio: 0.8,
-        },
-    };
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "config": config
+    });
 
-    serde_json::to_string(&result)
-        .map_err(|e| format!("Failed to serialize: {}", e))
+    execute_pyportfolioopt_operation(app, "hrp", data).await
 }
 
 /// Generate comprehensive portfolio report (stub - simplified for now)
 #[tauri::command]
 pub async fn pyportfolioopt_generate_report(
-    _prices_json: String,
-    _config: PyPortfolioOptConfig,
+    app: tauri::AppHandle,
+    prices_json: String,
+    config: PyPortfolioOptConfig,
 ) -> Result<String, String> {
-    // Simplified stub
-    Ok(r#"{"status": "report generated"}"#.to_string())
+    let data = serde_json::json!({
+        "prices_json": prices_json,
+        "config": config
+    });
+
+    execute_pyportfolioopt_operation(app, "generate_report", data).await
 }

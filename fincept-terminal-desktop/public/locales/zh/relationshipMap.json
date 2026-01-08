@@ -1,0 +1,13 @@
+{
+  "title": "[ZH] Relationship Map",
+  "search": {
+    "placeholder": "[ZH] Enter ticker (e.g., AAPL, TSLA, GOOGL)..."
+  },
+  "loading": {
+    "title": "[ZH] Loading",
+    "subtitle": "[ZH] Fetching data from SEC Edgar + Yahoo Finance"
+  },
+  "error": {
+    "title": "[ZH] Error"
+  }
+}

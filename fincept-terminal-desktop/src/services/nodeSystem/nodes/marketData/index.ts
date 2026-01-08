@@ -9,6 +9,7 @@ export * from './GetMarketDepthNode';
 export * from './StreamQuotesNode';
 export * from './GetFundamentalsNode';
 export * from './GetTickerStatsNode';
+export * from './YFinanceNode';
 
 // Re-export for convenience
 import { GetQuoteNode } from './GetQuoteNode';
@@ -17,6 +18,7 @@ import { GetMarketDepthNode } from './GetMarketDepthNode';
 import { StreamQuotesNode } from './StreamQuotesNode';
 import { GetFundamentalsNode } from './GetFundamentalsNode';
 import { GetTickerStatsNode } from './GetTickerStatsNode';
+import { YFinanceNode } from './YFinanceNode';
 
 export const MarketDataNodes = {
   GetQuoteNode,
@@ -25,6 +27,7 @@ export const MarketDataNodes = {
   StreamQuotesNode,
   GetFundamentalsNode,
   GetTickerStatsNode,
+  YFinanceNode,
 };
 
 export const MarketDataNodeTypes = [
@@ -34,6 +37,7 @@ export const MarketDataNodeTypes = [
   'streamQuotes',
   'getFundamentals',
   'getTickerStats',
+  'yfinance',
 ] as const;
 
 export type MarketDataNodeType = typeof MarketDataNodeTypes[number];

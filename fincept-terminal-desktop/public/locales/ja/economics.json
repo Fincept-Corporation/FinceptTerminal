@@ -1,59 +1,8 @@
 {
-    "title": "経済指標",
-    "header": {
-        "overview": "概要",
-        "indicators": "指標",
-        "calendar": "カレンダー",
-        "countries": "国別"
-    },
-    "indicators": {
-        "gdp": "GDP",
-        "inflation": "インフレ率",
-        "unemployment": "失業率",
-        "interestRate": "金利",
-        "tradeBalance": "貿易収支",
-        "consumerConfidence": "消費者信頼感",
-        "pmi": "PMI",
-        "cpi": "CPI"
-    },
-    "calendar": {
-        "date": "日付",
-        "event": "イベント",
-        "actual": "結果",
-        "forecast": "予想",
-        "previous": "前回",
-        "impact": "影響度"
-    },
-    "impact": {
-        "high": "高",
-        "medium": "中",
-        "low": "低"
-    },
-    "trends": {
-        "rising": "上昇",
-        "falling": "下落",
-        "stable": "横ばい",
-        "yoy": "前年比",
-        "mom": "前月比",
-        "qoq": "前四半期比"
-    },
-    "regions": {
-        "global": "世界",
-        "northAmerica": "北米",
-        "europe": "欧州",
-        "asia": "アジア太平洋",
-        "latam": "中南米",
-        "mena": "中東・北アフリカ"
-    },
-    "actions": {
-        "compare": "国を比較",
-        "export": "データエクスポート",
-        "subscribe": "更新通知",
-        "filter": "イベント絞り込み"
-    },
-    "messages": {
-        "loading": "経済データ読み込み中...",
-        "noEvents": "イベントなし",
-        "updated": "最終更新"
-    }
+  "title": "経済指標",
+  "header": {
+    "overview": "概要",
+    "indicators": "指標",
+    "countries": "国別"
+  }
 }

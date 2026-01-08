@@ -1,38 +1,35 @@
 {
-    "title": "MARKETPLACE",
-    "header": {
-        "browse": "Explorar",
-        "myItems": "Meus itens",
-        "cart": "Carrinho"
-    },
-    "categories": {
-        "all": "Todos",
-        "indicators": "Indicadores",
-        "strategies": "Estratégias",
-        "datasets": "Conjuntos de dados",
-        "tools": "Ferramentas"
-    },
-    "buttons": {
-        "buy": "Comprar",
-        "addToCart": "Adicionar ao carrinho",
-        "install": "Instalar",
-        "preview": "Visualizar"
-    },
-    "product": {
-        "price": "Preço",
-        "rating": "Avaliação",
-        "downloads": "Downloads",
-        "author": "Autor",
-        "version": "Versão"
-    },
-    "cart": {
-        "total": "Total",
-        "checkout": "Finalizar",
-        "empty": "Carrinho vazio"
-    },
-    "messages": {
-        "addedToCart": "Adicionado ao carrinho",
-        "purchased": "Comprado",
-        "installed": "Instalado"
-    }
+  "title": "MARKETPLACE",
+  "header": {
+    "browse": "Explorar",
+    "myPurchases": "[PT] MY PURCHASES",
+    "upload": "[PT] UPLOAD",
+    "myDatasets": "[PT] MY DATASETS",
+    "analytics": "[PT] ANALYTICS",
+    "pricing": "[PT] PRICING",
+    "datasetsAvailable": "[PT] Datasets Available",
+    "myUploads": "[PT] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "Adicionar ao carrinho",
+    "inCart": "[PT] ✓ IN CART",
+    "viewDetails": "[PT] VIEW DETAILS",
+    "backToMarketplace": "[PT] BACK TO MARKETPLACE",
+    "loading": "[PT] ⟳ LOADING...",
+    "refresh": "[PT] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "Avaliação",
+    "description": "[PT] PRODUCT DESCRIPTION",
+    "users": "[PT] USERS"
+  },
+  "cart": {
+    "empty": "Carrinho vazio",
+    "title": "[PT] SHOPPING CART",
+    "items": "[PT] items"
+  },
+  "guest": {
+    "title": "[PT] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[PT] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

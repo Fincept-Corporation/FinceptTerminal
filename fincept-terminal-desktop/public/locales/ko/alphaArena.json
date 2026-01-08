@@ -1,46 +1,9 @@
 {
-    "title": "알파 아레나",
-    "header": {
-        "competition": "경쟁",
-        "leaderboard": "순위표",
-        "decisions": "결정",
-        "cycles": "사이클"
-    },
-    "buttons": {
-        "start": "시작",
-        "stop": "중지",
-        "refresh": "새로고침",
-        "create": "경쟁 생성"
-    },
-    "form": {
-        "competitionName": "경쟁 이름",
-        "symbol": "심볼",
-        "mode": "트레이딩 모드",
-        "models": "모델 선택",
-        "apiKeys": "API 키"
-    },
-    "modes": {
-        "baseline": "기본",
-        "monk": "몽크",
-        "situational": "상황별",
-        "maxLeverage": "최대 레버리지"
-    },
-    "leaderboard": {
-        "rank": "순위",
-        "model": "모델",
-        "pnl": "손익",
-        "trades": "거래",
-        "winRate": "승률"
-    },
-    "status": {
-        "running": "실행 중",
-        "stopped": "중지됨",
-        "waiting": "대기 중",
-        "error": "오류"
-    },
-    "messages": {
-        "competitionStarted": "경쟁이 시작되었습니다",
-        "competitionStopped": "경쟁이 중지되었습니다",
-        "noCompetition": "활성 경쟁 없음"
-    }
+  "title": "알파 아레나",
+  "header": {
+    "competition": "경쟁"
+  },
+  "buttons": {
+    "create": "경쟁 생성"
+  }
 }

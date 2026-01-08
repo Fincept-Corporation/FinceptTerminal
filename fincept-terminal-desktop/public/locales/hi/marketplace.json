@@ -1,38 +1,35 @@
 {
-    "title": "मार्केटप्लेस",
-    "header": {
-        "browse": "ब्राउज़ करें",
-        "myItems": "मेरे आइटम",
-        "cart": "कार्ट"
-    },
-    "categories": {
-        "all": "सभी",
-        "indicators": "इंडिकेटर",
-        "strategies": "रणनीतियां",
-        "datasets": "डेटासेट",
-        "tools": "टूल्स"
-    },
-    "buttons": {
-        "buy": "खरीदें",
-        "addToCart": "कार्ट में जोड़ें",
-        "install": "इंस्टॉल करें",
-        "preview": "प्रीव्यू"
-    },
-    "product": {
-        "price": "कीमत",
-        "rating": "रेटिंग",
-        "downloads": "डाउनलोड",
-        "author": "लेखक",
-        "version": "संस्करण"
-    },
-    "cart": {
-        "total": "कुल",
-        "checkout": "चेकआउट",
-        "empty": "कार्ट खाली है"
-    },
-    "messages": {
-        "addedToCart": "कार्ट में जोड़ा गया",
-        "purchased": "खरीदा गया",
-        "installed": "इंस्टॉल किया गया"
-    }
+  "title": "मार्केटप्लेस",
+  "header": {
+    "browse": "ब्राउज़ करें",
+    "myPurchases": "[HI] MY PURCHASES",
+    "upload": "[HI] UPLOAD",
+    "myDatasets": "[HI] MY DATASETS",
+    "analytics": "[HI] ANALYTICS",
+    "pricing": "[HI] PRICING",
+    "datasetsAvailable": "[HI] Datasets Available",
+    "myUploads": "[HI] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "कार्ट में जोड़ें",
+    "inCart": "[HI] ✓ IN CART",
+    "viewDetails": "[HI] VIEW DETAILS",
+    "backToMarketplace": "[HI] BACK TO MARKETPLACE",
+    "loading": "[HI] ⟳ LOADING...",
+    "refresh": "[HI] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "रेटिंग",
+    "description": "[HI] PRODUCT DESCRIPTION",
+    "users": "[HI] USERS"
+  },
+  "cart": {
+    "empty": "कार्ट खाली है",
+    "title": "[HI] SHOPPING CART",
+    "items": "[HI] items"
+  },
+  "guest": {
+    "title": "[HI] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[HI] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

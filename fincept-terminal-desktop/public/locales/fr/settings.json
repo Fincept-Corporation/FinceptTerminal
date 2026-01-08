@@ -1,0 +1,60 @@
+{
+  "title": "PARAMÈTRES",
+  "credentials": {
+    "title": "GESTION DES IDENTIFIANTS API",
+    "description": "Gérer les clés API et les identifiants pour les services externes",
+    "apiKey": "Clé API",
+    "enterValue": "Entrez la valeur..."
+  },
+  "terminal": {
+    "title": "APPARENCE DU TERMINAL",
+    "description": "Personnalisez l'apparence visuelle de votre terminal",
+    "fontFamily": "FAMILLE DE POLICE",
+    "currentSettings": "PARAMÈTRES ACTUELS"
+  },
+  "terminalConfig": {
+    "title": "CONFIGURATION DE LA DISPOSITION DES ONGLETS",
+    "headerTabs": "ONGLETS D'EN-TÊTE (BARRE PRINCIPALE)",
+    "headerTabsDesc": "Faites glisser pour réorganiser. Ces onglets apparaissent dans la navigation principale de l'en-tête.",
+    "toolbarSections": "SECTIONS DU MENU DE LA BARRE D'OUTILS",
+    "newSection": "NOUVELLE SECTION",
+    "deleteSection": "SUPPRIMER",
+    "moveTo": "DÉPLACER VERS ▼",
+    "resetToDefault": "RÉINITIALISER PAR DÉFAUT",
+    "noTabsInSection": "Aucun onglet dans cette section",
+    "tip": "ASTUCE: Faites glisser les onglets pour les réorganiser. Utilisez les boutons fléchés pour déplacer les onglets entre l'en-tête et les sections de menu. Les modifications sont enregistrées automatiquement."
+  },
+  "llm": {
+    "title": "CONFIGURATION LLM",
+    "description": "Configurer les modèles et fournisseurs d'IA",
+    "connected": "CONNECTÉ",
+    "disconnected": "DÉCONNECTÉ",
+    "provider": "[FR] AI PROVIDER",
+    "globalSettings": "[FR] GLOBAL AI SETTINGS",
+    "temperature": "[FR] TEMPERATURE",
+    "maxTokens": "[FR] MAX TOKENS",
+    "systemPrompt": "[FR] SYSTEM PROMPT",
+    "modelLibrary": "[FR] MODEL LIBRARY",
+    "multiModelConfigs": "[FR] Multi-model configs"
+  },
+  "buttons": {
+    "save": "ENREGISTRER",
+    "cancel": "ANNULER",
+    "add": "AJOUTER"
+  },
+  "sidebar": {
+    "credentials": "[FR] API Credentials",
+    "llm": "[FR] LLM Configuration",
+    "dataSources": "[FR] Data Sources",
+    "backtesting": "[FR] Backtesting",
+    "tabLayout": "[FR] Tab Layout",
+    "appearance": "[FR] Appearance",
+    "language": "[FR] Language",
+    "polymarket": "[FR] Polymarket API"
+  },
+  "footer": {
+    "database": "[FR] Database: SQLite",
+    "storage": "[FR] Storage: File-based",
+    "secureStorage": "[FR] All data stored securely in fincept_terminal.db"
+  }
+}

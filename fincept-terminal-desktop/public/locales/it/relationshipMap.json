@@ -1,0 +1,13 @@
+{
+  "title": "[IT] Relationship Map",
+  "search": {
+    "placeholder": "[IT] Enter ticker (e.g., AAPL, TSLA, GOOGL)..."
+  },
+  "loading": {
+    "title": "[IT] Loading",
+    "subtitle": "[IT] Fetching data from SEC Edgar + Yahoo Finance"
+  },
+  "error": {
+    "title": "[IT] Error"
+  }
+}

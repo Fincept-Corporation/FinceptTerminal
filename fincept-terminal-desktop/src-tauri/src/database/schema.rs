@@ -506,6 +506,23 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_portfolio_transactions_date ON portfolio_transactions(transaction_date DESC);
         CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_portfolio ON portfolio_snapshots(portfolio_id);
         CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_date ON portfolio_snapshots(snapshot_date DESC);
+
+        -- Agent Configurations table (CoreAgent system)
+        CREATE TABLE IF NOT EXISTS agent_configs (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            config_json TEXT NOT NULL,
+            category TEXT DEFAULT 'general',
+            is_default INTEGER DEFAULT 0,
+            is_active INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_agent_configs_category ON agent_configs(category);
+        CREATE INDEX IF NOT EXISTS idx_agent_configs_is_default ON agent_configs(is_default);
+        CREATE INDEX IF NOT EXISTS idx_agent_configs_is_active ON agent_configs(is_active);
         ",
     )?;
 

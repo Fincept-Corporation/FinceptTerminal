@@ -1,38 +1,35 @@
 {
-    "title": "MARKETPLACE",
-    "header": {
-        "browse": "Răsfoiește",
-        "myItems": "Articolele mele",
-        "cart": "Coș"
-    },
-    "categories": {
-        "all": "Toate",
-        "indicators": "Indicatori",
-        "strategies": "Strategii",
-        "datasets": "Seturi de date",
-        "tools": "Unelte"
-    },
-    "buttons": {
-        "buy": "Cumpără",
-        "addToCart": "Adaugă în coș",
-        "install": "Instalează",
-        "preview": "Previzualizare"
-    },
-    "product": {
-        "price": "Preț",
-        "rating": "Rating",
-        "downloads": "Descărcări",
-        "author": "Autor",
-        "version": "Versiune"
-    },
-    "cart": {
-        "total": "Total",
-        "checkout": "Finalizează",
-        "empty": "Coș gol"
-    },
-    "messages": {
-        "addedToCart": "Adăugat în coș",
-        "purchased": "Cumpărat",
-        "installed": "Instalat"
-    }
+  "title": "MARKETPLACE",
+  "header": {
+    "browse": "Răsfoiește",
+    "myPurchases": "[RO] MY PURCHASES",
+    "upload": "[RO] UPLOAD",
+    "myDatasets": "[RO] MY DATASETS",
+    "analytics": "[RO] ANALYTICS",
+    "pricing": "[RO] PRICING",
+    "datasetsAvailable": "[RO] Datasets Available",
+    "myUploads": "[RO] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "Adaugă în coș",
+    "inCart": "[RO] ✓ IN CART",
+    "viewDetails": "[RO] VIEW DETAILS",
+    "backToMarketplace": "[RO] BACK TO MARKETPLACE",
+    "loading": "[RO] ⟳ LOADING...",
+    "refresh": "[RO] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "Rating",
+    "description": "[RO] PRODUCT DESCRIPTION",
+    "users": "[RO] USERS"
+  },
+  "cart": {
+    "empty": "Coș gol",
+    "title": "[RO] SHOPPING CART",
+    "items": "[RO] items"
+  },
+  "guest": {
+    "title": "[RO] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[RO] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

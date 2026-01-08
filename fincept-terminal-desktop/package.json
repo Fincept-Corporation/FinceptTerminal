@@ -12,7 +12,11 @@
     "tauri:dev": "bun run tauri dev",
     "tauri:build": "bun run tauri build",
     "tauri:build:msstore": "bun run tauri build --config src-tauri/tauri.microsoftstore.conf.json",
-    "bump-version": "bun scripts/bump-version.js"
+    "bump-version": "bun scripts/bump-version.js",
+    "i18n:audit": "bun scripts/audit-translations.js",
+    "i18n:sync": "bun scripts/sync-translations.js",
+    "i18n:translate": "bun scripts/translate-auto.js",
+    "i18n:update": "bun scripts/sync-translations.js && bun scripts/translate-auto.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -64,6 +68,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "ethers": "^6.16.0",
@@ -114,6 +119,7 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
+    "@types/d3": "^7.4.3",
     "@types/jmespath": "^0.15.2",
     "@types/jsonpath": "^0.2.4",
     "@types/node": "^24.5.2",
@@ -125,9 +131,11 @@
     "browserify-zlib": "^0.2.0",
     "buffer": "^6.0.3",
     "cross-env": "^10.1.0",
+    "glob": "^13.0.0",
     "http-proxy-agent": "^7.0.2",
     "https-browserify": "^1.0.0",
     "https-proxy-agent": "^7.0.6",
+    "i18next-parser": "^9.3.0",
     "socks-proxy-agent": "^8.0.5",
     "stream-browserify": "^3.0.0",
     "stream-http": "^3.2.0",

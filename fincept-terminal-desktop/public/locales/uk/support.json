@@ -1,42 +1,32 @@
 {
-    "title": "Тікет підтримки",
-    "header": {
-        "tickets": "Тікети",
-        "new": "Новий тікет",
-        "status": "Статус"
-    },
-    "form": {
-        "subject": "Тема",
-        "description": "Опис",
-        "priority": "Пріоритет",
-        "category": "Категорія"
-    },
-    "priority": {
-        "low": "Низький",
-        "medium": "Середній",
-        "high": "Високий",
-        "urgent": "Терміновий"
-    },
-    "status": {
-        "open": "Відкритий",
-        "inProgress": "В роботі",
-        "resolved": "Вирішено",
-        "closed": "Закритий"
-    },
-    "buttons": {
-        "submit": "Надіслати",
-        "cancel": "Скасувати",
-        "reply": "Відповісти",
-        "close": "Закрити"
-    },
-    "messages": {
-        "created": "Тікет створено",
-        "updated": "Тікет оновлено",
-        "closed": "Тікет закрито",
-        "noTickets": "Немає тікетів"
-    },
-    "auth": {
-        "loginRequired": "Увійдіть для створення тікету",
-        "demoMode": "Демо-режим"
-    }
+  "title": "Тікет підтримки",
+  "header": {
+    "tickets": "Тікети",
+    "open": "[UK] OPEN",
+    "resolved": "[UK] RESOLVED"
+  },
+  "status": {
+    "ready": "[UK] READY",
+    "updating": "[UK] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[UK] REFRESH",
+    "createTicket": "[UK] CREATE TICKET",
+    "backToList": "[UK] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[UK] AUTHENTICATION REQUIRED",
+    "loginMessage": "[UK] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[UK] SUPPORT TICKETS",
+    "noTickets": "[UK] No support tickets found. Create your first ticket to get started!",
+    "loading": "[UK] Loading tickets..."
+  },
+  "create": {
+    "title": "[UK] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[UK] DEMO"
+  }
 }

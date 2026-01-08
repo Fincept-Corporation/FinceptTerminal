@@ -1,6 +1,7 @@
 // Tauri commands module
 pub mod news;
 pub mod market_data;
+pub mod alpha_arena_bridge;
 pub mod polygon;
 pub mod yfinance;
 pub mod alphavantage;
@@ -122,3 +123,10 @@ pub mod functime_analytics;
 
 // High-Performance OrderBook Processing
 pub mod orderbook;
+pub mod financial_analysis;
+
+// Peer Comparison & Benchmarking - GICS-based peer analysis
+pub mod peer_commands;
+
+// Stock Screener - Advanced equity screening
+pub mod screener_commands;

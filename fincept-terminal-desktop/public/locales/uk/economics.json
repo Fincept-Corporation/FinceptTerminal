@@ -1,59 +1,8 @@
 {
-    "title": "ЕКОНОМІКА",
-    "header": {
-        "overview": "ОГЛЯД",
-        "indicators": "ІНДИКАТОРИ",
-        "calendar": "КАЛЕНДАР",
-        "countries": "КРАЇНИ"
-    },
-    "indicators": {
-        "gdp": "ВВП",
-        "inflation": "Інфляція",
-        "unemployment": "Безробіття",
-        "interestRate": "Відсоткова ставка",
-        "tradeBalance": "Торговий баланс",
-        "consumerConfidence": "Споживча впевненість",
-        "pmi": "PMI",
-        "cpi": "ІСЦ"
-    },
-    "calendar": {
-        "date": "Дата",
-        "event": "Подія",
-        "actual": "Факт",
-        "forecast": "Прогноз",
-        "previous": "Попереднє",
-        "impact": "Вплив"
-    },
-    "impact": {
-        "high": "Високий",
-        "medium": "Середній",
-        "low": "Низький"
-    },
-    "trends": {
-        "rising": "Зростання",
-        "falling": "Падіння",
-        "stable": "Стабільно",
-        "yoy": "Р/Р",
-        "mom": "М/М",
-        "qoq": "К/К"
-    },
-    "regions": {
-        "global": "Світ",
-        "northAmerica": "Північна Америка",
-        "europe": "Європа",
-        "asia": "Азійсько-Тихоокеанський",
-        "latam": "Латинська Америка",
-        "mena": "БВПА"
-    },
-    "actions": {
-        "compare": "Порівняти країни",
-        "export": "Експорт даних",
-        "subscribe": "Підписатися",
-        "filter": "Фільтр подій"
-    },
-    "messages": {
-        "loading": "Завантаження даних...",
-        "noEvents": "Немає подій",
-        "updated": "Оновлено"
-    }
+  "title": "ЕКОНОМІКА",
+  "header": {
+    "overview": "ОГЛЯД",
+    "indicators": "ІНДИКАТОРИ",
+    "countries": "КРАЇНИ"
+  }
 }

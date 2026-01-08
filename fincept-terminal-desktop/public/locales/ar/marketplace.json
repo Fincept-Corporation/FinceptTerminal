@@ -1,38 +1,35 @@
 {
-    "title": "السوق",
-    "header": {
-        "browse": "تصفح",
-        "myItems": "عناصري",
-        "cart": "السلة"
-    },
-    "categories": {
-        "all": "الكل",
-        "indicators": "المؤشرات",
-        "strategies": "الاستراتيجيات",
-        "datasets": "مجموعات البيانات",
-        "tools": "الأدوات"
-    },
-    "buttons": {
-        "buy": "شراء",
-        "addToCart": "أضف للسلة",
-        "install": "تثبيت",
-        "preview": "معاينة"
-    },
-    "product": {
-        "price": "السعر",
-        "rating": "التقييم",
-        "downloads": "التنزيلات",
-        "author": "المؤلف",
-        "version": "الإصدار"
-    },
-    "cart": {
-        "total": "المجموع",
-        "checkout": "الدفع",
-        "empty": "السلة فارغة"
-    },
-    "messages": {
-        "addedToCart": "تمت الإضافة للسلة",
-        "purchased": "تم الشراء",
-        "installed": "تم التثبيت"
-    }
+  "title": "السوق",
+  "header": {
+    "browse": "تصفح",
+    "myPurchases": "[AR] MY PURCHASES",
+    "upload": "[AR] UPLOAD",
+    "myDatasets": "[AR] MY DATASETS",
+    "analytics": "[AR] ANALYTICS",
+    "pricing": "[AR] PRICING",
+    "datasetsAvailable": "[AR] Datasets Available",
+    "myUploads": "[AR] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "أضف للسلة",
+    "inCart": "[AR] ✓ IN CART",
+    "viewDetails": "[AR] VIEW DETAILS",
+    "backToMarketplace": "[AR] BACK TO MARKETPLACE",
+    "loading": "[AR] ⟳ LOADING...",
+    "refresh": "[AR] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "التقييم",
+    "description": "[AR] PRODUCT DESCRIPTION",
+    "users": "[AR] USERS"
+  },
+  "cart": {
+    "empty": "السلة فارغة",
+    "title": "[AR] SHOPPING CART",
+    "items": "[AR] items"
+  },
+  "guest": {
+    "title": "[AR] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[AR] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

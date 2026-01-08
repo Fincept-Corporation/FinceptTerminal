@@ -1,39 +1,17 @@
 {
-    "title": "Notatki",
-    "header": {
-        "notes": "Notatki",
-        "folders": "Foldery",
-        "tags": "Tagi"
-    },
-    "toolbar": {
-        "newNote": "Nowa notatka",
-        "templates": "Szablony",
-        "favorites": "Ulubione",
-        "filters": "Filtry",
-        "archived": "Zarchiwizowane"
-    },
-    "editor": {
-        "title": "Tytuł",
-        "content": "Treść",
-        "tags": "Tagi"
-    },
-    "buttons": {
-        "save": "Zapisz",
-        "delete": "Usuń",
-        "archive": "Archiwizuj",
-        "share": "Udostępnij"
-    },
-    "messages": {
-        "saved": "Notatka zapisana",
-        "deleted": "Notatka usunięta",
-        "archived": "Notatka zarchiwizowana"
-    },
-    "search": {
-        "placeholder": "Szukaj notatek..."
-    },
-    "stats": {
-        "total": "Razem",
-        "archived": "Zarchiwizowane",
-        "favorites": "Ulubione"
-    }
+  "title": "Notatki",
+  "header": {
+    "total": "[PL] TOTAL",
+    "favorites": "[PL] FAVORITES",
+    "words": "[PL] WORDS",
+    "refresh": "[PL] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "Nowa notatka",
+    "templates": "Szablony",
+    "favorites": "Ulubione",
+    "filters": "Filtry",
+    "archived": "Zarchiwizowane",
+    "search": "[PL] Search notes, tags, tickers..."
+  }
 }

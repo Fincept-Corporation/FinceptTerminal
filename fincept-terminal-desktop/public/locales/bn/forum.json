@@ -1,61 +1,6 @@
 {
-    "title": "ফিনসেপ্ট ফোরাম",
-    "header": {
-        "trending": "ট্রেন্ডিং",
-        "new": "নতুন",
-        "following": "অনুসরণ করছি",
-        "myPosts": "আমার পোস্ট"
-    },
-    "categories": {
-        "all": "সব বিষয়",
-        "stocks": "স্টক",
-        "options": "অপশন",
-        "crypto": "ক্রিপ্টো",
-        "forex": "ফরেক্স",
-        "strategies": "কৌশল",
-        "general": "সাধারণ"
-    },
-    "post": {
-        "create": "পোস্ট তৈরি",
-        "reply": "উত্তর",
-        "edit": "সম্পাদনা",
-        "delete": "মুছুন",
-        "share": "শেয়ার",
-        "report": "রিপোর্ট",
-        "save": "সংরক্ষণ"
-    },
-    "form": {
-        "title": "শিরোনাম",
-        "content": "বিষয়বস্তু",
-        "tags": "ট্যাগ",
-        "category": "বিভাগ",
-        "submit": "পোস্ট করুন",
-        "cancel": "বাতিল",
-        "preview": "পূর্বরূপ"
-    },
-    "engagement": {
-        "likes": "পছন্দ",
-        "comments": "মন্তব্য",
-        "views": "ভিউ",
-        "shares": "শেয়ার"
-    },
-    "user": {
-        "posts": "পোস্ট",
-        "followers": "অনুসারী",
-        "following": "অনুসরণ",
-        "reputation": "সুনাম",
-        "joined": "যোগদান"
-    },
-    "sort": {
-        "newest": "সাম্প্রতিক",
-        "popular": "জনপ্রিয়",
-        "mostCommented": "সবচেয়ে মন্তব্য",
-        "topRated": "শীর্ষ রেটেড"
-    },
-    "messages": {
-        "loading": "লোড হচ্ছে...",
-        "noPosts": "কোনো পোস্ট নেই",
-        "postSuccess": "পোস্ট সফল",
-        "deleteConfirm": "এই পোস্ট মুছবেন?"
-    }
+  "title": "ফিনসেপ্ট ফোরাম",
+  "header": {
+    "trending": "ট্রেন্ডিং"
+  }
 }

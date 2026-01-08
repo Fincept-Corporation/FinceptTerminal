@@ -1,46 +1,26 @@
 {
-    "title": "مساعد الدردشة الذكي",
-    "header": {
-        "newChat": "محادثة جديدة",
-        "history": "السجل",
-        "settings": "الإعدادات"
-    },
-    "input": {
-        "placeholder": "اسأل عن الأسهم والأسواق والتحليل...",
-        "send": "إرسال",
-        "voice": "صوت"
-    },
-    "messages": {
-        "thinking": "جاري التفكير...",
-        "typing": "الذكاء الاصطناعي يكتب...",
-        "error": "خطأ في معالجة الطلب",
-        "welcome": "كيف يمكنني مساعدتك في التحليل المالي اليوم؟"
-    },
-    "suggestions": {
-        "title": "أسئلة مقترحة",
-        "stockAnalysis": "تحليل أداء الأسهم",
-        "marketTrends": "ما هي اتجاهات السوق الحالية؟",
-        "portfolioAdvice": "اقتراحات تحسين المحفظة"
-    },
-    "history": {
-        "title": "سجل المحادثات",
-        "today": "اليوم",
-        "yesterday": "أمس",
-        "thisWeek": "هذا الأسبوع",
-        "older": "قديم",
-        "clear": "مسح السجل"
-    },
-    "actions": {
-        "copy": "نسخ",
-        "regenerate": "إعادة توليد",
-        "like": "إعجاب",
-        "dislike": "عدم إعجاب",
-        "share": "مشاركة"
-    },
-    "models": {
-        "select": "اختر النموذج",
-        "gpt4": "GPT-4",
-        "claude": "Claude",
-        "gemini": "Gemini"
-    }
+  "title": "مساعد الدردشة الذكي",
+  "header": {
+    "newChat": "محادثة جديدة",
+    "settings": "الإعدادات"
+  },
+  "input": {
+    "placeholder": "اسأل عن الأسهم والأسواق والتحليل...",
+    "send": "إرسال"
+  },
+  "messages": {
+    "thinking": "جاري التفكير...",
+    "typing": "الذكاء الاصطناعي يكتب..."
+  },
+  "history": {
+    "clearAll": "[AR] CLEAR ALL",
+    "sessions": "[AR] SESSIONS",
+    "deleteAll": "[AR] Delete all sessions"
+  },
+  "subtitle": "[AR] Financial Intelligence System",
+  "panel": {
+    "dataContexts": "[AR] DATA CONTEXTS",
+    "quickPrompts": "[AR] QUICK PROMPTS",
+    "systemInfo": "[AR] SYSTEM INFO"
+  }
 }

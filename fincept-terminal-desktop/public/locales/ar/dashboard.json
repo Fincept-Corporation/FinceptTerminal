@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "جاري التحميل...",
     "error": "خطأ",
-    "configure": "تكوين",
-    "refresh": "تحديث",
-    "remove": "إزالة",
     "globalIndices": "المؤشرات العالمية - أفضل 12",
     "forex": "أزواج العملات",
     "crypto": "العملات المشفرة",
     "commodities": "السلع",
-    "bonds": "السندات",
-    "etfs": "صناديق ETF",
     "news": "الأخبار",
     "forum": "المنتدى",
     "watchlist": "قائمة المراقبة",
-    "maritime": "البحري",
     "index": "المؤشر",
     "symbol": "الرمز",
-    "name": "الاسم",
     "price": "السعر",
     "change": "التغير",
     "percentChange": "نسبة التغير",
-    "high": "الأعلى",
-    "low": "الأدنى",
     "noIndexData": "لا توجد بيانات مؤشرات",
     "noForexData": "لا توجد بيانات عملات",
     "noCryptoData": "لا توجد بيانات عملات مشفرة",
     "noCommoditiesData": "لا توجد بيانات سلع",
-    "noNewsData": "لا توجد أخبار",
     "noForumPosts": "لا توجد منشورات",
     "noStocksInWatchlist": "لا توجد أسهم في قائمة المراقبة",
     "noWatchlistSelected": "لم يتم اختيار قائمة مراقبة",
@@ -51,7 +41,8 @@
     "routes": "المسارات",
     "vol24h": "الحجم 24س",
     "topTradeCorridors": "أهم ممرات التجارة",
-    "ships": "سفن"
+    "ships": "سفن",
+    "unknown": "[AR] Unknown widget type"
   },
   "tips": {
     "drag": "اسحب الأدوات لإعادة الترتيب",
@@ -74,6 +65,11 @@
     "custom": "مخصص",
     "empty": "فارغ",
     "active": "نشط",
-    "cache": "التخزين المؤقت: مفعّل"
+    "cache": "التخزين المؤقت: مفعّل",
+    "label": "[AR] Status"
+  },
+  "messages": {
+    "layoutSaved": "[AR] Dashboard layout saved!",
+    "resetConfirm": "[AR] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

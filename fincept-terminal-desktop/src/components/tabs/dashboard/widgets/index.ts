@@ -9,9 +9,37 @@ export { GlobalIndicesWidget } from './GlobalIndicesWidget';
 export { ForexWidget } from './ForexWidget';
 export { MaritimeWidget } from './MaritimeWidget';
 export { DataSourceWidget } from './DataSourceWidget';
+// New widgets
+export { PolymarketWidget } from './PolymarketWidget';
+export { EconomicIndicatorsWidget } from './EconomicIndicatorsWidget';
+export { PortfolioSummaryWidget } from './PortfolioSummaryWidget';
+export { AlertsWidget } from './AlertsWidget';
+export { CalendarWidget } from './CalendarWidget';
+export { QuickTradeWidget } from './QuickTradeWidget';
+export { GeopoliticsWidget } from './GeopoliticsWidget';
+export { PerformanceWidget } from './PerformanceWidget';
 
 // Widget type definitions
-export type WidgetType = 'news' | 'market' | 'watchlist' | 'forum' | 'crypto' | 'commodities' | 'indices' | 'forex' | 'maritime' | 'datasource';
+export type WidgetType =
+  | 'news'
+  | 'market'
+  | 'watchlist'
+  | 'forum'
+  | 'crypto'
+  | 'commodities'
+  | 'indices'
+  | 'forex'
+  | 'maritime'
+  | 'datasource'
+  // New widget types
+  | 'polymarket'
+  | 'economic'
+  | 'portfolio'
+  | 'alerts'
+  | 'calendar'
+  | 'quicktrade'
+  | 'geopolitics'
+  | 'performance';
 
 export interface WidgetConfig {
   id: string;
@@ -105,5 +133,45 @@ export const DEFAULT_WIDGET_CONFIGS: Record<WidgetType, Partial<WidgetConfig>> =
       dataSourceAlias: '',
       dataSourceDisplayName: ''
     }
+  },
+  polymarket: {
+    type: 'polymarket',
+    title: 'Polymarket - Prediction Markets',
+    config: {}
+  },
+  economic: {
+    type: 'economic',
+    title: 'Economic Indicators',
+    config: {}
+  },
+  portfolio: {
+    type: 'portfolio',
+    title: 'Portfolio Summary',
+    config: {}
+  },
+  alerts: {
+    type: 'alerts',
+    title: 'Price Alerts',
+    config: {}
+  },
+  calendar: {
+    type: 'calendar',
+    title: 'Economic Calendar',
+    config: {}
+  },
+  quicktrade: {
+    type: 'quicktrade',
+    title: 'Quick Trade',
+    config: {}
+  },
+  geopolitics: {
+    type: 'geopolitics',
+    title: 'Geopolitical Risk',
+    config: {}
+  },
+  performance: {
+    type: 'performance',
+    title: 'Performance Tracker',
+    config: {}
   }
 };

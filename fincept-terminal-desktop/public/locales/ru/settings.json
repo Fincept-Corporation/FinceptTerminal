@@ -1,0 +1,60 @@
+{
+  "title": "Settings",
+  "credentials": {
+    "title": "API Credentials",
+    "apiKey": "API Key",
+    "description": "[RU] Manage API keys and credentials for external services",
+    "enterValue": "[RU] Enter value..."
+  },
+  "terminal": {
+    "title": "Terminal Appearance",
+    "fontFamily": "Font Family",
+    "description": "[RU] Customize the visual appearance of your terminal",
+    "currentSettings": "[RU] CURRENT SETTINGS"
+  },
+  "sidebar": {
+    "credentials": "[RU] API Credentials",
+    "llm": "[RU] LLM Configuration",
+    "dataSources": "[RU] Data Sources",
+    "backtesting": "[RU] Backtesting",
+    "tabLayout": "[RU] Tab Layout",
+    "appearance": "[RU] Appearance",
+    "language": "[RU] Language",
+    "polymarket": "[RU] Polymarket API"
+  },
+  "terminalConfig": {
+    "title": "[RU] TAB LAYOUT CONFIGURATION",
+    "headerTabs": "[RU] HEADER TABS (MAIN TAB BAR)",
+    "headerTabsDesc": "[RU] Drag to reorder. These tabs appear in the main header navigation.",
+    "toolbarSections": "[RU] TOOLBAR MENU SECTIONS",
+    "newSection": "[RU] NEW SECTION",
+    "deleteSection": "[RU] DELETE",
+    "moveTo": "[RU] MOVE TO ▼",
+    "resetToDefault": "[RU] RESET TO DEFAULT",
+    "noTabsInSection": "[RU] No tabs in this section",
+    "tip": "[RU] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+  },
+  "llm": {
+    "title": "[RU] LLM CONFIGURATION",
+    "description": "[RU] Configure AI models and providers",
+    "connected": "[RU] CONNECTED",
+    "disconnected": "[RU] DISCONNECTED",
+    "provider": "[RU] AI PROVIDER",
+    "globalSettings": "[RU] GLOBAL AI SETTINGS",
+    "temperature": "[RU] TEMPERATURE",
+    "maxTokens": "[RU] MAX TOKENS",
+    "systemPrompt": "[RU] SYSTEM PROMPT",
+    "modelLibrary": "[RU] MODEL LIBRARY",
+    "multiModelConfigs": "[RU] Multi-model configs"
+  },
+  "buttons": {
+    "save": "[RU] SAVE",
+    "cancel": "[RU] CANCEL",
+    "add": "[RU] ADD"
+  },
+  "footer": {
+    "database": "[RU] Database: SQLite",
+    "storage": "[RU] Storage: File-based",
+    "secureStorage": "[RU] All data stored securely in fincept_terminal.db"
+  }
+}

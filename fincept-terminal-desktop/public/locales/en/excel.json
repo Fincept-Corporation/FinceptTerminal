@@ -1,44 +1,11 @@
 {
-    "title": "EXCEL SPREADSHEET",
-    "header": {
-        "file": "File",
-        "sheets": "Sheets"
-    },
-    "toolbar": {
-        "new": "NEW",
-        "open": "OPEN",
-        "save": "SAVE",
-        "import": "IMPORT",
-        "export": "EXPORT",
-        "addSheet": "ADD SHEET",
-        "deleteSheet": "DELETE SHEET",
-        "snapshot": "SNAPSHOT",
-        "history": "HISTORY",
-        "revert": "REVERT"
-    },
-    "sheets": {
-        "sheet": "Sheet",
-        "rename": "Rename Sheet",
-        "delete": "Delete Sheet"
-    },
-    "history": {
-        "title": "SNAPSHOT HISTORY",
-        "noSnapshots": "No snapshots yet",
-        "restore": "RESTORE",
-        "delete": "DELETE"
-    },
-    "recentFiles": {
-        "title": "RECENT FILES",
-        "noFiles": "No recent files",
-        "open": "Open",
-        "clear": "Clear Recent"
-    },
-    "messages": {
-        "fileSaved": "File saved",
-        "fileOpened": "File opened",
-        "snapshotCreated": "Snapshot created",
-        "snapshotRestored": "Snapshot restored",
-        "sheetAdded": "Sheet added",
-        "sheetDeleted": "Sheet deleted"
-    }
+  "title": "EXCEL SPREADSHEET",
+  "toolbar": {
+    "save": "SAVE",
+    "import": "IMPORT",
+    "export": "EXPORT",
+    "snapshot": "SNAPSHOT",
+    "history": "HISTORY",
+    "revert": "REVERT"
+  }
 }

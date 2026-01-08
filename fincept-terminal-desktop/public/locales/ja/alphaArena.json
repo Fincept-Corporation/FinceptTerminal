@@ -1,46 +1,9 @@
 {
-    "title": "アルファアリーナ",
-    "header": {
-        "competition": "コンペティション",
-        "leaderboard": "リーダーボード",
-        "decisions": "決定",
-        "cycles": "サイクル"
-    },
-    "buttons": {
-        "start": "開始",
-        "stop": "停止",
-        "refresh": "更新",
-        "create": "コンペ作成"
-    },
-    "form": {
-        "competitionName": "コンペ名",
-        "symbol": "シンボル",
-        "mode": "トレードモード",
-        "models": "モデル選択",
-        "apiKeys": "APIキー"
-    },
-    "modes": {
-        "baseline": "ベースライン",
-        "monk": "モンク",
-        "situational": "状況型",
-        "maxLeverage": "最大レバレッジ"
-    },
-    "leaderboard": {
-        "rank": "順位",
-        "model": "モデル",
-        "pnl": "損益",
-        "trades": "取引",
-        "winRate": "勝率"
-    },
-    "status": {
-        "running": "実行中",
-        "stopped": "停止済み",
-        "waiting": "待機中",
-        "error": "エラー"
-    },
-    "messages": {
-        "competitionStarted": "コンペ開始",
-        "competitionStopped": "コンペ停止",
-        "noCompetition": "アクティブなコンペなし"
-    }
+  "title": "アルファアリーナ",
+  "header": {
+    "competition": "コンペティション"
+  },
+  "buttons": {
+    "create": "コンペ作成"
+  }
 }

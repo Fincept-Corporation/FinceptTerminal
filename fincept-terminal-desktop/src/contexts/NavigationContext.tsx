@@ -10,6 +10,7 @@ interface NavigationContextType {
   navigateToDashboard: () => void;
   navigateToProfile: () => void;
   setActiveTab?: (tab: string) => void;
+  activeTab?: string;  // Current active tab
 }
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined);
@@ -26,12 +27,14 @@ interface NavigationProviderProps {
   children: ReactNode;
   onNavigate: (screen: Screen) => void;
   onSetActiveTab?: (tab: string) => void;
+  activeTab?: string;  // Pass activeTab from parent
 }
 
 export const NavigationProvider: React.FC<NavigationProviderProps> = ({
   children,
   onNavigate,
-  onSetActiveTab
+  onSetActiveTab,
+  activeTab
 }) => {
   const navigateToScreen = (screen: Screen) => {
     onNavigate(screen);
@@ -58,7 +61,8 @@ export const NavigationProvider: React.FC<NavigationProviderProps> = ({
     navigateToPricing,
     navigateToDashboard,
     navigateToProfile,
-    setActiveTab: onSetActiveTab
+    setActiveTab: onSetActiveTab,
+    activeTab
   };
 
   return (

@@ -1,46 +1,26 @@
 {
-    "title": "TRỢ LÝ CHAT AI",
-    "header": {
-        "newChat": "CHAT MỚI",
-        "history": "LỊCH SỬ",
-        "settings": "CÀI ĐẶT"
-    },
-    "input": {
-        "placeholder": "Hỏi về cổ phiếu, thị trường...",
-        "send": "Gửi",
-        "voice": "Giọng nói"
-    },
-    "messages": {
-        "thinking": "Đang suy nghĩ...",
-        "typing": "AI đang nhập...",
-        "error": "Lỗi xử lý",
-        "welcome": "Tôi có thể giúp gì cho phân tích tài chính của bạn?"
-    },
-    "suggestions": {
-        "title": "Câu hỏi gợi ý",
-        "stockAnalysis": "Phân tích hiệu suất cổ phiếu",
-        "marketTrends": "Xu hướng thị trường hiện tại?",
-        "portfolioAdvice": "Gợi ý tối ưu hóa danh mục"
-    },
-    "history": {
-        "title": "Lịch sử chat",
-        "today": "Hôm nay",
-        "yesterday": "Hôm qua",
-        "thisWeek": "Tuần này",
-        "older": "Cũ hơn",
-        "clear": "Xóa lịch sử"
-    },
-    "actions": {
-        "copy": "Sao chép",
-        "regenerate": "Tạo lại",
-        "like": "Thích",
-        "dislike": "Không thích",
-        "share": "Chia sẻ"
-    },
-    "models": {
-        "select": "Chọn mô hình",
-        "gpt4": "GPT-4",
-        "claude": "Claude",
-        "gemini": "Gemini"
-    }
+  "title": "TRỢ LÝ CHAT AI",
+  "header": {
+    "newChat": "CHAT MỚI",
+    "settings": "CÀI ĐẶT"
+  },
+  "input": {
+    "placeholder": "Hỏi về cổ phiếu, thị trường...",
+    "send": "Gửi"
+  },
+  "messages": {
+    "thinking": "Đang suy nghĩ...",
+    "typing": "AI đang nhập..."
+  },
+  "history": {
+    "clearAll": "[VI] CLEAR ALL",
+    "sessions": "[VI] SESSIONS",
+    "deleteAll": "[VI] Delete all sessions"
+  },
+  "subtitle": "[VI] Financial Intelligence System",
+  "panel": {
+    "dataContexts": "[VI] DATA CONTEXTS",
+    "quickPrompts": "[VI] QUICK PROMPTS",
+    "systemInfo": "[VI] SYSTEM INFO"
+  }
 }

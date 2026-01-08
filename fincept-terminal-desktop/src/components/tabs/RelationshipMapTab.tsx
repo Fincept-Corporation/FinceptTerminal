@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import ReactFlow, {
   Node,
   Edge,
@@ -192,6 +193,7 @@ const nodeTypes = {
 };
 
 const RelationshipMapTab: React.FC = () => {
+  const { t } = useTranslation('relationshipMap');
   const { colors, fontSize, fontFamily } = useTerminalTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
@@ -559,7 +561,7 @@ const RelationshipMapTab: React.FC = () => {
       >
         <div className="flex items-center gap-3">
           <Globe className="w-5 h-5" style={{ color: colors.accent }} />
-          <h2 className="text-lg font-semibold">Relationship Map</h2>
+          <h2 className="text-lg font-semibold">{t('title')}</h2>
           <span className="text-xs px-2 py-1 rounded font-mono" style={{
             backgroundColor: colors.panel,
             color: colors.accent,
@@ -578,7 +580,7 @@ const RelationshipMapTab: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Enter ticker (e.g., AAPL, TSLA, GOOGL)..."
+            placeholder={t('search.placeholder')}
             className="w-full pl-10 pr-4 py-2 rounded border focus:outline-none focus:ring-1"
             style={{
               backgroundColor: colors.panel,
@@ -599,10 +601,10 @@ const RelationshipMapTab: React.FC = () => {
                 style={{ borderColor: colors.accent }}
               />
               <p className="text-lg font-semibold" style={{ color: colors.text }}>
-                Loading {selectedSymbol}...
+                {t('loading.title')} {selectedSymbol}...
               </p>
               <p className="text-sm mt-2" style={{ color: colors.textMuted }}>
-                Fetching data from SEC Edgar + Yahoo Finance
+                {t('loading.subtitle')}
               </p>
             </div>
           </div>
@@ -612,7 +614,7 @@ const RelationshipMapTab: React.FC = () => {
               backgroundColor: colors.panel,
               borderColor: colors.alert
             }}>
-              <p className="text-lg font-semibold mb-2" style={{ color: colors.alert }}>Error</p>
+              <p className="text-lg font-semibold mb-2" style={{ color: colors.alert }}>{t('error.title')}</p>
               <p style={{ color: colors.textMuted }}>{error}</p>
             </div>
           </div>

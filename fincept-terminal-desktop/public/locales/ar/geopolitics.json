@@ -1,59 +1,6 @@
 {
-    "title": "الجيوسياسية",
-    "header": {
-        "overview": "نظرة عامة",
-        "regions": "المناطق",
-        "analysis": "التحليل",
-        "alerts": "التنبيهات"
-    },
-    "regions": {
-        "global": "عالمي",
-        "northAmerica": "أمريكا الشمالية",
-        "europe": "أوروبا",
-        "asia": "آسيا والمحيط الهادئ",
-        "middleEast": "الشرق الأوسط",
-        "africa": "أفريقيا",
-        "latam": "أمريكا اللاتينية"
-    },
-    "categories": {
-        "conflict": "صراعات",
-        "sanctions": "عقوبات",
-        "trade": "علاقات تجارية",
-        "diplomacy": "دبلوماسية",
-        "elections": "انتخابات",
-        "policy": "تغييرات سياسية"
-    },
-    "risk": {
-        "level": "مستوى المخاطر",
-        "high": "عالي",
-        "medium": "متوسط",
-        "low": "منخفض",
-        "critical": "حرج",
-        "stable": "مستقر"
-    },
-    "impact": {
-        "economic": "التأثير الاقتصادي",
-        "market": "تأثير السوق",
-        "trade": "تأثير التجارة",
-        "currency": "تأثير العملة"
-    },
-    "timeline": {
-        "latest": "الأحدث",
-        "thisWeek": "هذا الأسبوع",
-        "thisMonth": "هذا الشهر",
-        "upcoming": "القادم"
-    },
-    "actions": {
-        "subscribe": "اشتراك",
-        "export": "تصدير",
-        "share": "مشاركة",
-        "setAlert": "تعيين تنبيه",
-        "filter": "تصفية"
-    },
-    "messages": {
-        "loading": "جاري تحميل البيانات...",
-        "noEvents": "لا توجد أحداث",
-        "updated": "آخر تحديث",
-        "breaking": "عاجل"
-    }
+  "title": "الجيوسياسية",
+  "messages": {
+    "loading": "جاري تحميل البيانات..."
+  }
 }

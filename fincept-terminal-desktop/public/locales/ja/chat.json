@@ -1,46 +1,26 @@
 {
-    "title": "AIチャットアシスタント",
-    "header": {
-        "newChat": "新規チャット",
-        "history": "履歴",
-        "settings": "設定"
-    },
-    "input": {
-        "placeholder": "株式、市場、分析について質問...",
-        "send": "送信",
-        "voice": "音声"
-    },
-    "messages": {
-        "thinking": "考え中...",
-        "typing": "AIが入力中...",
-        "error": "リクエスト処理エラー",
-        "welcome": "今日の金融分析でどのようにお手伝いできますか?"
-    },
-    "suggestions": {
-        "title": "おすすめの質問",
-        "stockAnalysis": "株価パフォーマンス分析",
-        "marketTrends": "現在の市場トレンドは?",
-        "portfolioAdvice": "ポートフォリオ最適化の提案"
-    },
-    "history": {
-        "title": "チャット履歴",
-        "today": "今日",
-        "yesterday": "昨日",
-        "thisWeek": "今週",
-        "older": "過去",
-        "clear": "履歴クリア"
-    },
-    "actions": {
-        "copy": "コピー",
-        "regenerate": "再生成",
-        "like": "いいね",
-        "dislike": "低評価",
-        "share": "共有"
-    },
-    "models": {
-        "select": "モデル選択",
-        "gpt4": "GPT-4",
-        "claude": "Claude",
-        "gemini": "Gemini"
-    }
+  "title": "AIチャットアシスタント",
+  "header": {
+    "newChat": "新規チャット",
+    "settings": "設定"
+  },
+  "input": {
+    "placeholder": "株式、市場、分析について質問...",
+    "send": "送信"
+  },
+  "messages": {
+    "thinking": "考え中...",
+    "typing": "AIが入力中..."
+  },
+  "history": {
+    "clearAll": "[JA] CLEAR ALL",
+    "sessions": "[JA] SESSIONS",
+    "deleteAll": "[JA] Delete all sessions"
+  },
+  "subtitle": "[JA] Financial Intelligence System",
+  "panel": {
+    "dataContexts": "[JA] DATA CONTEXTS",
+    "quickPrompts": "[JA] QUICK PROMPTS",
+    "systemInfo": "[JA] SYSTEM INFO"
+  }
 }

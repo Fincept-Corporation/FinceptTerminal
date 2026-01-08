@@ -1,39 +1,17 @@
 {
-    "title": "Notas",
-    "header": {
-        "notes": "Notas",
-        "folders": "Carpetas",
-        "tags": "Etiquetas"
-    },
-    "toolbar": {
-        "newNote": "Nueva nota",
-        "templates": "Plantillas",
-        "favorites": "Favoritos",
-        "filters": "Filtros",
-        "archived": "Archivadas"
-    },
-    "editor": {
-        "title": "Título",
-        "content": "Contenido",
-        "tags": "Etiquetas"
-    },
-    "buttons": {
-        "save": "Guardar",
-        "delete": "Eliminar",
-        "archive": "Archivar",
-        "share": "Compartir"
-    },
-    "messages": {
-        "saved": "Nota guardada",
-        "deleted": "Nota eliminada",
-        "archived": "Nota archivada"
-    },
-    "search": {
-        "placeholder": "Buscar notas..."
-    },
-    "stats": {
-        "total": "Total",
-        "archived": "Archivadas",
-        "favorites": "Favoritos"
-    }
+  "title": "Notas",
+  "header": {
+    "total": "[ES] TOTAL",
+    "favorites": "[ES] FAVORITES",
+    "words": "[ES] WORDS",
+    "refresh": "[ES] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "Nueva nota",
+    "templates": "Plantillas",
+    "favorites": "Favoritos",
+    "filters": "Filtros",
+    "archived": "Archivadas",
+    "search": "[ES] Search notes, tags, tickers..."
+  }
 }

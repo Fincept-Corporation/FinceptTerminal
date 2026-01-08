@@ -1,75 +1,25 @@
 {
-    "title": "LISTE DE SUIVI",
-    "header": {
-        "title": "MONITEUR LISTE DE SUIVI FINCEPT",
-        "myWatchlists": "MES LISTES",
-        "create": "CRÉER",
-        "import": "IMPORTER",
-        "export": "EXPORTER",
-        "updating": "MISE À JOUR",
-        "live": "EN DIRECT"
-    },
-    "sidebar": {
-        "groups": "GROUPES DE LISTES",
-        "new": "NOUVEAU",
-        "noWatchlists": "Pas encore de listes.",
-        "clickNew": "Cliquez NOUVEAU pour créer.",
-        "stocks": "actions",
-        "marketMovers": "LEADERS DU MARCHÉ",
-        "gainer": "HAUSSE",
-        "loser": "BAISSE",
-        "volumeLeaders": "LEADERS DE VOLUME"
-    },
-    "emptyState": {
-        "selectWatchlist": "Sélectionnez une liste ou créez-en une nouvelle pour commencer"
-    },
-    "list": {
-        "name": "Nom",
-        "symbols": "Symboles",
-        "created": "Créé",
-        "updated": "Dernière MAJ",
-        "actions": "Actions"
-    },
-    "actions": {
-        "add": "Ajouter symbole",
-        "remove": "Supprimer",
-        "edit": "Modifier",
-        "delete": "Supprimer",
-        "rename": "Renommer",
-        "duplicate": "Dupliquer"
-    },
-    "form": {
-        "name": "Nom de la liste",
-        "description": "Description",
-        "symbols": "Ajouter symboles",
-        "save": "Enregistrer",
-        "cancel": "Annuler"
-    },
-    "symbol": {
-        "price": "Prix",
-        "change": "Variation",
-        "volume": "Volume",
-        "marketCap": "Capitalisation",
-        "alert": "Définir alerte"
-    },
-    "alerts": {
-        "priceAbove": "Prix au-dessus",
-        "priceBelow": "Prix en-dessous",
-        "changePercent": "Variation %",
-        "volume": "Alerte volume"
-    },
-    "sort": {
-        "name": "Par nom",
-        "price": "Par prix",
-        "change": "Par variation",
-        "custom": "Ordre personnalisé"
-    },
-    "messages": {
-        "created": "Liste créée",
-        "deleted": "Liste supprimée",
-        "symbolAdded": "Symbole ajouté",
-        "symbolRemoved": "Symbole supprimé",
-        "noWatchlists": "Aucune liste",
-        "loading": "Chargement..."
-    }
+  "title": "LISTE DE SUIVI",
+  "header": {
+    "export": "EXPORTER",
+    "updating": "MISE À JOUR",
+    "live": "EN DIRECT"
+  },
+  "sidebar": {
+    "groups": "GROUPES DE LISTES",
+    "new": "NOUVEAU",
+    "noWatchlists": "Pas encore de listes.",
+    "clickNew": "Cliquez NOUVEAU pour créer.",
+    "stocks": "actions",
+    "marketMovers": "LEADERS DU MARCHÉ",
+    "gainer": "HAUSSE",
+    "loser": "BAISSE",
+    "volumeLeaders": "LEADERS DE VOLUME"
+  },
+  "emptyState": {
+    "selectWatchlist": "Sélectionnez une liste ou créez-en une nouvelle pour commencer"
+  },
+  "list": {
+    "symbols": "Symboles"
+  }
 }

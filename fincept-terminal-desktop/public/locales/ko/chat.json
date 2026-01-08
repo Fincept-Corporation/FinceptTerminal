@@ -1,46 +1,26 @@
 {
-    "title": "AI 채팅 어시스턴트",
-    "header": {
-        "newChat": "새 채팅",
-        "history": "기록",
-        "settings": "설정"
-    },
-    "input": {
-        "placeholder": "주식, 시장, 분석에 대해 질문하세요...",
-        "send": "전송",
-        "voice": "음성"
-    },
-    "messages": {
-        "thinking": "생각 중...",
-        "typing": "AI 입력 중...",
-        "error": "처리 오류",
-        "welcome": "오늘 금융 분석에 어떻게 도움을 드릴까요?"
-    },
-    "suggestions": {
-        "title": "추천 질문",
-        "stockAnalysis": "주식 성과 분석",
-        "marketTrends": "현재 시장 동향?",
-        "portfolioAdvice": "포트폴리오 최적화 제안"
-    },
-    "history": {
-        "title": "채팅 기록",
-        "today": "오늘",
-        "yesterday": "어제",
-        "thisWeek": "이번 주",
-        "older": "이전",
-        "clear": "기록 삭제"
-    },
-    "actions": {
-        "copy": "복사",
-        "regenerate": "재생성",
-        "like": "좋아요",
-        "dislike": "싫어요",
-        "share": "공유"
-    },
-    "models": {
-        "select": "모델 선택",
-        "gpt4": "GPT-4",
-        "claude": "Claude",
-        "gemini": "Gemini"
-    }
+  "title": "AI 채팅 어시스턴트",
+  "header": {
+    "newChat": "새 채팅",
+    "settings": "설정"
+  },
+  "input": {
+    "placeholder": "주식, 시장, 분석에 대해 질문하세요...",
+    "send": "전송"
+  },
+  "messages": {
+    "thinking": "생각 중...",
+    "typing": "AI 입력 중..."
+  },
+  "history": {
+    "clearAll": "[KO] CLEAR ALL",
+    "sessions": "[KO] SESSIONS",
+    "deleteAll": "[KO] Delete all sessions"
+  },
+  "subtitle": "[KO] Financial Intelligence System",
+  "panel": {
+    "dataContexts": "[KO] DATA CONTEXTS",
+    "quickPrompts": "[KO] QUICK PROMPTS",
+    "systemInfo": "[KO] SYSTEM INFO"
+  }
 }

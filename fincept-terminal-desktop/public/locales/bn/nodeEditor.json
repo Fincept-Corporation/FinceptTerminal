@@ -1,32 +1,6 @@
 {
-    "title": "নোড এডিটর",
-    "header": {
-        "nodes": "নোড",
-        "connections": "সংযোগ",
-        "canvas": "ক্যানভাস"
-    },
-    "tabs": {
-        "editor": "এডিটর",
-        "preview": "প্রিভিউ"
-    },
-    "toolbar": {
-        "addNode": "নোড যোগ",
-        "delete": "মুছুন",
-        "clear": "সব মুছুন",
-        "run": "চালান",
-        "save": "সংরক্ষণ",
-        "load": "লোড"
-    },
-    "nodes": {
-        "input": "ইনপুট",
-        "output": "আউটপুট",
-        "process": "প্রক্রিয়া",
-        "condition": "শর্ত"
-    },
-    "messages": {
-        "saved": "গ্রাফ সংরক্ষিত",
-        "loaded": "গ্রাফ লোড হয়েছে",
-        "running": "চলছে...",
-        "completed": "সম্পন্ন"
-    }
+  "title": "নোড এডিটর",
+  "tabs": {
+    "editor": "এডিটর"
+  }
 }

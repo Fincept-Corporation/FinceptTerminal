@@ -1,33 +1,19 @@
 {
-    "title": "रिपोर्ट बिल्डर",
-    "header": {
-        "templates": "टेम्पलेट",
-        "reports": "रिपोर्ट",
-        "preview": "प्रीव्यू"
-    },
-    "toolbar": {
-        "new": "नई रिपोर्ट",
-        "save": "सहेजें",
-        "export": "निर्यात",
-        "print": "प्रिंट",
-        "share": "शेयर करें"
-    },
-    "sections": {
-        "header": "हेडर",
-        "summary": "सारांश",
-        "charts": "चार्ट",
-        "tables": "टेबल",
-        "footer": "फुटर"
-    },
-    "templates": {
-        "daily": "दैनिक रिपोर्ट",
-        "weekly": "साप्ताहिक रिपोर्ट",
-        "monthly": "मासिक रिपोर्ट",
-        "custom": "कस्टम"
-    },
-    "messages": {
-        "saved": "रिपोर्ट सहेजी गई",
-        "exported": "रिपोर्ट निर्यात हुई",
-        "generating": "रिपोर्ट बन रही है..."
-    }
+  "title": "रिपोर्ट बिल्डर",
+  "header": {
+    "load": "[HI] Load",
+    "save": "[HI] Save",
+    "saving": "[HI] Saving...",
+    "exportPdf": "[HI] Export PDF",
+    "generating": "[HI] Generating..."
+  },
+  "components": {
+    "title": "[HI] ADD COMPONENTS"
+  },
+  "layout": {
+    "title": "[HI] LAYOUT"
+  },
+  "settings": {
+    "title": "[HI] SETTINGS"
+  }
 }

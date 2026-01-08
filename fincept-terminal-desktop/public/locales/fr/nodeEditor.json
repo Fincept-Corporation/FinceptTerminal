@@ -1,32 +1,6 @@
 {
-    "title": "Éditeur de nœuds",
-    "header": {
-        "nodes": "Nœuds",
-        "connections": "Connexions",
-        "canvas": "Canvas"
-    },
-    "tabs": {
-        "editor": "Éditeur",
-        "preview": "Aperçu"
-    },
-    "toolbar": {
-        "addNode": "Ajouter nœud",
-        "delete": "Supprimer",
-        "clear": "Tout effacer",
-        "run": "Exécuter",
-        "save": "Enregistrer",
-        "load": "Charger"
-    },
-    "nodes": {
-        "input": "Entrée",
-        "output": "Sortie",
-        "process": "Processus",
-        "condition": "Condition"
-    },
-    "messages": {
-        "saved": "Graphe enregistré",
-        "loaded": "Graphe chargé",
-        "running": "Exécution...",
-        "completed": "Terminé"
-    }
+  "title": "Éditeur de nœuds",
+  "tabs": {
+    "editor": "Éditeur"
+  }
 }

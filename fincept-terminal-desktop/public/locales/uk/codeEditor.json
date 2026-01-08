@@ -1,57 +1,29 @@
 {
-    "title": "РЕДАКТОР КОДУ",
-    "header": {
-        "files": "ФАЙЛИ",
-        "terminal": "ТЕРМІНАЛ",
-        "packages": "ПАКЕТИ"
-    },
-    "toolbar": {
-        "newFile": "НОВИЙ ФАЙЛ",
-        "new": "НОВИЙ",
-        "open": "ВІДКРИТИ",
-        "save": "ЗБЕРЕГТИ",
-        "run": "ВИКОНАТИ",
-        "running": "ВИКОНУЄТЬСЯ...",
-        "runAll": "ВИКОНАТИ ВСЕ",
-        "download": "ЗАВАНТАЖИТИ",
-        "upload": "ВИВАНТАЖИТИ",
-        "clear": "ОЧИСТИТИ",
-        "history": "ІСТОРІЯ"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "Редактор",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "РЕДАКТОР FINSCRIPT",
-        "terminal": "Термінал"
-    },
-    "terminal": {
-        "output": "Вивід",
-        "clear": "Очистити вивід",
-        "running": "Виконується...",
-        "completed": "Завершено"
-    },
-    "packages": {
-        "installed": "Встановлені пакети",
-        "install": "Встановити пакет",
-        "uninstall": "Видалити",
-        "clickToLoad": "Натисніть для завантаження...",
-        "load": "ЗАВАНТАЖИТИ ПАКЕТИ"
-    },
-    "history": {
-        "title": "ІСТОРІЯ НОУТБУКІВ",
-        "loading": "Завантаження історії...",
-        "empty": "Історія ноутбуків порожня"
-    },
-    "messages": {
-        "fileSaved": "Файл збережено",
-        "fileOpened": "Файл відкрито",
-        "executionComplete": "Виконання завершено",
-        "executionError": "Помилка виконання"
-    }
+  "title": "РЕДАКТОР КОДУ",
+  "header": {
+    "packages": "ПАКЕТИ"
+  },
+  "toolbar": {
+    "newFile": "НОВИЙ ФАЙЛ",
+    "new": "НОВИЙ",
+    "open": "ВІДКРИТИ",
+    "save": "ЗБЕРЕГТИ",
+    "run": "ВИКОНАТИ",
+    "running": "ВИКОНУЄТЬСЯ...",
+    "runAll": "ВИКОНАТИ ВСЕ",
+    "history": "ІСТОРІЯ"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "РЕДАКТОР FINSCRIPT"
+  },
+  "packages": {
+    "clickToLoad": "Натисніть для завантаження...",
+    "load": "ЗАВАНТАЖИТИ ПАКЕТИ"
+  },
+  "history": {
+    "title": "ІСТОРІЯ НОУТБУКІВ",
+    "loading": "Завантаження історії...",
+    "empty": "Історія ноутбуків порожня"
+  }
 }

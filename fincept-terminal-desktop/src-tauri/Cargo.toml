@@ -49,8 +49,9 @@ which = "7.0"
 printpdf = "0.7"
 flate2 = "1.0"  # For tar.gz extraction (macOS/Linux)
 tar = "0.4"  # For tar archive extraction
-pyo3 = { version = "0.23" }
 hashbrown = "0.15"  # Faster HashMap alternative
+interprocess = { version = "2.2", features = ["tokio"] }  # Unix domain sockets IPC
+rmp-serde = "1.3"  # MessagePack serialization
 ahash = "0.8"  # Fast hashing for orderbook
 smallvec = "1.13"  # Stack-allocated vectors for small arrays
 

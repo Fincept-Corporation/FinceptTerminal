@@ -1,42 +1,8 @@
 {
-    "title": "DBNOMICS TERMINAL",
-    "header": {
-        "provider": "Provider",
-        "dataset": "Dataset",
-        "series": "Series"
-    },
-    "toolbar": {
-        "fetch": "FETCH",
-        "refresh": "REFRESH",
-        "export": "EXPORT",
-        "addSeries": "ADD SERIES",
-        "removeSeries": "REMOVE"
-    },
-    "search": {
-        "searchProvider": "Search provider...",
-        "searchDataset": "Search dataset...",
-        "searchSeries": "Search series..."
-    },
-    "chart": {
-        "title": "TIME SERIES CHART",
-        "lineChart": "Line Chart",
-        "barChart": "Bar Chart",
-        "areaChart": "Area Chart"
-    },
-    "selection": {
-        "selectedSeries": "SELECTED SERIES",
-        "noSeries": "No series selected",
-        "clearAll": "Clear All"
-    },
-    "status": {
-        "loading": "Loading...",
-        "fetching": "Fetching data...",
-        "ready": "Ready",
-        "error": "Error fetching data"
-    },
-    "messages": {
-        "seriesAdded": "Series added",
-        "seriesRemoved": "Series removed",
-        "dataFetched": "Data fetched successfully"
-    }
+  "title": "DBNOMICS TERMINAL",
+  "toolbar": {
+    "fetch": "FETCH",
+    "refresh": "REFRESH",
+    "export": "EXPORT"
+  }
 }

@@ -1,84 +1,23 @@
 {
-    "title": "PRZEGLĄDARKA SERII FRED",
-    "header": {
-        "title": "EKSPLORATOR DANYCH FRED",
-        "filters": "FILTRY",
-        "results": "WYNIKI",
-        "saved": "ZAPISANE EKRANY",
-        "presets": "PRESETY"
-    },
-    "apiKey": {
-        "required": "WYMAGANY KLUCZ API",
-        "configure": "Skonfiguruj klucz FRED API w Ustawieniach → Poświadczenia aby uzyskać dostęp do danych ekonomicznych.",
-        "getKey": "Uzyskaj darmowy klucz API na",
-        "addToSettings": "Dodaj do Ustawień → Poświadczenia → FRED_API_KEY",
-        "saveAndReload": "Zapisz i odśwież tę kartę",
-        "tip": "Upewnij się, że skonfigurowałeś klucz FRED API w Ustawieniach → Poświadczenia"
-    },
-    "form": {
-        "seriesIds": "ID SERII",
-        "startDate": "DATA POCZĄTKOWA",
-        "endDate": "DATA KOŃCOWA",
-        "quickAdd": "SZYBKIE DODAWANIE"
-    },
-    "buttons": {
-        "fetch": "POBIERZ",
-        "loading": "ŁADOWANIE",
-        "browse": "PRZEGLĄDAJ SERIE",
-        "done": "GOTOWE"
-    },
-    "chart": {
-        "title": "WYKRES SZEREGU CZASOWEGO",
-        "emptyState": "Wprowadź ID serii i kliknij POBIERZ aby wizualizować dane",
-        "trySuggestion": "Spróbuj wyszukać GDP, UNRATE lub CPIAUCSL",
-        "waiting": "Proszę czekać podczas pobierania danych z FRED...",
-        "errorFetching": "Błąd Pobierania Danych"
-    },
-    "filters": {
-        "add": "Dodaj Filtr",
-        "clear": "Wyczyść Wszystko",
-        "reset": "Resetuj",
-        "apply": "Zastosuj Filtry"
-    },
-    "criteria": {
-        "marketCap": "Kapitalizacja",
-        "price": "Cena",
-        "volume": "Wolumen",
-        "pe": "P/E",
-        "eps": "EPS",
-        "dividend": "Dywidenda",
-        "beta": "Beta",
-        "sector": "Sektor",
-        "industry": "Branża",
-        "country": "Kraj",
-        "exchange": "Giełda"
-    },
-    "operators": {
-        "equals": "Równa się",
-        "greater": "Większe niż",
-        "less": "Mniejsze niż",
-        "between": "Pomiędzy",
-        "contains": "Zawiera"
-    },
-    "results": {
-        "symbol": "Symbol",
-        "name": "Nazwa",
-        "price": "Cena",
-        "change": "Zmiana",
-        "volume": "Wolumen",
-        "marketCap": "Kapitalizacja",
-        "matches": "wyników"
-    },
-    "actions": {
-        "save": "Zapisz Ekran",
-        "load": "Wczytaj Ekran",
-        "export": "Eksportuj Wyniki",
-        "addToWatchlist": "Dodaj do Obserwowanych"
-    },
-    "messages": {
-        "loading": "Filtrowanie akcji...",
-        "noResults": "Brak pasujących akcji",
-        "saved": "Ekran zapisany",
-        "applied": "Filtry zastosowane"
-    }
+  "title": "PRZEGLĄDARKA SERII FRED",
+  "header": {
+    "title": "EKSPLORATOR DANYCH FRED"
+  },
+  "apiKey": {
+    "required": "WYMAGANY KLUCZ API"
+  },
+  "form": {
+    "seriesIds": "ID SERII",
+    "quickAdd": "SZYBKIE DODAWANIE"
+  },
+  "buttons": {
+    "fetch": "POBIERZ",
+    "loading": "ŁADOWANIE",
+    "browse": "PRZEGLĄDAJ SERIE"
+  },
+  "chart": {
+    "title": "WYKRES SZEREGU CZASOWEGO",
+    "emptyState": "Wprowadź ID serii i kliknij POBIERZ aby wizualizować dane",
+    "trySuggestion": "Spróbuj wyszukać GDP, UNRATE lub CPIAUCSL"
+  }
 }

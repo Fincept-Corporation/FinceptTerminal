@@ -481,3 +481,193 @@ pub fn delete_watchlist(watchlist_id: &str) -> Result<()> {
 
     Ok(())
 }
+
+// ============================================================================
+// Agent Configuration Operations
+// ============================================================================
+
+pub fn save_agent_config(config: &AgentConfig) -> Result<OperationResult> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    conn.execute(
+        "INSERT OR REPLACE INTO agent_configs
+         (id, name, description, config_json, category, is_default, is_active, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, CURRENT_TIMESTAMP)",
+        params![
+            config.id,
+            config.name,
+            config.description,
+            config.config_json,
+            config.category,
+            if config.is_default { 1 } else { 0 },
+            if config.is_active { 1 } else { 0 },
+        ],
+    )?;
+
+    Ok(OperationResult {
+        success: true,
+        message: "Agent configuration saved successfully".to_string(),
+    })
+}
+
+pub fn get_agent_configs() -> Result<Vec<AgentConfig>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, name, description, config_json, category, is_default, is_active, created_at, updated_at
+         FROM agent_configs ORDER BY name"
+    )?;
+
+    let configs = stmt
+        .query_map([], |row| {
+            Ok(AgentConfig {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                config_json: row.get(3)?,
+                category: row.get(4)?,
+                is_default: row.get::<_, i32>(5)? != 0,
+                is_active: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(configs)
+}
+
+pub fn get_agent_config(id: &str) -> Result<Option<AgentConfig>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let config = conn.query_row(
+        "SELECT id, name, description, config_json, category, is_default, is_active, created_at, updated_at
+         FROM agent_configs WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(AgentConfig {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                config_json: row.get(3)?,
+                category: row.get(4)?,
+                is_default: row.get::<_, i32>(5)? != 0,
+                is_active: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        },
+    );
+
+    match config {
+        Ok(c) => Ok(Some(c)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+pub fn get_agent_configs_by_category(category: &str) -> Result<Vec<AgentConfig>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, name, description, config_json, category, is_default, is_active, created_at, updated_at
+         FROM agent_configs WHERE category = ?1 ORDER BY name"
+    )?;
+
+    let configs = stmt
+        .query_map(params![category], |row| {
+            Ok(AgentConfig {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                config_json: row.get(3)?,
+                category: row.get(4)?,
+                is_default: row.get::<_, i32>(5)? != 0,
+                is_active: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(configs)
+}
+
+pub fn delete_agent_config(id: &str) -> Result<OperationResult> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let rows_affected = conn.execute("DELETE FROM agent_configs WHERE id = ?1", params![id])?;
+
+    if rows_affected > 0 {
+        Ok(OperationResult {
+            success: true,
+            message: "Agent configuration deleted successfully".to_string(),
+        })
+    } else {
+        Ok(OperationResult {
+            success: false,
+            message: "Agent configuration not found".to_string(),
+        })
+    }
+}
+
+pub fn set_active_agent_config(id: &str) -> Result<OperationResult> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    // First, deactivate all configs
+    conn.execute("UPDATE agent_configs SET is_active = 0", [])?;
+
+    // Then activate the specified one
+    let rows_affected = conn.execute(
+        "UPDATE agent_configs SET is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?1",
+        params![id],
+    )?;
+
+    if rows_affected > 0 {
+        Ok(OperationResult {
+            success: true,
+            message: "Agent configuration activated".to_string(),
+        })
+    } else {
+        Ok(OperationResult {
+            success: false,
+            message: "Agent configuration not found".to_string(),
+        })
+    }
+}
+
+pub fn get_active_agent_config() -> Result<Option<AgentConfig>> {
+    let pool = get_pool()?;
+    let conn = pool.get()?;
+
+    let config = conn.query_row(
+        "SELECT id, name, description, config_json, category, is_default, is_active, created_at, updated_at
+         FROM agent_configs WHERE is_active = 1 LIMIT 1",
+        [],
+        |row| {
+            Ok(AgentConfig {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                config_json: row.get(3)?,
+                category: row.get(4)?,
+                is_default: row.get::<_, i32>(5)? != 0,
+                is_active: row.get::<_, i32>(6)? != 0,
+                created_at: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        },
+    );
+
+    match config {
+        Ok(c) => Ok(Some(c)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}

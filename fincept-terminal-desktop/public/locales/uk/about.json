@@ -1,0 +1,42 @@
+{
+  "title": "[UK] ABOUT",
+  "subtitle": "[UK] Application Information & Legal",
+  "version": {
+    "subtitle": "[UK] Professional Financial Intelligence Platform"
+  },
+  "openSource": {
+    "title": "[UK] OPEN SOURCE LICENSE",
+    "license": "[UK] AGPL-3.0 License",
+    "personal": "[UK] Free for personal/educational use",
+    "sharing": "[UK] Source sharing required on distribution",
+    "network": "[UK] Network service disclosure required"
+  },
+  "commercial": {
+    "title": "[UK] COMMERCIAL LICENSE",
+    "required": "[UK] Required for proprietary/SaaS use",
+    "noSharing": "[UK] No source sharing obligation",
+    "support": "[UK] Priority support included",
+    "custom": "[UK] Custom features available"
+  },
+  "trademarks": {
+    "title": "[UK] TRADEMARKS",
+    "description": "[UK] \"Fincept Terminal\" and \"Fincept\" are trademarks of Fincept Corporation. All rights reserved.",
+    "permission": "[UK] Use requires written permission except for AGPL-3.0 attribution."
+  },
+  "resources": {
+    "title": "[UK] RESOURCES",
+    "repository": "[UK] Repository",
+    "license": "[UK] License",
+    "commercial": "[UK] Commercial",
+    "trademarks": "[UK] Trademarks",
+    "cla": "[UK] CLA",
+    "website": "[UK] Website"
+  },
+  "contact": {
+    "title": "[UK] CONTACT",
+    "general": "[UK] General",
+    "commercial": "[UK] Commercial",
+    "security": "[UK] Security",
+    "legal": "[UK] Legal"
+  }
+}

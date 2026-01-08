@@ -1,42 +1,32 @@
 {
-    "title": "Тикет поддержки",
-    "header": {
-        "tickets": "Тикеты",
-        "new": "Новый тикет",
-        "status": "Статус"
-    },
-    "form": {
-        "subject": "Тема",
-        "description": "Описание",
-        "priority": "Приоритет",
-        "category": "Категория"
-    },
-    "priority": {
-        "low": "Низкий",
-        "medium": "Средний",
-        "high": "Высокий",
-        "urgent": "Срочный"
-    },
-    "status": {
-        "open": "Открыт",
-        "inProgress": "В работе",
-        "resolved": "Решён",
-        "closed": "Закрыт"
-    },
-    "buttons": {
-        "submit": "Отправить",
-        "cancel": "Отмена",
-        "reply": "Ответить",
-        "close": "Закрыть"
-    },
-    "messages": {
-        "created": "Тикет создан",
-        "updated": "Тикет обновлён",
-        "closed": "Тикет закрыт",
-        "noTickets": "Нет тикетов"
-    },
-    "auth": {
-        "loginRequired": "Войдите для создания тикета",
-        "demoMode": "Демо-режим"
-    }
+  "title": "Тикет поддержки",
+  "header": {
+    "tickets": "Тикеты",
+    "open": "[RU] OPEN",
+    "resolved": "[RU] RESOLVED"
+  },
+  "status": {
+    "ready": "[RU] READY",
+    "updating": "[RU] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[RU] REFRESH",
+    "createTicket": "[RU] CREATE TICKET",
+    "backToList": "[RU] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[RU] AUTHENTICATION REQUIRED",
+    "loginMessage": "[RU] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[RU] SUPPORT TICKETS",
+    "noTickets": "[RU] No support tickets found. Create your first ticket to get started!",
+    "loading": "[RU] Loading tickets..."
+  },
+  "create": {
+    "title": "[RU] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[RU] DEMO"
+  }
 }

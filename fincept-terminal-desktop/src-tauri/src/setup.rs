@@ -872,14 +872,27 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
     #[cfg(not(target_os = "macos"))]
     let needs_setup = !python_installed || !bun_installed || !packages_installed;
 
-    // Initialize Python runtime if setup is already complete (for app restarts)
+    // Initialize worker pool in background if setup is already complete (non-blocking)
+    // CRITICAL: Use tauri::async_runtime to ensure worker pool lives in Tauri's persistent runtime
     if !needs_setup && python_installed {
-        eprintln!("[SETUP] Python already installed, initializing runtime...");
-        if let Err(e) = crate::python_runtime::PythonRuntime::initialize_global() {
-            eprintln!("[SETUP] Warning: Failed to initialize Python runtime: {}", e);
-        } else {
-            eprintln!("[SETUP] Python runtime initialized successfully");
-        }
+        eprintln!("[SETUP] Python already installed, initializing worker pool in background...");
+        let app_clone = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let install_dir = match get_install_dir(&app_clone) {
+                Ok(dir) => dir,
+                Err(e) => {
+                    eprintln!("[SETUP] Failed to get install dir: {}", e);
+                    return;
+                }
+            };
+
+            if let Err(e) = crate::python_runtime::initialize_global_async(install_dir).await {
+                eprintln!("[SETUP] Warning: Failed to initialize worker pool: {}", e);
+            } else {
+                eprintln!("[SETUP] Worker pool initialized successfully in background");
+            }
+        });
+        eprintln!("[SETUP] Worker pool initialization started in background (non-blocking)");
     }
 
     Ok(SetupStatus {
@@ -983,13 +996,18 @@ pub async fn run_setup(app: AppHandle) -> Result<String, String> {
 
         emit_progress(&app, "complete", 100, "Setup complete!", false);
 
-        // Initialize Python runtime NOW that Python is installed
-        eprintln!("[SETUP] Initializing Python runtime...");
-        if let Err(e) = crate::python_runtime::PythonRuntime::initialize_global() {
-            eprintln!("[SETUP] Warning: Failed to initialize Python runtime: {}", e);
-        } else {
-            eprintln!("[SETUP] Python runtime initialized successfully");
-        }
+        // Initialize worker pool in background (non-blocking)
+        // CRITICAL: Use tauri::async_runtime to ensure worker pool lives in Tauri's persistent runtime
+        eprintln!("[SETUP] Initializing worker pool in background...");
+        let install_dir_clone = install_dir.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = crate::python_runtime::initialize_global_async(install_dir_clone).await {
+                eprintln!("[SETUP] Warning: Failed to initialize worker pool: {}", e);
+            } else {
+                eprintln!("[SETUP] Worker pool initialized successfully in background");
+            }
+        });
+        eprintln!("[SETUP] Worker pool initialization started in background (non-blocking)");
 
         Ok("Setup complete".to_string())
     }.await;

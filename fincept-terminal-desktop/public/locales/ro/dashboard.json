@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "Se încarcă...",
     "error": "Eroare",
-    "configure": "Configurează",
-    "refresh": "Reîmprospătează",
-    "remove": "Elimină",
     "globalIndices": "INDICI GLOBALI - TOP 12",
     "forex": "PERECHI FOREX",
     "crypto": "CRIPTOMONEDE",
     "commodities": "MĂRFURI",
-    "bonds": "OBLIGAȚIUNI",
-    "etfs": "ETF-uri",
     "news": "ȘTIRI",
     "forum": "FORUM",
     "watchlist": "LISTĂ DE URMĂRIRE",
-    "maritime": "MARITIM",
     "index": "INDICE",
     "symbol": "SIMBOL",
-    "name": "NUME",
     "price": "PREȚ",
     "change": "SCH",
     "percentChange": "%SCH",
-    "high": "MAX",
-    "low": "MIN",
     "noIndexData": "Nu există date indici",
     "noForexData": "Nu există date forex",
     "noCryptoData": "Nu există date cripto",
     "noCommoditiesData": "Nu există date mărfuri",
-    "noNewsData": "Nu există știri",
     "noForumPosts": "Nu există postări",
     "noStocksInWatchlist": "Nu există acțiuni în listă",
     "noWatchlistSelected": "Nicio listă selectată",
@@ -51,7 +41,8 @@
     "routes": "RUTE",
     "vol24h": "VOL 24O",
     "topTradeCorridors": "CORIDOARE COMERCIALE PRINCIPALE",
-    "ships": "nave"
+    "ships": "nave",
+    "unknown": "[RO] Unknown widget type"
   },
   "tips": {
     "drag": "Trageți widget-urile pentru rearanjare",
@@ -74,6 +65,11 @@
     "custom": "Personalizat",
     "empty": "Gol",
     "active": "ACTIV",
-    "cache": "Cache: ACTIVAT"
+    "cache": "Cache: ACTIVAT",
+    "label": "[RO] Status"
+  },
+  "messages": {
+    "layoutSaved": "[RO] Dashboard layout saved!",
+    "resetConfirm": "[RO] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

@@ -8,18 +8,24 @@ use crate::websocket::types::*;
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::RwLock;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 const KRAKEN_WS_URL: &str = "wss://ws.kraken.com/v2";
 
+/// Callback type for connection errors (used to trigger reconnection)
+type ErrorCallback = Box<dyn Fn(String) + Send + Sync>;
+
 pub struct KrakenAdapter {
     config: ProviderConfig,
     ws: Option<Arc<RwLock<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>>,
     message_callback: Option<Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>>,
-    connected: Arc<RwLock<bool>>,
+    error_callback: Option<Arc<ErrorCallback>>,
+    connected: Arc<AtomicBool>,
+    last_message_time: Arc<RwLock<u64>>,
 }
 
 impl KrakenAdapter {
@@ -28,15 +34,22 @@ impl KrakenAdapter {
             config,
             ws: None,
             message_callback: None,
-            connected: Arc::new(RwLock::new(false)),
+            error_callback: None,
+            connected: Arc::new(AtomicBool::new(false)),
+            last_message_time: Arc::new(RwLock::new(0)),
         }
     }
 
     fn now() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| Duration::from_secs(0))
             .as_millis() as u64
+    }
+
+    /// Set error callback for connection errors (to trigger reconnection)
+    pub fn set_error_callback(&mut self, callback: ErrorCallback) {
+        self.error_callback = Some(Arc::new(callback));
     }
 
     /// Normalize Kraken symbol (XBT -> BTC)
@@ -44,37 +57,134 @@ impl KrakenAdapter {
         symbol.replace("XBT", "BTC").replace('/', "")
     }
 
-    /// Parse Kraken ticker message
-    fn parse_ticker(&self, data: &Value) -> Option<TickerData> {
-        // Get the first element from the data array
+    /// Message receiver loop with error propagation
+    async fn receive_loop(
+        ws: Arc<RwLock<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
+        callback: Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>,
+        error_callback: Option<Arc<ErrorCallback>>,
+        connected: Arc<AtomicBool>,
+        last_message_time: Arc<RwLock<u64>>,
+    ) {
+        loop {
+            let msg_result = {
+                let mut ws_lock = ws.write().await;
+                ws_lock.next().await
+            };
+
+            match msg_result {
+                Some(Ok(msg)) => {
+                    // Update last message time
+                    *last_message_time.write().await = Self::now();
+
+                    // Handle message in separate task to avoid blocking
+                    let cb = callback.clone();
+                    tokio::spawn(async move {
+                        if let Message::Text(text) = msg {
+                            if let Ok(data) = serde_json::from_str::<Value>(&text) {
+                                Self::process_message(&data, &cb);
+                            }
+                        }
+                    });
+                }
+                Some(Err(e)) => {
+                    let error_msg = format!("WebSocket error: {}", e);
+                    eprintln!("[Kraken] {}", error_msg);
+                    connected.store(false, Ordering::SeqCst);
+
+                    // Emit error status via message callback
+                    callback(MarketMessage::Status(StatusData {
+                        provider: "kraken".to_string(),
+                        status: ConnectionStatus::Error,
+                        message: Some(error_msg.clone()),
+                        timestamp: Self::now(),
+                    }));
+
+                    // Notify error callback for reconnection handling
+                    if let Some(err_cb) = &error_callback {
+                        err_cb(error_msg);
+                    }
+                    break;
+                }
+                None => {
+                    let error_msg = "WebSocket connection closed unexpectedly".to_string();
+                    eprintln!("[Kraken] {}", error_msg);
+                    connected.store(false, Ordering::SeqCst);
+
+                    // Emit disconnected status
+                    callback(MarketMessage::Status(StatusData {
+                        provider: "kraken".to_string(),
+                        status: ConnectionStatus::Disconnected,
+                        message: Some(error_msg.clone()),
+                        timestamp: Self::now(),
+                    }));
+
+                    // Notify error callback for reconnection handling
+                    if let Some(err_cb) = &error_callback {
+                        err_cb(error_msg);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Process a parsed message and route to callback
+    fn process_message(data: &Value, callback: &Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>) {
+        if let Some(channel) = data.get("channel").and_then(|c| c.as_str()) {
+            match channel {
+                "ticker" => {
+                    if let Some(ticker) = Self::parse_ticker_static(data) {
+                        callback(MarketMessage::Ticker(ticker));
+                    }
+                }
+                "book" => {
+                    let is_snapshot = data.get("type")
+                        .and_then(|t| t.as_str())
+                        .map(|t| t == "snapshot")
+                        .unwrap_or(false);
+
+                    if let Some(book) = Self::parse_orderbook_static(data, is_snapshot) {
+                        callback(MarketMessage::OrderBook(book));
+                    }
+                }
+                "trade" => {
+                    if let Some(trades) = Self::parse_trade_static(data) {
+                        for trade in trades {
+                            callback(MarketMessage::Trade(trade));
+                        }
+                    }
+                }
+                "ohlc" => {
+                    if let Some(candle) = Self::parse_candle_static(data) {
+                        callback(MarketMessage::Candle(candle));
+                    }
+                }
+                "heartbeat" | "status" => {
+                    // Heartbeat and status messages - ignore silently
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Static parsing methods (don't need &self)
+    fn parse_ticker_static(data: &Value) -> Option<TickerData> {
         let ticker_data = data.get("data")?.as_array()?.get(0)?;
-
-        // Symbol is inside the data object
         let symbol = ticker_data.get("symbol")?.as_str()?;
-
-        // Values are numbers, not strings
         let last = ticker_data.get("last")?.as_f64()?;
-        let bid = ticker_data.get("bid")?.as_f64();
-        let ask = ticker_data.get("ask")?.as_f64();
-        let bid_qty = ticker_data.get("bid_qty")?.as_f64();
-        let ask_qty = ticker_data.get("ask_qty")?.as_f64();
-        let volume = ticker_data.get("volume")?.as_f64();
-        let high = ticker_data.get("high")?.as_f64();
-        let low = ticker_data.get("low")?.as_f64();
-        let vwap = ticker_data.get("vwap")?.as_f64();
 
         Some(TickerData {
             provider: "kraken".to_string(),
             symbol: Self::normalize_kraken_symbol(symbol),
             price: last,
-            bid,
-            ask,
-            bid_size: bid_qty,
-            ask_size: ask_qty,
-            volume,
-            high,
-            low,
-            open: vwap, // Using VWAP as a proxy for open (already Option<f64>)
+            bid: ticker_data.get("bid").and_then(|v| v.as_f64()),
+            ask: ticker_data.get("ask").and_then(|v| v.as_f64()),
+            bid_size: ticker_data.get("bid_qty").and_then(|v| v.as_f64()),
+            ask_size: ticker_data.get("ask_qty").and_then(|v| v.as_f64()),
+            volume: ticker_data.get("volume").and_then(|v| v.as_f64()),
+            high: ticker_data.get("high").and_then(|v| v.as_f64()),
+            low: ticker_data.get("low").and_then(|v| v.as_f64()),
+            open: ticker_data.get("vwap").and_then(|v| v.as_f64()),
             close: Some(last),
             change: None,
             change_percent: None,
@@ -82,12 +192,8 @@ impl KrakenAdapter {
         })
     }
 
-    /// Parse Kraken order book message
-    fn parse_orderbook(&self, data: &Value, is_snapshot: bool) -> Option<OrderBookData> {
-        // Get the first element from the data array
+    fn parse_orderbook_static(data: &Value, is_snapshot: bool) -> Option<OrderBookData> {
         let book_data = data.get("data")?.as_array()?.get(0)?;
-
-        // Symbol is inside the data object
         let symbol = book_data.get("symbol")?.as_str()?;
 
         let parse_levels = |levels: &Value| -> Vec<OrderBookLevel> {
@@ -95,7 +201,6 @@ impl KrakenAdapter {
                 .map(|arr| {
                     arr.iter()
                         .filter_map(|level| {
-                            // Kraken v2 book levels: {"price": 88500.0, "qty": 1.5}
                             Some(OrderBookLevel {
                                 price: level.get("price")?.as_f64()?,
                                 quantity: level.get("qty")?.as_f64()?,
@@ -107,39 +212,26 @@ impl KrakenAdapter {
                 .unwrap_or_default()
         };
 
-        let bids = if let Some(b) = book_data.get("bids") {
-            parse_levels(b)
-        } else {
-            vec![]
-        };
-
-        let asks = if let Some(a) = book_data.get("asks") {
-            parse_levels(a)
-        } else {
-            vec![]
-        };
-
         Some(OrderBookData {
             provider: "kraken".to_string(),
             symbol: Self::normalize_kraken_symbol(symbol),
-            bids,
-            asks,
+            bids: book_data.get("bids").map(parse_levels).unwrap_or_default(),
+            asks: book_data.get("asks").map(parse_levels).unwrap_or_default(),
             timestamp: Self::now(),
             is_snapshot,
         })
     }
 
-    /// Parse Kraken trade message
-    fn parse_trade(&self, data: &Value) -> Option<Vec<TradeData>> {
-        let symbol = data.get("symbol")?.as_str()?;
-        let trades = data.get("data")?.as_array()?;
+    fn parse_trade_static(data: &Value) -> Option<Vec<TradeData>> {
+        let trade_data = data.get("data")?.as_array()?.get(0)?;
+        let symbol = trade_data.get("symbol")?.as_str()?;
 
-        Some(
-            trades
-                .iter()
+        // Kraken v2 format: data array contains trade objects
+        let trades = if let Some(trades_array) = data.get("data").and_then(|d| d.as_array()) {
+            trades_array.iter()
                 .filter_map(|trade| {
-                    let price = trade.get("price")?.as_str()?.parse().ok()?;
-                    let qty = trade.get("qty")?.as_str()?.parse().ok()?;
+                    let price = trade.get("price")?.as_f64()?;
+                    let qty = trade.get("qty")?.as_f64()?;
                     let side_str = trade.get("side")?.as_str()?;
 
                     let side = match side_str {
@@ -158,116 +250,33 @@ impl KrakenAdapter {
                         timestamp: Self::now(),
                     })
                 })
-                .collect(),
-        )
+                .collect()
+        } else {
+            vec![]
+        };
+
+        if trades.is_empty() { None } else { Some(trades) }
     }
 
-    /// Parse Kraken candle message
-    fn parse_candle(&self, data: &Value) -> Option<CandleData> {
-        let symbol = data.get("symbol")?.as_str()?;
-        let candle_data = data.get("data")?.as_array()?.get(0)?;
+    fn parse_candle_static(data: &Value) -> Option<CandleData> {
+        let candle_array = data.get("data")?.as_array()?;
+        let candle_data = candle_array.get(0)?;
+        let symbol = candle_data.get("symbol")?.as_str()?;
 
         Some(CandleData {
             provider: "kraken".to_string(),
             symbol: Self::normalize_kraken_symbol(symbol),
-            open: candle_data.get("open")?.as_str()?.parse().ok()?,
-            high: candle_data.get("high")?.as_str()?.parse().ok()?,
-            low: candle_data.get("low")?.as_str()?.parse().ok()?,
-            close: candle_data.get("close")?.as_str()?.parse().ok()?,
-            volume: candle_data.get("volume")?.as_str()?.parse().ok()?,
+            open: candle_data.get("open")?.as_f64()?,
+            high: candle_data.get("high")?.as_f64()?,
+            low: candle_data.get("low")?.as_f64()?,
+            close: candle_data.get("close")?.as_f64()?,
+            volume: candle_data.get("volume")?.as_f64().unwrap_or(0.0),
             timestamp: Self::now(),
-            interval: candle_data.get("interval")?.as_str()?.to_string(),
+            interval: candle_data.get("interval")
+                .and_then(|v| v.as_str())
+                .unwrap_or("1m")
+                .to_string(),
         })
-    }
-
-    /// Handle incoming message
-    async fn handle_message(&self, msg: Message) {
-        if let Message::Text(text) = msg {
-            if let Ok(data) = serde_json::from_str::<Value>(&text) {
-                // Check message type
-                if let Some(channel) = data.get("channel").and_then(|c| c.as_str()) {
-                    let market_msg = match channel {
-                        "ticker" => {
-                            self.parse_ticker(&data).map(MarketMessage::Ticker)
-                        }
-                        "book" => {
-                            // Check if snapshot or update
-                            let is_snapshot = data.get("type")
-                                .and_then(|t| t.as_str())
-                                .map(|t| t == "snapshot")
-                                .unwrap_or(false);
-
-                            self.parse_orderbook(&data, is_snapshot).map(MarketMessage::OrderBook)
-                        }
-                        "trade" => {
-                            if let Some(trades) = self.parse_trade(&data) {
-                                // Emit each trade separately
-                                if let Some(callback) = &self.message_callback {
-                                    for trade in trades {
-                                        callback(MarketMessage::Trade(trade));
-                                    }
-                                }
-                                return;
-                            }
-                            None
-                        }
-                        "ohlc" => {
-                            self.parse_candle(&data).map(MarketMessage::Candle)
-                        }
-                        "heartbeat" | "status" => {
-                            // Heartbeat and status messages - ignore silently
-                            None
-                        }
-                        _ => None
-                    };
-
-                    if let Some(msg) = market_msg {
-                        if let Some(callback) = &self.message_callback {
-                            callback(msg);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// Message receiver loop
-    async fn receive_loop(
-        ws: Arc<RwLock<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>>>,
-        callback: Arc<Box<dyn Fn(MarketMessage) + Send + Sync>>,
-        connected: Arc<RwLock<bool>>,
-    ) {
-        loop {
-            let msg_result = {
-                let mut ws_lock = ws.write().await;
-                ws_lock.next().await
-            };
-
-            match msg_result {
-                Some(Ok(msg)) => {
-                    // Handle message in separate task to avoid blocking
-                    let adapter = KrakenAdapter {
-                        config: ProviderConfig::default(),
-                        ws: None,
-                        message_callback: Some(callback.clone()),
-                        connected: connected.clone(),
-                    };
-                    tokio::spawn(async move {
-                        adapter.handle_message(msg).await;
-                    });
-                }
-                Some(Err(e)) => {
-                    eprintln!("[Kraken] WebSocket error: {}", e);
-                    *connected.write().await = false;
-                    break;
-                }
-                None => {
-                    eprintln!("[Kraken] WebSocket connection closed");
-                    *connected.write().await = false;
-                    break;
-                }
-            }
-        }
     }
 }
 
@@ -289,15 +298,17 @@ impl WebSocketAdapter for KrakenAdapter {
 
         let ws = Arc::new(RwLock::new(ws_stream));
         self.ws = Some(ws.clone());
-        *self.connected.write().await = true;
+        self.connected.store(true, Ordering::SeqCst);
 
         eprintln!("[Kraken::connect] Starting receive loop...");
 
-        // Start receive loop
+        // Start receive loop with error callback
         if let Some(callback) = self.message_callback.clone() {
             let connected = self.connected.clone();
+            let error_callback = self.error_callback.clone();
+            let last_message_time = self.last_message_time.clone();
             tokio::spawn(async move {
-                Self::receive_loop(ws, callback, connected).await;
+                Self::receive_loop(ws, callback, error_callback, connected, last_message_time).await;
             });
             eprintln!("[Kraken::connect] ✓ Receive loop started");
         } else {
@@ -309,10 +320,10 @@ impl WebSocketAdapter for KrakenAdapter {
     }
 
     async fn disconnect(&mut self) -> anyhow::Result<()> {
-        *self.connected.write().await = false;
+        self.connected.store(false, Ordering::SeqCst);
 
         if let Some(ws) = &self.ws {
-            ws.write().await.close(None).await?;
+            let _ = ws.write().await.close(None).await;
         }
 
         self.ws = None;
@@ -395,11 +406,7 @@ impl WebSocketAdapter for KrakenAdapter {
     }
 
     fn is_connected(&self) -> bool {
-        // Use tokio runtime instead of futures executor
-        tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                *self.connected.read().await
-            })
-        })
+        // Use AtomicBool for lock-free, non-blocking check
+        self.connected.load(Ordering::SeqCst)
     }
 }

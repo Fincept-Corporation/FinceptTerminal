@@ -1,30 +1,8 @@
 {
-    "title": "DBnomics Verileri",
-    "header": {
-        "search": "Ara",
-        "providers": "Sağlayıcılar",
-        "datasets": "Veri setleri"
-    },
-    "form": {
-        "provider": "Sağlayıcı",
-        "dataset": "Veri seti",
-        "series": "Seri",
-        "startDate": "Başlangıç tarihi",
-        "endDate": "Bitiş tarihi"
-    },
-    "buttons": {
-        "fetch": "Getir",
-        "search": "Ara",
-        "export": "Dışa aktar",
-        "clear": "Temizle"
-    },
-    "chart": {
-        "title": "Veri görselleştirme",
-        "emptyState": "Verileri görmek için seri seçin"
-    },
-    "messages": {
-        "loading": "Veriler yükleniyor...",
-        "noData": "Veri bulunamadı",
-        "error": "Veri getirme hatası"
-    }
+  "title": "DBnomics Verileri",
+  "toolbar": {
+    "fetch": "[TR] FETCH",
+    "refresh": "[TR] REFRESH",
+    "export": "[TR] EXPORT"
+  }
 }

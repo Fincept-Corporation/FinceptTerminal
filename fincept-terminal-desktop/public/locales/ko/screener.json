@@ -1,84 +1,23 @@
 {
-    "title": "FRED 시리즈 브라우저",
-    "header": {
-        "title": "FRED 데이터 탐색기",
-        "filters": "필터",
-        "results": "결과",
-        "saved": "저장된 화면",
-        "presets": "프리셋"
-    },
-    "apiKey": {
-        "required": "API 키 필요",
-        "configure": "경제 데이터에 접근하려면 설정 → 자격 증명에서 FRED API 키를 구성하세요.",
-        "getKey": "무료 API 키 받기:",
-        "addToSettings": "설정 → 자격 증명 → FRED_API_KEY에 추가",
-        "saveAndReload": "저장하고 이 탭 새로고침",
-        "tip": "설정 → 자격 증명에서 FRED API 키를 구성했는지 확인하세요"
-    },
-    "form": {
-        "seriesIds": "시리즈 ID",
-        "startDate": "시작일",
-        "endDate": "종료일",
-        "quickAdd": "빠른 추가"
-    },
-    "buttons": {
-        "fetch": "가져오기",
-        "loading": "로딩 중",
-        "browse": "시리즈 찾아보기",
-        "done": "완료"
-    },
-    "chart": {
-        "title": "시계열 차트",
-        "emptyState": "시리즈 ID를 입력하고 가져오기를 클릭하여 데이터 시각화",
-        "trySuggestion": "GDP, UNRATE, CPIAUCSL 검색해 보세요",
-        "waiting": "FRED에서 데이터를 가져오는 중...",
-        "errorFetching": "데이터 가져오기 오류"
-    },
-    "filters": {
-        "add": "필터 추가",
-        "clear": "모두 지우기",
-        "reset": "초기화",
-        "apply": "필터 적용"
-    },
-    "criteria": {
-        "marketCap": "시가총액",
-        "price": "가격",
-        "volume": "거래량",
-        "pe": "PER",
-        "eps": "EPS",
-        "dividend": "배당수익률",
-        "beta": "베타",
-        "sector": "섹터",
-        "industry": "산업",
-        "country": "국가",
-        "exchange": "거래소"
-    },
-    "operators": {
-        "equals": "같음",
-        "greater": "초과",
-        "less": "미만",
-        "between": "사이",
-        "contains": "포함"
-    },
-    "results": {
-        "symbol": "심볼",
-        "name": "이름",
-        "price": "가격",
-        "change": "변동",
-        "volume": "거래량",
-        "marketCap": "시가총액",
-        "matches": "개 결과"
-    },
-    "actions": {
-        "save": "화면 저장",
-        "load": "화면 불러오기",
-        "export": "결과 내보내기",
-        "addToWatchlist": "관심목록에 추가"
-    },
-    "messages": {
-        "loading": "종목 스크리닝 중...",
-        "noResults": "조건에 맞는 종목 없음",
-        "saved": "화면 저장 완료",
-        "applied": "필터 적용됨"
-    }
+  "title": "FRED 시리즈 브라우저",
+  "header": {
+    "title": "FRED 데이터 탐색기"
+  },
+  "apiKey": {
+    "required": "API 키 필요"
+  },
+  "form": {
+    "seriesIds": "시리즈 ID",
+    "quickAdd": "빠른 추가"
+  },
+  "buttons": {
+    "fetch": "가져오기",
+    "loading": "로딩 중",
+    "browse": "시리즈 찾아보기"
+  },
+  "chart": {
+    "title": "시계열 차트",
+    "emptyState": "시리즈 ID를 입력하고 가져오기를 클릭하여 데이터 시각화",
+    "trySuggestion": "GDP, UNRATE, CPIAUCSL 검색해 보세요"
+  }
 }

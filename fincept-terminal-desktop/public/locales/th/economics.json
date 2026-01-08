@@ -1,59 +1,8 @@
 {
-    "title": "เศรษฐกิจ",
-    "header": {
-        "overview": "ภาพรวม",
-        "indicators": "ตัวชี้วัด",
-        "calendar": "ปฏิทิน",
-        "countries": "ประเทศ"
-    },
-    "indicators": {
-        "gdp": "GDP",
-        "inflation": "เงินเฟ้อ",
-        "unemployment": "อัตราว่างงาน",
-        "interestRate": "อัตราดอกเบี้ย",
-        "tradeBalance": "ดุลการค้า",
-        "consumerConfidence": "ความเชื่อมั่นผู้บริโภค",
-        "pmi": "PMI",
-        "cpi": "CPI"
-    },
-    "calendar": {
-        "date": "วันที่",
-        "event": "กิจกรรม",
-        "actual": "จริง",
-        "forecast": "คาดการณ์",
-        "previous": "ก่อนหน้า",
-        "impact": "ผลกระทบ"
-    },
-    "impact": {
-        "high": "สูง",
-        "medium": "ปานกลาง",
-        "low": "ต่ำ"
-    },
-    "trends": {
-        "rising": "เพิ่มขึ้น",
-        "falling": "ลดลง",
-        "stable": "ทรงตัว",
-        "yoy": "ปี/ปี",
-        "mom": "เดือน/เดือน",
-        "qoq": "ไตรมาส/ไตรมาส"
-    },
-    "regions": {
-        "global": "โลก",
-        "northAmerica": "อเมริกาเหนือ",
-        "europe": "ยุโรป",
-        "asia": "เอเชียแปซิฟิก",
-        "latam": "ละตินอเมริกา",
-        "mena": "ตะวันออกกลาง"
-    },
-    "actions": {
-        "compare": "เปรียบเทียบประเทศ",
-        "export": "ส่งออกข้อมูล",
-        "subscribe": "สมัครรับข่าวสาร",
-        "filter": "กรองกิจกรรม"
-    },
-    "messages": {
-        "loading": "กำลังโหลดข้อมูล...",
-        "noEvents": "ไม่มีกิจกรรม",
-        "updated": "อัปเดตล่าสุด"
-    }
+  "title": "เศรษฐกิจ",
+  "header": {
+    "overview": "ภาพรวม",
+    "indicators": "ตัวชี้วัด",
+    "countries": "ประเทศ"
+  }
 }

@@ -54,17 +54,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
         if (errorMessage.toLowerCase().includes('invalid email or password') ||
             errorMessage.toLowerCase().includes('invalid credentials') ||
             errorMessage.toLowerCase().includes('check your credentials')) {
-          setError('Invalid email or password. Please double-check your login information.');
+          setError(t('login.errors.invalidCredentials'));
         } else if (errorMessage.toLowerCase().includes('account not found') ||
                    errorMessage.toLowerCase().includes('user not found') ||
                    errorMessage.toLowerCase().includes('user does not exist')) {
-          setError('No account found with this email. Please check your email or sign up for a new account.');
+          setError(t('login.errors.accountNotFound'));
         } else if (errorMessage.toLowerCase().includes('password')) {
-          setError('Incorrect password. Please try again or use "Forgot Password" to reset it.');
+          setError(t('login.errors.incorrectPassword'));
         } else if (errorMessage.toLowerCase().includes('server error')) {
-          setError('Server error. Please try again in a few moments.');
+          setError(t('login.errors.serverError'));
         } else if (errorMessage.toLowerCase().includes('unable to connect')) {
-          setError('Unable to connect to server. Please check your internet connection and try again.');
+          setError(t('login.errors.connectionError'));
         } else {
           // Display the error as-is if it's already user-friendly
           setError(errorMessage);
@@ -81,7 +81,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
     e.preventDefault();
 
     if (!mfaCode) {
-      setError('Please enter the MFA code sent to your email.');
+      setError(t('login.errors.mfaCodeRequired'));
       return;
     }
 
@@ -94,10 +94,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
       if (result.success) {
         // App.tsx useEffect will handle navigation based on account_type
       } else {
-        setError(result.error || 'Invalid MFA code. Please check your email and try again.');
+        setError(result.error || t('login.errors.mfaInvalid'));
       }
     } catch (err) {
-      setError('MFA verification failed. Please try again.');
+      setError(t('login.errors.mfaFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -129,22 +129,22 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Shield className="h-6 w-6 text-blue-400" />
-            <h2 className="text-white text-2xl font-light">Two-Factor Authentication</h2>
+            <h2 className="text-white text-2xl font-light">{t('login.mfa.title')}</h2>
           </div>
           <p className="text-zinc-400 text-xs leading-5">
-            A verification code has been sent to your email. Please enter it below to complete login.
+            {t('login.mfa.subtitle')}
           </p>
         </div>
 
         <form onSubmit={handleMfaVerify} className="space-y-4">
           <div className="space-y-1">
             <Label htmlFor="mfaCode" className="text-white text-xs">
-              Verification Code
+              {t('login.mfa.codeLabel')}
             </Label>
             <Input
               id="mfaCode"
               type="text"
-              placeholder="Enter 6-digit code"
+              placeholder={t('login.mfa.codePlaceholder')}
               value={mfaCode}
               onChange={(e) => {
                 setMfaCode(e.target.value);
@@ -173,9 +173,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
               {isLoading ? (
                 <div className="flex items-center justify-center">
                   <div className="w-3 h-3 border border-white/30 border-t-white rounded-full animate-spin mr-1.5"></div>
-                  Verifying...
+                  {t('login.mfa.verifying')}
                 </div>
-              ) : 'Verify & Login'}
+              ) : t('login.mfa.verifyButton')}
             </Button>
 
             <button
@@ -188,7 +188,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
               className="text-zinc-400 hover:text-zinc-300 text-xs transition-colors"
               disabled={isLoading}
             >
-              ← Back to login
+              {t('login.mfa.backToLogin')}
             </button>
           </div>
         </form>

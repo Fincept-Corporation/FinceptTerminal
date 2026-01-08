@@ -1,76 +1,8 @@
 {
-    "title": "TRADING",
-    "header": {
-        "orders": "AUFTRÄGE",
-        "positions": "POSITIONEN",
-        "history": "VERLAUF",
-        "settings": "EINSTELLUNGEN",
-        "terminal": "FINCEPT TERMINAL",
-        "selectBroker": "BROKER WÄHLEN",
-        "paper": "PAPIER",
-        "live": "LIVE",
-        "watchlist": "BEOBACHTUNGSLISTE",
-        "orderbook": "ORDERBUCH",
-        "trades": "TRADES",
-        "stats": "STATISTIKEN",
-        "features": "FUNKTIONEN",
-        "crossExchange": "BÖRSENÜBERGREIFEND",
-        "chart": "CHART",
-        "depth": "TIEFE",
-        "volume": "VOLUMEN",
-        "aiAgents": "KI-AGENTEN",
-        "leaderboard": "RANGLISTE",
-        "modelChat": "MODELL-CHAT"
-    },
-    "orderTypes": {
-        "market": "Markt",
-        "limit": "Limit",
-        "stop": "Stop",
-        "stopLimit": "Stop-Limit",
-        "trailingStop": "Trailing Stop"
-    },
-    "actions": {
-        "buy": "KAUFEN",
-        "sell": "VERKAUFEN",
-        "cancel": "Stornieren",
-        "modify": "Ändern",
-        "close": "Schließen",
-        "closeAll": "Alle Schließen"
-    },
-    "form": {
-        "symbol": "Symbol",
-        "quantity": "Menge",
-        "price": "Preis",
-        "stopPrice": "Stop-Preis",
-        "takeProfit": "Gewinnmitnahme",
-        "stopLoss": "Stop Loss",
-        "leverage": "Hebel"
-    },
-    "position": {
-        "openPrice": "Eröffnungspreis",
-        "currentPrice": "Aktueller Preis",
-        "pnl": "G&V",
-        "pnlPercent": "G&V %",
-        "margin": "Margin",
-        "size": "Größe"
-    },
-    "order": {
-        "pending": "Ausstehend",
-        "filled": "Ausgeführt",
-        "cancelled": "Storniert",
-        "rejected": "Abgelehnt",
-        "partial": "Teilweise Ausgeführt"
-    },
-    "time": {
-        "gtc": "Gültig Bis Widerruf",
-        "day": "Tagesorder",
-        "ioc": "Sofort oder Stornieren",
-        "fok": "Alles oder Nichts"
-    },
-    "messages": {
-        "orderPlaced": "Auftrag erfolgreich platziert",
-        "orderFailed": "Auftrag fehlgeschlagen",
-        "confirmOrder": "Diesen Auftrag bestätigen?",
-        "noPositions": "Keine offenen Positionen"
-    }
+  "header": {
+    "terminal": "FINCEPT TERMINAL",
+    "selectBroker": "BROKER WÄHLEN",
+    "paper": "PAPIER",
+    "live": "LIVE"
+  }
 }

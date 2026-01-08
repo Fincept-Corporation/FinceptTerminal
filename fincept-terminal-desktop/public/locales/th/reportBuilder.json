@@ -1,33 +1,19 @@
 {
-    "title": "ตัวสร้างรายงาน",
-    "header": {
-        "templates": "เทมเพลต",
-        "reports": "รายงาน",
-        "preview": "ดูตัวอย่าง"
-    },
-    "toolbar": {
-        "new": "รายงานใหม่",
-        "save": "บันทึก",
-        "export": "ส่งออก",
-        "print": "พิมพ์",
-        "share": "แชร์"
-    },
-    "sections": {
-        "header": "ส่วนหัว",
-        "summary": "สรุป",
-        "charts": "แผนภูมิ",
-        "tables": "ตาราง",
-        "footer": "ส่วนท้าย"
-    },
-    "templates": {
-        "daily": "รายงานรายวัน",
-        "weekly": "รายงานรายสัปดาห์",
-        "monthly": "รายงานรายเดือน",
-        "custom": "กำหนดเอง"
-    },
-    "messages": {
-        "saved": "บันทึกรายงานแล้ว",
-        "exported": "ส่งออกรายงานแล้ว",
-        "generating": "กำลังสร้างรายงาน..."
-    }
+  "title": "ตัวสร้างรายงาน",
+  "header": {
+    "load": "[TH] Load",
+    "save": "[TH] Save",
+    "saving": "[TH] Saving...",
+    "exportPdf": "[TH] Export PDF",
+    "generating": "[TH] Generating..."
+  },
+  "components": {
+    "title": "[TH] ADD COMPONENTS"
+  },
+  "layout": {
+    "title": "[TH] LAYOUT"
+  },
+  "settings": {
+    "title": "[TH] SETTINGS"
+  }
 }

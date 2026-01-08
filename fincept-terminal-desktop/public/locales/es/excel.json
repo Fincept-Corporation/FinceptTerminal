@@ -1,26 +1,11 @@
 {
-    "title": "Integración Excel",
-    "header": {
-        "import": "Importar",
-        "export": "Exportar",
-        "preview": "Vista previa"
-    },
-    "toolbar": {
-        "open": "Abrir archivo",
-        "save": "Guardar",
-        "upload": "Subir",
-        "download": "Descargar",
-        "refresh": "Actualizar"
-    },
-    "table": {
-        "sheet": "Hoja",
-        "rows": "Filas",
-        "columns": "Columnas"
-    },
-    "messages": {
-        "loading": "Cargando archivo...",
-        "imported": "Archivo importado",
-        "exported": "Archivo exportado",
-        "error": "Error al procesar archivo"
-    }
+  "title": "Integración Excel",
+  "toolbar": {
+    "save": "Guardar",
+    "import": "[ES] IMPORT",
+    "export": "[ES] EXPORT",
+    "snapshot": "[ES] SNAPSHOT",
+    "history": "[ES] HISTORY",
+    "revert": "[ES] REVERT"
+  }
 }

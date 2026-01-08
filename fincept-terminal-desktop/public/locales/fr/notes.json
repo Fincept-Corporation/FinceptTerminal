@@ -1,39 +1,17 @@
 {
-    "title": "Notes",
-    "header": {
-        "notes": "Notes",
-        "folders": "Dossiers",
-        "tags": "Tags"
-    },
-    "toolbar": {
-        "newNote": "Nouvelle note",
-        "templates": "Modèles",
-        "favorites": "Favoris",
-        "filters": "Filtres",
-        "archived": "Archivées"
-    },
-    "editor": {
-        "title": "Titre",
-        "content": "Contenu",
-        "tags": "Tags"
-    },
-    "buttons": {
-        "save": "Enregistrer",
-        "delete": "Supprimer",
-        "archive": "Archiver",
-        "share": "Partager"
-    },
-    "messages": {
-        "saved": "Note enregistrée",
-        "deleted": "Note supprimée",
-        "archived": "Note archivée"
-    },
-    "search": {
-        "placeholder": "Rechercher des notes..."
-    },
-    "stats": {
-        "total": "Total",
-        "archived": "Archivées",
-        "favorites": "Favoris"
-    }
+  "title": "Notes",
+  "header": {
+    "total": "[FR] TOTAL",
+    "favorites": "[FR] FAVORITES",
+    "words": "[FR] WORDS",
+    "refresh": "[FR] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "Nouvelle note",
+    "templates": "Modèles",
+    "favorites": "Favoris",
+    "filters": "Filtres",
+    "archived": "Archivées",
+    "search": "[FR] Search notes, tags, tickers..."
+  }
 }

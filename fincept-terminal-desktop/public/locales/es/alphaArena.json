@@ -1,46 +1,9 @@
 {
-    "title": "ARENA ALFA",
-    "header": {
-        "competition": "COMPETICIÓN",
-        "leaderboard": "CLASIFICACIÓN",
-        "decisions": "DECISIONES",
-        "cycles": "CICLOS"
-    },
-    "buttons": {
-        "start": "INICIAR",
-        "stop": "DETENER",
-        "refresh": "ACTUALIZAR",
-        "create": "CREAR COMPETICIÓN"
-    },
-    "form": {
-        "competitionName": "Nombre de la competición",
-        "symbol": "Símbolo",
-        "mode": "Modo de trading",
-        "models": "Seleccionar modelos",
-        "apiKeys": "Claves API"
-    },
-    "modes": {
-        "baseline": "Básico",
-        "monk": "Monk",
-        "situational": "Situacional",
-        "maxLeverage": "Máximo apalancamiento"
-    },
-    "leaderboard": {
-        "rank": "Posición",
-        "model": "Modelo",
-        "pnl": "P&L",
-        "trades": "Operaciones",
-        "winRate": "Tasa de éxito"
-    },
-    "status": {
-        "running": "EN EJECUCIÓN",
-        "stopped": "DETENIDO",
-        "waiting": "ESPERANDO",
-        "error": "ERROR"
-    },
-    "messages": {
-        "competitionStarted": "Competición iniciada",
-        "competitionStopped": "Competición detenida",
-        "noCompetition": "Sin competición activa"
-    }
+  "title": "ARENA ALFA",
+  "header": {
+    "competition": "COMPETICIÓN"
+  },
+  "buttons": {
+    "create": "CREAR COMPETICIÓN"
+  }
 }

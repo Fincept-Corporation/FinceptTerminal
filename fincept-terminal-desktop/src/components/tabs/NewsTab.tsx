@@ -474,7 +474,7 @@ const NewsTab: React.FC = () => {
             overflow: 'auto'
           }}>
             <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-              PRIMARY NEWS FEED [{activeFilter}]
+              {t('feeds.primary')} [{activeFilter}]
             </div>
             <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
@@ -533,7 +533,7 @@ const NewsTab: React.FC = () => {
             overflow: 'auto'
           }}>
             <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-              SECONDARY NEWS FEED [{activeFilter}]
+              {t('feeds.secondary')} [{activeFilter}]
             </div>
             <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 
@@ -588,7 +588,7 @@ const NewsTab: React.FC = () => {
             {/* News Analytics Section */}
             <div style={{ flex: 1, minHeight: '600px', overflowY: 'auto' }}>
               <div style={{ color: colors.primary, fontSize: '12px', fontWeight: 'bold', marginBottom: '8px', letterSpacing: '0.5px' }}>
-                REAL-TIME NEWS ANALYTICS
+                {t('analytics.title')}
               </div>
               <div style={{ borderBottom: `2px solid ${colors.primary}`, marginBottom: '12px' }}></div>
 
@@ -974,7 +974,7 @@ const NewsTab: React.FC = () => {
               overflowY: 'auto'
             }}>
               <div style={{ color: colors.primary, fontSize: '11px', fontWeight: 'bold', marginBottom: '4px' }}>
-                ADDITIONAL HEADLINES
+                {t('feeds.additional')}
               </div>
               <div style={{ borderBottom: `1px solid ${colors.textMuted}`, marginBottom: '4px' }}></div>
 

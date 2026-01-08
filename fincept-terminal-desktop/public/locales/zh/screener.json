@@ -1,84 +1,23 @@
 {
-    "title": "FRED系列浏览器",
-    "header": {
-        "title": "FRED数据浏览器",
-        "filters": "筛选器",
-        "results": "结果",
-        "saved": "已保存屏幕",
-        "presets": "预设"
-    },
-    "apiKey": {
-        "required": "需要API密钥",
-        "configure": "在设置 → 凭据中配置您的FRED API密钥以访问经济数据。",
-        "getKey": "在此获取免费API密钥",
-        "addToSettings": "添加到设置 → 凭据 → FRED_API_KEY",
-        "saveAndReload": "保存并重新加载此标签页",
-        "tip": "确保您已在设置 → 凭据中配置了FRED API密钥"
-    },
-    "form": {
-        "seriesIds": "系列ID",
-        "startDate": "开始日期",
-        "endDate": "结束日期",
-        "quickAdd": "快速添加"
-    },
-    "buttons": {
-        "fetch": "获取",
-        "loading": "加载中",
-        "browse": "浏览系列",
-        "done": "完成"
-    },
-    "chart": {
-        "title": "时间序列图表",
-        "emptyState": "输入系列ID并点击获取来可视化数据",
-        "trySuggestion": "尝试搜索GDP、UNRATE或CPIAUCSL",
-        "waiting": "请稍候，正在从FRED获取数据...",
-        "errorFetching": "获取数据错误"
-    },
-    "filters": {
-        "add": "添加筛选器",
-        "clear": "全部清除",
-        "reset": "重置",
-        "apply": "应用筛选器"
-    },
-    "criteria": {
-        "marketCap": "市值",
-        "price": "价格",
-        "volume": "成交量",
-        "pe": "市盈率",
-        "eps": "每股收益",
-        "dividend": "股息率",
-        "beta": "贝塔",
-        "sector": "行业",
-        "industry": "产业",
-        "country": "国家",
-        "exchange": "交易所"
-    },
-    "operators": {
-        "equals": "等于",
-        "greater": "大于",
-        "less": "小于",
-        "between": "介于",
-        "contains": "包含"
-    },
-    "results": {
-        "symbol": "代码",
-        "name": "名称",
-        "price": "价格",
-        "change": "涨跌",
-        "volume": "成交量",
-        "marketCap": "市值",
-        "matches": "个结果"
-    },
-    "actions": {
-        "save": "保存屏幕",
-        "load": "加载屏幕",
-        "export": "导出结果",
-        "addToWatchlist": "添加到自选"
-    },
-    "messages": {
-        "loading": "正在筛选股票...",
-        "noResults": "没有符合条件的股票",
-        "saved": "屏幕保存成功",
-        "applied": "筛选器已应用"
-    }
+  "title": "FRED系列浏览器",
+  "header": {
+    "title": "FRED数据浏览器"
+  },
+  "apiKey": {
+    "required": "需要API密钥"
+  },
+  "form": {
+    "seriesIds": "系列ID",
+    "quickAdd": "快速添加"
+  },
+  "buttons": {
+    "fetch": "获取",
+    "loading": "加载中",
+    "browse": "浏览系列"
+  },
+  "chart": {
+    "title": "时间序列图表",
+    "emptyState": "输入系列ID并点击获取来可视化数据",
+    "trySuggestion": "尝试搜索GDP、UNRATE或CPIAUCSL"
+  }
 }

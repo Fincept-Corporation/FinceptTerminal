@@ -1,0 +1,60 @@
+{
+  "title": "设置",
+  "credentials": {
+    "title": "API 凭据",
+    "apiKey": "API 密钥",
+    "description": "[ZH] Manage API keys and credentials for external services",
+    "enterValue": "[ZH] Enter value..."
+  },
+  "terminal": {
+    "title": "终端外观",
+    "fontFamily": "字体系列",
+    "description": "[ZH] Customize the visual appearance of your terminal",
+    "currentSettings": "[ZH] CURRENT SETTINGS"
+  },
+  "sidebar": {
+    "credentials": "[ZH] API Credentials",
+    "llm": "[ZH] LLM Configuration",
+    "dataSources": "[ZH] Data Sources",
+    "backtesting": "[ZH] Backtesting",
+    "tabLayout": "[ZH] Tab Layout",
+    "appearance": "[ZH] Appearance",
+    "language": "[ZH] Language",
+    "polymarket": "[ZH] Polymarket API"
+  },
+  "terminalConfig": {
+    "title": "[ZH] TAB LAYOUT CONFIGURATION",
+    "headerTabs": "[ZH] HEADER TABS (MAIN TAB BAR)",
+    "headerTabsDesc": "[ZH] Drag to reorder. These tabs appear in the main header navigation.",
+    "toolbarSections": "[ZH] TOOLBAR MENU SECTIONS",
+    "newSection": "[ZH] NEW SECTION",
+    "deleteSection": "[ZH] DELETE",
+    "moveTo": "[ZH] MOVE TO ▼",
+    "resetToDefault": "[ZH] RESET TO DEFAULT",
+    "noTabsInSection": "[ZH] No tabs in this section",
+    "tip": "[ZH] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+  },
+  "llm": {
+    "title": "[ZH] LLM CONFIGURATION",
+    "description": "[ZH] Configure AI models and providers",
+    "connected": "[ZH] CONNECTED",
+    "disconnected": "[ZH] DISCONNECTED",
+    "provider": "[ZH] AI PROVIDER",
+    "globalSettings": "[ZH] GLOBAL AI SETTINGS",
+    "temperature": "[ZH] TEMPERATURE",
+    "maxTokens": "[ZH] MAX TOKENS",
+    "systemPrompt": "[ZH] SYSTEM PROMPT",
+    "modelLibrary": "[ZH] MODEL LIBRARY",
+    "multiModelConfigs": "[ZH] Multi-model configs"
+  },
+  "buttons": {
+    "save": "[ZH] SAVE",
+    "cancel": "[ZH] CANCEL",
+    "add": "[ZH] ADD"
+  },
+  "footer": {
+    "database": "[ZH] Database: SQLite",
+    "storage": "[ZH] Storage: File-based",
+    "secureStorage": "[ZH] All data stored securely in fincept_terminal.db"
+  }
+}

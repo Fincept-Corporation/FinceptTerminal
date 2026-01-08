@@ -1,38 +1,35 @@
 {
-    "title": "CHỢ",
-    "header": {
-        "browse": "Duyệt",
-        "myItems": "Mục của tôi",
-        "cart": "Giỏ hàng"
-    },
-    "categories": {
-        "all": "Tất cả",
-        "indicators": "Chỉ báo",
-        "strategies": "Chiến lược",
-        "datasets": "Bộ dữ liệu",
-        "tools": "Công cụ"
-    },
-    "buttons": {
-        "buy": "Mua",
-        "addToCart": "Thêm vào giỏ",
-        "install": "Cài đặt",
-        "preview": "Xem trước"
-    },
-    "product": {
-        "price": "Giá",
-        "rating": "Đánh giá",
-        "downloads": "Lượt tải",
-        "author": "Tác giả",
-        "version": "Phiên bản"
-    },
-    "cart": {
-        "total": "Tổng",
-        "checkout": "Thanh toán",
-        "empty": "Giỏ trống"
-    },
-    "messages": {
-        "addedToCart": "Đã thêm vào giỏ",
-        "purchased": "Đã mua",
-        "installed": "Đã cài đặt"
-    }
+  "title": "CHỢ",
+  "header": {
+    "browse": "Duyệt",
+    "myPurchases": "[VI] MY PURCHASES",
+    "upload": "[VI] UPLOAD",
+    "myDatasets": "[VI] MY DATASETS",
+    "analytics": "[VI] ANALYTICS",
+    "pricing": "[VI] PRICING",
+    "datasetsAvailable": "[VI] Datasets Available",
+    "myUploads": "[VI] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "Thêm vào giỏ",
+    "inCart": "[VI] ✓ IN CART",
+    "viewDetails": "[VI] VIEW DETAILS",
+    "backToMarketplace": "[VI] BACK TO MARKETPLACE",
+    "loading": "[VI] ⟳ LOADING...",
+    "refresh": "[VI] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "Đánh giá",
+    "description": "[VI] PRODUCT DESCRIPTION",
+    "users": "[VI] USERS"
+  },
+  "cart": {
+    "empty": "Giỏ trống",
+    "title": "[VI] SHOPPING CART",
+    "items": "[VI] items"
+  },
+  "guest": {
+    "title": "[VI] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[VI] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

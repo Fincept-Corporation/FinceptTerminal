@@ -1,57 +1,29 @@
 {
-    "title": "কোড এডিটর",
-    "header": {
-        "files": "ফাইল",
-        "terminal": "টার্মিনাল",
-        "packages": "প্যাকেজ"
-    },
-    "toolbar": {
-        "newFile": "নতুন ফাইল",
-        "new": "নতুন",
-        "open": "খুলুন",
-        "save": "সংরক্ষণ",
-        "run": "কোড চালান",
-        "running": "চলছে...",
-        "runAll": "সব চালান",
-        "download": "ডাউনলোড",
-        "upload": "আপলোড",
-        "clear": "মুছুন",
-        "history": "ইতিহাস"
-    },
-    "languages": {
-        "finscript": "ফিনস্ক্রিপ্ট",
-        "python": "পাইথন",
-        "javascript": "জাভাস্ক্রিপ্ট",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "এডিটর",
-        "notebook": "জুপিটার নোটবুক",
-        "finscript": "ফিনস্ক্রিপ্ট এডিটর",
-        "terminal": "টার্মিনাল"
-    },
-    "terminal": {
-        "output": "আউটপুট",
-        "clear": "আউটপুট মুছুন",
-        "running": "চলছে...",
-        "completed": "সম্পন্ন"
-    },
-    "packages": {
-        "installed": "ইনস্টল করা প্যাকেজ",
-        "install": "প্যাকেজ ইনস্টল",
-        "uninstall": "আনইনস্টল",
-        "clickToLoad": "প্যাকেজ লোড করতে ক্লিক করুন...",
-        "load": "প্যাকেজ লোড করুন"
-    },
-    "history": {
-        "title": "নোটবুক ইতিহাস",
-        "loading": "ইতিহাস লোড হচ্ছে...",
-        "empty": "এখনো কোনো নোটবুক ইতিহাস নেই"
-    },
-    "messages": {
-        "fileSaved": "ফাইল সংরক্ষিত",
-        "fileOpened": "ফাইল খোলা হয়েছে",
-        "executionComplete": "এক্সিকিউশন সম্পন্ন",
-        "executionError": "এক্সিকিউশন ত্রুটি"
-    }
+  "title": "কোড এডিটর",
+  "header": {
+    "packages": "প্যাকেজ"
+  },
+  "toolbar": {
+    "newFile": "নতুন ফাইল",
+    "new": "নতুন",
+    "open": "খুলুন",
+    "save": "সংরক্ষণ",
+    "run": "কোড চালান",
+    "running": "চলছে...",
+    "runAll": "সব চালান",
+    "history": "ইতিহাস"
+  },
+  "tabs": {
+    "notebook": "জুপিটার নোটবুক",
+    "finscript": "ফিনস্ক্রিপ্ট এডিটর"
+  },
+  "packages": {
+    "clickToLoad": "প্যাকেজ লোড করতে ক্লিক করুন...",
+    "load": "প্যাকেজ লোড করুন"
+  },
+  "history": {
+    "title": "নোটবুক ইতিহাস",
+    "loading": "ইতিহাস লোড হচ্ছে...",
+    "empty": "এখনো কোনো নোটবুক ইতিহাস নেই"
+  }
 }

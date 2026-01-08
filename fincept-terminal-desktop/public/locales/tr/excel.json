@@ -1,26 +1,11 @@
 {
-    "title": "Excel Entegrasyonu",
-    "header": {
-        "import": "İçe aktar",
-        "export": "Dışa aktar",
-        "preview": "Önizleme"
-    },
-    "toolbar": {
-        "open": "Dosya aç",
-        "save": "Kaydet",
-        "upload": "Yükle",
-        "download": "İndir",
-        "refresh": "Yenile"
-    },
-    "table": {
-        "sheet": "Sayfa",
-        "rows": "Satırlar",
-        "columns": "Sütunlar"
-    },
-    "messages": {
-        "loading": "Dosya yükleniyor...",
-        "imported": "Dosya içe aktarıldı",
-        "exported": "Dosya dışa aktarıldı",
-        "error": "İşleme hatası"
-    }
+  "title": "Excel Entegrasyonu",
+  "toolbar": {
+    "save": "Kaydet",
+    "import": "[TR] IMPORT",
+    "export": "[TR] EXPORT",
+    "snapshot": "[TR] SNAPSHOT",
+    "history": "[TR] HISTORY",
+    "revert": "[TR] REVERT"
+  }
 }

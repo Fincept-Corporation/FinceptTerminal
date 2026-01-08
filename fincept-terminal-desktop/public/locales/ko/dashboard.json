@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "로딩 중...",
     "error": "오류",
-    "configure": "구성",
-    "refresh": "새로고침",
-    "remove": "제거",
     "globalIndices": "글로벌 지수 - TOP 12",
     "forex": "외환 쌍",
     "crypto": "암호화폐",
     "commodities": "원자재",
-    "bonds": "채권",
-    "etfs": "ETF",
     "news": "뉴스",
     "forum": "포럼",
     "watchlist": "관심목록",
-    "maritime": "해양",
     "index": "지수",
     "symbol": "심볼",
-    "name": "이름",
     "price": "가격",
     "change": "변동",
     "percentChange": "변동%",
-    "high": "고가",
-    "low": "저가",
     "noIndexData": "지수 데이터 없음",
     "noForexData": "외환 데이터 없음",
     "noCryptoData": "암호화폐 데이터 없음",
     "noCommoditiesData": "원자재 데이터 없음",
-    "noNewsData": "뉴스 없음",
     "noForumPosts": "포럼 게시물 없음",
     "noStocksInWatchlist": "관심목록에 종목 없음",
     "noWatchlistSelected": "관심목록 미선택",
@@ -51,7 +41,8 @@
     "routes": "항로",
     "vol24h": "24시간 거래량",
     "topTradeCorridors": "주요 무역 회랑",
-    "ships": "선박"
+    "ships": "선박",
+    "unknown": "[KO] Unknown widget type"
   },
   "tips": {
     "drag": "위젯을 드래그하여 재배열",
@@ -74,6 +65,11 @@
     "custom": "사용자 정의",
     "empty": "비어있음",
     "active": "활성",
-    "cache": "캐시: 활성화"
+    "cache": "캐시: 활성화",
+    "label": "[KO] Status"
+  },
+  "messages": {
+    "layoutSaved": "[KO] Dashboard layout saved!",
+    "resetConfirm": "[KO] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

@@ -1,95 +1,27 @@
-﻿{
-    "title": "เครื่องมือแบ็คเทสต์",
-    "header": {
-        "strategy": "กลยุทธ์",
-        "results": "ผลลัพธ์",
-        "trades": "การเทรด"
-    },
-    "toolbar": {
-        "run": "รันแบ็คเทสต์",
-        "running": "กำลังรัน...",
-        "stop": "หยุด",
-        "reset": "รีเซ็ต",
-        "export": "ส่งออกผลลัพธ์",
-        "refresh": "รีเฟรช"
-    },
-    "config": {
-        "symbolTimeframe": "สัญลักษณ์และกรอบเวลา",
-        "symbol": "สัญลักษณ์",
-        "stockTicker": "รหัสหุ้นสำหรับแบ็คเทสต์",
-        "startDate": "วันเริ่มต้น",
-        "endDate": "วันสิ้นสุด",
-        "initialCapital": "ทุนเริ่มต้น",
-        "strategy": "กลยุทธ์",
-        "parameters": "พารามิเตอร์"
-    },
-    "sections": {
-        "strategyConfig": "การตั้งค่ากลยุทธ์",
-        "strategyType": "ประเภทกลยุทธ์",
-        "strategyParams": "พารามิเตอร์กลยุทธ์",
-        "backtestResults": "ผลแบ็คเทสต์",
-        "advancedSettings": "การตั้งค่าขั้นสูง",
-        "advancedNote": "ตัวเลือกขั้นสูงสำหรับ Backtesting.py"
-    },
-    "advanced": {
-        "commission": "ค่าคอมมิชชั่น (ทศนิยม)",
-        "tradeOnClose": "เทรดเมื่อปิด",
-        "hedging": "การเฮดจิ้ง",
-        "exclusiveOrders": "คำสั่งพิเศษ",
-        "margin": "มาร์จิ้น"
-    },
-    "strategies": {
-        "sma": "SMA Crossover",
-        "rsi": "กลยุทธ์ RSI",
-        "macd": "กลยุทธ์ MACD",
-        "bollinger": "Bollinger Bands",
-        "custom": "กลยุทธ์กำหนดเอง"
-    },
-    "smaParams": {
-        "fastPeriod": "ช่วงเร็ว",
-        "slowPeriod": "ช่วงช้า",
-        "fastNote": "ค่าเฉลี่ยเคลื่อนที่ระยะสั้น",
-        "slowNote": "ค่าเฉลี่ยเคลื่อนที่ระยะยาว"
-    },
-    "results": {
-        "totalReturn": "ผลตอบแทนรวม",
-        "sharpeRatio": "อัตราส่วน Sharpe",
-        "maxDrawdown": "Drawdown สูงสุด",
-        "winRate": "อัตราชนะ",
-        "totalTrades": "จำนวนเทรดทั้งหมด",
-        "profitFactor": "Profit Factor",
-        "configurePrompt": "กำหนดค่าแบ็คเทสต์และคลิก 'รันแบ็คเทสต์' เพื่อดูผลลัพธ์"
-    },
-    "trades": {
-        "date": "วันที่",
-        "type": "ประเภท",
-        "price": "ราคา",
-        "quantity": "จำนวน",
-        "pnl": "กำไร/ขาดทุน"
-    },
-    "status": {
-        "ready": "พร้อม",
-        "running": "กำลังรัน...",
-        "completed": "เสร็จสิ้น",
-        "error": "ข้อผิดพลาด"
-    },
-    "messages": {
-        "backtestStarted": "เริ่มแบ็คเทสต์",
-        "backtestCompleted": "แบ็คเทสต์เสร็จสิ้น",
-        "backtestError": "แบ็คเทสต์ล้มเหลว"
-    },
-    "visual": {
-        "priceData": "ข้อมูลราคา",
-        "maIndicator": "ตัวบ่งชี้ MA",
-        "condition": "เงื่อนไข",
-        "buyOrder": "คำสั่งซื้อ",
-        "sellOrder": "คำสั่งขาย",
-        "addBlocksPrompt": "คลิกบล็อกด้านบนเพื่อเพิ่มในกลยุทธ์",
-        "remove": "ลบ",
-        "generateCode": "สร้างโค้ดจากบล็อก"
-    },
-    "template": {
-        "strategyTemplates": "แม่แบบกลยุทธ์",
-        "apply": "ใช้แม่แบบ"
-    }
+{
+  "title": "เครื่องมือแบ็คเทสต์",
+  "toolbar": {
+    "run": "รันแบ็คเทสต์"
+  },
+  "config": {
+    "symbolTimeframe": "สัญลักษณ์และกรอบเวลา",
+    "symbol": "สัญลักษณ์",
+    "stockTicker": "รหัสหุ้นสำหรับแบ็คเทสต์",
+    "startDate": "วันเริ่มต้น",
+    "endDate": "วันสิ้นสุด",
+    "initialCapital": "ทุนเริ่มต้น"
+  },
+  "sections": {
+    "strategyConfig": "การตั้งค่ากลยุทธ์",
+    "strategyType": "ประเภทกลยุทธ์",
+    "strategyParams": "พารามิเตอร์กลยุทธ์",
+    "backtestResults": "ผลแบ็คเทสต์",
+    "advancedSettings": "การตั้งค่าขั้นสูง"
+  },
+  "smaParams": {
+    "fastPeriod": "ช่วงเร็ว",
+    "slowPeriod": "ช่วงช้า",
+    "fastNote": "ค่าเฉลี่ยเคลื่อนที่ระยะสั้น",
+    "slowNote": "ค่าเฉลี่ยเคลื่อนที่ระยะยาว"
+  }
 }

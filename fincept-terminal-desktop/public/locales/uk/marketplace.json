@@ -1,38 +1,35 @@
 {
-    "title": "МАРКЕТПЛЕЙС",
-    "header": {
-        "browse": "Переглянути",
-        "myItems": "Мої товари",
-        "cart": "Кошик"
-    },
-    "categories": {
-        "all": "Всі",
-        "indicators": "Індикатори",
-        "strategies": "Стратегії",
-        "datasets": "Набори даних",
-        "tools": "Інструменти"
-    },
-    "buttons": {
-        "buy": "Купити",
-        "addToCart": "До кошика",
-        "install": "Встановити",
-        "preview": "Перегляд"
-    },
-    "product": {
-        "price": "Ціна",
-        "rating": "Рейтинг",
-        "downloads": "Завантаження",
-        "author": "Автор",
-        "version": "Версія"
-    },
-    "cart": {
-        "total": "Всього",
-        "checkout": "Оформити",
-        "empty": "Кошик порожній"
-    },
-    "messages": {
-        "addedToCart": "Додано до кошика",
-        "purchased": "Куплено",
-        "installed": "Встановлено"
-    }
+  "title": "МАРКЕТПЛЕЙС",
+  "header": {
+    "browse": "Переглянути",
+    "myPurchases": "[UK] MY PURCHASES",
+    "upload": "[UK] UPLOAD",
+    "myDatasets": "[UK] MY DATASETS",
+    "analytics": "[UK] ANALYTICS",
+    "pricing": "[UK] PRICING",
+    "datasetsAvailable": "[UK] Datasets Available",
+    "myUploads": "[UK] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "До кошика",
+    "inCart": "[UK] ✓ IN CART",
+    "viewDetails": "[UK] VIEW DETAILS",
+    "backToMarketplace": "[UK] BACK TO MARKETPLACE",
+    "loading": "[UK] ⟳ LOADING...",
+    "refresh": "[UK] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "Рейтинг",
+    "description": "[UK] PRODUCT DESCRIPTION",
+    "users": "[UK] USERS"
+  },
+  "cart": {
+    "empty": "Кошик порожній",
+    "title": "[UK] SHOPPING CART",
+    "items": "[UK] items"
+  },
+  "guest": {
+    "title": "[UK] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[UK] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

@@ -1,58 +1,28 @@
 {
-    "title": "PANEL AUDIT LOGIN",
-    "accessDenied": "Akses admin diperlukan untuk melihat Panel Audit Login",
-    "metrics": {
-        "dauToday": "DAU Hari Ini",
-        "mau": "MAU",
-        "successRate": "Tingkat Keberhasilan",
-        "failed24h": "Gagal (24j)",
-        "activeSessions": "Sesi Aktif",
-        "uniqueIps": "IP Unik"
-    },
-    "views": {
-        "overview": "IKHTISAR",
-        "eventLog": "LOG EVENT",
-        "alerts": "PERINGATAN",
-        "analytics": "ANALITIK"
-    },
-    "activity": {
-        "recentLoginActivity": "AKTIVITAS LOGIN TERBARU",
-        "securityAlerts": "PERINGATAN KEAMANAN",
-        "noActiveAlerts": "Tidak ada peringatan aktif",
-        "loginEventLog": "LOG EVENT LOGIN"
-    },
-    "table": {
-        "time": "Waktu",
-        "event": "Event",
-        "user": "Pengguna",
-        "ipAddress": "Alamat IP",
-        "location": "Lokasi",
-        "device": "Perangkat",
-        "details": "Detail"
-    },
-    "alerts": {
-        "securityIncidents": "PERINGATAN & INSIDEN KEAMANAN",
-        "noAlerts": "Tidak ada peringatan keamanan saat ini",
-        "dismiss": "ABAIKAN",
-        "blockIp": "BLOKIR IP",
-        "investigate": "INVESTIGASI"
-    },
-    "analytics": {
-        "loginsByCountry": "LOGIN BERDASARKAN NEGARA (30 hari)",
-        "failureReasons": "ALASAN KEGAGALAN (24j)",
-        "peakHours": "JAM PUNCAK (UTC)",
-        "logins": "login"
-    },
-    "controls": {
-        "autoRefresh": "Refresh otomatis",
-        "loading": "MEMUAT...",
-        "refresh": "REFRESH"
-    },
-    "status": {
-        "admin": "Admin",
-        "dau": "DAU",
-        "status": "Status",
-        "updating": "MEMPERBARUI",
-        "ready": "SIAP"
-    }
+  "title": "PANEL AUDIT LOGIN",
+  "metrics": {
+    "dauToday": "DAU Hari Ini",
+    "mau": "MAU",
+    "successRate": "Tingkat Keberhasilan",
+    "failed24h": "Gagal (24j)",
+    "activeSessions": "Sesi Aktif",
+    "uniqueIps": "IP Unik"
+  },
+  "views": {
+    "overview": "IKHTISAR",
+    "eventLog": "LOG EVENT",
+    "alerts": "PERINGATAN",
+    "analytics": "ANALITIK"
+  },
+  "activity": {
+    "recentLoginActivity": "AKTIVITAS LOGIN TERBARU",
+    "securityAlerts": "PERINGATAN KEAMANAN",
+    "noActiveAlerts": "Tidak ada peringatan aktif",
+    "loginEventLog": "LOG EVENT LOGIN"
+  },
+  "controls": {
+    "autoRefresh": "Refresh otomatis",
+    "loading": "MEMUAT...",
+    "refresh": "REFRESH"
+  }
 }

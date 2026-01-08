@@ -1,84 +1,23 @@
 {
-    "title": "FRED SERİ TARAYICISI",
-    "header": {
-        "title": "FRED VERİ ARAŞTIRMACISI",
-        "filters": "FİLTRELER",
-        "results": "SONUÇLAR",
-        "saved": "KAYITLI EKRANLAR",
-        "presets": "ÖN AYARLAR"
-    },
-    "apiKey": {
-        "required": "API ANAHTARI GEREKLİ",
-        "configure": "Ekonomik verilere erişmek için Ayarlar → Kimlik Bilgileri'nde FRED API anahtarınızı yapılandırın.",
-        "getKey": "Ücretsiz API anahtarı alın:",
-        "addToSettings": "Ayarlar → Kimlik Bilgileri → FRED_API_KEY'e ekleyin",
-        "saveAndReload": "Kaydedin ve bu sekmeyi yeniden yükleyin",
-        "tip": "Ayarlar → Kimlik Bilgileri'nde FRED API anahtarınızı yapılandırdığınızdan emin olun"
-    },
-    "form": {
-        "seriesIds": "SERİ ID'LERİ",
-        "startDate": "BAŞLANGIÇ TARİHİ",
-        "endDate": "BİTİŞ TARİHİ",
-        "quickAdd": "HIZLI EKLE"
-    },
-    "buttons": {
-        "fetch": "GETİR",
-        "loading": "YÜKLENİYOR",
-        "browse": "SERİLERE GÖZE AT",
-        "done": "TAMAM"
-    },
-    "chart": {
-        "title": "ZAMAN SERİSİ GRAFİĞİ",
-        "emptyState": "Verileri görselleştirmek için seri ID'lerini girin ve GETİR'e tıklayın",
-        "trySuggestion": "GDP, UNRATE veya CPIAUCSL aramayı deneyin",
-        "waiting": "FRED'den veri alınırken lütfen bekleyin...",
-        "errorFetching": "Veri Alma Hatası"
-    },
-    "filters": {
-        "add": "Filtre Ekle",
-        "clear": "Tümünü Temizle",
-        "reset": "Sıfırla",
-        "apply": "Filtreleri Uygula"
-    },
-    "criteria": {
-        "marketCap": "Piyasa Değeri",
-        "price": "Fiyat",
-        "volume": "Hacim",
-        "pe": "F/K",
-        "eps": "HBK",
-        "dividend": "Temettü Verimi",
-        "beta": "Beta",
-        "sector": "Sektör",
-        "industry": "Endüstri",
-        "country": "Ülke",
-        "exchange": "Borsa"
-    },
-    "operators": {
-        "equals": "Eşit",
-        "greater": "Büyük",
-        "less": "Küçük",
-        "between": "Arasında",
-        "contains": "İçerir"
-    },
-    "results": {
-        "symbol": "Sembol",
-        "name": "Ad",
-        "price": "Fiyat",
-        "change": "Değişim",
-        "volume": "Hacim",
-        "marketCap": "Piyasa Değeri",
-        "matches": "eşleşme bulundu"
-    },
-    "actions": {
-        "save": "Ekranı Kaydet",
-        "load": "Ekranı Yükle",
-        "export": "Sonuçları Dışa Aktar",
-        "addToWatchlist": "İzleme Listesine Ekle"
-    },
-    "messages": {
-        "loading": "Hisseler taranıyor...",
-        "noResults": "Kriterlere uyan hisse yok",
-        "saved": "Ekran başarıyla kaydedildi",
-        "applied": "Filtreler uygulandı"
-    }
+  "title": "FRED SERİ TARAYICISI",
+  "header": {
+    "title": "FRED VERİ ARAŞTIRMACISI"
+  },
+  "apiKey": {
+    "required": "API ANAHTARI GEREKLİ"
+  },
+  "form": {
+    "seriesIds": "SERİ ID'LERİ",
+    "quickAdd": "HIZLI EKLE"
+  },
+  "buttons": {
+    "fetch": "GETİR",
+    "loading": "YÜKLENİYOR",
+    "browse": "SERİLERE GÖZE AT"
+  },
+  "chart": {
+    "title": "ZAMAN SERİSİ GRAFİĞİ",
+    "emptyState": "Verileri görselleştirmek için seri ID'lerini girin ve GETİR'e tıklayın",
+    "trySuggestion": "GDP, UNRATE veya CPIAUCSL aramayı deneyin"
+  }
 }

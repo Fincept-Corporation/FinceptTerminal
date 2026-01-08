@@ -1,33 +1,19 @@
 {
-    "title": "Pembuat Laporan",
-    "header": {
-        "templates": "Template",
-        "reports": "Laporan",
-        "preview": "Pratinjau"
-    },
-    "toolbar": {
-        "new": "Laporan baru",
-        "save": "Simpan",
-        "export": "Ekspor",
-        "print": "Cetak",
-        "share": "Bagikan"
-    },
-    "sections": {
-        "header": "Header",
-        "summary": "Ringkasan",
-        "charts": "Grafik",
-        "tables": "Tabel",
-        "footer": "Footer"
-    },
-    "templates": {
-        "daily": "Laporan harian",
-        "weekly": "Laporan mingguan",
-        "monthly": "Laporan bulanan",
-        "custom": "Kustom"
-    },
-    "messages": {
-        "saved": "Laporan disimpan",
-        "exported": "Laporan diekspor",
-        "generating": "Membuat laporan..."
-    }
+  "title": "Pembuat Laporan",
+  "header": {
+    "load": "[ID] Load",
+    "save": "[ID] Save",
+    "saving": "[ID] Saving...",
+    "exportPdf": "[ID] Export PDF",
+    "generating": "[ID] Generating..."
+  },
+  "components": {
+    "title": "[ID] ADD COMPONENTS"
+  },
+  "layout": {
+    "title": "[ID] LAYOUT"
+  },
+  "settings": {
+    "title": "[ID] SETTINGS"
+  }
 }

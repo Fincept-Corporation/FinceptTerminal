@@ -8,6 +8,9 @@ import { Trophy, Play, Square, TrendingUp, TrendingDown, RefreshCw } from 'lucid
 import { invoke } from '@tauri-apps/api/core';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { useBrokerContext } from '@/contexts/BrokerContext';
+import { alphaArenaBrokerBridge } from '@/services/alphaArenaBrokerBridge';
+import { createPaperTradingAdapter } from '@/paper-trading';
 
 // Bloomberg color palette
 const COLORS = {
@@ -48,6 +51,19 @@ interface ModelDecision {
 
 const AlphaArenaTab: React.FC = () => {
   const { t } = useTranslation('alphaArena');
+
+  // BrokerContext integration
+  const {
+    activeBroker,
+    availableBrokers,
+    setActiveBroker,
+    tradingMode,
+    setTradingMode,
+    paperAdapter,
+    activeAdapter,
+    defaultSymbols,
+  } = useBrokerContext();
+
   const [competitionId, setCompetitionId] = useState<string>('');
   const [isRunning, setIsRunning] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -59,13 +75,16 @@ const AlphaArenaTab: React.FC = () => {
 
   // Form state
   const [competitionName, setCompetitionName] = useState('Alpha Arena Competition');
-  const [symbol, setSymbol] = useState('BTC/USD');
+  const [symbol, setSymbol] = useState(defaultSymbols[0] || 'BTC/USD');
   const [mode, setMode] = useState<'baseline' | 'monk' | 'situational' | 'max_leverage'>('baseline');
   const [selectedModels, setSelectedModels] = useState<string[]>(['gpt-4o-mini', 'claude-3-5-sonnet']);
   const [apiKeys, setApiKeys] = useState<Record<string, string>>({
     'gpt-4o-mini': '',
     'claude-3-5-sonnet': ''
   });
+
+  // Use paper trading by default (can switch to live)
+  const usePaperTrading = tradingMode === 'paper';
 
   // Refresh leaderboard and decisions
   const refreshData = async () => {

@@ -1,7 +1,4 @@
 {
-  "header": {
-    "title": "FINCEPT PROFESSIONAL"
-  },
   "navigation": {
     "dashboard": "Painel",
     "markets": "Mercados",
@@ -11,14 +8,10 @@
     "watchlist": "Lista de Acompanhamento",
     "research": "Pesquisa",
     "screener": "Screener",
-    "trading": "Trading",
     "chat": "AI Chat",
     "agents": "Agentes",
     "settings": "Configurações",
-    "profile": "Perfil",
-    "forum": "Fórum",
-    "help": "Ajuda",
-    "logout": "Sair"
+    "profile": "Perfil"
   },
   "functionKeys": {
     "f1": "PANL",
@@ -34,16 +27,7 @@
     "f11": "FULL",
     "f12": "PERF"
   },
-  "status": {
-    "connected": "Conectado",
-    "disconnected": "Desconectado",
-    "loading": "Carregando...",
-    "error": "Erro",
-    "ready": "Pronto"
-  },
   "labels": {
-    "moreTabs": "Mais abas nos menus da barra de ferramentas",
-    "enterCommand": "Inserir Comando",
-    "search": "Pesquisar"
+    "moreTabs": "Mais abas nos menus da barra de ferramentas"
   }
 }

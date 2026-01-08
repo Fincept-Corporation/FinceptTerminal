@@ -1,7 +1,4 @@
 {
-  "header": {
-    "title": "FINCEPT PROFESSIONAL"
-  },
   "navigation": {
     "dashboard": "Bảng điều khiển",
     "markets": "Thị trường",
@@ -11,14 +8,10 @@
     "watchlist": "Theo dõi",
     "research": "Nghiên cứu",
     "screener": "Bộ lọc",
-    "trading": "Giao dịch",
     "chat": "AI Chat",
     "agents": "Đại lý",
     "settings": "Cài đặt",
-    "profile": "Hồ sơ",
-    "forum": "Diễn đàn",
-    "help": "Trợ giúp",
-    "logout": "Đăng xuất"
+    "profile": "Hồ sơ"
   },
   "functionKeys": {
     "f1": "BẢNG",
@@ -34,16 +27,7 @@
     "f11": "FULL",
     "f12": "PROF"
   },
-  "status": {
-    "connected": "Đã kết nối",
-    "disconnected": "Đã ngắt",
-    "loading": "Đang tải...",
-    "error": "Lỗi",
-    "ready": "Sẵn sàng"
-  },
   "labels": {
-    "moreTabs": "Thêm tab trong menu thanh công cụ",
-    "enterCommand": "Nhập lệnh",
-    "search": "Tìm kiếm"
+    "moreTabs": "Thêm tab trong menu thanh công cụ"
   }
 }

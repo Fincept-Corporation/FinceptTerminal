@@ -1,57 +1,29 @@
 {
-    "title": "コードエディタ",
-    "header": {
-        "files": "ファイル",
-        "terminal": "ターミナル",
-        "packages": "パッケージ"
-    },
-    "toolbar": {
-        "newFile": "新規ファイル",
-        "new": "新規",
-        "open": "開く",
-        "save": "保存",
-        "run": "コード実行",
-        "running": "実行中...",
-        "runAll": "すべて実行",
-        "download": "ダウンロード",
-        "upload": "アップロード",
-        "clear": "クリア",
-        "history": "履歴"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "エディタ",
-        "notebook": "JUPYTERノートブック",
-        "finscript": "FINSCRIPTエディタ",
-        "terminal": "ターミナル"
-    },
-    "terminal": {
-        "output": "出力",
-        "clear": "出力をクリア",
-        "running": "実行中...",
-        "completed": "完了"
-    },
-    "packages": {
-        "installed": "インストール済みパッケージ",
-        "install": "パッケージをインストール",
-        "uninstall": "アンインストール",
-        "clickToLoad": "クリックしてロード...",
-        "load": "パッケージをロード"
-    },
-    "history": {
-        "title": "ノートブック履歴",
-        "loading": "履歴を読込中...",
-        "empty": "ノートブック履歴なし"
-    },
-    "messages": {
-        "fileSaved": "ファイル保存済み",
-        "fileOpened": "ファイルを開きました",
-        "executionComplete": "実行完了",
-        "executionError": "実行エラー"
-    }
+  "title": "コードエディタ",
+  "header": {
+    "packages": "パッケージ"
+  },
+  "toolbar": {
+    "newFile": "新規ファイル",
+    "new": "新規",
+    "open": "開く",
+    "save": "保存",
+    "run": "コード実行",
+    "running": "実行中...",
+    "runAll": "すべて実行",
+    "history": "履歴"
+  },
+  "tabs": {
+    "notebook": "JUPYTERノートブック",
+    "finscript": "FINSCRIPTエディタ"
+  },
+  "packages": {
+    "clickToLoad": "クリックしてロード...",
+    "load": "パッケージをロード"
+  },
+  "history": {
+    "title": "ノートブック履歴",
+    "loading": "履歴を読込中...",
+    "empty": "ノートブック履歴なし"
+  }
 }

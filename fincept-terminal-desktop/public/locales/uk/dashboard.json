@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "Завантаження...",
     "error": "Помилка",
-    "configure": "Налаштувати",
-    "refresh": "Оновити",
-    "remove": "Видалити",
     "globalIndices": "СВІТОВІ ІНДЕКСИ - ТОП 12",
     "forex": "ПАРИ FOREX",
     "crypto": "КРИПТОВАЛЮТИ",
     "commodities": "СИРОВИНА",
-    "bonds": "ОБЛІГАЦІЇ",
-    "etfs": "ETF",
     "news": "НОВИНИ",
     "forum": "ФОРУМ",
     "watchlist": "СПИСОК СПОСТЕРЕЖЕННЯ",
-    "maritime": "МОРСЬКИЙ",
     "index": "ІНДЕКС",
     "symbol": "СИМВОЛ",
-    "name": "НАЗВА",
     "price": "ЦІНА",
     "change": "ЗМ",
     "percentChange": "%ЗМ",
-    "high": "МАКС",
-    "low": "МІН",
     "noIndexData": "Немає даних індексів",
     "noForexData": "Немає даних forex",
     "noCryptoData": "Немає даних крипто",
     "noCommoditiesData": "Немає даних сировини",
-    "noNewsData": "Немає новин",
     "noForumPosts": "Немає постів",
     "noStocksInWatchlist": "Немає акцій у списку",
     "noWatchlistSelected": "Список не вибрано",
@@ -51,7 +41,8 @@
     "routes": "МАРШРУТИ",
     "vol24h": "ОБ'ЄМ 24Г",
     "topTradeCorridors": "ОСНОВНІ ТОРГОВІ КОРИДОРИ",
-    "ships": "судна"
+    "ships": "судна",
+    "unknown": "[UK] Unknown widget type"
   },
   "tips": {
     "drag": "Перетягніть віджети для перестановки",
@@ -74,6 +65,11 @@
     "custom": "Власний",
     "empty": "Порожній",
     "active": "АКТИВНИЙ",
-    "cache": "Кеш: УВІМКНЕНО"
+    "cache": "Кеш: УВІМКНЕНО",
+    "label": "[UK] Status"
+  },
+  "messages": {
+    "layoutSaved": "[UK] Dashboard layout saved!",
+    "resetConfirm": "[UK] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

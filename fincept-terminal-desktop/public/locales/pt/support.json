@@ -1,42 +1,32 @@
 {
-    "title": "Ticket de suporte",
-    "header": {
-        "tickets": "Tickets",
-        "new": "Novo ticket",
-        "status": "Status"
-    },
-    "form": {
-        "subject": "Assunto",
-        "description": "Descrição",
-        "priority": "Prioridade",
-        "category": "Categoria"
-    },
-    "priority": {
-        "low": "Baixa",
-        "medium": "Média",
-        "high": "Alta",
-        "urgent": "Urgente"
-    },
-    "status": {
-        "open": "Aberto",
-        "inProgress": "Em andamento",
-        "resolved": "Resolvido",
-        "closed": "Fechado"
-    },
-    "buttons": {
-        "submit": "Enviar",
-        "cancel": "Cancelar",
-        "reply": "Responder",
-        "close": "Fechar"
-    },
-    "messages": {
-        "created": "Ticket criado",
-        "updated": "Ticket atualizado",
-        "closed": "Ticket fechado",
-        "noTickets": "Sem tickets"
-    },
-    "auth": {
-        "loginRequired": "Faça login para criar tickets",
-        "demoMode": "Modo demo"
-    }
+  "title": "Ticket de suporte",
+  "header": {
+    "tickets": "Tickets",
+    "open": "[PT] OPEN",
+    "resolved": "[PT] RESOLVED"
+  },
+  "status": {
+    "ready": "[PT] READY",
+    "updating": "[PT] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[PT] REFRESH",
+    "createTicket": "[PT] CREATE TICKET",
+    "backToList": "[PT] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[PT] AUTHENTICATION REQUIRED",
+    "loginMessage": "[PT] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[PT] SUPPORT TICKETS",
+    "noTickets": "[PT] No support tickets found. Create your first ticket to get started!",
+    "loading": "[PT] Loading tickets..."
+  },
+  "create": {
+    "title": "[PT] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[PT] DEMO"
+  }
 }

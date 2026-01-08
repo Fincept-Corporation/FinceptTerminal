@@ -1,33 +1,19 @@
 {
-    "title": "Генератор звітів",
-    "header": {
-        "templates": "Шаблони",
-        "reports": "Звіти",
-        "preview": "Перегляд"
-    },
-    "toolbar": {
-        "new": "Новий звіт",
-        "save": "Зберегти",
-        "export": "Експорт",
-        "print": "Друк",
-        "share": "Поділитися"
-    },
-    "sections": {
-        "header": "Заголовок",
-        "summary": "Резюме",
-        "charts": "Графіки",
-        "tables": "Таблиці",
-        "footer": "Підвал"
-    },
-    "templates": {
-        "daily": "Щоденний звіт",
-        "weekly": "Щотижневий звіт",
-        "monthly": "Щомісячний звіт",
-        "custom": "Власний"
-    },
-    "messages": {
-        "saved": "Звіт збережено",
-        "exported": "Звіт експортовано",
-        "generating": "Генерація звіту..."
-    }
+  "title": "Генератор звітів",
+  "header": {
+    "load": "[UK] Load",
+    "save": "[UK] Save",
+    "saving": "[UK] Saving...",
+    "exportPdf": "[UK] Export PDF",
+    "generating": "[UK] Generating..."
+  },
+  "components": {
+    "title": "[UK] ADD COMPONENTS"
+  },
+  "layout": {
+    "title": "[UK] LAYOUT"
+  },
+  "settings": {
+    "title": "[UK] SETTINGS"
+  }
 }

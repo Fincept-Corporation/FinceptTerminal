@@ -1,75 +1,25 @@
 {
-    "title": "ウォッチリスト",
-    "header": {
-        "title": "FINCEPT ウォッチリストモニター",
-        "myWatchlists": "マイウォッチリスト",
-        "create": "作成",
-        "import": "インポート",
-        "export": "エクスポート",
-        "updating": "更新中",
-        "live": "ライブ"
-    },
-    "sidebar": {
-        "groups": "ウォッチリストグループ",
-        "new": "新規",
-        "noWatchlists": "まだウォッチリストがありません。",
-        "clickNew": "新規をクリックして作成。",
-        "stocks": "銘柄",
-        "marketMovers": "マーケットムーバー",
-        "gainer": "上昇",
-        "loser": "下落",
-        "volumeLeaders": "出来高リーダー"
-    },
-    "emptyState": {
-        "selectWatchlist": "ウォッチリストを選択するか新規作成してください"
-    },
-    "list": {
-        "name": "名前",
-        "symbols": "銘柄",
-        "created": "作成日",
-        "updated": "最終更新",
-        "actions": "アクション"
-    },
-    "actions": {
-        "add": "銘柄追加",
-        "remove": "削除",
-        "edit": "編集",
-        "delete": "削除",
-        "rename": "名前変更",
-        "duplicate": "複製"
-    },
-    "form": {
-        "name": "リスト名",
-        "description": "説明",
-        "symbols": "銘柄を追加",
-        "save": "保存",
-        "cancel": "キャンセル"
-    },
-    "symbol": {
-        "price": "価格",
-        "change": "変動",
-        "volume": "出来高",
-        "marketCap": "時価総額",
-        "alert": "アラート設定"
-    },
-    "alerts": {
-        "priceAbove": "価格以上",
-        "priceBelow": "価格以下",
-        "changePercent": "変動 %",
-        "volume": "出来高アラート"
-    },
-    "sort": {
-        "name": "名前順",
-        "price": "価格順",
-        "change": "変動順",
-        "custom": "カスタム順"
-    },
-    "messages": {
-        "created": "リスト作成完了",
-        "deleted": "リスト削除完了",
-        "symbolAdded": "銘柄追加完了",
-        "symbolRemoved": "銘柄削除完了",
-        "noWatchlists": "ウォッチリストなし",
-        "loading": "読み込み中..."
-    }
+  "title": "ウォッチリスト",
+  "header": {
+    "export": "エクスポート",
+    "updating": "更新中",
+    "live": "ライブ"
+  },
+  "sidebar": {
+    "groups": "ウォッチリストグループ",
+    "new": "新規",
+    "noWatchlists": "まだウォッチリストがありません。",
+    "clickNew": "新規をクリックして作成。",
+    "stocks": "銘柄",
+    "marketMovers": "マーケットムーバー",
+    "gainer": "上昇",
+    "loser": "下落",
+    "volumeLeaders": "出来高リーダー"
+  },
+  "emptyState": {
+    "selectWatchlist": "ウォッチリストを選択するか新規作成してください"
+  },
+  "list": {
+    "symbols": "銘柄"
+  }
 }

@@ -1,61 +1,6 @@
 {
-    "title": "FINCEPT フォーラム",
-    "header": {
-        "trending": "トレンド",
-        "new": "新着",
-        "following": "フォロー中",
-        "myPosts": "マイ投稿"
-    },
-    "categories": {
-        "all": "すべて",
-        "stocks": "株式",
-        "options": "オプション",
-        "crypto": "暗号通貨",
-        "forex": "為替",
-        "strategies": "戦略",
-        "general": "一般"
-    },
-    "post": {
-        "create": "投稿作成",
-        "reply": "返信",
-        "edit": "編集",
-        "delete": "削除",
-        "share": "共有",
-        "report": "報告",
-        "save": "保存"
-    },
-    "form": {
-        "title": "タイトル",
-        "content": "内容",
-        "tags": "タグ",
-        "category": "カテゴリ",
-        "submit": "投稿",
-        "cancel": "キャンセル",
-        "preview": "プレビュー"
-    },
-    "engagement": {
-        "likes": "いいね",
-        "comments": "コメント",
-        "views": "閲覧",
-        "shares": "共有"
-    },
-    "user": {
-        "posts": "投稿",
-        "followers": "フォロワー",
-        "following": "フォロー中",
-        "reputation": "評価",
-        "joined": "参加日"
-    },
-    "sort": {
-        "newest": "新着順",
-        "popular": "人気順",
-        "mostCommented": "コメント順",
-        "topRated": "評価順"
-    },
-    "messages": {
-        "loading": "投稿を読み込み中...",
-        "noPosts": "投稿なし",
-        "postSuccess": "投稿成功",
-        "deleteConfirm": "この投稿を削除しますか?"
-    }
+  "title": "FINCEPT フォーラム",
+  "header": {
+    "trending": "トレンド"
+  }
 }

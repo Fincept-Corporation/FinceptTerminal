@@ -1,226 +1,126 @@
-# FinAgent Core - Production-Ready Agent Infrastructure
+# FinAgent Core - Pure Agno Implementation
 
-**Version:** 1.0.0
-**Status:** ✅ Ready for Production
-
-## Overview
-
-`finagent_core` is the foundational infrastructure for all agents in Fincept Terminal. Built on the Agno framework, it provides multi-LLM support, persistent memory, dynamic configuration, and seamless Tauri integration.
-
-## Quick Start
-
-```bash
-# Install dependencies
-pip install -r finagent_core/requirements.txt
-
-# Set API keys
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-
-# Test execution
-python finagent_core/tauri_bridge.py --action list_agents
-```
+Single configurable agent system for the entire terminal.
 
 ## Architecture
 
 ```
-finagent_core/
-├── base_agent.py           # ConfigurableAgent & AgentRegistry
-├── tauri_bridge.py         # Rust-Python bridge
-├── requirements.txt        # Dependencies
-├── config/
-│   └── llm_providers.py   # Multi-LLM provider manager
-├── tools/
-│   └── tool_registry.py   # Tool management
-├── database/
-│   └── db_manager.py      # SQLite/PostgreSQL support
-└── utils/
-    ├── path_resolver.py   # Path utilities
-    └── logger.py          # Logging
+CoreAgent (single instance)
+    ↓
+AgentFactory (creates Agno agent)
+    ↓
+Agno Agent (adapts to config)
 ```
 
-## Core Features
+## Components
 
-### 1. ConfigurableAgent - Dynamic agents via JSON
+### 1. **CoreAgent** (`core_agent.py`)
+Single agent instance that recreates itself when config changes.
+
 ```python
-from finagent_core import AgentRegistry
+from finagent_core import CoreAgent
 
-registry = AgentRegistry()
-registry.load_configs_from_json("configs/agent_definitions.json")
-agent = registry.get_agent("warren_buffett_agent")
-response = agent.run("Analyze Apple stock")
+agent = CoreAgent(api_keys={"OPENAI_API_KEY": "sk-..."})
+
+config = {
+    "model": {
+        "provider": "openai",
+        "model_id": "gpt-4-turbo",
+        "temperature": 0.7
+    },
+    "instructions": "You are a portfolio analyst",
+    "tools": ["yfinance", "calculator"]
+}
+
+response = agent.run("Analyze AAPL", config)
 ```
 
-### 2. Multi-LLM Provider Support
-- OpenAI (GPT-4, GPT-3.5, GPT-4 Turbo)
-- Anthropic (Claude 3 Opus, Sonnet, Haiku)
-- Google (Gemini Pro, 1.5 Pro)
-- Ollama (Llama2, Mistral, etc.)
-- Groq, Cohere
+### 2. **AgentFactory** (`agent_factory.py`)
+Creates Agno agents from configuration.
 
-### 3. Tauri Bridge - Rust Integration
-```bash
-python finagent_core/tauri_bridge.py \
-  --action execute_agent \
-  --parameters '{"agent_id": "buffett", "query": "...", "category": "TraderInvestorsAgent"}' \
-  --inputs '{"api_keys": {"OPENAI_API_KEY": "sk-..."}}'
-```
+**Handles:**
+- Model creation (OpenAI, Anthropic, Google, Groq, Ollama, DeepSeek)
+- Tool loading (100+ Agno tools)
+- Knowledge base setup
+- Memory/storage configuration
 
-### 4. Agent Configuration (JSON)
+### 3. **ConfigLoader** (`config_loader.py`)
+Loads and validates tab configurations (for future use).
+
+## Configuration Schema
+
 ```json
 {
-  "id": "warren_buffett_agent",
-  "name": "Warren Buffett Investment Agent",
-  "role": "Value investor",
-  "llm_config": {
-    "provider": "openai",
+  "model": {
+    "provider": "openai|anthropic|google|groq|ollama|deepseek",
     "model_id": "gpt-4-turbo",
-    "temperature": 0.6
+    "temperature": 0.7,
+    "max_tokens": 4096
   },
-  "tools": ["financial_metrics_tool"],
-  "enable_memory": true,
-  "instructions": "..."
+  "name": "Agent Name",
+  "instructions": "System prompt...",
+  "tools": ["yfinance", "calculator", "duckduckgo"],
+  "memory": true,
+  "output_format": "markdown|text|json",
+  "knowledge": {
+    "path": "docs/",
+    "vector_db": {"type": "pgvector", "url": "..."},
+    "embedder": {"type": "openai"}
+  },
+  "storage": {
+    "type": "sqlite|postgres",
+    "db_file": "sessions.db"
+  }
 }
 ```
 
-## Usage from Rust (Tauri)
+## Usage from Rust/Frontend
 
-```rust
-use std::process::Command;
-
-let output = Command::new("python")
-    .arg("finagent_core/tauri_bridge.py")
-    .arg("--action").arg("execute_agent")
-    .arg("--parameters").arg(params_json)
-    .arg("--inputs").arg(inputs_json)
-    .output()?;
-```
-
-## Agent Categories
-
-- **TraderInvestorsAgent** - Warren Buffett, Benjamin Graham, Peter Lynch
-- **GeopoliticsAgents** - Geographic determinism, world order analysis
-- **EconomicAgents** - Capitalism, Keynesian, Neoliberal systems
-- **hedgeFundAgents** - Multi-agent hedge fund teams
-
-## Key Components
-
-### LLMProviderManager
 ```python
-from finagent_core.config.llm_providers import LLMProviderManager
-
-model = LLMProviderManager.get_model(
-    provider="anthropic",
-    model_id="claude-3-sonnet-20240229",
-    temperature=0.7
-)
+# Via agent_manager.py
+python agent_manager.py execute_single_agent \
+  '{"query": "Analyze NVDA stock"}' \
+  '{"model": {"provider": "anthropic", "model_id": "claude-sonnet-4-5"}, "instructions": "Portfolio analyst"}' \
+  '{"ANTHROPIC_API_KEY": "sk-..."}'
 ```
 
-### ToolRegistry
-```python
-from finagent_core.tools.tool_registry import get_tool_registry
+## Supported Models
 
-registry = get_tool_registry()
-tools = registry.get_tools(["financial_metrics_tool", "web_search"])
-```
+| Provider | Models |
+|----------|--------|
+| OpenAI | gpt-4o, gpt-4-turbo, gpt-4, gpt-3.5-turbo |
+| Anthropic | claude-sonnet-4-5, claude-3-5-sonnet, claude-3-opus |
+| Google | gemini-2.0-flash, gemini-1.5-pro |
+| Groq | llama-3.3-70b, mixtral-8x7b |
+| Ollama | llama3.3, mistral, mixtral (local) |
+| DeepSeek | deepseek-chat, deepseek-coder |
 
-### DatabaseManager
-```python
-from finagent_core.database.db_manager import DatabaseManager
+## Supported Tools
 
-db_manager = DatabaseManager()
-db = db_manager.get_database('sqlite')  # or 'postgres'
-```
+**Finance:**
+- yfinance, financial_datasets
 
-## Environment Variables
+**Search:**
+- duckduckgo, tavily
 
-```bash
-# LLM Providers
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_API_KEY=...
-GROQ_API_KEY=gsk_...
+**Development:**
+- python, calculator, file, shell
 
-# Financial Data
-FINANCIAL_DATASETS_API_KEY=...
+**Knowledge:**
+- knowledge (RAG)
 
-# Database (optional)
-DATABASE_URL=postgresql://...
-```
-
-## Installation
-
-```bash
-# Core framework
-pip install agno
-
-# With all providers
-pip install agno[openai,anthropic,google]
-
-# Or use requirements.txt
-pip install -r finagent_core/requirements.txt
-```
-
-## Testing
-
-```bash
-# List agents
-python finagent_core/tauri_bridge.py --action list_agents
-
-# Get providers
-python finagent_core/tauri_bridge.py --action get_providers
-
-# Execute agent
-python finagent_core/tauri_bridge.py \
-  --action execute_agent \
-  --parameters '{"agent_id": "warren_buffett_agent", "query": "Test", "category": "TraderInvestorsAgent"}' \
-  --inputs '{"api_keys": {"OPENAI_API_KEY": "sk-..."}}'
-```
-
-## Migration from Old System
-
-**OLD (src/):**
-```python
-from fincept_terminal.Agents.src.graph.state import AgentState
-from fincept_terminal.Agents.src.utils.llm import call_llm
-
-def warren_buffett_agent(state: AgentState):
-    # 340 lines of hardcoded logic
-```
-
-**NEW (finagent_core):**
-```python
-from finagent_core import AgentRegistry
-
-registry = AgentRegistry()
-registry.load_configs_from_json("configs/agent_definitions.json")
-agent = registry.get_agent("warren_buffett_agent")
-response = agent.run(query)  # 3 lines!
-```
+**100+ more available** via `agno.tools.*`
 
 ## Benefits
 
-- **43% less code** - Streamlined architecture
-- **6+ LLM providers** - vs single provider before
-- **JSON configuration** - No code changes needed
-- **Persistent memory** - Cross-session context
-- **Production ready** - Error handling, logging, persistence
-- **50%+ faster** - Async/concurrent execution
+✅ **Single Agent** - One instance for entire terminal
+✅ **Dynamic Config** - Changes behavior per tab
+✅ **Full Agno** - Leverages all framework features
+✅ **No Static Code** - Pure framework, no custom executors
+✅ **Extensible** - Easy to add tools, models, knowledge
 
 ## Next Steps
 
-1. **Delete old `src/` folder** - All functionality replaced
-2. **Update agent imports** - Change to `finagent_core`
-3. **Create agent configs** - JSON files for each category
-4. **Update Rust commands** - Use `tauri_bridge.py`
-5. **Test thoroughly** - Verify all agents work
-
-## Support
-
-Check the code - everything is well-documented with docstrings and type hints.
-
----
-
-**License:** MIT
-**Maintained By:** Fincept Terminal
-**Framework:** Agno (https://docs.agno.com/)
+1. Frontend sends config + query
+2. CoreAgent adapts and responds
+3. Tab-specific configs stored in DB (future)

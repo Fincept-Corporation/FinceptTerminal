@@ -1,39 +1,17 @@
 {
-    "title": "โน้ต",
-    "header": {
-        "notes": "โน้ต",
-        "folders": "โฟลเดอร์",
-        "tags": "แท็ก"
-    },
-    "toolbar": {
-        "newNote": "โน้ตใหม่",
-        "templates": "เทมเพลต",
-        "favorites": "รายการโปรด",
-        "filters": "ตัวกรอง",
-        "archived": "เก็บถาวร"
-    },
-    "editor": {
-        "title": "หัวข้อ",
-        "content": "เนื้อหา",
-        "tags": "แท็ก"
-    },
-    "buttons": {
-        "save": "บันทึก",
-        "delete": "ลบ",
-        "archive": "เก็บถาวร",
-        "share": "แชร์"
-    },
-    "messages": {
-        "saved": "บันทึกโน้ตแล้ว",
-        "deleted": "ลบโน้ตแล้ว",
-        "archived": "เก็บถาวรโน้ตแล้ว"
-    },
-    "search": {
-        "placeholder": "ค้นหาโน้ต..."
-    },
-    "stats": {
-        "total": "ทั้งหมด",
-        "archived": "เก็บถาวร",
-        "favorites": "รายการโปรด"
-    }
+  "title": "โน้ต",
+  "header": {
+    "total": "[TH] TOTAL",
+    "favorites": "[TH] FAVORITES",
+    "words": "[TH] WORDS",
+    "refresh": "[TH] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "โน้ตใหม่",
+    "templates": "เทมเพลต",
+    "favorites": "รายการโปรด",
+    "filters": "ตัวกรอง",
+    "archived": "เก็บถาวร",
+    "search": "[TH] Search notes, tags, tickers..."
+  }
 }

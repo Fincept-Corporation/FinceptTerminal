@@ -1,32 +1,6 @@
 {
-    "title": "Knoten-Editor",
-    "header": {
-        "nodes": "Knoten",
-        "connections": "Verbindungen",
-        "canvas": "Leinwand"
-    },
-    "tabs": {
-        "editor": "Editor",
-        "preview": "Vorschau"
-    },
-    "toolbar": {
-        "addNode": "Knoten hinzufügen",
-        "delete": "Löschen",
-        "clear": "Alles löschen",
-        "run": "Ausführen",
-        "save": "Speichern",
-        "load": "Laden"
-    },
-    "nodes": {
-        "input": "Eingabe",
-        "output": "Ausgabe",
-        "process": "Prozess",
-        "condition": "Bedingung"
-    },
-    "messages": {
-        "saved": "Graph gespeichert",
-        "loaded": "Graph geladen",
-        "running": "Läuft...",
-        "completed": "Abgeschlossen"
-    }
+  "title": "Knoten-Editor",
+  "tabs": {
+    "editor": "Editor"
+  }
 }

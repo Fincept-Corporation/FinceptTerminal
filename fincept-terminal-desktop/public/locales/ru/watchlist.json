@@ -1,75 +1,25 @@
 {
-    "title": "СПИСОК НАБЛЮДЕНИЯ",
-    "header": {
-        "title": "МОНИТОР СПИСКОВ FINCEPT",
-        "myWatchlists": "МОИ СПИСКИ",
-        "create": "СОЗДАТЬ",
-        "import": "ИМПОРТ",
-        "export": "ЭКСПОРТ",
-        "updating": "ОБНОВЛЕНИЕ",
-        "live": "ЖИВОЙ"
-    },
-    "sidebar": {
-        "groups": "ГРУППЫ СПИСКОВ",
-        "new": "НОВЫЙ",
-        "noWatchlists": "Пока нет списков.",
-        "clickNew": "Нажмите НОВЫЙ для создания.",
-        "stocks": "акции",
-        "marketMovers": "ЛИДЕРЫ РЫНКА",
-        "gainer": "РАСТУТ",
-        "loser": "ПАДАЮТ",
-        "volumeLeaders": "ЛИДЕРЫ ОБЪЕМА"
-    },
-    "emptyState": {
-        "selectWatchlist": "Выберите список или создайте новый для начала"
-    },
-    "list": {
-        "name": "Название",
-        "symbols": "Символы",
-        "created": "Создан",
-        "updated": "Последнее обновление",
-        "actions": "Действия"
-    },
-    "actions": {
-        "add": "Добавить символ",
-        "remove": "Удалить",
-        "edit": "Редактировать",
-        "delete": "Удалить",
-        "rename": "Переименовать",
-        "duplicate": "Дублировать"
-    },
-    "form": {
-        "name": "Название списка",
-        "description": "Описание",
-        "symbols": "Добавить символы",
-        "save": "Сохранить",
-        "cancel": "Отмена"
-    },
-    "symbol": {
-        "price": "Цена",
-        "change": "Изменение",
-        "volume": "Объем",
-        "marketCap": "Капитализация",
-        "alert": "Установить оповещение"
-    },
-    "alerts": {
-        "priceAbove": "Цена выше",
-        "priceBelow": "Цена ниже",
-        "changePercent": "Изменение %",
-        "volume": "Оповещение об объеме"
-    },
-    "sort": {
-        "name": "По названию",
-        "price": "По цене",
-        "change": "По изменению",
-        "custom": "Свой порядок"
-    },
-    "messages": {
-        "created": "Список создан",
-        "deleted": "Список удален",
-        "symbolAdded": "Символ добавлен",
-        "symbolRemoved": "Символ удален",
-        "noWatchlists": "Нет списков",
-        "loading": "Загрузка..."
-    }
+  "title": "СПИСОК НАБЛЮДЕНИЯ",
+  "header": {
+    "export": "ЭКСПОРТ",
+    "updating": "ОБНОВЛЕНИЕ",
+    "live": "ЖИВОЙ"
+  },
+  "sidebar": {
+    "groups": "ГРУППЫ СПИСКОВ",
+    "new": "НОВЫЙ",
+    "noWatchlists": "Пока нет списков.",
+    "clickNew": "Нажмите НОВЫЙ для создания.",
+    "stocks": "акции",
+    "marketMovers": "ЛИДЕРЫ РЫНКА",
+    "gainer": "РАСТУТ",
+    "loser": "ПАДАЮТ",
+    "volumeLeaders": "ЛИДЕРЫ ОБЪЕМА"
+  },
+  "emptyState": {
+    "selectWatchlist": "Выберите список или создайте новый для начала"
+  },
+  "list": {
+    "symbols": "Символы"
+  }
 }

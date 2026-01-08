@@ -182,7 +182,7 @@ const App: React.FC = () => {
         <ProviderProvider>
           <DataSourceProvider>
             <ThemeProvider>
-              <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab}>
+              <NavigationProvider onNavigate={setCurrentScreen} onSetActiveTab={setActiveTab} activeTab={activeTab}>
                 <DashboardScreen />
               </NavigationProvider>
             </ThemeProvider>

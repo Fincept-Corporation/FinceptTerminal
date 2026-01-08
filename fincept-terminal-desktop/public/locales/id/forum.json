@@ -1,61 +1,6 @@
 {
-    "title": "FORUM FINCEPT",
-    "header": {
-        "trending": "TRENDING",
-        "new": "BARU",
-        "following": "MENGIKUTI",
-        "myPosts": "POSTINGAN SAYA"
-    },
-    "categories": {
-        "all": "Semua Topik",
-        "stocks": "Saham",
-        "options": "Opsi",
-        "crypto": "Kripto",
-        "forex": "Forex",
-        "strategies": "Strategi",
-        "general": "Umum"
-    },
-    "post": {
-        "create": "Buat Postingan",
-        "reply": "Balas",
-        "edit": "Edit",
-        "delete": "Hapus",
-        "share": "Bagikan",
-        "report": "Laporkan",
-        "save": "Simpan"
-    },
-    "form": {
-        "title": "Judul",
-        "content": "Konten",
-        "tags": "Tag",
-        "category": "Kategori",
-        "submit": "Posting",
-        "cancel": "Batal",
-        "preview": "Pratinjau"
-    },
-    "engagement": {
-        "likes": "Suka",
-        "comments": "Komentar",
-        "views": "Dilihat",
-        "shares": "Dibagikan"
-    },
-    "user": {
-        "posts": "Postingan",
-        "followers": "Pengikut",
-        "following": "Mengikuti",
-        "reputation": "Reputasi",
-        "joined": "Bergabung"
-    },
-    "sort": {
-        "newest": "Terbaru",
-        "popular": "Terpopuler",
-        "mostCommented": "Komentar terbanyak",
-        "topRated": "Nilai tertinggi"
-    },
-    "messages": {
-        "loading": "Memuat...",
-        "noPosts": "Tidak ada postingan",
-        "postSuccess": "Berhasil diposting",
-        "deleteConfirm": "Hapus postingan ini?"
-    }
+  "title": "FORUM FINCEPT",
+  "header": {
+    "trending": "TRENDING"
+  }
 }

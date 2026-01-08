@@ -1,59 +1,8 @@
 {
-    "title": "KINH TẾ",
-    "header": {
-        "overview": "TỔNG QUAN",
-        "indicators": "CHỈ SỐ",
-        "calendar": "LỊCH",
-        "countries": "QUỐC GIA"
-    },
-    "indicators": {
-        "gdp": "GDP",
-        "inflation": "Lạm phát",
-        "unemployment": "Thất nghiệp",
-        "interestRate": "Lãi suất",
-        "tradeBalance": "Cán cân thương mại",
-        "consumerConfidence": "Niềm tin tiêu dùng",
-        "pmi": "PMI",
-        "cpi": "CPI"
-    },
-    "calendar": {
-        "date": "Ngày",
-        "event": "Sự kiện",
-        "actual": "Thực tế",
-        "forecast": "Dự báo",
-        "previous": "Trước đó",
-        "impact": "Tác động"
-    },
-    "impact": {
-        "high": "Cao",
-        "medium": "Trung bình",
-        "low": "Thấp"
-    },
-    "trends": {
-        "rising": "Tăng",
-        "falling": "Giảm",
-        "stable": "Ổn định",
-        "yoy": "Năm/Năm",
-        "mom": "Tháng/Tháng",
-        "qoq": "Quý/Quý"
-    },
-    "regions": {
-        "global": "Toàn cầu",
-        "northAmerica": "Bắc Mỹ",
-        "europe": "Châu Âu",
-        "asia": "Châu Á - TBD",
-        "latam": "Mỹ Latin",
-        "mena": "MENA"
-    },
-    "actions": {
-        "compare": "So sánh quốc gia",
-        "export": "Xuất dữ liệu",
-        "subscribe": "Đăng ký",
-        "filter": "Lọc sự kiện"
-    },
-    "messages": {
-        "loading": "Đang tải dữ liệu...",
-        "noEvents": "Không có sự kiện",
-        "updated": "Cập nhật"
-    }
+  "title": "KINH TẾ",
+  "header": {
+    "overview": "TỔNG QUAN",
+    "indicators": "CHỈ SỐ",
+    "countries": "QUỐC GIA"
+  }
 }

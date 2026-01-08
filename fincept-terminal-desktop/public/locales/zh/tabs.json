@@ -1,7 +1,4 @@
 {
-  "header": {
-    "title": "FINCEPT PROFESSIONAL"
-  },
   "navigation": {
     "dashboard": "仪表板",
     "markets": "市场",
@@ -11,14 +8,10 @@
     "watchlist": "自选股",
     "research": "研究",
     "screener": "筛选器",
-    "trading": "交易",
     "chat": "AI聊天",
     "agents": "代理",
     "settings": "设置",
-    "profile": "个人资料",
-    "forum": "论坛",
-    "help": "帮助",
-    "logout": "登出"
+    "profile": "个人资料"
   },
   "functionKeys": {
     "f1": "仪表",
@@ -34,16 +27,7 @@
     "f11": "全屏",
     "f12": "资料"
   },
-  "status": {
-    "connected": "已连接",
-    "disconnected": "已断开",
-    "loading": "加载中...",
-    "error": "错误",
-    "ready": "就绪"
-  },
   "labels": {
-    "moreTabs": "工具栏菜单中更多标签页",
-    "enterCommand": "输入命令",
-    "search": "搜索"
+    "moreTabs": "工具栏菜单中更多标签页"
   }
 }

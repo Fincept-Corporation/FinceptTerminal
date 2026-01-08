@@ -1,0 +1,60 @@
+{
+  "title": "Settings",
+  "credentials": {
+    "title": "API Credentials",
+    "apiKey": "API Key",
+    "description": "[UK] Manage API keys and credentials for external services",
+    "enterValue": "[UK] Enter value..."
+  },
+  "terminal": {
+    "title": "Terminal Appearance",
+    "fontFamily": "Font Family",
+    "description": "[UK] Customize the visual appearance of your terminal",
+    "currentSettings": "[UK] CURRENT SETTINGS"
+  },
+  "sidebar": {
+    "credentials": "[UK] API Credentials",
+    "llm": "[UK] LLM Configuration",
+    "dataSources": "[UK] Data Sources",
+    "backtesting": "[UK] Backtesting",
+    "tabLayout": "[UK] Tab Layout",
+    "appearance": "[UK] Appearance",
+    "language": "[UK] Language",
+    "polymarket": "[UK] Polymarket API"
+  },
+  "terminalConfig": {
+    "title": "[UK] TAB LAYOUT CONFIGURATION",
+    "headerTabs": "[UK] HEADER TABS (MAIN TAB BAR)",
+    "headerTabsDesc": "[UK] Drag to reorder. These tabs appear in the main header navigation.",
+    "toolbarSections": "[UK] TOOLBAR MENU SECTIONS",
+    "newSection": "[UK] NEW SECTION",
+    "deleteSection": "[UK] DELETE",
+    "moveTo": "[UK] MOVE TO ▼",
+    "resetToDefault": "[UK] RESET TO DEFAULT",
+    "noTabsInSection": "[UK] No tabs in this section",
+    "tip": "[UK] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+  },
+  "llm": {
+    "title": "[UK] LLM CONFIGURATION",
+    "description": "[UK] Configure AI models and providers",
+    "connected": "[UK] CONNECTED",
+    "disconnected": "[UK] DISCONNECTED",
+    "provider": "[UK] AI PROVIDER",
+    "globalSettings": "[UK] GLOBAL AI SETTINGS",
+    "temperature": "[UK] TEMPERATURE",
+    "maxTokens": "[UK] MAX TOKENS",
+    "systemPrompt": "[UK] SYSTEM PROMPT",
+    "modelLibrary": "[UK] MODEL LIBRARY",
+    "multiModelConfigs": "[UK] Multi-model configs"
+  },
+  "buttons": {
+    "save": "[UK] SAVE",
+    "cancel": "[UK] CANCEL",
+    "add": "[UK] ADD"
+  },
+  "footer": {
+    "database": "[UK] Database: SQLite",
+    "storage": "[UK] Storage: File-based",
+    "secureStorage": "[UK] All data stored securely in fincept_terminal.db"
+  }
+}

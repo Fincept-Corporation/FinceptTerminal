@@ -1,95 +1,27 @@
-﻿{
-    "title": "백테스팅 엔진",
-    "header": {
-        "strategy": "전략",
-        "results": "결과",
-        "trades": "거래"
-    },
-    "toolbar": {
-        "run": "백테스트 실행",
-        "running": "실행 중...",
-        "stop": "중지",
-        "reset": "리셋",
-        "export": "결과 내보내기",
-        "refresh": "새로고침"
-    },
-    "config": {
-        "symbolTimeframe": "심볼 및 시간대",
-        "symbol": "심볼",
-        "stockTicker": "백테스트할 종목 코드",
-        "startDate": "시작일",
-        "endDate": "종료일",
-        "initialCapital": "초기 자본",
-        "strategy": "전략",
-        "parameters": "파라미터"
-    },
-    "sections": {
-        "strategyConfig": "전략 구성",
-        "strategyType": "전략 유형",
-        "strategyParams": "전략 파라미터",
-        "backtestResults": "백테스트 결과",
-        "advancedSettings": "고급 설정",
-        "advancedNote": "Backtesting.py 제공자를 위한 고급 옵션"
-    },
-    "advanced": {
-        "commission": "수수료 (소수)",
-        "tradeOnClose": "종가 거래",
-        "hedging": "헤지",
-        "exclusiveOrders": "독점 주문",
-        "margin": "증거금"
-    },
-    "strategies": {
-        "sma": "SMA 교차",
-        "rsi": "RSI 전략",
-        "macd": "MACD 전략",
-        "bollinger": "볼린저 밴드",
-        "custom": "사용자 정의 전략"
-    },
-    "smaParams": {
-        "fastPeriod": "빠른 기간",
-        "slowPeriod": "느린 기간",
-        "fastNote": "단기 이동평균",
-        "slowNote": "장기 이동평균"
-    },
-    "results": {
-        "totalReturn": "총 수익률",
-        "sharpeRatio": "샤프 비율",
-        "maxDrawdown": "최대 낙폭",
-        "winRate": "승률",
-        "totalTrades": "총 거래 수",
-        "profitFactor": "수익 팩터",
-        "configurePrompt": "백테스트를 구성하고 '백테스트 실행'을 클릭하여 결과 확인"
-    },
-    "trades": {
-        "date": "날짜",
-        "type": "유형",
-        "price": "가격",
-        "quantity": "수량",
-        "pnl": "손익"
-    },
-    "status": {
-        "ready": "준비",
-        "running": "실행 중...",
-        "completed": "완료",
-        "error": "오류"
-    },
-    "messages": {
-        "backtestStarted": "백테스트 시작",
-        "backtestCompleted": "백테스트 완료",
-        "backtestError": "백테스트 실패"
-    },
-    "visual": {
-        "priceData": "가격 데이터",
-        "maIndicator": "MA 지표",
-        "condition": "조건",
-        "buyOrder": "매수 주문",
-        "sellOrder": "매도 주문",
-        "addBlocksPrompt": "블록을 클릭하여 전략에 추가",
-        "remove": "제거",
-        "generateCode": "블록에서 코드 생성"
-    },
-    "template": {
-        "strategyTemplates": "전략 템플릿",
-        "apply": "템플릿 적용"
-    }
+{
+  "title": "백테스팅 엔진",
+  "toolbar": {
+    "run": "백테스트 실행"
+  },
+  "config": {
+    "symbolTimeframe": "심볼 및 시간대",
+    "symbol": "심볼",
+    "stockTicker": "백테스트할 종목 코드",
+    "startDate": "시작일",
+    "endDate": "종료일",
+    "initialCapital": "초기 자본"
+  },
+  "sections": {
+    "strategyConfig": "전략 구성",
+    "strategyType": "전략 유형",
+    "strategyParams": "전략 파라미터",
+    "backtestResults": "백테스트 결과",
+    "advancedSettings": "고급 설정"
+  },
+  "smaParams": {
+    "fastPeriod": "빠른 기간",
+    "slowPeriod": "느린 기간",
+    "fastNote": "단기 이동평균",
+    "slowNote": "장기 이동평균"
+  }
 }

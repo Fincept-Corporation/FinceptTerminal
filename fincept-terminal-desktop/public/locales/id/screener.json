@@ -1,84 +1,23 @@
 {
-    "title": "PENJELAJAH SERI FRED",
-    "header": {
-        "title": "PENJELAJAH DATA FRED",
-        "filters": "FILTER",
-        "results": "HASIL",
-        "saved": "LAYAR TERSIMPAN",
-        "presets": "PRESET"
-    },
-    "apiKey": {
-        "required": "KUNCI API DIPERLUKAN",
-        "configure": "Konfigurasikan kunci FRED API Anda di Pengaturan → Kredensial untuk mengakses data ekonomi.",
-        "getKey": "Dapatkan kunci API gratis di",
-        "addToSettings": "Tambahkan ke Pengaturan → Kredensial → FRED_API_KEY",
-        "saveAndReload": "Simpan dan muat ulang tab ini",
-        "tip": "Pastikan Anda telah mengonfigurasi kunci FRED API Anda di Pengaturan → Kredensial"
-    },
-    "form": {
-        "seriesIds": "ID SERI",
-        "startDate": "TANGGAL MULAI",
-        "endDate": "TANGGAL AKHIR",
-        "quickAdd": "TAMBAH CEPAT"
-    },
-    "buttons": {
-        "fetch": "AMBIL",
-        "loading": "MEMUAT",
-        "browse": "JELAJAHI SERI",
-        "done": "SELESAI"
-    },
-    "chart": {
-        "title": "GRAFIK DERET WAKTU",
-        "emptyState": "Masukkan ID seri dan klik AMBIL untuk memvisualisasikan data",
-        "trySuggestion": "Coba cari GDP, UNRATE, atau CPIAUCSL",
-        "waiting": "Mohon tunggu sementara kami mengambil data dari FRED...",
-        "errorFetching": "Error Mengambil Data"
-    },
-    "filters": {
-        "add": "Tambah Filter",
-        "clear": "Hapus Semua",
-        "reset": "Reset",
-        "apply": "Terapkan Filter"
-    },
-    "criteria": {
-        "marketCap": "Kapitalisasi Pasar",
-        "price": "Harga",
-        "volume": "Volume",
-        "pe": "P/E",
-        "eps": "EPS",
-        "dividend": "Hasil Dividen",
-        "beta": "Beta",
-        "sector": "Sektor",
-        "industry": "Industri",
-        "country": "Negara",
-        "exchange": "Bursa"
-    },
-    "operators": {
-        "equals": "Sama dengan",
-        "greater": "Lebih dari",
-        "less": "Kurang dari",
-        "between": "Antara",
-        "contains": "Mengandung"
-    },
-    "results": {
-        "symbol": "Simbol",
-        "name": "Nama",
-        "price": "Harga",
-        "change": "Perubahan",
-        "volume": "Volume",
-        "marketCap": "Kapitalisasi",
-        "matches": "hasil ditemukan"
-    },
-    "actions": {
-        "save": "Simpan Layar",
-        "load": "Muat Layar",
-        "export": "Ekspor Hasil",
-        "addToWatchlist": "Tambah ke Watchlist"
-    },
-    "messages": {
-        "loading": "Menyaring saham...",
-        "noResults": "Tidak ada saham yang cocok",
-        "saved": "Layar berhasil disimpan",
-        "applied": "Filter diterapkan"
-    }
+  "title": "PENJELAJAH SERI FRED",
+  "header": {
+    "title": "PENJELAJAH DATA FRED"
+  },
+  "apiKey": {
+    "required": "KUNCI API DIPERLUKAN"
+  },
+  "form": {
+    "seriesIds": "ID SERI",
+    "quickAdd": "TAMBAH CEPAT"
+  },
+  "buttons": {
+    "fetch": "AMBIL",
+    "loading": "MEMUAT",
+    "browse": "JELAJAHI SERI"
+  },
+  "chart": {
+    "title": "GRAFIK DERET WAKTU",
+    "emptyState": "Masukkan ID seri dan klik AMBIL untuk memvisualisasikan data",
+    "trySuggestion": "Coba cari GDP, UNRATE, atau CPIAUCSL"
+  }
 }

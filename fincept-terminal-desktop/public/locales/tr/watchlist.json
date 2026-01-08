@@ -1,75 +1,25 @@
 {
-    "title": "İZLEME LİSTESİ",
-    "header": {
-        "title": "FINCEPT İZLEME LİSTESİ MONİTÖRÜ",
-        "myWatchlists": "LİSTELERİM",
-        "create": "OLUŞTUR",
-        "import": "İÇE AKTAR",
-        "export": "DIŞA AKTAR",
-        "updating": "GÜNCELLEME",
-        "live": "CANLI"
-    },
-    "sidebar": {
-        "groups": "LİSTE GRUPLARI",
-        "new": "YENİ",
-        "noWatchlists": "Henüz liste yok.",
-        "clickNew": "Oluşturmak için YENİ'ye tıklayın.",
-        "stocks": "hisse",
-        "marketMovers": "PİYASA LİDERLERİ",
-        "gainer": "YÜKSELENLER",
-        "loser": "DÜŞENLER",
-        "volumeLeaders": "HACİM LİDERLERİ"
-    },
-    "emptyState": {
-        "selectWatchlist": "Başlamak için bir liste seçin veya yeni oluşturun"
-    },
-    "list": {
-        "name": "Ad",
-        "symbols": "Semboller",
-        "created": "Oluşturuldu",
-        "updated": "Son Güncelleme",
-        "actions": "İşlemler"
-    },
-    "actions": {
-        "add": "Sembol ekle",
-        "remove": "Kaldır",
-        "edit": "Düzenle",
-        "delete": "Sil",
-        "rename": "Yeniden adlandır",
-        "duplicate": "Çoğalt"
-    },
-    "form": {
-        "name": "Liste adı",
-        "description": "Açıklama",
-        "symbols": "Sembol ekle",
-        "save": "Kaydet",
-        "cancel": "İptal"
-    },
-    "symbol": {
-        "price": "Fiyat",
-        "change": "Değişim",
-        "volume": "Hacim",
-        "marketCap": "Piyasa Değeri",
-        "alert": "Uyarı ayarla"
-    },
-    "alerts": {
-        "priceAbove": "Fiyat üstünde",
-        "priceBelow": "Fiyat altında",
-        "changePercent": "Değişim %",
-        "volume": "Hacim uyarısı"
-    },
-    "sort": {
-        "name": "Ada göre",
-        "price": "Fiyata göre",
-        "change": "Değişime göre",
-        "custom": "Özel sıralama"
-    },
-    "messages": {
-        "created": "Liste oluşturuldu",
-        "deleted": "Liste silindi",
-        "symbolAdded": "Sembol eklendi",
-        "symbolRemoved": "Sembol kaldırıldı",
-        "noWatchlists": "Liste yok",
-        "loading": "Yükleniyor..."
-    }
+  "title": "İZLEME LİSTESİ",
+  "header": {
+    "export": "DIŞA AKTAR",
+    "updating": "GÜNCELLEME",
+    "live": "CANLI"
+  },
+  "sidebar": {
+    "groups": "LİSTE GRUPLARI",
+    "new": "YENİ",
+    "noWatchlists": "Henüz liste yok.",
+    "clickNew": "Oluşturmak için YENİ'ye tıklayın.",
+    "stocks": "hisse",
+    "marketMovers": "PİYASA LİDERLERİ",
+    "gainer": "YÜKSELENLER",
+    "loser": "DÜŞENLER",
+    "volumeLeaders": "HACİM LİDERLERİ"
+  },
+  "emptyState": {
+    "selectWatchlist": "Başlamak için bir liste seçin veya yeni oluşturun"
+  },
+  "list": {
+    "symbols": "Semboller"
+  }
 }

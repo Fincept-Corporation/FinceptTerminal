@@ -1,33 +1,19 @@
 {
-    "title": "报告生成器",
-    "header": {
-        "templates": "模板",
-        "reports": "报告",
-        "preview": "预览"
-    },
-    "toolbar": {
-        "new": "新建报告",
-        "save": "保存",
-        "export": "导出",
-        "print": "打印",
-        "share": "分享"
-    },
-    "sections": {
-        "header": "页眉",
-        "summary": "摘要",
-        "charts": "图表",
-        "tables": "表格",
-        "footer": "页脚"
-    },
-    "templates": {
-        "daily": "日报",
-        "weekly": "周报",
-        "monthly": "月报",
-        "custom": "自定义"
-    },
-    "messages": {
-        "saved": "报告已保存",
-        "exported": "报告已导出",
-        "generating": "正在生成报告..."
-    }
+  "title": "报告生成器",
+  "header": {
+    "load": "[ZH] Load",
+    "save": "[ZH] Save",
+    "saving": "[ZH] Saving...",
+    "exportPdf": "[ZH] Export PDF",
+    "generating": "[ZH] Generating..."
+  },
+  "components": {
+    "title": "[ZH] ADD COMPONENTS"
+  },
+  "layout": {
+    "title": "[ZH] LAYOUT"
+  },
+  "settings": {
+    "title": "[ZH] SETTINGS"
+  }
 }

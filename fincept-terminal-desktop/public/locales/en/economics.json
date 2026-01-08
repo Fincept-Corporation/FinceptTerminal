@@ -1,59 +1,8 @@
 {
-    "title": "ECONOMICS",
-    "header": {
-        "overview": "OVERVIEW",
-        "indicators": "INDICATORS",
-        "calendar": "CALENDAR",
-        "countries": "COUNTRIES"
-    },
-    "indicators": {
-        "gdp": "GDP",
-        "inflation": "Inflation",
-        "unemployment": "Unemployment",
-        "interestRate": "Interest Rate",
-        "tradeBalance": "Trade Balance",
-        "consumerConfidence": "Consumer Confidence",
-        "pmi": "PMI",
-        "cpi": "CPI"
-    },
-    "calendar": {
-        "date": "Date",
-        "event": "Event",
-        "actual": "Actual",
-        "forecast": "Forecast",
-        "previous": "Previous",
-        "impact": "Impact"
-    },
-    "impact": {
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low"
-    },
-    "trends": {
-        "rising": "Rising",
-        "falling": "Falling",
-        "stable": "Stable",
-        "yoy": "YoY",
-        "mom": "MoM",
-        "qoq": "QoQ"
-    },
-    "regions": {
-        "global": "Global",
-        "northAmerica": "North America",
-        "europe": "Europe",
-        "asia": "Asia Pacific",
-        "latam": "Latin America",
-        "mena": "MENA"
-    },
-    "actions": {
-        "compare": "Compare Countries",
-        "export": "Export Data",
-        "subscribe": "Subscribe to Updates",
-        "filter": "Filter Events"
-    },
-    "messages": {
-        "loading": "Loading economic data...",
-        "noEvents": "No events scheduled",
-        "updated": "Last updated"
-    }
+  "title": "ECONOMICS",
+  "header": {
+    "overview": "OVERVIEW",
+    "indicators": "INDICATORS",
+    "countries": "COUNTRIES"
+  }
 }

@@ -1,61 +1,6 @@
 {
-    "title": "ФОРУМ FINCEPT",
-    "header": {
-        "trending": "ТРЕНДИ",
-        "new": "НОВЕ",
-        "following": "ПІДПИСКИ",
-        "myPosts": "МОЇ ПОСТИ"
-    },
-    "categories": {
-        "all": "Усі теми",
-        "stocks": "Акції",
-        "options": "Опціони",
-        "crypto": "Крипто",
-        "forex": "Форекс",
-        "strategies": "Стратегії",
-        "general": "Загальне"
-    },
-    "post": {
-        "create": "Створити пост",
-        "reply": "Відповісти",
-        "edit": "Редагувати",
-        "delete": "Видалити",
-        "share": "Поділитися",
-        "report": "Поскаржитися",
-        "save": "Зберегти"
-    },
-    "form": {
-        "title": "Заголовок",
-        "content": "Зміст",
-        "tags": "Теги",
-        "category": "Категорія",
-        "submit": "Опублікувати",
-        "cancel": "Скасувати",
-        "preview": "Попередній перегляд"
-    },
-    "engagement": {
-        "likes": "Вподобання",
-        "comments": "Коментарі",
-        "views": "Перегляди",
-        "shares": "Поширення"
-    },
-    "user": {
-        "posts": "Пости",
-        "followers": "Підписники",
-        "following": "Підписки",
-        "reputation": "Репутація",
-        "joined": "Приєднався"
-    },
-    "sort": {
-        "newest": "Найновіші",
-        "popular": "Популярні",
-        "mostCommented": "Обговорювані",
-        "topRated": "Найкращі"
-    },
-    "messages": {
-        "loading": "Завантаження...",
-        "noPosts": "Немає постів",
-        "postSuccess": "Опубліковано",
-        "deleteConfirm": "Видалити цей пост?"
-    }
+  "title": "ФОРУМ FINCEPT",
+  "header": {
+    "trending": "ТРЕНДИ"
+  }
 }

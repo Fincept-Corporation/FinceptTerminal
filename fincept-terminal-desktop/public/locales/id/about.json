@@ -1,0 +1,42 @@
+{
+  "title": "[ID] ABOUT",
+  "subtitle": "[ID] Application Information & Legal",
+  "version": {
+    "subtitle": "[ID] Professional Financial Intelligence Platform"
+  },
+  "openSource": {
+    "title": "[ID] OPEN SOURCE LICENSE",
+    "license": "[ID] AGPL-3.0 License",
+    "personal": "[ID] Free for personal/educational use",
+    "sharing": "[ID] Source sharing required on distribution",
+    "network": "[ID] Network service disclosure required"
+  },
+  "commercial": {
+    "title": "[ID] COMMERCIAL LICENSE",
+    "required": "[ID] Required for proprietary/SaaS use",
+    "noSharing": "[ID] No source sharing obligation",
+    "support": "[ID] Priority support included",
+    "custom": "[ID] Custom features available"
+  },
+  "trademarks": {
+    "title": "[ID] TRADEMARKS",
+    "description": "[ID] \"Fincept Terminal\" and \"Fincept\" are trademarks of Fincept Corporation. All rights reserved.",
+    "permission": "[ID] Use requires written permission except for AGPL-3.0 attribution."
+  },
+  "resources": {
+    "title": "[ID] RESOURCES",
+    "repository": "[ID] Repository",
+    "license": "[ID] License",
+    "commercial": "[ID] Commercial",
+    "trademarks": "[ID] Trademarks",
+    "cla": "[ID] CLA",
+    "website": "[ID] Website"
+  },
+  "contact": {
+    "title": "[ID] CONTACT",
+    "general": "[ID] General",
+    "commercial": "[ID] Commercial",
+    "security": "[ID] Security",
+    "legal": "[ID] Legal"
+  }
+}

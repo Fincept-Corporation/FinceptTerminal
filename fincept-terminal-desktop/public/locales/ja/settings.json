@@ -1,0 +1,60 @@
+{
+  "title": "設定",
+  "credentials": {
+    "title": "API 認証情報",
+    "apiKey": "API キー",
+    "description": "[JA] Manage API keys and credentials for external services",
+    "enterValue": "[JA] Enter value..."
+  },
+  "terminal": {
+    "title": "ターミナル外観",
+    "fontFamily": "フォントファミリー",
+    "description": "[JA] Customize the visual appearance of your terminal",
+    "currentSettings": "[JA] CURRENT SETTINGS"
+  },
+  "sidebar": {
+    "credentials": "[JA] API Credentials",
+    "llm": "[JA] LLM Configuration",
+    "dataSources": "[JA] Data Sources",
+    "backtesting": "[JA] Backtesting",
+    "tabLayout": "[JA] Tab Layout",
+    "appearance": "[JA] Appearance",
+    "language": "[JA] Language",
+    "polymarket": "[JA] Polymarket API"
+  },
+  "terminalConfig": {
+    "title": "[JA] TAB LAYOUT CONFIGURATION",
+    "headerTabs": "[JA] HEADER TABS (MAIN TAB BAR)",
+    "headerTabsDesc": "[JA] Drag to reorder. These tabs appear in the main header navigation.",
+    "toolbarSections": "[JA] TOOLBAR MENU SECTIONS",
+    "newSection": "[JA] NEW SECTION",
+    "deleteSection": "[JA] DELETE",
+    "moveTo": "[JA] MOVE TO ▼",
+    "resetToDefault": "[JA] RESET TO DEFAULT",
+    "noTabsInSection": "[JA] No tabs in this section",
+    "tip": "[JA] TIP: Drag tabs to reorder them. Use arrow buttons to move tabs between header and menu sections. Changes are saved automatically."
+  },
+  "llm": {
+    "title": "[JA] LLM CONFIGURATION",
+    "description": "[JA] Configure AI models and providers",
+    "connected": "[JA] CONNECTED",
+    "disconnected": "[JA] DISCONNECTED",
+    "provider": "[JA] AI PROVIDER",
+    "globalSettings": "[JA] GLOBAL AI SETTINGS",
+    "temperature": "[JA] TEMPERATURE",
+    "maxTokens": "[JA] MAX TOKENS",
+    "systemPrompt": "[JA] SYSTEM PROMPT",
+    "modelLibrary": "[JA] MODEL LIBRARY",
+    "multiModelConfigs": "[JA] Multi-model configs"
+  },
+  "buttons": {
+    "save": "[JA] SAVE",
+    "cancel": "[JA] CANCEL",
+    "add": "[JA] ADD"
+  },
+  "footer": {
+    "database": "[JA] Database: SQLite",
+    "storage": "[JA] Storage: File-based",
+    "secureStorage": "[JA] All data stored securely in fincept_terminal.db"
+  }
+}

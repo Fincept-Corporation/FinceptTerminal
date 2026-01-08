@@ -1,46 +1,9 @@
 {
-    "title": "阿尔法竞技场",
-    "header": {
-        "competition": "比赛",
-        "leaderboard": "排行榜",
-        "decisions": "决策",
-        "cycles": "周期"
-    },
-    "buttons": {
-        "start": "开始",
-        "stop": "停止",
-        "refresh": "刷新",
-        "create": "创建比赛"
-    },
-    "form": {
-        "competitionName": "比赛名称",
-        "symbol": "交易代码",
-        "mode": "交易模式",
-        "models": "选择模型",
-        "apiKeys": "API密钥"
-    },
-    "modes": {
-        "baseline": "基准",
-        "monk": "保守",
-        "situational": "情境",
-        "maxLeverage": "最大杠杆"
-    },
-    "leaderboard": {
-        "rank": "排名",
-        "model": "模型",
-        "pnl": "盈亏",
-        "trades": "交易",
-        "winRate": "胜率"
-    },
-    "status": {
-        "running": "运行中",
-        "stopped": "已停止",
-        "waiting": "等待中",
-        "error": "错误"
-    },
-    "messages": {
-        "competitionStarted": "比赛已开始",
-        "competitionStopped": "比赛已停止",
-        "noCompetition": "无活动比赛"
-    }
+  "title": "阿尔法竞技场",
+  "header": {
+    "competition": "比赛"
+  },
+  "buttons": {
+    "create": "创建比赛"
+  }
 }

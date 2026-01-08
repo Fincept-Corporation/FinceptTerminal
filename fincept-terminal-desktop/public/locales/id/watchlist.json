@@ -1,75 +1,25 @@
 {
-    "title": "DAFTAR PANTAU",
-    "header": {
-        "title": "MONITOR DAFTAR PANTAU FINCEPT",
-        "myWatchlists": "DAFTAR PANTAU SAYA",
-        "create": "BUAT",
-        "import": "IMPOR",
-        "export": "EKSPOR",
-        "updating": "MEMPERBARUI",
-        "live": "LANGSUNG"
-    },
-    "sidebar": {
-        "groups": "GRUP DAFTAR PANTAU",
-        "new": "BARU",
-        "noWatchlists": "Belum ada daftar pantau.",
-        "clickNew": "Klik BARU untuk membuat.",
-        "stocks": "saham",
-        "marketMovers": "PENGGERAK PASAR",
-        "gainer": "NAIK",
-        "loser": "TURUN",
-        "volumeLeaders": "VOLUME TERTINGGI"
-    },
-    "emptyState": {
-        "selectWatchlist": "Pilih daftar pantau atau buat yang baru untuk memulai"
-    },
-    "list": {
-        "name": "Nama",
-        "symbols": "Simbol",
-        "created": "Dibuat",
-        "updated": "Terakhir Diperbarui",
-        "actions": "Tindakan"
-    },
-    "actions": {
-        "add": "Tambah Simbol",
-        "remove": "Hapus",
-        "edit": "Edit",
-        "delete": "Hapus",
-        "rename": "Ganti Nama",
-        "duplicate": "Duplikat"
-    },
-    "form": {
-        "name": "Nama Daftar Pantau",
-        "description": "Deskripsi",
-        "symbols": "Tambah Simbol",
-        "save": "Simpan",
-        "cancel": "Batal"
-    },
-    "symbol": {
-        "price": "Harga",
-        "change": "Perubahan",
-        "volume": "Volume",
-        "marketCap": "Kapitalisasi Pasar",
-        "alert": "Atur Peringatan"
-    },
-    "alerts": {
-        "priceAbove": "Harga Di Atas",
-        "priceBelow": "Harga Di Bawah",
-        "changePercent": "Perubahan %",
-        "volume": "Peringatan Volume"
-    },
-    "sort": {
-        "name": "Berdasarkan Nama",
-        "price": "Berdasarkan Harga",
-        "change": "Berdasarkan Perubahan",
-        "custom": "Urutan Kustom"
-    },
-    "messages": {
-        "created": "Daftar pantau dibuat",
-        "deleted": "Daftar pantau dihapus",
-        "symbolAdded": "Simbol ditambahkan",
-        "symbolRemoved": "Simbol dihapus",
-        "noWatchlists": "Belum ada daftar pantau",
-        "loading": "Memuat..."
-    }
+  "title": "DAFTAR PANTAU",
+  "header": {
+    "export": "EKSPOR",
+    "updating": "MEMPERBARUI",
+    "live": "LANGSUNG"
+  },
+  "sidebar": {
+    "groups": "GRUP DAFTAR PANTAU",
+    "new": "BARU",
+    "noWatchlists": "Belum ada daftar pantau.",
+    "clickNew": "Klik BARU untuk membuat.",
+    "stocks": "saham",
+    "marketMovers": "PENGGERAK PASAR",
+    "gainer": "NAIK",
+    "loser": "TURUN",
+    "volumeLeaders": "VOLUME TERTINGGI"
+  },
+  "emptyState": {
+    "selectWatchlist": "Pilih daftar pantau atau buat yang baru untuk memulai"
+  },
+  "list": {
+    "symbols": "Simbol"
+  }
 }

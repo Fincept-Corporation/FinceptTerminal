@@ -1,39 +1,17 @@
 {
-    "title": "笔记",
-    "header": {
-        "notes": "笔记",
-        "folders": "文件夹",
-        "tags": "标签"
-    },
-    "toolbar": {
-        "newNote": "新建笔记",
-        "templates": "模板",
-        "favorites": "收藏",
-        "filters": "筛选",
-        "archived": "已归档"
-    },
-    "editor": {
-        "title": "标题",
-        "content": "内容",
-        "tags": "标签"
-    },
-    "buttons": {
-        "save": "保存",
-        "delete": "删除",
-        "archive": "归档",
-        "share": "分享"
-    },
-    "messages": {
-        "saved": "笔记已保存",
-        "deleted": "笔记已删除",
-        "archived": "笔记已归档"
-    },
-    "search": {
-        "placeholder": "搜索笔记..."
-    },
-    "stats": {
-        "total": "总计",
-        "archived": "已归档",
-        "favorites": "收藏"
-    }
+  "title": "笔记",
+  "header": {
+    "total": "[ZH] TOTAL",
+    "favorites": "[ZH] FAVORITES",
+    "words": "[ZH] WORDS",
+    "refresh": "[ZH] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "新建笔记",
+    "templates": "模板",
+    "favorites": "收藏",
+    "filters": "筛选",
+    "archived": "已归档",
+    "search": "[ZH] Search notes, tags, tickers..."
+  }
 }

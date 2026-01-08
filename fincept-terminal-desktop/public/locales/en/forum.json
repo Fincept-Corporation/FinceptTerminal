@@ -1,61 +1,6 @@
 {
-    "title": "FINCEPT FORUM",
-    "header": {
-        "trending": "TRENDING",
-        "new": "NEW",
-        "following": "FOLLOWING",
-        "myPosts": "MY POSTS"
-    },
-    "categories": {
-        "all": "All Topics",
-        "stocks": "Stocks",
-        "options": "Options",
-        "crypto": "Crypto",
-        "forex": "Forex",
-        "strategies": "Strategies",
-        "general": "General"
-    },
-    "post": {
-        "create": "Create Post",
-        "reply": "Reply",
-        "edit": "Edit",
-        "delete": "Delete",
-        "share": "Share",
-        "report": "Report",
-        "save": "Save"
-    },
-    "form": {
-        "title": "Title",
-        "content": "Content",
-        "tags": "Tags",
-        "category": "Category",
-        "submit": "Post",
-        "cancel": "Cancel",
-        "preview": "Preview"
-    },
-    "engagement": {
-        "likes": "Likes",
-        "comments": "Comments",
-        "views": "Views",
-        "shares": "Shares"
-    },
-    "user": {
-        "posts": "Posts",
-        "followers": "Followers",
-        "following": "Following",
-        "reputation": "Reputation",
-        "joined": "Joined"
-    },
-    "sort": {
-        "newest": "Newest",
-        "popular": "Most Popular",
-        "mostCommented": "Most Commented",
-        "topRated": "Top Rated"
-    },
-    "messages": {
-        "loading": "Loading posts...",
-        "noPosts": "No posts found",
-        "postSuccess": "Post created successfully",
-        "deleteConfirm": "Delete this post?"
-    }
+  "title": "FINCEPT FORUM",
+  "header": {
+    "trending": "TRENDING"
+  }
 }

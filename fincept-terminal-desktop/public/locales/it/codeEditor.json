@@ -1,57 +1,29 @@
 {
-    "title": "EDITOR CODICE",
-    "header": {
-        "files": "FILE",
-        "terminal": "TERMINALE",
-        "packages": "PACCHETTI"
-    },
-    "toolbar": {
-        "newFile": "NUOVO FILE",
-        "new": "NUOVO",
-        "open": "APRI",
-        "save": "SALVA",
-        "run": "ESEGUI",
-        "running": "IN ESECUZIONE...",
-        "runAll": "ESEGUI TUTTO",
-        "download": "SCARICA",
-        "upload": "CARICA",
-        "clear": "PULISCI",
-        "history": "CRONOLOGIA"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "Editor",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "EDITOR FINSCRIPT",
-        "terminal": "Terminale"
-    },
-    "terminal": {
-        "output": "Output",
-        "clear": "Pulisci output",
-        "running": "In esecuzione...",
-        "completed": "Completato"
-    },
-    "packages": {
-        "installed": "Pacchetti installati",
-        "install": "Installa pacchetto",
-        "uninstall": "Disinstalla",
-        "clickToLoad": "Clicca per caricare...",
-        "load": "CARICA PACCHETTI"
-    },
-    "history": {
-        "title": "CRONOLOGIA NOTEBOOK",
-        "loading": "Caricamento cronologia...",
-        "empty": "Nessuna cronologia notebook"
-    },
-    "messages": {
-        "fileSaved": "File salvato",
-        "fileOpened": "File aperto",
-        "executionComplete": "Esecuzione completata",
-        "executionError": "Errore esecuzione"
-    }
+  "title": "EDITOR CODICE",
+  "header": {
+    "packages": "PACCHETTI"
+  },
+  "toolbar": {
+    "newFile": "NUOVO FILE",
+    "new": "NUOVO",
+    "open": "APRI",
+    "save": "SALVA",
+    "run": "ESEGUI",
+    "running": "IN ESECUZIONE...",
+    "runAll": "ESEGUI TUTTO",
+    "history": "CRONOLOGIA"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "EDITOR FINSCRIPT"
+  },
+  "packages": {
+    "clickToLoad": "Clicca per caricare...",
+    "load": "CARICA PACCHETTI"
+  },
+  "history": {
+    "title": "CRONOLOGIA NOTEBOOK",
+    "loading": "Caricamento cronologia...",
+    "empty": "Nessuna cronologia notebook"
+  }
 }

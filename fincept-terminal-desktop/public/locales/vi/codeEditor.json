@@ -1,57 +1,29 @@
 {
-    "title": "TRÌNH SOẠN MÃ",
-    "header": {
-        "files": "TỆP",
-        "terminal": "TERMINAL",
-        "packages": "GÓI"
-    },
-    "toolbar": {
-        "newFile": "TỆP MỚI",
-        "new": "MỚI",
-        "open": "MỞ",
-        "save": "LƯU",
-        "run": "CHẠY",
-        "running": "ĐANG CHẠY...",
-        "runAll": "CHẠY TẤT CẢ",
-        "download": "TẢI XUỐNG",
-        "upload": "TẢI LÊN",
-        "clear": "XÓA",
-        "history": "LỊCH SỬ"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "Trình soạn",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "TRÌNH SOẠN FINSCRIPT",
-        "terminal": "Terminal"
-    },
-    "terminal": {
-        "output": "Đầu ra",
-        "clear": "Xóa đầu ra",
-        "running": "Đang chạy...",
-        "completed": "Hoàn thành"
-    },
-    "packages": {
-        "installed": "Gói đã cài",
-        "install": "Cài gói",
-        "uninstall": "Gỡ cài",
-        "clickToLoad": "Nhấn để tải...",
-        "load": "TẢI CÁC GÓI"
-    },
-    "history": {
-        "title": "LỊCH SỬ NOTEBOOK",
-        "loading": "Đang tải lịch sử...",
-        "empty": "Không có lịch sử notebook"
-    },
-    "messages": {
-        "fileSaved": "Đã lưu tệp",
-        "fileOpened": "Đã mở tệp",
-        "executionComplete": "Chạy hoàn tất",
-        "executionError": "Lỗi khi chạy"
-    }
+  "title": "TRÌNH SOẠN MÃ",
+  "header": {
+    "packages": "GÓI"
+  },
+  "toolbar": {
+    "newFile": "TỆP MỚI",
+    "new": "MỚI",
+    "open": "MỞ",
+    "save": "LƯU",
+    "run": "CHẠY",
+    "running": "ĐANG CHẠY...",
+    "runAll": "CHẠY TẤT CẢ",
+    "history": "LỊCH SỬ"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "TRÌNH SOẠN FINSCRIPT"
+  },
+  "packages": {
+    "clickToLoad": "Nhấn để tải...",
+    "load": "TẢI CÁC GÓI"
+  },
+  "history": {
+    "title": "LỊCH SỬ NOTEBOOK",
+    "loading": "Đang tải lịch sử...",
+    "empty": "Không có lịch sử notebook"
+  }
 }

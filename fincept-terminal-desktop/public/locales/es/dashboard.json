@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "Cargando...",
     "error": "Error",
-    "configure": "Configurar",
-    "refresh": "Actualizar",
-    "remove": "Eliminar",
     "globalIndices": "ÍNDICES GLOBALES - TOP 12",
     "forex": "PARES FOREX",
     "crypto": "CRIPTOMONEDAS",
     "commodities": "MATERIAS PRIMAS",
-    "bonds": "BONOS",
-    "etfs": "ETFs",
     "news": "NOTICIAS",
     "forum": "FORO",
     "watchlist": "LISTA DE SEGUIMIENTO",
-    "maritime": "MARÍTIMO",
     "index": "ÍNDICE",
     "symbol": "SÍMBOLO",
-    "name": "NOMBRE",
     "price": "PRECIO",
     "change": "CAM",
     "percentChange": "%CAM",
-    "high": "ALTO",
-    "low": "BAJO",
     "noIndexData": "Sin datos de índices",
     "noForexData": "Sin datos de forex",
     "noCryptoData": "Sin datos de cripto",
     "noCommoditiesData": "Sin datos de materias primas",
-    "noNewsData": "Sin noticias",
     "noForumPosts": "Sin publicaciones",
     "noStocksInWatchlist": "Sin acciones en lista",
     "noWatchlistSelected": "Sin lista seleccionada",
@@ -51,7 +41,8 @@
     "routes": "RUTAS",
     "vol24h": "VOL 24H",
     "topTradeCorridors": "CORREDORES COMERCIALES PRINCIPALES",
-    "ships": "barcos"
+    "ships": "barcos",
+    "unknown": "[ES] Unknown widget type"
   },
   "tips": {
     "drag": "Arrastra widgets para reorganizar",
@@ -74,6 +65,11 @@
     "custom": "Personalizado",
     "empty": "Vacío",
     "active": "ACTIVO",
-    "cache": "Caché: HABILITADO"
+    "cache": "Caché: HABILITADO",
+    "label": "[ES] Status"
+  },
+  "messages": {
+    "layoutSaved": "[ES] Dashboard layout saved!",
+    "resetConfirm": "[ES] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

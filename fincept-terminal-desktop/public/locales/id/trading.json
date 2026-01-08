@@ -1,76 +1,8 @@
 {
-    "title": "TRADING",
-    "header": {
-        "orders": "ORDER",
-        "positions": "POSISI",
-        "history": "RIWAYAT",
-        "settings": "PENGATURAN",
-        "terminal": "TERMINAL FINCEPT",
-        "selectBroker": "PILIH BROKER",
-        "paper": "SIMULASI",
-        "live": "LIVE",
-        "watchlist": "WATCHLIST",
-        "orderbook": "ORDERBOOK",
-        "trades": "PERDAGANGAN",
-        "stats": "STATISTIK",
-        "features": "FITUR",
-        "crossExchange": "CROSS-EXCHANGE",
-        "chart": "GRAFIK",
-        "depth": "KEDALAMAN",
-        "volume": "VOLUME",
-        "aiAgents": "AGEN AI",
-        "leaderboard": "PAPAN PERINGKAT",
-        "modelChat": "CHAT MODEL"
-    },
-    "orderTypes": {
-        "market": "Pasar",
-        "limit": "Limit",
-        "stop": "Stop",
-        "stopLimit": "Stop Limit",
-        "trailingStop": "Trailing Stop"
-    },
-    "actions": {
-        "buy": "BELI",
-        "sell": "JUAL",
-        "cancel": "Batal",
-        "modify": "Ubah",
-        "close": "Tutup",
-        "closeAll": "Tutup Semua"
-    },
-    "form": {
-        "symbol": "Simbol",
-        "quantity": "Kuantitas",
-        "price": "Harga",
-        "stopPrice": "Harga Stop",
-        "takeProfit": "Take Profit",
-        "stopLoss": "Stop Loss",
-        "leverage": "Leverage"
-    },
-    "position": {
-        "openPrice": "Harga Buka",
-        "currentPrice": "Harga Saat Ini",
-        "pnl": "L/R",
-        "pnlPercent": "L/R %",
-        "margin": "Margin",
-        "size": "Ukuran"
-    },
-    "order": {
-        "pending": "Menunggu",
-        "filled": "Terisi",
-        "cancelled": "Dibatalkan",
-        "rejected": "Ditolak",
-        "partial": "Terisi Sebagian"
-    },
-    "time": {
-        "gtc": "Berlaku Sampai Dibatalkan",
-        "day": "Order Harian",
-        "ioc": "Langsung atau Batal",
-        "fok": "Semua atau Tidak"
-    },
-    "messages": {
-        "orderPlaced": "Order berhasil",
-        "orderFailed": "Order gagal",
-        "confirmOrder": "Konfirmasi order ini?",
-        "noPositions": "Tidak ada posisi terbuka"
-    }
+  "header": {
+    "terminal": "TERMINAL FINCEPT",
+    "selectBroker": "PILIH BROKER",
+    "paper": "SIMULASI",
+    "live": "LIVE"
+  }
 }

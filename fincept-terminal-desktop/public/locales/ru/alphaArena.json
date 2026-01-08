@@ -1,46 +1,9 @@
 {
-    "title": "АЛЬФА АРЕНА",
-    "header": {
-        "competition": "СОРЕВНОВАНИЕ",
-        "leaderboard": "ТАБЛИЦА ЛИДЕРОВ",
-        "decisions": "РЕШЕНИЯ",
-        "cycles": "ЦИКЛЫ"
-    },
-    "buttons": {
-        "start": "СТАРТ",
-        "stop": "СТОП",
-        "refresh": "ОБНОВИТЬ",
-        "create": "СОЗДАТЬ СОРЕВНОВАНИЕ"
-    },
-    "form": {
-        "competitionName": "Название соревнования",
-        "symbol": "Символ",
-        "mode": "Режим торговли",
-        "models": "Выбрать модели",
-        "apiKeys": "API ключи"
-    },
-    "modes": {
-        "baseline": "Базовый",
-        "monk": "Монк",
-        "situational": "Ситуационный",
-        "maxLeverage": "Макс. плечо"
-    },
-    "leaderboard": {
-        "rank": "Ранг",
-        "model": "Модель",
-        "pnl": "П/У",
-        "trades": "Сделки",
-        "winRate": "Винрейт"
-    },
-    "status": {
-        "running": "РАБОТАЕТ",
-        "stopped": "ОСТАНОВЛЕНО",
-        "waiting": "ОЖИДАНИЕ",
-        "error": "ОШИБКА"
-    },
-    "messages": {
-        "competitionStarted": "Соревнование началось",
-        "competitionStopped": "Соревнование остановлено",
-        "noCompetition": "Нет активных соревнований"
-    }
+  "title": "АЛЬФА АРЕНА",
+  "header": {
+    "competition": "СОРЕВНОВАНИЕ"
+  },
+  "buttons": {
+    "create": "СОЗДАТЬ СОРЕВНОВАНИЕ"
+  }
 }

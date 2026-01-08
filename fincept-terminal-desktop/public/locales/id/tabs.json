@@ -1,7 +1,4 @@
 {
-  "header": {
-    "title": "FINCEPT PROFESSIONAL"
-  },
   "navigation": {
     "dashboard": "Dashboard",
     "markets": "Pasar",
@@ -11,14 +8,10 @@
     "watchlist": "Watchlist",
     "research": "Riset",
     "screener": "Screener",
-    "trading": "Trading",
     "chat": "AI Chat",
     "agents": "Agen",
     "settings": "Pengaturan",
-    "profile": "Profil",
-    "forum": "Forum",
-    "help": "Bantuan",
-    "logout": "Keluar"
+    "profile": "Profil"
   },
   "functionKeys": {
     "f1": "DASH",
@@ -34,16 +27,7 @@
     "f11": "FULL",
     "f12": "PROF"
   },
-  "status": {
-    "connected": "Terhubung",
-    "disconnected": "Terputus",
-    "loading": "Memuat...",
-    "error": "Error",
-    "ready": "Siap"
-  },
   "labels": {
-    "moreTabs": "Tab lainnya di menu toolbar",
-    "enterCommand": "Masukkan Perintah",
-    "search": "Cari"
+    "moreTabs": "Tab lainnya di menu toolbar"
   }
 }

@@ -7,9 +7,10 @@ import sys
 import json
 import pandas as pd
 
-# Add technicals directory to path
+# Add script directory to path to allow importing technicals package
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'technicals'))
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, script_dir)
 
 from technicals.momentum_indicators import calculate_all_momentum_indicators
 from technicals.volume_indicators import calculate_all_volume_indicators
@@ -108,14 +109,31 @@ def compute_all_technicals(historical_data_json):
         })
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print(json.dumps({
+def main(args=None):
+    """
+    Main entry point for PyO3 and subprocess execution
+
+    Args:
+        args: List of arguments (for PyO3) or None (for subprocess)
+
+    Returns:
+        JSON string with technical indicators or error
+    """
+    # Support both PyO3 (args parameter) and subprocess (sys.argv)
+    if args is None:
+        args = sys.argv[1:]
+
+    if len(args) < 1:
+        return json.dumps({
             "success": False,
             "error": "Usage: python compute_technicals.py '<historical_data_json>'"
-        }))
-        sys.exit(1)
+        })
 
-    historical_data_json = sys.argv[1]
+    historical_data_json = args[0]
     result = compute_all_technicals(historical_data_json)
+    return result
+
+
+if __name__ == "__main__":
+    result = main()
     print(result)

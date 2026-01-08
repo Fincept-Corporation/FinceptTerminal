@@ -556,3 +556,42 @@ pub async fn db_delete_excel_snapshot(id: i64) -> Result<String, String> {
     notes_excel::delete_excel_snapshot(id).map_err(|e| e.to_string())?;
     Ok("Excel snapshot deleted successfully".to_string())
 }
+
+// ============================================================================
+// Agent Configuration Commands
+// ============================================================================
+
+#[tauri::command]
+pub async fn db_save_agent_config(config: AgentConfig) -> Result<OperationResult, String> {
+    queries::save_agent_config(&config).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_agent_configs() -> Result<Vec<AgentConfig>, String> {
+    queries::get_agent_configs().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_agent_config(id: String) -> Result<Option<AgentConfig>, String> {
+    queries::get_agent_config(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_agent_configs_by_category(category: String) -> Result<Vec<AgentConfig>, String> {
+    queries::get_agent_configs_by_category(&category).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_delete_agent_config(id: String) -> Result<OperationResult, String> {
+    queries::delete_agent_config(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_set_active_agent_config(id: String) -> Result<OperationResult, String> {
+    queries::set_active_agent_config(&id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn db_get_active_agent_config() -> Result<Option<AgentConfig>, String> {
+    queries::get_active_agent_config().map_err(|e| e.to_string())
+}

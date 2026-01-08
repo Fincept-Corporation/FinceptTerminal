@@ -1,39 +1,17 @@
 {
-    "title": "Notlar",
-    "header": {
-        "notes": "Notlar",
-        "folders": "Klasörler",
-        "tags": "Etiketler"
-    },
-    "toolbar": {
-        "newNote": "Yeni not",
-        "templates": "Şablonlar",
-        "favorites": "Favoriler",
-        "filters": "Filtreler",
-        "archived": "Arşivlenmiş"
-    },
-    "editor": {
-        "title": "Başlık",
-        "content": "İçerik",
-        "tags": "Etiketler"
-    },
-    "buttons": {
-        "save": "Kaydet",
-        "delete": "Sil",
-        "archive": "Arşivle",
-        "share": "Paylaş"
-    },
-    "messages": {
-        "saved": "Not kaydedildi",
-        "deleted": "Not silindi",
-        "archived": "Not arşivlendi"
-    },
-    "search": {
-        "placeholder": "Notları ara..."
-    },
-    "stats": {
-        "total": "Toplam",
-        "archived": "Arşivlenmiş",
-        "favorites": "Favoriler"
-    }
+  "title": "Notlar",
+  "header": {
+    "total": "[TR] TOTAL",
+    "favorites": "[TR] FAVORITES",
+    "words": "[TR] WORDS",
+    "refresh": "[TR] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "Yeni not",
+    "templates": "Şablonlar",
+    "favorites": "Favoriler",
+    "filters": "Filtreler",
+    "archived": "Arşivlenmiş",
+    "search": "[TR] Search notes, tags, tickers..."
+  }
 }

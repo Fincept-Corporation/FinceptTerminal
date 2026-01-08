@@ -1,30 +1,8 @@
 {
-    "title": "DBnomics ডেটা",
-    "header": {
-        "search": "অনুসন্ধান",
-        "providers": "প্রদানকারী",
-        "datasets": "ডেটাসেট"
-    },
-    "form": {
-        "provider": "প্রদানকারী",
-        "dataset": "ডেটাসেট",
-        "series": "সিরিজ",
-        "startDate": "শুরুর তারিখ",
-        "endDate": "শেষ তারিখ"
-    },
-    "buttons": {
-        "fetch": "ফেচ",
-        "search": "অনুসন্ধান",
-        "export": "রপ্তানি",
-        "clear": "মুছুন"
-    },
-    "chart": {
-        "title": "ডেটা ভিজুয়ালাইজেশন",
-        "emptyState": "ডেটা দেখতে একটি সিরিজ নির্বাচন করুন"
-    },
-    "messages": {
-        "loading": "ডেটা লোড হচ্ছে...",
-        "noData": "কোনো ডেটা পাওয়া যায়নি",
-        "error": "ডেটা আনতে ত্রুটি"
-    }
+  "title": "DBnomics ডেটা",
+  "toolbar": {
+    "fetch": "[BN] FETCH",
+    "refresh": "[BN] REFRESH",
+    "export": "[BN] EXPORT"
+  }
 }

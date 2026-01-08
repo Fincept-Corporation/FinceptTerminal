@@ -1,59 +1,6 @@
 {
-    "title": "GEOPOLITICS",
-    "header": {
-        "overview": "OVERVIEW",
-        "regions": "REGIONS",
-        "analysis": "ANALYSIS",
-        "alerts": "ALERTS"
-    },
-    "regions": {
-        "global": "Global",
-        "northAmerica": "North America",
-        "europe": "Europe",
-        "asia": "Asia Pacific",
-        "middleEast": "Middle East",
-        "africa": "Africa",
-        "latam": "Latin America"
-    },
-    "categories": {
-        "conflict": "Conflicts",
-        "sanctions": "Sanctions",
-        "trade": "Trade Relations",
-        "diplomacy": "Diplomacy",
-        "elections": "Elections",
-        "policy": "Policy Changes"
-    },
-    "risk": {
-        "level": "Risk Level",
-        "high": "High",
-        "medium": "Medium",
-        "low": "Low",
-        "critical": "Critical",
-        "stable": "Stable"
-    },
-    "impact": {
-        "economic": "Economic Impact",
-        "market": "Market Impact",
-        "trade": "Trade Impact",
-        "currency": "Currency Impact"
-    },
-    "timeline": {
-        "latest": "Latest",
-        "thisWeek": "This Week",
-        "thisMonth": "This Month",
-        "upcoming": "Upcoming"
-    },
-    "actions": {
-        "subscribe": "Subscribe",
-        "export": "Export",
-        "share": "Share",
-        "setAlert": "Set Alert",
-        "filter": "Filter"
-    },
-    "messages": {
-        "loading": "Loading geopolitical data...",
-        "noEvents": "No events",
-        "updated": "Last updated",
-        "breaking": "Breaking News"
-    }
+  "title": "GEOPOLITICS",
+  "messages": {
+    "loading": "Loading geopolitical data..."
+  }
 }

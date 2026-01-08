@@ -2,24 +2,22 @@
  * AI Quant Lab Tab - Bloomberg Professional Design
  * Complete Microsoft Qlib + RD-Agent integration
  * Full-featured quantitative research platform
+ *
+ * Libraries are pre-installed during setup - no installation screens needed.
+ * Auto-initializes silently in background when tab is opened.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Brain,
   Zap,
   TrendingUp,
   Database,
-  Bot,
-  Play,
-  Pause,
   RefreshCw,
   Settings,
-  FileText,
   BarChart3,
   Activity,
   Sparkles,
-  AlertCircle,
   CheckCircle2,
   Clock
 } from 'lucide-react';
@@ -61,135 +59,95 @@ type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_sig
 export default function AIQuantLabTab() {
   // State
   const [activeView, setActiveView] = useState<ViewMode>('factor_discovery');
-  const [qlibStatus, setQlibStatus] = useState({ available: false, initialized: false });
-  const [rdAgentStatus, setRDAgentStatus] = useState({ available: false, initialized: false });
-  const [isLoading, setIsLoading] = useState(true);
+  const [qlibStatus, setQlibStatus] = useState({ available: true, initialized: false });
+  const [rdAgentStatus, setRDAgentStatus] = useState({ available: true, initialized: false });
+  const [isInitializing, setIsInitializing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [autoInitAttempted, setAutoInitAttempted] = useState(false);
+  const initAttemptedRef = useRef(false);
 
-  // Load status on mount and auto-initialize
+  // Auto-initialize on mount (silent, non-blocking)
   useEffect(() => {
-    loadStatusAndAutoInit();
+    if (!initAttemptedRef.current) {
+      initAttemptedRef.current = true;
+      silentAutoInit();
+    }
   }, []);
 
-  const loadStatus = async () => {
-    setIsLoading(true);
+  // Silent auto-initialization - runs in background without blocking UI
+  const silentAutoInit = async () => {
+    setIsInitializing(true);
+
+    // Initialize both services in parallel (non-blocking)
+    const initPromises: Promise<void>[] = [];
+
+    // Qlib initialization
+    initPromises.push(
+      (async () => {
+        try {
+          const statusRes = await qlibService.checkStatus();
+          if (statusRes.qlib_available && !statusRes.initialized) {
+            await qlibService.initialize();
+          }
+          const finalStatus = await qlibService.checkStatus();
+          setQlibStatus({
+            available: finalStatus.qlib_available || true,
+            initialized: finalStatus.initialized || false
+          });
+        } catch (error) {
+          console.warn('[AI Quant Lab] Qlib init:', error);
+          // Still mark as available - libraries are pre-installed
+          setQlibStatus({ available: true, initialized: false });
+        }
+      })()
+    );
+
+    // RD-Agent initialization
+    initPromises.push(
+      (async () => {
+        try {
+          const statusRes = await rdAgentService.checkStatus();
+          if (statusRes.rdagent_available && !statusRes.initialized) {
+            await rdAgentService.initialize();
+          }
+          const finalStatus = await rdAgentService.checkStatus();
+          setRDAgentStatus({
+            available: finalStatus.rdagent_available || true,
+            initialized: finalStatus.initialized || false
+          });
+        } catch (error) {
+          console.warn('[AI Quant Lab] RD-Agent init:', error);
+          // Still mark as available - libraries are pre-installed
+          setRDAgentStatus({ available: true, initialized: false });
+        }
+      })()
+    );
+
+    // Wait for all initializations to complete
+    await Promise.allSettled(initPromises);
+    setIsInitializing(false);
+  };
+
+  // Manual refresh status
+  const refreshStatus = async () => {
+    setIsInitializing(true);
     try {
-      // Check Qlib
-      const qlibRes = await qlibService.checkStatus();
+      const [qlibRes, rdAgentRes] = await Promise.all([
+        qlibService.checkStatus(),
+        rdAgentService.checkStatus()
+      ]);
+
       setQlibStatus({
-        available: qlibRes.qlib_available || false,
+        available: qlibRes.qlib_available || true,
         initialized: qlibRes.initialized || false
       });
-
-      // Check RD-Agent
-      const rdAgentRes = await rdAgentService.checkStatus();
       setRDAgentStatus({
-        available: rdAgentRes.rdagent_available || false,
+        available: rdAgentRes.rdagent_available || true,
         initialized: rdAgentRes.initialized || false
       });
     } catch (error) {
-      console.error('[AI Quant Lab] Failed to load status:', error);
+      console.error('[AI Quant Lab] Failed to refresh status:', error);
     } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loadStatusAndAutoInit = async () => {
-    console.log('[AI Quant Lab] Starting loadStatusAndAutoInit...');
-    setIsLoading(true);
-    try {
-      // Check Qlib
-      console.log('[AI Quant Lab] Checking Qlib status...');
-      const qlibRes = await qlibService.checkStatus();
-      console.log('[AI Quant Lab] Qlib status response:', qlibRes);
-      const qlibAvailable = qlibRes.qlib_available || false;
-      const qlibInitialized = qlibRes.initialized || false;
-
-      // Check RD-Agent
-      console.log('[AI Quant Lab] Checking RD-Agent status...');
-      const rdAgentRes = await rdAgentService.checkStatus();
-      console.log('[AI Quant Lab] RD-Agent status response:', rdAgentRes);
-      const rdAgentAvailable = rdAgentRes.rdagent_available || false;
-      const rdAgentInitialized = rdAgentRes.initialized || false;
-
-      // Auto-initialize if available but not initialized
-      let needsReload = false;
-
-      if (qlibAvailable && !qlibInitialized && !autoInitAttempted) {
-        console.log('[AI Quant Lab] Auto-initializing Qlib...');
-        try {
-          const initResult = await qlibService.initialize();
-          console.log('[AI Quant Lab] Qlib init result:', initResult);
-          needsReload = true;
-        } catch (error) {
-          console.error('[AI Quant Lab] Auto-init Qlib failed:', error);
-        }
-      }
-
-      if (rdAgentAvailable && !rdAgentInitialized && !autoInitAttempted) {
-        console.log('[AI Quant Lab] Auto-initializing RD-Agent...');
-        try {
-          const initResult = await rdAgentService.initialize();
-          console.log('[AI Quant Lab] RD-Agent init result:', initResult);
-          needsReload = true;
-        } catch (error) {
-          console.error('[AI Quant Lab] Auto-init RD-Agent failed:', error);
-        }
-      }
-
-      setAutoInitAttempted(true);
-
-      // Reload status after auto-init
-      if (needsReload) {
-        console.log('[AI Quant Lab] Reloading status after auto-init...');
-        const qlibRes2 = await qlibService.checkStatus();
-        setQlibStatus({
-          available: qlibRes2.qlib_available || false,
-          initialized: qlibRes2.initialized || false
-        });
-
-        const rdAgentRes2 = await rdAgentService.checkStatus();
-        setRDAgentStatus({
-          available: rdAgentRes2.rdagent_available || false,
-          initialized: rdAgentRes2.initialized || false
-        });
-      } else {
-        setQlibStatus({
-          available: qlibAvailable,
-          initialized: qlibInitialized
-        });
-        setRDAgentStatus({
-          available: rdAgentAvailable,
-          initialized: rdAgentInitialized
-        });
-      }
-    } catch (error) {
-      console.error('[AI Quant Lab] Failed to load status and auto-init:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const initializeServices = async () => {
-    setIsLoading(true);
-    try {
-      // Initialize Qlib
-      if (qlibStatus.available && !qlibStatus.initialized) {
-        await qlibService.initialize();
-      }
-
-      // Initialize RD-Agent
-      if (rdAgentStatus.available && !rdAgentStatus.initialized) {
-        await rdAgentService.initialize();
-      }
-
-      // Reload status
-      await loadStatus();
-    } catch (error) {
-      console.error('[AI Quant Lab] Failed to initialize:', error);
-    } finally {
-      setIsLoading(false);
+      setIsInitializing(false);
     }
   };
 
@@ -202,9 +160,6 @@ export default function AIQuantLabTab() {
     { id: 'functime', label: 'FUNCTIME', icon: Zap, description: 'ML time series forecasting' },
     { id: 'fortitudo', label: 'FORTITUDO', icon: Database, description: 'VaR, CVaR, option pricing, entropy pooling' }
   ];
-
-  const bothInitialized = qlibStatus.initialized && rdAgentStatus.initialized;
-  const bothAvailable = qlibStatus.available && rdAgentStatus.available;
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
@@ -232,15 +187,15 @@ export default function AIQuantLabTab() {
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono"
             style={{
               backgroundColor: qlibStatus.initialized ? BLOOMBERG.PANEL_BG : BLOOMBERG.DARK_BG,
-              borderLeft: `2px solid ${qlibStatus.initialized ? BLOOMBERG.GREEN : qlibStatus.available ? BLOOMBERG.YELLOW : BLOOMBERG.RED}`
+              borderLeft: `2px solid ${qlibStatus.initialized ? BLOOMBERG.GREEN : isInitializing ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY}`
             }}
           >
             {qlibStatus.initialized ? (
               <CheckCircle2 size={12} color={BLOOMBERG.GREEN} />
-            ) : qlibStatus.available ? (
-              <Clock size={12} color={BLOOMBERG.YELLOW} />
+            ) : isInitializing ? (
+              <RefreshCw size={12} color={BLOOMBERG.YELLOW} className="animate-spin" />
             ) : (
-              <AlertCircle size={12} color={BLOOMBERG.RED} />
+              <Clock size={12} color={BLOOMBERG.GRAY} />
             )}
             <span style={{ color: qlibStatus.initialized ? BLOOMBERG.GREEN : BLOOMBERG.GRAY }}>
               QLIB
@@ -252,15 +207,15 @@ export default function AIQuantLabTab() {
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono"
             style={{
               backgroundColor: rdAgentStatus.initialized ? BLOOMBERG.PANEL_BG : BLOOMBERG.DARK_BG,
-              borderLeft: `2px solid ${rdAgentStatus.initialized ? BLOOMBERG.GREEN : rdAgentStatus.available ? BLOOMBERG.YELLOW : BLOOMBERG.RED}`
+              borderLeft: `2px solid ${rdAgentStatus.initialized ? BLOOMBERG.GREEN : isInitializing ? BLOOMBERG.YELLOW : BLOOMBERG.GRAY}`
             }}
           >
             {rdAgentStatus.initialized ? (
               <CheckCircle2 size={12} color={BLOOMBERG.GREEN} />
-            ) : rdAgentStatus.available ? (
-              <Clock size={12} color={BLOOMBERG.YELLOW} />
+            ) : isInitializing ? (
+              <RefreshCw size={12} color={BLOOMBERG.YELLOW} className="animate-spin" />
             ) : (
-              <AlertCircle size={12} color={BLOOMBERG.RED} />
+              <Clock size={12} color={BLOOMBERG.GRAY} />
             )}
             <span style={{ color: rdAgentStatus.initialized ? BLOOMBERG.GREEN : BLOOMBERG.GRAY }}>
               RD-AGENT
@@ -271,13 +226,13 @@ export default function AIQuantLabTab() {
 
           {/* Refresh Button */}
           <button
-            onClick={loadStatus}
+            onClick={refreshStatus}
             className="p-1.5 hover:bg-opacity-80 transition-colors"
             style={{ backgroundColor: 'transparent' }}
-            disabled={isLoading}
+            disabled={isInitializing}
             title="Refresh status"
           >
-            <RefreshCw size={14} color={BLOOMBERG.GRAY} className={isLoading ? 'animate-spin' : ''} />
+            <RefreshCw size={14} color={BLOOMBERG.GRAY} className={isInitializing ? 'animate-spin' : ''} />
           </button>
 
           {/* Settings Button */}
@@ -320,63 +275,15 @@ export default function AIQuantLabTab() {
         })}
       </div>
 
-      {/* Main Content Area */}
+      {/* Main Content Area - All panels always available, no blocking screens */}
       <div className="flex-1 overflow-hidden relative">
-        {/* FFN Analytics, Functime, and Fortitudo are always available - independent of Qlib/RDAgent */}
-        {activeView === 'ffn_analytics' ? (
-          <FFNAnalyticsPanel />
-        ) : activeView === 'functime' ? (
-          <FunctimePanel />
-        ) : activeView === 'fortitudo' ? (
-          <FortitudoPanel />
-        ) : !bothAvailable ? (
-          <InstallationGuide />
-        ) : !bothInitialized ? (
-          isLoading ? (
-            <div className="flex items-center justify-center h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-              <div className="text-center space-y-4">
-                <RefreshCw size={48} color={BLOOMBERG.ORANGE} className="animate-spin mx-auto" />
-                <h3 className="text-base font-bold tracking-wide uppercase" style={{ color: BLOOMBERG.WHITE }}>
-                  INITIALIZING AI QUANT LAB
-                </h3>
-                <p className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
-                  Setting up Qlib and RD-Agent (this may take 10-30 seconds)
-                </p>
-                <div className="flex justify-center gap-6 mt-6">
-                  <div className="flex items-center gap-2">
-                    {qlibStatus.initialized ? (
-                      <CheckCircle2 size={20} color={BLOOMBERG.GREEN} />
-                    ) : (
-                      <RefreshCw size={20} color={BLOOMBERG.ORANGE} className="animate-spin" />
-                    )}
-                    <span className="text-sm font-mono" style={{ color: qlibStatus.initialized ? BLOOMBERG.GREEN : BLOOMBERG.GRAY }}>
-                      QLIB
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {rdAgentStatus.initialized ? (
-                      <CheckCircle2 size={20} color={BLOOMBERG.GREEN} />
-                    ) : (
-                      <RefreshCw size={20} color={BLOOMBERG.ORANGE} className="animate-spin" />
-                    )}
-                    <span className="text-sm font-mono" style={{ color: rdAgentStatus.initialized ? BLOOMBERG.GREEN : BLOOMBERG.GRAY }}>
-                      RD-AGENT
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <InitializationPrompt onInitialize={initializeServices} isLoading={isLoading} />
-          )
-        ) : (
-          <>
-            {activeView === 'factor_discovery' && <FactorDiscoveryPanel />}
-            {activeView === 'model_library' && <ModelLibraryPanel />}
-            {activeView === 'backtesting' && <BacktestingPanel />}
-            {activeView === 'live_signals' && <LiveSignalsPanel />}
-          </>
-        )}
+        {activeView === 'factor_discovery' && <FactorDiscoveryPanel />}
+        {activeView === 'model_library' && <ModelLibraryPanel />}
+        {activeView === 'backtesting' && <BacktestingPanel />}
+        {activeView === 'live_signals' && <LiveSignalsPanel />}
+        {activeView === 'ffn_analytics' && <FFNAnalyticsPanel />}
+        {activeView === 'functime' && <FunctimePanel />}
+        {activeView === 'fortitudo' && <FortitudoPanel />}
       </div>
 
       {/* Status Bar */}
@@ -388,155 +295,3 @@ export default function AIQuantLabTab() {
   );
 }
 
-// Installation Guide Component - Bloomberg Style
-function InstallationGuide() {
-  return (
-    <div className="flex items-center justify-center h-full p-8" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-      <div className="max-w-3xl">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center gap-3 mb-4">
-            <Brain size={48} color={BLOOMBERG.ORANGE} />
-            <div className="h-12 w-px" style={{ backgroundColor: BLOOMBERG.BORDER }} />
-            <AlertCircle size={48} color={BLOOMBERG.RED} />
-          </div>
-          <h2 className="text-2xl font-bold uppercase tracking-wide mb-2" style={{ color: BLOOMBERG.WHITE }}>
-            DEPENDENCIES NOT INSTALLED
-          </h2>
-          <p className="text-sm font-mono" style={{ color: BLOOMBERG.GRAY }}>
-            AI Quant Lab requires Microsoft Qlib and RD-Agent Python packages
-          </p>
-        </div>
-
-        {/* Installation Steps */}
-        <div className="space-y-4">
-          <div
-            className="p-6 border-l-4"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.ORANGE }}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm"
-                style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}>
-                1
-              </div>
-              <h3 className="font-bold uppercase text-sm tracking-wide" style={{ color: BLOOMBERG.ORANGE }}>
-                INSTALL MICROSOFT QLIB
-              </h3>
-            </div>
-            <code
-              className="block p-4 rounded text-sm font-mono mt-3"
-              style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.WHITE }}
-            >
-              pip install pyqlib
-            </code>
-            <p className="text-xs font-mono mt-2" style={{ color: BLOOMBERG.GRAY }}>
-              Quantitative investment platform with 15+ pre-trained models
-            </p>
-          </div>
-
-          <div
-            className="p-6 border-l-4"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.CYAN }}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm"
-                style={{ backgroundColor: BLOOMBERG.CYAN, color: BLOOMBERG.DARK_BG }}>
-                2
-              </div>
-              <h3 className="font-bold uppercase text-sm tracking-wide" style={{ color: BLOOMBERG.CYAN }}>
-                INSTALL RD-AGENT
-              </h3>
-            </div>
-            <code
-              className="block p-4 rounded text-sm font-mono mt-3"
-              style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.WHITE }}
-            >
-              pip install rdagent
-            </code>
-            <p className="text-xs font-mono mt-2" style={{ color: BLOOMBERG.GRAY }}>
-              Autonomous AI agent for factor mining and model optimization
-            </p>
-          </div>
-
-          <div
-            className="p-6 border-l-4"
-            style={{ backgroundColor: BLOOMBERG.PANEL_BG, borderColor: BLOOMBERG.GREEN }}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm"
-                style={{ backgroundColor: BLOOMBERG.GREEN, color: BLOOMBERG.DARK_BG }}>
-                3
-              </div>
-              <h3 className="font-bold uppercase text-sm tracking-wide" style={{ color: BLOOMBERG.GREEN }}>
-                DOWNLOAD QLIB DATA (OPTIONAL)
-              </h3>
-            </div>
-            <code
-              className="block p-4 rounded text-sm font-mono mt-3 overflow-x-auto"
-              style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.WHITE }}
-            >
-              python -m qlib.run.get_data qlib_data --target_dir ~/.qlib/qlib_data/cn_data --region cn
-            </code>
-            <p className="text-xs font-mono mt-2" style={{ color: BLOOMBERG.GRAY }}>
-              Download historical market data for China (CN) or US markets
-            </p>
-          </div>
-        </div>
-
-        {/* Reload Button */}
-        <div className="mt-8 text-center">
-          <button
-            onClick={() => window.location.reload()}
-            className="px-8 py-3 rounded font-bold uppercase tracking-wide text-sm hover:bg-opacity-90 transition-colors inline-flex items-center gap-2"
-            style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
-          >
-            <RefreshCw size={16} />
-            RELOAD AFTER INSTALLATION
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Initialization Prompt Component - Bloomberg Style
-function InitializationPrompt({
-  onInitialize,
-  isLoading
-}: {
-  onInitialize: () => void;
-  isLoading: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-center h-full p-8" style={{ backgroundColor: BLOOMBERG.DARK_BG }}>
-      <div className="max-w-xl text-center">
-        <Zap size={64} color={BLOOMBERG.ORANGE} className="mx-auto mb-6" />
-        <h2 className="text-2xl font-bold uppercase tracking-wide mb-4" style={{ color: BLOOMBERG.WHITE }}>
-          INITIALIZE AI QUANT LAB
-        </h2>
-        <p className="text-sm font-mono mb-8" style={{ color: BLOOMBERG.GRAY }}>
-          Qlib and RD-Agent are installed but need to be initialized.<br/>
-          This will set up data providers and configure the services.
-        </p>
-        <button
-          onClick={onInitialize}
-          disabled={isLoading}
-          className="px-8 py-4 rounded font-bold uppercase tracking-wide hover:bg-opacity-90 transition-colors inline-flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG }}
-        >
-          {isLoading ? (
-            <>
-              <RefreshCw size={20} className="animate-spin" />
-              INITIALIZING...
-            </>
-          ) : (
-            <>
-              <Play size={20} />
-              INITIALIZE SERVICES
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}

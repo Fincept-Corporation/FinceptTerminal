@@ -1,75 +1,25 @@
 {
-    "title": "ওয়াচলিস্ট",
-    "header": {
-        "title": "FINCEPT ওয়াচলিস্ট মনিটর",
-        "myWatchlists": "আমার ওয়াচলিস্ট",
-        "create": "তৈরি করুন",
-        "import": "আমদানি",
-        "export": "রপ্তানি",
-        "updating": "আপডেট হচ্ছে",
-        "live": "লাইভ"
-    },
-    "sidebar": {
-        "groups": "ওয়াচলিস্ট গ্রুপ",
-        "new": "নতুন",
-        "noWatchlists": "এখনো কোনো তালিকা নেই।",
-        "clickNew": "তৈরি করতে নতুন ক্লিক করুন।",
-        "stocks": "স্টক",
-        "marketMovers": "মার্কেট মুভার্স",
-        "gainer": "গেইনার",
-        "loser": "লুজার",
-        "volumeLeaders": "ভলিউম লিডার"
-    },
-    "emptyState": {
-        "selectWatchlist": "শুরু করতে একটি তালিকা নির্বাচন করুন বা নতুন তৈরি করুন"
-    },
-    "list": {
-        "name": "নাম",
-        "symbols": "সিম্বল",
-        "created": "তৈরি হয়েছে",
-        "updated": "শেষ আপডেট",
-        "actions": "কার্যক্রম"
-    },
-    "actions": {
-        "add": "সিম্বল যোগ করুন",
-        "remove": "সরান",
-        "edit": "সম্পাদনা",
-        "delete": "মুছুন",
-        "rename": "নাম পরিবর্তন",
-        "duplicate": "ডুপ্লিকেট"
-    },
-    "form": {
-        "name": "তালিকার নাম",
-        "description": "বিবরণ",
-        "symbols": "সিম্বল যোগ করুন",
-        "save": "সেভ করুন",
-        "cancel": "বাতিল"
-    },
-    "symbol": {
-        "price": "মূল্য",
-        "change": "পরিবর্তন",
-        "volume": "ভলিউম",
-        "marketCap": "মার্কেট ক্যাপ",
-        "alert": "অ্যালার্ট সেট করুন"
-    },
-    "alerts": {
-        "priceAbove": "মূল্য উপরে",
-        "priceBelow": "মূল্য নিচে",
-        "changePercent": "পরিবর্তন %",
-        "volume": "ভলিউম অ্যালার্ট"
-    },
-    "sort": {
-        "name": "নাম অনুসারে",
-        "price": "মূল্য অনুসারে",
-        "change": "পরিবর্তন অনুসারে",
-        "custom": "কাস্টম অর্ডার"
-    },
-    "messages": {
-        "created": "তালিকা তৈরি হয়েছে",
-        "deleted": "তালিকা মুছে ফেলা হয়েছে",
-        "symbolAdded": "সিম্বল যোগ হয়েছে",
-        "symbolRemoved": "সিম্বল সরানো হয়েছে",
-        "noWatchlists": "কোনো তালিকা নেই",
-        "loading": "লোড হচ্ছে..."
-    }
+  "title": "ওয়াচলিস্ট",
+  "header": {
+    "export": "রপ্তানি",
+    "updating": "আপডেট হচ্ছে",
+    "live": "লাইভ"
+  },
+  "sidebar": {
+    "groups": "ওয়াচলিস্ট গ্রুপ",
+    "new": "নতুন",
+    "noWatchlists": "এখনো কোনো তালিকা নেই।",
+    "clickNew": "তৈরি করতে নতুন ক্লিক করুন।",
+    "stocks": "স্টক",
+    "marketMovers": "মার্কেট মুভার্স",
+    "gainer": "গেইনার",
+    "loser": "লুজার",
+    "volumeLeaders": "ভলিউম লিডার"
+  },
+  "emptyState": {
+    "selectWatchlist": "শুরু করতে একটি তালিকা নির্বাচন করুন বা নতুন তৈরি করুন"
+  },
+  "list": {
+    "symbols": "সিম্বল"
+  }
 }

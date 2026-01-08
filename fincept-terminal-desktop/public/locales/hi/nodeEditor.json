@@ -1,32 +1,6 @@
 {
-    "title": "नोड एडिटर",
-    "header": {
-        "nodes": "नोड",
-        "connections": "कनेक्शन",
-        "canvas": "कैनवास"
-    },
-    "tabs": {
-        "editor": "एडिटर",
-        "preview": "प्रीव्यू"
-    },
-    "toolbar": {
-        "addNode": "नोड जोड़ें",
-        "delete": "हटाएं",
-        "clear": "सभी हटाएं",
-        "run": "चलाएं",
-        "save": "सहेजें",
-        "load": "लोड करें"
-    },
-    "nodes": {
-        "input": "इनपुट",
-        "output": "आउटपुट",
-        "process": "प्रोसेस",
-        "condition": "शर्त"
-    },
-    "messages": {
-        "saved": "ग्राफ सहेजा गया",
-        "loaded": "ग्राफ लोड हुआ",
-        "running": "चल रहा है...",
-        "completed": "पूर्ण"
-    }
+  "title": "नोड एडिटर",
+  "tabs": {
+    "editor": "एडिटर"
+  }
 }
