@@ -24,15 +24,15 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## 📥 Descargar la última versión
 
-**Versión:**`v3.1.1`\|**Liberado:**2026-01-06
+**Versión:**`v3.1.3`\|**Liberado:**2026-01-07
 
 | Plataforma   | Arquitectura               | Descargar                                                                                                                              |
 | ------------ | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **macos**    | Silicio de manzana         | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
-| **macos**    | Intel                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
-| **linux**    | x64 (Imagen de aplicación) | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
-| **linux**    | x64 (Debian)               | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
-| **ventanas** | hshch                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+| **macos**    | Silicio de manzana         | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macos**    | Intel                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **linux**    | x64 (Imagen de aplicación) | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **linux**    | x64 (Debian)               | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **ventanas** | hshch                      | [Descargar](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
 
 [Ver todos los lanzamientos](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -46,7 +46,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 | **Característica**      | **Terminal Fincept**                                                                                                                                          | **Código fuente**                                                                                                                                                                                                                                                                     |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 📊**Analítica**         | Currículo completo de CFA Nivel 1, 2, 3 en Python • Modelos DCF • Optimización de cartera • Métricas de riesgo (VaR, Sharpe)                                  | [Módulos de análisis](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/Analytics)                                                                                                                                |
+| 📊**Analítica**         | Complete CFA Level 1, 2, 3 curriculum in Python • DCF models • Portfolio optimization • Risk metrics (VaR, Sharpe)                                            | [Módulos de análisis](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/Analytics)                                                                                                                                |
 | 🤖**Agentes de IA**     | Más de 20 personas de inversionistas (Buffett, Dalio, Graham) • Estrategias de fondos de cobertura (Bridgewater, Citadel, Renaissance) • Soporte local de LLM | [Agentes de IA](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src-tauri/resources/scripts/agents)                                                                                                                                         |
 | 🌐**Acceso a datos**    | Más de 100 conectores (DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • Mapeador de API personalizado • Cero restricciones de datos                            | [Adaptadores de datos](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                           |
 | 🔗**Dominio cruzado**   | Integre la cadena de suministro → cartera • Geopolítica → capital • Marítimo → macro • Sus datos, a su manera                                                 | [Sistema de flujo de trabajo](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                              |
@@ -183,7 +183,7 @@ Plataforma de inteligencia financiera de última generación con análisis de ni
 
 ## 📥 Descargar
 
-**vz. 0,11**| Windows • Mac OS • Linux
+**vz. 0,11**| Windows • MacOS • Linux
 
 [![Download](https://img.shields.io/badge/Download-Latest%20Release-brightgreen?style=for-the-badge)](https://github.com/Fincept-Corporation/FinceptTerminal/releases)[![Microsoft Store](https://img.shields.io/badge/Microsoft%20Store-Get%20App-blue?style=for-the-badge&logo=microsoft)](https://apps.microsoft.com/detail/XPDDZR13CXS466?hl=en-US&gl=IN&ocid=pdpshare)
 
@@ -205,7 +205,7 @@ bun install && bun run tauri:dev
 
 ## 🛣️ ¿Qué sigue?
 
-**Primer trimestre de 2026:**Transmisión en tiempo real mejorada • Backtesting avanzado • Creador de estrategias de opciones • Más de 50 agentes de IA**2026:**Negociación en papel • Gestión de carteras múltiples • Aplicación móvil • Negociación social**Futuro:**Características institucionales • API programática • UI de capacitación de ML • Soluciones de marca blanca
+**Primer trimestre de 2026:**Transmisión en tiempo real mejorada • Backtesting avanzado • Creador de estrategias de opciones • Más de 50 agentes de IA**Mayo de 2026:**Negociación en papel • Gestión de carteras múltiples • Aplicación móvil • Negociación social**Futuro:**Características institucionales • API programática • UI de capacitación de ML • Soluciones de marca blanca
 
 * * *
 

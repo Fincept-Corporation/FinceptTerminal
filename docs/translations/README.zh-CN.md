@@ -24,15 +24,15 @@
 
 ## 📥 下载最新版本
 
-**版本：**`v3.1.1`\|**发布：**2026-01-06
+**版本：**`v3.1.3`\|**发布：**2026-01-07
 
 | 平台        | 建筑学         | 下载                                                                                                                              |
 | --------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS** | 苹果硅         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
-| **macOS** | 英特尔         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
-| **Linux** | x64（应用程序图像） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
-| **Linux** | x64（Debian） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
-| **视窗**    | 哈什奇         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+| **macOS** | 苹果硅         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macOS** | 英特尔         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **Linux** | x64（应用程序图像） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **Linux** | x64（Debian） | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **视窗**    | 哈什奇         | [下载](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
 
 [查看所有版本](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -205,7 +205,7 @@ bun install && bun run tauri:dev
 
 ## 🛣️ 接下来是什么
 
-**2026 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2026：**模拟交易 • 多投资组合管理 • 移动应用程序 • 社交交易**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
+**2026 年第一季度：**增强的实时流 • 高级回溯测试 • 期权策略构建器 • 50 多个人工智能代理**2026 年 5 月：**模拟交易 • 多投资组合管理 • 移动应用程序 • 社交交易**未来：**机构功能 • 编程 API • ML 培训 UI • 白标解决方案
 
 * * *
 

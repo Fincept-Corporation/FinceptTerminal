@@ -24,15 +24,15 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 
 ## 📥 Laden Sie die neueste Version herunter
 
-**Version:**`v3.1.1`\|**Freigegeben:**2026-01-06
+**Version:**`v3.1.3`\|**Freigegeben:**2026-01-07
 
 | Plattform   | Architektur    | Herunterladen                                                                                                                              |
 | ----------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **macOS**   | Apple Silicon  | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
-| **macOS**   | Intel          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
-| **Linux**   | x64 (AppImage) | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
-| **Linux**   | x64 (Debian)   | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
-| **Windows** | hshch          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+| **macOS**   | Apple Silicon  | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macOS**   | Intel          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **Linux**   | x64 (AppImage) | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **Linux**   | x64 (Debian)   | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **Windows** | hshch          | [Herunterladen](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
 
 [Alle Veröffentlichungen anzeigen](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -87,7 +87,7 @@ Hochmoderne Financial-Intelligence-Plattform mit Analysen auf CFA-Ebene, KI-Auto
 </td>
 <td width="50%" valign="top">
 
-### **🤖 AI-Powered Automation**
+### **🤖 KI-gestützte Automatisierung**
 
 ![Chat](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Chat.png)
 
@@ -205,7 +205,7 @@ bun install && bun run tauri:dev
 
 ## 🛣️ Was kommt als nächstes?
 
-**Q1 2026:**Verbessertes Echtzeit-Streaming • Erweitertes Backtesting • Optionsstrategie-Builder • Über 50 KI-Agenten**2026:**Papierhandel • Multi-Portfolio-Management • Mobile App • Social Trading**Zukunft:**Institutionelle Funktionen • Programmatische API • Benutzeroberfläche für ML-Training • White-Label-Lösungen
+**Q1 2026:**Verbessertes Echtzeit-Streaming • Erweitertes Backtesting • Optionsstrategie-Builder • Über 50 KI-Agenten**Mai 2026:**Papierhandel • Multi-Portfolio-Management • Mobile App • Social Trading**Zukunft:**Institutionelle Merkmale • Programmatische API • Benutzeroberfläche für ML-Training • White-Label-Lösungen
 
 * * *
 
@@ -233,7 +233,7 @@ Wir gestalten die Zukunft der Finanzanalyse – gemeinsam.
 
 ### Kommerzielle Lizenz
 
--   💼 Erforderlich für proprietäre/SaaS-Nutzung ohne Open-Source-Änderungen
+-   💼 Erforderlich für proprietäre/SaaS-Nutzung ohne Open-Sourcing-Änderungen
 -   📞 Kontakt:**[support@fincept.in](mailto:support@fincept.in)**
 -   📄 Einzelheiten:[Leitfaden für kommerzielle Lizenzen](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)
 

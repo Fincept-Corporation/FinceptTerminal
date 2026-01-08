@@ -24,15 +24,15 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 
 ## 📥 최신 릴리스 다운로드
 
-**버전:**`v3.1.1`\|**출시된:**2026-01-06
+**버전:**`v3.1.3`\|**출시된:**2026-01-07
 
 | 플랫폼       | 건축학       | 다운로드                                                                                                                              |
 | --------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS** | 애플실리콘     | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
-| **macOS** | 인텔        | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
-| **리눅스**   | x64(앱이미지) | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
-| **리눅스**   | x64(데비안)  | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
-| **윈도우**   | 쉿         | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+| **macOS** | 애플실리콘     | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macOS** | 인텔        | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **리눅스**   | x64(앱이미지) | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **리눅스**   | x64(데비안)  | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **윈도우**   | 쉿         | [다운로드](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
 
 [모든 릴리스 보기](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -114,7 +114,7 @@ CFA 수준 분석, AI 자동화 및 무제한 데이터 연결을 갖춘 최첨�
 <tr>
 <td width="50%" valign="top">
 
-### **🌐 무제한 데이터 액세스**
+### **🌐 Unlimited Data Access**
 
 ![Markets](https://raw.githubusercontent.com/Fincept-Corporation/FinceptTerminal/main/images/Markets.png)
 
@@ -205,7 +205,7 @@ bun install && bun run tauri:dev
 
 ## 🛣️ 다음은 무엇입니까?
 
-**2026년 1분기:**향상된 실시간 스트리밍 • 고급 백테스팅 • 옵션 전략 빌더 • 50개 이상의 AI 에이전트**2026년:**서류 거래 • 다중 포트폴리오 관리 • 모바일 앱 • 소셜 트레이딩**미래:**기관 기능 • 프로그래밍 방식 API • ML 교육 UI • 화이트 라벨 솔루션
+**2026년 1분기:**향상된 실시간 스트리밍 • 고급 백테스팅 • 옵션 전략 빌더 • 50개 이상의 AI 에이전트**2026년 5월:**서류 거래 • 다중 포트폴리오 관리 • 모바일 앱 • 소셜 트레이딩**미래:**기관 기능 • 프로그래밍 방식 API • ML 교육 UI • 화이트 라벨 솔루션
 
 * * *
 

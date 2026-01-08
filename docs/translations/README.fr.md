@@ -24,15 +24,15 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 
 ## 📥 Téléchargez la dernière version
 
-**Version:**`v3.1.1`\|**Libéré:**2026-01-06
+**Version:**`v3.1.3`\|**Libéré:**2026-01-07
 
 | Plate-forme  | Architecture   | Télécharger                                                                                                                              |
 | ------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS**    | Pomme Silicium | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
-| **macOS**    | Intel          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
-| **Linux**    | x64 (AppImage) | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
-| **Linux**    | x64 (Debian)   | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
-| **Fenêtres** | hshch          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+| **macOS**    | Pomme Silicium | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macOS**    | Intel          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **Linux**    | x64 (AppImage) | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **Linux**    | x64 (Debian)   | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **Fenêtres** | hshch          | [Télécharger](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
 
 [Voir toutes les versions](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -51,7 +51,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 | 🌐**Accès aux données** | Plus de 100 connecteurs (DBnomics, Polygon, Kraken, PostgreSQL, Kafka) • Mappeur d'API personnalisé • Aucune restriction de données                   | [Adaptateurs de données](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/data-sources/adapters)                                                                                                                      |
 | 🔗**Inter-domaine**     | Intégrer la chaîne d'approvisionnement → portefeuille • Géopolitique → actions • Maritime → macro • Vos données, à votre façon                        | [Système de flux de travail](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)                                                                                                                            |
 | 🎨**Flux de travail**   | Éditeur de nœuds visuels • Agents Python • Outils MCP • Automatisation sans code                                                                      | [Nœuds personnalisés](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/node-editor)•[Serveurs MCP](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs/mcp) |
-| 🚢**Intelligence**      | 3D maritime tracking • Satellite monitoring • Geopolitical frameworks • Trade route analysis                                                          | [Onglet Maritime](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                                   |
+| 🚢**Intelligence**      | Suivi maritime 3D • Surveillance par satellite • Cadres géopolitiques • Analyse des routes commerciales                                               | [Onglet Maritime](https://github.com/Fincept-Corporation/FinceptTerminal/tree/main/fincept-terminal-desktop/src/components/tabs)                                                                                                                                                   |
 | 💰**Tarifs**            | Gratuit et Open Source (AGPL-3.0) • Licences commerciales disponibles                                                                                 | [Référentiel complet](https://github.com/Fincept-Corporation/FinceptTerminal)•[Licence commerciale](https://github.com/Fincept-Corporation/FinceptTerminal/blob/main/docs/COMMERCIAL_LICENSE.md)                                                                                   |
 
 * * *
@@ -78,7 +78,7 @@ Plateforme de renseignement financier de pointe avec analyses de niveau CFA, aut
 -   Modèles de remise de dividendes
 -   Multiples et revenus résiduels
 
-**Produits dérivés et risques**
+**Produits dérivés et risque**
 
 -   Prix ​​des options et Grecs
 -   Stratégies de couverture
@@ -205,7 +205,7 @@ bun install && bun run tauri:dev
 
 ## 🛣️ Quelle est la prochaine étape
 
-**T1 2026 :**Streaming en temps réel amélioré • Backtesting avancé • Générateur de stratégies d'options • Plus de 50 agents IA**2026 :**Trading papier • Gestion multi-portefeuilles • Application mobile • Trading social**Avenir:**Fonctionnalités institutionnelles • API programmatique • Interface utilisateur de formation ML • Solutions en marque blanche
+**T1 2026 :**Streaming en temps réel amélioré • Backtesting avancé • Générateur de stratégies d'options • Plus de 50 agents IA**Mai 2026 :**Trading papier • Gestion multi-portefeuilles • Application mobile • Trading social**Avenir:**Fonctionnalités institutionnelles • API programmatique • Interface utilisateur de formation ML • Solutions en marque blanche
 
 * * *
 

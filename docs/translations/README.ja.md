@@ -24,15 +24,15 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 
 ## 📥 最新リリースをダウンロード
 
-**バージョン:**`v3.1.1`\|**リリース:**2026-01-06
+**バージョン:**`v3.1.3`\|**リリース:**2026-01-07
 
 | プラットフォーム  | 建築            | ダウンロード                                                                                                                              |
 | --------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| **macOS** | アップルシリコン      | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
-| **macOS** | インテル          | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
-| **Linux** | x64 (アプリイメージ) | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
-| **Linux** | x64 (Debian)  | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
-| **窓**     | ふーん           | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.1/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
+| **macOS** | アップルシリコン      | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-arm64.dmg)    |
+| **macOS** | インテル          | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-macOS-x64.dmg)      |
+| **Linux** | x64 (アプリイメージ) | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.AppImage) |
+| **Linux** | x64 (Debian)  | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Linux-x64.deb)      |
+| **窓**     | ふーん           | [ダウンロード](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.3/FinceptTerminal-v3.1.0-Windows-x64.msi)    |
 
 [すべてのリリースを表示](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
@@ -42,7 +42,7 @@ CFA レベルの分析、AI 自動化、無制限のデータ接続を備えた�
 
 ## 🎯 当社の特徴
 
-**フィンセプトターミナル**は、従来のソフトウェアによる制限を拒否する人々のために構築されたオープンソースの金融プラットフォームです。私たちは次の点で競争します**分析の深さ**そして**データへのアクセシビリティ**—インサイダー情報や独占フィードではありません。
+**フィンセプトターミナル**は、従来のソフトウェアによる制限を拒否する人のために構築されたオープンソースの金融プラットフォームです。私たちは次の点で競争します**分析の深さ**そして**データへのアクセシビリティ**—インサイダー情報や独占フィードではありません。
 
 | **特徴**         | **フィンセプトターミナル**                                                                     | **ソースコード**                                                                                                                                                                                                                                                        |
 | -------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -205,7 +205,8 @@ bun install && bun run tauri:dev
 
 ## 🛣️ 次は何ですか
 
-**2026 年第 1 四半期:**強化されたリアルタイム ストリーミング • 高度なバックテスト • オプション戦略ビルダー • 50 以上の AI エージェント**2026年:**ペーパートレーディング • マルチポートフォリオ管理 • モバイルアプリ • ソーシャルトレーディング**未来：**制度上の機能 • プログラマティック API • ML トレーニング UI • ホワイトラベル ソリューション
+**2026 年第 1 四半期:**強化されたリアルタイム ストリーミング • 高度なバックテスト • オプション戦略ビルダー • 50 以上の AI エージェント**2026 年 5 月:** Paper trading • Multi-portfolio management • Mobile app • Social trading
+**未来：**制度上の機能 • プログラマティック API • ML トレーニング UI • ホワイトラベル ソリューション
 
 * * *
 
@@ -215,9 +216,9 @@ bun install && bun run tauri:dev
 
 **貢献する：**新しいデータコネクタ • AI エージェント • 分析モジュール • ドキュメント • 翻訳
 
-**プロジェクトは初めてですか?**まずは私たちのものから始めましょう[開発者向けウォークスルー](docs/DEVELOPER_WALKTHROUGH.md)コードベースの完全なガイドについては、こちらをご覧ください。
+**プロジェクトは初めてですか?**まずは私たちのものから始めましょう[開発者向けチュートリアル](docs/DEVELOPER_WALKTHROUGH.md)コードベースの完全なガイドについては、こちらをご覧ください。
 
-[貢献ガイド](docs/CONTRIBUTING.md)•[開発者向けウォークスルー](docs/DEVELOPER_WALKTHROUGH.md)•[バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
+[貢献ガイド](docs/CONTRIBUTING.md)•[開発者向けチュートリアル](docs/DEVELOPER_WALKTHROUGH.md)•[バグを報告する](https://github.com/Fincept-Corporation/FinceptTerminal/issues)•[リクエスト機能](https://github.com/Fincept-Corporation/FinceptTerminal/discussions)
 
 * * *
 
