@@ -1,7 +1,4 @@
 {
-  "header": {
-    "title": "FINCEPT PROFESSIONAL"
-  },
   "navigation": {
     "dashboard": "डैशबोर्ड",
     "markets": "बाजार",
@@ -11,14 +8,10 @@
     "watchlist": "वॉचलिस्ट",
     "research": "रिसर्च",
     "screener": "स्क्रीनर",
-    "trading": "ट्रेडिंग",
     "chat": "AI Chat",
     "agents": "एजेंट",
     "settings": "सेटिंग्स",
-    "profile": "प्रोफ़ाइल",
-    "forum": "फ़ोरम",
-    "help": "सहायता",
-    "logout": "लॉगआउट"
+    "profile": "प्रोफ़ाइल"
   },
   "functionKeys": {
     "f1": "डैश",
@@ -34,16 +27,7 @@
     "f11": "फ़ुल",
     "f12": "प्रोफ"
   },
-  "status": {
-    "connected": "जुड़ा हुआ",
-    "disconnected": "डिस्कनेक्ट",
-    "loading": "लोड हो रहा है...",
-    "error": "त्रुटि",
-    "ready": "तैयार"
-  },
   "labels": {
-    "moreTabs": "टूलबार मेन्यू में अधिक टैब",
-    "enterCommand": "कमांड दर्ज करें",
-    "search": "खोज"
+    "moreTabs": "टूलबार मेन्यू में अधिक टैब"
   }
 }

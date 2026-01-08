@@ -1,95 +1,27 @@
 {
-    "title": "BACKTESTING ENGINE",
-    "header": {
-        "strategy": "STRATEGY",
-        "results": "RESULTS",
-        "trades": "TRADES"
-    },
-    "toolbar": {
-        "run": "Run Backtest",
-        "running": "Running...",
-        "stop": "STOP",
-        "reset": "RESET",
-        "export": "EXPORT RESULTS",
-        "refresh": "Refresh"
-    },
-    "config": {
-        "symbolTimeframe": "Symbol & Timeframe",
-        "symbol": "Symbol",
-        "stockTicker": "Stock ticker to backtest",
-        "startDate": "Start Date",
-        "endDate": "End Date",
-        "initialCapital": "Initial Capital",
-        "strategy": "Strategy",
-        "parameters": "Parameters"
-    },
-    "sections": {
-        "strategyConfig": "Strategy Configuration",
-        "strategyType": "Strategy Type",
-        "strategyParams": "Strategy Parameters",
-        "backtestResults": "Backtest Results",
-        "advancedSettings": "Advanced Settings",
-        "advancedNote": "Advanced options for Backtesting.py provider"
-    },
-    "advanced": {
-        "commission": "Commission (decimal)",
-        "tradeOnClose": "Trade on Close",
-        "hedging": "Hedging",
-        "exclusiveOrders": "Exclusive Orders",
-        "margin": "Margin"
-    },
-    "strategies": {
-        "sma": "SMA Crossover",
-        "rsi": "RSI Strategy",
-        "macd": "MACD Strategy",
-        "bollinger": "Bollinger Bands",
-        "custom": "Custom Strategy"
-    },
-    "smaParams": {
-        "fastPeriod": "Fast Period",
-        "slowPeriod": "Slow Period",
-        "fastNote": "Short-term moving average",
-        "slowNote": "Long-term moving average"
-    },
-    "results": {
-        "totalReturn": "Total Return",
-        "sharpeRatio": "Sharpe Ratio",
-        "maxDrawdown": "Max Drawdown",
-        "winRate": "Win Rate",
-        "totalTrades": "Total Trades",
-        "profitFactor": "Profit Factor",
-        "configurePrompt": "Configure your backtest and click \"Run Backtest\" to see results"
-    },
-    "trades": {
-        "date": "Date",
-        "type": "Type",
-        "price": "Price",
-        "quantity": "Quantity",
-        "pnl": "P&L"
-    },
-    "status": {
-        "ready": "Ready",
-        "running": "Running...",
-        "completed": "Completed",
-        "error": "Error"
-    },
-    "messages": {
-        "backtestStarted": "Backtest started",
-        "backtestCompleted": "Backtest completed",
-        "backtestError": "Backtest failed"
-    },
-    "visual": {
-        "priceData": "Price Data",
-        "maIndicator": "MA Indicator",
-        "condition": "Condition",
-        "buyOrder": "Buy Order",
-        "sellOrder": "Sell Order",
-        "addBlocksPrompt": "Click blocks above to add them to your strategy",
-        "remove": "Remove",
-        "generateCode": "Generate Code from Blocks"
-    },
-    "template": {
-        "strategyTemplates": "Strategy Templates",
-        "apply": "Apply Template"
-    }
+  "title": "BACKTESTING ENGINE",
+  "toolbar": {
+    "run": "Run Backtest"
+  },
+  "config": {
+    "symbolTimeframe": "Symbol & Timeframe",
+    "symbol": "Symbol",
+    "stockTicker": "Stock ticker to backtest",
+    "startDate": "Start Date",
+    "endDate": "End Date",
+    "initialCapital": "Initial Capital"
+  },
+  "sections": {
+    "strategyConfig": "Strategy Configuration",
+    "strategyType": "Strategy Type",
+    "strategyParams": "Strategy Parameters",
+    "backtestResults": "Backtest Results",
+    "advancedSettings": "Advanced Settings"
+  },
+  "smaParams": {
+    "fastPeriod": "Fast Period",
+    "slowPeriod": "Slow Period",
+    "fastNote": "Short-term moving average",
+    "slowNote": "Long-term moving average"
+  }
 }

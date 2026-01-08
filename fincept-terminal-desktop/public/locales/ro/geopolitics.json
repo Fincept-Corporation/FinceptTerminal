@@ -1,59 +1,6 @@
 {
-    "title": "GEOPOLITICĂ",
-    "header": {
-        "overview": "PREZENTARE",
-        "regions": "REGIUNI",
-        "analysis": "ANALIZĂ",
-        "alerts": "ALERTE"
-    },
-    "regions": {
-        "global": "Global",
-        "northAmerica": "America de Nord",
-        "europe": "Europa",
-        "asia": "Asia-Pacific",
-        "middleEast": "Orientul Mijlociu",
-        "africa": "Africa",
-        "latam": "America Latină"
-    },
-    "categories": {
-        "conflict": "Conflicte",
-        "sanctions": "Sancțiuni",
-        "trade": "Relații comerciale",
-        "diplomacy": "Diplomație",
-        "elections": "Alegeri",
-        "policy": "Schimbări politice"
-    },
-    "risk": {
-        "level": "Nivel de risc",
-        "high": "Ridicat",
-        "medium": "Mediu",
-        "low": "Scăzut",
-        "critical": "Critic",
-        "stable": "Stabil"
-    },
-    "impact": {
-        "economic": "Impact economic",
-        "market": "Impact pe piață",
-        "trade": "Impact comercial",
-        "currency": "Impact valutar"
-    },
-    "timeline": {
-        "latest": "Cel mai recent",
-        "thisWeek": "Săptămâna aceasta",
-        "thisMonth": "Luna aceasta",
-        "upcoming": "Următor"
-    },
-    "actions": {
-        "subscribe": "Abonează-te",
-        "export": "Exportă",
-        "share": "Distribuie",
-        "setAlert": "Setează alertă",
-        "filter": "Filtrează"
-    },
-    "messages": {
-        "loading": "Se încarcă datele...",
-        "noEvents": "Fără evenimente",
-        "updated": "Actualizat",
-        "breaking": "Urgent"
-    }
+  "title": "GEOPOLITICĂ",
+  "messages": {
+    "loading": "Se încarcă datele..."
+  }
 }

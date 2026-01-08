@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "Yükleniyor...",
     "error": "Hata",
-    "configure": "Yapılandır",
-    "refresh": "Yenile",
-    "remove": "Kaldır",
     "globalIndices": "GLOBAL ENDEKSLER - EN İYİ 12",
     "forex": "FOREX ÇİFTLERİ",
     "crypto": "KRİPTO PARALAR",
     "commodities": "EMTİALAR",
-    "bonds": "TAHVİLLER",
-    "etfs": "ETF'ler",
     "news": "HABERLER",
     "forum": "FORUM",
     "watchlist": "İZLEME LİSTESİ",
-    "maritime": "DENİZCİLİK",
     "index": "ENDEKS",
     "symbol": "SEMBOL",
-    "name": "İSİM",
     "price": "FİYAT",
     "change": "DEĞ",
     "percentChange": "%DEĞ",
-    "high": "YÜKSEK",
-    "low": "DÜŞÜK",
     "noIndexData": "Endeks verisi yok",
     "noForexData": "Forex verisi yok",
     "noCryptoData": "Kripto verisi yok",
     "noCommoditiesData": "Emtia verisi yok",
-    "noNewsData": "Haber yok",
     "noForumPosts": "Forum postu yok",
     "noStocksInWatchlist": "Listede hisse yok",
     "noWatchlistSelected": "Liste seçilmedi",
@@ -51,7 +41,8 @@
     "routes": "ROTALAR",
     "vol24h": "HCM 24S",
     "topTradeCorridors": "ANA TİCARET KORİDORLARI",
-    "ships": "gemi"
+    "ships": "gemi",
+    "unknown": "[TR] Unknown widget type"
   },
   "tips": {
     "drag": "Widget'ları yeniden düzenlemek için sürükleyin",
@@ -74,6 +65,11 @@
     "custom": "Özel",
     "empty": "Boş",
     "active": "AKTİF",
-    "cache": "Önbellek: ETKİN"
+    "cache": "Önbellek: ETKİN",
+    "label": "[TR] Status"
+  },
+  "messages": {
+    "layoutSaved": "[TR] Dashboard layout saved!",
+    "resetConfirm": "[TR] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

@@ -1,84 +1,23 @@
 {
-    "title": "เบราว์เซอร์ซีรีส์ FRED",
-    "header": {
-        "title": "ตัวสำรวจข้อมูล FRED",
-        "filters": "ตัวกรอง",
-        "results": "ผลลัพธ์",
-        "saved": "หน้าจอที่บันทึก",
-        "presets": "ค่าที่ตั้งไว้"
-    },
-    "apiKey": {
-        "required": "ต้องใช้ API KEY",
-        "configure": "กำหนดค่า FRED API key ของคุณใน การตั้งค่า → ข้อมูลประจำตัว เพื่อเข้าถึงข้อมูลเศรษฐกิจ",
-        "getKey": "รับ API key ฟรีที่",
-        "addToSettings": "เพิ่มไปยัง การตั้งค่า → ข้อมูลประจำตัว → FRED_API_KEY",
-        "saveAndReload": "บันทึกและโหลดแท็บนี้ใหม่",
-        "tip": "ตรวจสอบให้แน่ใจว่าคุณได้กำหนดค่า FRED API key ใน การตั้งค่า → ข้อมูลประจำตัว"
-    },
-    "form": {
-        "seriesIds": "รหัสซีรีส์",
-        "startDate": "วันที่เริ่มต้น",
-        "endDate": "วันที่สิ้นสุด",
-        "quickAdd": "เพิ่มด่วน"
-    },
-    "buttons": {
-        "fetch": "ดึงข้อมูล",
-        "loading": "กำลังโหลด",
-        "browse": "เรียกดูซีรีส์",
-        "done": "เสร็จ"
-    },
-    "chart": {
-        "title": "กราฟอนุกรมเวลา",
-        "emptyState": "ใส่รหัสซีรีส์และคลิก ดึงข้อมูล เพื่อแสดงผล",
-        "trySuggestion": "ลองค้นหา GDP, UNRATE หรือ CPIAUCSL",
-        "waiting": "กรุณารอขณะดึงข้อมูลจาก FRED...",
-        "errorFetching": "เกิดข้อผิดพลาดในการดึงข้อมูล"
-    },
-    "filters": {
-        "add": "เพิ่มตัวกรอง",
-        "clear": "ล้างทั้งหมด",
-        "reset": "รีเซ็ต",
-        "apply": "ใช้ตัวกรอง"
-    },
-    "criteria": {
-        "marketCap": "มูลค่าตลาด",
-        "price": "ราคา",
-        "volume": "ปริมาณ",
-        "pe": "P/E",
-        "eps": "EPS",
-        "dividend": "ผลตอบแทนเงินปันผล",
-        "beta": "เบต้า",
-        "sector": "เซกเตอร์",
-        "industry": "อุตสาหกรรม",
-        "country": "ประเทศ",
-        "exchange": "ตลาด"
-    },
-    "operators": {
-        "equals": "เท่ากับ",
-        "greater": "มากกว่า",
-        "less": "น้อยกว่า",
-        "between": "ระหว่าง",
-        "contains": "มี"
-    },
-    "results": {
-        "symbol": "สัญลักษณ์",
-        "name": "ชื่อ",
-        "price": "ราคา",
-        "change": "เปลี่ยนแปลง",
-        "volume": "ปริมาณ",
-        "marketCap": "มูลค่าตลาด",
-        "matches": "ผลลัพธ์ที่พบ"
-    },
-    "actions": {
-        "save": "บันทึกหน้าจอ",
-        "load": "โหลดหน้าจอ",
-        "export": "ส่งออกผลลัพธ์",
-        "addToWatchlist": "เพิ่มลงรายการติดตาม"
-    },
-    "messages": {
-        "loading": "กำลังกรองหุ้น...",
-        "noResults": "ไม่มีหุ้นที่ตรงกับเกณฑ์",
-        "saved": "บันทึกหน้าจอสำเร็จ",
-        "applied": "ใช้ตัวกรองแล้ว"
-    }
+  "title": "เบราว์เซอร์ซีรีส์ FRED",
+  "header": {
+    "title": "ตัวสำรวจข้อมูล FRED"
+  },
+  "apiKey": {
+    "required": "ต้องใช้ API KEY"
+  },
+  "form": {
+    "seriesIds": "รหัสซีรีส์",
+    "quickAdd": "เพิ่มด่วน"
+  },
+  "buttons": {
+    "fetch": "ดึงข้อมูล",
+    "loading": "กำลังโหลด",
+    "browse": "เรียกดูซีรีส์"
+  },
+  "chart": {
+    "title": "กราฟอนุกรมเวลา",
+    "emptyState": "ใส่รหัสซีรีส์และคลิก ดึงข้อมูล เพื่อแสดงผล",
+    "trySuggestion": "ลองค้นหา GDP, UNRATE หรือ CPIAUCSL"
+  }
 }

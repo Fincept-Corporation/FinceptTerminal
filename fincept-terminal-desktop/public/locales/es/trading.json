@@ -1,76 +1,8 @@
 {
-    "title": "TRADING",
-    "header": {
-        "orders": "ÓRDENES",
-        "positions": "POSICIONES",
-        "history": "HISTORIAL",
-        "settings": "CONFIGURACIÓN",
-        "terminal": "TERMINAL FINCEPT",
-        "selectBroker": "SELECCIONAR BROKER",
-        "paper": "PAPEL",
-        "live": "EN VIVO",
-        "watchlist": "LISTA DE SEGUIMIENTO",
-        "orderbook": "LIBRO DE ÓRDENES",
-        "trades": "OPERACIONES",
-        "stats": "ESTADÍSTICAS",
-        "features": "CARACTERÍSTICAS",
-        "crossExchange": "CROSS-EXCHANGE",
-        "chart": "GRÁFICO",
-        "depth": "PROFUNDIDAD",
-        "volume": "VOLUMEN",
-        "aiAgents": "AGENTES IA",
-        "leaderboard": "CLASIFICACIÓN",
-        "modelChat": "CHAT MODELO"
-    },
-    "orderTypes": {
-        "market": "Mercado",
-        "limit": "Límite",
-        "stop": "Stop",
-        "stopLimit": "Stop Límite",
-        "trailingStop": "Trailing Stop"
-    },
-    "actions": {
-        "buy": "COMPRAR",
-        "sell": "VENDER",
-        "cancel": "Cancelar",
-        "modify": "Modificar",
-        "close": "Cerrar",
-        "closeAll": "Cerrar Todo"
-    },
-    "form": {
-        "symbol": "Símbolo",
-        "quantity": "Cantidad",
-        "price": "Precio",
-        "stopPrice": "Precio Stop",
-        "takeProfit": "Toma de Ganancias",
-        "stopLoss": "Stop Loss",
-        "leverage": "Apalancamiento"
-    },
-    "position": {
-        "openPrice": "Precio Apertura",
-        "currentPrice": "Precio Actual",
-        "pnl": "P&L",
-        "pnlPercent": "P&L %",
-        "margin": "Margen",
-        "size": "Tamaño"
-    },
-    "order": {
-        "pending": "Pendiente",
-        "filled": "Ejecutada",
-        "cancelled": "Cancelada",
-        "rejected": "Rechazada",
-        "partial": "Parcialmente Ejecutada"
-    },
-    "time": {
-        "gtc": "Válida Hasta Cancelar",
-        "day": "Orden del Día",
-        "ioc": "Inmediata o Cancelar",
-        "fok": "Ejecutar o Anular"
-    },
-    "messages": {
-        "orderPlaced": "Orden ejecutada exitosamente",
-        "orderFailed": "Orden fallida",
-        "confirmOrder": "¿Confirmar esta orden?",
-        "noPositions": "Sin posiciones abiertas"
-    }
+  "header": {
+    "terminal": "TERMINAL FINCEPT",
+    "selectBroker": "SELECCIONAR BROKER",
+    "paper": "PAPEL",
+    "live": "EN VIVO"
+  }
 }

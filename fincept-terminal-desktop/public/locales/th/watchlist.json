@@ -1,75 +1,25 @@
 {
-    "title": "รายการติดตาม",
-    "header": {
-        "title": "มอนิเตอร์รายการติดตาม FINCEPT",
-        "myWatchlists": "รายการติดตามของฉัน",
-        "create": "สร้าง",
-        "import": "นำเข้า",
-        "export": "ส่งออก",
-        "updating": "กำลังอัปเดต",
-        "live": "สด"
-    },
-    "sidebar": {
-        "groups": "กลุ่มรายการติดตาม",
-        "new": "ใหม่",
-        "noWatchlists": "ยังไม่มีรายการติดตาม",
-        "clickNew": "คลิก ใหม่ เพื่อสร้าง",
-        "stocks": "หุ้น",
-        "marketMovers": "ตัวขับเคลื่อนตลาด",
-        "gainer": "ขึ้น",
-        "loser": "ลง",
-        "volumeLeaders": "ปริมาณสูงสุด"
-    },
-    "emptyState": {
-        "selectWatchlist": "เลือกรายการติดตามหรือสร้างใหม่เพื่อเริ่มต้น"
-    },
-    "list": {
-        "name": "ชื่อ",
-        "symbols": "สัญลักษณ์",
-        "created": "สร้างเมื่อ",
-        "updated": "อัปเดตล่าสุด",
-        "actions": "การดำเนินการ"
-    },
-    "actions": {
-        "add": "เพิ่มสัญลักษณ์",
-        "remove": "ลบ",
-        "edit": "แก้ไข",
-        "delete": "ลบ",
-        "rename": "เปลี่ยนชื่อ",
-        "duplicate": "ทำซ้ำ"
-    },
-    "form": {
-        "name": "ชื่อรายการ",
-        "description": "คำอธิบาย",
-        "symbols": "เพิ่มสัญลักษณ์",
-        "save": "บันทึก",
-        "cancel": "ยกเลิก"
-    },
-    "symbol": {
-        "price": "ราคา",
-        "change": "เปลี่ยนแปลง",
-        "volume": "ปริมาณ",
-        "marketCap": "มูลค่าตลาด",
-        "alert": "ตั้งการแจ้งเตือน"
-    },
-    "alerts": {
-        "priceAbove": "ราคาสูงกว่า",
-        "priceBelow": "ราคาต่ำกว่า",
-        "changePercent": "เปลี่ยนแปลง %",
-        "volume": "แจ้งเตือนปริมาณ"
-    },
-    "sort": {
-        "name": "ตามชื่อ",
-        "price": "ตามราคา",
-        "change": "ตามการเปลี่ยนแปลง",
-        "custom": "ลำดับกำหนดเอง"
-    },
-    "messages": {
-        "created": "สร้างรายการแล้ว",
-        "deleted": "ลบรายการแล้ว",
-        "symbolAdded": "เพิ่มสัญลักษณ์แล้ว",
-        "symbolRemoved": "ลบสัญลักษณ์แล้ว",
-        "noWatchlists": "ไม่มีรายการติดตาม",
-        "loading": "กำลังโหลด..."
-    }
+  "title": "รายการติดตาม",
+  "header": {
+    "export": "ส่งออก",
+    "updating": "กำลังอัปเดต",
+    "live": "สด"
+  },
+  "sidebar": {
+    "groups": "กลุ่มรายการติดตาม",
+    "new": "ใหม่",
+    "noWatchlists": "ยังไม่มีรายการติดตาม",
+    "clickNew": "คลิก ใหม่ เพื่อสร้าง",
+    "stocks": "หุ้น",
+    "marketMovers": "ตัวขับเคลื่อนตลาด",
+    "gainer": "ขึ้น",
+    "loser": "ลง",
+    "volumeLeaders": "ปริมาณสูงสุด"
+  },
+  "emptyState": {
+    "selectWatchlist": "เลือกรายการติดตามหรือสร้างใหม่เพื่อเริ่มต้น"
+  },
+  "list": {
+    "symbols": "สัญลักษณ์"
+  }
 }

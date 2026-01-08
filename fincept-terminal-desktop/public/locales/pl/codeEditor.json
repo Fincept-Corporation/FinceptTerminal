@@ -1,57 +1,29 @@
 {
-    "title": "EDYTOR KODU",
-    "header": {
-        "files": "PLIKI",
-        "terminal": "TERMINAL",
-        "packages": "PAKIETY"
-    },
-    "toolbar": {
-        "newFile": "NOWY PLIK",
-        "new": "NOWY",
-        "open": "OTWÓRZ",
-        "save": "ZAPISZ",
-        "run": "URUCHOM",
-        "running": "URUCHAMIANIE...",
-        "runAll": "URUCHOM WSZYSTKO",
-        "download": "POBIERZ",
-        "upload": "WYŚLIJ",
-        "clear": "WYCZYŚĆ",
-        "history": "HISTORIA"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "Edytor",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "EDYTOR FINSCRIPT",
-        "terminal": "Terminal"
-    },
-    "terminal": {
-        "output": "Wyjście",
-        "clear": "Wyczyść wyjście",
-        "running": "Uruchamianie...",
-        "completed": "Zakończono"
-    },
-    "packages": {
-        "installed": "Zainstalowane pakiety",
-        "install": "Zainstaluj pakiet",
-        "uninstall": "Odinstaluj",
-        "clickToLoad": "Kliknij aby załadować...",
-        "load": "ZAŁADUJ PAKIETY"
-    },
-    "history": {
-        "title": "HISTORIA NOTEBOOKÓW",
-        "loading": "Ładowanie historii...",
-        "empty": "Brak historii notebooków"
-    },
-    "messages": {
-        "fileSaved": "Plik zapisany",
-        "fileOpened": "Plik otwarty",
-        "executionComplete": "Wykonanie zakończone",
-        "executionError": "Błąd wykonania"
-    }
+  "title": "EDYTOR KODU",
+  "header": {
+    "packages": "PAKIETY"
+  },
+  "toolbar": {
+    "newFile": "NOWY PLIK",
+    "new": "NOWY",
+    "open": "OTWÓRZ",
+    "save": "ZAPISZ",
+    "run": "URUCHOM",
+    "running": "URUCHAMIANIE...",
+    "runAll": "URUCHOM WSZYSTKO",
+    "history": "HISTORIA"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "EDYTOR FINSCRIPT"
+  },
+  "packages": {
+    "clickToLoad": "Kliknij aby załadować...",
+    "load": "ZAŁADUJ PAKIETY"
+  },
+  "history": {
+    "title": "HISTORIA NOTEBOOKÓW",
+    "loading": "Ładowanie historii...",
+    "empty": "Brak historii notebooków"
+  }
 }

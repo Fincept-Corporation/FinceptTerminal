@@ -1,58 +1,28 @@
 {
-    "title": "PANNEAU D'AUDIT DE CONNEXION",
-    "accessDenied": "Accès administrateur requis",
-    "metrics": {
-        "dauToday": "DAU Aujourd'hui",
-        "mau": "MAU",
-        "successRate": "Taux de Réussite",
-        "failed24h": "Échecs (24h)",
-        "activeSessions": "Sessions Actives",
-        "uniqueIps": "IPs Uniques"
-    },
-    "views": {
-        "overview": "APERÇU",
-        "eventLog": "JOURNAL D'ÉVÉNEMENTS",
-        "alerts": "ALERTES",
-        "analytics": "ANALYTIQUES"
-    },
-    "activity": {
-        "recentLoginActivity": "ACTIVITÉ DE CONNEXION RÉCENTE",
-        "securityAlerts": "ALERTES DE SÉCURITÉ",
-        "noActiveAlerts": "Aucune alerte active",
-        "loginEventLog": "JOURNAL D'ÉVÉNEMENTS DE CONNEXION"
-    },
-    "table": {
-        "time": "Heure",
-        "event": "Événement",
-        "user": "Utilisateur",
-        "ipAddress": "Adresse IP",
-        "location": "Emplacement",
-        "device": "Appareil",
-        "details": "Détails"
-    },
-    "alerts": {
-        "securityIncidents": "ALERTES ET INCIDENTS DE SÉCURITÉ",
-        "noAlerts": "Aucune alerte de sécurité",
-        "dismiss": "IGNORER",
-        "blockIp": "BLOQUER IP",
-        "investigate": "ENQUÊTER"
-    },
-    "analytics": {
-        "loginsByCountry": "CONNEXIONS PAR PAYS (30 jours)",
-        "failureReasons": "RAISONS D'ÉCHEC (24h)",
-        "peakHours": "HEURES DE POINTE (UTC)",
-        "logins": "connexions"
-    },
-    "controls": {
-        "autoRefresh": "Auto-actualiser",
-        "loading": "CHARGEMENT...",
-        "refresh": "ACTUALISER"
-    },
-    "status": {
-        "admin": "Admin",
-        "dau": "DAU",
-        "status": "Statut",
-        "updating": "MISE À JOUR",
-        "ready": "PRÊT"
-    }
+  "title": "PANNEAU D'AUDIT DE CONNEXION",
+  "metrics": {
+    "dauToday": "DAU Aujourd'hui",
+    "mau": "MAU",
+    "successRate": "Taux de Réussite",
+    "failed24h": "Échecs (24h)",
+    "activeSessions": "Sessions Actives",
+    "uniqueIps": "IPs Uniques"
+  },
+  "views": {
+    "overview": "APERÇU",
+    "eventLog": "JOURNAL D'ÉVÉNEMENTS",
+    "alerts": "ALERTES",
+    "analytics": "ANALYTIQUES"
+  },
+  "activity": {
+    "recentLoginActivity": "ACTIVITÉ DE CONNEXION RÉCENTE",
+    "securityAlerts": "ALERTES DE SÉCURITÉ",
+    "noActiveAlerts": "Aucune alerte active",
+    "loginEventLog": "JOURNAL D'ÉVÉNEMENTS DE CONNEXION"
+  },
+  "controls": {
+    "autoRefresh": "Auto-actualiser",
+    "loading": "CHARGEMENT...",
+    "refresh": "ACTUALISER"
+  }
 }

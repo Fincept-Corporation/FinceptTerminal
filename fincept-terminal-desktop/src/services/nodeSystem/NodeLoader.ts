@@ -24,7 +24,7 @@ import { CodeNode as CoreCodeNode } from '../../nodes/core/Code.node';
 // Import analytics nodes
 import {
   TechnicalIndicatorsNode,
-  TechnicalIndicatorsEnhancedNode,
+  TechnicalIndicatorsPythonNode,
   PortfolioOptimizationNode,
   BacktestEngineNode,
   RiskAnalysisNode,
@@ -254,7 +254,7 @@ class NodeLoaderClass {
     try {
       const nodes = [
         { instance: new TechnicalIndicatorsNode(), name: 'TechnicalIndicatorsNode' },
-        { instance: new TechnicalIndicatorsEnhancedNode(), name: 'TechnicalIndicatorsEnhancedNode' },
+        { instance: new TechnicalIndicatorsPythonNode(), name: 'TechnicalIndicatorsPythonNode' },
         { instance: new PortfolioOptimizationNode(), name: 'PortfolioOptimizationNode' },
         { instance: new BacktestEngineNode(), name: 'BacktestEngineNode' },
         { instance: new RiskAnalysisNode(), name: 'RiskAnalysisNode' },

@@ -1,38 +1,35 @@
 {
-    "title": "মার্কেটপ্লেস",
-    "header": {
-        "browse": "ব্রাউজ",
-        "myItems": "আমার আইটেম",
-        "cart": "কার্ট"
-    },
-    "categories": {
-        "all": "সব",
-        "indicators": "ইন্ডিকেটর",
-        "strategies": "কৌশল",
-        "datasets": "ডেটাসেট",
-        "tools": "টুল"
-    },
-    "buttons": {
-        "buy": "কিনুন",
-        "addToCart": "কার্টে যোগ",
-        "install": "ইনস্টল",
-        "preview": "প্রিভিউ"
-    },
-    "product": {
-        "price": "মূল্য",
-        "rating": "রেটিং",
-        "downloads": "ডাউনলোড",
-        "author": "লেখক",
-        "version": "সংস্করণ"
-    },
-    "cart": {
-        "total": "মোট",
-        "checkout": "চেকআউট",
-        "empty": "কার্ট খালি"
-    },
-    "messages": {
-        "addedToCart": "কার্টে যোগ হয়েছে",
-        "purchased": "কেনা হয়েছে",
-        "installed": "ইনস্টল হয়েছে"
-    }
+  "title": "মার্কেটপ্লেস",
+  "header": {
+    "browse": "ব্রাউজ",
+    "myPurchases": "[BN] MY PURCHASES",
+    "upload": "[BN] UPLOAD",
+    "myDatasets": "[BN] MY DATASETS",
+    "analytics": "[BN] ANALYTICS",
+    "pricing": "[BN] PRICING",
+    "datasetsAvailable": "[BN] Datasets Available",
+    "myUploads": "[BN] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "কার্টে যোগ",
+    "inCart": "[BN] ✓ IN CART",
+    "viewDetails": "[BN] VIEW DETAILS",
+    "backToMarketplace": "[BN] BACK TO MARKETPLACE",
+    "loading": "[BN] ⟳ LOADING...",
+    "refresh": "[BN] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "রেটিং",
+    "description": "[BN] PRODUCT DESCRIPTION",
+    "users": "[BN] USERS"
+  },
+  "cart": {
+    "empty": "কার্ট খালি",
+    "title": "[BN] SHOPPING CART",
+    "items": "[BN] items"
+  },
+  "guest": {
+    "title": "[BN] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[BN] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

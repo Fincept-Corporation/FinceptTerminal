@@ -1,58 +1,28 @@
 {
-    "title": "ПАНЕЛЬ АУДИТА ВХОДА",
-    "accessDenied": "Требуется доступ администратора",
-    "metrics": {
-        "dauToday": "DAU Сегодня",
-        "mau": "MAU",
-        "successRate": "Показатель успеха",
-        "failed24h": "Неудачные (24ч)",
-        "activeSessions": "Активные сессии",
-        "uniqueIps": "Уникальные IP"
-    },
-    "views": {
-        "overview": "ОБЗОР",
-        "eventLog": "ЖУРНАЛ СОБЫТИЙ",
-        "alerts": "ОПОВЕЩЕНИЯ",
-        "analytics": "АНАЛИТИКА"
-    },
-    "activity": {
-        "recentLoginActivity": "НЕДАВНЯЯ АКТИВНОСТЬ ВХОДА",
-        "securityAlerts": "ОПОВЕЩЕНИЯ БЕЗОПАСНОСТИ",
-        "noActiveAlerts": "Нет активных оповещений",
-        "loginEventLog": "ЖУРНАЛ СОБЫТИЙ ВХОДА"
-    },
-    "table": {
-        "time": "Время",
-        "event": "Событие",
-        "user": "Пользователь",
-        "ipAddress": "IP-адрес",
-        "location": "Местоположение",
-        "device": "Устройство",
-        "details": "Детали"
-    },
-    "alerts": {
-        "securityIncidents": "ОПОВЕЩЕНИЯ И ИНЦИДЕНТЫ БЕЗОПАСНОСТИ",
-        "noAlerts": "Нет оповещений безопасности",
-        "dismiss": "ОТКЛОНИТЬ",
-        "blockIp": "БЛОКИРОВАТЬ IP",
-        "investigate": "РАССЛЕДОВАТЬ"
-    },
-    "analytics": {
-        "loginsByCountry": "ВХОДЫ ПО СТРАНАМ (30 дней)",
-        "failureReasons": "ПРИЧИНЫ ОТКАЗОВ (24ч)",
-        "peakHours": "ПИКОВЫЕ ЧАСЫ (UTC)",
-        "logins": "входы"
-    },
-    "controls": {
-        "autoRefresh": "Автообновление",
-        "loading": "ЗАГРУЗКА...",
-        "refresh": "ОБНОВИТЬ"
-    },
-    "status": {
-        "admin": "Админ",
-        "dau": "DAU",
-        "status": "Статус",
-        "updating": "ОБНОВЛЕНИЕ",
-        "ready": "ГОТОВ"
-    }
+  "title": "ПАНЕЛЬ АУДИТА ВХОДА",
+  "metrics": {
+    "dauToday": "DAU Сегодня",
+    "mau": "MAU",
+    "successRate": "Показатель успеха",
+    "failed24h": "Неудачные (24ч)",
+    "activeSessions": "Активные сессии",
+    "uniqueIps": "Уникальные IP"
+  },
+  "views": {
+    "overview": "ОБЗОР",
+    "eventLog": "ЖУРНАЛ СОБЫТИЙ",
+    "alerts": "ОПОВЕЩЕНИЯ",
+    "analytics": "АНАЛИТИКА"
+  },
+  "activity": {
+    "recentLoginActivity": "НЕДАВНЯЯ АКТИВНОСТЬ ВХОДА",
+    "securityAlerts": "ОПОВЕЩЕНИЯ БЕЗОПАСНОСТИ",
+    "noActiveAlerts": "Нет активных оповещений",
+    "loginEventLog": "ЖУРНАЛ СОБЫТИЙ ВХОДА"
+  },
+  "controls": {
+    "autoRefresh": "Автообновление",
+    "loading": "ЗАГРУЗКА...",
+    "refresh": "ОБНОВИТЬ"
+  }
 }

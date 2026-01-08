@@ -1,33 +1,19 @@
 {
-    "title": "Generador de informes",
-    "header": {
-        "templates": "Plantillas",
-        "reports": "Informes",
-        "preview": "Vista previa"
-    },
-    "toolbar": {
-        "new": "Nuevo informe",
-        "save": "Guardar",
-        "export": "Exportar",
-        "print": "Imprimir",
-        "share": "Compartir"
-    },
-    "sections": {
-        "header": "Encabezado",
-        "summary": "Resumen",
-        "charts": "Gráficos",
-        "tables": "Tablas",
-        "footer": "Pie de página"
-    },
-    "templates": {
-        "daily": "Informe diario",
-        "weekly": "Informe semanal",
-        "monthly": "Informe mensual",
-        "custom": "Personalizado"
-    },
-    "messages": {
-        "saved": "Informe guardado",
-        "exported": "Informe exportado",
-        "generating": "Generando informe..."
-    }
+  "title": "Generador de informes",
+  "header": {
+    "load": "[ES] Load",
+    "save": "[ES] Save",
+    "saving": "[ES] Saving...",
+    "exportPdf": "[ES] Export PDF",
+    "generating": "[ES] Generating..."
+  },
+  "components": {
+    "title": "[ES] ADD COMPONENTS"
+  },
+  "layout": {
+    "title": "[ES] LAYOUT"
+  },
+  "settings": {
+    "title": "[ES] SETTINGS"
+  }
 }

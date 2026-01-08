@@ -1,39 +1,17 @@
 {
-    "title": "Ghi chú",
-    "header": {
-        "notes": "Ghi chú",
-        "folders": "Thư mục",
-        "tags": "Thẻ"
-    },
-    "toolbar": {
-        "newNote": "Ghi chú mới",
-        "templates": "Mẫu",
-        "favorites": "Yêu thích",
-        "filters": "Bộ lọc",
-        "archived": "Lưu trữ"
-    },
-    "editor": {
-        "title": "Tiêu đề",
-        "content": "Nội dung",
-        "tags": "Thẻ"
-    },
-    "buttons": {
-        "save": "Lưu",
-        "delete": "Xóa",
-        "archive": "Lưu trữ",
-        "share": "Chia sẻ"
-    },
-    "messages": {
-        "saved": "Đã lưu ghi chú",
-        "deleted": "Đã xóa ghi chú",
-        "archived": "Đã lưu trữ ghi chú"
-    },
-    "search": {
-        "placeholder": "Tìm ghi chú..."
-    },
-    "stats": {
-        "total": "Tổng cộng",
-        "archived": "Đã lưu trữ",
-        "favorites": "Yêu thích"
-    }
+  "title": "Ghi chú",
+  "header": {
+    "total": "[VI] TOTAL",
+    "favorites": "[VI] FAVORITES",
+    "words": "[VI] WORDS",
+    "refresh": "[VI] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "Ghi chú mới",
+    "templates": "Mẫu",
+    "favorites": "Yêu thích",
+    "filters": "Bộ lọc",
+    "archived": "Lưu trữ",
+    "search": "[VI] Search notes, tags, tickers..."
+  }
 }

@@ -1,61 +1,6 @@
 {
-    "title": "FINCEPT 포럼",
-    "header": {
-        "trending": "인기",
-        "new": "최신",
-        "following": "팔로잉",
-        "myPosts": "내 게시물"
-    },
-    "categories": {
-        "all": "전체 주제",
-        "stocks": "주식",
-        "options": "옵션",
-        "crypto": "암호화폐",
-        "forex": "외환",
-        "strategies": "전략",
-        "general": "일반"
-    },
-    "post": {
-        "create": "게시물 작성",
-        "reply": "답글",
-        "edit": "수정",
-        "delete": "삭제",
-        "share": "공유",
-        "report": "신고",
-        "save": "저장"
-    },
-    "form": {
-        "title": "제목",
-        "content": "내용",
-        "tags": "태그",
-        "category": "카테고리",
-        "submit": "게시",
-        "cancel": "취소",
-        "preview": "미리보기"
-    },
-    "engagement": {
-        "likes": "좋아요",
-        "comments": "댓글",
-        "views": "조회",
-        "shares": "공유"
-    },
-    "user": {
-        "posts": "게시물",
-        "followers": "팔로워",
-        "following": "팔로잉",
-        "reputation": "평판",
-        "joined": "가입일"
-    },
-    "sort": {
-        "newest": "최신순",
-        "popular": "인기순",
-        "mostCommented": "댓글순",
-        "topRated": "평점순"
-    },
-    "messages": {
-        "loading": "로딩 중...",
-        "noPosts": "게시물 없음",
-        "postSuccess": "게시 성공",
-        "deleteConfirm": "삭제하시겠습니까?"
-    }
+  "title": "FINCEPT 포럼",
+  "header": {
+    "trending": "인기"
+  }
 }

@@ -98,7 +98,8 @@ export interface ConnectionMetrics {
 // ============================================================================
 
 export class WebSocketBridge {
-  private eventListeners: Map<string, UnlistenFn> = new Map();
+  // Track all listeners per event type (multiple listeners allowed)
+  private eventListeners: Map<string, Set<UnlistenFn>> = new Map();
 
   // ========================================================================
   // CONFIGURATION
@@ -150,44 +151,51 @@ export class WebSocketBridge {
   // EVENT LISTENERS
   // ========================================================================
 
-  async onTicker(callback: (data: TickerData) => void): Promise<UnlistenFn> {
-    const unlisten = await listen<TickerData>('ws_ticker', (event) => {
+  /**
+   * Helper to register a listener and track it properly (allows multiple listeners per event)
+   */
+  private async registerListener<T>(
+    eventName: string,
+    callback: (data: T) => void
+  ): Promise<UnlistenFn> {
+    const unlisten = await listen<T>(eventName, (event) => {
       callback(event.payload);
     });
-    this.eventListeners.set('ws_ticker', unlisten);
-    return unlisten;
+
+    // Track listener in set (allows multiple listeners)
+    if (!this.eventListeners.has(eventName)) {
+      this.eventListeners.set(eventName, new Set());
+    }
+    this.eventListeners.get(eventName)!.add(unlisten);
+
+    // Return a wrapped unlisten that also removes from tracking
+    return () => {
+      unlisten();
+      const listeners = this.eventListeners.get(eventName);
+      if (listeners) {
+        listeners.delete(unlisten);
+      }
+    };
+  }
+
+  async onTicker(callback: (data: TickerData) => void): Promise<UnlistenFn> {
+    return this.registerListener<TickerData>('ws_ticker', callback);
   }
 
   async onOrderBook(callback: (data: OrderBookData) => void): Promise<UnlistenFn> {
-    const unlisten = await listen<OrderBookData>('ws_orderbook', (event) => {
-      callback(event.payload);
-    });
-    this.eventListeners.set('ws_orderbook', unlisten);
-    return unlisten;
+    return this.registerListener<OrderBookData>('ws_orderbook', callback);
   }
 
   async onTrade(callback: (data: TradeData) => void): Promise<UnlistenFn> {
-    const unlisten = await listen<TradeData>('ws_trade', (event) => {
-      callback(event.payload);
-    });
-    this.eventListeners.set('ws_trade', unlisten);
-    return unlisten;
+    return this.registerListener<TradeData>('ws_trade', callback);
   }
 
   async onCandle(callback: (data: CandleData) => void): Promise<UnlistenFn> {
-    const unlisten = await listen<CandleData>('ws_candle', (event) => {
-      callback(event.payload);
-    });
-    this.eventListeners.set('ws_candle', unlisten);
-    return unlisten;
+    return this.registerListener<CandleData>('ws_candle', callback);
   }
 
   async onStatus(callback: (data: StatusData) => void): Promise<UnlistenFn> {
-    const unlisten = await listen<StatusData>('ws_status', (event) => {
-      callback(event.payload);
-    });
-    this.eventListeners.set('ws_status', unlisten);
-    return unlisten;
+    return this.registerListener<StatusData>('ws_status', callback);
   }
 
   // ========================================================================
@@ -207,9 +215,11 @@ export class WebSocketBridge {
   // ========================================================================
 
   async cleanup(): Promise<void> {
-    // Unlisten from all events
-    for (const unlisten of this.eventListeners.values()) {
-      unlisten();
+    // Unlisten from all events (now properly handles multiple listeners per event)
+    for (const listeners of this.eventListeners.values()) {
+      for (const unlisten of listeners) {
+        unlisten();
+      }
     }
     this.eventListeners.clear();
   }

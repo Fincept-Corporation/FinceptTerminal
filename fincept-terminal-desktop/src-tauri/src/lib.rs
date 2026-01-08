@@ -1364,13 +1364,7 @@ pub fn run() {
             commands::agents::execute_python_agent,
             commands::agents::get_agent_metadata,
             commands::agents::execute_python_agent_command,
-            commands::agents::execute_agent_manager_command,
-            commands::agents::list_agents,
-            commands::agents::get_agent_config,
-            commands::agents::save_agent_config,
-            commands::agents::get_agent_providers,
-            commands::agents::execute_single_agent,
-            commands::agents::execute_agent_team,
+            commands::agents::execute_core_agent,
             // Portfolio Analytics Commands
             // Portfolio Management (CRUD operations)
             commands::portfolio_management::portfolio_create,
@@ -1763,6 +1757,14 @@ pub fn run() {
             commands::database::db_create_excel_snapshot,
             commands::database::db_get_excel_snapshots,
             commands::database::db_delete_excel_snapshot,
+            // Agent Configuration Commands
+            commands::database::db_save_agent_config,
+            commands::database::db_get_agent_configs,
+            commands::database::db_get_agent_config,
+            commands::database::db_get_agent_configs_by_category,
+            commands::database::db_delete_agent_config,
+            commands::database::db_set_active_agent_config,
+            commands::database::db_get_active_agent_config,
             // Alpha Arena Bridge Commands
             commands::alpha_arena_bridge::paper_trading_create_portfolio,
             commands::alpha_arena_bridge::paper_trading_get_portfolio,

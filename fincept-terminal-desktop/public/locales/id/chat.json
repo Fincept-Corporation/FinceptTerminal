@@ -1,46 +1,26 @@
 {
-    "title": "ASISTEN CHAT AI",
-    "header": {
-        "newChat": "CHAT BARU",
-        "history": "RIWAYAT",
-        "settings": "PENGATURAN"
-    },
-    "input": {
-        "placeholder": "Tanyakan tentang saham, pasar...",
-        "send": "Kirim",
-        "voice": "Suara"
-    },
-    "messages": {
-        "thinking": "Berpikir...",
-        "typing": "AI mengetik...",
-        "error": "Error pemrosesan",
-        "welcome": "Bagaimana saya bisa membantu analisis keuangan Anda?"
-    },
-    "suggestions": {
-        "title": "Pertanyaan yang Disarankan",
-        "stockAnalysis": "Analisis kinerja saham",
-        "marketTrends": "Tren pasar saat ini?",
-        "portfolioAdvice": "Saran optimasi portofolio"
-    },
-    "history": {
-        "title": "Riwayat Chat",
-        "today": "Hari ini",
-        "yesterday": "Kemarin",
-        "thisWeek": "Minggu ini",
-        "older": "Lebih lama",
-        "clear": "Hapus riwayat"
-    },
-    "actions": {
-        "copy": "Salin",
-        "regenerate": "Regenerasi",
-        "like": "Suka",
-        "dislike": "Tidak suka",
-        "share": "Bagikan"
-    },
-    "models": {
-        "select": "Pilih Model",
-        "gpt4": "GPT-4",
-        "claude": "Claude",
-        "gemini": "Gemini"
-    }
+  "title": "ASISTEN CHAT AI",
+  "header": {
+    "newChat": "CHAT BARU",
+    "settings": "PENGATURAN"
+  },
+  "input": {
+    "placeholder": "Tanyakan tentang saham, pasar...",
+    "send": "Kirim"
+  },
+  "messages": {
+    "thinking": "Berpikir...",
+    "typing": "AI mengetik..."
+  },
+  "history": {
+    "clearAll": "[ID] CLEAR ALL",
+    "sessions": "[ID] SESSIONS",
+    "deleteAll": "[ID] Delete all sessions"
+  },
+  "subtitle": "[ID] Financial Intelligence System",
+  "panel": {
+    "dataContexts": "[ID] DATA CONTEXTS",
+    "quickPrompts": "[ID] QUICK PROMPTS",
+    "systemInfo": "[ID] SYSTEM INFO"
+  }
 }

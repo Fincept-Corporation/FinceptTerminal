@@ -1,42 +1,32 @@
 {
-    "title": "সাপোর্ট টিকেট",
-    "header": {
-        "tickets": "টিকেট",
-        "new": "নতুন টিকেট",
-        "status": "স্ট্যাটাস"
-    },
-    "form": {
-        "subject": "বিষয়",
-        "description": "বিবরণ",
-        "priority": "অগ্রাধিকার",
-        "category": "বিভাগ"
-    },
-    "priority": {
-        "low": "কম",
-        "medium": "মাঝারি",
-        "high": "উচ্চ",
-        "urgent": "জরুরি"
-    },
-    "status": {
-        "open": "খোলা",
-        "inProgress": "প্রক্রিয়াধীন",
-        "resolved": "সমাধান হয়েছে",
-        "closed": "বন্ধ"
-    },
-    "buttons": {
-        "submit": "জমা দিন",
-        "cancel": "বাতিল",
-        "reply": "উত্তর দিন",
-        "close": "বন্ধ করুন"
-    },
-    "messages": {
-        "created": "টিকেট তৈরি হয়েছে",
-        "updated": "টিকেট আপডেট হয়েছে",
-        "closed": "টিকেট বন্ধ হয়েছে",
-        "noTickets": "কোনো টিকেট নেই"
-    },
-    "auth": {
-        "loginRequired": "টিকেট তৈরি করতে লগইন করুন",
-        "demoMode": "ডেমো মোড"
-    }
+  "title": "সাপোর্ট টিকেট",
+  "header": {
+    "tickets": "টিকেট",
+    "open": "[BN] OPEN",
+    "resolved": "[BN] RESOLVED"
+  },
+  "status": {
+    "ready": "[BN] READY",
+    "updating": "[BN] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[BN] REFRESH",
+    "createTicket": "[BN] CREATE TICKET",
+    "backToList": "[BN] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[BN] AUTHENTICATION REQUIRED",
+    "loginMessage": "[BN] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[BN] SUPPORT TICKETS",
+    "noTickets": "[BN] No support tickets found. Create your first ticket to get started!",
+    "loading": "[BN] Loading tickets..."
+  },
+  "create": {
+    "title": "[BN] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[BN] DEMO"
+  }
 }

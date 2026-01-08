@@ -1,84 +1,23 @@
 {
-    "title": "EXPLORATOR SERII FRED",
-    "header": {
-        "title": "EXPLORATOR DATE FRED",
-        "filters": "FILTRE",
-        "results": "REZULTATE",
-        "saved": "ECRANE SALVATE",
-        "presets": "PRESETĂRI"
-    },
-    "apiKey": {
-        "required": "CHEIE API NECESARĂ",
-        "configure": "Configurați cheia FRED API în Setări → Credențiale pentru a accesa datele economice.",
-        "getKey": "Obțineți cheia API gratuită la",
-        "addToSettings": "Adăugați la Setări → Credențiale → FRED_API_KEY",
-        "saveAndReload": "Salvați și reîncărcați această filă",
-        "tip": "Asigurați-vă că ați configurat cheia FRED API în Setări → Credențiale"
-    },
-    "form": {
-        "seriesIds": "ID-URI SERIE",
-        "startDate": "DATA ÎNCEPUT",
-        "endDate": "DATA SFÂRȘIT",
-        "quickAdd": "ADĂUGARE RAPIDĂ"
-    },
-    "buttons": {
-        "fetch": "PREIA",
-        "loading": "SE ÎNCARCĂ",
-        "browse": "RĂSFOIEȘTE SERII",
-        "done": "GATA"
-    },
-    "chart": {
-        "title": "GRAFIC SERIE TEMPORALĂ",
-        "emptyState": "Introduceți ID-uri serie și faceți clic PREIA pentru a vizualiza datele",
-        "trySuggestion": "Încercați să căutați GDP, UNRATE sau CPIAUCSL",
-        "waiting": "Vă rugăm așteptați în timp ce preluăm datele din FRED...",
-        "errorFetching": "Eroare la Preluarea Datelor"
-    },
-    "filters": {
-        "add": "Adaugă Filtru",
-        "clear": "Șterge Tot",
-        "reset": "Resetează",
-        "apply": "Aplică Filtre"
-    },
-    "criteria": {
-        "marketCap": "Capitalizare",
-        "price": "Preț",
-        "volume": "Volum",
-        "pe": "P/E",
-        "eps": "EPS",
-        "dividend": "Randament Dividend",
-        "beta": "Beta",
-        "sector": "Sector",
-        "industry": "Industrie",
-        "country": "Țară",
-        "exchange": "Bursă"
-    },
-    "operators": {
-        "equals": "Egal cu",
-        "greater": "Mai mare decât",
-        "less": "Mai mic decât",
-        "between": "Între",
-        "contains": "Conține"
-    },
-    "results": {
-        "symbol": "Simbol",
-        "name": "Nume",
-        "price": "Preț",
-        "change": "Schimbare",
-        "volume": "Volum",
-        "marketCap": "Capitalizare",
-        "matches": "rezultate găsite"
-    },
-    "actions": {
-        "save": "Salvează Ecran",
-        "load": "Încarcă Ecran",
-        "export": "Exportă Rezultate",
-        "addToWatchlist": "Adaugă la Watchlist"
-    },
-    "messages": {
-        "loading": "Filtrare acțiuni...",
-        "noResults": "Nicio acțiune nu corespunde",
-        "saved": "Ecran salvat cu succes",
-        "applied": "Filtre aplicate"
-    }
+  "title": "EXPLORATOR SERII FRED",
+  "header": {
+    "title": "EXPLORATOR DATE FRED"
+  },
+  "apiKey": {
+    "required": "CHEIE API NECESARĂ"
+  },
+  "form": {
+    "seriesIds": "ID-URI SERIE",
+    "quickAdd": "ADĂUGARE RAPIDĂ"
+  },
+  "buttons": {
+    "fetch": "PREIA",
+    "loading": "SE ÎNCARCĂ",
+    "browse": "RĂSFOIEȘTE SERII"
+  },
+  "chart": {
+    "title": "GRAFIC SERIE TEMPORALĂ",
+    "emptyState": "Introduceți ID-uri serie și faceți clic PREIA pentru a vizualiza datele",
+    "trySuggestion": "Încercați să căutați GDP, UNRATE sau CPIAUCSL"
+  }
 }

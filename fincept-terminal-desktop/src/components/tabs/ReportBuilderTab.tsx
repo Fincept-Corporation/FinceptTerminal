@@ -608,7 +608,7 @@ const ReportBuilderTab: React.FC = () => {
             style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
           >
             <FolderOpen size={14} />
-            Load
+            {t('header.load')}
           </button>
           <button
             onClick={saveTemplate}
@@ -617,7 +617,7 @@ const ReportBuilderTab: React.FC = () => {
             style={{ color: BLOOMBERG_COLORS.TEXT_PRIMARY }}
           >
             <Save size={14} />
-            {isSaving ? 'Saving...' : 'Save'}
+            {isSaving ? t('header.saving') : t('header.save')}
           </button>
           <button
             onClick={generatePdf}
@@ -630,7 +630,7 @@ const ReportBuilderTab: React.FC = () => {
             }}
           >
             <Download size={14} />
-            {isGenerating ? 'Generating...' : 'Export PDF'}
+            {isGenerating ? t('header.generating') : t('header.exportPdf')}
           </button>
         </div>
       </div>
@@ -642,7 +642,7 @@ const ReportBuilderTab: React.FC = () => {
           <div className="p-3">
             {/* Add Components */}
             <div className="mb-4">
-              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>ADD COMPONENTS</h3>
+              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>{t('components.title')}</h3>
               <div className="space-y-1">
                 <button
                   onClick={() => addComponent('heading')}
@@ -705,7 +705,7 @@ const ReportBuilderTab: React.FC = () => {
 
             {/* Layout Components */}
             <div className="mb-4">
-              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>LAYOUT</h3>
+              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>{t('layout.title')}</h3>
               <div className="grid grid-cols-2 gap-1">
                 <button
                   onClick={() => addComponent('section')}
@@ -744,7 +744,7 @@ const ReportBuilderTab: React.FC = () => {
 
             {/* Settings */}
             <div className="mb-4">
-              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>SETTINGS</h3>
+              <h3 className="text-xs font-bold mb-2" style={{ color: BLOOMBERG_COLORS.ORANGE }}>{t('settings.title')}</h3>
               <div className="space-y-2">
                 <div>
                   <label className="text-[9px] block mb-1" style={{ color: BLOOMBERG_COLORS.TEXT_SECONDARY }}>

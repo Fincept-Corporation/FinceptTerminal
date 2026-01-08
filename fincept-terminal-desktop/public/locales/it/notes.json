@@ -1,39 +1,17 @@
 {
-    "title": "Note",
-    "header": {
-        "notes": "Note",
-        "folders": "Cartelle",
-        "tags": "Tag"
-    },
-    "toolbar": {
-        "newNote": "Nuova nota",
-        "templates": "Modelli",
-        "favorites": "Preferiti",
-        "filters": "Filtri",
-        "archived": "Archiviate"
-    },
-    "editor": {
-        "title": "Titolo",
-        "content": "Contenuto",
-        "tags": "Tag"
-    },
-    "buttons": {
-        "save": "Salva",
-        "delete": "Elimina",
-        "archive": "Archivia",
-        "share": "Condividi"
-    },
-    "messages": {
-        "saved": "Nota salvata",
-        "deleted": "Nota eliminata",
-        "archived": "Nota archiviata"
-    },
-    "search": {
-        "placeholder": "Cerca note..."
-    },
-    "stats": {
-        "total": "Totale",
-        "archived": "Archiviate",
-        "favorites": "Preferiti"
-    }
+  "title": "Note",
+  "header": {
+    "total": "[IT] TOTAL",
+    "favorites": "[IT] FAVORITES",
+    "words": "[IT] WORDS",
+    "refresh": "[IT] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "Nuova nota",
+    "templates": "Modelli",
+    "favorites": "Preferiti",
+    "filters": "Filtri",
+    "archived": "Archiviate",
+    "search": "[IT] Search notes, tags, tickers..."
+  }
 }

@@ -1,39 +1,17 @@
 {
-    "title": "নোটস",
-    "header": {
-        "notes": "নোট",
-        "folders": "ফোল্ডার",
-        "tags": "ট্যাগ"
-    },
-    "toolbar": {
-        "newNote": "নতুন নোট",
-        "templates": "টেমপ্লেট",
-        "favorites": "প্রিয়",
-        "filters": "ফিল্টার",
-        "archived": "আর্কাইভ করা"
-    },
-    "editor": {
-        "title": "শিরোনাম",
-        "content": "বিষয়বস্তু",
-        "tags": "ট্যাগ"
-    },
-    "buttons": {
-        "save": "সংরক্ষণ",
-        "delete": "মুছুন",
-        "archive": "আর্কাইভ",
-        "share": "শেয়ার"
-    },
-    "messages": {
-        "saved": "নোট সংরক্ষিত",
-        "deleted": "নোট মুছে ফেলা হয়েছে",
-        "archived": "নোট আর্কাইভ হয়েছে"
-    },
-    "search": {
-        "placeholder": "নোট খুঁজুন..."
-    },
-    "stats": {
-        "total": "মোট",
-        "archived": "আর্কাইভ করা",
-        "favorites": "প্রিয়"
-    }
+  "title": "নোটস",
+  "header": {
+    "total": "[BN] TOTAL",
+    "favorites": "[BN] FAVORITES",
+    "words": "[BN] WORDS",
+    "refresh": "[BN] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "নতুন নোট",
+    "templates": "টেমপ্লেট",
+    "favorites": "প্রিয়",
+    "filters": "ফিল্টার",
+    "archived": "আর্কাইভ করা",
+    "search": "[BN] Search notes, tags, tickers..."
+  }
 }

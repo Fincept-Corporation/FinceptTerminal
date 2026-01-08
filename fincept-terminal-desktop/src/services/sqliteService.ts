@@ -622,6 +622,78 @@ export const getContextStorageStats = async (): Promise<any> => {
   return null;
 };
 
+// ==================== AGENT CONFIGURATIONS ====================
+
+export interface AgentConfig {
+  id: string;
+  name: string;
+  description?: string;
+  config_json: string;
+  category: string;
+  is_default: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentConfigData {
+  model?: {
+    provider: string;
+    model_id?: string;
+    temperature?: number;
+    max_tokens?: number;
+  };
+  instructions?: string;
+  tools?: string[];
+  memory?: {
+    enabled: boolean;
+    optimization_strategy?: string;
+  };
+  knowledge?: {
+    embedder?: { provider: string; model?: string };
+    vectordb?: { type: string };
+  };
+  reasoning?: {
+    strategy: string;
+    max_steps?: number;
+  };
+  output_format?: string;
+  debug?: boolean;
+}
+
+export const saveAgentConfig = async (config: Omit<AgentConfig, 'created_at' | 'updated_at'> | AgentConfig): Promise<{ success: boolean; message: string }> => {
+  const configWithTimestamps = {
+    ...config,
+    created_at: 'created_at' in config ? config.created_at : new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  return await invoke('db_save_agent_config', { config: configWithTimestamps });
+};
+
+export const getAgentConfigs = async (): Promise<AgentConfig[]> => {
+  return await invoke<AgentConfig[]>('db_get_agent_configs');
+};
+
+export const getAgentConfig = async (id: string): Promise<AgentConfig | null> => {
+  return await invoke<AgentConfig | null>('db_get_agent_config', { id });
+};
+
+export const getAgentConfigsByCategory = async (category: string): Promise<AgentConfig[]> => {
+  return await invoke<AgentConfig[]>('db_get_agent_configs_by_category', { category });
+};
+
+export const deleteAgentConfig = async (id: string): Promise<{ success: boolean; message: string }> => {
+  return await invoke('db_delete_agent_config', { id });
+};
+
+export const setActiveAgentConfig = async (id: string): Promise<{ success: boolean; message: string }> => {
+  return await invoke('db_set_active_agent_config', { id });
+};
+
+export const getActiveAgentConfig = async (): Promise<AgentConfig | null> => {
+  return await invoke<AgentConfig | null>('db_get_active_agent_config');
+};
+
 // ==================== CACHE ====================
 
 export const saveMarketDataCache = async (symbol: string, category: string, quoteData: string): Promise<void> => {
@@ -958,6 +1030,15 @@ class SqliteService {
   createOrder = createOrder;
   getPortfolioOrders = getPortfolioOrders;
   getPortfolioTrades = getPortfolioTrades;
+
+  // Agent Configurations
+  saveAgentConfig = saveAgentConfig;
+  getAgentConfigs = getAgentConfigs;
+  getAgentConfig = getAgentConfig;
+  getAgentConfigsByCategory = getAgentConfigsByCategory;
+  deleteAgentConfig = deleteAgentConfig;
+  setActiveAgentConfig = setActiveAgentConfig;
+  getActiveAgentConfig = getActiveAgentConfig;
 
   // WebSocket Provider Configs (not in Rust backend yet)
   async getWSProviderConfigs(): Promise<any[]> {

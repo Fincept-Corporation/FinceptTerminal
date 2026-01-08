@@ -1,76 +1,8 @@
 {
-    "title": "GIAO DỊCH",
-    "header": {
-        "orders": "LỆNH",
-        "positions": "VỊ THẾ",
-        "history": "LỊCH SỬ",
-        "settings": "CÀI ĐẶT",
-        "terminal": "TERMINAL FINCEPT",
-        "selectBroker": "CHỌN SÀN",
-        "paper": "MÔ PHỎNG",
-        "live": "THỰC",
-        "watchlist": "DANH SÁCH THEO DÕI",
-        "orderbook": "SỔ LỆNH",
-        "trades": "GIAO DỊCH",
-        "stats": "THỐNG KÊ",
-        "features": "TÍNH NĂNG",
-        "crossExchange": "LIÊN SÀN",
-        "chart": "BIỂU ĐỒ",
-        "depth": "ĐỘ SÂU",
-        "volume": "KHỐI LƯỢNG",
-        "aiAgents": "ĐẠI LÝ AI",
-        "leaderboard": "BẢNG XẾP HẠNG",
-        "modelChat": "CHAT MÔ HÌNH"
-    },
-    "orderTypes": {
-        "market": "Thị trường",
-        "limit": "Giới hạn",
-        "stop": "Dừng",
-        "stopLimit": "Dừng giới hạn",
-        "trailingStop": "Trailing Stop"
-    },
-    "actions": {
-        "buy": "MUA",
-        "sell": "BÁN",
-        "cancel": "Hủy",
-        "modify": "Sửa",
-        "close": "Đóng",
-        "closeAll": "Đóng tất cả"
-    },
-    "form": {
-        "symbol": "Mã",
-        "quantity": "Số lượng",
-        "price": "Giá",
-        "stopPrice": "Giá dừng",
-        "takeProfit": "Chốt lời",
-        "stopLoss": "Cắt lỗ",
-        "leverage": "Đòn bẩy"
-    },
-    "position": {
-        "openPrice": "Giá mở",
-        "currentPrice": "Giá hiện tại",
-        "pnl": "Lãi/Lỗ",
-        "pnlPercent": "Lãi/Lỗ %",
-        "margin": "Ký quỹ",
-        "size": "Kích thước"
-    },
-    "order": {
-        "pending": "Đang chờ",
-        "filled": "Đã khớp",
-        "cancelled": "Đã hủy",
-        "rejected": "Bị từ chối",
-        "partial": "Khớp một phần"
-    },
-    "time": {
-        "gtc": "Có hiệu lực đến khi hủy",
-        "day": "Lệnh trong ngày",
-        "ioc": "Ngay hoặc hủy",
-        "fok": "Tất cả hoặc không"
-    },
-    "messages": {
-        "orderPlaced": "Đặt lệnh thành công",
-        "orderFailed": "Đặt lệnh thất bại",
-        "confirmOrder": "Xác nhận lệnh này?",
-        "noPositions": "Không có vị thế mở"
-    }
+  "header": {
+    "terminal": "TERMINAL FINCEPT",
+    "selectBroker": "CHỌN SÀN",
+    "paper": "MÔ PHỎNG",
+    "live": "THỰC"
+  }
 }

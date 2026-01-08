@@ -1,57 +1,29 @@
 {
-    "title": "CODE EDITOR",
-    "header": {
-        "files": "FILES",
-        "terminal": "TERMINAL",
-        "packages": "PACKAGES"
-    },
-    "toolbar": {
-        "newFile": "NEW FILE",
-        "new": "NEW",
-        "open": "OPEN",
-        "save": "SAVE",
-        "run": "RUN CODE",
-        "running": "RUNNING...",
-        "runAll": "RUN ALL",
-        "download": "DOWNLOAD",
-        "upload": "UPLOAD",
-        "clear": "CLEAR",
-        "history": "HISTORY"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "Editor",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "FINSCRIPT EDITOR",
-        "terminal": "Terminal"
-    },
-    "terminal": {
-        "output": "Output",
-        "clear": "Clear Output",
-        "running": "Running...",
-        "completed": "Completed"
-    },
-    "packages": {
-        "installed": "Installed Packages",
-        "install": "Install Package",
-        "uninstall": "Uninstall",
-        "clickToLoad": "Click to load packages...",
-        "load": "LOAD PACKAGES"
-    },
-    "history": {
-        "title": "NOTEBOOK HISTORY",
-        "loading": "Loading history...",
-        "empty": "No notebook history yet"
-    },
-    "messages": {
-        "fileSaved": "File saved",
-        "fileOpened": "File opened",
-        "executionComplete": "Execution complete",
-        "executionError": "Execution error"
-    }
+  "title": "CODE EDITOR",
+  "header": {
+    "packages": "PACKAGES"
+  },
+  "toolbar": {
+    "newFile": "NEW FILE",
+    "new": "NEW",
+    "open": "OPEN",
+    "save": "SAVE",
+    "run": "RUN CODE",
+    "running": "RUNNING...",
+    "runAll": "RUN ALL",
+    "history": "HISTORY"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "FINSCRIPT EDITOR"
+  },
+  "packages": {
+    "clickToLoad": "Click to load packages...",
+    "load": "LOAD PACKAGES"
+  },
+  "history": {
+    "title": "NOTEBOOK HISTORY",
+    "loading": "Loading history...",
+    "empty": "No notebook history yet"
+  }
 }

@@ -1,32 +1,6 @@
 {
-    "title": "Editor de nós",
-    "header": {
-        "nodes": "Nós",
-        "connections": "Conexões",
-        "canvas": "Tela"
-    },
-    "tabs": {
-        "editor": "Editor",
-        "preview": "Visualizar"
-    },
-    "toolbar": {
-        "addNode": "Adicionar nó",
-        "delete": "Excluir",
-        "clear": "Limpar tudo",
-        "run": "Executar",
-        "save": "Salvar",
-        "load": "Carregar"
-    },
-    "nodes": {
-        "input": "Entrada",
-        "output": "Saída",
-        "process": "Processo",
-        "condition": "Condição"
-    },
-    "messages": {
-        "saved": "Gráfico salvo",
-        "loaded": "Gráfico carregado",
-        "running": "Executando...",
-        "completed": "Concluído"
-    }
+  "title": "Editor de nós",
+  "tabs": {
+    "editor": "Editor"
+  }
 }

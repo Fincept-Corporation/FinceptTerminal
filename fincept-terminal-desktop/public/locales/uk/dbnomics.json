@@ -1,30 +1,8 @@
 {
-    "title": "Дані DBnomics",
-    "header": {
-        "search": "Пошук",
-        "providers": "Постачальники",
-        "datasets": "Набори даних"
-    },
-    "form": {
-        "provider": "Постачальник",
-        "dataset": "Набір даних",
-        "series": "Серія",
-        "startDate": "Дата початку",
-        "endDate": "Дата закінчення"
-    },
-    "buttons": {
-        "fetch": "Отримати",
-        "search": "Пошук",
-        "export": "Експорт",
-        "clear": "Очистити"
-    },
-    "chart": {
-        "title": "Візуалізація даних",
-        "emptyState": "Оберіть серію для перегляду даних"
-    },
-    "messages": {
-        "loading": "Завантаження даних...",
-        "noData": "Дані не знайдено",
-        "error": "Помилка отримання даних"
-    }
+  "title": "Дані DBnomics",
+  "toolbar": {
+    "fetch": "[UK] FETCH",
+    "refresh": "[UK] REFRESH",
+    "export": "[UK] EXPORT"
+  }
 }

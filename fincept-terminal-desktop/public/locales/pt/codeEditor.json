@@ -1,57 +1,29 @@
 {
-    "title": "EDITOR DE CÓDIGO",
-    "header": {
-        "files": "ARQUIVOS",
-        "terminal": "TERMINAL",
-        "packages": "PACOTES"
-    },
-    "toolbar": {
-        "newFile": "NOVO ARQUIVO",
-        "new": "NOVO",
-        "open": "ABRIR",
-        "save": "SALVAR",
-        "run": "EXECUTAR",
-        "running": "EXECUTANDO...",
-        "runAll": "EXECUTAR TUDO",
-        "download": "BAIXAR",
-        "upload": "CARREGAR",
-        "clear": "LIMPAR",
-        "history": "HISTÓRICO"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "Editor",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "EDITOR FINSCRIPT",
-        "terminal": "Terminal"
-    },
-    "terminal": {
-        "output": "Saída",
-        "clear": "Limpar saída",
-        "running": "Executando...",
-        "completed": "Concluído"
-    },
-    "packages": {
-        "installed": "Pacotes instalados",
-        "install": "Instalar pacote",
-        "uninstall": "Desinstalar",
-        "clickToLoad": "Clique para carregar...",
-        "load": "CARREGAR PACOTES"
-    },
-    "history": {
-        "title": "HISTÓRICO DE NOTEBOOKS",
-        "loading": "Carregando histórico...",
-        "empty": "Sem histórico de notebooks"
-    },
-    "messages": {
-        "fileSaved": "Arquivo salvo",
-        "fileOpened": "Arquivo aberto",
-        "executionComplete": "Execução concluída",
-        "executionError": "Erro de execução"
-    }
+  "title": "EDITOR DE CÓDIGO",
+  "header": {
+    "packages": "PACOTES"
+  },
+  "toolbar": {
+    "newFile": "NOVO ARQUIVO",
+    "new": "NOVO",
+    "open": "ABRIR",
+    "save": "SALVAR",
+    "run": "EXECUTAR",
+    "running": "EXECUTANDO...",
+    "runAll": "EXECUTAR TUDO",
+    "history": "HISTÓRICO"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "EDITOR FINSCRIPT"
+  },
+  "packages": {
+    "clickToLoad": "Clique para carregar...",
+    "load": "CARREGAR PACOTES"
+  },
+  "history": {
+    "title": "HISTÓRICO DE NOTEBOOKS",
+    "loading": "Carregando histórico...",
+    "empty": "Sem histórico de notebooks"
+  }
 }

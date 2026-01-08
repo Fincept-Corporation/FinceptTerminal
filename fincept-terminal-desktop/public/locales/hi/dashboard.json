@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "लोड हो रहा है...",
     "error": "त्रुटि",
-    "configure": "कॉन्फ़िगर करें",
-    "refresh": "रीफ्रेश",
-    "remove": "हटाएं",
     "globalIndices": "वैश्विक सूचकांक - शीर्ष 12",
     "forex": "फ़ॉरेक्स जोड़े",
     "crypto": "क्रिप्टोकरेंसी",
     "commodities": "कमोडिटीज़",
-    "bonds": "बॉन्ड",
-    "etfs": "ETF",
     "news": "समाचार",
     "forum": "फोरम",
     "watchlist": "वॉचलिस्ट",
-    "maritime": "समुद्री",
     "index": "सूचकांक",
     "symbol": "सिम्बल",
-    "name": "नाम",
     "price": "मूल्य",
     "change": "बदलाव",
     "percentChange": "%बदलाव",
-    "high": "उच्च",
-    "low": "निम्न",
     "noIndexData": "कोई सूचकांक डेटा नहीं",
     "noForexData": "कोई फ़ॉरेक्स डेटा नहीं",
     "noCryptoData": "कोई क्रिप्टो डेटा नहीं",
     "noCommoditiesData": "कोई कमोडिटी डेटा नहीं",
-    "noNewsData": "कोई समाचार नहीं",
     "noForumPosts": "कोई पोस्ट नहीं",
     "noStocksInWatchlist": "वॉचलिस्ट में कोई स्टॉक नहीं",
     "noWatchlistSelected": "कोई वॉचलिस्ट नहीं चुनी",
@@ -51,7 +41,8 @@
     "routes": "मार्ग",
     "vol24h": "वॉल्यूम 24घ",
     "topTradeCorridors": "शीर्ष व्यापार गलियारे",
-    "ships": "जहाज"
+    "ships": "जहाज",
+    "unknown": "[HI] Unknown widget type"
   },
   "tips": {
     "drag": "विजेट को पुनर्व्यवस्थित करने के लिए खींचें",
@@ -74,6 +65,11 @@
     "custom": "कस्टम",
     "empty": "खाली",
     "active": "सक्रिय",
-    "cache": "कैश: सक्षम"
+    "cache": "कैश: सक्षम",
+    "label": "[HI] Status"
+  },
+  "messages": {
+    "layoutSaved": "[HI] Dashboard layout saved!",
+    "resetConfirm": "[HI] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

@@ -1,30 +1,8 @@
 {
-    "title": "Data DBnomics",
-    "header": {
-        "search": "Cari",
-        "providers": "Penyedia",
-        "datasets": "Dataset"
-    },
-    "form": {
-        "provider": "Penyedia",
-        "dataset": "Dataset",
-        "series": "Seri",
-        "startDate": "Tanggal mulai",
-        "endDate": "Tanggal akhir"
-    },
-    "buttons": {
-        "fetch": "Ambil",
-        "search": "Cari",
-        "export": "Ekspor",
-        "clear": "Hapus"
-    },
-    "chart": {
-        "title": "Visualisasi data",
-        "emptyState": "Pilih seri untuk melihat data"
-    },
-    "messages": {
-        "loading": "Memuat data...",
-        "noData": "Data tidak ditemukan",
-        "error": "Error mengambil data"
-    }
+  "title": "Data DBnomics",
+  "toolbar": {
+    "fetch": "[ID] FETCH",
+    "refresh": "[ID] REFRESH",
+    "export": "[ID] EXPORT"
+  }
 }

@@ -1,46 +1,9 @@
 {
-    "title": "ALPHA ARENA",
-    "header": {
-        "competition": "COMPETIȚIE",
-        "leaderboard": "CLASAMENT",
-        "decisions": "DECIZII",
-        "cycles": "CICLURI"
-    },
-    "buttons": {
-        "start": "START",
-        "stop": "STOP",
-        "refresh": "REÎMPROSPĂTEAZĂ",
-        "create": "CREEAZĂ COMPETIȚIE"
-    },
-    "form": {
-        "competitionName": "Numele competiției",
-        "symbol": "Simbol",
-        "mode": "Mod de tranzacționare",
-        "models": "Selectează modele",
-        "apiKeys": "Chei API"
-    },
-    "modes": {
-        "baseline": "De bază",
-        "monk": "Monk",
-        "situational": "Situațional",
-        "maxLeverage": "Levier maxim"
-    },
-    "leaderboard": {
-        "rank": "Poziție",
-        "model": "Model",
-        "pnl": "P&L",
-        "trades": "Tranzacții",
-        "winRate": "Rată câștig"
-    },
-    "status": {
-        "running": "RULEAZĂ",
-        "stopped": "OPRIT",
-        "waiting": "AȘTEAPTĂ",
-        "error": "EROARE"
-    },
-    "messages": {
-        "competitionStarted": "Competiție începută",
-        "competitionStopped": "Competiție oprită",
-        "noCompetition": "Nicio competiție activă"
-    }
+  "title": "ALPHA ARENA",
+  "header": {
+    "competition": "COMPETIȚIE"
+  },
+  "buttons": {
+    "create": "CREEAZĂ COMPETIȚIE"
+  }
 }

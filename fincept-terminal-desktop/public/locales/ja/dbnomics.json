@@ -1,30 +1,8 @@
 {
-    "title": "DBnomicsデータ",
-    "header": {
-        "search": "検索",
-        "providers": "プロバイダー",
-        "datasets": "データセット"
-    },
-    "form": {
-        "provider": "プロバイダー",
-        "dataset": "データセット",
-        "series": "シリーズ",
-        "startDate": "開始日",
-        "endDate": "終了日"
-    },
-    "buttons": {
-        "fetch": "取得",
-        "search": "検索",
-        "export": "エクスポート",
-        "clear": "クリア"
-    },
-    "chart": {
-        "title": "データ可視化",
-        "emptyState": "シリーズを選択してデータを表示"
-    },
-    "messages": {
-        "loading": "データを読込中...",
-        "noData": "データが見つかりません",
-        "error": "データ取得エラー"
-    }
+  "title": "DBnomicsデータ",
+  "toolbar": {
+    "fetch": "[JA] FETCH",
+    "refresh": "[JA] REFRESH",
+    "export": "[JA] EXPORT"
+  }
 }

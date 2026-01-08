@@ -48,10 +48,26 @@ export class FyersStandardAdapter extends BaseBrokerAdapter {
   private depthCallbacks: Map<string, (depth: UnifiedMarketDepth) => void> = new Map();
   private quoteCache: Map<string, UnifiedQuote> = new Map(); // Cache OHLC data from REST API
 
+  // Store unsubscribe functions for cleanup
+  private messageUnsubscribe?: () => void;
+  private connectUnsubscribe?: () => void;
+  private errorUnsubscribe?: () => void;
+  private closeUnsubscribe?: () => void;
+
+  // Configurable connection timeout (default 15s)
+  private connectionTimeoutMs = 15000;
+
   constructor() {
     super('fyers');
     this.authClient = new FyersAuth();
     this.dataWebSocket = new FyersDataWebSocket();
+  }
+
+  /**
+   * Set connection timeout
+   */
+  setConnectionTimeout(timeoutMs: number): void {
+    this.connectionTimeoutMs = timeoutMs;
   }
 
   // ==================== BROKER CAPABILITIES ====================
@@ -307,8 +323,11 @@ export class FyersStandardAdapter extends BaseBrokerAdapter {
       hasToken: !!creds.accessToken
     });
 
+    // Clean up any existing listeners before setting up new ones
+    this.cleanupWebSocketListeners();
+
     // Setup message handler BEFORE connecting
-    this.dataWebSocket.onMessage((message: DataSocketMessage) => {
+    this.messageUnsubscribe = this.dataWebSocket.onMessage((message: DataSocketMessage) => {
       console.log('[FyersStandardAdapter] Received message:', message);
 
       // Handle quote updates
@@ -333,24 +352,62 @@ export class FyersStandardAdapter extends BaseBrokerAdapter {
 
     // Wait for connection
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('WebSocket connection timeout'));
-      }, 10000);
+      let settled = false;
 
-      this.dataWebSocket.onConnect(() => {
-        clearTimeout(timeout);
-        console.log('[FyersStandardAdapter] Data WebSocket connected successfully');
-        resolve();
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          reject(new Error(`WebSocket connection timeout after ${this.connectionTimeoutMs}ms`));
+        }
+      }, this.connectionTimeoutMs);
+
+      this.connectUnsubscribe = this.dataWebSocket.onConnect(() => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          console.log('[FyersStandardAdapter] Data WebSocket connected successfully');
+          resolve();
+        }
       });
 
-      this.dataWebSocket.onError((error) => {
-        clearTimeout(timeout);
-        reject(error);
+      this.errorUnsubscribe = this.dataWebSocket.onError((error) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          reject(error);
+        }
+      });
+
+      // Setup close handler for reconnection scenarios
+      this.closeUnsubscribe = this.dataWebSocket.onClose(() => {
+        console.log('[FyersStandardAdapter] Data WebSocket connection closed');
       });
 
       // Connect Data WebSocket for market quotes in SymbolUpdate mode
       this.dataWebSocket.connect(fullAccessToken);
     });
+  }
+
+  /**
+   * Clean up WebSocket event listeners
+   */
+  private cleanupWebSocketListeners(): void {
+    if (this.messageUnsubscribe) {
+      this.messageUnsubscribe();
+      this.messageUnsubscribe = undefined;
+    }
+    if (this.connectUnsubscribe) {
+      this.connectUnsubscribe();
+      this.connectUnsubscribe = undefined;
+    }
+    if (this.errorUnsubscribe) {
+      this.errorUnsubscribe();
+      this.errorUnsubscribe = undefined;
+    }
+    if (this.closeUnsubscribe) {
+      this.closeUnsubscribe();
+      this.closeUnsubscribe = undefined;
+    }
   }
 
   subscribeOrders(callback: (order: UnifiedOrder) => void): void {
@@ -459,10 +516,18 @@ export class FyersStandardAdapter extends BaseBrokerAdapter {
   }
 
   async disconnectWebSocket(): Promise<void> {
-    this.dataWebSocket.disconnect();
+    // Clean up event listeners first
+    this.cleanupWebSocketListeners();
+
+    // Clear all callbacks
     this.quoteCallbacks.clear();
     this.depthCallbacks.clear();
-    console.log('[FyersStandardAdapter] Data WebSocket disconnected');
+    this.quoteCache.clear();
+
+    // Disconnect the WebSocket
+    this.dataWebSocket.disconnect();
+
+    console.log('[FyersStandardAdapter] Data WebSocket disconnected and cleaned up');
   }
 
   async calculateMargin(order: OrderRequest): Promise<{ required: number; available: number; leverage?: number }> {

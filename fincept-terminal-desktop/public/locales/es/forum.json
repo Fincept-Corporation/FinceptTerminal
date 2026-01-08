@@ -1,61 +1,6 @@
 {
-    "title": "FORO FINCEPT",
-    "header": {
-        "trending": "TENDENCIAS",
-        "new": "NUEVO",
-        "following": "SIGUIENDO",
-        "myPosts": "MIS PUBLICACIONES"
-    },
-    "categories": {
-        "all": "Todos los temas",
-        "stocks": "Acciones",
-        "options": "Opciones",
-        "crypto": "Cripto",
-        "forex": "Forex",
-        "strategies": "Estrategias",
-        "general": "General"
-    },
-    "post": {
-        "create": "Crear publicación",
-        "reply": "Responder",
-        "edit": "Editar",
-        "delete": "Eliminar",
-        "share": "Compartir",
-        "report": "Reportar",
-        "save": "Guardar"
-    },
-    "form": {
-        "title": "Título",
-        "content": "Contenido",
-        "tags": "Etiquetas",
-        "category": "Categoría",
-        "submit": "Publicar",
-        "cancel": "Cancelar",
-        "preview": "Vista previa"
-    },
-    "engagement": {
-        "likes": "Me gusta",
-        "comments": "Comentarios",
-        "views": "Vistas",
-        "shares": "Compartidos"
-    },
-    "user": {
-        "posts": "Publicaciones",
-        "followers": "Seguidores",
-        "following": "Siguiendo",
-        "reputation": "Reputación",
-        "joined": "Se unió"
-    },
-    "sort": {
-        "newest": "Más nuevo",
-        "popular": "Más popular",
-        "mostCommented": "Más comentado",
-        "topRated": "Mejor valorado"
-    },
-    "messages": {
-        "loading": "Cargando...",
-        "noPosts": "Sin publicaciones",
-        "postSuccess": "Publicado con éxito",
-        "deleteConfirm": "¿Eliminar esta publicación?"
-    }
+  "title": "FORO FINCEPT",
+  "header": {
+    "trending": "TENDENCIAS"
+  }
 }

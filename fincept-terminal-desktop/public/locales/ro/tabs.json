@@ -1,7 +1,4 @@
 {
-  "header": {
-    "title": "FINCEPT PROFESSIONAL"
-  },
   "navigation": {
     "dashboard": "Tablou de bord",
     "markets": "Piețe",
@@ -11,14 +8,10 @@
     "watchlist": "Listă urmărire",
     "research": "Cercetare",
     "screener": "Screener",
-    "trading": "Trading",
     "chat": "AI Chat",
     "agents": "Agenți",
     "settings": "Setări",
-    "profile": "Profil",
-    "forum": "Forum",
-    "help": "Ajutor",
-    "logout": "Deconectare"
+    "profile": "Profil"
   },
   "functionKeys": {
     "f1": "TABL",
@@ -34,16 +27,7 @@
     "f11": "FULL",
     "f12": "PROF"
   },
-  "status": {
-    "connected": "Conectat",
-    "disconnected": "Deconectat",
-    "loading": "Se încarcă...",
-    "error": "Eroare",
-    "ready": "Gata"
-  },
   "labels": {
-    "moreTabs": "Mai multe file în meniurile toolbar",
-    "enterCommand": "Introduceți comanda",
-    "search": "Căutare"
+    "moreTabs": "Mai multe file în meniurile toolbar"
   }
 }

@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { UserApiService } from '@/services/userApi';
 import { TabHeader } from '@/components/common/TabHeader';
 import { TabFooter } from '@/components/common/TabFooter';
+import { useTranslation } from 'react-i18next';
 import {
   User, CreditCard, Activity, Shield, Key, RefreshCw,
   LogOut, Crown, Zap, FileText, CheckCircle, AlertCircle, Eye, EyeOff, BarChart
@@ -30,6 +31,7 @@ const COLORS = {
 type Section = 'overview' | 'usage' | 'security' | 'billing';
 
 const ProfileTab: React.FC = () => {
+  const { t } = useTranslation('profile');
   const { session, logout, refreshUserData } = useAuth();
   const [activeSection, setActiveSection] = useState<Section>('overview');
   const [loading, setLoading] = useState(false);
@@ -103,7 +105,7 @@ const ProfileTab: React.FC = () => {
         fontFamily: 'monospace',
         fontSize: '11px'
       }}>
-        <span style={{ color: COLORS.MUTED }}>CREDITS: </span>
+        <span style={{ color: COLORS.MUTED }}>{t('extracted.credits')} </span>
         <span style={{ color: COLORS.CYAN, fontWeight: 'bold' }}>{credits.toLocaleString()}</span>
       </div>
       <div style={{
@@ -113,7 +115,7 @@ const ProfileTab: React.FC = () => {
         fontFamily: 'monospace',
         fontSize: '11px'
       }}>
-        <span style={{ color: COLORS.MUTED }}>PLAN: </span>
+        <span style={{ color: COLORS.MUTED }}>{t('extracted.plan')} </span>
         <span style={{ color: COLORS.ORANGE, fontWeight: 'bold' }}>{accountType.toUpperCase()}</span>
       </div>
       <button
@@ -132,7 +134,7 @@ const ProfileTab: React.FC = () => {
         }}
       >
         <RefreshCw size={12} />
-        REFRESH
+        {t('refresh')}
       </button>
     </div>
   );
@@ -146,7 +148,7 @@ const ProfileTab: React.FC = () => {
       fontFamily: 'Consolas, "Courier New", monospace'
     }}>
       <TabHeader
-        title="PROFILE & ACCOUNT"
+        title={t('extracted.profileAccount')}
         subtitle={`${username} | ${email}`}
         icon={<User size={20} />}
         actions={headerActions}

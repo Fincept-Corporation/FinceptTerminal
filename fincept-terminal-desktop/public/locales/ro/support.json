@@ -1,42 +1,32 @@
 {
-    "title": "Tichet suport",
-    "header": {
-        "tickets": "Tichete",
-        "new": "Tichet nou",
-        "status": "Status"
-    },
-    "form": {
-        "subject": "Subiect",
-        "description": "Descriere",
-        "priority": "Prioritate",
-        "category": "Categorie"
-    },
-    "priority": {
-        "low": "Scăzută",
-        "medium": "Medie",
-        "high": "Ridicată",
-        "urgent": "Urgentă"
-    },
-    "status": {
-        "open": "Deschis",
-        "inProgress": "În curs",
-        "resolved": "Rezolvat",
-        "closed": "Închis"
-    },
-    "buttons": {
-        "submit": "Trimite",
-        "cancel": "Anulează",
-        "reply": "Răspunde",
-        "close": "Închide"
-    },
-    "messages": {
-        "created": "Tichet creat",
-        "updated": "Tichet actualizat",
-        "closed": "Tichet închis",
-        "noTickets": "Niciun tichet"
-    },
-    "auth": {
-        "loginRequired": "Conectează-te pentru a crea tichet",
-        "demoMode": "Mod demo"
-    }
+  "title": "Tichet suport",
+  "header": {
+    "tickets": "Tichete",
+    "open": "[RO] OPEN",
+    "resolved": "[RO] RESOLVED"
+  },
+  "status": {
+    "ready": "[RO] READY",
+    "updating": "[RO] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[RO] REFRESH",
+    "createTicket": "[RO] CREATE TICKET",
+    "backToList": "[RO] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[RO] AUTHENTICATION REQUIRED",
+    "loginMessage": "[RO] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[RO] SUPPORT TICKETS",
+    "noTickets": "[RO] No support tickets found. Create your first ticket to get started!",
+    "loading": "[RO] Loading tickets..."
+  },
+  "create": {
+    "title": "[RO] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[RO] DEMO"
+  }
 }

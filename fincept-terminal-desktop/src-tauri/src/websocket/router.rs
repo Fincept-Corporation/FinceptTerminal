@@ -10,11 +10,21 @@
 use super::types::*;
 use dashmap::DashMap;
 use serde::Serialize;
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::Emitter;
 use tokio::sync::broadcast;
 
 const CHANNEL_CAPACITY: usize = 1000;
+
+/// Metrics for tracking message routing performance
+#[derive(Debug, Default)]
+pub struct RouterMetrics {
+    pub messages_routed: AtomicU64,
+    pub messages_dropped: AtomicU64,
+    pub frontend_emissions: AtomicU64,
+}
 
 /// Message router that broadcasts messages to multiple consumers
 pub struct MessageRouter {
@@ -25,11 +35,19 @@ pub struct MessageRouter {
     candle_tx: broadcast::Sender<CandleData>,
     status_tx: broadcast::Sender<StatusData>,
 
-    // Track which topics have frontend subscribers
+    // Track which topics have frontend subscribers (using HashSet for faster lookup)
+    // Format: "provider.channel.normalizedSymbol" (e.g., "kraken.ticker.BTCUSD")
     frontend_subscribers: Arc<DashMap<String, bool>>,
+
+    // Pre-computed normalized symbols for faster matching
+    // Maps "provider.channel" -> Set of normalized symbols
+    normalized_subscriptions: Arc<DashMap<String, HashSet<String>>>,
 
     // Tauri app handle for emitting events
     app_handle: Option<tauri::AppHandle>,
+
+    // Routing metrics
+    metrics: Arc<RouterMetrics>,
 }
 
 impl MessageRouter {
@@ -47,7 +65,9 @@ impl MessageRouter {
             candle_tx,
             status_tx,
             frontend_subscribers: Arc::new(DashMap::new()),
+            normalized_subscriptions: Arc::new(DashMap::new()),
             app_handle: None,
+            metrics: Arc::new(RouterMetrics::default()),
         }
     }
 
@@ -56,45 +76,74 @@ impl MessageRouter {
         self.app_handle = Some(app_handle);
     }
 
-    /// Register frontend subscriber for a topic
+    /// Normalize a symbol by removing slashes, dashes, and underscores, then uppercase
+    #[inline]
+    fn normalize_symbol(symbol: &str) -> String {
+        symbol
+            .replace('/', "")
+            .replace('-', "")
+            .replace('_', "")
+            .to_uppercase()
+    }
+
+    /// Register frontend subscriber for a topic (with normalized symbol caching)
     pub fn subscribe_frontend(&self, topic: &str) {
         self.frontend_subscribers.insert(topic.to_string(), true);
+
+        // Parse topic and cache normalized symbol for fast lookup
+        // Topic format: "provider.channel.symbol"
+        let parts: Vec<&str> = topic.splitn(3, '.').collect();
+        if parts.len() == 3 {
+            let provider = parts[0];
+            let channel = parts[1];
+            let symbol = parts[2];
+            let normalized = Self::normalize_symbol(symbol);
+
+            let key = format!("{}.{}", provider, channel);
+            self.normalized_subscriptions
+                .entry(key)
+                .or_insert_with(HashSet::new)
+                .insert(normalized);
+        }
     }
 
     /// Unregister frontend subscriber
     pub fn unsubscribe_frontend(&self, topic: &str) {
         self.frontend_subscribers.remove(topic);
+
+        // Remove from normalized cache
+        let parts: Vec<&str> = topic.splitn(3, '.').collect();
+        if parts.len() == 3 {
+            let provider = parts[0];
+            let channel = parts[1];
+            let symbol = parts[2];
+            let normalized = Self::normalize_symbol(symbol);
+
+            let key = format!("{}.{}", provider, channel);
+            if let Some(mut symbols) = self.normalized_subscriptions.get_mut(&key) {
+                symbols.remove(&normalized);
+            }
+        }
     }
 
-    /// Check if frontend is subscribed to topic
+    /// Check if frontend is subscribed to topic (optimized - O(1) lookup)
+    #[inline]
     fn has_frontend_subscriber(&self, provider: &str, symbol: &str, channel: &str) -> bool {
-        // The incoming symbol is already normalized by adapters (e.g., "BTCUSD" without slash)
-        // But frontend might register with slash format (e.g., "BTC/USD")
+        // Normalize the incoming symbol once
+        let normalized_symbol = Self::normalize_symbol(symbol);
 
-        // Normalize the symbol by removing any slashes
-        let normalized_symbol = symbol.replace("/", "");
-
-        // Build list of topic variants to check
-        let mut topics_to_check = vec![
-            format!("{}.{}.{}", provider, channel, symbol),           // Original (e.g., BTCUSD)
-            format!("{}.{}.{}", provider, channel, normalized_symbol.clone()), // Normalized (e.g., BTCUSD)
-        ];
-
-        // Also check common slash patterns for crypto pairs
-        // For symbols like BTCUSD, check BTC/USD
-        if normalized_symbol.len() >= 6 {
-            // Try standard crypto pair format (3 chars / remaining)
-            let variant = format!("{}/{}", &normalized_symbol[..3], &normalized_symbol[3..]);
-            topics_to_check.push(format!("{}.{}.{}", provider, channel, variant));
-        }
-        if normalized_symbol.len() >= 8 {
-            // Try 4/4 split (e.g., DOGE/USDT -> DOGE/USDT)
-            let variant = format!("{}/{}", &normalized_symbol[..4], &normalized_symbol[4..]);
-            topics_to_check.push(format!("{}.{}.{}", provider, channel, variant));
+        // Fast lookup using pre-computed normalized subscriptions
+        let key = format!("{}.{}", provider, channel);
+        if let Some(symbols) = self.normalized_subscriptions.get(&key) {
+            return symbols.contains(&normalized_symbol);
         }
 
-        // Return true if any topic matches
-        topics_to_check.iter().any(|topic| self.frontend_subscribers.contains_key(topic))
+        false
+    }
+
+    /// Get routing metrics
+    pub fn get_metrics(&self) -> &RouterMetrics {
+        &self.metrics
     }
 
     /// Route message to all consumers
@@ -123,8 +172,13 @@ impl MessageRouter {
     // ========================================================================
 
     async fn route_ticker(&self, data: TickerData) {
-        // 1. Broadcast to backend services
-        let _ = self.ticker_tx.send(data.clone());
+        self.metrics.messages_routed.fetch_add(1, Ordering::Relaxed);
+
+        // 1. Broadcast to backend services (handle lag gracefully)
+        if let Err(broadcast::error::SendError(_)) = self.ticker_tx.send(data.clone()) {
+            // No receivers or all receivers lagged - this is normal when no services are listening
+            self.metrics.messages_dropped.fetch_add(1, Ordering::Relaxed);
+        }
 
         // 2. Emit to frontend if subscribed
         if self.has_frontend_subscriber(&data.provider, &data.symbol, "ticker") {
@@ -133,8 +187,12 @@ impl MessageRouter {
     }
 
     async fn route_orderbook(&self, data: OrderBookData) {
-        // 1. Broadcast to backend services
-        let _ = self.orderbook_tx.send(data.clone());
+        self.metrics.messages_routed.fetch_add(1, Ordering::Relaxed);
+
+        // 1. Broadcast to backend services (handle lag gracefully)
+        if let Err(broadcast::error::SendError(_)) = self.orderbook_tx.send(data.clone()) {
+            self.metrics.messages_dropped.fetch_add(1, Ordering::Relaxed);
+        }
 
         // 2. Emit to frontend if subscribed
         if self.has_frontend_subscriber(&data.provider, &data.symbol, "book") {
@@ -143,8 +201,12 @@ impl MessageRouter {
     }
 
     async fn route_trade(&self, data: TradeData) {
-        // 1. Broadcast to backend services
-        let _ = self.trade_tx.send(data.clone());
+        self.metrics.messages_routed.fetch_add(1, Ordering::Relaxed);
+
+        // 1. Broadcast to backend services (handle lag gracefully)
+        if let Err(broadcast::error::SendError(_)) = self.trade_tx.send(data.clone()) {
+            self.metrics.messages_dropped.fetch_add(1, Ordering::Relaxed);
+        }
 
         // 2. Emit to frontend if subscribed
         if self.has_frontend_subscriber(&data.provider, &data.symbol, "trade") {
@@ -153,8 +215,12 @@ impl MessageRouter {
     }
 
     async fn route_candle(&self, data: CandleData) {
-        // 1. Broadcast to backend services
-        let _ = self.candle_tx.send(data.clone());
+        self.metrics.messages_routed.fetch_add(1, Ordering::Relaxed);
+
+        // 1. Broadcast to backend services (handle lag gracefully)
+        if let Err(broadcast::error::SendError(_)) = self.candle_tx.send(data.clone()) {
+            self.metrics.messages_dropped.fetch_add(1, Ordering::Relaxed);
+        }
 
         // 2. Emit to frontend if subscribed
         if self.has_frontend_subscriber(&data.provider, &data.symbol, "candle") {
@@ -163,8 +229,12 @@ impl MessageRouter {
     }
 
     async fn route_status(&self, data: StatusData) {
-        // 1. Broadcast to backend services
-        let _ = self.status_tx.send(data.clone());
+        self.metrics.messages_routed.fetch_add(1, Ordering::Relaxed);
+
+        // 1. Broadcast to backend services (handle lag gracefully)
+        if let Err(broadcast::error::SendError(_)) = self.status_tx.send(data.clone()) {
+            self.metrics.messages_dropped.fetch_add(1, Ordering::Relaxed);
+        }
 
         // 2. Always emit status to frontend
         self.emit_to_frontend("ws_status", &data);
@@ -205,7 +275,9 @@ impl MessageRouter {
 
     fn emit_to_frontend<T: Serialize + Clone>(&self, event: &str, payload: &T) {
         if let Some(app) = &self.app_handle {
-            let _ = app.emit(event, payload);
+            if app.emit(event, payload).is_ok() {
+                self.metrics.frontend_emissions.fetch_add(1, Ordering::Relaxed);
+            }
         }
     }
 }

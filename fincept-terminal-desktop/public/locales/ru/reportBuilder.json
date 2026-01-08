@@ -1,33 +1,19 @@
 {
-    "title": "Генератор отчётов",
-    "header": {
-        "templates": "Шаблоны",
-        "reports": "Отчёты",
-        "preview": "Просмотр"
-    },
-    "toolbar": {
-        "new": "Новый отчёт",
-        "save": "Сохранить",
-        "export": "Экспорт",
-        "print": "Печать",
-        "share": "Поделиться"
-    },
-    "sections": {
-        "header": "Заголовок",
-        "summary": "Сводка",
-        "charts": "Графики",
-        "tables": "Таблицы",
-        "footer": "Подвал"
-    },
-    "templates": {
-        "daily": "Ежедневный отчёт",
-        "weekly": "Еженедельный отчёт",
-        "monthly": "Ежемесячный отчёт",
-        "custom": "Настраиваемый"
-    },
-    "messages": {
-        "saved": "Отчёт сохранён",
-        "exported": "Отчёт экспортирован",
-        "generating": "Генерация отчёта..."
-    }
+  "title": "Генератор отчётов",
+  "header": {
+    "load": "[RU] Load",
+    "save": "[RU] Save",
+    "saving": "[RU] Saving...",
+    "exportPdf": "[RU] Export PDF",
+    "generating": "[RU] Generating..."
+  },
+  "components": {
+    "title": "[RU] ADD COMPONENTS"
+  },
+  "layout": {
+    "title": "[RU] LAYOUT"
+  },
+  "settings": {
+    "title": "[RU] SETTINGS"
+  }
 }

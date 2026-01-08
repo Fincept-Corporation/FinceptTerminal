@@ -1,38 +1,35 @@
 {
-    "title": "МАРКЕТПЛЕЙС",
-    "header": {
-        "browse": "Обзор",
-        "myItems": "Мои товары",
-        "cart": "Корзина"
-    },
-    "categories": {
-        "all": "Все",
-        "indicators": "Индикаторы",
-        "strategies": "Стратегии",
-        "datasets": "Наборы данных",
-        "tools": "Инструменты"
-    },
-    "buttons": {
-        "buy": "Купить",
-        "addToCart": "В корзину",
-        "install": "Установить",
-        "preview": "Просмотр"
-    },
-    "product": {
-        "price": "Цена",
-        "rating": "Рейтинг",
-        "downloads": "Загрузки",
-        "author": "Автор",
-        "version": "Версия"
-    },
-    "cart": {
-        "total": "Итого",
-        "checkout": "Оформить",
-        "empty": "Корзина пуста"
-    },
-    "messages": {
-        "addedToCart": "Добавлено в корзину",
-        "purchased": "Куплено",
-        "installed": "Установлено"
-    }
+  "title": "МАРКЕТПЛЕЙС",
+  "header": {
+    "browse": "Обзор",
+    "myPurchases": "[RU] MY PURCHASES",
+    "upload": "[RU] UPLOAD",
+    "myDatasets": "[RU] MY DATASETS",
+    "analytics": "[RU] ANALYTICS",
+    "pricing": "[RU] PRICING",
+    "datasetsAvailable": "[RU] Datasets Available",
+    "myUploads": "[RU] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "В корзину",
+    "inCart": "[RU] ✓ IN CART",
+    "viewDetails": "[RU] VIEW DETAILS",
+    "backToMarketplace": "[RU] BACK TO MARKETPLACE",
+    "loading": "[RU] ⟳ LOADING...",
+    "refresh": "[RU] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "Рейтинг",
+    "description": "[RU] PRODUCT DESCRIPTION",
+    "users": "[RU] USERS"
+  },
+  "cart": {
+    "empty": "Корзина пуста",
+    "title": "[RU] SHOPPING CART",
+    "items": "[RU] items"
+  },
+  "guest": {
+    "title": "[RU] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[RU] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

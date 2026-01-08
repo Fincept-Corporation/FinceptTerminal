@@ -1,58 +1,28 @@
 {
-    "title": "登录审计仪表板",
-    "accessDenied": "需要管理员权限",
-    "metrics": {
-        "dauToday": "今日DAU",
-        "mau": "MAU",
-        "successRate": "成功率",
-        "failed24h": "失败(24小时)",
-        "activeSessions": "活跃会话",
-        "uniqueIps": "唯一IP"
-    },
-    "views": {
-        "overview": "概览",
-        "eventLog": "事件日志",
-        "alerts": "警报",
-        "analytics": "分析"
-    },
-    "activity": {
-        "recentLoginActivity": "最近登录活动",
-        "securityAlerts": "安全警报",
-        "noActiveAlerts": "没有活跃警报",
-        "loginEventLog": "登录事件日志"
-    },
-    "table": {
-        "time": "时间",
-        "event": "事件",
-        "user": "用户",
-        "ipAddress": "IP地址",
-        "location": "位置",
-        "device": "设备",
-        "details": "详情"
-    },
-    "alerts": {
-        "securityIncidents": "安全警报和事件",
-        "noAlerts": "没有安全警报",
-        "dismiss": "忽略",
-        "blockIp": "封禁IP",
-        "investigate": "调查"
-    },
-    "analytics": {
-        "loginsByCountry": "按国家登录(30天)",
-        "failureReasons": "失败原因(24小时)",
-        "peakHours": "高峰时段(UTC)",
-        "logins": "登录"
-    },
-    "controls": {
-        "autoRefresh": "自动刷新",
-        "loading": "加载中...",
-        "refresh": "刷新"
-    },
-    "status": {
-        "admin": "管理员",
-        "dau": "DAU",
-        "status": "状态",
-        "updating": "更新中",
-        "ready": "就绪"
-    }
+  "title": "登录审计仪表板",
+  "metrics": {
+    "dauToday": "今日DAU",
+    "mau": "MAU",
+    "successRate": "成功率",
+    "failed24h": "失败(24小时)",
+    "activeSessions": "活跃会话",
+    "uniqueIps": "唯一IP"
+  },
+  "views": {
+    "overview": "概览",
+    "eventLog": "事件日志",
+    "alerts": "警报",
+    "analytics": "分析"
+  },
+  "activity": {
+    "recentLoginActivity": "最近登录活动",
+    "securityAlerts": "安全警报",
+    "noActiveAlerts": "没有活跃警报",
+    "loginEventLog": "登录事件日志"
+  },
+  "controls": {
+    "autoRefresh": "自动刷新",
+    "loading": "加载中...",
+    "refresh": "刷新"
+  }
 }

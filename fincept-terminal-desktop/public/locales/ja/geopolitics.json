@@ -1,59 +1,6 @@
 {
-    "title": "地政学",
-    "header": {
-        "overview": "概要",
-        "regions": "地域",
-        "analysis": "分析",
-        "alerts": "アラート"
-    },
-    "regions": {
-        "global": "世界",
-        "northAmerica": "北米",
-        "europe": "欧州",
-        "asia": "アジア太平洋",
-        "middleEast": "中東",
-        "africa": "アフリカ",
-        "latam": "中南米"
-    },
-    "categories": {
-        "conflict": "紛争",
-        "sanctions": "制裁",
-        "trade": "貿易関係",
-        "diplomacy": "外交",
-        "elections": "選挙",
-        "policy": "政策変更"
-    },
-    "risk": {
-        "level": "リスクレベル",
-        "high": "高",
-        "medium": "中",
-        "low": "低",
-        "critical": "深刻",
-        "stable": "安定"
-    },
-    "impact": {
-        "economic": "経済への影響",
-        "market": "市場への影響",
-        "trade": "貿易への影響",
-        "currency": "為替への影響"
-    },
-    "timeline": {
-        "latest": "最新",
-        "thisWeek": "今週",
-        "thisMonth": "今月",
-        "upcoming": "今後"
-    },
-    "actions": {
-        "subscribe": "購読",
-        "export": "エクスポート",
-        "share": "共有",
-        "setAlert": "アラート設定",
-        "filter": "フィルター"
-    },
-    "messages": {
-        "loading": "地政学データ読み込み中...",
-        "noEvents": "イベントなし",
-        "updated": "最終更新",
-        "breaking": "速報"
-    }
+  "title": "地政学",
+  "messages": {
+    "loading": "地政学データ読み込み中..."
+  }
 }

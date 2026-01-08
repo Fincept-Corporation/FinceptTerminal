@@ -1,57 +1,29 @@
 {
-    "title": "कोड एडिटर",
-    "header": {
-        "files": "फाइलें",
-        "terminal": "टर्मिनल",
-        "packages": "पैकेज"
-    },
-    "toolbar": {
-        "newFile": "नई फाइल",
-        "new": "नया",
-        "open": "खोलें",
-        "save": "सहेजें",
-        "run": "कोड चलाएं",
-        "running": "चल रहा है...",
-        "runAll": "सभी चलाएं",
-        "download": "डाउनलोड",
-        "upload": "अपलोड",
-        "clear": "साफ करें",
-        "history": "इतिहास"
-    },
-    "languages": {
-        "finscript": "फिनस्क्रिप्ट",
-        "python": "पायथन",
-        "javascript": "जावास्क्रिप्ट",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "एडिटर",
-        "notebook": "ज्यूपिटर नोटबुक",
-        "finscript": "फिनस्क्रिप्ट एडिटर",
-        "terminal": "टर्मिनल"
-    },
-    "terminal": {
-        "output": "आउटपुट",
-        "clear": "आउटपुट साफ करें",
-        "running": "चल रहा है...",
-        "completed": "पूर्ण"
-    },
-    "packages": {
-        "installed": "इंस्टॉल किए गए पैकेज",
-        "install": "पैकेज इंस्टॉल करें",
-        "uninstall": "अनइंस्टॉल",
-        "clickToLoad": "पैकेज लोड करने के लिए क्लिक करें...",
-        "load": "पैकेज लोड करें"
-    },
-    "history": {
-        "title": "नोटबुक इतिहास",
-        "loading": "इतिहास लोड हो रहा है...",
-        "empty": "अभी तक कोई नोटबुक इतिहास नहीं"
-    },
-    "messages": {
-        "fileSaved": "फाइल सहेजी गई",
-        "fileOpened": "फाइल खोली गई",
-        "executionComplete": "निष्पादन पूर्ण",
-        "executionError": "निष्पादन त्रुटि"
-    }
+  "title": "कोड एडिटर",
+  "header": {
+    "packages": "पैकेज"
+  },
+  "toolbar": {
+    "newFile": "नई फाइल",
+    "new": "नया",
+    "open": "खोलें",
+    "save": "सहेजें",
+    "run": "कोड चलाएं",
+    "running": "चल रहा है...",
+    "runAll": "सभी चलाएं",
+    "history": "इतिहास"
+  },
+  "tabs": {
+    "notebook": "ज्यूपिटर नोटबुक",
+    "finscript": "फिनस्क्रिप्ट एडिटर"
+  },
+  "packages": {
+    "clickToLoad": "पैकेज लोड करने के लिए क्लिक करें...",
+    "load": "पैकेज लोड करें"
+  },
+  "history": {
+    "title": "नोटबुक इतिहास",
+    "loading": "इतिहास लोड हो रहा है...",
+    "empty": "अभी तक कोई नोटबुक इतिहास नहीं"
+  }
 }

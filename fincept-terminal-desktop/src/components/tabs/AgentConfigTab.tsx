@@ -1,32 +1,24 @@
 // File: src/components/tabs/AgentConfigTab.tsx
-// Professional Bloomberg Terminal-Grade Agent Configuration Interface
+// CoreAgent Configuration - Uses finagent_core system with SQLite persistence
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import {
-  Bot,
-  Brain,
-  RefreshCw,
-  Save,
-  Play,
-  Settings as SettingsIcon,
-  Code,
-  ChevronDown,
-  AlertCircle,
-  CheckCircle,
-  Zap,
-  Database,
-  Eye,
-  EyeOff,
-  Key,
+  Bot, Brain, RefreshCw, Save, Play, Trash2, Plus, Settings,
+  ChevronDown, ChevronRight, AlertCircle, CheckCircle, Zap,
+  Database, Code, MessageSquare, Wrench, Copy, Check, X,
+  Cpu, BookOpen, Sparkles,
 } from 'lucide-react';
-import { sqliteService, type LLMConfig } from '@/services/sqliteService';
+import {
+  saveAgentConfig, getAgentConfigs, deleteAgentConfig,
+  setActiveAgentConfig, getActiveAgentConfig,
+  getLLMConfigs,
+  type AgentConfig, type AgentConfigData, type LLMConfig,
+} from '@/services/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
-import { useTranslation } from 'react-i18next';
-import { useAuth } from '@/contexts/AuthContext';
 
-// Bloomberg Professional Color Palette
 const BLOOMBERG = {
   ORANGE: '#FF8800',
   WHITE: '#FFFFFF',
@@ -42,1364 +34,638 @@ const BLOOMBERG = {
   PURPLE: '#9D4EDD',
   BORDER: '#2A2A2A',
   HOVER: '#1F1F1F',
-  MUTED: '#4A4A4A'
+  MUTED: '#4A4A4A',
 };
 
-interface AgentConfig {
-  id: string;
-  name: string;
-  role: string;
-  goal: string;
-  description: string;
-  book_source?: string;
-  llm_config: {
-    provider: string;
-    model_id: string;
-    temperature: number;
-    max_tokens: number;
-  };
-  tools: string[];
-  enable_memory: boolean;
-  enable_agentic_memory: boolean;
-  instructions: string;
-}
+// 40+ Model providers from finagent_core
+const MODEL_PROVIDERS = [
+  { id: 'openai', name: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4', 'o1', 'o1-mini', 'o1-preview'] },
+  { id: 'anthropic', name: 'Anthropic', models: ['claude-sonnet-4-5-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'] },
+  { id: 'google', name: 'Google', models: ['gemini-2.0-flash-exp', 'gemini-1.5-pro', 'gemini-1.5-flash'] },
+  { id: 'groq', name: 'Groq', models: ['llama-3.3-70b-versatile', 'llama-3.1-70b-versatile', 'mixtral-8x7b-32768'] },
+  { id: 'ollama', name: 'Ollama (Local)', models: ['llama3.3', 'llama3.2', 'mistral', 'mixtral', 'qwen2.5', 'phi3', 'gemma2'] },
+  { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'] },
+  { id: 'mistral', name: 'Mistral', models: ['mistral-large-latest', 'mistral-medium-latest', 'codestral-latest'] },
+  { id: 'cohere', name: 'Cohere', models: ['command-r-plus', 'command-r', 'command-light'] },
+  { id: 'xai', name: 'xAI (Grok)', models: ['grok-2', 'grok-2-mini', 'grok-beta'] },
+  { id: 'perplexity', name: 'Perplexity', models: ['llama-3.1-sonar-large-128k-online', 'llama-3.1-sonar-small-128k-online'] },
+  { id: 'together', name: 'Together AI', models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'mistralai/Mixtral-8x22B-Instruct-v0.1'] },
+  { id: 'fireworks', name: 'Fireworks', models: ['accounts/fireworks/models/llama-v3p1-405b-instruct'] },
+  { id: 'aws', name: 'AWS Bedrock', models: ['anthropic.claude-3-5-sonnet-20241022-v2:0', 'amazon.titan-text-express-v1'] },
+  { id: 'azure', name: 'Azure OpenAI', models: ['gpt-4o', 'gpt-4-turbo', 'gpt-35-turbo'] },
+  { id: 'vertexai', name: 'Vertex AI', models: ['gemini-1.5-pro', 'gemini-1.5-flash'] },
+];
 
-interface ProviderInfo {
-  name: string;
-  models: string[];
-  api_key_required: boolean;
-}
+// 100+ Tools from finagent_core organized by category
+const TOOL_CATEGORIES: Record<string, { tools: string[]; color: string }> = {
+  'Finance': { tools: ['yfinance', 'polygon', 'alpha_vantage', 'finnhub', 'financial_datasets', 'sec_tools'], color: BLOOMBERG.GREEN },
+  'Search': { tools: ['duckduckgo', 'googlesearch', 'tavily', 'exa', 'searxng', 'serpapi'], color: BLOOMBERG.CYAN },
+  'Web': { tools: ['requests', 'crawl4ai', 'firecrawl', 'newspaper', 'wikipedia', 'arxiv'], color: BLOOMBERG.BLUE },
+  'Data': { tools: ['pandas', 'csv', 'json_tools', 'sql', 'file', 'excel'], color: BLOOMBERG.PURPLE },
+  'Code': { tools: ['python', 'shell', 'calculator'], color: BLOOMBERG.YELLOW },
+  'AI/ML': { tools: ['openai', 'anthropic', 'ollama', 'huggingface'], color: BLOOMBERG.ORANGE },
+  'Communication': { tools: ['email', 'slack', 'discord', 'telegram'], color: BLOOMBERG.RED },
+  'Storage': { tools: ['s3', 'gcs', 'github', 'gitlab'], color: BLOOMBERG.GRAY },
+};
+
+// Reasoning strategies
+const REASONING_STRATEGIES = [
+  { id: 'chain_of_thought', name: 'Chain of Thought', desc: 'Step-by-step reasoning' },
+  { id: 'tree_of_thought', name: 'Tree of Thought', desc: 'Explore multiple paths' },
+  { id: 'self_reflection', name: 'Self Reflection', desc: 'Iterative improvement' },
+  { id: 'react', name: 'ReAct', desc: 'Reasoning + Acting' },
+];
+
+const CONFIG_CATEGORIES = [
+  { id: 'general', name: 'General', icon: '🤖' },
+  { id: 'finance', name: 'Finance', icon: '💰' },
+  { id: 'research', name: 'Research', icon: '🔬' },
+  { id: 'coding', name: 'Coding', icon: '💻' },
+  { id: 'trading', name: 'Trading', icon: '📈' },
+  { id: 'custom', name: 'Custom', icon: '⚙️' },
+];
 
 const AgentConfigTab: React.FC = () => {
   const { t } = useTranslation('agentConfig');
-  const { session } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState('TraderInvestorsAgent');
-  const [agents, setAgents] = useState<AgentConfig[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
-  const [jsonText, setJsonText] = useState('');
-  const [providers, setProviders] = useState<Record<string, ProviderInfo>>({});
+
+  // Saved configs
+  const [savedConfigs, setSavedConfigs] = useState<AgentConfig[]>([]);
+  const [activeConfigId, setActiveConfigId] = useState<string | null>(null);
+  const [selectedConfigId, setSelectedConfigId] = useState<string | null>(null);
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+
+  // Current config being edited
+  const [configName, setConfigName] = useState('New Agent');
+  const [configDescription, setConfigDescription] = useState('');
+  const [configCategory, setConfigCategory] = useState('general');
+
+  // Model
+  const [modelProvider, setModelProvider] = useState('openai');
+  const [modelId, setModelId] = useState('gpt-4o-mini');
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxTokens, setMaxTokens] = useState(4096);
+
+  // Agent
+  const [instructions, setInstructions] = useState('You are a helpful AI assistant specialized in financial analysis.');
+  const [selectedTools, setSelectedTools] = useState<string[]>(['yfinance', 'calculator']);
+
+  // Memory
+  const [memoryEnabled, setMemoryEnabled] = useState(false);
+
+  // Reasoning
+  const [reasoningEnabled, setReasoningEnabled] = useState(false);
+  const [reasoningStrategy, setReasoningStrategy] = useState('chain_of_thought');
+  const [reasoningMaxSteps, setReasoningMaxSteps] = useState(10);
+
+  // Output
+  const [markdownOutput, setMarkdownOutput] = useState(true);
+  const [debugMode, setDebugMode] = useState(false);
+
+  // UI
   const [loading, setLoading] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
-  const [showJsonEditor, setShowJsonEditor] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [llmConfigs, setLlmConfigs] = useState<LLMConfig[]>([]);
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
-  const [testQuery, setTestQuery] = useState('Analyze China-Russia alliance dynamics');
-  const [expandedBooks, setExpandedBooks] = useState<Set<string>>(new Set());
-  const [teamName, setTeamName] = useState<string | null>(null);
-  const [selectedBook, setSelectedBook] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['model', 'instructions', 'tools']));
+  const [testQuery, setTestQuery] = useState('');
+  const [testResponse, setTestResponse] = useState<string | null>(null);
+  const [showJson, setShowJson] = useState(false);
 
-  const categories = [
-    { id: 'TraderInvestorsAgent', name: 'Trader/Investor Agents', icon: '💰' },
-    { id: 'GeopoliticsAgents', name: 'Geopolitics Agents', icon: '🌍' },
-    { id: 'EconomicAgents', name: 'Economic Agents', icon: '📊' },
-    { id: 'hedgeFundAgents', name: 'Hedge Fund Team', icon: '🏦' },
-  ];
-
-  // Load agents on mount and category change
   useEffect(() => {
-    loadAgents();
-    loadProviders();
-    loadLLMConfigs();
-  }, [selectedCategory, session]);
+    loadConfigs();
+  }, []);
 
-  const loadLLMConfigs = async () => {
+  const loadConfigs = async () => {
     try {
-      let configs = await sqliteService.getLLMConfigs();
-      console.log('[AgentConfigTab] Loaded LLM configs from DB:', configs);
-
-      // Always ensure Fincept config exists with session's API key
-      const userApiKey = session?.api_key || '';
-      console.log('[AgentConfigTab] Session API key:', userApiKey ? `${userApiKey.substring(0, 8)}...` : 'MISSING');
-
-      const finceptExists = configs.some(c => c.provider === 'fincept');
-
-      if (!finceptExists && userApiKey) {
-        console.log('[AgentConfigTab] Creating new Fincept config with user API key');
-        const now = new Date().toISOString();
-        const finceptConfig = {
-          provider: 'fincept',
-          api_key: userApiKey,
-          base_url: 'https://finceptbackend.share.zrok.io/research/llm',
-          model: 'fincept-llm',
-          is_active: true,
-          created_at: now,
-          updated_at: now,
-        };
-        await sqliteService.saveLLMConfig(finceptConfig);
-        configs = await sqliteService.getLLMConfigs();
-      } else if (finceptExists && userApiKey) {
-        // Update existing Fincept config with latest user API key
-        const finceptConfig = configs.find(c => c.provider === 'fincept');
-        console.log('[AgentConfigTab] Existing Fincept config API key:', finceptConfig?.api_key ? `${finceptConfig.api_key.substring(0, 8)}...` : 'MISSING');
-        if (finceptConfig && finceptConfig.api_key !== userApiKey) {
-          console.log('[AgentConfigTab] Updating Fincept config with new user API key');
-          finceptConfig.api_key = userApiKey;
-          await sqliteService.saveLLMConfig(finceptConfig);
-          configs = await sqliteService.getLLMConfigs();
-        }
-      }
-
-      setLlmConfigs(configs);
-
-      // Build API keys map - always prioritize user's Fincept key
-      const keys: Record<string, string> = {};
-      configs.forEach(config => {
-        if (config.api_key && config.provider !== 'fincept') {
-          // Skip fincept - we'll add it from user.api_key below
-          keys[`${config.provider.toUpperCase()}_API_KEY`] = config.api_key;
-        }
-      });
-      // Always add user's Fincept key (highest priority)
-      if (userApiKey) {
-        keys['FINCEPT_API_KEY'] = userApiKey;
-      }
-      console.log('[AgentConfigTab] Built API keys map:', Object.keys(keys));
-      setApiKeys(keys);
+      const configs = await getAgentConfigs();
+      setSavedConfigs(configs);
+      const active = await getActiveAgentConfig();
+      if (active) setActiveConfigId(active.id);
     } catch (err) {
-      console.error('Failed to load LLM configs:', err);
+      console.error('Failed to load configs:', err);
     }
   };
 
-  // Update JSON when selected agent changes
-  useEffect(() => {
-    if (selectedAgent) {
-      setJsonText(JSON.stringify(selectedAgent, null, 2));
-    }
-  }, [selectedAgent]);
+  const toggleSection = (id: string) => {
+    const s = new Set(expandedSections);
+    s.has(id) ? s.delete(id) : s.add(id);
+    setExpandedSections(s);
+  };
 
-  const loadAgents = async () => {
+  const toggleTool = (tool: string) => {
+    setSelectedTools(prev =>
+      prev.includes(tool) ? prev.filter(t => t !== tool) : [...prev, tool]
+    );
+  };
+
+  const buildConfig = useCallback((): AgentConfigData => {
+    const cfg: AgentConfigData = {
+      model: { provider: modelProvider, model_id: modelId, temperature, max_tokens: maxTokens },
+      instructions,
+    };
+    if (selectedTools.length > 0) cfg.tools = selectedTools;
+    if (memoryEnabled) cfg.memory = { enabled: true };
+    if (reasoningEnabled) cfg.reasoning = { strategy: reasoningStrategy, max_steps: reasoningMaxSteps };
+    if (markdownOutput) cfg.output_format = 'markdown';
+    if (debugMode) cfg.debug = true;
+    return cfg;
+  }, [modelProvider, modelId, temperature, maxTokens, instructions, selectedTools, memoryEnabled, reasoningEnabled, reasoningStrategy, reasoningMaxSteps, markdownOutput, debugMode]);
+
+  const handleSave = async () => {
+    if (!configName.trim()) {
+      setError('Please enter a config name');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      // New simplified command - follows yfinance pattern
-      const resultStr = await invoke<string>('list_agents', {
-        category: selectedCategory,
+      const id = selectedConfigId || crypto.randomUUID();
+      const result = await saveAgentConfig({
+        id,
+        name: configName,
+        description: configDescription || undefined,
+        config_json: JSON.stringify(buildConfig()),
+        category: configCategory,
+        is_default: false,
+        is_active: activeConfigId === id,
       });
-
-      const data = JSON.parse(resultStr);
-      if (data.success) {
-        setAgents(data.agents || []);
-        setTeamName(data.team_name || null);
-        if (data.agents && data.agents.length > 0) {
-          setSelectedAgent(data.agents[0]);
-        }
+      if (result.success) {
+        setSuccess('Saved!');
+        setSelectedConfigId(id);
+        await loadConfigs();
+        setTimeout(() => setSuccess(null), 2000);
       } else {
-        setError(data.error || 'Failed to load agents');
+        setError(result.message);
       }
     } catch (err: any) {
-      console.error('Failed to load agents:', err);
       setError(err.toString());
     } finally {
       setLoading(false);
     }
   };
 
-  const loadProviders = async () => {
+  const handleLoad = (cfg: AgentConfig) => {
     try {
-      // New simplified command
-      const resultStr = await invoke<string>('get_agent_providers');
-      const data = JSON.parse(resultStr);
-
-      if (data.success && data.providers) {
-        setProviders(data.providers);
+      const data: AgentConfigData = JSON.parse(cfg.config_json);
+      setConfigName(cfg.name);
+      setConfigDescription(cfg.description || '');
+      setConfigCategory(cfg.category);
+      setSelectedConfigId(cfg.id);
+      if (data.model) {
+        setModelProvider(data.model.provider || 'openai');
+        setModelId(data.model.model_id || 'gpt-4o-mini');
+        setTemperature(data.model.temperature ?? 0.7);
+        setMaxTokens(data.model.max_tokens ?? 4096);
       }
+      setInstructions(data.instructions || '');
+      setSelectedTools(data.tools || []);
+      setMemoryEnabled(data.memory?.enabled ?? false);
+      setReasoningEnabled(!!data.reasoning);
+      if (data.reasoning) {
+        setReasoningStrategy(data.reasoning.strategy || 'chain_of_thought');
+        setReasoningMaxSteps(data.reasoning.max_steps ?? 10);
+      }
+      setMarkdownOutput(data.output_format === 'markdown');
+      setDebugMode(data.debug ?? false);
+      setTestResponse(null);
     } catch (err) {
-      console.error('Failed to load providers:', err);
+      setError('Failed to parse config');
     }
   };
 
-  const saveConfig = async () => {
-    if (!selectedAgent) return;
-
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this configuration?')) return;
     try {
-      // Parse the JSON text to validate and get updated config
-      const updatedConfig = JSON.parse(jsonText);
-
-      // New simplified command
-      const resultStr = await invoke<string>('save_agent_config', {
-        category: selectedCategory,
-        agentId: selectedAgent.id,
-        configJson: JSON.stringify(updatedConfig),
-      });
-
-      const data = JSON.parse(resultStr);
-      if (data.success) {
-        setSuccess('Configuration saved successfully!');
-        setSelectedAgent(updatedConfig);
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        setError(data.error || 'Failed to save configuration');
-      }
+      await deleteAgentConfig(id);
+      if (selectedConfigId === id) handleNew();
+      await loadConfigs();
+      setSuccess('Deleted');
+      setTimeout(() => setSuccess(null), 2000);
     } catch (err: any) {
-      console.error('Failed to save config:', err);
       setError(err.toString());
-    } finally {
-      setLoading(false);
     }
   };
 
-  const testAgent = async () => {
-    if (!selectedAgent) return;
+  const handleSetActive = async (id: string) => {
+    try {
+      await setActiveAgentConfig(id);
+      setActiveConfigId(id);
+      setSuccess('Activated');
+      setTimeout(() => setSuccess(null), 2000);
+    } catch (err: any) {
+      setError(err.toString());
+    }
+  };
+
+  const handleNew = () => {
+    setSelectedConfigId(null);
+    setConfigName('New Agent');
+    setConfigDescription('');
+    setConfigCategory('general');
+    setModelProvider('openai');
+    setModelId('gpt-4o-mini');
+    setTemperature(0.7);
+    setMaxTokens(4096);
+    setInstructions('You are a helpful AI assistant.');
+    setSelectedTools([]);
+    setMemoryEnabled(false);
+    setReasoningEnabled(false);
+    setDebugMode(false);
+    setTestResponse(null);
+  };
+
+  // Helper to fetch API keys from Settings LLM configs
+  const fetchApiKeysFromSettings = async (): Promise<Record<string, string>> => {
+    try {
+      const llmConfigs = await getLLMConfigs();
+      const apiKeys: Record<string, string> = {};
+
+      // Map provider configs to API keys
+      for (const config of llmConfigs) {
+        if (config.api_key) {
+          // Store by provider name (lowercase)
+          const providerKey = `${config.provider.toUpperCase()}_API_KEY`;
+          apiKeys[providerKey] = config.api_key;
+          // Also store by common name patterns
+          apiKeys[config.provider] = config.api_key;
+        }
+      }
+
+      return apiKeys;
+    } catch (err) {
+      console.error('Failed to fetch API keys from settings:', err);
+      return {};
+    }
+  };
+
+  const handleTest = async () => {
     if (!testQuery.trim()) {
-      setError('Please enter a test query');
+      setError('Enter a test query');
       return;
     }
-
-    // Get active LLM config from Settings
-    const activeLLM = llmConfigs.find(c => c.is_active);
-    if (!activeLLM) {
-      setError('No active LLM provider configured in Settings. Please configure and activate an LLM provider.');
-      return;
-    }
-
-    console.log('Testing agent with API keys:', apiKeys);
-    console.log('Session API key:', session?.api_key?.substring(0, 8));
-
-    setLoading(true);
+    setTesting(true);
     setError(null);
-    setTestResult(null);
+    setTestResponse(null);
     try {
-      // New simplified command
-      const resultStr = await invoke<string>('execute_single_agent', {
-        category: selectedCategory,
-        agentId: selectedAgent.id,
-        query: testQuery,
-        llmConfigJson: JSON.stringify({
-          provider: activeLLM.provider,
-          model: activeLLM.model,
-        }),
+      // Fetch API keys from Settings tab's LLM configurations
+      const apiKeys = await fetchApiKeysFromSettings();
+
+      // Check if we have API key for selected provider
+      const providerKey = `${modelProvider.toUpperCase()}_API_KEY`;
+      if (!apiKeys[providerKey] && !apiKeys[modelProvider] && modelProvider !== 'ollama') {
+        setError(`No API key found for ${modelProvider}. Please configure it in Settings → LLM Config.`);
+        setTesting(false);
+        return;
+      }
+
+      const result = await invoke<string>('execute_core_agent', {
+        queryJson: testQuery,
+        configJson: JSON.stringify(buildConfig()),
         apiKeysJson: JSON.stringify(apiKeys),
       });
-
-      const data = JSON.parse(resultStr);
-      setTestResult(data);
-    } catch (err: any) {
-      console.error('Failed to test agent:', err);
-      setError(err.toString());
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const testTeamCollaboration = async () => {
-    if (!testQuery.trim()) {
-      setError('Please enter a test query');
-      return;
-    }
-
-    const activeLLM = llmConfigs.find(c => c.is_active);
-    if (!activeLLM) {
-      setError('No active LLM provider configured in Settings.');
-      return;
-    }
-
-    // Get agents for selected book only
-    const bookAgents = selectedBook
-      ? agents.filter(a => a.book_source === selectedBook)
-      : agents;
-
-    const agentIds = bookAgents.map(a => a.id);
-
-    setLoading(true);
-    setError(null);
-    setTestResult({
-      success: true,
-      discussion: [],
-      total_agents: bookAgents.length,
-      rounds: 2,
-      query: testQuery
-    });
-
-    try {
-      // New simplified command
-      const resultStr = await invoke<string>('execute_agent_team', {
-        category: selectedCategory,
-        query: testQuery,
-        llmConfigJson: JSON.stringify({
-          provider: activeLLM.provider,
-          model: activeLLM.model,
-        }),
-        apiKeysJson: JSON.stringify(apiKeys),
-        agentIdsJson: agentIds.length > 0 ? JSON.stringify(agentIds) : null,
-      });
-
-      const data = JSON.parse(resultStr);
-      setTestResult(data);
-
-      if (!data.success) {
-        setError(data.error || 'Team collaboration failed');
+      const parsed = JSON.parse(result);
+      if (parsed.success) {
+        setTestResponse(parsed.response || parsed.content || 'No response');
+      } else {
+        setError(parsed.error || 'Test failed');
       }
     } catch (err: any) {
-      console.error('Team collaboration failed:', err);
       setError(err.toString());
     } finally {
-      setLoading(false);
+      setTesting(false);
     }
   };
+
+  const filteredConfigs = filterCategory === 'all'
+    ? savedConfigs
+    : savedConfigs.filter(c => c.category === filterCategory);
+
+  const availableModels = MODEL_PROVIDERS.find(p => p.id === modelProvider)?.models || [];
+
+  const SectionHeader = ({ id, title, icon, badge }: { id: string; title: string; icon: React.ReactNode; badge?: string }) => (
+    <button
+      onClick={() => toggleSection(id)}
+      className="w-full flex items-center justify-between p-2 rounded transition-colors"
+      style={{ backgroundColor: BLOOMBERG.HEADER_BG }}
+    >
+      <div className="flex items-center gap-2">
+        <span style={{ color: BLOOMBERG.ORANGE }}>{icon}</span>
+        <span style={{ color: BLOOMBERG.WHITE, fontSize: '11px', fontWeight: 600 }}>{title}</span>
+        {badge && <span style={{ color: BLOOMBERG.CYAN, fontSize: '9px' }}>({badge})</span>}
+      </div>
+      {expandedSections.has(id) ? <ChevronDown size={14} color={BLOOMBERG.GRAY} /> : <ChevronRight size={14} color={BLOOMBERG.GRAY} />}
+    </button>
+  );
 
   return (
-    <div style={{
-      height: '100%',
-      backgroundColor: BLOOMBERG.DARK_BG,
-      color: BLOOMBERG.WHITE,
-      fontFamily: '"IBM Plex Mono", "Consolas", monospace',
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column'
-    }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
-
-        *::-webkit-scrollbar { width: 6px; height: 6px; }
-        *::-webkit-scrollbar-track { background: ${BLOOMBERG.DARK_BG}; }
-        *::-webkit-scrollbar-thumb { background: ${BLOOMBERG.BORDER}; border-radius: 3px; }
-        *::-webkit-scrollbar-thumb:hover { background: ${BLOOMBERG.MUTED}; }
-
-        .terminal-glow {
-          text-shadow: 0 0 10px ${BLOOMBERG.ORANGE}40;
-        }
-      `}</style>
-
-      {/* ========== TOP NAVIGATION BAR ========== */}
-      <div style={{
-        backgroundColor: BLOOMBERG.HEADER_BG,
-        borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
-        padding: '6px 12px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0,
-        boxShadow: `0 2px 8px ${BLOOMBERG.ORANGE}20`
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Bot size={18} color={BLOOMBERG.ORANGE} style={{ filter: 'drop-shadow(0 0 4px ' + BLOOMBERG.ORANGE + ')' }} />
-            <span style={{
-              color: BLOOMBERG.ORANGE,
-              fontWeight: 700,
-              fontSize: '14px',
-              letterSpacing: '0.5px',
-              textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
-            }}>
-              {t('title')}
-            </span>
-          </div>
-
-          <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
-
-          {/* Category Selector */}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                style={{
-                  padding: '4px 12px',
-                  backgroundColor: selectedCategory === cat.id ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${selectedCategory === cat.id ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                  color: selectedCategory === cat.id ? BLOOMBERG.DARK_BG : BLOOMBERG.CYAN,
-                  cursor: 'pointer',
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <span>{cat.icon}</span>
-                <span>{cat.name}</span>
-              </button>
-            ))}
-          </div>
+    <div className="flex flex-col h-full" style={{ backgroundColor: BLOOMBERG.DARK_BG, fontFamily: 'Consolas, monospace' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: BLOOMBERG.ORANGE, backgroundColor: BLOOMBERG.HEADER_BG }}>
+        <div className="flex items-center gap-3">
+          <Bot size={20} color={BLOOMBERG.ORANGE} />
+          <span style={{ color: BLOOMBERG.ORANGE, fontWeight: 700, fontSize: '13px' }}>CORE AGENT BUILDER</span>
+          <span style={{ color: BLOOMBERG.GRAY, fontSize: '9px' }}>finagent_core</span>
         </div>
-
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {/* API Keys Indicator */}
-          <div style={{
-            padding: '4px 10px',
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            border: `1px solid ${Object.keys(apiKeys).length > 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
-            fontSize: '9px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            color: Object.keys(apiKeys).length > 0 ? BLOOMBERG.GREEN : BLOOMBERG.RED
-          }}>
-            <Key size={10} />
-            {Object.keys(apiKeys).length} API Keys
-          </div>
-
-          <button
-            onClick={() => setShowJsonEditor(!showJsonEditor)}
-            style={{
-              padding: '4px 10px',
-              backgroundColor: showJsonEditor ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: showJsonEditor ? BLOOMBERG.DARK_BG : BLOOMBERG.CYAN,
-              cursor: 'pointer',
-              fontSize: '10px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-          >
-            {showJsonEditor ? <EyeOff size={12} /> : <Eye size={12} />}
-            {showJsonEditor ? 'Hide JSON' : 'Show JSON'}
+        <div className="flex items-center gap-2">
+          <button onClick={handleNew} className="flex items-center gap-1 px-2 py-1 text-xs" style={{ backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}`, color: BLOOMBERG.WHITE }}>
+            <Plus size={12} /> New
           </button>
-
-          <button
-            onClick={loadAgents}
-            disabled={loading}
-            style={{
-              padding: '4px 10px',
-              backgroundColor: BLOOMBERG.PANEL_BG,
-              border: `1px solid ${BLOOMBERG.BORDER}`,
-              color: BLOOMBERG.CYAN,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontSize: '10px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-          >
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-            Refresh
+          <button onClick={handleSave} disabled={loading} className="flex items-center gap-1 px-2 py-1 text-xs" style={{ backgroundColor: BLOOMBERG.ORANGE, color: BLOOMBERG.DARK_BG, fontWeight: 600 }}>
+            <Save size={12} /> {loading ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
 
-      {/* ========== MAIN CONTENT ========== */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left Panel - Agent List */}
-        <div style={{
-          width: '260px',
-          borderRight: `1px solid ${BLOOMBERG.BORDER}`,
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: BLOOMBERG.PANEL_BG
-        }}>
-          <div style={{
-            padding: '8px 12px',
-            borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-            backgroundColor: BLOOMBERG.HEADER_BG,
-            fontSize: '11px',
-            fontWeight: 600,
-            color: BLOOMBERG.GRAY
-          }}>
-            {teamName ? `TEAM: ${teamName.toUpperCase()} (${agents.length})` : `AVAILABLE AGENTS (${agents.length})`}
+      {/* Alerts */}
+      {error && (
+        <div className="flex items-center gap-2 px-3 py-1 text-xs" style={{ backgroundColor: `${BLOOMBERG.RED}20`, color: BLOOMBERG.RED }}>
+          <AlertCircle size={12} /> {error}
+          <button onClick={() => setError(null)} className="ml-auto"><X size={12} /></button>
+        </div>
+      )}
+      {success && (
+        <div className="flex items-center gap-2 px-3 py-1 text-xs" style={{ backgroundColor: `${BLOOMBERG.GREEN}20`, color: BLOOMBERG.GREEN }}>
+          <CheckCircle size={12} /> {success}
+        </div>
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left: Saved Configs */}
+        <div className="w-56 border-r flex flex-col" style={{ borderColor: BLOOMBERG.BORDER, backgroundColor: BLOOMBERG.PANEL_BG }}>
+          <div className="p-2 border-b" style={{ borderColor: BLOOMBERG.BORDER }}>
+            <select
+              value={filterCategory}
+              onChange={e => setFilterCategory(e.target.value)}
+              className="w-full px-2 py-1 text-xs"
+              style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+            >
+              <option value="all">All Categories</option>
+              {CONFIG_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+            </select>
           </div>
-
-          <div style={{ flex: 1, overflow: 'auto', padding: '8px' }}>
-            {loading && agents.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '20px', color: BLOOMBERG.GRAY }}>
-                <RefreshCw size={20} className="animate-spin" style={{ margin: '0 auto' }} />
-                <div style={{ marginTop: '8px', fontSize: '10px' }}>Loading agents...</div>
-              </div>
-            ) : agents.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '20px', color: BLOOMBERG.GRAY }}>
-                <AlertCircle size={20} style={{ margin: '0 auto' }} />
-                <div style={{ marginTop: '8px', fontSize: '10px' }}>No agents found</div>
-              </div>
+          <div className="flex-1 overflow-auto p-2 space-y-1">
+            {filteredConfigs.length === 0 ? (
+              <div className="text-center py-8 text-xs" style={{ color: BLOOMBERG.GRAY }}>No saved configs</div>
             ) : (
-              <>
-                {(() => {
-                  // Group agents by book_source
-                  const grouped = agents.reduce((acc, agent) => {
-                    const book = agent.book_source || 'Other';
-                    if (!acc[book]) acc[book] = [];
-                    acc[book].push(agent);
-                    return acc;
-                  }, {} as Record<string, AgentConfig[]>);
-
-                  const books = Object.keys(grouped);
-
-                  // If only one agent or no books, show flat list
-                  if (books.length <= 1 && !teamName) {
-                    return agents.map((agent) => (
-                      <button
-                        key={agent.id}
-                        onClick={() => setSelectedAgent(agent)}
-                        style={{
-                          width: '100%',
-                          padding: '10px',
-                          marginBottom: '6px',
-                          backgroundColor: selectedAgent?.id === agent.id ? BLOOMBERG.HOVER : 'transparent',
-                          border: `1px solid ${selectedAgent?.id === agent.id ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                          color: BLOOMBERG.WHITE,
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          fontSize: '10px',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          if (selectedAgent?.id !== agent.id) {
-                            e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                            e.currentTarget.style.borderColor = BLOOMBERG.MUTED;
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (selectedAgent?.id !== agent.id) {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                            e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                          }
-                        }}
-                      >
-                        <div style={{ fontWeight: 600, color: BLOOMBERG.CYAN, marginBottom: '4px' }}>
-                          {agent.name}
-                        </div>
-                        <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px' }}>
-                          {agent.role}
-                        </div>
-                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                          <span style={{
-                            padding: '2px 6px',
-                            backgroundColor: BLOOMBERG.DARK_BG,
-                            border: `1px solid ${BLOOMBERG.BORDER}`,
-                            borderRadius: '2px',
-                            fontSize: '8px',
-                            color: BLOOMBERG.YELLOW
-                          }}>
-                            {agent.llm_config.provider}
-                          </span>
-                          <span style={{
-                            padding: '2px 6px',
-                            backgroundColor: BLOOMBERG.DARK_BG,
-                            border: `1px solid ${BLOOMBERG.BORDER}`,
-                            borderRadius: '2px',
-                            fontSize: '8px',
-                            color: BLOOMBERG.PURPLE
-                          }}>
-                            {agent.llm_config.model_id}
-                          </span>
-                        </div>
-                      </button>
-                    ));
-                  }
-
-                  // Show book groups
-                  return books.map(bookName => {
-                    const bookAgents = grouped[bookName];
-                    const isExpanded = expandedBooks.has(bookName);
-
-                    return (
-                      <div key={bookName} style={{ marginBottom: '8px' }}>
-                        {/* Book Header */}
-                        <button
-                          onClick={() => {
-                            const newExpanded = new Set(expandedBooks);
-                            if (isExpanded) {
-                              newExpanded.delete(bookName);
-                            } else {
-                              newExpanded.add(bookName);
-                            }
-                            setExpandedBooks(newExpanded);
-                            setSelectedBook(isExpanded ? null : bookName);
-                          }}
-                          style={{
-                            width: '100%',
-                            padding: '10px',
-                            backgroundColor: isExpanded ? BLOOMBERG.ORANGE + '20' : BLOOMBERG.HEADER_BG,
-                            border: `1px solid ${isExpanded ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                            color: BLOOMBERG.WHITE,
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                            fontSize: '10px',
-                            fontWeight: 600,
-                            marginBottom: isExpanded ? '6px' : '0'
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontSize: '14px' }}>📖</span>
-                              <span style={{ color: BLOOMBERG.ORANGE }}>{bookName}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ color: BLOOMBERG.GRAY, fontSize: '9px' }}>
-                                {bookAgents.length} agents
-                              </span>
-                              <ChevronDown
-                                size={14}
-                                style={{
-                                  transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                                  transition: 'transform 0.2s'
-                                }}
-                              />
-                            </div>
-                          </div>
+              filteredConfigs.map(cfg => (
+                <div
+                  key={cfg.id}
+                  onClick={() => handleLoad(cfg)}
+                  className="p-2 rounded cursor-pointer group"
+                  style={{
+                    backgroundColor: selectedConfigId === cfg.id ? BLOOMBERG.HOVER : 'transparent',
+                    border: `1px solid ${activeConfigId === cfg.id ? BLOOMBERG.GREEN : selectedConfigId === cfg.id ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium truncate" style={{ color: BLOOMBERG.WHITE }}>{cfg.name}</span>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100">
+                      {activeConfigId !== cfg.id && (
+                        <button onClick={e => { e.stopPropagation(); handleSetActive(cfg.id); }} title="Set Active">
+                          <Check size={12} color={BLOOMBERG.GREEN} />
                         </button>
-
-                        {/* Expanded Agents */}
-                        {isExpanded && bookAgents.map((agent) => (
-                          <button
-                            key={agent.id}
-                            onClick={() => setSelectedAgent(agent)}
-                            style={{
-                              width: 'calc(100% - 12px)',
-                              padding: '10px',
-                              marginBottom: '6px',
-                              marginLeft: '12px',
-                              backgroundColor: selectedAgent?.id === agent.id ? BLOOMBERG.HOVER : 'transparent',
-                              border: `1px solid ${selectedAgent?.id === agent.id ? BLOOMBERG.CYAN : BLOOMBERG.BORDER}`,
-                              color: BLOOMBERG.WHITE,
-                              cursor: 'pointer',
-                              textAlign: 'left',
-                              fontSize: '10px',
-                              transition: 'all 0.2s'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (selectedAgent?.id !== agent.id) {
-                                e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                                e.currentTarget.style.borderColor = BLOOMBERG.MUTED;
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (selectedAgent?.id !== agent.id) {
-                                e.currentTarget.style.backgroundColor = 'transparent';
-                                e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                              }
-                            }}
-                          >
-                            <div style={{ fontWeight: 600, color: BLOOMBERG.CYAN, marginBottom: '4px' }}>
-                              {agent.name}
-                            </div>
-                            <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px' }}>
-                              {agent.role}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    );
-                  });
-                })()}
-              </>
+                      )}
+                      <button onClick={e => { e.stopPropagation(); handleDelete(cfg.id); }} title="Delete">
+                        <Trash2 size={12} color={BLOOMBERG.RED} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-xs" style={{ color: BLOOMBERG.GRAY }}>{cfg.category}</div>
+                  {activeConfigId === cfg.id && (
+                    <div className="flex items-center gap-1 mt-1 text-xs" style={{ color: BLOOMBERG.GREEN }}>
+                      <Zap size={10} /> Active
+                    </div>
+                  )}
+                </div>
+              ))
             )}
           </div>
         </div>
 
-        {/* Middle Panel - Configuration Editor */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: testResult ? `1px solid ${BLOOMBERG.BORDER}` : 'none' }}>
-          {/* Status Messages */}
-          {(error || success) && (
-            <div style={{
-              padding: '8px 12px',
-              backgroundColor: error ? BLOOMBERG.RED + '20' : BLOOMBERG.GREEN + '20',
-              borderBottom: `1px solid ${error ? BLOOMBERG.RED : BLOOMBERG.GREEN}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '10px'
-            }}>
-              {error ? <AlertCircle size={14} color={BLOOMBERG.RED} /> : <CheckCircle size={14} color={BLOOMBERG.GREEN} />}
-              <span style={{ color: error ? BLOOMBERG.RED : BLOOMBERG.GREEN }}>
-                {error || success}
-              </span>
+        {/* Center: Config Editor */}
+        <div className="flex-1 overflow-auto p-3 space-y-2">
+          {/* Basic Info */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="col-span-2">
+              <label className="text-xs" style={{ color: BLOOMBERG.GRAY }}>Name</label>
+              <input
+                value={configName}
+                onChange={e => setConfigName(e.target.value)}
+                className="w-full px-2 py-1 text-xs mt-1"
+                style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+              />
             </div>
-          )}
-
-          {selectedAgent ? (
-            <>
-              {/* Agent Info Header */}
-              <div style={{
-                padding: '12px',
-                borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-                backgroundColor: BLOOMBERG.HEADER_BG
-              }}>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.CYAN, marginBottom: '6px' }}>
-                  {selectedAgent.name}
-                </div>
-                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>
-                  {selectedAgent.description}
-                </div>
-
-                {/* Test Query Input */}
-                <div style={{ marginBottom: '8px' }}>
-                  <div style={{ fontSize: '9px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '4px' }}>
-                    TEST QUERY
-                  </div>
-                  <textarea
-                    value={testQuery}
-                    onChange={(e) => setTestQuery(e.target.value)}
-                    placeholder="Enter your test query here..."
-                    style={{
-                      width: '100%',
-                      minHeight: '60px',
-                      backgroundColor: BLOOMBERG.DARK_BG,
-                      border: `1px solid ${BLOOMBERG.BORDER}`,
-                      color: BLOOMBERG.WHITE,
-                      padding: '6px 8px',
-                      fontSize: '10px',
-                      fontFamily: 'inherit',
-                      resize: 'vertical',
-                      outline: 'none'
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button
-                    onClick={saveConfig}
-                    disabled={loading}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: BLOOMBERG.GREEN,
-                      border: 'none',
-                      color: BLOOMBERG.DARK_BG,
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Save size={12} />
-                    Save Configuration
-                  </button>
-
-                  <button
-                    onClick={testAgent}
-                    disabled={loading}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: BLOOMBERG.BLUE,
-                      border: 'none',
-                      color: BLOOMBERG.WHITE,
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Play size={12} />
-                    {loading ? 'Testing...' : 'Test Agent'}
-                  </button>
-
-                  {(teamName || (selectedBook && agents.filter(a => a.book_source === selectedBook).length > 1)) && (
-                    <button
-                      onClick={testTeamCollaboration}
-                      disabled={loading}
-                      style={{
-                        padding: '6px 12px',
-                        backgroundColor: BLOOMBERG.PURPLE,
-                        border: 'none',
-                        color: BLOOMBERG.WHITE,
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <Brain size={12} />
-                      {loading ? 'Collaborating...' : '🤝 Team Discussion'}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* JSON Editor */}
-              <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-                {showJsonEditor ? (
-                  <div style={{ height: '100%' }}>
-                    <div style={{
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      color: BLOOMBERG.GRAY,
-                      marginBottom: '8px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}>
-                      <Code size={12} />
-                      JSON CONFIGURATION
-                    </div>
-                    <textarea
-                      value={jsonText}
-                      onChange={(e) => setJsonText(e.target.value)}
-                      style={{
-                        width: '100%',
-                        height: 'calc(100% - 30px)',
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        color: BLOOMBERG.CYAN,
-                        padding: '12px',
-                        fontSize: '11px',
-                        fontFamily: '"IBM Plex Mono", monospace',
-                        resize: 'none',
-                        outline: 'none'
-                      }}
-                      spellCheck={false}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ display: 'grid', gap: '12px' }}>
-                    {/* Basic Info */}
-                    <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        ROLE
-                      </div>
-                      <input
-                        type="text"
-                        value={selectedAgent.role}
-                        onChange={(e) => {
-                          const updated = { ...selectedAgent, role: e.target.value };
-                          setSelectedAgent(updated);
-                          setJsonText(JSON.stringify(updated, null, 2));
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          backgroundColor: BLOOMBERG.DARK_BG,
-                          border: `1px solid ${BLOOMBERG.BORDER}`,
-                          fontSize: '11px',
-                          color: BLOOMBERG.YELLOW,
-                          outline: 'none',
-                          fontFamily: 'inherit'
-                        }}
-                      />
-                    </div>
-
-                    <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        GOAL
-                      </div>
-                      <textarea
-                        value={selectedAgent.goal}
-                        onChange={(e) => {
-                          const updated = { ...selectedAgent, goal: e.target.value };
-                          setSelectedAgent(updated);
-                          setJsonText(JSON.stringify(updated, null, 2));
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          backgroundColor: BLOOMBERG.DARK_BG,
-                          border: `1px solid ${BLOOMBERG.BORDER}`,
-                          fontSize: '11px',
-                          color: BLOOMBERG.WHITE,
-                          outline: 'none',
-                          resize: 'vertical',
-                          minHeight: '60px',
-                          fontFamily: 'inherit',
-                          lineHeight: '1.5'
-                        }}
-                      />
-                    </div>
-
-                    {/* LLM Config - Show ACTIVE from Settings */}
-                    <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        LLM CONFIGURATION (ACTIVE FROM SETTINGS)
-                      </div>
-                      <div style={{
-                        padding: '8px',
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
-                        gap: '8px',
-                        fontSize: '10px'
-                      }}>
-                        {(() => {
-                          const activeLLM = llmConfigs.find(c => c.is_active);
-                          if (!activeLLM) {
-                            return (
-                              <div style={{ gridColumn: '1 / -1', color: BLOOMBERG.RED, textAlign: 'center' }}>
-                                [WARN]️ No active LLM configured in Settings
-                              </div>
-                            );
-                          }
-                          // Check apiKeys map for actual runtime API key (not DB config)
-                          const apiKeyName = `${activeLLM.provider.toUpperCase()}_API_KEY`;
-                          const hasApiKey = !!apiKeys[apiKeyName];
-
-                          return (
-                            <>
-                              <div>
-                                <span style={{ color: BLOOMBERG.GRAY }}>Provider:</span>{' '}
-                                <span style={{ color: BLOOMBERG.CYAN }}>{activeLLM.provider}</span>
-                              </div>
-                              <div>
-                                <span style={{ color: BLOOMBERG.GRAY }}>Model:</span>{' '}
-                                <span style={{ color: BLOOMBERG.PURPLE }}>{activeLLM.model}</span>
-                              </div>
-                              <div>
-                                <span style={{ color: BLOOMBERG.GRAY }}>API Key:</span>{' '}
-                                <span style={{ color: hasApiKey ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
-                                  {hasApiKey ? '[OK] Configured' : '[FAIL] Missing'}
-                                </span>
-                              </div>
-                              <div>
-                                <span style={{ color: BLOOMBERG.GRAY }}>Status:</span>{' '}
-                                <span style={{ color: BLOOMBERG.GREEN }}>● ACTIVE</span>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
-
-                    {/* Tools */}
-                    <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        TOOLS ({selectedAgent.tools.length})
-                      </div>
-                      <div style={{
-                        padding: '8px',
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        display: 'flex',
-                        gap: '6px',
-                        flexWrap: 'wrap'
-                      }}>
-                        {selectedAgent.tools.map((tool, idx) => (
-                          <span
-                            key={idx}
-                            style={{
-                              padding: '4px 8px',
-                              backgroundColor: BLOOMBERG.DARK_BG,
-                              border: `1px solid ${BLOOMBERG.BORDER}`,
-                              color: BLOOMBERG.GREEN,
-                              fontSize: '9px'
-                            }}
-                          >
-                            {tool}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Scoring Weights */}
-                    {(selectedAgent as any).scoring_weights && Object.keys((selectedAgent as any).scoring_weights).length > 0 && (
-                      <div>
-                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                          SCORING WEIGHTS (User Configurable)
-                        </div>
-                        <div style={{
-                          padding: '8px',
-                          backgroundColor: BLOOMBERG.PANEL_BG,
-                          border: `1px solid ${BLOOMBERG.ORANGE}`,
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: '8px',
-                          fontSize: '10px'
-                        }}>
-                          {Object.entries((selectedAgent as any).scoring_weights || {}).map(([key, value]) => (
-                            <div key={key}>
-                              <span style={{ color: BLOOMBERG.GRAY }}>{key}:</span>{' '}
-                              <span style={{ color: BLOOMBERG.ORANGE, fontWeight: 600 }}>{((value as number) * 100).toFixed(0)}%</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Thresholds */}
-                    {(selectedAgent as any).thresholds && Object.keys((selectedAgent as any).thresholds).length > 0 && (
-                      <div>
-                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                          ANALYSIS THRESHOLDS (User Configurable)
-                        </div>
-                        <div style={{
-                          padding: '8px',
-                          backgroundColor: BLOOMBERG.PANEL_BG,
-                          border: `1px solid ${BLOOMBERG.CYAN}`,
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr 1fr',
-                          gap: '6px',
-                          fontSize: '9px',
-                          maxHeight: '150px',
-                          overflow: 'auto'
-                        }}>
-                          {Object.entries((selectedAgent as any).thresholds || {}).map(([key, value]) => (
-                            <div key={key}>
-                              <span style={{ color: BLOOMBERG.GRAY }}>{key}:</span>{' '}
-                              <span style={{ color: BLOOMBERG.CYAN }}>{String(value)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Data Sources */}
-                    {(selectedAgent as any).data_sources && (
-                      <div>
-                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                          DATA SOURCES (User Configurable)
-                        </div>
-                        <div style={{
-                          padding: '8px',
-                          backgroundColor: BLOOMBERG.PANEL_BG,
-                          border: `1px solid ${BLOOMBERG.PURPLE}`,
-                          fontSize: '10px'
-                        }}>
-                          {(selectedAgent as any).data_sources?.line_items && Array.isArray((selectedAgent as any).data_sources.line_items) && (
-                            <div style={{ marginBottom: '6px' }}>
-                              <span style={{ color: BLOOMBERG.GRAY }}>Line Items:</span>{' '}
-                              <span style={{ color: BLOOMBERG.PURPLE }}>
-                                {(selectedAgent as any).data_sources.line_items.join(', ')}
-                              </span>
-                            </div>
-                          )}
-                          {(selectedAgent as any).data_sources?.years_of_data != null && (
-                            <div>
-                              <span style={{ color: BLOOMBERG.GRAY }}>Years of Data:</span>{' '}
-                              <span style={{ color: BLOOMBERG.YELLOW }}>{(selectedAgent as any).data_sources.years_of_data}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Instructions */}
-                    <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        INSTRUCTIONS
-                      </div>
-                      <textarea
-                        value={selectedAgent.instructions}
-                        onChange={(e) => {
-                          const updated = { ...selectedAgent, instructions: e.target.value };
-                          setSelectedAgent(updated);
-                          setJsonText(JSON.stringify(updated, null, 2));
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '8px',
-                          backgroundColor: BLOOMBERG.DARK_BG,
-                          border: `1px solid ${BLOOMBERG.BORDER}`,
-                          fontSize: '10px',
-                          color: BLOOMBERG.WHITE,
-                          outline: 'none',
-                          resize: 'vertical',
-                          minHeight: '150px',
-                          fontFamily: 'inherit',
-                          lineHeight: '1.6'
-                        }}
-                      />
-                    </div>
-
-                    {/* Save Button */}
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                      <button
-                        onClick={saveConfig}
-                        disabled={loading}
-                        style={{
-                          flex: 1,
-                          padding: '10px',
-                          backgroundColor: BLOOMBERG.ORANGE,
-                          border: `1px solid ${BLOOMBERG.ORANGE}`,
-                          color: BLOOMBERG.DARK_BG,
-                          cursor: loading ? 'not-allowed' : 'pointer',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          opacity: loading ? 0.6 : 1
-                        }}
-                      >
-                        <Save size={14} />
-                        {loading ? 'SAVING...' : 'SAVE CHANGES'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: BLOOMBERG.GRAY,
-              fontSize: '11px'
-            }}>
-              <div style={{ textAlign: 'center' }}>
-                <Bot size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
-                <div>Select an agent to view configuration</div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Panel - Test Results */}
-        {testResult && (
-          <div style={{
-            width: '400px',
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: BLOOMBERG.PANEL_BG,
-            overflow: 'hidden'
-          }}>
-            {/* Header */}
-            <div style={{
-              padding: '8px 12px',
-              borderBottom: `1px solid ${BLOOMBERG.BORDER}`,
-              backgroundColor: BLOOMBERG.HEADER_BG,
-              fontSize: '11px',
-              fontWeight: 600,
-              color: BLOOMBERG.GRAY,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Zap size={12} color={testResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED} />
-                <span>TEST RESULT</span>
-              </div>
-              <button
-                onClick={() => setTestResult(null)}
-                style={{
-                  padding: '2px 6px',
-                  backgroundColor: 'transparent',
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  color: BLOOMBERG.GRAY,
-                  cursor: 'pointer',
-                  fontSize: '9px'
-                }}
+            <div>
+              <label className="text-xs" style={{ color: BLOOMBERG.GRAY }}>Category</label>
+              <select
+                value={configCategory}
+                onChange={e => setConfigCategory(e.target.value)}
+                className="w-full px-2 py-1 text-xs mt-1"
+                style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}
               >
-                Close
-              </button>
-            </div>
-
-            {/* Result Content */}
-            <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
-              {/* Status Banner */}
-              <div style={{
-                padding: '8px',
-                backgroundColor: testResult.success ? BLOOMBERG.GREEN + '20' : BLOOMBERG.RED + '20',
-                border: `1px solid ${testResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED}`,
-                marginBottom: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '10px',
-                color: testResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED
-              }}>
-                {testResult.success ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                <span style={{ fontWeight: 600 }}>
-                  {testResult.success ? 'SUCCESS' : 'FAILED'}
-                </span>
-              </div>
-
-              {/* Agent Info */}
-              {testResult.agent_name && (
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ fontSize: '9px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '4px' }}>
-                    AGENT
-                  </div>
-                  <div style={{
-                    padding: '6px 8px',
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
-                    fontSize: '10px',
-                    color: BLOOMBERG.CYAN
-                  }}>
-                    {testResult.agent_name}
-                  </div>
-                </div>
-              )}
-
-              {/* Provider & Model */}
-              {testResult.provider && (
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ fontSize: '9px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '4px' }}>
-                    PROVIDER & MODEL
-                  </div>
-                  <div style={{
-                    padding: '6px 8px',
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
-                    fontSize: '10px',
-                    display: 'flex',
-                    gap: '8px'
-                  }}>
-                    <span style={{ color: BLOOMBERG.YELLOW }}>{testResult.provider}</span>
-                    <span style={{ color: BLOOMBERG.GRAY }}>•</span>
-                    <span style={{ color: BLOOMBERG.PURPLE }}>{testResult.model}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Team Discussion */}
-              {testResult.discussion && (
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ fontSize: '9px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '4px' }}>
-                    TEAM DISCUSSION ({testResult.total_agents} AGENTS, {testResult.rounds} ROUNDS)
-                  </div>
-                  <div style={{ maxHeight: '500px', overflow: 'auto' }}>
-                    {testResult.discussion.map((entry: any, idx: number) => (
-                      <div key={idx} style={{
-                        padding: '8px',
-                        backgroundColor: BLOOMBERG.DARK_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        marginBottom: '8px',
-                        fontSize: '10px'
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                          <span style={{ color: BLOOMBERG.CYAN, fontWeight: 600 }}>{entry.agent}</span>
-                          <span style={{ color: BLOOMBERG.GRAY, fontSize: '9px' }}>Round {entry.round}</span>
-                        </div>
-                        <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px' }}>
-                          {entry.role}
-                        </div>
-                        <div style={{ color: BLOOMBERG.WHITE, lineHeight: '1.6' }}>
-                          <ReactMarkdown
-                            components={{
-                              p: ({ node, ...props }) => <p style={{ margin: '0.5em 0' }} {...props} />,
-                              strong: ({ node, ...props }) => <strong style={{ color: BLOOMBERG.CYAN, fontWeight: 600 }} {...props} />,
-                              em: ({ node, ...props }) => <em style={{ color: BLOOMBERG.YELLOW }} {...props} />,
-                              ul: ({ node, ...props }) => <ul style={{ margin: '0.5em 0', paddingLeft: '1.5em' }} {...props} />,
-                              ol: ({ node, ...props }) => <ol style={{ margin: '0.5em 0', paddingLeft: '1.5em' }} {...props} />,
-                              li: ({ node, ...props }) => <li style={{ margin: '0.25em 0' }} {...props} />,
-                            }}
-                          >
-                            {entry.response}
-                          </ReactMarkdown>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Response */}
-              {testResult.response && (
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ fontSize: '9px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '4px' }}>
-                    RESPONSE
-                  </div>
-                  <div style={{
-                    padding: '12px',
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
-                    fontSize: '10px',
-                    maxHeight: '400px',
-                    overflow: 'auto',
-                    lineHeight: '1.8',
-                    color: BLOOMBERG.WHITE,
-                    whiteSpace: 'pre-wrap'
-                  }}>
-                    <ReactMarkdown
-                      components={{
-                        p: ({ node, ...props }) => <p style={{ margin: '0.8em 0', lineHeight: '1.8' }} {...props} />,
-                        strong: ({ node, ...props }) => <strong style={{ color: BLOOMBERG.CYAN, fontWeight: 700 }} {...props} />,
-                        em: ({ node, ...props }) => <em style={{ color: BLOOMBERG.YELLOW, fontStyle: 'italic' }} {...props} />,
-                        ul: ({ node, ...props }) => <ul style={{ margin: '0.8em 0', paddingLeft: '2em', listStyleType: 'disc' }} {...props} />,
-                        ol: ({ node, ...props }) => <ol style={{ margin: '0.8em 0', paddingLeft: '2em', listStyleType: 'decimal' }} {...props} />,
-                        li: ({ node, ...props }) => <li style={{ margin: '0.5em 0', lineHeight: '1.8' }} {...props} />,
-                        h1: ({ node, ...props }) => <h1 style={{ color: BLOOMBERG.ORANGE, fontSize: '14px', fontWeight: 700, margin: '1em 0 0.5em' }} {...props} />,
-                        h2: ({ node, ...props }) => <h2 style={{ color: BLOOMBERG.CYAN, fontSize: '12px', fontWeight: 700, margin: '1em 0 0.5em' }} {...props} />,
-                        h3: ({ node, ...props }) => <h3 style={{ color: BLOOMBERG.YELLOW, fontSize: '11px', fontWeight: 600, margin: '0.8em 0 0.4em' }} {...props} />,
-                        code: ({ node, inline, ...props }: any) => inline
-                          ? <code style={{ backgroundColor: BLOOMBERG.HEADER_BG, padding: '2px 4px', color: BLOOMBERG.GREEN, fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px' }} {...props} />
-                          : <code style={{ display: 'block', backgroundColor: BLOOMBERG.HEADER_BG, padding: '8px', color: BLOOMBERG.GREEN, fontFamily: 'IBM Plex Mono, monospace', fontSize: '9px', margin: '0.5em 0', overflow: 'auto' }} {...props} />,
-                        blockquote: ({ node, ...props }) => <blockquote style={{ borderLeft: `3px solid ${BLOOMBERG.ORANGE}`, paddingLeft: '12px', margin: '0.8em 0', color: BLOOMBERG.GRAY, fontStyle: 'italic' }} {...props} />,
-                      }}
-                    >
-                      {testResult.response}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-              )}
-
-              {/* Tokens Used */}
-              {testResult.tokens_used && (
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ fontSize: '9px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '4px' }}>
-                    TOKENS USED
-                  </div>
-                  <div style={{
-                    padding: '6px 8px',
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    border: `1px solid ${BLOOMBERG.BORDER}`,
-                    fontSize: '10px',
-                    color: BLOOMBERG.CYAN
-                  }}>
-                    {testResult.tokens_used.toLocaleString()}
-                  </div>
-                </div>
-              )}
-
-              {/* Error Message */}
-              {testResult.error && (
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ fontSize: '9px', fontWeight: 600, color: BLOOMBERG.RED, marginBottom: '4px' }}>
-                    ERROR
-                  </div>
-                  <div style={{
-                    padding: '8px',
-                    backgroundColor: BLOOMBERG.DARK_BG,
-                    border: `1px solid ${BLOOMBERG.RED}`,
-                    fontSize: '10px',
-                    color: BLOOMBERG.RED,
-                    lineHeight: '1.6',
-                    whiteSpace: 'pre-wrap'
-                  }}>
-                    {testResult.error}
-                  </div>
-                </div>
-              )}
-
-              {/* Raw JSON (collapsed by default) */}
-              <details style={{ marginTop: '12px' }}>
-                <summary style={{
-                  fontSize: '9px',
-                  fontWeight: 600,
-                  color: BLOOMBERG.GRAY,
-                  cursor: 'pointer',
-                  marginBottom: '4px',
-                  padding: '4px',
-                  backgroundColor: BLOOMBERG.HEADER_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`
-                }}>
-                  RAW JSON
-                </summary>
-                <div style={{
-                  padding: '8px',
-                  backgroundColor: BLOOMBERG.DARK_BG,
-                  border: `1px solid ${BLOOMBERG.BORDER}`,
-                  fontSize: '9px',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                  maxHeight: '200px',
-                  overflow: 'auto',
-                  marginTop: '4px'
-                }}>
-                  <pre style={{ margin: 0, color: BLOOMBERG.CYAN }}>
-                    {JSON.stringify(testResult, null, 2)}
-                  </pre>
-                </div>
-              </details>
+                {CONFIG_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+              </select>
             </div>
           </div>
-        )}
+
+          {/* Model */}
+          <div className="rounded" style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}>
+            <SectionHeader id="model" title="MODEL" icon={<Cpu size={14} />} />
+            {expandedSections.has('model') && (
+              <div className="p-2 space-y-2" style={{ backgroundColor: BLOOMBERG.PANEL_BG }}>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs" style={{ color: BLOOMBERG.GRAY }}>Provider</label>
+                    <select
+                      value={modelProvider}
+                      onChange={e => { setModelProvider(e.target.value); setModelId(MODEL_PROVIDERS.find(p => p.id === e.target.value)?.models[0] || ''); }}
+                      className="w-full px-2 py-1 text-xs mt-1"
+                      style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.CYAN, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                    >
+                      {MODEL_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs" style={{ color: BLOOMBERG.GRAY }}>Model</label>
+                    <select
+                      value={modelId}
+                      onChange={e => setModelId(e.target.value)}
+                      className="w-full px-2 py-1 text-xs mt-1"
+                      style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.PURPLE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                    >
+                      {availableModels.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs" style={{ color: BLOOMBERG.GRAY }}>Temperature: {temperature}</label>
+                    <input type="range" min="0" max="2" step="0.1" value={temperature} onChange={e => setTemperature(parseFloat(e.target.value))} className="w-full mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-xs" style={{ color: BLOOMBERG.GRAY }}>Max Tokens</label>
+                    <input
+                      type="number"
+                      value={maxTokens}
+                      onChange={e => setMaxTokens(parseInt(e.target.value) || 4096)}
+                      className="w-full px-2 py-1 text-xs mt-1"
+                      style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Instructions */}
+          <div className="rounded" style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}>
+            <SectionHeader id="instructions" title="INSTRUCTIONS" icon={<MessageSquare size={14} />} />
+            {expandedSections.has('instructions') && (
+              <div className="p-2" style={{ backgroundColor: BLOOMBERG.PANEL_BG }}>
+                <textarea
+                  value={instructions}
+                  onChange={e => setInstructions(e.target.value)}
+                  rows={5}
+                  placeholder="System instructions..."
+                  className="w-full px-2 py-1 text-xs font-mono"
+                  style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}`, resize: 'vertical' }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Tools */}
+          <div className="rounded" style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}>
+            <SectionHeader id="tools" title="TOOLS" icon={<Wrench size={14} />} badge={`${selectedTools.length}`} />
+            {expandedSections.has('tools') && (
+              <div className="p-2 space-y-2" style={{ backgroundColor: BLOOMBERG.PANEL_BG }}>
+                {Object.entries(TOOL_CATEGORIES).map(([cat, { tools, color }]) => (
+                  <div key={cat}>
+                    <div className="text-xs mb-1" style={{ color }}>{cat}</div>
+                    <div className="flex flex-wrap gap-1">
+                      {tools.map(tool => (
+                        <button
+                          key={tool}
+                          onClick={() => toggleTool(tool)}
+                          className="px-2 py-0.5 text-xs rounded"
+                          style={{
+                            backgroundColor: selectedTools.includes(tool) ? color : BLOOMBERG.HEADER_BG,
+                            color: selectedTools.includes(tool) ? BLOOMBERG.DARK_BG : BLOOMBERG.WHITE,
+                            border: `1px solid ${BLOOMBERG.BORDER}`,
+                          }}
+                        >
+                          {tool}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Memory & Reasoning */}
+          <div className="rounded" style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}>
+            <SectionHeader id="advanced" title="ADVANCED" icon={<Brain size={14} />} />
+            {expandedSections.has('advanced') && (
+              <div className="p-2 space-y-2" style={{ backgroundColor: BLOOMBERG.PANEL_BG }}>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={memoryEnabled} onChange={e => setMemoryEnabled(e.target.checked)} />
+                  <span className="text-xs" style={{ color: BLOOMBERG.WHITE }}>Enable Memory</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={reasoningEnabled} onChange={e => setReasoningEnabled(e.target.checked)} />
+                  <span className="text-xs" style={{ color: BLOOMBERG.WHITE }}>Enable Reasoning</span>
+                </label>
+                {reasoningEnabled && (
+                  <div className="grid grid-cols-2 gap-2 ml-4">
+                    <select
+                      value={reasoningStrategy}
+                      onChange={e => setReasoningStrategy(e.target.value)}
+                      className="px-2 py-1 text-xs"
+                      style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.CYAN, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                    >
+                      {REASONING_STRATEGIES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    <input
+                      type="number"
+                      value={reasoningMaxSteps}
+                      onChange={e => setReasoningMaxSteps(parseInt(e.target.value) || 10)}
+                      placeholder="Max steps"
+                      className="px-2 py-1 text-xs"
+                      style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}
+                    />
+                  </div>
+                )}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={markdownOutput} onChange={e => setMarkdownOutput(e.target.checked)} />
+                  <span className="text-xs" style={{ color: BLOOMBERG.WHITE }}>Markdown Output</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={debugMode} onChange={e => setDebugMode(e.target.checked)} />
+                  <span className="text-xs" style={{ color: BLOOMBERG.WHITE }}>Debug Mode</span>
+                </label>
+              </div>
+            )}
+          </div>
+
+          {/* JSON Preview */}
+          <div className="rounded" style={{ border: `1px solid ${BLOOMBERG.BORDER}` }}>
+            <SectionHeader id="json" title="JSON CONFIG" icon={<Code size={14} />} />
+            {expandedSections.has('json') && (
+              <div className="p-2" style={{ backgroundColor: BLOOMBERG.PANEL_BG }}>
+                <pre className="text-xs p-2 rounded overflow-auto max-h-40" style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.GREEN }}>
+                  {JSON.stringify(buildConfig(), null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Test Panel */}
+        <div className="w-72 border-l flex flex-col" style={{ borderColor: BLOOMBERG.BORDER, backgroundColor: BLOOMBERG.PANEL_BG }}>
+          <div className="p-2 border-b flex items-center gap-2" style={{ borderColor: BLOOMBERG.BORDER }}>
+            <Play size={14} color={BLOOMBERG.GREEN} />
+            <span className="text-xs font-medium" style={{ color: BLOOMBERG.WHITE }}>Test Agent</span>
+          </div>
+          <div className="p-2 space-y-2 flex-1 overflow-auto">
+            <textarea
+              value={testQuery}
+              onChange={e => setTestQuery(e.target.value)}
+              rows={3}
+              placeholder="Enter test query..."
+              className="w-full px-2 py-1 text-xs"
+              style={{ backgroundColor: BLOOMBERG.HEADER_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}`, resize: 'vertical' }}
+            />
+            <button
+              onClick={handleTest}
+              disabled={testing || !testQuery.trim()}
+              className="w-full flex items-center justify-center gap-2 px-2 py-2 text-xs font-medium rounded"
+              style={{ backgroundColor: testing ? BLOOMBERG.MUTED : BLOOMBERG.GREEN, color: BLOOMBERG.DARK_BG, opacity: testing || !testQuery.trim() ? 0.6 : 1 }}
+            >
+              {testing ? <><RefreshCw size={12} className="animate-spin" /> Running...</> : <><Play size={12} /> Run Test</>}
+            </button>
+            {testResponse && (
+              <div className="mt-2">
+                <div className="text-xs mb-1" style={{ color: BLOOMBERG.GRAY }}>Response:</div>
+                <div className="p-2 rounded text-xs overflow-auto max-h-80" style={{ backgroundColor: BLOOMBERG.DARK_BG, color: BLOOMBERG.WHITE, border: `1px solid ${BLOOMBERG.BORDER}` }}>
+                  <ReactMarkdown
+                    components={{
+                      p: ({ children }) => <p className="mb-2">{children}</p>,
+                      strong: ({ children }) => <strong style={{ color: BLOOMBERG.CYAN }}>{children}</strong>,
+                      code: ({ children }) => <code style={{ backgroundColor: BLOOMBERG.HEADER_BG, padding: '1px 4px', color: BLOOMBERG.GREEN }}>{children}</code>,
+                    }}
+                  >
+                    {testResponse}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      <TabFooter
-        tabName="AGENT CONFIGURATION"
-        leftInfo={[
-          { label: `Agents: ${agents.length}`, color: BLOOMBERG.GRAY },
-          { label: `LLM Configs: ${llmConfigs.length}`, color: BLOOMBERG.GRAY },
-          { label: `Active: ${llmConfigs.filter(c => c.is_active).length}`, color: BLOOMBERG.GREEN },
-        ]}
-        statusInfo={testResult ? (testResult.success ? 'Test Passed' : 'Test Failed') : 'Ready'}
-        backgroundColor={BLOOMBERG.PANEL_BG}
-        borderColor={BLOOMBERG.BORDER}
-      />
+      <TabFooter tabName="Core Agent Builder" />
     </div>
   );
 };

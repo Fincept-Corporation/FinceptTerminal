@@ -1,95 +1,27 @@
-﻿{
-    "title": "MESIN BACKTESTING",
-    "header": {
-        "strategy": "STRATEGI",
-        "results": "HASIL",
-        "trades": "PERDAGANGAN"
-    },
-    "toolbar": {
-        "run": "Jalankan Backtest",
-        "running": "Berjalan...",
-        "stop": "STOP",
-        "reset": "RESET",
-        "export": "EKSPOR HASIL",
-        "refresh": "Segarkan"
-    },
-    "config": {
-        "symbolTimeframe": "Simbol & Kerangka Waktu",
-        "symbol": "Simbol",
-        "stockTicker": "Ticker saham untuk backtest",
-        "startDate": "Tanggal Mulai",
-        "endDate": "Tanggal Akhir",
-        "initialCapital": "Modal Awal",
-        "strategy": "Strategi",
-        "parameters": "Parameter"
-    },
-    "sections": {
-        "strategyConfig": "Konfigurasi Strategi",
-        "strategyType": "Tipe Strategi",
-        "strategyParams": "Parameter Strategi",
-        "backtestResults": "Hasil Backtest",
-        "advancedSettings": "Pengaturan Lanjutan",
-        "advancedNote": "Opsi lanjutan untuk penyedia Backtesting.py"
-    },
-    "advanced": {
-        "commission": "Komisi (desimal)",
-        "tradeOnClose": "Perdagangan saat Tutup",
-        "hedging": "Hedging",
-        "exclusiveOrders": "Order Eksklusif",
-        "margin": "Margin"
-    },
-    "strategies": {
-        "sma": "SMA Crossover",
-        "rsi": "Strategi RSI",
-        "macd": "Strategi MACD",
-        "bollinger": "Bollinger Bands",
-        "custom": "Strategi Kustom"
-    },
-    "smaParams": {
-        "fastPeriod": "Periode Cepat",
-        "slowPeriod": "Periode Lambat",
-        "fastNote": "Moving average jangka pendek",
-        "slowNote": "Moving average jangka panjang"
-    },
-    "results": {
-        "totalReturn": "Total Return",
-        "sharpeRatio": "Sharpe Ratio",
-        "maxDrawdown": "Max Drawdown",
-        "winRate": "Win Rate",
-        "totalTrades": "Total Perdagangan",
-        "profitFactor": "Profit Factor",
-        "configurePrompt": "Konfigurasikan backtest Anda dan klik 'Jalankan Backtest' untuk melihat hasil"
-    },
-    "trades": {
-        "date": "Tanggal",
-        "type": "Tipe",
-        "price": "Harga",
-        "quantity": "Kuantitas",
-        "pnl": "P&L"
-    },
-    "status": {
-        "ready": "Siap",
-        "running": "Berjalan...",
-        "completed": "Selesai",
-        "error": "Error"
-    },
-    "messages": {
-        "backtestStarted": "Backtest dimulai",
-        "backtestCompleted": "Backtest selesai",
-        "backtestError": "Backtest gagal"
-    },
-    "visual": {
-        "priceData": "Data Harga",
-        "maIndicator": "Indikator MA",
-        "condition": "Kondisi",
-        "buyOrder": "Order Beli",
-        "sellOrder": "Order Jual",
-        "addBlocksPrompt": "Klik blok di atas untuk menambahkan ke strategi Anda",
-        "remove": "Hapus",
-        "generateCode": "Generate Kode dari Blok"
-    },
-    "template": {
-        "strategyTemplates": "Template Strategi",
-        "apply": "Terapkan Template"
-    }
+{
+  "title": "MESIN BACKTESTING",
+  "toolbar": {
+    "run": "Jalankan Backtest"
+  },
+  "config": {
+    "symbolTimeframe": "Simbol & Kerangka Waktu",
+    "symbol": "Simbol",
+    "stockTicker": "Ticker saham untuk backtest",
+    "startDate": "Tanggal Mulai",
+    "endDate": "Tanggal Akhir",
+    "initialCapital": "Modal Awal"
+  },
+  "sections": {
+    "strategyConfig": "Konfigurasi Strategi",
+    "strategyType": "Tipe Strategi",
+    "strategyParams": "Parameter Strategi",
+    "backtestResults": "Hasil Backtest",
+    "advancedSettings": "Pengaturan Lanjutan"
+  },
+  "smaParams": {
+    "fastPeriod": "Periode Cepat",
+    "slowPeriod": "Periode Lambat",
+    "fastNote": "Moving average jangka pendek",
+    "slowNote": "Moving average jangka panjang"
+  }
 }

@@ -1,26 +1,11 @@
 {
-    "title": "Integracja Excel",
-    "header": {
-        "import": "Importuj",
-        "export": "Eksportuj",
-        "preview": "Podgląd"
-    },
-    "toolbar": {
-        "open": "Otwórz plik",
-        "save": "Zapisz",
-        "upload": "Wyślij",
-        "download": "Pobierz",
-        "refresh": "Odśwież"
-    },
-    "table": {
-        "sheet": "Arkusz",
-        "rows": "Wiersze",
-        "columns": "Kolumny"
-    },
-    "messages": {
-        "loading": "Ładowanie pliku...",
-        "imported": "Plik zaimportowany",
-        "exported": "Plik wyeksportowany",
-        "error": "Błąd przetwarzania"
-    }
+  "title": "Integracja Excel",
+  "toolbar": {
+    "save": "Zapisz",
+    "import": "[PL] IMPORT",
+    "export": "[PL] EXPORT",
+    "snapshot": "[PL] SNAPSHOT",
+    "history": "[PL] HISTORY",
+    "revert": "[PL] REVERT"
+  }
 }

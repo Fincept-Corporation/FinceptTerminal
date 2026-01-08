@@ -1,42 +1,32 @@
 {
-    "title": "Phiếu hỗ trợ",
-    "header": {
-        "tickets": "Phiếu",
-        "new": "Phiếu mới",
-        "status": "Trạng thái"
-    },
-    "form": {
-        "subject": "Chủ đề",
-        "description": "Mô tả",
-        "priority": "Ưu tiên",
-        "category": "Danh mục"
-    },
-    "priority": {
-        "low": "Thấp",
-        "medium": "Trung bình",
-        "high": "Cao",
-        "urgent": "Khẩn cấp"
-    },
-    "status": {
-        "open": "Mở",
-        "inProgress": "Đang xử lý",
-        "resolved": "Đã giải quyết",
-        "closed": "Đã đóng"
-    },
-    "buttons": {
-        "submit": "Gửi",
-        "cancel": "Hủy",
-        "reply": "Trả lời",
-        "close": "Đóng"
-    },
-    "messages": {
-        "created": "Đã tạo phiếu",
-        "updated": "Đã cập nhật phiếu",
-        "closed": "Đã đóng phiếu",
-        "noTickets": "Không có phiếu"
-    },
-    "auth": {
-        "loginRequired": "Đăng nhập để tạo phiếu",
-        "demoMode": "Chế độ demo"
-    }
+  "title": "Phiếu hỗ trợ",
+  "header": {
+    "tickets": "Phiếu",
+    "open": "[VI] OPEN",
+    "resolved": "[VI] RESOLVED"
+  },
+  "status": {
+    "ready": "[VI] READY",
+    "updating": "[VI] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[VI] REFRESH",
+    "createTicket": "[VI] CREATE TICKET",
+    "backToList": "[VI] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[VI] AUTHENTICATION REQUIRED",
+    "loginMessage": "[VI] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[VI] SUPPORT TICKETS",
+    "noTickets": "[VI] No support tickets found. Create your first ticket to get started!",
+    "loading": "[VI] Loading tickets..."
+  },
+  "create": {
+    "title": "[VI] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[VI] DEMO"
+  }
 }

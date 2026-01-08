@@ -1,59 +1,6 @@
 {
-    "title": "ГЕОПОЛІТИКА",
-    "header": {
-        "overview": "ОГЛЯД",
-        "regions": "РЕГІОНИ",
-        "analysis": "АНАЛІЗ",
-        "alerts": "СПОВІЩЕННЯ"
-    },
-    "regions": {
-        "global": "Світ",
-        "northAmerica": "Північна Америка",
-        "europe": "Європа",
-        "asia": "Азійсько-Тихоокеанський",
-        "middleEast": "Близький Схід",
-        "africa": "Африка",
-        "latam": "Латинська Америка"
-    },
-    "categories": {
-        "conflict": "Конфлікти",
-        "sanctions": "Санкції",
-        "trade": "Торгові відносини",
-        "diplomacy": "Дипломатія",
-        "elections": "Вибори",
-        "policy": "Зміни політики"
-    },
-    "risk": {
-        "level": "Рівень ризику",
-        "high": "Високий",
-        "medium": "Середній",
-        "low": "Низький",
-        "critical": "Критичний",
-        "stable": "Стабільний"
-    },
-    "impact": {
-        "economic": "Економічний вплив",
-        "market": "Вплив на ринок",
-        "trade": "Вплив на торгівлю",
-        "currency": "Вплив на валюту"
-    },
-    "timeline": {
-        "latest": "Останнє",
-        "thisWeek": "Цього тижня",
-        "thisMonth": "Цього місяця",
-        "upcoming": "Майбутнє"
-    },
-    "actions": {
-        "subscribe": "Підписатися",
-        "export": "Експорт",
-        "share": "Поділитися",
-        "setAlert": "Створити сповіщення",
-        "filter": "Фільтр"
-    },
-    "messages": {
-        "loading": "Завантаження даних...",
-        "noEvents": "Немає подій",
-        "updated": "Оновлено",
-        "breaking": "Терміново"
-    }
+  "title": "ГЕОПОЛІТИКА",
+  "messages": {
+    "loading": "Завантаження даних..."
+  }
 }

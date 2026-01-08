@@ -1,46 +1,9 @@
 {
-    "title": "ALPHA ARENA",
-    "header": {
-        "competition": "YARIŞMA",
-        "leaderboard": "SIRALAMA",
-        "decisions": "KARARLAR",
-        "cycles": "DÖNGÜLER"
-    },
-    "buttons": {
-        "start": "BAŞLAT",
-        "stop": "DURDUR",
-        "refresh": "YENİLE",
-        "create": "YARIŞMA OLUŞTUR"
-    },
-    "form": {
-        "competitionName": "Yarışma adı",
-        "symbol": "Sembol",
-        "mode": "Ticaret modu",
-        "models": "Modelleri seç",
-        "apiKeys": "API Anahtarları"
-    },
-    "modes": {
-        "baseline": "Temel",
-        "monk": "Monk",
-        "situational": "Durumsal",
-        "maxLeverage": "Maksimum kaldıraç"
-    },
-    "leaderboard": {
-        "rank": "Sıra",
-        "model": "Model",
-        "pnl": "K/Z",
-        "trades": "İşlemler",
-        "winRate": "Kazanma oranı"
-    },
-    "status": {
-        "running": "ÇALIŞIYOR",
-        "stopped": "DURDURULDU",
-        "waiting": "BEKLİYOR",
-        "error": "HATA"
-    },
-    "messages": {
-        "competitionStarted": "Yarışma başladı",
-        "competitionStopped": "Yarışma durduruldu",
-        "noCompetition": "Aktif yarışma yok"
-    }
+  "title": "ALPHA ARENA",
+  "header": {
+    "competition": "YARIŞMA"
+  },
+  "buttons": {
+    "create": "YARIŞMA OLUŞTUR"
+  }
 }

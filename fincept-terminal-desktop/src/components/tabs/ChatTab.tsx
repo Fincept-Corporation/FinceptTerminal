@@ -566,7 +566,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {t('title')}
         </div>
         <div style={{ color: colors.text, fontSize: '14px', marginBottom: '16px' }}>
-          Financial Intelligence System
+          {t('subtitle')}
         </div>
         <div style={{ color: colors.warning, fontSize: '12px', marginBottom: '16px' }}>
           Provider: {currentProvider.toUpperCase()} | Model: {llmConfigService.getActiveConfig().model}
@@ -791,7 +791,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           <div style={{ padding: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
               <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold' }}>
-                SESSIONS ({statistics.totalSessions})
+                {t('history.sessions')} ({statistics.totalSessions})
               </div>
               {sessions.length > 0 && (
                 <button
@@ -805,9 +805,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
                     cursor: 'pointer',
                     fontWeight: 'bold'
                   }}
-                  title="Delete all sessions"
+                  title={t('history.deleteAll')}
                 >
-                  {t('history.clear').replace('History', 'All').toUpperCase()}
+                  {t('history.clearAll')}
                 </button>
               )}
             </div>
@@ -1092,7 +1092,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {/* Context Selector */}
           <div>
             <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              DATA CONTEXTS
+              {t('panel.dataContexts')}
             </div>
             <ContextSelector
               chatSessionUuid={currentSessionUuid}
@@ -1103,7 +1103,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {/* Quick Prompts */}
           <div>
             <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '8px' }}>
-              QUICK PROMPTS
+              {t('panel.quickPrompts')}
             </div>
             {[
               { cmd: 'MARKET TRENDS', prompt: 'Analyze current market trends and key insights' },
@@ -1134,7 +1134,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
           {/* System Info */}
           <div>
             <div style={{ color: colors.warning, fontSize: '11px', fontWeight: 'bold', marginBottom: '6px' }}>
-              SYSTEM INFO
+              {t('panel.systemInfo')}
             </div>
             <div style={{ color: colors.text, fontSize: '9px', marginBottom: '2px' }}>
               Provider: {currentProvider.toUpperCase()}

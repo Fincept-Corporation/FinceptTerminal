@@ -1,95 +1,27 @@
-﻿{
-    "title": "MOTOR DE BACKTESTING",
-    "header": {
-        "strategy": "ESTRATÉGIA",
-        "results": "RESULTADOS",
-        "trades": "OPERAÇÕES"
-    },
-    "toolbar": {
-        "run": "Executar Backtest",
-        "running": "Executando...",
-        "stop": "PARAR",
-        "reset": "REINICIAR",
-        "export": "EXPORTAR RESULTADOS",
-        "refresh": "Atualizar"
-    },
-    "config": {
-        "symbolTimeframe": "Código e Período",
-        "symbol": "Código",
-        "stockTicker": "Código da ação para backtest",
-        "startDate": "Data Início",
-        "endDate": "Data Fim",
-        "initialCapital": "Capital Inicial",
-        "strategy": "Estratégia",
-        "parameters": "Parâmetros"
-    },
-    "sections": {
-        "strategyConfig": "Configuração da Estratégia",
-        "strategyType": "Tipo de Estratégia",
-        "strategyParams": "Parâmetros da Estratégia",
-        "backtestResults": "Resultados do Backtest",
-        "advancedSettings": "Configurações Avançadas",
-        "advancedNote": "Opções avançadas para o provedor Backtesting.py"
-    },
-    "advanced": {
-        "commission": "Comissão (decimal)",
-        "tradeOnClose": "Operar no Fechamento",
-        "hedging": "Hedge",
-        "exclusiveOrders": "Ordens Exclusivas",
-        "margin": "Margem"
-    },
-    "strategies": {
-        "sma": "Cruzamento SMA",
-        "rsi": "Estratégia RSI",
-        "macd": "Estratégia MACD",
-        "bollinger": "Bandas de Bollinger",
-        "custom": "Estratégia Personalizada"
-    },
-    "smaParams": {
-        "fastPeriod": "Período Rápido",
-        "slowPeriod": "Período Lento",
-        "fastNote": "Média móvel de curto prazo",
-        "slowNote": "Média móvel de longo prazo"
-    },
-    "results": {
-        "totalReturn": "Retorno Total",
-        "sharpeRatio": "Índice Sharpe",
-        "maxDrawdown": "Drawdown Máximo",
-        "winRate": "Taxa de Acerto",
-        "totalTrades": "Total de Operações",
-        "profitFactor": "Fator de Lucro",
-        "configurePrompt": "Configure seu backtest e clique em 'Executar Backtest' para ver resultados"
-    },
-    "trades": {
-        "date": "Data",
-        "type": "Tipo",
-        "price": "Preço",
-        "quantity": "Quantidade",
-        "pnl": "L/P"
-    },
-    "status": {
-        "ready": "Pronto",
-        "running": "Executando...",
-        "completed": "Concluído",
-        "error": "Erro"
-    },
-    "messages": {
-        "backtestStarted": "Backtest iniciado",
-        "backtestCompleted": "Backtest concluído",
-        "backtestError": "Falha no backtest"
-    },
-    "visual": {
-        "priceData": "Dados de Preço",
-        "maIndicator": "Indicador MA",
-        "condition": "Condição",
-        "buyOrder": "Ordem de Compra",
-        "sellOrder": "Ordem de Venda",
-        "addBlocksPrompt": "Clique nos blocos para adicionar à estratégia",
-        "remove": "Remover",
-        "generateCode": "Gerar Código dos Blocos"
-    },
-    "template": {
-        "strategyTemplates": "Modelos de Estratégia",
-        "apply": "Aplicar Modelo"
-    }
+{
+  "title": "MOTOR DE BACKTESTING",
+  "toolbar": {
+    "run": "Executar Backtest"
+  },
+  "config": {
+    "symbolTimeframe": "Código e Período",
+    "symbol": "Código",
+    "stockTicker": "Código da ação para backtest",
+    "startDate": "Data Início",
+    "endDate": "Data Fim",
+    "initialCapital": "Capital Inicial"
+  },
+  "sections": {
+    "strategyConfig": "Configuração da Estratégia",
+    "strategyType": "Tipo de Estratégia",
+    "strategyParams": "Parâmetros da Estratégia",
+    "backtestResults": "Resultados do Backtest",
+    "advancedSettings": "Configurações Avançadas"
+  },
+  "smaParams": {
+    "fastPeriod": "Período Rápido",
+    "slowPeriod": "Período Lento",
+    "fastNote": "Média móvel de curto prazo",
+    "slowNote": "Média móvel de longo prazo"
+  }
 }

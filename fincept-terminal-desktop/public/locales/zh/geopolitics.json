@@ -1,59 +1,6 @@
 {
-    "title": "地缘政治",
-    "header": {
-        "overview": "概览",
-        "regions": "地区",
-        "analysis": "分析",
-        "alerts": "警报"
-    },
-    "regions": {
-        "global": "全球",
-        "northAmerica": "北美",
-        "europe": "欧洲",
-        "asia": "亚太",
-        "middleEast": "中东",
-        "africa": "非洲",
-        "latam": "拉美"
-    },
-    "categories": {
-        "conflict": "冲突",
-        "sanctions": "制裁",
-        "trade": "贸易关系",
-        "diplomacy": "外交",
-        "elections": "选举",
-        "policy": "政策变化"
-    },
-    "risk": {
-        "level": "风险等级",
-        "high": "高",
-        "medium": "中",
-        "low": "低",
-        "critical": "严重",
-        "stable": "稳定"
-    },
-    "impact": {
-        "economic": "经济影响",
-        "market": "市场影响",
-        "trade": "贸易影响",
-        "currency": "汇率影响"
-    },
-    "timeline": {
-        "latest": "最新",
-        "thisWeek": "本周",
-        "thisMonth": "本月",
-        "upcoming": "即将发生"
-    },
-    "actions": {
-        "subscribe": "订阅",
-        "export": "导出",
-        "share": "分享",
-        "setAlert": "设置提醒",
-        "filter": "筛选"
-    },
-    "messages": {
-        "loading": "加载地缘政治数据...",
-        "noEvents": "暂无事件",
-        "updated": "更新时间",
-        "breaking": "突发新闻"
-    }
+  "title": "地缘政治",
+  "messages": {
+    "loading": "加载地缘政治数据..."
+  }
 }

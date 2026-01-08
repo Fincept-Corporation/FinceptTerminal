@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "กำลังโหลด...",
     "error": "ข้อผิดพลาด",
-    "configure": "ตั้งค่า",
-    "refresh": "รีเฟรช",
-    "remove": "ลบ",
     "globalIndices": "ดัชนีโลก - 12 อันดับแรก",
     "forex": "คู่เงิน",
     "crypto": "สกุลเงินดิจิทัล",
     "commodities": "สินค้าโภคภัณฑ์",
-    "bonds": "พันธบัตร",
-    "etfs": "ETF",
     "news": "ข่าว",
     "forum": "ฟอรัม",
     "watchlist": "รายการติดตาม",
-    "maritime": "ทางทะเล",
     "index": "ดัชนี",
     "symbol": "สัญลักษณ์",
-    "name": "ชื่อ",
     "price": "ราคา",
     "change": "เปลี่ยน",
     "percentChange": "%เปลี่ยน",
-    "high": "สูง",
-    "low": "ต่ำ",
     "noIndexData": "ไม่มีข้อมูลดัชนี",
     "noForexData": "ไม่มีข้อมูลฟอเร็กซ์",
     "noCryptoData": "ไม่มีข้อมูลคริปโต",
     "noCommoditiesData": "ไม่มีข้อมูลสินค้าโภคภัณฑ์",
-    "noNewsData": "ไม่มีข่าว",
     "noForumPosts": "ไม่มีโพสต์ฟอรัม",
     "noStocksInWatchlist": "ไม่มีหุ้นในรายการ",
     "noWatchlistSelected": "ไม่ได้เลือกรายการ",
@@ -51,7 +41,8 @@
     "routes": "เส้นทาง",
     "vol24h": "ปริมาณ 24ชม",
     "topTradeCorridors": "เส้นทางการค้าหลัก",
-    "ships": "เรือ"
+    "ships": "เรือ",
+    "unknown": "[TH] Unknown widget type"
   },
   "tips": {
     "drag": "ลากวิดเจ็ตเพื่อจัดเรียง",
@@ -74,6 +65,11 @@
     "custom": "กำหนดเอง",
     "empty": "ว่าง",
     "active": "ใช้งาน",
-    "cache": "แคช: เปิดใช้"
+    "cache": "แคช: เปิดใช้",
+    "label": "[TH] Status"
+  },
+  "messages": {
+    "layoutSaved": "[TH] Dashboard layout saved!",
+    "resetConfirm": "[TH] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

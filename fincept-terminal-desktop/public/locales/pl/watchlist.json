@@ -1,75 +1,25 @@
 {
-    "title": "LISTA OBSERWOWANYCH",
-    "header": {
-        "title": "MONITOR LIST FINCEPT",
-        "myWatchlists": "MOJE LISTY",
-        "create": "UTWÓRZ",
-        "import": "IMPORTUJ",
-        "export": "EKSPORTUJ",
-        "updating": "AKTUALIZACJA",
-        "live": "NA ŻYWO"
-    },
-    "sidebar": {
-        "groups": "GRUPY LIST",
-        "new": "NOWA",
-        "noWatchlists": "Brak list obserwowanych.",
-        "clickNew": "Kliknij NOWA aby utworzyć.",
-        "stocks": "akcje",
-        "marketMovers": "LIDERZY RYNKU",
-        "gainer": "ZYSKUJĄ",
-        "loser": "TRACĄ",
-        "volumeLeaders": "LIDERZY WOLUMENU"
-    },
-    "emptyState": {
-        "selectWatchlist": "Wybierz listę lub utwórz nową aby rozpocząć"
-    },
-    "list": {
-        "name": "Nazwa",
-        "symbols": "Symbole",
-        "created": "Utworzono",
-        "updated": "Ostatnia aktualizacja",
-        "actions": "Akcje"
-    },
-    "actions": {
-        "add": "Dodaj symbol",
-        "remove": "Usuń",
-        "edit": "Edytuj",
-        "delete": "Usuń",
-        "rename": "Zmień nazwę",
-        "duplicate": "Duplikuj"
-    },
-    "form": {
-        "name": "Nazwa listy",
-        "description": "Opis",
-        "symbols": "Dodaj symbole",
-        "save": "Zapisz",
-        "cancel": "Anuluj"
-    },
-    "symbol": {
-        "price": "Cena",
-        "change": "Zmiana",
-        "volume": "Wolumen",
-        "marketCap": "Kapitalizacja",
-        "alert": "Ustaw alert"
-    },
-    "alerts": {
-        "priceAbove": "Cena powyżej",
-        "priceBelow": "Cena poniżej",
-        "changePercent": "Zmiana %",
-        "volume": "Alert wolumenu"
-    },
-    "sort": {
-        "name": "Po nazwie",
-        "price": "Po cenie",
-        "change": "Po zmianie",
-        "custom": "Własna kolejność"
-    },
-    "messages": {
-        "created": "Lista utworzona",
-        "deleted": "Lista usunięta",
-        "symbolAdded": "Symbol dodany",
-        "symbolRemoved": "Symbol usunięty",
-        "noWatchlists": "Brak list",
-        "loading": "Ładowanie..."
-    }
+  "title": "LISTA OBSERWOWANYCH",
+  "header": {
+    "export": "EKSPORTUJ",
+    "updating": "AKTUALIZACJA",
+    "live": "NA ŻYWO"
+  },
+  "sidebar": {
+    "groups": "GRUPY LIST",
+    "new": "NOWA",
+    "noWatchlists": "Brak list obserwowanych.",
+    "clickNew": "Kliknij NOWA aby utworzyć.",
+    "stocks": "akcje",
+    "marketMovers": "LIDERZY RYNKU",
+    "gainer": "ZYSKUJĄ",
+    "loser": "TRACĄ",
+    "volumeLeaders": "LIDERZY WOLUMENU"
+  },
+  "emptyState": {
+    "selectWatchlist": "Wybierz listę lub utwórz nową aby rozpocząć"
+  },
+  "list": {
+    "symbols": "Symbole"
+  }
 }

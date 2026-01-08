@@ -1,38 +1,35 @@
 {
-    "title": "MARKETPLACE",
-    "header": {
-        "browse": "Gözat",
-        "myItems": "Öğelerim",
-        "cart": "Sepet"
-    },
-    "categories": {
-        "all": "Tümü",
-        "indicators": "Göstergeler",
-        "strategies": "Stratejiler",
-        "datasets": "Veri setleri",
-        "tools": "Araçlar"
-    },
-    "buttons": {
-        "buy": "Satın al",
-        "addToCart": "Sepete ekle",
-        "install": "Yükle",
-        "preview": "Önizleme"
-    },
-    "product": {
-        "price": "Fiyat",
-        "rating": "Puan",
-        "downloads": "İndirmeler",
-        "author": "Yazar",
-        "version": "Sürüm"
-    },
-    "cart": {
-        "total": "Toplam",
-        "checkout": "Ödeme",
-        "empty": "Sepet boş"
-    },
-    "messages": {
-        "addedToCart": "Sepete eklendi",
-        "purchased": "Satın alındı",
-        "installed": "Yüklendi"
-    }
+  "title": "MARKETPLACE",
+  "header": {
+    "browse": "Gözat",
+    "myPurchases": "[TR] MY PURCHASES",
+    "upload": "[TR] UPLOAD",
+    "myDatasets": "[TR] MY DATASETS",
+    "analytics": "[TR] ANALYTICS",
+    "pricing": "[TR] PRICING",
+    "datasetsAvailable": "[TR] Datasets Available",
+    "myUploads": "[TR] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "Sepete ekle",
+    "inCart": "[TR] ✓ IN CART",
+    "viewDetails": "[TR] VIEW DETAILS",
+    "backToMarketplace": "[TR] BACK TO MARKETPLACE",
+    "loading": "[TR] ⟳ LOADING...",
+    "refresh": "[TR] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "Puan",
+    "description": "[TR] PRODUCT DESCRIPTION",
+    "users": "[TR] USERS"
+  },
+  "cart": {
+    "empty": "Sepet boş",
+    "title": "[TR] SHOPPING CART",
+    "items": "[TR] items"
+  },
+  "guest": {
+    "title": "[TR] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[TR] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

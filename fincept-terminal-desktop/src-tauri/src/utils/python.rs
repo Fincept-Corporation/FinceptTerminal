@@ -3,15 +3,32 @@ use std::path::PathBuf;
 use tauri::Manager;
 
 /// NumPy 1.x compatible libraries (use venv-numpy1)
+/// Based on requirements-numpy1.txt - includes backtesting, time series,
+/// portfolio optimization, and quant finance libraries
 const NUMPY1_LIBRARIES: &[&str] = &[
+    // Backtesting and trading
     "vectorbt",
     "backtesting",
+    // Time series and forecasting
     "gluonts",
     "functime",
+    // Portfolio optimization
     "PyPortfolioOpt",
+    "pyportfolioopt",
+    "finquant",
+    // Qlib and RD-Agent (match both script paths and library names)
     "pyqlib",
+    "qlib",           // matches qlib_service.py paths
     "rdagent",
+    "rd_agent",       // matches rd_agent_service.py paths
     "gs-quant",
+    "gs_quant",
+    // Financial modeling libraries (NumPy 1.x dependent due to numba/llvmlite)
+    "ffn",            // matches ffn_wrapper, ffn_service.py
+    "fortitudo",      // matches fortitudo_tech_wrapper, fortitudo_service.py
+    "financepy",
+    // AI Quant Lab uses Qlib/RD-Agent which need NumPy 1.x
+    "ai_quant_lab",
 ];
 
 /// Determine which venv to use based on library name

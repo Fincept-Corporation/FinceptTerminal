@@ -1,77 +1,32 @@
 {
-    "title": "NOTIZIE PROFESSIONALI TERMINALE FINCEPT",
-    "header": {
-        "liveFeed": "FEED LIVE",
-        "live": "LIVE",
-        "refresh": "AGGIORNA",
-        "updating": "AGGIORNAMENTO...",
-        "alerts": "AVVISI",
-        "sources": "FONTI",
-        "topics": "ARGOMENTI",
-        "status": "STATO",
-        "demoMode": "MODALITÀ DEMO",
-        "articles": "ARTICOLI",
-        "activeSources": "FONTI ATTIVE"
-    },
-    "categories": {
-        "all": "TUTTO",
-        "markets": "MERCATI",
-        "stocks": "Azioni",
-        "forex": "Forex",
-        "crypto": "CRIPTO",
-        "commodities": "Materie Prime",
-        "economy": "Economia",
-        "economic": "ECON",
-        "politics": "Politica",
-        "earnings": "UTILI",
-        "tech": "TECH",
-        "energy": "ENERGIA",
-        "banking": "BANCHE",
-        "geopolitics": "GEOPO",
-        "flash": "FLASH",
-        "urgent": "URGENTE"
-    },
-    "feedLabels": {
-        "primary": "FEED NOTIZIE PRINCIPALE",
-        "secondary": "FEED NOTIZIE SECONDARIO",
-        "refresh": "AGGIORNA"
-    },
-    "filters": {
-        "source": "Fonte",
-        "region": "Regione",
-        "timeframe": "Periodo"
-    },
-    "timeframes": {
-        "1h": "1 Ora",
-        "24h": "24 Ore",
-        "1w": "1 Settimana",
-        "1m": "1 Mese"
-    },
-    "article": {
-        "readMore": "Leggi Altro",
-        "source": "Fonte",
-        "published": "Pubblicato",
-        "relatedStocks": "Azioni Correlate",
-        "sentiment": "Sentiment",
-        "impact": "Impatto"
-    },
-    "sentiment": {
-        "bullish": "RIALZISTA",
-        "bearish": "RIBASSISTA",
-        "neutral": "NEUTRO",
-        "positive": "Positivo",
-        "negative": "Negativo"
-    },
-    "autoRefresh": {
-        "title": "INTERVALLO AGGIORNAMENTO AUTOMATICO",
-        "minute": "minuto",
-        "minutes": "minuti"
-    },
-    "messages": {
-        "loading": "Caricamento notizie...",
-        "loadingFeeds": "Caricamento feed...",
-        "error": "Errore caricamento notizie",
-        "noNews": "Nessuna notizia disponibile",
-        "breaking": "URGENTE"
-    }
+  "title": "NOTIZIE PROFESSIONALI TERMINALE FINCEPT",
+  "header": {
+    "liveFeed": "FEED LIVE",
+    "live": "LIVE",
+    "refresh": "AGGIORNA",
+    "updating": "AGGIORNAMENTO...",
+    "alerts": "AVVISI",
+    "sources": "FONTI",
+    "status": "STATO",
+    "demoMode": "MODALITÀ DEMO",
+    "articles": "ARTICOLI",
+    "activeSources": "FONTI ATTIVE"
+  },
+  "autoRefresh": {
+    "title": "INTERVALLO AGGIORNAMENTO AUTOMATICO",
+    "minute": "minuto",
+    "minutes": "minuti"
+  },
+  "messages": {
+    "loadingFeeds": "Caricamento feed...",
+    "breaking": "URGENTE"
+  },
+  "feeds": {
+    "primary": "[IT] PRIMARY NEWS FEED",
+    "secondary": "[IT] SECONDARY NEWS FEED",
+    "additional": "[IT] ADDITIONAL HEADLINES"
+  },
+  "analytics": {
+    "title": "[IT] REAL-TIME NEWS ANALYTICS"
+  }
 }

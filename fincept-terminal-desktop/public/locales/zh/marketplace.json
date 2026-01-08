@@ -1,38 +1,35 @@
 {
-    "title": "市场",
-    "header": {
-        "browse": "浏览",
-        "myItems": "我的项目",
-        "cart": "购物车"
-    },
-    "categories": {
-        "all": "全部",
-        "indicators": "指标",
-        "strategies": "策略",
-        "datasets": "数据集",
-        "tools": "工具"
-    },
-    "buttons": {
-        "buy": "购买",
-        "addToCart": "加入购物车",
-        "install": "安装",
-        "preview": "预览"
-    },
-    "product": {
-        "price": "价格",
-        "rating": "评分",
-        "downloads": "下载量",
-        "author": "作者",
-        "version": "版本"
-    },
-    "cart": {
-        "total": "合计",
-        "checkout": "结账",
-        "empty": "购物车为空"
-    },
-    "messages": {
-        "addedToCart": "已加入购物车",
-        "purchased": "已购买",
-        "installed": "已安装"
-    }
+  "title": "市场",
+  "header": {
+    "browse": "浏览",
+    "myPurchases": "[ZH] MY PURCHASES",
+    "upload": "[ZH] UPLOAD",
+    "myDatasets": "[ZH] MY DATASETS",
+    "analytics": "[ZH] ANALYTICS",
+    "pricing": "[ZH] PRICING",
+    "datasetsAvailable": "[ZH] Datasets Available",
+    "myUploads": "[ZH] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "加入购物车",
+    "inCart": "[ZH] ✓ IN CART",
+    "viewDetails": "[ZH] VIEW DETAILS",
+    "backToMarketplace": "[ZH] BACK TO MARKETPLACE",
+    "loading": "[ZH] ⟳ LOADING...",
+    "refresh": "[ZH] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "评分",
+    "description": "[ZH] PRODUCT DESCRIPTION",
+    "users": "[ZH] USERS"
+  },
+  "cart": {
+    "empty": "购物车为空",
+    "title": "[ZH] SHOPPING CART",
+    "items": "[ZH] items"
+  },
+  "guest": {
+    "title": "[ZH] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[ZH] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

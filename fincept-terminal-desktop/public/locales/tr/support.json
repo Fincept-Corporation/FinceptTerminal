@@ -1,42 +1,32 @@
 {
-    "title": "Destek Bileti",
-    "header": {
-        "tickets": "Biletler",
-        "new": "Yeni bilet",
-        "status": "Durum"
-    },
-    "form": {
-        "subject": "Konu",
-        "description": "Açıklama",
-        "priority": "Öncelik",
-        "category": "Kategori"
-    },
-    "priority": {
-        "low": "Düşük",
-        "medium": "Orta",
-        "high": "Yüksek",
-        "urgent": "Acil"
-    },
-    "status": {
-        "open": "Açık",
-        "inProgress": "İşlemde",
-        "resolved": "Çözüldü",
-        "closed": "Kapalı"
-    },
-    "buttons": {
-        "submit": "Gönder",
-        "cancel": "İptal",
-        "reply": "Yanıtla",
-        "close": "Kapat"
-    },
-    "messages": {
-        "created": "Bilet oluşturuldu",
-        "updated": "Bilet güncellendi",
-        "closed": "Bilet kapatıldı",
-        "noTickets": "Bilet yok"
-    },
-    "auth": {
-        "loginRequired": "Bilet oluşturmak için giriş yapın",
-        "demoMode": "Demo modu"
-    }
+  "title": "Destek Bileti",
+  "header": {
+    "tickets": "Biletler",
+    "open": "[TR] OPEN",
+    "resolved": "[TR] RESOLVED"
+  },
+  "status": {
+    "ready": "[TR] READY",
+    "updating": "[TR] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[TR] REFRESH",
+    "createTicket": "[TR] CREATE TICKET",
+    "backToList": "[TR] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[TR] AUTHENTICATION REQUIRED",
+    "loginMessage": "[TR] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[TR] SUPPORT TICKETS",
+    "noTickets": "[TR] No support tickets found. Create your first ticket to get started!",
+    "loading": "[TR] Loading tickets..."
+  },
+  "create": {
+    "title": "[TR] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[TR] DEMO"
+  }
 }

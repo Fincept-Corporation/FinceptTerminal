@@ -1,46 +1,26 @@
 {
-    "title": "ASISTENT CHAT AI",
-    "header": {
-        "newChat": "CHAT NOU",
-        "history": "ISTORIC",
-        "settings": "SETĂRI"
-    },
-    "input": {
-        "placeholder": "Întreabă despre acțiuni, piețe...",
-        "send": "Trimite",
-        "voice": "Voce"
-    },
-    "messages": {
-        "thinking": "Se gândește...",
-        "typing": "AI scrie...",
-        "error": "Eroare procesare",
-        "welcome": "Cum vă pot ajuta cu analiza financiară?"
-    },
-    "suggestions": {
-        "title": "Întrebări sugerate",
-        "stockAnalysis": "Analiza performanței acțiunilor",
-        "marketTrends": "Tendințe actuale de piață?",
-        "portfolioAdvice": "Sugestii optimizare portofoliu"
-    },
-    "history": {
-        "title": "Istoric chat",
-        "today": "Astăzi",
-        "yesterday": "Ieri",
-        "thisWeek": "Săptămâna aceasta",
-        "older": "Mai vechi",
-        "clear": "Șterge istoricul"
-    },
-    "actions": {
-        "copy": "Copiază",
-        "regenerate": "Regenerează",
-        "like": "Îmi place",
-        "dislike": "Nu îmi place",
-        "share": "Distribuie"
-    },
-    "models": {
-        "select": "Selectează model",
-        "gpt4": "GPT-4",
-        "claude": "Claude",
-        "gemini": "Gemini"
-    }
+  "title": "ASISTENT CHAT AI",
+  "header": {
+    "newChat": "CHAT NOU",
+    "settings": "SETĂRI"
+  },
+  "input": {
+    "placeholder": "Întreabă despre acțiuni, piețe...",
+    "send": "Trimite"
+  },
+  "messages": {
+    "thinking": "Se gândește...",
+    "typing": "AI scrie..."
+  },
+  "history": {
+    "clearAll": "[RO] CLEAR ALL",
+    "sessions": "[RO] SESSIONS",
+    "deleteAll": "[RO] Delete all sessions"
+  },
+  "subtitle": "[RO] Financial Intelligence System",
+  "panel": {
+    "dataContexts": "[RO] DATA CONTEXTS",
+    "quickPrompts": "[RO] QUICK PROMPTS",
+    "systemInfo": "[RO] SYSTEM INFO"
+  }
 }

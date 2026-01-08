@@ -1,60 +1,17 @@
 {
-    "title": "FINANCIAL NOTES",
-    "header": {
-        "total": "TOTAL",
-        "favorites": "FAVORITES",
-        "words": "WORDS",
-        "refresh": "REFRESH"
-    },
-    "toolbar": {
-        "search": "Search notes, tags, tickers...",
-        "newNote": "NEW NOTE",
-        "templates": "TEMPLATES",
-        "favorites": "FAVORITES",
-        "filters": "FILTERS",
-        "archived": "ARCHIVED"
-    },
-    "filters": {
-        "priority": "Priority",
-        "sentiment": "Sentiment",
-        "clearFilters": "CLEAR FILTERS"
-    },
-    "templates": {
-        "selectTemplate": "SELECT TEMPLATE"
-    },
-    "reminders": {
-        "upcomingReminders": "UPCOMING REMINDERS (24H)",
-        "noReminders": "No upcoming reminders in the next 24 hours",
-        "refresh": "REFRESH"
-    },
-    "categories": {
-        "allNotes": "ALL NOTES",
-        "tradeIdeas": "TRADE IDEAS",
-        "research": "RESEARCH",
-        "marketAnalysis": "MARKET ANALYSIS",
-        "earnings": "EARNINGS",
-        "economic": "ECONOMIC",
-        "portfolio": "PORTFOLIO",
-        "general": "GENERAL"
-    },
-    "editor": {
-        "title": "Title",
-        "content": "Content",
-        "category": "Category",
-        "priority": "Priority",
-        "sentiment": "Sentiment",
-        "tags": "Tags",
-        "tickers": "Tickers",
-        "reminder": "Reminder",
-        "save": "SAVE",
-        "cancel": "CANCEL",
-        "create": "CREATE",
-        "update": "UPDATE"
-    },
-    "messages": {
-        "noteCreated": "Note created",
-        "noteUpdated": "Note updated",
-        "noteDeleted": "Note deleted",
-        "reminderSet": "Reminder set"
-    }
+  "title": "FINANCIAL NOTES",
+  "header": {
+    "total": "TOTAL",
+    "favorites": "FAVORITES",
+    "words": "WORDS",
+    "refresh": "REFRESH"
+  },
+  "toolbar": {
+    "search": "Search notes, tags, tickers...",
+    "newNote": "NEW NOTE",
+    "templates": "TEMPLATES",
+    "favorites": "FAVORITES",
+    "filters": "FILTERS",
+    "archived": "ARCHIVED"
+  }
 }

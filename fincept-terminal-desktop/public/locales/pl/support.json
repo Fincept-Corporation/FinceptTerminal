@@ -1,42 +1,32 @@
 {
-    "title": "Zgłoszenie wsparcia",
-    "header": {
-        "tickets": "Zgłoszenia",
-        "new": "Nowe zgłoszenie",
-        "status": "Status"
-    },
-    "form": {
-        "subject": "Temat",
-        "description": "Opis",
-        "priority": "Priorytet",
-        "category": "Kategoria"
-    },
-    "priority": {
-        "low": "Niski",
-        "medium": "Średni",
-        "high": "Wysoki",
-        "urgent": "Pilny"
-    },
-    "status": {
-        "open": "Otwarte",
-        "inProgress": "W trakcie",
-        "resolved": "Rozwiązane",
-        "closed": "Zamknięte"
-    },
-    "buttons": {
-        "submit": "Wyślij",
-        "cancel": "Anuluj",
-        "reply": "Odpowiedz",
-        "close": "Zamknij"
-    },
-    "messages": {
-        "created": "Zgłoszenie utworzone",
-        "updated": "Zgłoszenie zaktualizowane",
-        "closed": "Zgłoszenie zamknięte",
-        "noTickets": "Brak zgłoszeń"
-    },
-    "auth": {
-        "loginRequired": "Zaloguj się aby utworzyć zgłoszenie",
-        "demoMode": "Tryb demo"
-    }
+  "title": "Zgłoszenie wsparcia",
+  "header": {
+    "tickets": "Zgłoszenia",
+    "open": "[PL] OPEN",
+    "resolved": "[PL] RESOLVED"
+  },
+  "status": {
+    "ready": "[PL] READY",
+    "updating": "[PL] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[PL] REFRESH",
+    "createTicket": "[PL] CREATE TICKET",
+    "backToList": "[PL] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[PL] AUTHENTICATION REQUIRED",
+    "loginMessage": "[PL] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[PL] SUPPORT TICKETS",
+    "noTickets": "[PL] No support tickets found. Create your first ticket to get started!",
+    "loading": "[PL] Loading tickets..."
+  },
+  "create": {
+    "title": "[PL] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[PL] DEMO"
+  }
 }

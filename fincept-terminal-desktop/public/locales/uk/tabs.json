@@ -1,7 +1,4 @@
 {
-  "header": {
-    "title": "FINCEPT PROFESSIONAL"
-  },
   "navigation": {
     "dashboard": "Панель",
     "markets": "Ринки",
@@ -11,14 +8,10 @@
     "watchlist": "Список спостереження",
     "research": "Дослідження",
     "screener": "Скринер",
-    "trading": "Трейдинг",
     "chat": "AI Chat",
     "agents": "Агенти",
     "settings": "Налаштування",
-    "profile": "Профіль",
-    "forum": "Форум",
-    "help": "Допомога",
-    "logout": "Вихід"
+    "profile": "Профіль"
   },
   "functionKeys": {
     "f1": "ПАНЛ",
@@ -34,16 +27,7 @@
     "f11": "ПОВН",
     "f12": "ПРФЛ"
   },
-  "status": {
-    "connected": "Підключено",
-    "disconnected": "Відключено",
-    "loading": "Завантаження...",
-    "error": "Помилка",
-    "ready": "Готово"
-  },
   "labels": {
-    "moreTabs": "Більше вкладок у меню панелі інструментів",
-    "enterCommand": "Введіть команду",
-    "search": "Пошук"
+    "moreTabs": "Більше вкладок у меню панелі інструментів"
   }
 }

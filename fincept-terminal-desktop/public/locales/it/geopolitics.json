@@ -1,59 +1,6 @@
 {
-    "title": "GEOPOLITICA",
-    "header": {
-        "overview": "PANORAMICA",
-        "regions": "REGIONI",
-        "analysis": "ANALISI",
-        "alerts": "AVVISI"
-    },
-    "regions": {
-        "global": "Globale",
-        "northAmerica": "Nord America",
-        "europe": "Europa",
-        "asia": "Asia-Pacifico",
-        "middleEast": "Medio Oriente",
-        "africa": "Africa",
-        "latam": "America Latina"
-    },
-    "categories": {
-        "conflict": "Conflitti",
-        "sanctions": "Sanzioni",
-        "trade": "Relazioni commerciali",
-        "diplomacy": "Diplomazia",
-        "elections": "Elezioni",
-        "policy": "Cambiamenti politici"
-    },
-    "risk": {
-        "level": "Livello di rischio",
-        "high": "Alto",
-        "medium": "Medio",
-        "low": "Basso",
-        "critical": "Critico",
-        "stable": "Stabile"
-    },
-    "impact": {
-        "economic": "Impatto economico",
-        "market": "Impatto sul mercato",
-        "trade": "Impatto commerciale",
-        "currency": "Impatto valutario"
-    },
-    "timeline": {
-        "latest": "Più recente",
-        "thisWeek": "Questa settimana",
-        "thisMonth": "Questo mese",
-        "upcoming": "Prossimo"
-    },
-    "actions": {
-        "subscribe": "Iscriviti",
-        "export": "Esporta",
-        "share": "Condividi",
-        "setAlert": "Imposta avviso",
-        "filter": "Filtra"
-    },
-    "messages": {
-        "loading": "Caricamento dati...",
-        "noEvents": "Nessun evento",
-        "updated": "Aggiornato",
-        "breaking": "Ultima ora"
-    }
+  "title": "GEOPOLITICA",
+  "messages": {
+    "loading": "Caricamento dati..."
+  }
 }

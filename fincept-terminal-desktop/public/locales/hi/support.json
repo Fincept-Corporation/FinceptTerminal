@@ -1,42 +1,32 @@
 {
-    "title": "सपोर्ट टिकट",
-    "header": {
-        "tickets": "टिकट",
-        "new": "नया टिकट",
-        "status": "स्थिति"
-    },
-    "form": {
-        "subject": "विषय",
-        "description": "विवरण",
-        "priority": "प्राथमिकता",
-        "category": "श्रेणी"
-    },
-    "priority": {
-        "low": "कम",
-        "medium": "मध्यम",
-        "high": "उच्च",
-        "urgent": "तत्काल"
-    },
-    "status": {
-        "open": "खुला",
-        "inProgress": "प्रगति में",
-        "resolved": "हल हो गया",
-        "closed": "बंद"
-    },
-    "buttons": {
-        "submit": "सबमिट करें",
-        "cancel": "रद्द करें",
-        "reply": "जवाब दें",
-        "close": "बंद करें"
-    },
-    "messages": {
-        "created": "टिकट बना",
-        "updated": "टिकट अपडेट हुआ",
-        "closed": "टिकट बंद हुआ",
-        "noTickets": "कोई टिकट नहीं"
-    },
-    "auth": {
-        "loginRequired": "टिकट बनाने के लिए लॉगिन करें",
-        "demoMode": "डेमो मोड"
-    }
+  "title": "सपोर्ट टिकट",
+  "header": {
+    "tickets": "टिकट",
+    "open": "[HI] OPEN",
+    "resolved": "[HI] RESOLVED"
+  },
+  "status": {
+    "ready": "[HI] READY",
+    "updating": "[HI] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[HI] REFRESH",
+    "createTicket": "[HI] CREATE TICKET",
+    "backToList": "[HI] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[HI] AUTHENTICATION REQUIRED",
+    "loginMessage": "[HI] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[HI] SUPPORT TICKETS",
+    "noTickets": "[HI] No support tickets found. Create your first ticket to get started!",
+    "loading": "[HI] Loading tickets..."
+  },
+  "create": {
+    "title": "[HI] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[HI] DEMO"
+  }
 }

@@ -1,7 +1,4 @@
 {
-  "header": {
-    "title": "FINCEPT PROFESSIONAL"
-  },
   "navigation": {
     "dashboard": "لوحة المعلومات",
     "markets": "الأسواق",
@@ -11,14 +8,10 @@
     "watchlist": "قائمة المراقبة",
     "research": "البحث",
     "screener": "الفرز",
-    "trading": "التداول",
     "chat": "الذكاء الاصطناعي",
     "agents": "الوكلاء",
     "settings": "الإعدادات",
-    "profile": "الملف الشخصي",
-    "forum": "المنتدى",
-    "help": "المساعدة",
-    "logout": "تسجيل الخروج"
+    "profile": "الملف الشخصي"
   },
   "functionKeys": {
     "f1": "لوحة",
@@ -34,16 +27,7 @@
     "f11": "كامل",
     "f12": "ملف"
   },
-  "status": {
-    "connected": "متصل",
-    "disconnected": "غير متصل",
-    "loading": "جاري التحميل...",
-    "error": "خطأ",
-    "ready": "جاهز"
-  },
   "labels": {
-    "moreTabs": "المزيد من علامات التبويب في قوائم شريط الأدوات",
-    "enterCommand": "أدخل الأمر",
-    "search": "بحث"
+    "moreTabs": "المزيد من علامات التبويب في قوائم شريط الأدوات"
   }
 }

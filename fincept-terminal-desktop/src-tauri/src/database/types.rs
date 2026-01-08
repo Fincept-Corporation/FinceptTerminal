@@ -339,3 +339,20 @@ pub struct ExcelSnapshot {
     pub sheet_data: String,
     pub created_at: String,
 }
+
+// ============================================================================
+// Agent Configurations
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentConfig {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub config_json: String,
+    pub category: String,
+    pub is_default: bool,
+    pub is_active: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}

@@ -1,84 +1,23 @@
 {
-    "title": "متصفح سلاسل FRED",
-    "header": {
-        "title": "مستكشف بيانات FRED",
-        "filters": "المرشحات",
-        "results": "النتائج",
-        "saved": "الشاشات المحفوظة",
-        "presets": "الإعدادات المسبقة"
-    },
-    "apiKey": {
-        "required": "مطلوب مفتاح API",
-        "configure": "قم بتكوين مفتاح FRED API في الإعدادات → بيانات الاعتماد للوصول إلى البيانات الاقتصادية.",
-        "getKey": "احصل على مفتاح API مجاني من",
-        "addToSettings": "أضف إلى الإعدادات → بيانات الاعتماد → FRED_API_KEY",
-        "saveAndReload": "احفظ وأعد تحميل هذه الصفحة",
-        "tip": "تأكد من تكوين مفتاح FRED API في الإعدادات → بيانات الاعتماد"
-    },
-    "form": {
-        "seriesIds": "معرفات السلسلة",
-        "startDate": "تاريخ البدء",
-        "endDate": "تاريخ الانتهاء",
-        "quickAdd": "إضافة سريعة"
-    },
-    "buttons": {
-        "fetch": "جلب",
-        "loading": "جاري التحميل",
-        "browse": "تصفح السلاسل",
-        "done": "تم"
-    },
-    "chart": {
-        "title": "مخطط السلسلة الزمنية",
-        "emptyState": "أدخل معرفات السلسلة وانقر على جلب لعرض البيانات",
-        "trySuggestion": "جرب البحث عن GDP أو UNRATE أو CPIAUCSL",
-        "waiting": "يرجى الانتظار أثناء جلب البيانات من FRED...",
-        "errorFetching": "خطأ في جلب البيانات"
-    },
-    "filters": {
-        "add": "إضافة فلتر",
-        "clear": "مسح الكل",
-        "reset": "إعادة تعيين",
-        "apply": "تطبيق الفلاتر"
-    },
-    "criteria": {
-        "marketCap": "القيمة السوقية",
-        "price": "السعر",
-        "volume": "الحجم",
-        "pe": "P/E",
-        "eps": "ربحية السهم",
-        "dividend": "عائد التوزيعات",
-        "beta": "بيتا",
-        "sector": "القطاع",
-        "industry": "الصناعة",
-        "country": "البلد",
-        "exchange": "البورصة"
-    },
-    "operators": {
-        "equals": "يساوي",
-        "greater": "أكبر من",
-        "less": "أقل من",
-        "between": "بين",
-        "contains": "يحتوي"
-    },
-    "results": {
-        "symbol": "الرمز",
-        "name": "الاسم",
-        "price": "السعر",
-        "change": "التغير",
-        "volume": "الحجم",
-        "marketCap": "القيمة السوقية",
-        "matches": "نتيجة"
-    },
-    "actions": {
-        "save": "حفظ الشاشة",
-        "load": "تحميل الشاشة",
-        "export": "تصدير النتائج",
-        "addToWatchlist": "إضافة للقائمة"
-    },
-    "messages": {
-        "loading": "جاري الفلترة...",
-        "noResults": "لا توجد نتائج مطابقة",
-        "saved": "تم حفظ الشاشة",
-        "applied": "تم تطبيق الفلاتر"
-    }
+  "title": "متصفح سلاسل FRED",
+  "header": {
+    "title": "مستكشف بيانات FRED"
+  },
+  "apiKey": {
+    "required": "مطلوب مفتاح API"
+  },
+  "form": {
+    "seriesIds": "معرفات السلسلة",
+    "quickAdd": "إضافة سريعة"
+  },
+  "buttons": {
+    "fetch": "جلب",
+    "loading": "جاري التحميل",
+    "browse": "تصفح السلاسل"
+  },
+  "chart": {
+    "title": "مخطط السلسلة الزمنية",
+    "emptyState": "أدخل معرفات السلسلة وانقر على جلب لعرض البيانات",
+    "trySuggestion": "جرب البحث عن GDP أو UNRATE أو CPIAUCSL"
+  }
 }

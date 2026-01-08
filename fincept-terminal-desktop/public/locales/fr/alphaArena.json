@@ -1,46 +1,9 @@
 {
-    "title": "ARÈNE ALPHA",
-    "header": {
-        "competition": "COMPÉTITION",
-        "leaderboard": "CLASSEMENT",
-        "decisions": "DÉCISIONS",
-        "cycles": "CYCLES"
-    },
-    "buttons": {
-        "start": "DÉMARRER",
-        "stop": "ARRÊTER",
-        "refresh": "ACTUALISER",
-        "create": "CRÉER COMPÉTITION"
-    },
-    "form": {
-        "competitionName": "Nom de la compétition",
-        "symbol": "Symbole",
-        "mode": "Mode de trading",
-        "models": "Sélectionner les modèles",
-        "apiKeys": "Clés API"
-    },
-    "modes": {
-        "baseline": "Référence",
-        "monk": "Monk",
-        "situational": "Situationnel",
-        "maxLeverage": "Levier maximum"
-    },
-    "leaderboard": {
-        "rank": "Rang",
-        "model": "Modèle",
-        "pnl": "P&L",
-        "trades": "Trades",
-        "winRate": "Taux de réussite"
-    },
-    "status": {
-        "running": "EN COURS",
-        "stopped": "ARRÊTÉ",
-        "waiting": "EN ATTENTE",
-        "error": "ERREUR"
-    },
-    "messages": {
-        "competitionStarted": "Compétition démarrée",
-        "competitionStopped": "Compétition arrêtée",
-        "noCompetition": "Aucune compétition active"
-    }
+  "title": "ARÈNE ALPHA",
+  "header": {
+    "competition": "COMPÉTITION"
+  },
+  "buttons": {
+    "create": "CRÉER COMPÉTITION"
+  }
 }

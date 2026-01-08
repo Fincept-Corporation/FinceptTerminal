@@ -40,89 +40,21 @@ pub struct AgentExecutionResult {
     pub agent_type: String,
 }
 
-/// Execute agent manager command - simplified architecture
+/// Execute CoreAgent - unified single agent system
 #[tauri::command]
-pub async fn execute_agent_manager_command(
+pub async fn execute_core_agent(
     app: tauri::AppHandle,
-    command: String,
-    args: Vec<String>,
-) -> Result<String, String> {
-    let mut cmd_args = vec![command];
-    cmd_args.extend(args);
-
-    let script_path = get_script_path(&app, "agents/agent_manager.py")?;
-    python_runtime::execute_python_script(&script_path, cmd_args)
-}
-
-/// List available agents in a category
-#[tauri::command]
-pub async fn list_agents(
-    app: tauri::AppHandle,
-    category: String,
-) -> Result<String, String> {
-    let args = vec![category];
-    execute_agent_manager_command(app, "list_agents".to_string(), args).await
-}
-
-/// Get specific agent configuration
-#[tauri::command]
-pub async fn get_agent_config(
-    app: tauri::AppHandle,
-    category: String,
-    agent_id: String,
-) -> Result<String, String> {
-    let args = vec![category, agent_id];
-    execute_agent_manager_command(app, "get_config".to_string(), args).await
-}
-
-/// Save agent configuration
-#[tauri::command]
-pub async fn save_agent_config(
-    app: tauri::AppHandle,
-    category: String,
-    agent_id: String,
+    query_json: String,
     config_json: String,
-) -> Result<String, String> {
-    let args = vec![category, agent_id, config_json];
-    execute_agent_manager_command(app, "save_config".to_string(), args).await
-}
-
-/// Get available LLM providers
-#[tauri::command]
-pub async fn get_agent_providers(app: tauri::AppHandle) -> Result<String, String> {
-    execute_agent_manager_command(app, "get_providers".to_string(), vec![]).await
-}
-
-/// Execute a single agent
-#[tauri::command]
-pub async fn execute_single_agent(
-    app: tauri::AppHandle,
-    category: String,
-    agent_id: String,
-    query: String,
-    llm_config_json: String,
     api_keys_json: String,
 ) -> Result<String, String> {
-    let args = vec![category, agent_id, query, llm_config_json, api_keys_json];
-    execute_agent_manager_command(app, "execute_agent".to_string(), args).await
+    let script_path = get_script_path(&app, "agents/core_agent_cli.py")?;
+    let args = vec![query_json, config_json, api_keys_json];
+    python_runtime::execute_python_script(&script_path, args)
 }
 
-/// Execute team collaboration
-#[tauri::command]
-pub async fn execute_agent_team(
-    app: tauri::AppHandle,
-    category: String,
-    query: String,
-    llm_config_json: String,
-    api_keys_json: String,
-    agent_ids_json: Option<String>,
-) -> Result<String, String> {
-    let mut args = vec![category, query, llm_config_json, api_keys_json];
-    if let Some(ids) = agent_ids_json {
-        args.push(ids);
-    }
-    execute_agent_manager_command(app, "execute_team".to_string(), args).await
-}
+/// DEPRECATED - Old agent manager commands removed
+/// Use execute_core_agent instead for all agent operations
 
 // Legacy commands for Node Editor compatibility
 fn get_agent_script_path(agent_type: &str) -> Option<&'static str> {

@@ -1,56 +1,99 @@
 {
-    "title": "AGENT CONFIGURATION",
-    "header": {
-        "agents": "AGENTS",
-        "active": "ACTIVE",
-        "total": "TOTAL"
+  "title": "CORE AGENT CONFIG",
+  "subtitle": "Build, save, and test agent configurations",
+  "buttons": {
+    "new": "New",
+    "save": "Save",
+    "saving": "Saving..."
+  },
+  "sidebar": {
+    "title": "Saved Configurations",
+    "empty": "No saved configs yet",
+    "active": "Active"
+  },
+  "form": {
+    "configName": "Config Name",
+    "category": "Category",
+    "description": "Description (optional)",
+    "descriptionPlaceholder": "Brief description of this agent configuration"
+  },
+  "sections": {
+    "model": {
+      "title": "Model Configuration",
+      "description": "Select LLM provider and model",
+      "provider": "Provider",
+      "model": "Model",
+      "temperature": "Temperature",
+      "maxTokens": "Max Tokens"
     },
-    "toolbar": {
-        "refresh": "REFRESH",
-        "save": "SAVE",
-        "saveConfig": "Save Configuration",
-        "run": "RUN",
-        "test": "TEST",
-        "testAgent": "Test Agent"
+    "instructions": {
+      "title": "System Instructions",
+      "description": "Define agent behavior",
+      "placeholder": "Enter system instructions for the agent..."
     },
-    "sidebar": {
-        "availableAgents": "AVAILABLE AGENTS",
-        "selectAgent": "Select an agent to configure"
+    "tools": {
+      "title": "Tools",
+      "selected": "tools selected"
     },
-    "config": {
-        "name": "Name",
-        "role": "Role",
-        "goal": "Goal",
-        "description": "Description",
-        "llmConfig": "LLM Configuration",
-        "provider": "Provider",
-        "model": "Model",
-        "temperature": "Temperature",
-        "maxTokens": "Max Tokens",
-        "tools": "Tools",
-        "memory": "Enable Memory",
-        "agenticMemory": "Enable Agentic Memory",
-        "instructions": "Instructions",
-        "testQuery": "TEST QUERY",
-        "testQueryPlaceholder": "Enter your test query here..."
+    "memory": {
+      "title": "Memory",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enableMemory": "Enable Memory",
+      "strategy": "Optimization Strategy"
     },
-    "llmProviders": {
-        "openai": "OpenAI",
-        "anthropic": "Anthropic",
-        "ollama": "Ollama",
-        "gemini": "Gemini"
+    "reasoning": {
+      "title": "Reasoning",
+      "enableReasoning": "Enable Reasoning",
+      "strategy": "Strategy",
+      "maxSteps": "Max Reasoning Steps"
     },
-    "status": {
-        "ready": "Ready",
-        "running": "Running",
-        "error": "Error",
-        "configured": "Configured"
+    "advanced": {
+      "title": "Advanced Options",
+      "outputFormat": "Output Format",
+      "plainText": "Plain Text",
+      "markdown": "Markdown",
+      "debugMode": "Debug Mode"
     },
-    "messages": {
-        "configSaved": "Configuration saved",
-        "agentTested": "Agent tested successfully",
-        "testFailed": "Test failed",
-        "loadingAgents": "Loading agents...",
-        "noAgents": "No agents found"
+    "json": {
+      "title": "JSON Preview"
     }
+  },
+  "test": {
+    "title": "Test Agent",
+    "query": "Test Query",
+    "placeholder": "Enter a query to test the agent...",
+    "run": "Run Test",
+    "running": "Running...",
+    "response": "Response"
+  },
+  "messages": {
+    "saved": "Configuration saved successfully!",
+    "deleted": "Configuration deleted",
+    "activeUpdated": "Active configuration updated",
+    "loaded": "Loaded",
+    "parseFailed": "Failed to parse config",
+    "enterQuery": "Please enter a test query",
+    "testFailed": "Test failed"
+  },
+  "categories": {
+    "general": "General Purpose",
+    "finance": "Finance & Trading",
+    "research": "Research & Analysis",
+    "coding": "Code & Development",
+    "custom": "Custom"
+  },
+  "toolCategories": {
+    "finance": "finance",
+    "search": "search",
+    "data": "data",
+    "web": "web",
+    "code": "code",
+    "ai": "ai"
+  },
+  "memoryStrategies": {
+    "default": "Default",
+    "recent": "Recent Messages",
+    "summary": "Summary"
+  }
 }

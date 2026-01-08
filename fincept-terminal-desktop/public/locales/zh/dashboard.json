@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "加载中...",
     "error": "错误",
-    "configure": "配置",
-    "refresh": "刷新",
-    "remove": "移除",
     "globalIndices": "全球指数 - 前12",
     "forex": "外汇对",
     "crypto": "加密货币",
     "commodities": "商品",
-    "bonds": "债券",
-    "etfs": "ETF",
     "news": "新闻",
     "forum": "论坛",
     "watchlist": "自选股",
-    "maritime": "航运",
     "index": "指数",
     "symbol": "代码",
-    "name": "名称",
     "price": "价格",
     "change": "涨跌",
     "percentChange": "涨跌%",
-    "high": "最高",
-    "low": "最低",
     "noIndexData": "无指数数据",
     "noForexData": "无外汇数据",
     "noCryptoData": "无加密货币数据",
     "noCommoditiesData": "无商品数据",
-    "noNewsData": "无新闻",
     "noForumPosts": "无帖子",
     "noStocksInWatchlist": "自选股无股票",
     "noWatchlistSelected": "未选择自选股",
@@ -51,7 +41,8 @@
     "routes": "航线",
     "vol24h": "24小时交易量",
     "topTradeCorridors": "主要贸易走廊",
-    "ships": "船"
+    "ships": "船",
+    "unknown": "[ZH] Unknown widget type"
   },
   "tips": {
     "drag": "拖动小部件重新排列",
@@ -74,6 +65,11 @@
     "custom": "自定义",
     "empty": "空",
     "active": "活跃",
-    "cache": "缓存: 已启用"
+    "cache": "缓存: 已启用",
+    "label": "[ZH] Status"
+  },
+  "messages": {
+    "layoutSaved": "[ZH] Dashboard layout saved!",
+    "resetConfirm": "[ZH] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

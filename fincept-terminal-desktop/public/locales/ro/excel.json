@@ -1,26 +1,11 @@
 {
-    "title": "Integrare Excel",
-    "header": {
-        "import": "Importă",
-        "export": "Exportă",
-        "preview": "Previzualizare"
-    },
-    "toolbar": {
-        "open": "Deschide fișier",
-        "save": "Salvează",
-        "upload": "Încarcă",
-        "download": "Descarcă",
-        "refresh": "Reîmprospătează"
-    },
-    "table": {
-        "sheet": "Foaie",
-        "rows": "Rânduri",
-        "columns": "Coloane"
-    },
-    "messages": {
-        "loading": "Se încarcă fișierul...",
-        "imported": "Fișier importat",
-        "exported": "Fișier exportat",
-        "error": "Eroare procesare"
-    }
+  "title": "Integrare Excel",
+  "toolbar": {
+    "save": "Salvează",
+    "import": "[RO] IMPORT",
+    "export": "[RO] EXPORT",
+    "snapshot": "[RO] SNAPSHOT",
+    "history": "[RO] HISTORY",
+    "revert": "[RO] REVERT"
+  }
 }

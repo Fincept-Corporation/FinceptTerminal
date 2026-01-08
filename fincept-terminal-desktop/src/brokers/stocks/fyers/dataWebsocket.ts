@@ -81,14 +81,16 @@ export type ConnectionCallback = () => void;
 export class FyersDataWebSocket {
   private socket: any = null;
   private isConnected = false;
+  private isConnecting = false;
   private accessToken = '';
   private logger: any;
   private hasReceivedFirstMessage = false;
 
-  private messageCallbacks: MessageCallback[] = [];
-  private errorCallbacks: ErrorCallback[] = [];
-  private connectCallbacks: ConnectionCallback[] = [];
-  private closeCallbacks: ConnectionCallback[] = [];
+  // Use Sets for O(1) add/remove and to prevent duplicates
+  private messageCallbacks: Set<MessageCallback> = new Set();
+  private errorCallbacks: Set<ErrorCallback> = new Set();
+  private connectCallbacks: Set<ConnectionCallback> = new Set();
+  private closeCallbacks: Set<ConnectionCallback> = new Set();
 
   private subscribedSymbols: Set<string> = new Set();
   private currentMode: number = 2; // 2 = SymbolUpdate (full OHLCV), 1 = LiteMode
@@ -112,6 +114,12 @@ export class FyersDataWebSocket {
       return;
     }
 
+    if (this.isConnecting) {
+      this.logger.info('Connection already in progress');
+      return;
+    }
+
+    this.isConnecting = true;
     this.accessToken = accessToken;
 
     this.logger.info('Initializing Fyers Data WebSocket...');
@@ -124,12 +132,20 @@ export class FyersDataWebSocket {
 
     this.socket.on('error', (error: any) => {
       this.logger.error('WebSocket Error:', error);
-      this.errorCallbacks.forEach(cb => cb(error));
+      this.isConnecting = false;
+      this.errorCallbacks.forEach(cb => {
+        try {
+          cb(error);
+        } catch (err) {
+          this.logger.error('Error callback threw:', err);
+        }
+      });
     });
 
     this.socket.on('connect', () => {
       this.logger.info('✓ WebSocket Connected');
       this.isConnected = true;
+      this.isConnecting = false;
 
       // Subscribe to pending symbols AFTER connection
       if (this.subscribedSymbols.size > 0) {
@@ -145,13 +161,26 @@ export class FyersDataWebSocket {
         this.logger.info('✓ Subscription complete - waiting for full OHLCV data...');
       }
 
-      this.connectCallbacks.forEach(cb => cb());
+      this.connectCallbacks.forEach(cb => {
+        try {
+          cb();
+        } catch (err) {
+          this.logger.error('Connect callback threw:', err);
+        }
+      });
     });
 
     this.socket.on('close', () => {
       this.logger.info('WebSocket Connection closed');
       this.isConnected = false;
-      this.closeCallbacks.forEach(cb => cb());
+      this.isConnecting = false;
+      this.closeCallbacks.forEach(cb => {
+        try {
+          cb();
+        } catch (err) {
+          this.logger.error('Close callback threw:', err);
+        }
+      });
     });
 
     this.socket.on('message', (message: any) => {
@@ -169,9 +198,15 @@ export class FyersDataWebSocket {
         this.hasReceivedFirstMessage = true;
       }
 
-      // Forward message to callbacks
+      // Forward message to callbacks with error handling
       if (message && typeof message === 'object') {
-        this.messageCallbacks.forEach(cb => cb(message));
+        this.messageCallbacks.forEach(cb => {
+          try {
+            cb(message);
+          } catch (err) {
+            this.logger.error('Message callback threw:', err);
+          }
+        });
       }
     });
 
@@ -259,46 +294,38 @@ export class FyersDataWebSocket {
 
   /**
    * Subscribe to message updates
+   * Returns unsubscribe function
    */
   onMessage(callback: MessageCallback): () => void {
-    this.messageCallbacks.push(callback);
-    return () => {
-      const index = this.messageCallbacks.indexOf(callback);
-      if (index > -1) this.messageCallbacks.splice(index, 1);
-    };
+    this.messageCallbacks.add(callback);
+    return () => this.messageCallbacks.delete(callback);
   }
 
   /**
    * Subscribe to connection events
+   * Returns unsubscribe function
    */
   onConnect(callback: ConnectionCallback): () => void {
-    this.connectCallbacks.push(callback);
-    return () => {
-      const index = this.connectCallbacks.indexOf(callback);
-      if (index > -1) this.connectCallbacks.splice(index, 1);
-    };
+    this.connectCallbacks.add(callback);
+    return () => this.connectCallbacks.delete(callback);
   }
 
   /**
    * Subscribe to close events
+   * Returns unsubscribe function
    */
   onClose(callback: ConnectionCallback): () => void {
-    this.closeCallbacks.push(callback);
-    return () => {
-      const index = this.closeCallbacks.indexOf(callback);
-      if (index > -1) this.closeCallbacks.splice(index, 1);
-    };
+    this.closeCallbacks.add(callback);
+    return () => this.closeCallbacks.delete(callback);
   }
 
   /**
    * Subscribe to errors
+   * Returns unsubscribe function
    */
   onError(callback: ErrorCallback): () => void {
-    this.errorCallbacks.push(callback);
-    return () => {
-      const index = this.errorCallbacks.indexOf(callback);
-      if (index > -1) this.errorCallbacks.splice(index, 1);
-    };
+    this.errorCallbacks.add(callback);
+    return () => this.errorCallbacks.delete(callback);
   }
 
   /**
@@ -319,9 +346,21 @@ export class FyersDataWebSocket {
    * Remove all callbacks
    */
   clearCallbacks(): void {
-    this.messageCallbacks = [];
-    this.errorCallbacks = [];
-    this.connectCallbacks = [];
-    this.closeCallbacks = [];
+    this.messageCallbacks.clear();
+    this.errorCallbacks.clear();
+    this.connectCallbacks.clear();
+    this.closeCallbacks.clear();
+  }
+
+  /**
+   * Get callback counts (for debugging)
+   */
+  getCallbackCounts(): Record<string, number> {
+    return {
+      message: this.messageCallbacks.size,
+      error: this.errorCallbacks.size,
+      connect: this.connectCallbacks.size,
+      close: this.closeCallbacks.size,
+    };
   }
 }

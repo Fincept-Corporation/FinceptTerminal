@@ -1,39 +1,17 @@
 {
-    "title": "Catatan",
-    "header": {
-        "notes": "Catatan",
-        "folders": "Folder",
-        "tags": "Tag"
-    },
-    "toolbar": {
-        "newNote": "Catatan baru",
-        "templates": "Template",
-        "favorites": "Favorit",
-        "filters": "Filter",
-        "archived": "Diarsipkan"
-    },
-    "editor": {
-        "title": "Judul",
-        "content": "Konten",
-        "tags": "Tag"
-    },
-    "buttons": {
-        "save": "Simpan",
-        "delete": "Hapus",
-        "archive": "Arsipkan",
-        "share": "Bagikan"
-    },
-    "messages": {
-        "saved": "Catatan disimpan",
-        "deleted": "Catatan dihapus",
-        "archived": "Catatan diarsipkan"
-    },
-    "search": {
-        "placeholder": "Cari catatan..."
-    },
-    "stats": {
-        "total": "Total",
-        "archived": "Diarsipkan",
-        "favorites": "Favorit"
-    }
+  "title": "Catatan",
+  "header": {
+    "total": "[ID] TOTAL",
+    "favorites": "[ID] FAVORITES",
+    "words": "[ID] WORDS",
+    "refresh": "[ID] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "Catatan baru",
+    "templates": "Template",
+    "favorites": "Favorit",
+    "filters": "Filter",
+    "archived": "Diarsipkan",
+    "search": "[ID] Search notes, tags, tickers..."
+  }
 }

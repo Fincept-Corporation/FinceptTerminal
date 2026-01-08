@@ -1,33 +1,19 @@
 {
-    "title": "Rapor Oluşturucu",
-    "header": {
-        "templates": "Şablonlar",
-        "reports": "Raporlar",
-        "preview": "Önizleme"
-    },
-    "toolbar": {
-        "new": "Yeni rapor",
-        "save": "Kaydet",
-        "export": "Dışa aktar",
-        "print": "Yazdır",
-        "share": "Paylaş"
-    },
-    "sections": {
-        "header": "Başlık",
-        "summary": "Özet",
-        "charts": "Grafikler",
-        "tables": "Tablolar",
-        "footer": "Altbilgi"
-    },
-    "templates": {
-        "daily": "Günlük rapor",
-        "weekly": "Haftalık rapor",
-        "monthly": "Aylık rapor",
-        "custom": "Özel"
-    },
-    "messages": {
-        "saved": "Rapor kaydedildi",
-        "exported": "Rapor dışa aktarıldı",
-        "generating": "Rapor oluşturuluyor..."
-    }
+  "title": "Rapor Oluşturucu",
+  "header": {
+    "load": "[TR] Load",
+    "save": "[TR] Save",
+    "saving": "[TR] Saving...",
+    "exportPdf": "[TR] Export PDF",
+    "generating": "[TR] Generating..."
+  },
+  "components": {
+    "title": "[TR] ADD COMPONENTS"
+  },
+  "layout": {
+    "title": "[TR] LAYOUT"
+  },
+  "settings": {
+    "title": "[TR] SETTINGS"
+  }
 }

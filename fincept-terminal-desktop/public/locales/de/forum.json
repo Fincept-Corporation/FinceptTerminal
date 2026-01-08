@@ -1,61 +1,6 @@
 {
-    "title": "FINCEPT FORUM",
-    "header": {
-        "trending": "TRENDING",
-        "new": "NEU",
-        "following": "FOLGE ICH",
-        "myPosts": "MEINE BEITRÄGE"
-    },
-    "categories": {
-        "all": "Alle Themen",
-        "stocks": "Aktien",
-        "options": "Optionen",
-        "crypto": "Krypto",
-        "forex": "Forex",
-        "strategies": "Strategien",
-        "general": "Allgemein"
-    },
-    "post": {
-        "create": "Beitrag erstellen",
-        "reply": "Antworten",
-        "edit": "Bearbeiten",
-        "delete": "Löschen",
-        "share": "Teilen",
-        "report": "Melden",
-        "save": "Speichern"
-    },
-    "form": {
-        "title": "Titel",
-        "content": "Inhalt",
-        "tags": "Tags",
-        "category": "Kategorie",
-        "submit": "Posten",
-        "cancel": "Abbrechen",
-        "preview": "Vorschau"
-    },
-    "engagement": {
-        "likes": "Likes",
-        "comments": "Kommentare",
-        "views": "Aufrufe",
-        "shares": "Geteilt"
-    },
-    "user": {
-        "posts": "Beiträge",
-        "followers": "Follower",
-        "following": "Folge ich",
-        "reputation": "Reputation",
-        "joined": "Beigetreten"
-    },
-    "sort": {
-        "newest": "Neueste",
-        "popular": "Beliebteste",
-        "mostCommented": "Meiste Kommentare",
-        "topRated": "Bestbewertet"
-    },
-    "messages": {
-        "loading": "Lade Beiträge...",
-        "noPosts": "Keine Beiträge",
-        "postSuccess": "Erfolgreich gepostet",
-        "deleteConfirm": "Beitrag löschen?"
-    }
+  "title": "FINCEPT FORUM",
+  "header": {
+    "trending": "TRENDING"
+  }
 }

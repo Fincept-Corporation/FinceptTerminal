@@ -1,46 +1,9 @@
 {
-    "title": "อัลฟ่าอารีน่า",
-    "header": {
-        "competition": "การแข่งขัน",
-        "leaderboard": "ตารางอันดับ",
-        "decisions": "การตัดสินใจ",
-        "cycles": "รอบ"
-    },
-    "buttons": {
-        "start": "เริ่ม",
-        "stop": "หยุด",
-        "refresh": "รีเฟรช",
-        "create": "สร้างการแข่งขัน"
-    },
-    "form": {
-        "competitionName": "ชื่อการแข่งขัน",
-        "symbol": "สัญลักษณ์",
-        "mode": "โหมดการเทรด",
-        "models": "เลือกโมเดล",
-        "apiKeys": "API Keys"
-    },
-    "modes": {
-        "baseline": "พื้นฐาน",
-        "monk": "มังค์",
-        "situational": "ตามสถานการณ์",
-        "maxLeverage": "เลเวอเรจสูงสุด"
-    },
-    "leaderboard": {
-        "rank": "อันดับ",
-        "model": "โมเดล",
-        "pnl": "กำไร/ขาดทุน",
-        "trades": "การเทรด",
-        "winRate": "อัตราชนะ"
-    },
-    "status": {
-        "running": "กำลังทำงาน",
-        "stopped": "หยุดแล้ว",
-        "waiting": "รอ",
-        "error": "ข้อผิดพลาด"
-    },
-    "messages": {
-        "competitionStarted": "เริ่มการแข่งขันแล้ว",
-        "competitionStopped": "หยุดการแข่งขันแล้ว",
-        "noCompetition": "ไม่มีการแข่งขันที่ใช้งานอยู่"
-    }
+  "title": "อัลฟ่าอารีน่า",
+  "header": {
+    "competition": "การแข่งขัน"
+  },
+  "buttons": {
+    "create": "สร้างการแข่งขัน"
+  }
 }

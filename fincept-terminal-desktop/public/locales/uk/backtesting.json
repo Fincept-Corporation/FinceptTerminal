@@ -1,95 +1,27 @@
-﻿{
-    "title": "ДВИГУН БЕКТЕСТИНГУ",
-    "header": {
-        "strategy": "СТРАТЕГІЯ",
-        "results": "РЕЗУЛЬТАТИ",
-        "trades": "УГОДИ"
-    },
-    "toolbar": {
-        "run": "Запустити Бектест",
-        "running": "Виконується...",
-        "stop": "СТОП",
-        "reset": "СКИНУТИ",
-        "export": "ЕКСПОРТ РЕЗУЛЬТАТІВ",
-        "refresh": "Оновити"
-    },
-    "config": {
-        "symbolTimeframe": "Символ та Таймфрейм",
-        "symbol": "Символ",
-        "stockTicker": "Тікер акції для бектесту",
-        "startDate": "Дата Початку",
-        "endDate": "Дата Закінчення",
-        "initialCapital": "Початковий Капітал",
-        "strategy": "Стратегія",
-        "parameters": "Параметри"
-    },
-    "sections": {
-        "strategyConfig": "Налаштування Стратегії",
-        "strategyType": "Тип Стратегії",
-        "strategyParams": "Параметри Стратегії",
-        "backtestResults": "Результати Бектесту",
-        "advancedSettings": "Розширені Налаштування",
-        "advancedNote": "Розширені опції для Backtesting.py"
-    },
-    "advanced": {
-        "commission": "Комісія (десяткова)",
-        "tradeOnClose": "Торгівля на Закритті",
-        "hedging": "Хеджування",
-        "exclusiveOrders": "Ексклюзивні Ордери",
-        "margin": "Маржа"
-    },
-    "strategies": {
-        "sma": "Перетин SMA",
-        "rsi": "Стратегія RSI",
-        "macd": "Стратегія MACD",
-        "bollinger": "Смуги Болінджера",
-        "custom": "Власна Стратегія"
-    },
-    "smaParams": {
-        "fastPeriod": "Швидкий Період",
-        "slowPeriod": "Повільний Період",
-        "fastNote": "Короткострокова ковзна середня",
-        "slowNote": "Довгострокова ковзна середня"
-    },
-    "results": {
-        "totalReturn": "Загальна Доходність",
-        "sharpeRatio": "Коефіцієнт Шарпа",
-        "maxDrawdown": "Макс Просадка",
-        "winRate": "Відсоток Виграшів",
-        "totalTrades": "Всього Угод",
-        "profitFactor": "Фактор Прибутку",
-        "configurePrompt": "Налаштуйте бектест та натисніть 'Запустити Бектест' для перегляду результатів"
-    },
-    "trades": {
-        "date": "Дата",
-        "type": "Тип",
-        "price": "Ціна",
-        "quantity": "Кількість",
-        "pnl": "P&L"
-    },
-    "status": {
-        "ready": "Готовий",
-        "running": "Виконується...",
-        "completed": "Завершено",
-        "error": "Помилка"
-    },
-    "messages": {
-        "backtestStarted": "Бектест розпочато",
-        "backtestCompleted": "Бектест завершено",
-        "backtestError": "Помилка бектесту"
-    },
-    "visual": {
-        "priceData": "Дані Ціни",
-        "maIndicator": "Індикатор MA",
-        "condition": "Умова",
-        "buyOrder": "Ордер на Купівлю",
-        "sellOrder": "Ордер на Продаж",
-        "addBlocksPrompt": "Натисніть на блоки вище, щоб додати до стратегії",
-        "remove": "Видалити",
-        "generateCode": "Згенерувати Код з Блоків"
-    },
-    "template": {
-        "strategyTemplates": "Шаблони Стратегій",
-        "apply": "Застосувати Шаблон"
-    }
+{
+  "title": "ДВИГУН БЕКТЕСТИНГУ",
+  "toolbar": {
+    "run": "Запустити Бектест"
+  },
+  "config": {
+    "symbolTimeframe": "Символ та Таймфрейм",
+    "symbol": "Символ",
+    "stockTicker": "Тікер акції для бектесту",
+    "startDate": "Дата Початку",
+    "endDate": "Дата Закінчення",
+    "initialCapital": "Початковий Капітал"
+  },
+  "sections": {
+    "strategyConfig": "Налаштування Стратегії",
+    "strategyType": "Тип Стратегії",
+    "strategyParams": "Параметри Стратегії",
+    "backtestResults": "Результати Бектесту",
+    "advancedSettings": "Розширені Налаштування"
+  },
+  "smaParams": {
+    "fastPeriod": "Швидкий Період",
+    "slowPeriod": "Повільний Період",
+    "fastNote": "Короткострокова ковзна середня",
+    "slowNote": "Довгострокова ковзна середня"
+  }
 }

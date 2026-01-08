@@ -1,95 +1,27 @@
 {
-    "title": "ব্যাকটেস্টিং ইঞ্জিন",
-    "header": {
-        "strategy": "কৌশল",
-        "results": "ফলাফল",
-        "trades": "ট্রেড"
-    },
-    "toolbar": {
-        "run": "ব্যাকটেস্ট চালান",
-        "running": "চলছে...",
-        "stop": "থামান",
-        "reset": "রিসেট",
-        "export": "ফলাফল এক্সপোর্ট",
-        "refresh": "রিফ্রেশ"
-    },
-    "config": {
-        "symbolTimeframe": "সিম্বল ও টাইমফ্রেম",
-        "symbol": "সিম্বল",
-        "stockTicker": "ব্যাকটেস্টের জন্য স্টক টিকার",
-        "startDate": "শুরুর তারিখ",
-        "endDate": "শেষ তারিখ",
-        "initialCapital": "প্রাথমিক মূলধন",
-        "strategy": "কৌশল",
-        "parameters": "প্যারামিটার"
-    },
-    "sections": {
-        "strategyConfig": "কৌশল কনফিগারেশন",
-        "strategyType": "কৌশলের ধরন",
-        "strategyParams": "কৌশল প্যারামিটার",
-        "backtestResults": "ব্যাকটেস্ট ফলাফল",
-        "advancedSettings": "উন্নত সেটিংস",
-        "advancedNote": "Backtesting.py প্রদানকারীর জন্য উন্নত বিকল্প"
-    },
-    "advanced": {
-        "commission": "কমিশন (দশমিক)",
-        "tradeOnClose": "বন্ধে ট্রেড",
-        "hedging": "হেজিং",
-        "exclusiveOrders": "এক্সক্লুসিভ অর্ডার",
-        "margin": "মার্জিন"
-    },
-    "strategies": {
-        "sma": "SMA ক্রসওভার",
-        "rsi": "RSI কৌশল",
-        "macd": "MACD কৌশল",
-        "bollinger": "বলিঙ্গার ব্যান্ড",
-        "custom": "কাস্টম কৌশল"
-    },
-    "smaParams": {
-        "fastPeriod": "দ্রুত পিরিয়ড",
-        "slowPeriod": "ধীর পিরিয়ড",
-        "fastNote": "স্বল্পমেয়াদী মুভিং এভারেজ",
-        "slowNote": "দীর্ঘমেয়াদী মুভিং এভারেজ"
-    },
-    "results": {
-        "totalReturn": "মোট রিটার্ন",
-        "sharpeRatio": "শার্প রেশিও",
-        "maxDrawdown": "সর্বোচ্চ ড্রডাউন",
-        "winRate": "জয়ের হার",
-        "totalTrades": "মোট ট্রেড",
-        "profitFactor": "লাভ ফ্যাক্টর",
-        "configurePrompt": "আপনার ব্যাকটেস্ট কনফিগার করুন এবং ফলাফল দেখতে 'ব্যাকটেস্ট চালান' ক্লিক করুন"
-    },
-    "trades": {
-        "date": "তারিখ",
-        "type": "ধরন",
-        "price": "মূল্য",
-        "quantity": "পরিমাণ",
-        "pnl": "লাভ/ক্ষতি"
-    },
-    "status": {
-        "ready": "প্রস্তুত",
-        "running": "চলছে...",
-        "completed": "সম্পন্ন",
-        "error": "ত্রুটি"
-    },
-    "messages": {
-        "backtestStarted": "ব্যাকটেস্ট শুরু হয়েছে",
-        "backtestCompleted": "ব্যাকটেস্ট সম্পন্ন",
-        "backtestError": "ব্যাকটেস্ট ব্যর্থ"
-    },
-    "visual": {
-        "priceData": "মূল্য ডেটা",
-        "maIndicator": "MA সূচক",
-        "condition": "শর্ত",
-        "buyOrder": "কেনার অর্ডার",
-        "sellOrder": "বিক্রির অর্ডার",
-        "addBlocksPrompt": "আপনার কৌশলে যোগ করতে উপরের ব্লকগুলিতে ক্লিক করুন",
-        "remove": "সরান",
-        "generateCode": "ব্লক থেকে কোড তৈরি করুন"
-    },
-    "template": {
-        "strategyTemplates": "কৌশল টেমপ্লেট",
-        "apply": "টেমপ্লেট প্রয়োগ করুন"
-    }
+  "title": "ব্যাকটেস্টিং ইঞ্জিন",
+  "toolbar": {
+    "run": "ব্যাকটেস্ট চালান"
+  },
+  "config": {
+    "symbolTimeframe": "সিম্বল ও টাইমফ্রেম",
+    "symbol": "সিম্বল",
+    "stockTicker": "ব্যাকটেস্টের জন্য স্টক টিকার",
+    "startDate": "শুরুর তারিখ",
+    "endDate": "শেষ তারিখ",
+    "initialCapital": "প্রাথমিক মূলধন"
+  },
+  "sections": {
+    "strategyConfig": "কৌশল কনফিগারেশন",
+    "strategyType": "কৌশলের ধরন",
+    "strategyParams": "কৌশল প্যারামিটার",
+    "backtestResults": "ব্যাকটেস্ট ফলাফল",
+    "advancedSettings": "উন্নত সেটিংস"
+  },
+  "smaParams": {
+    "fastPeriod": "দ্রুত পিরিয়ড",
+    "slowPeriod": "ধীর পিরিয়ড",
+    "fastNote": "স্বল্পমেয়াদী মুভিং এভারেজ",
+    "slowNote": "দীর্ঘমেয়াদী মুভিং এভারেজ"
+  }
 }

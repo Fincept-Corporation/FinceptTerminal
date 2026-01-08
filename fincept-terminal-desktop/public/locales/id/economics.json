@@ -1,59 +1,8 @@
 {
-    "title": "EKONOMI",
-    "header": {
-        "overview": "RINGKASAN",
-        "indicators": "INDIKATOR",
-        "calendar": "KALENDER",
-        "countries": "NEGARA"
-    },
-    "indicators": {
-        "gdp": "PDB",
-        "inflation": "Inflasi",
-        "unemployment": "Pengangguran",
-        "interestRate": "Suku Bunga",
-        "tradeBalance": "Neraca Perdagangan",
-        "consumerConfidence": "Kepercayaan Konsumen",
-        "pmi": "PMI",
-        "cpi": "IHK"
-    },
-    "calendar": {
-        "date": "Tanggal",
-        "event": "Peristiwa",
-        "actual": "Aktual",
-        "forecast": "Perkiraan",
-        "previous": "Sebelumnya",
-        "impact": "Dampak"
-    },
-    "impact": {
-        "high": "Tinggi",
-        "medium": "Sedang",
-        "low": "Rendah"
-    },
-    "trends": {
-        "rising": "Naik",
-        "falling": "Turun",
-        "stable": "Stabil",
-        "yoy": "Tahunan",
-        "mom": "Bulanan",
-        "qoq": "Kuartalan"
-    },
-    "regions": {
-        "global": "Global",
-        "northAmerica": "Amerika Utara",
-        "europe": "Eropa",
-        "asia": "Asia Pasifik",
-        "latam": "Amerika Latin",
-        "mena": "MENA"
-    },
-    "actions": {
-        "compare": "Bandingkan Negara",
-        "export": "Ekspor Data",
-        "subscribe": "Berlangganan",
-        "filter": "Filter Peristiwa"
-    },
-    "messages": {
-        "loading": "Memuat data...",
-        "noEvents": "Tidak ada peristiwa",
-        "updated": "Diperbarui"
-    }
+  "title": "EKONOMI",
+  "header": {
+    "overview": "RINGKASAN",
+    "indicators": "INDIKATOR",
+    "countries": "NEGARA"
+  }
 }

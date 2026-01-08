@@ -1,58 +1,28 @@
 {
-    "title": "LOGIN AUDIT DASHBOARD",
-    "accessDenied": "Admin access required to view Login Audit Dashboard",
-    "metrics": {
-        "dauToday": "DAU Today",
-        "mau": "MAU",
-        "successRate": "Success Rate",
-        "failed24h": "Failed (24h)",
-        "activeSessions": "Active Sessions",
-        "uniqueIps": "Unique IPs"
-    },
-    "views": {
-        "overview": "OVERVIEW",
-        "eventLog": "EVENT LOG",
-        "alerts": "ALERTS",
-        "analytics": "ANALYTICS"
-    },
-    "activity": {
-        "recentLoginActivity": "RECENT LOGIN ACTIVITY",
-        "securityAlerts": "SECURITY ALERTS",
-        "noActiveAlerts": "No active alerts",
-        "loginEventLog": "LOGIN EVENT LOG"
-    },
-    "table": {
-        "time": "Time",
-        "event": "Event",
-        "user": "User",
-        "ipAddress": "IP Address",
-        "location": "Location",
-        "device": "Device",
-        "details": "Details"
-    },
-    "alerts": {
-        "securityIncidents": "SECURITY ALERTS & INCIDENTS",
-        "noAlerts": "No security alerts at this time",
-        "dismiss": "DISMISS",
-        "blockIp": "BLOCK IP",
-        "investigate": "INVESTIGATE"
-    },
-    "analytics": {
-        "loginsByCountry": "LOGINS BY COUNTRY (30 days)",
-        "failureReasons": "FAILURE REASONS (24h)",
-        "peakHours": "PEAK HOURS (UTC)",
-        "logins": "logins"
-    },
-    "controls": {
-        "autoRefresh": "Auto-refresh",
-        "loading": "LOADING...",
-        "refresh": "REFRESH"
-    },
-    "status": {
-        "admin": "Admin",
-        "dau": "DAU",
-        "status": "Status",
-        "updating": "UPDATING",
-        "ready": "READY"
-    }
+  "title": "LOGIN AUDIT DASHBOARD",
+  "metrics": {
+    "dauToday": "DAU Today",
+    "mau": "MAU",
+    "successRate": "Success Rate",
+    "failed24h": "Failed (24h)",
+    "activeSessions": "Active Sessions",
+    "uniqueIps": "Unique IPs"
+  },
+  "views": {
+    "overview": "OVERVIEW",
+    "eventLog": "EVENT LOG",
+    "alerts": "ALERTS",
+    "analytics": "ANALYTICS"
+  },
+  "activity": {
+    "recentLoginActivity": "RECENT LOGIN ACTIVITY",
+    "securityAlerts": "SECURITY ALERTS",
+    "noActiveAlerts": "No active alerts",
+    "loginEventLog": "LOGIN EVENT LOG"
+  },
+  "controls": {
+    "autoRefresh": "Auto-refresh",
+    "loading": "LOADING...",
+    "refresh": "REFRESH"
+  }
 }

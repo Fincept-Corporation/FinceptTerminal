@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "Memuat...",
     "error": "Error",
-    "configure": "Konfigurasi",
-    "refresh": "Segarkan",
-    "remove": "Hapus",
     "globalIndices": "INDEKS GLOBAL - TOP 12",
     "forex": "PASANGAN FOREX",
     "crypto": "CRYPTOCURRENCY",
     "commodities": "KOMODITAS",
-    "bonds": "OBLIGASI",
-    "etfs": "ETF",
     "news": "BERITA",
     "forum": "FORUM",
     "watchlist": "WATCHLIST",
-    "maritime": "MARITIM",
     "index": "INDEKS",
     "symbol": "SIMBOL",
-    "name": "NAMA",
     "price": "HARGA",
     "change": "CHG",
     "percentChange": "%CHG",
-    "high": "TINGGI",
-    "low": "RENDAH",
     "noIndexData": "Tidak ada data indeks",
     "noForexData": "Tidak ada data forex",
     "noCryptoData": "Tidak ada data kripto",
     "noCommoditiesData": "Tidak ada data komoditas",
-    "noNewsData": "Tidak ada berita",
     "noForumPosts": "Tidak ada post forum",
     "noStocksInWatchlist": "Tidak ada saham di watchlist",
     "noWatchlistSelected": "Tidak ada watchlist dipilih",
@@ -51,7 +41,8 @@
     "routes": "RUTE",
     "vol24h": "VOL 24J",
     "topTradeCorridors": "KORIDOR PERDAGANGAN UTAMA",
-    "ships": "kapal"
+    "ships": "kapal",
+    "unknown": "[ID] Unknown widget type"
   },
   "tips": {
     "drag": "Seret widget untuk mengatur ulang",
@@ -74,6 +65,11 @@
     "custom": "Kustom",
     "empty": "Kosong",
     "active": "AKTIF",
-    "cache": "Cache: AKTIF"
+    "cache": "Cache: AKTIF",
+    "label": "[ID] Status"
+  },
+  "messages": {
+    "layoutSaved": "[ID] Dashboard layout saved!",
+    "resetConfirm": "[ID] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

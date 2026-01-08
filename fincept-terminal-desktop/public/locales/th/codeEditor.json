@@ -1,57 +1,29 @@
 {
-    "title": "ตัวแก้ไขโค้ด",
-    "header": {
-        "files": "ไฟล์",
-        "terminal": "เทอร์มินัล",
-        "packages": "แพ็คเกจ"
-    },
-    "toolbar": {
-        "newFile": "ไฟล์ใหม่",
-        "new": "ใหม่",
-        "open": "เปิด",
-        "save": "บันทึก",
-        "run": "รันโค้ด",
-        "running": "กำลังรัน...",
-        "runAll": "รันทั้งหมด",
-        "download": "ดาวน์โหลด",
-        "upload": "อัพโหลด",
-        "clear": "ล้าง",
-        "history": "ประวัติ"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "ตัวแก้ไข",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "ตัวแก้ไข FINSCRIPT",
-        "terminal": "เทอร์มินัล"
-    },
-    "terminal": {
-        "output": "ผลลัพธ์",
-        "clear": "ล้างผลลัพธ์",
-        "running": "กำลังรัน...",
-        "completed": "เสร็จสิ้น"
-    },
-    "packages": {
-        "installed": "แพ็คเกจที่ติดตั้ง",
-        "install": "ติดตั้งแพ็คเกจ",
-        "uninstall": "ถอนการติดตั้ง",
-        "clickToLoad": "คลิกเพื่อโหลด...",
-        "load": "โหลดแพ็คเกจ"
-    },
-    "history": {
-        "title": "ประวัติ NOTEBOOK",
-        "loading": "กำลังโหลดประวัติ...",
-        "empty": "ไม่มีประวัติ notebook"
-    },
-    "messages": {
-        "fileSaved": "บันทึกไฟล์แล้ว",
-        "fileOpened": "เปิดไฟล์แล้ว",
-        "executionComplete": "รันเสร็จสิ้น",
-        "executionError": "ข้อผิดพลาดในการรัน"
-    }
+  "title": "ตัวแก้ไขโค้ด",
+  "header": {
+    "packages": "แพ็คเกจ"
+  },
+  "toolbar": {
+    "newFile": "ไฟล์ใหม่",
+    "new": "ใหม่",
+    "open": "เปิด",
+    "save": "บันทึก",
+    "run": "รันโค้ด",
+    "running": "กำลังรัน...",
+    "runAll": "รันทั้งหมด",
+    "history": "ประวัติ"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "ตัวแก้ไข FINSCRIPT"
+  },
+  "packages": {
+    "clickToLoad": "คลิกเพื่อโหลด...",
+    "load": "โหลดแพ็คเกจ"
+  },
+  "history": {
+    "title": "ประวัติ NOTEBOOK",
+    "loading": "กำลังโหลดประวัติ...",
+    "empty": "ไม่มีประวัติ notebook"
+  }
 }

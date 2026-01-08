@@ -1,46 +1,26 @@
 {
-    "title": "AI SOHBET ASİSTANI",
-    "header": {
-        "newChat": "YENİ SOHBET",
-        "history": "GEÇMİŞ",
-        "settings": "AYARLAR"
-    },
-    "input": {
-        "placeholder": "Hisseler, piyasalar hakkında sorun...",
-        "send": "Gönder",
-        "voice": "Ses"
-    },
-    "messages": {
-        "thinking": "Düşünülüyor...",
-        "typing": "AI yazıyor...",
-        "error": "İşlem hatası",
-        "welcome": "Finansal analizinizde nasıl yardımcı olabilirim?"
-    },
-    "suggestions": {
-        "title": "Önerilen Sorular",
-        "stockAnalysis": "Hisse performansı analizi",
-        "marketTrends": "Güncel piyasa trendleri?",
-        "portfolioAdvice": "Portföy optimizasyon önerileri"
-    },
-    "history": {
-        "title": "Sohbet Geçmişi",
-        "today": "Bugün",
-        "yesterday": "Dün",
-        "thisWeek": "Bu hafta",
-        "older": "Eski",
-        "clear": "Geçmişi temizle"
-    },
-    "actions": {
-        "copy": "Kopyala",
-        "regenerate": "Yeniden oluştur",
-        "like": "Beğen",
-        "dislike": "Beğenme",
-        "share": "Paylaş"
-    },
-    "models": {
-        "select": "Model seç",
-        "gpt4": "GPT-4",
-        "claude": "Claude",
-        "gemini": "Gemini"
-    }
+  "title": "AI SOHBET ASİSTANI",
+  "header": {
+    "newChat": "YENİ SOHBET",
+    "settings": "AYARLAR"
+  },
+  "input": {
+    "placeholder": "Hisseler, piyasalar hakkında sorun...",
+    "send": "Gönder"
+  },
+  "messages": {
+    "thinking": "Düşünülüyor...",
+    "typing": "AI yazıyor..."
+  },
+  "history": {
+    "clearAll": "[TR] CLEAR ALL",
+    "sessions": "[TR] SESSIONS",
+    "deleteAll": "[TR] Delete all sessions"
+  },
+  "subtitle": "[TR] Financial Intelligence System",
+  "panel": {
+    "dataContexts": "[TR] DATA CONTEXTS",
+    "quickPrompts": "[TR] QUICK PROMPTS",
+    "systemInfo": "[TR] SYSTEM INFO"
+  }
 }

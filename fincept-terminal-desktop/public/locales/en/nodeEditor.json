@@ -1,61 +1,6 @@
 {
-    "title": "NODE EDITOR",
-    "header": {
-        "nodes": "NODES",
-        "workflows": "WORKFLOWS"
-    },
-    "tabs": {
-        "editor": "EDITOR",
-        "workflows": "WORKFLOWS"
-    },
-    "toolbar": {
-        "addNode": "ADD NODE",
-        "run": "RUN",
-        "save": "SAVE",
-        "deploy": "DEPLOY",
-        "saveDraft": "SAVE DRAFT",
-        "export": "EXPORT",
-        "import": "IMPORT",
-        "clear": "CLEAR"
-    },
-    "nodeTypes": {
-        "dataSource": "Data Source",
-        "technicalIndicator": "Technical Indicators",
-        "agentMediator": "Agent Mediator",
-        "resultsDisplay": "Results Display",
-        "mcpTool": "MCP Tool",
-        "pythonAgent": "Python Agent"
-    },
-    "categories": {
-        "input": "Input",
-        "processing": "Processing",
-        "output": "Output"
-    },
-    "nodeMenu": {
-        "coreNodes": "CORE NODES",
-        "mcpTools": "MCP TOOLS",
-        "pythonAgents": "PYTHON AGENTS"
-    },
-    "status": {
-        "ready": "Ready",
-        "running": "Running",
-        "completed": "Completed",
-        "error": "Error",
-        "idle": "Idle"
-    },
-    "deploy": {
-        "title": "DEPLOY WORKFLOW",
-        "workflowName": "Workflow Name",
-        "description": "Description",
-        "saveAsDraft": "Save as Draft",
-        "deploy": "DEPLOY & RUN",
-        "cancel": "CANCEL"
-    },
-    "messages": {
-        "workflowSaved": "Workflow saved",
-        "workflowDeployed": "Workflow deployed successfully",
-        "workflowCleared": "Workflow cleared",
-        "deploying": "Deploying...",
-        "executing": "Executing..."
-    }
+  "title": "NODE EDITOR",
+  "tabs": {
+    "editor": "EDITOR"
+  }
 }

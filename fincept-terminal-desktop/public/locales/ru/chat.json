@@ -1,46 +1,26 @@
 {
-    "title": "ЧАТ-АССИСТЕНТ ИИ",
-    "header": {
-        "newChat": "НОВЫЙ ЧАТ",
-        "history": "ИСТОРИЯ",
-        "settings": "НАСТРОЙКИ"
-    },
-    "input": {
-        "placeholder": "Спросите об акциях, рынках...",
-        "send": "Отправить",
-        "voice": "Голос"
-    },
-    "messages": {
-        "thinking": "Думаю...",
-        "typing": "ИИ печатает...",
-        "error": "Ошибка обработки",
-        "welcome": "Как я могу помочь с финансовым анализом?"
-    },
-    "suggestions": {
-        "title": "Рекомендуемые вопросы",
-        "stockAnalysis": "Анализ акций",
-        "marketTrends": "Текущие рыночные тренды?",
-        "portfolioAdvice": "Оптимизация портфеля"
-    },
-    "history": {
-        "title": "История чата",
-        "today": "Сегодня",
-        "yesterday": "Вчера",
-        "thisWeek": "На этой неделе",
-        "older": "Ранее",
-        "clear": "Очистить историю"
-    },
-    "actions": {
-        "copy": "Копировать",
-        "regenerate": "Перегенерировать",
-        "like": "Нравится",
-        "dislike": "Не нравится",
-        "share": "Поделиться"
-    },
-    "models": {
-        "select": "Выбрать модель",
-        "gpt4": "GPT-4",
-        "claude": "Claude",
-        "gemini": "Gemini"
-    }
+  "title": "ЧАТ-АССИСТЕНТ ИИ",
+  "header": {
+    "newChat": "НОВЫЙ ЧАТ",
+    "settings": "НАСТРОЙКИ"
+  },
+  "input": {
+    "placeholder": "Спросите об акциях, рынках...",
+    "send": "Отправить"
+  },
+  "messages": {
+    "thinking": "Думаю...",
+    "typing": "ИИ печатает..."
+  },
+  "history": {
+    "clearAll": "[RU] CLEAR ALL",
+    "sessions": "[RU] SESSIONS",
+    "deleteAll": "[RU] Delete all sessions"
+  },
+  "subtitle": "[RU] Financial Intelligence System",
+  "panel": {
+    "dataContexts": "[RU] DATA CONTEXTS",
+    "quickPrompts": "[RU] QUICK PROMPTS",
+    "systemInfo": "[RU] SYSTEM INFO"
+  }
 }

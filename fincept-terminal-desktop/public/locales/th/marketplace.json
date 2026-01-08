@@ -1,38 +1,35 @@
 {
-    "title": "ตลาด",
-    "header": {
-        "browse": "เรียกดู",
-        "myItems": "รายการของฉัน",
-        "cart": "ตะกร้า"
-    },
-    "categories": {
-        "all": "ทั้งหมด",
-        "indicators": "ตัวชี้วัด",
-        "strategies": "กลยุทธ์",
-        "datasets": "ชุดข้อมูล",
-        "tools": "เครื่องมือ"
-    },
-    "buttons": {
-        "buy": "ซื้อ",
-        "addToCart": "เพิ่มในตะกร้า",
-        "install": "ติดตั้ง",
-        "preview": "ดูตัวอย่าง"
-    },
-    "product": {
-        "price": "ราคา",
-        "rating": "คะแนน",
-        "downloads": "ดาวน์โหลด",
-        "author": "ผู้เขียน",
-        "version": "เวอร์ชัน"
-    },
-    "cart": {
-        "total": "รวม",
-        "checkout": "ชำระเงิน",
-        "empty": "ตะกร้าว่าง"
-    },
-    "messages": {
-        "addedToCart": "เพิ่มในตะกร้าแล้ว",
-        "purchased": "ซื้อแล้ว",
-        "installed": "ติดตั้งแล้ว"
-    }
+  "title": "ตลาด",
+  "header": {
+    "browse": "เรียกดู",
+    "myPurchases": "[TH] MY PURCHASES",
+    "upload": "[TH] UPLOAD",
+    "myDatasets": "[TH] MY DATASETS",
+    "analytics": "[TH] ANALYTICS",
+    "pricing": "[TH] PRICING",
+    "datasetsAvailable": "[TH] Datasets Available",
+    "myUploads": "[TH] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "เพิ่มในตะกร้า",
+    "inCart": "[TH] ✓ IN CART",
+    "viewDetails": "[TH] VIEW DETAILS",
+    "backToMarketplace": "[TH] BACK TO MARKETPLACE",
+    "loading": "[TH] ⟳ LOADING...",
+    "refresh": "[TH] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "คะแนน",
+    "description": "[TH] PRODUCT DESCRIPTION",
+    "users": "[TH] USERS"
+  },
+  "cart": {
+    "empty": "ตะกร้าว่าง",
+    "title": "[TH] SHOPPING CART",
+    "items": "[TH] items"
+  },
+  "guest": {
+    "title": "[TH] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[TH] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

@@ -104,20 +104,32 @@ if __name__ == '__main__':
 fn determine_venv_for_script(script_path: &PathBuf) -> &'static str {
     let path_str = script_path.to_string_lossy().to_lowercase();
 
-    // NumPy 1.x libraries
+    // NumPy 1.x libraries (from requirements-numpy1.txt)
+    // Includes backtesting, time series, portfolio optimization, and quant libraries
     if path_str.contains("vectorbt")
         || path_str.contains("backtesting")
         || path_str.contains("gluonts")
         || path_str.contains("functime")
         || path_str.contains("pyportfolioopt")
-        || path_str.contains("pyqlib")
-        || path_str.contains("rdagent")
+        // Qlib and RD-Agent (match both script paths and library names)
+        || path_str.contains("qlib")      // matches qlib_service.py, pyqlib
+        || path_str.contains("rd_agent")  // matches rd_agent_service.py
+        || path_str.contains("rdagent")   // matches library name
         || path_str.contains("gs-quant")
+        || path_str.contains("gs_quant")
+        // Financial modeling libraries (NumPy 1.x dependent)
+        || path_str.contains("ffn")           // matches ffn_wrapper, ffn_service.py
+        || path_str.contains("fortitudo")     // matches fortitudo_tech_wrapper, fortitudo_service.py
+        || path_str.contains("financepy")
+        || path_str.contains("finquant")
+        // AI Quant Lab uses Qlib/RD-Agent which need NumPy 1.x
+        || path_str.contains("ai_quant_lab")
     {
         return "venv-numpy1";
     }
 
-    // Default to NumPy 2.x
+    // NumPy 2.x libraries (vnpy, edgartools, modern ML)
+    // Default for everything else
     "venv-numpy2"
 }
 

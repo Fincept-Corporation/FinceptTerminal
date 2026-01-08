@@ -1,7 +1,4 @@
 {
-  "header": {
-    "title": "FINCEPT PROFESSIONAL"
-  },
   "navigation": {
     "dashboard": "ড্যাশবোর্ড",
     "markets": "বাজার",
@@ -11,14 +8,10 @@
     "watchlist": "ওয়াচলিস্ট",
     "research": "গবেষণা",
     "screener": "স্ক্রিনার",
-    "trading": "ট্রেডিং",
     "chat": "AI Chat",
     "agents": "এজেন্ট",
     "settings": "সেটিংস",
-    "profile": "প্রোফাইল",
-    "forum": "ফোরাম",
-    "help": "সাহায্য",
-    "logout": "লগআউট"
+    "profile": "প্রোফাইল"
   },
   "functionKeys": {
     "f1": "ড্যাশ",
@@ -34,16 +27,7 @@
     "f11": "পূর্ণ",
     "f12": "প্রফ"
   },
-  "status": {
-    "connected": "সংযুক্ত",
-    "disconnected": "সংযোগ বিচ্ছিন্ন",
-    "loading": "লোড হচ্ছে...",
-    "error": "ত্রুটি",
-    "ready": "প্রস্তুত"
-  },
   "labels": {
-    "moreTabs": "টুলবার মেনুতে আরও ট্যাব",
-    "enterCommand": "কমান্ড প্রবেশ করুন",
-    "search": "অনুসন্ধান"
+    "moreTabs": "টুলবার মেনুতে আরও ট্যাব"
   }
 }

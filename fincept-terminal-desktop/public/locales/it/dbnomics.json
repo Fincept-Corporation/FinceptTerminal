@@ -1,30 +1,8 @@
 {
-    "title": "Dati DBnomics",
-    "header": {
-        "search": "Cerca",
-        "providers": "Provider",
-        "datasets": "Dataset"
-    },
-    "form": {
-        "provider": "Provider",
-        "dataset": "Dataset",
-        "series": "Serie",
-        "startDate": "Data inizio",
-        "endDate": "Data fine"
-    },
-    "buttons": {
-        "fetch": "Recupera",
-        "search": "Cerca",
-        "export": "Esporta",
-        "clear": "Pulisci"
-    },
-    "chart": {
-        "title": "Visualizzazione dati",
-        "emptyState": "Seleziona una serie per visualizzare i dati"
-    },
-    "messages": {
-        "loading": "Caricamento dati...",
-        "noData": "Nessun dato trovato",
-        "error": "Errore nel recupero dati"
-    }
+  "title": "Dati DBnomics",
+  "toolbar": {
+    "fetch": "[IT] FETCH",
+    "refresh": "[IT] REFRESH",
+    "export": "[IT] EXPORT"
+  }
 }

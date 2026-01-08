@@ -873,10 +873,11 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
     let needs_setup = !python_installed || !bun_installed || !packages_installed;
 
     // Initialize worker pool in background if setup is already complete (non-blocking)
+    // CRITICAL: Use tauri::async_runtime to ensure worker pool lives in Tauri's persistent runtime
     if !needs_setup && python_installed {
         eprintln!("[SETUP] Python already installed, initializing worker pool in background...");
         let app_clone = app.clone();
-        std::thread::spawn(move || {
+        tauri::async_runtime::spawn(async move {
             let install_dir = match get_install_dir(&app_clone) {
                 Ok(dir) => dir,
                 Err(e) => {
@@ -885,7 +886,7 @@ pub fn check_setup_status(app: AppHandle) -> Result<SetupStatus, String> {
                 }
             };
 
-            if let Err(e) = crate::python_runtime::initialize_global(install_dir) {
+            if let Err(e) = crate::python_runtime::initialize_global_async(install_dir).await {
                 eprintln!("[SETUP] Warning: Failed to initialize worker pool: {}", e);
             } else {
                 eprintln!("[SETUP] Worker pool initialized successfully in background");
@@ -996,10 +997,11 @@ pub async fn run_setup(app: AppHandle) -> Result<String, String> {
         emit_progress(&app, "complete", 100, "Setup complete!", false);
 
         // Initialize worker pool in background (non-blocking)
+        // CRITICAL: Use tauri::async_runtime to ensure worker pool lives in Tauri's persistent runtime
         eprintln!("[SETUP] Initializing worker pool in background...");
-        let app_clone = app.clone();
-        std::thread::spawn(move || {
-            if let Err(e) = crate::python_runtime::initialize_global(install_dir.clone()) {
+        let install_dir_clone = install_dir.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = crate::python_runtime::initialize_global_async(install_dir_clone).await {
                 eprintln!("[SETUP] Warning: Failed to initialize worker pool: {}", e);
             } else {
                 eprintln!("[SETUP] Worker pool initialized successfully in background");

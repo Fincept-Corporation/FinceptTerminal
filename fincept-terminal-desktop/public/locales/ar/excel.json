@@ -1,26 +1,11 @@
 {
-    "title": "تكامل إكسل",
-    "header": {
-        "import": "استيراد",
-        "export": "تصدير",
-        "preview": "معاينة"
-    },
-    "toolbar": {
-        "open": "فتح ملف",
-        "save": "حفظ",
-        "upload": "رفع",
-        "download": "تنزيل",
-        "refresh": "تحديث"
-    },
-    "table": {
-        "sheet": "ورقة",
-        "rows": "صفوف",
-        "columns": "أعمدة"
-    },
-    "messages": {
-        "loading": "جاري تحميل الملف...",
-        "imported": "تم استيراد الملف",
-        "exported": "تم تصدير الملف",
-        "error": "خطأ في معالجة الملف"
-    }
+  "title": "تكامل إكسل",
+  "toolbar": {
+    "save": "حفظ",
+    "import": "[AR] IMPORT",
+    "export": "[AR] EXPORT",
+    "snapshot": "[AR] SNAPSHOT",
+    "history": "[AR] HISTORY",
+    "revert": "[AR] REVERT"
+  }
 }

@@ -1,30 +1,8 @@
 {
-    "title": "Datos DBnomics",
-    "header": {
-        "search": "Buscar",
-        "providers": "Proveedores",
-        "datasets": "Conjuntos de datos"
-    },
-    "form": {
-        "provider": "Proveedor",
-        "dataset": "Conjunto de datos",
-        "series": "Serie",
-        "startDate": "Fecha de inicio",
-        "endDate": "Fecha de fin"
-    },
-    "buttons": {
-        "fetch": "Obtener",
-        "search": "Buscar",
-        "export": "Exportar",
-        "clear": "Limpiar"
-    },
-    "chart": {
-        "title": "Visualización de datos",
-        "emptyState": "Seleccione una serie para ver datos"
-    },
-    "messages": {
-        "loading": "Cargando datos...",
-        "noData": "No se encontraron datos",
-        "error": "Error al obtener datos"
-    }
+  "title": "Datos DBnomics",
+  "toolbar": {
+    "fetch": "[ES] FETCH",
+    "refresh": "[ES] REFRESH",
+    "export": "[ES] EXPORT"
+  }
 }

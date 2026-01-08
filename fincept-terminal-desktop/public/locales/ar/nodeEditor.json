@@ -1,32 +1,6 @@
 {
-    "title": "محرر العقد",
-    "header": {
-        "nodes": "العقد",
-        "connections": "الاتصالات",
-        "canvas": "اللوحة"
-    },
-    "tabs": {
-        "editor": "المحرر",
-        "preview": "معاينة"
-    },
-    "toolbar": {
-        "addNode": "إضافة عقدة",
-        "delete": "حذف",
-        "clear": "مسح الكل",
-        "run": "تشغيل",
-        "save": "حفظ",
-        "load": "تحميل"
-    },
-    "nodes": {
-        "input": "إدخال",
-        "output": "إخراج",
-        "process": "معالجة",
-        "condition": "شرط"
-    },
-    "messages": {
-        "saved": "تم حفظ الرسم البياني",
-        "loaded": "تم تحميل الرسم البياني",
-        "running": "جاري التشغيل...",
-        "completed": "اكتمل"
-    }
+  "title": "محرر العقد",
+  "tabs": {
+    "editor": "المحرر"
+  }
 }

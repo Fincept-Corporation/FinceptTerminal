@@ -1,61 +1,6 @@
 {
-    "title": "FORUM FINCEPT",
-    "header": {
-        "trending": "ÎN TENDINȚE",
-        "new": "NOU",
-        "following": "URMĂRESC",
-        "myPosts": "POSTĂRILE MELE"
-    },
-    "categories": {
-        "all": "Toate subiectele",
-        "stocks": "Acțiuni",
-        "options": "Opțiuni",
-        "crypto": "Cripto",
-        "forex": "Forex",
-        "strategies": "Strategii",
-        "general": "General"
-    },
-    "post": {
-        "create": "Creează postare",
-        "reply": "Răspunde",
-        "edit": "Editează",
-        "delete": "Șterge",
-        "share": "Distribuie",
-        "report": "Raportează",
-        "save": "Salvează"
-    },
-    "form": {
-        "title": "Titlu",
-        "content": "Conținut",
-        "tags": "Etichete",
-        "category": "Categorie",
-        "submit": "Publică",
-        "cancel": "Anulează",
-        "preview": "Previzualizare"
-    },
-    "engagement": {
-        "likes": "Aprecieri",
-        "comments": "Comentarii",
-        "views": "Vizualizări",
-        "shares": "Distribuiri"
-    },
-    "user": {
-        "posts": "Postări",
-        "followers": "Urmăritori",
-        "following": "Urmăresc",
-        "reputation": "Reputație",
-        "joined": "S-a alăturat"
-    },
-    "sort": {
-        "newest": "Cele mai noi",
-        "popular": "Cele mai populare",
-        "mostCommented": "Cele mai comentate",
-        "topRated": "Cele mai bine cotate"
-    },
-    "messages": {
-        "loading": "Se încarcă...",
-        "noPosts": "Fără postări",
-        "postSuccess": "Publicat cu succes",
-        "deleteConfirm": "Ștergi această postare?"
-    }
+  "title": "FORUM FINCEPT",
+  "header": {
+    "trending": "ÎN TENDINȚE"
+  }
 }

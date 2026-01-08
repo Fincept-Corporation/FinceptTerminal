@@ -3,8 +3,8 @@
  * Export all analytics-related nodes
  *
  * Phase 6 Analytics Nodes (7/8 Complete):
- * ✅ TechnicalIndicatorsNode - 100+ indicators
- * ✅ TechnicalIndicatorsEnhancedNode - Comprehensive indicators with all categories
+ * ✅ TechnicalIndicatorsNode - Basic TypeScript indicators (SMA, EMA, RSI)
+ * ✅ TechnicalIndicatorsPythonNode - 50+ Python-powered indicators (RECOMMENDED)
  * ✅ PortfolioOptimizationNode - MPT optimization
  * ✅ BacktestEngineNode - Strategy backtesting
  * ✅ RiskAnalysisNode - VaR, CVaR, risk metrics
@@ -15,7 +15,7 @@
  */
 
 export { TechnicalIndicatorsNode } from './TechnicalIndicatorsNode';
-export { TechnicalIndicatorsEnhancedNode } from './TechnicalIndicatorsEnhanced.node';
+export { TechnicalIndicatorsPythonNode } from './TechnicalIndicatorsPython.node';
 export { PortfolioOptimizationNode } from './PortfolioOptimizationNode';
 export { BacktestEngineNode } from './BacktestEngineNode';
 export { RiskAnalysisNode } from './RiskAnalysisNode';

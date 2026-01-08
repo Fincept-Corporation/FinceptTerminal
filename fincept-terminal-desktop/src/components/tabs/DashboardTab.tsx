@@ -16,6 +16,14 @@ import {
   ForexWidget,
   MaritimeWidget,
   DataSourceWidget,
+  PolymarketWidget,
+  EconomicIndicatorsWidget,
+  PortfolioSummaryWidget,
+  AlertsWidget,
+  CalendarWidget,
+  QuickTradeWidget,
+  GeopoliticsWidget,
+  PerformanceWidget,
   WidgetType,
   WidgetConfig
 } from './dashboard/widgets';
@@ -27,19 +35,20 @@ interface WidgetInstance extends WidgetConfig {
   layout: Layout;
 }
 
+// Title keys map to translation keys in dashboard.json
 const DEFAULT_LAYOUT: WidgetInstance[] = [
   // Row 1 - Top indices and major markets
   {
     id: 'indices-1',
     type: 'indices',
-    title: 'Global Indices - Top 12',
+    title: 'widgets.globalIndices',
     config: {},
     layout: { i: 'indices-1', x: 0, y: 0, w: 6, h: 5, minW: 3, minH: 4 }
   },
   {
     id: 'news-1',
     type: 'news',
-    title: 'Market News',
+    title: 'widgets.marketNews',
     config: { newsCategory: 'MARKETS', newsLimit: 5 },
     layout: { i: 'news-1', x: 6, y: 0, w: 6, h: 5, minW: 2, minH: 3 }
   },
@@ -47,28 +56,28 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
   {
     id: 'forex-1',
     type: 'forex',
-    title: 'Forex - Major Pairs',
+    title: 'widgets.forex',
     config: {},
     layout: { i: 'forex-1', x: 0, y: 5, w: 3, h: 4, minW: 2, minH: 3 }
   },
   {
     id: 'commodities-1',
     type: 'commodities',
-    title: 'Commodities',
+    title: 'widgets.commodities',
     config: {},
     layout: { i: 'commodities-1', x: 3, y: 5, w: 3, h: 4, minW: 2, minH: 3 }
   },
   {
     id: 'news-2',
     type: 'news',
-    title: 'SEC Press Releases',
+    title: 'widgets.secPressReleases',
     config: { newsCategory: 'REGULATORY', newsLimit: 5 },
     layout: { i: 'news-2', x: 6, y: 5, w: 3, h: 4, minW: 2, minH: 3 }
   },
   {
     id: 'news-3',
     type: 'news',
-    title: 'Crypto News',
+    title: 'widgets.cryptoNews',
     config: { newsCategory: 'CRYPTO', newsLimit: 5 },
     layout: { i: 'news-3', x: 9, y: 5, w: 3, h: 4, minW: 2, minH: 3 }
   },
@@ -76,21 +85,21 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
   {
     id: 'forum-1',
     type: 'forum',
-    title: 'Trending Forum Posts',
+    title: 'widgets.trendingForum',
     config: { forumCategoryName: 'Trending', forumLimit: 5 },
     layout: { i: 'forum-1', x: 0, y: 9, w: 4, h: 4, minW: 2, minH: 3 }
   },
   {
     id: 'maritime-1',
     type: 'maritime',
-    title: 'Maritime Intelligence',
+    title: 'widgets.maritimeIntelligence',
     config: {},
     layout: { i: 'maritime-1', x: 4, y: 9, w: 4, h: 4, minW: 2, minH: 3 }
   },
   {
     id: 'market-2',
     type: 'market',
-    title: 'Tech Stocks',
+    title: 'widgets.techStocks',
     config: { marketCategory: 'Tech', marketTickers: ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA'] },
     layout: { i: 'market-2', x: 8, y: 9, w: 4, h: 4, minW: 2, minH: 3 }
   }
@@ -196,12 +205,12 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
   // Save layout to localStorage
   const saveLayout = () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ widgets, nextId }));
-    alert('Dashboard layout saved!');
+    alert(t('messages.layoutSaved'));
   };
 
   // Reset to default layout
   const resetLayout = () => {
-    if (confirm('Reset dashboard to default layout? This will remove all custom widgets.')) {
+    if (confirm(t('messages.resetConfirm'))) {
       setWidgets(DEFAULT_LAYOUT);
       localStorage.removeItem(STORAGE_KEY);
     }
@@ -328,8 +337,71 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
             onRemove={() => handleRemoveWidget(widget.id)}
           />
         );
+      case 'polymarket':
+        return (
+          <PolymarketWidget
+            id={widget.id}
+            onRemove={() => handleRemoveWidget(widget.id)}
+            onNavigate={() => onNavigateToTab?.('polymarket')}
+          />
+        );
+      case 'economic':
+        return (
+          <EconomicIndicatorsWidget
+            id={widget.id}
+            onRemove={() => handleRemoveWidget(widget.id)}
+            onNavigate={() => onNavigateToTab?.('economics')}
+          />
+        );
+      case 'portfolio':
+        return (
+          <PortfolioSummaryWidget
+            id={widget.id}
+            onRemove={() => handleRemoveWidget(widget.id)}
+            onNavigate={() => onNavigateToTab?.('portfolio')}
+          />
+        );
+      case 'alerts':
+        return (
+          <AlertsWidget
+            id={widget.id}
+            onRemove={() => handleRemoveWidget(widget.id)}
+            onNavigate={() => onNavigateToTab?.('monitoring')}
+          />
+        );
+      case 'calendar':
+        return (
+          <CalendarWidget
+            id={widget.id}
+            onRemove={() => handleRemoveWidget(widget.id)}
+          />
+        );
+      case 'quicktrade':
+        return (
+          <QuickTradeWidget
+            id={widget.id}
+            onRemove={() => handleRemoveWidget(widget.id)}
+            onNavigate={() => onNavigateToTab?.('trading')}
+          />
+        );
+      case 'geopolitics':
+        return (
+          <GeopoliticsWidget
+            id={widget.id}
+            onRemove={() => handleRemoveWidget(widget.id)}
+            onNavigate={() => onNavigateToTab?.('geopolitics')}
+          />
+        );
+      case 'performance':
+        return (
+          <PerformanceWidget
+            id={widget.id}
+            onRemove={() => handleRemoveWidget(widget.id)}
+            onNavigate={() => onNavigateToTab?.('portfolio')}
+          />
+        );
       default:
-        return <div>Unknown widget type</div>;
+        return <div>{t('widgets.unknown')}</div>;
     }
   };
 
@@ -622,7 +694,7 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         ]}
         statusInfo={
           <>
-            Status: <span style={{ color: colors.secondary }}>{t('status.active')}</span>
+            {t('status.label')}: <span style={{ color: colors.secondary }}>{t('status.active')}</span>
             {dbInitialized && (
               <span style={{ marginLeft: '8px', color: colors.secondary }}>
                 | {t('status.cache')}

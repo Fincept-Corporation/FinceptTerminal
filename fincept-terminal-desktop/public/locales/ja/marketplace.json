@@ -1,38 +1,35 @@
 {
-    "title": "マーケットプレイス",
-    "header": {
-        "browse": "閲覧",
-        "myItems": "マイアイテム",
-        "cart": "カート"
-    },
-    "categories": {
-        "all": "すべて",
-        "indicators": "インジケーター",
-        "strategies": "戦略",
-        "datasets": "データセット",
-        "tools": "ツール"
-    },
-    "buttons": {
-        "buy": "購入",
-        "addToCart": "カートに追加",
-        "install": "インストール",
-        "preview": "プレビュー"
-    },
-    "product": {
-        "price": "価格",
-        "rating": "評価",
-        "downloads": "ダウンロード数",
-        "author": "作者",
-        "version": "バージョン"
-    },
-    "cart": {
-        "total": "合計",
-        "checkout": "購入手続き",
-        "empty": "カートは空です"
-    },
-    "messages": {
-        "addedToCart": "カートに追加しました",
-        "purchased": "購入完了",
-        "installed": "インストール完了"
-    }
+  "title": "マーケットプレイス",
+  "header": {
+    "browse": "閲覧",
+    "myPurchases": "[JA] MY PURCHASES",
+    "upload": "[JA] UPLOAD",
+    "myDatasets": "[JA] MY DATASETS",
+    "analytics": "[JA] ANALYTICS",
+    "pricing": "[JA] PRICING",
+    "datasetsAvailable": "[JA] Datasets Available",
+    "myUploads": "[JA] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "カートに追加",
+    "inCart": "[JA] ✓ IN CART",
+    "viewDetails": "[JA] VIEW DETAILS",
+    "backToMarketplace": "[JA] BACK TO MARKETPLACE",
+    "loading": "[JA] ⟳ LOADING...",
+    "refresh": "[JA] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "評価",
+    "description": "[JA] PRODUCT DESCRIPTION",
+    "users": "[JA] USERS"
+  },
+  "cart": {
+    "empty": "カートは空です",
+    "title": "[JA] SHOPPING CART",
+    "items": "[JA] items"
+  },
+  "guest": {
+    "title": "[JA] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[JA] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

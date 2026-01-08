@@ -1,33 +1,19 @@
 {
-    "title": "Berichts-Generator",
-    "header": {
-        "templates": "Vorlagen",
-        "reports": "Berichte",
-        "preview": "Vorschau"
-    },
-    "toolbar": {
-        "new": "Neuer Bericht",
-        "save": "Speichern",
-        "export": "Exportieren",
-        "print": "Drucken",
-        "share": "Teilen"
-    },
-    "sections": {
-        "header": "Kopfzeile",
-        "summary": "Zusammenfassung",
-        "charts": "Diagramme",
-        "tables": "Tabellen",
-        "footer": "Fußzeile"
-    },
-    "templates": {
-        "daily": "Tagesbericht",
-        "weekly": "Wochenbericht",
-        "monthly": "Monatsbericht",
-        "custom": "Benutzerdefiniert"
-    },
-    "messages": {
-        "saved": "Bericht gespeichert",
-        "exported": "Bericht exportiert",
-        "generating": "Bericht wird erstellt..."
-    }
+  "title": "Berichts-Generator",
+  "header": {
+    "load": "[DE] Load",
+    "save": "[DE] Save",
+    "saving": "[DE] Saving...",
+    "exportPdf": "[DE] Export PDF",
+    "generating": "[DE] Generating..."
+  },
+  "components": {
+    "title": "[DE] ADD COMPONENTS"
+  },
+  "layout": {
+    "title": "[DE] LAYOUT"
+  },
+  "settings": {
+    "title": "[DE] SETTINGS"
+  }
 }

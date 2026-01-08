@@ -1,66 +1,92 @@
 {
-    "title": "MARITIME",
-    "header": {
-        "overview": "OVERVIEW",
-        "tracking": "TRACKING",
-        "ports": "PORTS",
-        "routes": "ROUTES"
-    },
-    "vessels": {
-        "type": "Vessel Type",
-        "cargo": "Cargo",
-        "tanker": "Tanker",
-        "container": "Container",
-        "bulk": "Bulk Carrier",
-        "passenger": "Passenger",
-        "status": "Status"
-    },
-    "tracking": {
-        "position": "Position",
-        "speed": "Speed",
-        "heading": "Heading",
-        "destination": "Destination",
-        "eta": "ETA",
-        "lastUpdate": "Last Update"
-    },
-    "ports": {
-        "name": "Port Name",
-        "country": "Country",
-        "arrivals": "Arrivals",
-        "departures": "Departures",
-        "congestion": "Congestion",
-        "waitTime": "Wait Time"
-    },
-    "routes": {
-        "origin": "Origin",
-        "destination": "Destination",
-        "distance": "Distance",
-        "transitTime": "Transit Time",
-        "riskLevel": "Risk Level"
-    },
-    "status": {
-        "anchored": "Anchored",
-        "underway": "Underway",
-        "moored": "Moored",
-        "atPort": "At Port",
-        "drifting": "Drifting"
-    },
-    "metrics": {
-        "dwt": "DWT",
-        "teu": "TEU",
-        "draft": "Draft",
-        "length": "Length",
-        "speed": "Speed (knots)"
-    },
-    "actions": {
-        "track": "Track Vessel",
-        "setAlert": "Set Alert",
-        "export": "Export",
-        "filter": "Filter"
-    },
-    "messages": {
-        "loading": "Loading maritime data...",
-        "noVessels": "No vessels found",
-        "updated": "Last updated"
-    }
+  "title": "MARITIME",
+  "header": {
+    "overview": "OVERVIEW",
+    "tracking": "TRACKING",
+    "ports": "PORTS",
+    "routes": "ROUTES"
+  },
+  "vessels": {
+    "type": "Vessel Type",
+    "cargo": "Cargo",
+    "tanker": "Tanker",
+    "container": "Container",
+    "bulk": "Bulk Carrier",
+    "passenger": "Passenger",
+    "status": "Status"
+  },
+  "tracking": {
+    "position": "Position",
+    "speed": "Speed",
+    "heading": "Heading",
+    "destination": "Destination",
+    "eta": "ETA",
+    "lastUpdate": "Last Update"
+  },
+  "ports": {
+    "name": "Port Name",
+    "country": "Country",
+    "arrivals": "Arrivals",
+    "departures": "Departures",
+    "congestion": "Congestion",
+    "waitTime": "Wait Time"
+  },
+  "routes": {
+    "origin": "Origin",
+    "destination": "Destination",
+    "distance": "Distance",
+    "transitTime": "Transit Time",
+    "riskLevel": "Risk Level"
+  },
+  "status": {
+    "anchored": "Anchored",
+    "underway": "Underway",
+    "moored": "Moored",
+    "atPort": "At Port",
+    "drifting": "Drifting"
+  },
+  "metrics": {
+    "dwt": "DWT",
+    "teu": "TEU",
+    "draft": "Draft",
+    "length": "Length",
+    "speed": "Speed (knots)"
+  },
+  "actions": {
+    "track": "Track Vessel",
+    "setAlert": "Set Alert",
+    "export": "Export",
+    "filter": "Filter"
+  },
+  "messages": {
+    "loading": "Loading maritime data...",
+    "noVessels": "No vessels found",
+    "updated": "Last updated"
+  },
+  "extracted": {
+    "errorFailedToLoad": "ERROR: Failed to load 3D Globe",
+    "checkConsoleForDetails": "Check console for details",
+    "globalIntel": "GLOBAL INTEL",
+    "activeVessels": "ACTIVE VESSELS",
+    "tradeVolume24h": "TRADE VOLUME (24H)",
+    "majorPorts": "MAJOR PORTS",
+    "tradeCorridors": "TRADE CORRIDORS",
+    "mapControls": "MAP CONTROLS",
+    "clearAllMarkers": "CLEAR ALL MARKERS",
+    "routeDetails": "ROUTE DETAILS",
+    "value": "Value:",
+    "status": "Status:",
+    "activeVessels1": "Active Vessels:",
+    "waypoints": "Waypoints:",
+    "addTarget": "ADD TARGET",
+    "markerType": "MARKER TYPE",
+    "quickAddPresets": "QUICK ADD PRESETS",
+    "noTargetsMarked": "No targets marked",
+    "systemStatus": "SYSTEM STATUS",
+    "satelliteImageryOnline": "Satellite imagery: ONLINE",
+    "aisTranspondersStreaming": "AIS transponders: STREAMING",
+    "orbitalTracking13Sats": "Orbital tracking: 13 SATs",
+    "airTrafficMonitored": "Air traffic: MONITORED",
+    "poweredByGlobegl3d": "Powered by Globe.GL 3D Visualization"
+  }
 }

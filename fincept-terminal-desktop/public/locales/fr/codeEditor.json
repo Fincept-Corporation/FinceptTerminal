@@ -1,57 +1,29 @@
 {
-    "title": "ÉDITEUR DE CODE",
-    "header": {
-        "files": "FICHIERS",
-        "terminal": "TERMINAL",
-        "packages": "PAQUETS"
-    },
-    "toolbar": {
-        "newFile": "NOUVEAU FICHIER",
-        "new": "NOUVEAU",
-        "open": "OUVRIR",
-        "save": "ENREGISTRER",
-        "run": "EXÉCUTER",
-        "running": "EXÉCUTION...",
-        "runAll": "TOUT EXÉCUTER",
-        "download": "TÉLÉCHARGER",
-        "upload": "IMPORTER",
-        "clear": "EFFACER",
-        "history": "HISTORIQUE"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "Éditeur",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "ÉDITEUR FINSCRIPT",
-        "terminal": "Terminal"
-    },
-    "terminal": {
-        "output": "Sortie",
-        "clear": "Effacer la sortie",
-        "running": "Exécution...",
-        "completed": "Terminé"
-    },
-    "packages": {
-        "installed": "Paquets installés",
-        "install": "Installer le paquet",
-        "uninstall": "Désinstaller",
-        "clickToLoad": "Cliquez pour charger...",
-        "load": "CHARGER LES PAQUETS"
-    },
-    "history": {
-        "title": "HISTORIQUE DES NOTEBOOKS",
-        "loading": "Chargement de l'historique...",
-        "empty": "Aucun historique de notebooks"
-    },
-    "messages": {
-        "fileSaved": "Fichier enregistré",
-        "fileOpened": "Fichier ouvert",
-        "executionComplete": "Exécution terminée",
-        "executionError": "Erreur d'exécution"
-    }
+  "title": "ÉDITEUR DE CODE",
+  "header": {
+    "packages": "PAQUETS"
+  },
+  "toolbar": {
+    "newFile": "NOUVEAU FICHIER",
+    "new": "NOUVEAU",
+    "open": "OUVRIR",
+    "save": "ENREGISTRER",
+    "run": "EXÉCUTER",
+    "running": "EXÉCUTION...",
+    "runAll": "TOUT EXÉCUTER",
+    "history": "HISTORIQUE"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "ÉDITEUR FINSCRIPT"
+  },
+  "packages": {
+    "clickToLoad": "Cliquez pour charger...",
+    "load": "CHARGER LES PAQUETS"
+  },
+  "history": {
+    "title": "HISTORIQUE DES NOTEBOOKS",
+    "loading": "Chargement de l'historique...",
+    "empty": "Aucun historique de notebooks"
+  }
 }

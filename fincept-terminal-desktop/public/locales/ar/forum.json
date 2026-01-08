@@ -1,61 +1,6 @@
 {
-    "title": "منتدى فينسبت",
-    "header": {
-        "trending": "الرائج",
-        "new": "جديد",
-        "following": "المتابَعين",
-        "myPosts": "منشوراتي"
-    },
-    "categories": {
-        "all": "جميع المواضيع",
-        "stocks": "الأسهم",
-        "options": "الخيارات",
-        "crypto": "العملات المشفرة",
-        "forex": "الفوركس",
-        "strategies": "الاستراتيجيات",
-        "general": "عام"
-    },
-    "post": {
-        "create": "إنشاء منشور",
-        "reply": "رد",
-        "edit": "تعديل",
-        "delete": "حذف",
-        "share": "مشاركة",
-        "report": "إبلاغ",
-        "save": "حفظ"
-    },
-    "form": {
-        "title": "العنوان",
-        "content": "المحتوى",
-        "tags": "الوسوم",
-        "category": "الفئة",
-        "submit": "نشر",
-        "cancel": "إلغاء",
-        "preview": "معاينة"
-    },
-    "engagement": {
-        "likes": "إعجابات",
-        "comments": "تعليقات",
-        "views": "مشاهدات",
-        "shares": "مشاركات"
-    },
-    "user": {
-        "posts": "منشورات",
-        "followers": "متابعون",
-        "following": "يتابع",
-        "reputation": "السمعة",
-        "joined": "انضم في"
-    },
-    "sort": {
-        "newest": "الأحدث",
-        "popular": "الأكثر شعبية",
-        "mostCommented": "الأكثر تعليقاً",
-        "topRated": "الأعلى تقييماً"
-    },
-    "messages": {
-        "loading": "جاري تحميل المنشورات...",
-        "noPosts": "لا توجد منشورات",
-        "postSuccess": "تم النشر بنجاح",
-        "deleteConfirm": "حذف هذا المنشور؟"
-    }
+  "title": "منتدى فينسبت",
+  "header": {
+    "trending": "الرائج"
+  }
 }

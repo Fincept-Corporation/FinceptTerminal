@@ -12,32 +12,22 @@
   "widgets": {
     "loading": "Загрузка...",
     "error": "Ошибка",
-    "configure": "Настроить",
-    "refresh": "Обновить",
-    "remove": "Удалить",
     "globalIndices": "ГЛОБАЛЬНЫЕ ИНДЕКСЫ - ТОП 12",
     "forex": "ПАРЫ FOREX",
     "crypto": "КРИПТОВАЛЮТЫ",
     "commodities": "СЫРЬЕ",
-    "bonds": "ОБЛИГАЦИИ",
-    "etfs": "ETF",
     "news": "НОВОСТИ",
     "forum": "ФОРУМ",
     "watchlist": "СПИСОК НАБЛЮДЕНИЯ",
-    "maritime": "МОРСКОЙ",
     "index": "ИНДЕКС",
     "symbol": "СИМВОЛ",
-    "name": "НАЗВАНИЕ",
     "price": "ЦЕНА",
     "change": "ИЗМ",
     "percentChange": "%ИЗМ",
-    "high": "МАКС",
-    "low": "МИН",
     "noIndexData": "Нет данных индексов",
     "noForexData": "Нет данных forex",
     "noCryptoData": "Нет данных крипто",
     "noCommoditiesData": "Нет данных сырья",
-    "noNewsData": "Нет новостей",
     "noForumPosts": "Нет постов",
     "noStocksInWatchlist": "Нет акций в списке",
     "noWatchlistSelected": "Список не выбран",
@@ -51,7 +41,8 @@
     "routes": "МАРШРУТЫ",
     "vol24h": "ОБЪЕМ 24Ч",
     "topTradeCorridors": "ОСНОВНЫЕ ТОРГОВЫЕ КОРИДОРЫ",
-    "ships": "суда"
+    "ships": "суда",
+    "unknown": "[RU] Unknown widget type"
   },
   "tips": {
     "drag": "Перетащите виджеты для перестановки",
@@ -74,6 +65,11 @@
     "custom": "Пользовательский",
     "empty": "Пусто",
     "active": "АКТИВЕН",
-    "cache": "Кеш: ВКЛЮЧЕН"
+    "cache": "Кеш: ВКЛЮЧЕН",
+    "label": "[RU] Status"
+  },
+  "messages": {
+    "layoutSaved": "[RU] Dashboard layout saved!",
+    "resetConfirm": "[RU] Reset dashboard to default layout? This will remove all custom widgets."
   }
 }

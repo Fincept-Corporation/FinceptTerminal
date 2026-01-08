@@ -1,38 +1,35 @@
 {
-    "title": "MARKETPLACE",
-    "header": {
-        "browse": "Jelajahi",
-        "myItems": "Item saya",
-        "cart": "Keranjang"
-    },
-    "categories": {
-        "all": "Semua",
-        "indicators": "Indikator",
-        "strategies": "Strategi",
-        "datasets": "Dataset",
-        "tools": "Alat"
-    },
-    "buttons": {
-        "buy": "Beli",
-        "addToCart": "Tambah ke keranjang",
-        "install": "Instal",
-        "preview": "Pratinjau"
-    },
-    "product": {
-        "price": "Harga",
-        "rating": "Rating",
-        "downloads": "Unduhan",
-        "author": "Penulis",
-        "version": "Versi"
-    },
-    "cart": {
-        "total": "Total",
-        "checkout": "Checkout",
-        "empty": "Keranjang kosong"
-    },
-    "messages": {
-        "addedToCart": "Ditambahkan ke keranjang",
-        "purchased": "Dibeli",
-        "installed": "Terinstal"
-    }
+  "title": "MARKETPLACE",
+  "header": {
+    "browse": "Jelajahi",
+    "myPurchases": "[ID] MY PURCHASES",
+    "upload": "[ID] UPLOAD",
+    "myDatasets": "[ID] MY DATASETS",
+    "analytics": "[ID] ANALYTICS",
+    "pricing": "[ID] PRICING",
+    "datasetsAvailable": "[ID] Datasets Available",
+    "myUploads": "[ID] My Uploads"
+  },
+  "buttons": {
+    "addToCart": "Tambah ke keranjang",
+    "inCart": "[ID] ✓ IN CART",
+    "viewDetails": "[ID] VIEW DETAILS",
+    "backToMarketplace": "[ID] BACK TO MARKETPLACE",
+    "loading": "[ID] ⟳ LOADING...",
+    "refresh": "[ID] 🔄 REFRESH"
+  },
+  "product": {
+    "rating": "Rating",
+    "description": "[ID] PRODUCT DESCRIPTION",
+    "users": "[ID] USERS"
+  },
+  "cart": {
+    "empty": "Keranjang kosong",
+    "title": "[ID] SHOPPING CART",
+    "items": "[ID] items"
+  },
+  "guest": {
+    "title": "[ID] MARKETPLACE REQUIRES REGISTERED ACCOUNT",
+    "message": "[ID] Guest users cannot access marketplace features. Please register to upload, purchase, and trade datasets."
+  }
 }

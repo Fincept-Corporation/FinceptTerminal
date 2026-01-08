@@ -1,57 +1,29 @@
 {
-    "title": "CODE-EDITOR",
-    "header": {
-        "files": "DATEIEN",
-        "terminal": "TERMINAL",
-        "packages": "PAKETE"
-    },
-    "toolbar": {
-        "newFile": "NEUE DATEI",
-        "new": "NEU",
-        "open": "ÖFFNEN",
-        "save": "SPEICHERN",
-        "run": "AUSFÜHREN",
-        "running": "LÄUFT...",
-        "runAll": "ALLE AUSFÜHREN",
-        "download": "HERUNTERLADEN",
-        "upload": "HOCHLADEN",
-        "clear": "LÖSCHEN",
-        "history": "VERLAUF"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "Editor",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "FINSCRIPT EDITOR",
-        "terminal": "Terminal"
-    },
-    "terminal": {
-        "output": "Ausgabe",
-        "clear": "Ausgabe löschen",
-        "running": "Läuft...",
-        "completed": "Abgeschlossen"
-    },
-    "packages": {
-        "installed": "Installierte Pakete",
-        "install": "Paket installieren",
-        "uninstall": "Deinstallieren",
-        "clickToLoad": "Klicken zum Laden...",
-        "load": "PAKETE LADEN"
-    },
-    "history": {
-        "title": "NOTEBOOK-VERLAUF",
-        "loading": "Verlauf wird geladen...",
-        "empty": "Kein Notebook-Verlauf"
-    },
-    "messages": {
-        "fileSaved": "Datei gespeichert",
-        "fileOpened": "Datei geöffnet",
-        "executionComplete": "Ausführung abgeschlossen",
-        "executionError": "Ausführungsfehler"
-    }
+  "title": "CODE-EDITOR",
+  "header": {
+    "packages": "PAKETE"
+  },
+  "toolbar": {
+    "newFile": "NEUE DATEI",
+    "new": "NEU",
+    "open": "ÖFFNEN",
+    "save": "SPEICHERN",
+    "run": "AUSFÜHREN",
+    "running": "LÄUFT...",
+    "runAll": "ALLE AUSFÜHREN",
+    "history": "VERLAUF"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "FINSCRIPT EDITOR"
+  },
+  "packages": {
+    "clickToLoad": "Klicken zum Laden...",
+    "load": "PAKETE LADEN"
+  },
+  "history": {
+    "title": "NOTEBOOK-VERLAUF",
+    "loading": "Verlauf wird geladen...",
+    "empty": "Kein Notebook-Verlauf"
+  }
 }

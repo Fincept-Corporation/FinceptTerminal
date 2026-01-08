@@ -1,32 +1,6 @@
 {
-    "title": "Editor nodi",
-    "header": {
-        "nodes": "Nodi",
-        "connections": "Connessioni",
-        "canvas": "Canvas"
-    },
-    "tabs": {
-        "editor": "Editor",
-        "preview": "Anteprima"
-    },
-    "toolbar": {
-        "addNode": "Aggiungi nodo",
-        "delete": "Elimina",
-        "clear": "Pulisci tutto",
-        "run": "Esegui",
-        "save": "Salva",
-        "load": "Carica"
-    },
-    "nodes": {
-        "input": "Input",
-        "output": "Output",
-        "process": "Processo",
-        "condition": "Condizione"
-    },
-    "messages": {
-        "saved": "Grafico salvato",
-        "loaded": "Grafico caricato",
-        "running": "In esecuzione...",
-        "completed": "Completato"
-    }
+  "title": "Editor nodi",
+  "tabs": {
+    "editor": "Editor"
+  }
 }

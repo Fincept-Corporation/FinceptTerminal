@@ -1,59 +1,8 @@
 {
-    "title": "ЭКОНОМИКА",
-    "header": {
-        "overview": "ОБЗОР",
-        "indicators": "ИНДИКАТОРЫ",
-        "calendar": "КАЛЕНДАРЬ",
-        "countries": "СТРАНЫ"
-    },
-    "indicators": {
-        "gdp": "ВВП",
-        "inflation": "Инфляция",
-        "unemployment": "Безработица",
-        "interestRate": "Процентная ставка",
-        "tradeBalance": "Торговый баланс",
-        "consumerConfidence": "Потребительская уверенность",
-        "pmi": "PMI",
-        "cpi": "ИПЦ"
-    },
-    "calendar": {
-        "date": "Дата",
-        "event": "Событие",
-        "actual": "Факт",
-        "forecast": "Прогноз",
-        "previous": "Предыдущее",
-        "impact": "Влияние"
-    },
-    "impact": {
-        "high": "Высокое",
-        "medium": "Среднее",
-        "low": "Низкое"
-    },
-    "trends": {
-        "rising": "Рост",
-        "falling": "Падение",
-        "stable": "Стабильно",
-        "yoy": "Г/Г",
-        "mom": "М/М",
-        "qoq": "К/К"
-    },
-    "regions": {
-        "global": "Мир",
-        "northAmerica": "Северная Америка",
-        "europe": "Европа",
-        "asia": "Азиатско-Тихоокеанский",
-        "latam": "Латинская Америка",
-        "mena": "БВСА"
-    },
-    "actions": {
-        "compare": "Сравнить страны",
-        "export": "Экспорт данных",
-        "subscribe": "Подписаться",
-        "filter": "Фильтр событий"
-    },
-    "messages": {
-        "loading": "Загрузка данных...",
-        "noEvents": "Нет событий",
-        "updated": "Обновлено"
-    }
+  "title": "ЭКОНОМИКА",
+  "header": {
+    "overview": "ОБЗОР",
+    "indicators": "ИНДИКАТОРЫ",
+    "countries": "СТРАНЫ"
+  }
 }

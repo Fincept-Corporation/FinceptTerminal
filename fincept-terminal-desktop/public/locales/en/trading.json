@@ -1,76 +1,8 @@
 {
-    "title": "TRADING",
-    "header": {
-        "orders": "ORDERS",
-        "positions": "POSITIONS",
-        "history": "HISTORY",
-        "settings": "SETTINGS",
-        "terminal": "FINCEPT TERMINAL",
-        "selectBroker": "SELECT BROKER",
-        "paper": "PAPER",
-        "live": "LIVE",
-        "watchlist": "WATCHLIST",
-        "orderbook": "ORDERBOOK",
-        "trades": "TRADES",
-        "stats": "STATS",
-        "features": "FEATURES",
-        "crossExchange": "CROSS-EXCHANGE",
-        "chart": "CHART",
-        "depth": "DEPTH",
-        "volume": "VOLUME",
-        "aiAgents": "AI AGENTS",
-        "leaderboard": "LEADERBOARD",
-        "modelChat": "MODEL CHAT"
-    },
-    "orderTypes": {
-        "market": "Market",
-        "limit": "Limit",
-        "stop": "Stop",
-        "stopLimit": "Stop Limit",
-        "trailingStop": "Trailing Stop"
-    },
-    "actions": {
-        "buy": "BUY",
-        "sell": "SELL",
-        "cancel": "Cancel",
-        "modify": "Modify",
-        "close": "Close",
-        "closeAll": "Close All"
-    },
-    "form": {
-        "symbol": "Symbol",
-        "quantity": "Quantity",
-        "price": "Price",
-        "stopPrice": "Stop Price",
-        "takeProfit": "Take Profit",
-        "stopLoss": "Stop Loss",
-        "leverage": "Leverage"
-    },
-    "position": {
-        "openPrice": "Open Price",
-        "currentPrice": "Current Price",
-        "pnl": "P&L",
-        "pnlPercent": "P&L %",
-        "margin": "Margin",
-        "size": "Size"
-    },
-    "order": {
-        "pending": "Pending",
-        "filled": "Filled",
-        "cancelled": "Cancelled",
-        "rejected": "Rejected",
-        "partial": "Partially Filled"
-    },
-    "time": {
-        "gtc": "Good Till Cancelled",
-        "day": "Day Order",
-        "ioc": "Immediate or Cancel",
-        "fok": "Fill or Kill"
-    },
-    "messages": {
-        "orderPlaced": "Order placed successfully",
-        "orderFailed": "Order failed",
-        "confirmOrder": "Confirm this order?",
-        "noPositions": "No open positions"
-    }
+  "header": {
+    "terminal": "FINCEPT TERMINAL",
+    "selectBroker": "SELECT BROKER",
+    "paper": "PAPER",
+    "live": "LIVE"
+  }
 }

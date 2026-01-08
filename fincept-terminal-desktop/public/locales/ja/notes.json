@@ -1,39 +1,17 @@
 {
-    "title": "ノート",
-    "header": {
-        "notes": "ノート",
-        "folders": "フォルダ",
-        "tags": "タグ"
-    },
-    "toolbar": {
-        "newNote": "新規ノート",
-        "templates": "テンプレート",
-        "favorites": "お気に入り",
-        "filters": "フィルター",
-        "archived": "アーカイブ済み"
-    },
-    "editor": {
-        "title": "タイトル",
-        "content": "内容",
-        "tags": "タグ"
-    },
-    "buttons": {
-        "save": "保存",
-        "delete": "削除",
-        "archive": "アーカイブ",
-        "share": "共有"
-    },
-    "messages": {
-        "saved": "ノートを保存しました",
-        "deleted": "ノートを削除しました",
-        "archived": "ノートをアーカイブしました"
-    },
-    "search": {
-        "placeholder": "ノートを検索..."
-    },
-    "stats": {
-        "total": "合計",
-        "archived": "アーカイブ済み",
-        "favorites": "お気に入り"
-    }
+  "title": "ノート",
+  "header": {
+    "total": "[JA] TOTAL",
+    "favorites": "[JA] FAVORITES",
+    "words": "[JA] WORDS",
+    "refresh": "[JA] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "新規ノート",
+    "templates": "テンプレート",
+    "favorites": "お気に入り",
+    "filters": "フィルター",
+    "archived": "アーカイブ済み",
+    "search": "[JA] Search notes, tags, tickers..."
+  }
 }

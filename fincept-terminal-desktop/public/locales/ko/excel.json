@@ -1,26 +1,11 @@
 {
-    "title": "Excel 통합",
-    "header": {
-        "import": "가져오기",
-        "export": "내보내기",
-        "preview": "미리보기"
-    },
-    "toolbar": {
-        "open": "파일 열기",
-        "save": "저장",
-        "upload": "업로드",
-        "download": "다운로드",
-        "refresh": "새로고침"
-    },
-    "table": {
-        "sheet": "시트",
-        "rows": "행",
-        "columns": "열"
-    },
-    "messages": {
-        "loading": "파일 로딩 중...",
-        "imported": "파일 가져옴",
-        "exported": "파일 내보냄",
-        "error": "파일 처리 오류"
-    }
+  "title": "Excel 통합",
+  "toolbar": {
+    "save": "저장",
+    "import": "[KO] IMPORT",
+    "export": "[KO] EXPORT",
+    "snapshot": "[KO] SNAPSHOT",
+    "history": "[KO] HISTORY",
+    "revert": "[KO] REVERT"
+  }
 }

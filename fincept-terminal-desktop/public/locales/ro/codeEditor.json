@@ -1,57 +1,29 @@
 {
-    "title": "EDITOR COD",
-    "header": {
-        "files": "FIȘIERE",
-        "terminal": "TERMINAL",
-        "packages": "PACHETE"
-    },
-    "toolbar": {
-        "newFile": "FIȘIER NOU",
-        "new": "NOU",
-        "open": "DESCHIDE",
-        "save": "SALVEAZĂ",
-        "run": "RULEAZĂ",
-        "running": "RULEAZĂ...",
-        "runAll": "RULEAZĂ TOT",
-        "download": "DESCARCĂ",
-        "upload": "ÎNCARCĂ",
-        "clear": "CURĂȚĂ",
-        "history": "ISTORIC"
-    },
-    "languages": {
-        "finscript": "FinScript",
-        "python": "Python",
-        "javascript": "JavaScript",
-        "json": "JSON"
-    },
-    "tabs": {
-        "editor": "Editor",
-        "notebook": "JUPYTER NOTEBOOK",
-        "finscript": "EDITOR FINSCRIPT",
-        "terminal": "Terminal"
-    },
-    "terminal": {
-        "output": "Ieșire",
-        "clear": "Curăță ieșirea",
-        "running": "Rulează...",
-        "completed": "Finalizat"
-    },
-    "packages": {
-        "installed": "Pachete instalate",
-        "install": "Instalează pachet",
-        "uninstall": "Dezinstalează",
-        "clickToLoad": "Click pentru a încărca...",
-        "load": "ÎNCARCĂ PACHETE"
-    },
-    "history": {
-        "title": "ISTORIC NOTEBOOK",
-        "loading": "Încarcă istoric...",
-        "empty": "Niciun istoric notebook"
-    },
-    "messages": {
-        "fileSaved": "Fișier salvat",
-        "fileOpened": "Fișier deschis",
-        "executionComplete": "Execuție finalizată",
-        "executionError": "Eroare execuție"
-    }
+  "title": "EDITOR COD",
+  "header": {
+    "packages": "PACHETE"
+  },
+  "toolbar": {
+    "newFile": "FIȘIER NOU",
+    "new": "NOU",
+    "open": "DESCHIDE",
+    "save": "SALVEAZĂ",
+    "run": "RULEAZĂ",
+    "running": "RULEAZĂ...",
+    "runAll": "RULEAZĂ TOT",
+    "history": "ISTORIC"
+  },
+  "tabs": {
+    "notebook": "JUPYTER NOTEBOOK",
+    "finscript": "EDITOR FINSCRIPT"
+  },
+  "packages": {
+    "clickToLoad": "Click pentru a încărca...",
+    "load": "ÎNCARCĂ PACHETE"
+  },
+  "history": {
+    "title": "ISTORIC NOTEBOOK",
+    "loading": "Încarcă istoric...",
+    "empty": "Niciun istoric notebook"
+  }
 }

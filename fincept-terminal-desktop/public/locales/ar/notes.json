@@ -1,39 +1,17 @@
 {
-    "title": "الملاحظات",
-    "header": {
-        "notes": "ملاحظات",
-        "folders": "مجلدات",
-        "tags": "وسوم"
-    },
-    "toolbar": {
-        "newNote": "ملاحظة جديدة",
-        "templates": "قوالب",
-        "favorites": "المفضلة",
-        "filters": "فلاتر",
-        "archived": "مؤرشفة"
-    },
-    "editor": {
-        "title": "العنوان",
-        "content": "المحتوى",
-        "tags": "الوسوم"
-    },
-    "buttons": {
-        "save": "حفظ",
-        "delete": "حذف",
-        "archive": "أرشفة",
-        "share": "مشاركة"
-    },
-    "messages": {
-        "saved": "تم حفظ الملاحظة",
-        "deleted": "تم حذف الملاحظة",
-        "archived": "تم أرشفة الملاحظة"
-    },
-    "search": {
-        "placeholder": "البحث في الملاحظات..."
-    },
-    "stats": {
-        "total": "المجموع",
-        "archived": "مؤرشفة",
-        "favorites": "المفضلة"
-    }
+  "title": "الملاحظات",
+  "header": {
+    "total": "[AR] TOTAL",
+    "favorites": "[AR] FAVORITES",
+    "words": "[AR] WORDS",
+    "refresh": "[AR] REFRESH"
+  },
+  "toolbar": {
+    "newNote": "ملاحظة جديدة",
+    "templates": "قوالب",
+    "favorites": "المفضلة",
+    "filters": "فلاتر",
+    "archived": "مؤرشفة",
+    "search": "[AR] Search notes, tags, tickers..."
+  }
 }

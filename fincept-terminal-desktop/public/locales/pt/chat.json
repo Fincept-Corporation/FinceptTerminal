@@ -1,46 +1,26 @@
 {
-    "title": "ASSISTENTE CHAT IA",
-    "header": {
-        "newChat": "NOVO CHAT",
-        "history": "HISTÓRICO",
-        "settings": "CONFIGURAÇÕES"
-    },
-    "input": {
-        "placeholder": "Pergunte sobre ações, mercados...",
-        "send": "Enviar",
-        "voice": "Voz"
-    },
-    "messages": {
-        "thinking": "Pensando...",
-        "typing": "IA digitando...",
-        "error": "Erro no processamento",
-        "welcome": "Como posso ajudar com sua análise financeira?"
-    },
-    "suggestions": {
-        "title": "Perguntas sugeridas",
-        "stockAnalysis": "Analisar desempenho de ações",
-        "marketTrends": "Tendências atuais do mercado?",
-        "portfolioAdvice": "Sugestões de otimização de portfólio"
-    },
-    "history": {
-        "title": "Histórico de chat",
-        "today": "Hoje",
-        "yesterday": "Ontem",
-        "thisWeek": "Esta semana",
-        "older": "Antigo",
-        "clear": "Limpar histórico"
-    },
-    "actions": {
-        "copy": "Copiar",
-        "regenerate": "Regenerar",
-        "like": "Curtir",
-        "dislike": "Não curtir",
-        "share": "Compartilhar"
-    },
-    "models": {
-        "select": "Selecionar modelo",
-        "gpt4": "GPT-4",
-        "claude": "Claude",
-        "gemini": "Gemini"
-    }
+  "title": "ASSISTENTE CHAT IA",
+  "header": {
+    "newChat": "NOVO CHAT",
+    "settings": "CONFIGURAÇÕES"
+  },
+  "input": {
+    "placeholder": "Pergunte sobre ações, mercados...",
+    "send": "Enviar"
+  },
+  "messages": {
+    "thinking": "Pensando...",
+    "typing": "IA digitando..."
+  },
+  "history": {
+    "clearAll": "[PT] CLEAR ALL",
+    "sessions": "[PT] SESSIONS",
+    "deleteAll": "[PT] Delete all sessions"
+  },
+  "subtitle": "[PT] Financial Intelligence System",
+  "panel": {
+    "dataContexts": "[PT] DATA CONTEXTS",
+    "quickPrompts": "[PT] QUICK PROMPTS",
+    "systemInfo": "[PT] SYSTEM INFO"
+  }
 }

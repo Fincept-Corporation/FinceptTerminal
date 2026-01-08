@@ -1,58 +1,28 @@
 {
-    "title": "PANEL AUDYTU LOGOWAŃ",
-    "accessDenied": "Wymagany dostęp administratora do Panelu Audytu",
-    "metrics": {
-        "dauToday": "DAU Dzisiaj",
-        "mau": "MAU",
-        "successRate": "Wskaźnik sukcesu",
-        "failed24h": "Nieudane (24h)",
-        "activeSessions": "Aktywne sesje",
-        "uniqueIps": "Unikalne IP"
-    },
-    "views": {
-        "overview": "PRZEGLĄD",
-        "eventLog": "LOG ZDARZEŃ",
-        "alerts": "ALERTY",
-        "analytics": "ANALITYKA"
-    },
-    "activity": {
-        "recentLoginActivity": "OSTATNIA AKTYWNOŚĆ LOGOWANIA",
-        "securityAlerts": "ALERTY BEZPIECZEŃSTWA",
-        "noActiveAlerts": "Brak aktywnych alertów",
-        "loginEventLog": "LOG ZDARZEŃ LOGOWANIA"
-    },
-    "table": {
-        "time": "Czas",
-        "event": "Zdarzenie",
-        "user": "Użytkownik",
-        "ipAddress": "Adres IP",
-        "location": "Lokalizacja",
-        "device": "Urządzenie",
-        "details": "Szczegóły"
-    },
-    "alerts": {
-        "securityIncidents": "ALERTY I INCYDENTY BEZPIECZEŃSTWA",
-        "noAlerts": "Brak alertów bezpieczeństwa",
-        "dismiss": "ODRZUĆ",
-        "blockIp": "BLOKUJ IP",
-        "investigate": "ZBADAJ"
-    },
-    "analytics": {
-        "loginsByCountry": "LOGOWANIA WG KRAJU (30 dni)",
-        "failureReasons": "PRZYCZYNY BŁĘDÓW (24h)",
-        "peakHours": "GODZINY SZCZYTU (UTC)",
-        "logins": "logowania"
-    },
-    "controls": {
-        "autoRefresh": "Auto-odświeżanie",
-        "loading": "ŁADOWANIE...",
-        "refresh": "ODŚWIEŻ"
-    },
-    "status": {
-        "admin": "Admin",
-        "dau": "DAU",
-        "status": "Status",
-        "updating": "AKTUALIZACJA",
-        "ready": "GOTOWY"
-    }
+  "title": "PANEL AUDYTU LOGOWAŃ",
+  "metrics": {
+    "dauToday": "DAU Dzisiaj",
+    "mau": "MAU",
+    "successRate": "Wskaźnik sukcesu",
+    "failed24h": "Nieudane (24h)",
+    "activeSessions": "Aktywne sesje",
+    "uniqueIps": "Unikalne IP"
+  },
+  "views": {
+    "overview": "PRZEGLĄD",
+    "eventLog": "LOG ZDARZEŃ",
+    "alerts": "ALERTY",
+    "analytics": "ANALITYKA"
+  },
+  "activity": {
+    "recentLoginActivity": "OSTATNIA AKTYWNOŚĆ LOGOWANIA",
+    "securityAlerts": "ALERTY BEZPIECZEŃSTWA",
+    "noActiveAlerts": "Brak aktywnych alertów",
+    "loginEventLog": "LOG ZDARZEŃ LOGOWANIA"
+  },
+  "controls": {
+    "autoRefresh": "Auto-odświeżanie",
+    "loading": "ŁADOWANIE...",
+    "refresh": "ODŚWIEŻ"
+  }
 }

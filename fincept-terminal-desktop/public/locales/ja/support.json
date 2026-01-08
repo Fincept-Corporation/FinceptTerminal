@@ -1,42 +1,32 @@
 {
-    "title": "サポートチケット",
-    "header": {
-        "tickets": "チケット",
-        "new": "新規チケット",
-        "status": "ステータス"
-    },
-    "form": {
-        "subject": "件名",
-        "description": "説明",
-        "priority": "優先度",
-        "category": "カテゴリ"
-    },
-    "priority": {
-        "low": "低",
-        "medium": "中",
-        "high": "高",
-        "urgent": "緊急"
-    },
-    "status": {
-        "open": "オープン",
-        "inProgress": "対応中",
-        "resolved": "解決済み",
-        "closed": "クローズ"
-    },
-    "buttons": {
-        "submit": "送信",
-        "cancel": "キャンセル",
-        "reply": "返信",
-        "close": "閉じる"
-    },
-    "messages": {
-        "created": "チケットを作成しました",
-        "updated": "チケットを更新しました",
-        "closed": "チケットをクローズしました",
-        "noTickets": "チケットなし"
-    },
-    "auth": {
-        "loginRequired": "ログインしてチケットを作成",
-        "demoMode": "デモモード"
-    }
+  "title": "サポートチケット",
+  "header": {
+    "tickets": "チケット",
+    "open": "[JA] OPEN",
+    "resolved": "[JA] RESOLVED"
+  },
+  "status": {
+    "ready": "[JA] READY",
+    "updating": "[JA] UPDATING"
+  },
+  "buttons": {
+    "refresh": "[JA] REFRESH",
+    "createTicket": "[JA] CREATE TICKET",
+    "backToList": "[JA] BACK TO LIST"
+  },
+  "auth": {
+    "required": "[JA] AUTHENTICATION REQUIRED",
+    "loginMessage": "[JA] Please login to access support tickets"
+  },
+  "list": {
+    "supportTickets": "[JA] SUPPORT TICKETS",
+    "noTickets": "[JA] No support tickets found. Create your first ticket to get started!",
+    "loading": "[JA] Loading tickets..."
+  },
+  "create": {
+    "title": "[JA] CREATE NEW TICKET"
+  },
+  "demo": {
+    "badge": "[JA] DEMO"
+  }
 }

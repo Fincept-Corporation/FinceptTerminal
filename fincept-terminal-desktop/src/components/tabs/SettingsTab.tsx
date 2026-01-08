@@ -683,7 +683,7 @@ export default function SettingsTab() {
           <div style={{ padding: '16px 0' }}>
             {[
               { id: 'credentials', icon: Lock, label: t('sidebar.credentials') },
-              { id: 'polymarket', icon: TrendingUp, label: 'Polymarket API' },
+              { id: 'polymarket', icon: TrendingUp, label: t('sidebar.polymarket') },
               { id: 'llm', icon: Bot, label: t('sidebar.llm') },
               { id: 'dataConnections', icon: Database, label: t('sidebar.dataSources') },
               { id: 'backtesting', icon: Activity, label: t('sidebar.backtesting') },
@@ -858,7 +858,7 @@ export default function SettingsTab() {
                         marginBottom: '8px',
                         letterSpacing: '0.5px'
                       }}>
-                        AI PROVIDER
+                        {t('llm.provider')}
                       </div>
                       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                         {llmConfigs.map(config => (
@@ -1130,13 +1130,13 @@ export default function SettingsTab() {
                         gap: '6px'
                       }}>
                         <Zap size={12} color={colors.primary} />
-                        GLOBAL AI SETTINGS
+                        {t('llm.globalSettings')}
                       </div>
 
                       <div style={{ display: 'grid', gap: '8px' }}>
                         <div>
                           <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            TEMPERATURE
+                            {t('llm.temperature')}
                           </label>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <input
@@ -1165,7 +1165,7 @@ export default function SettingsTab() {
 
                         <div>
                           <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            MAX TOKENS
+                            {t('llm.maxTokens')}
                           </label>
                           <input
                             type="number"
@@ -1186,7 +1186,7 @@ export default function SettingsTab() {
 
                         <div>
                           <label style={{ color: colors.text, fontSize: '8px', display: 'block', marginBottom: '3px', fontWeight: 600 }}>
-                            SYSTEM PROMPT
+                            {t('llm.systemPrompt')}
                           </label>
                           <textarea
                             value={llmGlobalSettings.system_prompt}
@@ -1225,10 +1225,10 @@ export default function SettingsTab() {
                       }}>
                         <div>
                           <div style={{ color: colors.text, fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', marginBottom: '2px' }}>
-                            MODEL LIBRARY
+                            {t('llm.modelLibrary')}
                           </div>
                           <div style={{ color: '#666', fontSize: '8px' }}>
-                            Multi-model configs
+                            {t('llm.multiModelConfigs')}
                           </div>
                         </div>
                         <button
@@ -2148,10 +2148,10 @@ export default function SettingsTab() {
       <TabFooter
         tabName="SETTINGS"
         leftInfo={[
-          { label: 'Database: SQLite', color: colors.text },
-          { label: 'Storage: File-based', color: colors.text },
+          { label: t('footer.database'), color: colors.text },
+          { label: t('footer.storage'), color: colors.text },
         ]}
-        statusInfo="All data stored securely in fincept_terminal.db"
+        statusInfo={t('footer.secureStorage')}
         backgroundColor={colors.panel}
         borderColor={colors.primary}
       />

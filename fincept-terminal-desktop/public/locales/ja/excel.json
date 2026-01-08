@@ -1,26 +1,11 @@
 {
-    "title": "Excel連携",
-    "header": {
-        "import": "インポート",
-        "export": "エクスポート",
-        "preview": "プレビュー"
-    },
-    "toolbar": {
-        "open": "ファイルを開く",
-        "save": "保存",
-        "upload": "アップロード",
-        "download": "ダウンロード",
-        "refresh": "更新"
-    },
-    "table": {
-        "sheet": "シート",
-        "rows": "行",
-        "columns": "列"
-    },
-    "messages": {
-        "loading": "ファイルを読込中...",
-        "imported": "ファイルをインポートしました",
-        "exported": "ファイルをエクスポートしました",
-        "error": "ファイル処理エラー"
-    }
+  "title": "Excel連携",
+  "toolbar": {
+    "save": "保存",
+    "import": "[JA] IMPORT",
+    "export": "[JA] EXPORT",
+    "snapshot": "[JA] SNAPSHOT",
+    "history": "[JA] HISTORY",
+    "revert": "[JA] REVERT"
+  }
 }

@@ -171,7 +171,7 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
               WIDGET TYPE
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-              {(['news', 'market', 'watchlist', 'forum', 'crypto', 'commodities', 'indices', 'forex', 'maritime', 'datasource'] as WidgetType[]).map(type => (
+              {(['news', 'market', 'watchlist', 'forum', 'crypto', 'commodities', 'indices', 'forex', 'maritime', 'datasource', 'polymarket', 'economic', 'portfolio', 'alerts', 'calendar', 'quicktrade', 'geopolitics', 'performance'] as WidgetType[]).map(type => (
                 <button
                   key={type}
                   onClick={() => setSelectedType(type)}
@@ -317,6 +317,55 @@ export const AddWidgetModal: React.FC<AddWidgetModalProps> = ({
             {['crypto', 'commodities', 'indices', 'forex', 'maritime'].includes(selectedType) && (
               <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
                 This widget shows live {selectedType === 'maritime' ? 'maritime intelligence' : selectedType} data with automatic updates. No configuration required.
+              </div>
+            )}
+
+            {/* New widgets - No Config */}
+            {selectedType === 'polymarket' && (
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+                Shows top prediction markets from Polymarket with YES/NO probabilities and trading volume.
+              </div>
+            )}
+
+            {selectedType === 'economic' && (
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+                Displays key economic indicators: GDP, Unemployment, CPI, Fed Funds Rate, and Treasury yields.
+              </div>
+            )}
+
+            {selectedType === 'portfolio' && (
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+                Shows portfolio summary with total value, P&L, and top positions. Requires a portfolio in the Portfolio tab.
+              </div>
+            )}
+
+            {selectedType === 'alerts' && (
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+                Displays active price alerts and recently triggered alerts. Configure alerts in the Monitoring tab.
+              </div>
+            )}
+
+            {selectedType === 'calendar' && (
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+                Shows upcoming economic events with impact ratings (FOMC, CPI, PMI, employment data, etc.).
+              </div>
+            )}
+
+            {selectedType === 'quicktrade' && (
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+                One-click trading panel for quick market orders on popular assets (BTC, ETH, SPY, etc.).
+              </div>
+            )}
+
+            {selectedType === 'geopolitics' && (
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+                Geopolitical risk monitor showing trade restrictions, tariff risks, and supply chain threats by country.
+              </div>
+            )}
+
+            {selectedType === 'performance' && (
+              <div style={{ color: BLOOMBERG_GRAY, fontSize: '10px', padding: '8px', fontStyle: 'italic' }}>
+                Tracks trading performance with P&L by period (today, week, month, YTD) and win rate statistics.
               </div>
             )}
           </div>

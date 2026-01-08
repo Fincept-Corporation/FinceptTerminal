@@ -1,26 +1,11 @@
 {
-    "title": "Tích hợp Excel",
-    "header": {
-        "import": "Nhập",
-        "export": "Xuất",
-        "preview": "Xem trước"
-    },
-    "toolbar": {
-        "open": "Mở tệp",
-        "save": "Lưu",
-        "upload": "Tải lên",
-        "download": "Tải xuống",
-        "refresh": "Làm mới"
-    },
-    "table": {
-        "sheet": "Bảng tính",
-        "rows": "Hàng",
-        "columns": "Cột"
-    },
-    "messages": {
-        "loading": "Đang tải tệp...",
-        "imported": "Đã nhập tệp",
-        "exported": "Đã xuất tệp",
-        "error": "Lỗi xử lý tệp"
-    }
+  "title": "Tích hợp Excel",
+  "toolbar": {
+    "save": "Lưu",
+    "import": "[VI] IMPORT",
+    "export": "[VI] EXPORT",
+    "snapshot": "[VI] SNAPSHOT",
+    "history": "[VI] HISTORY",
+    "revert": "[VI] REVERT"
+  }
 }

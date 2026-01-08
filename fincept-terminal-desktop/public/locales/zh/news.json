@@ -1,77 +1,32 @@
 {
-    "title": "FINCEPT 终端专业新闻",
-    "header": {
-        "liveFeed": "实时动态",
-        "live": "实时",
-        "refresh": "刷新",
-        "updating": "更新中...",
-        "alerts": "提醒",
-        "sources": "来源",
-        "topics": "话题",
-        "status": "状态",
-        "demoMode": "演示模式",
-        "articles": "文章",
-        "activeSources": "活跃来源"
-    },
-    "categories": {
-        "all": "全部",
-        "markets": "市场",
-        "stocks": "股票",
-        "forex": "外汇",
-        "crypto": "加密货币",
-        "commodities": "商品",
-        "economy": "经济",
-        "economic": "经济",
-        "politics": "政治",
-        "earnings": "财报",
-        "tech": "科技",
-        "energy": "能源",
-        "banking": "银行",
-        "geopolitics": "地缘政治",
-        "flash": "快讯",
-        "urgent": "紧急"
-    },
-    "feedLabels": {
-        "primary": "主要新闻源",
-        "secondary": "次要新闻源",
-        "refresh": "刷新"
-    },
-    "filters": {
-        "source": "来源",
-        "region": "地区",
-        "timeframe": "时间"
-    },
-    "timeframes": {
-        "1h": "1小时",
-        "24h": "24小时",
-        "1w": "1周",
-        "1m": "1个月"
-    },
-    "article": {
-        "readMore": "阅读更多",
-        "source": "来源",
-        "published": "发布时间",
-        "relatedStocks": "相关股票",
-        "sentiment": "情绪",
-        "impact": "影响"
-    },
-    "sentiment": {
-        "bullish": "看涨",
-        "bearish": "看跌",
-        "neutral": "中性",
-        "positive": "正面",
-        "negative": "负面"
-    },
-    "autoRefresh": {
-        "title": "自动刷新间隔",
-        "minute": "分钟",
-        "minutes": "分钟"
-    },
-    "messages": {
-        "loading": "加载新闻...",
-        "loadingFeeds": "加载新闻源...",
-        "error": "加载新闻出错",
-        "noNews": "暂无新闻",
-        "breaking": "突发"
-    }
+  "title": "FINCEPT 终端专业新闻",
+  "header": {
+    "liveFeed": "实时动态",
+    "live": "实时",
+    "refresh": "刷新",
+    "updating": "更新中...",
+    "alerts": "提醒",
+    "sources": "来源",
+    "status": "状态",
+    "demoMode": "演示模式",
+    "articles": "文章",
+    "activeSources": "活跃来源"
+  },
+  "autoRefresh": {
+    "title": "自动刷新间隔",
+    "minute": "分钟",
+    "minutes": "分钟"
+  },
+  "messages": {
+    "loadingFeeds": "加载新闻源...",
+    "breaking": "突发"
+  },
+  "feeds": {
+    "primary": "[ZH] PRIMARY NEWS FEED",
+    "secondary": "[ZH] SECONDARY NEWS FEED",
+    "additional": "[ZH] ADDITIONAL HEADLINES"
+  },
+  "analytics": {
+    "title": "[ZH] REAL-TIME NEWS ANALYTICS"
+  }
 }

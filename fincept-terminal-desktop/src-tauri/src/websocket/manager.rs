@@ -11,9 +11,10 @@ use super::adapters::{create_adapter, WebSocketAdapter};
 use super::router::MessageRouter;
 use super::types::*;
 use dashmap::DashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tokio::time;
 
 /// WebSocket Manager - orchestrates all WebSocket connections
@@ -30,11 +31,11 @@ pub struct WebSocketManager {
     // Connection metrics
     metrics: Arc<DashMap<String, ConnectionMetrics>>,
 
-    // Subscription tracking (provider -> symbol -> channels)
-    subscriptions: Arc<DashMap<String, DashMap<String, Vec<String>>>>,
+    // Subscription tracking (provider -> symbol -> channels as HashSet to prevent duplicates)
+    subscriptions: Arc<DashMap<String, DashMap<String, HashSet<String>>>>,
 
-    // Prevent duplicate connections
-    connecting: Arc<DashMap<String, bool>>,
+    // Connection locks to prevent race conditions (one mutex per provider)
+    connection_locks: Arc<DashMap<String, Arc<Mutex<()>>>>,
 }
 
 impl WebSocketManager {
@@ -45,8 +46,16 @@ impl WebSocketManager {
             configs: Arc::new(DashMap::new()),
             metrics: Arc::new(DashMap::new()),
             subscriptions: Arc::new(DashMap::new()),
-            connecting: Arc::new(DashMap::new()),
+            connection_locks: Arc::new(DashMap::new()),
         }
+    }
+
+    /// Get or create a connection lock for a provider (prevents race conditions)
+    fn get_connection_lock(&self, provider: &str) -> Arc<Mutex<()>> {
+        self.connection_locks
+            .entry(provider.to_string())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
     }
 
     // ========================================================================
@@ -67,30 +76,18 @@ impl WebSocketManager {
     // CONNECTION MANAGEMENT
     // ========================================================================
 
-    /// Connect to a provider
+    /// Connect to a provider (thread-safe with proper locking)
     pub async fn connect(&self, provider: &str) -> Result<()> {
-        // Check if already connected
+        // Acquire lock for this provider to prevent race conditions
+        let lock = self.get_connection_lock(provider);
+        let _guard = lock.lock().await;
+
+        // Now safely check if already connected (inside the lock)
         if self.is_connected(provider) {
-            return Err(WebSocketError::AlreadyConnected(provider.to_string()));
+            return Ok(()); // Return Ok instead of error - connection exists
         }
 
-        // Check if already connecting - wait for it to complete
-        while self.connecting.contains_key(provider) {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-
-        // Check again if connected (might have been connected by another task)
-        if self.is_connected(provider) {
-            return Ok(());
-        }
-
-        self.connecting.insert(provider.to_string(), true);
-
-        let result = self.connect_internal(provider).await;
-
-        self.connecting.remove(provider);
-
-        result
+        self.connect_internal(provider).await
     }
 
     async fn connect_internal(&self, provider: &str) -> Result<()> {
@@ -163,28 +160,68 @@ impl WebSocketManager {
         }
     }
 
-    /// Reconnect to a provider
+    /// Reconnect to a provider with exponential backoff
     pub async fn reconnect(&self, provider: &str) -> Result<()> {
-        // Get existing subscriptions
+        // Get existing subscriptions before disconnecting
         let subs = self.get_provider_subscriptions(provider);
+
+        // Get config for reconnect settings
+        let config = self.get_config(provider);
+        let base_delay = config.as_ref().map(|c| c.reconnect_delay_ms).unwrap_or(5000);
+        let max_attempts = config.as_ref().map(|c| c.max_reconnect_attempts).unwrap_or(10);
 
         // Disconnect
         let _ = self.disconnect(provider).await;
 
-        // Small delay
-        time::sleep(Duration::from_millis(1000)).await;
+        // Exponential backoff reconnection
+        let mut attempt = 0;
+        let mut last_error = None;
 
-        // Connect
-        self.connect(provider).await?;
+        while attempt < max_attempts {
+            // Calculate delay with exponential backoff (capped at 60 seconds)
+            let delay = std::cmp::min(
+                base_delay * (2_u64.pow(attempt)),
+                60_000
+            );
 
-        // Restore subscriptions
-        for (symbol, channels) in subs {
-            for channel in channels {
-                let _ = self.subscribe(provider, &symbol, &channel, None).await;
+            time::sleep(Duration::from_millis(delay)).await;
+
+            // Update status
+            self.emit_status(provider, ConnectionStatus::Reconnecting,
+                Some(format!("Attempt {} of {}", attempt + 1, max_attempts))).await;
+
+            // Try to connect
+            match self.connect(provider).await {
+                Ok(_) => {
+                    // Update reconnect count in metrics
+                    if let Some(mut metrics) = self.metrics.get_mut(provider) {
+                        metrics.reconnect_count += 1;
+                    }
+
+                    // Restore subscriptions
+                    for (symbol, channels) in &subs {
+                        for channel in channels {
+                            let _ = self.subscribe(provider, symbol, channel, None).await;
+                        }
+                    }
+
+                    return Ok(());
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    attempt += 1;
+                    eprintln!("[WebSocketManager] Reconnect attempt {} failed for {}", attempt, provider);
+                }
             }
         }
 
-        Ok(())
+        // All attempts failed
+        self.emit_status(provider, ConnectionStatus::Error,
+            Some(format!("Failed to reconnect after {} attempts", max_attempts))).await;
+
+        Err(last_error.unwrap_or_else(|| WebSocketError::ConnectionError(
+            format!("Failed to reconnect to {} after {} attempts", provider, max_attempts)
+        )))
     }
 
     /// Check if provider is connected
@@ -204,6 +241,11 @@ impl WebSocketManager {
         channel: &str,
         params: Option<serde_json::Value>,
     ) -> Result<()> {
+        // Check if already subscribed (prevent duplicates)
+        if self.is_subscribed(provider, symbol, channel) {
+            return Ok(()); // Already subscribed, no-op
+        }
+
         // Ensure connected
         if !self.is_connected(provider) {
             self.connect(provider).await?;
@@ -217,13 +259,13 @@ impl WebSocketManager {
         adapter.write().await.subscribe(symbol, channel, params).await
             .map_err(|e| WebSocketError::SubscriptionError(e.to_string()))?;
 
-        // Track subscription
+        // Track subscription using HashSet (prevents duplicates)
         self.subscriptions
             .entry(provider.to_string())
             .or_insert_with(DashMap::new)
             .entry(symbol.to_string())
-            .or_insert_with(Vec::new)
-            .push(channel.to_string());
+            .or_insert_with(HashSet::new)
+            .insert(channel.to_string());
 
         // Update metrics
         if let Some(mut metrics) = self.metrics.get_mut(provider) {
@@ -231,6 +273,13 @@ impl WebSocketManager {
         }
 
         Ok(())
+    }
+
+    /// Check if already subscribed to a channel
+    fn is_subscribed(&self, provider: &str, symbol: &str, channel: &str) -> bool {
+        self.subscriptions.get(provider)
+            .and_then(|subs| subs.get(symbol).map(|channels| channels.contains(channel)))
+            .unwrap_or(false)
     }
 
     /// Unsubscribe from a channel
@@ -248,11 +297,12 @@ impl WebSocketManager {
         adapter.write().await.unsubscribe(symbol, channel).await
             .map_err(|e| WebSocketError::SubscriptionError(e.to_string()))?;
 
-        // Remove from tracking
+        // Remove from tracking (HashSet automatically handles non-existent keys)
         if let Some(provider_subs) = self.subscriptions.get(provider) {
             if let Some(mut symbol_channels) = provider_subs.get_mut(symbol) {
-                symbol_channels.retain(|c| c != channel);
+                symbol_channels.remove(channel);
                 if symbol_channels.is_empty() {
+                    drop(symbol_channels); // Release the lock before removing
                     provider_subs.remove(symbol);
                 }
             }
@@ -266,12 +316,12 @@ impl WebSocketManager {
         Ok(())
     }
 
-    /// Get all subscriptions for a provider
+    /// Get all subscriptions for a provider (converts HashSet to Vec for iteration)
     fn get_provider_subscriptions(&self, provider: &str) -> Vec<(String, Vec<String>)> {
         self.subscriptions.get(provider)
             .map(|subs| {
                 subs.iter()
-                    .map(|entry| (entry.key().clone(), entry.value().clone()))
+                    .map(|entry| (entry.key().clone(), entry.value().iter().cloned().collect()))
                     .collect()
             })
             .unwrap_or_default()
@@ -329,7 +379,7 @@ impl WebSocketManager {
     fn now() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_else(|_| Duration::from_secs(0))
             .as_millis() as u64
     }
 
