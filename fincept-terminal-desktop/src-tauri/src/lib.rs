@@ -1365,6 +1365,7 @@ pub fn run() {
             commands::agents::get_agent_metadata,
             commands::agents::execute_python_agent_command,
             commands::agents::execute_core_agent,
+            commands::agents::read_agent_config,
             // Portfolio Analytics Commands
             // Portfolio Management (CRUD operations)
             commands::portfolio_management::portfolio_create,

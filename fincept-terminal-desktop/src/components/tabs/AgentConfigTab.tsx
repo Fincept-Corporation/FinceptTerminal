@@ -3,22 +3,24 @@
 
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { resolveResource } from '@tauri-apps/api/path';
+import { readTextFile } from '@tauri-apps/plugin-fs';
 import {
   Bot,
-  Brain,
   RefreshCw,
-  Save,
   Play,
-  Settings as SettingsIcon,
   Code,
-  ChevronDown,
   AlertCircle,
   CheckCircle,
-  Zap,
-  Database,
   Eye,
   EyeOff,
+  Users,
+  TrendingUp,
+  Globe,
+  Building2,
 } from 'lucide-react';
+import { getLLMConfigs } from '@/services/sqliteService';
+import { TabFooter } from '@/components/common/TabFooter';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {
@@ -57,35 +59,28 @@ interface AgentConfig {
   instructions: string;
 }
 
-interface ProviderInfo {
-  name: string;
-  models: string[];
-  api_key_required: boolean;
-}
-
 const AgentConfigTab: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('TraderInvestorsAgent');
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentConfig | null>(null);
   const [jsonText, setJsonText] = useState('');
-  const [providers, setProviders] = useState<Record<string, ProviderInfo>>({});
   const [loading, setLoading] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
   const [showJsonEditor, setShowJsonEditor] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [testQuery, setTestQuery] = useState('Analyze AAPL stock and provide your investment thesis.');
 
   const categories = [
-    { id: 'TraderInvestorsAgent', name: 'TRADERS' },
-    { id: 'GeopoliticsAgents', name: 'GEOPOLITICS' },
-    { id: 'EconomicAgents', name: 'ECONOMICS' },
-    { id: 'hedgeFundAgents', name: 'HEDGE FUNDS' },
+    { id: 'TraderInvestorsAgent', name: 'TRADERS', icon: TrendingUp, configFile: 'agent_definitions.json' },
+    { id: 'GeopoliticsAgents', name: 'GEOPOLITICS', icon: Globe, configFile: 'agent_definitions.json' },
+    { id: 'EconomicAgents', name: 'ECONOMICS', icon: Building2, configFile: 'agent_definitions.json' },
+    { id: 'hedgeFundAgents', name: 'HEDGE FUNDS', icon: Users, configFile: 'team_config.json' },
   ];
 
   // Load agents on mount and category change
   useEffect(() => {
     loadAgents();
-    loadProviders();
   }, [selectedCategory]);
 
   // Update JSON when selected agent changes
@@ -98,21 +93,47 @@ const AgentConfigTab: React.FC = () => {
   const loadAgents = async () => {
     setLoading(true);
     setError(null);
-    try {
-      const result = await invoke('execute_python_agent_command', {
-        action: 'list_agents',
-        parameters: { category: selectedCategory },
-        inputs: null,
-      });
+    setAgents([]);
+    setSelectedAgent(null);
 
-      const data = result as any;
-      if (data.success) {
-        setAgents(data.agents || []);
-        if (data.agents && data.agents.length > 0) {
-          setSelectedAgent(data.agents[0]);
+    try {
+      const category = categories.find(c => c.id === selectedCategory);
+      if (!category) {
+        setError('Invalid category');
+        setLoading(false);
+        return;
+      }
+
+      // Try to load from resource path
+      const configPath = `resources/scripts/agents/${selectedCategory}/configs/${category.configFile}`;
+
+      try {
+        const resourcePath = await resolveResource(configPath);
+        const content = await readTextFile(resourcePath);
+        const data = JSON.parse(content);
+
+        const agentList = data.agents || [];
+        setAgents(agentList);
+        if (agentList.length > 0) {
+          setSelectedAgent(agentList[0]);
         }
-      } else {
-        setError(data.error || 'Failed to load agents');
+      } catch (fileError) {
+        // Fallback: try invoke command to read file
+        try {
+          const result = await invoke<string>('read_agent_config', {
+            category: selectedCategory,
+            configFile: category.configFile,
+          });
+          const data = JSON.parse(result);
+          const agentList = data.agents || [];
+          setAgents(agentList);
+          if (agentList.length > 0) {
+            setSelectedAgent(agentList[0]);
+          }
+        } catch (invokeError) {
+          console.error('Failed to load agents via invoke:', invokeError);
+          setError(`Failed to load agents: ${fileError}`);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load agents:', err);
@@ -122,80 +143,72 @@ const AgentConfigTab: React.FC = () => {
     }
   };
 
-  const loadProviders = async () => {
+  // Fetch API keys from Settings LLM configurations
+  const fetchApiKeysFromSettings = async (): Promise<Record<string, string>> => {
     try {
-      const result = await invoke('execute_python_agent_command', {
-        action: 'get_providers',
-        parameters: {},
-        inputs: null,
-      });
+      const llmConfigs = await getLLMConfigs();
+      const apiKeys: Record<string, string> = {};
 
-      const data = result as any;
-      if (data.success && data.providers) {
-        setProviders(data.providers);
+      for (const config of llmConfigs) {
+        if (config.api_key) {
+          const providerUpper = config.provider.toUpperCase();
+          apiKeys[`${providerUpper}_API_KEY`] = config.api_key;
+          apiKeys[config.provider] = config.api_key;
+          apiKeys[providerUpper] = config.api_key;
+        }
       }
+
+      return apiKeys;
     } catch (err) {
-      console.error('Failed to load providers:', err);
-    }
-  };
-
-  const saveConfig = async () => {
-    if (!selectedAgent) return;
-
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      // Parse the JSON text to validate and get updated config
-      const updatedConfig = JSON.parse(jsonText);
-
-      const result = await invoke('execute_python_agent_command', {
-        action: 'update_config',
-        parameters: {
-          agent_id: selectedAgent.id,
-          category: selectedCategory,
-          updates: updatedConfig,
-        },
-        inputs: null,
-      });
-
-      const data = result as any;
-      if (data.success) {
-        setSuccess('Configuration saved successfully!');
-        setSelectedAgent(updatedConfig);
-        setTimeout(() => setSuccess(null), 3000);
-      } else {
-        setError(data.error || 'Failed to save configuration');
-      }
-    } catch (err: any) {
-      console.error('Failed to save config:', err);
-      setError(err.toString());
-    } finally {
-      setLoading(false);
+      console.error('Failed to fetch API keys from settings:', err);
+      return {};
     }
   };
 
   const testAgent = async () => {
-    if (!selectedAgent) return;
+    if (!selectedAgent || !testQuery.trim()) return;
 
     setLoading(true);
     setError(null);
     setTestResult(null);
+    setSuccess(null);
+
     try {
-      const result = await invoke('execute_python_agent_command', {
-        action: 'execute_agent',
-        parameters: {
-          agent_id: selectedAgent.id,
-          category: selectedCategory,
-          query: 'Test query: Provide a brief summary of your role and capabilities.',
+      const apiKeys = await fetchApiKeysFromSettings();
+      const provider = selectedAgent.llm_config.provider;
+
+      if (!apiKeys[provider] && !apiKeys[`${provider.toUpperCase()}_API_KEY`] && provider !== 'ollama' && provider !== 'fincept') {
+        setError(`No API key found for ${provider}. Configure it in Settings > LLM Config.`);
+        setLoading(false);
+        return;
+      }
+
+      // Build config from selected agent
+      const config = {
+        model: {
+          provider: selectedAgent.llm_config.provider,
+          model_id: selectedAgent.llm_config.model_id,
+          temperature: selectedAgent.llm_config.temperature,
+          max_tokens: selectedAgent.llm_config.max_tokens,
         },
-        inputs: {
-          api_keys: {}, // User would need to provide API keys
-        },
+        instructions: selectedAgent.instructions,
+        tools: selectedAgent.tools,
+        memory: { enabled: selectedAgent.enable_memory },
+        debug: false,
+      };
+
+      const result = await invoke<string>('execute_core_agent', {
+        queryJson: testQuery,
+        configJson: JSON.stringify(config),
+        apiKeysJson: JSON.stringify(apiKeys),
       });
 
-      const data = result as any;
-      setTestResult(data);
+      const parsed = JSON.parse(result);
+      setTestResult(parsed);
+      if (parsed.success) {
+        setSuccess('Agent executed successfully');
+        setTimeout(() => setSuccess(null), 3000);
+      }
     } catch (err: any) {
       console.error('Failed to test agent:', err);
       setError(err.toString());
@@ -203,6 +216,8 @@ const AgentConfigTab: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const CategoryIcon = categories.find(c => c.id === selectedCategory)?.icon || Bot;
 
   return (
     <div style={{
@@ -215,19 +230,15 @@ const AgentConfigTab: React.FC = () => {
       flexDirection: 'column'
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
-
         *::-webkit-scrollbar { width: 6px; height: 6px; }
         *::-webkit-scrollbar-track { background: ${BLOOMBERG.DARK_BG}; }
         *::-webkit-scrollbar-thumb { background: ${BLOOMBERG.BORDER}; border-radius: 3px; }
         *::-webkit-scrollbar-thumb:hover { background: ${BLOOMBERG.MUTED}; }
-
-        .terminal-glow {
-          text-shadow: 0 0 10px ${BLOOMBERG.ORANGE}40;
-        }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
       `}</style>
 
-      {/* ========== TOP NAVIGATION BAR ========== */}
+      {/* TOP NAVIGATION BAR */}
       <div style={{
         backgroundColor: BLOOMBERG.HEADER_BG,
         borderBottom: `2px solid ${BLOOMBERG.ORANGE}`,
@@ -236,18 +247,11 @@ const AgentConfigTab: React.FC = () => {
         alignItems: 'center',
         justifyContent: 'space-between',
         flexShrink: 0,
-        boxShadow: `0 2px 8px ${BLOOMBERG.ORANGE}20`
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Bot size={18} color={BLOOMBERG.ORANGE} style={{ filter: 'drop-shadow(0 0 4px ' + BLOOMBERG.ORANGE + ')' }} />
-            <span style={{
-              color: BLOOMBERG.ORANGE,
-              fontWeight: 700,
-              fontSize: '14px',
-              letterSpacing: '0.5px',
-              textShadow: `0 0 10px ${BLOOMBERG.ORANGE}40`
-            }}>
+            <Bot size={18} color={BLOOMBERG.ORANGE} />
+            <span style={{ color: BLOOMBERG.ORANGE, fontWeight: 700, fontSize: '14px', letterSpacing: '0.5px' }}>
               AGENT CONFIGURATION
             </span>
           </div>
@@ -255,26 +259,32 @@ const AgentConfigTab: React.FC = () => {
           <div style={{ height: '16px', width: '1px', backgroundColor: BLOOMBERG.BORDER }} />
 
           {/* Category Selector */}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                style={{
-                  padding: '4px 12px',
-                  backgroundColor: selectedCategory === cat.id ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
-                  border: `1px solid ${selectedCategory === cat.id ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
-                  color: selectedCategory === cat.id ? BLOOMBERG.DARK_BG : BLOOMBERG.CYAN,
-                  cursor: 'pointer',
-                  fontSize: '10px',
-                  fontWeight: 600,
-                  transition: 'all 0.2s',
-                  letterSpacing: '0.5px'
-                }}
-              >
-                {cat.name}
-              </button>
-            ))}
+          <div style={{ display: 'flex', gap: '4px' }}>
+            {categories.map((cat) => {
+              const Icon = cat.icon;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  style={{
+                    padding: '4px 10px',
+                    backgroundColor: selectedCategory === cat.id ? BLOOMBERG.ORANGE : BLOOMBERG.PANEL_BG,
+                    border: `1px solid ${selectedCategory === cat.id ? BLOOMBERG.ORANGE : BLOOMBERG.BORDER}`,
+                    color: selectedCategory === cat.id ? BLOOMBERG.DARK_BG : BLOOMBERG.CYAN,
+                    cursor: 'pointer',
+                    fontSize: '9px',
+                    fontWeight: 600,
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  <Icon size={10} />
+                  {cat.name}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -295,7 +305,7 @@ const AgentConfigTab: React.FC = () => {
             }}
           >
             {showJsonEditor ? <EyeOff size={12} /> : <Eye size={12} />}
-            {showJsonEditor ? 'Hide JSON' : 'Show JSON'}
+            JSON
           </button>
 
           <button
@@ -320,7 +330,7 @@ const AgentConfigTab: React.FC = () => {
         </div>
       </div>
 
-      {/* ========== MAIN CONTENT ========== */}
+      {/* MAIN CONTENT */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left Panel - Agent List */}
         <div style={{
@@ -367,47 +377,33 @@ const AgentConfigTab: React.FC = () => {
                     cursor: 'pointer',
                     textAlign: 'left',
                     fontSize: '10px',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (selectedAgent?.id !== agent.id) {
-                      e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
-                      e.currentTarget.style.borderColor = BLOOMBERG.MUTED;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (selectedAgent?.id !== agent.id) {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
-                    }
+                    transition: 'all 0.15s'
                   }}
                 >
                   <div style={{ fontWeight: 600, color: BLOOMBERG.CYAN, marginBottom: '4px' }}>
                     {agent.name}
                   </div>
-                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px' }}>
-                    {agent.role}
+                  <div style={{ color: BLOOMBERG.GRAY, fontSize: '9px', marginBottom: '4px', lineHeight: 1.3 }}>
+                    {agent.role?.substring(0, 60)}{agent.role?.length > 60 ? '...' : ''}
                   </div>
                   <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                     <span style={{
                       padding: '2px 6px',
                       backgroundColor: BLOOMBERG.DARK_BG,
                       border: `1px solid ${BLOOMBERG.BORDER}`,
-                      borderRadius: '2px',
                       fontSize: '8px',
                       color: BLOOMBERG.YELLOW
                     }}>
-                      {agent.llm_config.provider}
+                      {agent.llm_config?.provider || 'N/A'}
                     </span>
                     <span style={{
                       padding: '2px 6px',
                       backgroundColor: BLOOMBERG.DARK_BG,
                       border: `1px solid ${BLOOMBERG.BORDER}`,
-                      borderRadius: '2px',
                       fontSize: '8px',
                       color: BLOOMBERG.PURPLE
                     }}>
-                      {agent.llm_config.model_id}
+                      {agent.llm_config?.model_id?.substring(0, 20) || 'N/A'}
                     </span>
                   </div>
                 </button>
@@ -430,9 +426,15 @@ const AgentConfigTab: React.FC = () => {
               fontSize: '10px'
             }}>
               {error ? <AlertCircle size={14} color={BLOOMBERG.RED} /> : <CheckCircle size={14} color={BLOOMBERG.GREEN} />}
-              <span style={{ color: error ? BLOOMBERG.RED : BLOOMBERG.GREEN }}>
+              <span style={{ color: error ? BLOOMBERG.RED : BLOOMBERG.GREEN, flex: 1 }}>
                 {error || success}
               </span>
+              <button
+                onClick={() => { setError(null); setSuccess(null); }}
+                style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '14px' }}
+              >
+                x
+              </button>
             </div>
           )}
 
@@ -447,33 +449,33 @@ const AgentConfigTab: React.FC = () => {
                 <div style={{ fontSize: '16px', fontWeight: 700, color: BLOOMBERG.CYAN, marginBottom: '6px' }}>
                   {selectedAgent.name}
                 </div>
-                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px' }}>
+                <div style={{ fontSize: '10px', color: BLOOMBERG.GRAY, marginBottom: '8px', lineHeight: 1.4 }}>
                   {selectedAgent.description}
                 </div>
+
+                {/* Test Query Input */}
+                <div style={{ marginBottom: '8px' }}>
+                  <input
+                    type="text"
+                    value={testQuery}
+                    onChange={(e) => setTestQuery(e.target.value)}
+                    placeholder="Enter test query..."
+                    style={{
+                      width: '100%',
+                      padding: '6px 10px',
+                      backgroundColor: BLOOMBERG.DARK_BG,
+                      border: `1px solid ${BLOOMBERG.BORDER}`,
+                      color: BLOOMBERG.WHITE,
+                      fontSize: '10px',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
-                    onClick={saveConfig}
-                    disabled={loading}
-                    style={{
-                      padding: '6px 12px',
-                      backgroundColor: BLOOMBERG.GREEN,
-                      border: 'none',
-                      color: BLOOMBERG.DARK_BG,
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Save size={12} />
-                    Save Configuration
-                  </button>
-
-                  <button
                     onClick={testAgent}
-                    disabled={loading}
+                    disabled={loading || !testQuery.trim()}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: BLOOMBERG.BLUE,
@@ -484,16 +486,17 @@ const AgentConfigTab: React.FC = () => {
                       fontWeight: 600,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '4px',
+                      opacity: loading || !testQuery.trim() ? 0.5 : 1,
                     }}
                   >
                     <Play size={12} />
-                    Test Agent
+                    {loading ? 'Running...' : 'Run Agent'}
                   </button>
                 </div>
               </div>
 
-              {/* JSON Editor */}
+              {/* Content Area */}
               <div style={{ flex: 1, overflow: 'auto', padding: '12px' }}>
                 {showJsonEditor ? (
                   <div style={{ height: '100%' }}>
@@ -529,73 +532,45 @@ const AgentConfigTab: React.FC = () => {
                   </div>
                 ) : (
                   <div style={{ display: 'grid', gap: '12px' }}>
-                    {/* Basic Info */}
-                    <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        ROLE
+                    {/* Role & Goal */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div>
+                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>ROLE</div>
+                        <div style={{ padding: '8px', backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}`, fontSize: '10px', color: BLOOMBERG.YELLOW }}>
+                          {selectedAgent.role}
+                        </div>
                       </div>
-                      <div style={{
-                        padding: '8px',
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        fontSize: '11px',
-                        color: BLOOMBERG.YELLOW
-                      }}>
-                        {selectedAgent.role}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        GOAL
-                      </div>
-                      <div style={{
-                        padding: '8px',
-                        backgroundColor: BLOOMBERG.PANEL_BG,
-                        border: `1px solid ${BLOOMBERG.BORDER}`,
-                        fontSize: '11px'
-                      }}>
-                        {selectedAgent.goal}
+                      <div>
+                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>GOAL</div>
+                        <div style={{ padding: '8px', backgroundColor: BLOOMBERG.PANEL_BG, border: `1px solid ${BLOOMBERG.BORDER}`, fontSize: '10px' }}>
+                          {selectedAgent.goal}
+                        </div>
                       </div>
                     </div>
 
                     {/* LLM Config */}
                     <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        LLM CONFIGURATION
-                      </div>
+                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>LLM CONFIGURATION</div>
                       <div style={{
                         padding: '8px',
                         backgroundColor: BLOOMBERG.PANEL_BG,
                         border: `1px solid ${BLOOMBERG.BORDER}`,
                         display: 'grid',
-                        gridTemplateColumns: '1fr 1fr',
+                        gridTemplateColumns: 'repeat(4, 1fr)',
                         gap: '8px',
                         fontSize: '10px'
                       }}>
-                        <div>
-                          <span style={{ color: BLOOMBERG.GRAY }}>Provider:</span>{' '}
-                          <span style={{ color: BLOOMBERG.CYAN }}>{selectedAgent.llm_config.provider}</span>
-                        </div>
-                        <div>
-                          <span style={{ color: BLOOMBERG.GRAY }}>Model:</span>{' '}
-                          <span style={{ color: BLOOMBERG.PURPLE }}>{selectedAgent.llm_config.model_id}</span>
-                        </div>
-                        <div>
-                          <span style={{ color: BLOOMBERG.GRAY }}>Temperature:</span>{' '}
-                          <span style={{ color: BLOOMBERG.YELLOW }}>{selectedAgent.llm_config.temperature}</span>
-                        </div>
-                        <div>
-                          <span style={{ color: BLOOMBERG.GRAY }}>Max Tokens:</span>{' '}
-                          <span style={{ color: BLOOMBERG.YELLOW }}>{selectedAgent.llm_config.max_tokens}</span>
-                        </div>
+                        <div><span style={{ color: BLOOMBERG.GRAY }}>Provider:</span> <span style={{ color: BLOOMBERG.CYAN }}>{selectedAgent.llm_config?.provider}</span></div>
+                        <div><span style={{ color: BLOOMBERG.GRAY }}>Model:</span> <span style={{ color: BLOOMBERG.PURPLE }}>{selectedAgent.llm_config?.model_id}</span></div>
+                        <div><span style={{ color: BLOOMBERG.GRAY }}>Temp:</span> <span style={{ color: BLOOMBERG.YELLOW }}>{selectedAgent.llm_config?.temperature}</span></div>
+                        <div><span style={{ color: BLOOMBERG.GRAY }}>Max Tokens:</span> <span style={{ color: BLOOMBERG.YELLOW }}>{selectedAgent.llm_config?.max_tokens}</span></div>
                       </div>
                     </div>
 
                     {/* Tools */}
                     <div>
                       <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        TOOLS ({selectedAgent.tools.length})
+                        TOOLS ({selectedAgent.tools?.length || 0})
                       </div>
                       <div style={{
                         padding: '8px',
@@ -605,17 +580,14 @@ const AgentConfigTab: React.FC = () => {
                         gap: '6px',
                         flexWrap: 'wrap'
                       }}>
-                        {selectedAgent.tools.map((tool, idx) => (
-                          <span
-                            key={idx}
-                            style={{
-                              padding: '4px 8px',
-                              backgroundColor: BLOOMBERG.DARK_BG,
-                              border: `1px solid ${BLOOMBERG.BORDER}`,
-                              color: BLOOMBERG.GREEN,
-                              fontSize: '9px'
-                            }}
-                          >
+                        {(selectedAgent.tools || []).map((tool, idx) => (
+                          <span key={idx} style={{
+                            padding: '4px 8px',
+                            backgroundColor: BLOOMBERG.DARK_BG,
+                            border: `1px solid ${BLOOMBERG.BORDER}`,
+                            color: BLOOMBERG.GREEN,
+                            fontSize: '9px'
+                          }}>
                             {tool}
                           </span>
                         ))}
@@ -624,17 +596,16 @@ const AgentConfigTab: React.FC = () => {
 
                     {/* Instructions */}
                     <div>
-                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                        INSTRUCTIONS
-                      </div>
+                      <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>INSTRUCTIONS</div>
                       <div style={{
                         padding: '8px',
                         backgroundColor: BLOOMBERG.PANEL_BG,
                         border: `1px solid ${BLOOMBERG.BORDER}`,
                         fontSize: '10px',
-                        maxHeight: '200px',
+                        maxHeight: '150px',
                         overflow: 'auto',
-                        lineHeight: '1.5'
+                        lineHeight: '1.5',
+                        whiteSpace: 'pre-wrap',
                       }}>
                         {selectedAgent.instructions}
                       </div>
@@ -643,9 +614,7 @@ const AgentConfigTab: React.FC = () => {
                     {/* Test Result */}
                     {testResult && (
                       <div>
-                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>
-                          TEST RESULT
-                        </div>
+                        <div style={{ fontSize: '10px', fontWeight: 600, color: BLOOMBERG.GRAY, marginBottom: '6px' }}>TEST RESULT</div>
                         <div style={{
                           padding: '8px',
                           backgroundColor: BLOOMBERG.DARK_BG,
@@ -655,8 +624,8 @@ const AgentConfigTab: React.FC = () => {
                           overflow: 'auto',
                           fontFamily: 'monospace'
                         }}>
-                          <pre style={{ margin: 0, color: testResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>
-                            {JSON.stringify(testResult, null, 2)}
+                          <pre style={{ margin: 0, color: testResult.success ? BLOOMBERG.GREEN : BLOOMBERG.RED, whiteSpace: 'pre-wrap' }}>
+                            {testResult.response || testResult.content || JSON.stringify(testResult, null, 2)}
                           </pre>
                         </div>
                       </div>
@@ -675,13 +644,23 @@ const AgentConfigTab: React.FC = () => {
               fontSize: '11px'
             }}>
               <div style={{ textAlign: 'center' }}>
-                <Bot size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+                <CategoryIcon size={48} style={{ margin: '0 auto 12px', opacity: 0.3 }} />
                 <div>Select an agent to view configuration</div>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Footer */}
+      <TabFooter
+        tabName="AGENT CONFIG"
+        leftInfo={[
+          { label: `${agents.length} agents`, color: BLOOMBERG.CYAN },
+          { label: selectedCategory, color: BLOOMBERG.YELLOW },
+        ]}
+        statusInfo="API keys configured in Settings > LLM Config"
+      />
     </div>
   );
 };

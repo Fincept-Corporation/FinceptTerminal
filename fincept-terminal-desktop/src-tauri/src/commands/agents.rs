@@ -157,6 +157,34 @@ pub async fn get_agent_metadata(agent_type: String) -> Result<AgentMetadata, Str
     Err(format!("Legacy command - use get_agent_config instead for: {}", agent_type))
 }
 
+/// Read agent configuration file from resources
+#[tauri::command]
+pub async fn read_agent_config(
+    app: tauri::AppHandle,
+    category: String,
+    config_file: String,
+) -> Result<String, String> {
+    let config_path = format!("resources/scripts/agents/{}/configs/{}", category, config_file);
+
+    let full_path = if cfg!(debug_assertions) {
+        let current_dir = std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?;
+        let base_dir = if current_dir.ends_with("src-tauri") {
+            current_dir
+        } else {
+            current_dir.join("src-tauri")
+        };
+        base_dir.join(&config_path)
+    } else {
+        let resource_dir = app.path().resource_dir()
+            .map_err(|e| format!("Failed to get resource directory: {}", e))?;
+        resource_dir.join(&config_path)
+    };
+
+    std::fs::read_to_string(&full_path)
+        .map_err(|e| format!("Failed to read config file {}: {}", full_path.display(), e))
+}
+
 #[tauri::command]
 pub async fn execute_python_agent_command(
     _app: tauri::AppHandle,

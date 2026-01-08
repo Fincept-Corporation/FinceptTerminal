@@ -256,3 +256,44 @@ pub fn execute_python_script_simple(
     // Execute with worker pool (sync wrapper)
     crate::python_runtime::execute_python_script(&script_path, args_vec)
 }
+
+/// Execute Python script directly using subprocess (bypasses worker pool)
+/// Use this for commands that need specific venv or when worker pool has issues
+/// This is slower but more reliable on Windows
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+pub fn execute_python_subprocess(
+    app: &tauri::AppHandle,
+    script_relative_path: &str,
+    args: &[String],
+    library_hint: Option<&str>,
+) -> Result<String, String> {
+    use std::process::Command;
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
+    let script_path = get_script_path(app, script_relative_path)?;
+    let python_path = get_python_path_for_library(app, library_hint)?;
+
+    let mut cmd = Command::new(&python_path);
+    cmd.arg(&script_path)
+        .args(args)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let output = cmd.output()
+        .map_err(|e| format!("Failed to execute Python: {}", e))?;
+
+    if output.status.success() {
+        String::from_utf8(output.stdout)
+            .map_err(|e| format!("Failed to parse output: {}", e))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Err(format!("Python script failed:\nstderr: {}\nstdout: {}", stderr, stdout))
+    }
+}
