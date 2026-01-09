@@ -1,7 +1,23 @@
-// Financial Analysis Panel
+// Financial Analysis Panel - Bloomberg Style
 import React, { useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { AlertCircle, CheckCircle, BarChart3, DollarSign, PieChart, Activity, FileText, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+
+// Bloomberg color constants
+const COLORS = {
+  ORANGE: '#FF8800',
+  WHITE: '#FFFFFF',
+  RED: '#FF3B3B',
+  GREEN: '#00D66F',
+  YELLOW: '#FFD700',
+  GRAY: '#787878',
+  CYAN: '#00E5FF',
+  DARK_BG: '#000000',
+  PANEL_BG: '#0F0F0F',
+  HEADER_BG: '#1A1A1A',
+  BORDER: '#2A2A2A',
+  HOVER: '#1F1F1F',
+};
 
 interface FinancialsInput { revenue?: number; net_income?: number; total_assets?: number; operating_cash_flow?: number; }
 interface FinancialDataInput { company: { ticker: string; name: string; sector?: string; country?: string }; period: { period_end: string; fiscal_year: number }; financials: FinancialsInput; }
@@ -9,11 +25,11 @@ interface AnalysisResult { success: boolean; metrics?: Record<string, any>; summ
 type AnalysisType = 'income' | 'balance' | 'cashflow' | 'comprehensive' | 'metrics';
 
 const ANALYSIS_TYPES = [
-  { type: 'income' as AnalysisType, label: 'Income', icon: <DollarSign className="w-4 h-4" /> },
-  { type: 'balance' as AnalysisType, label: 'Balance', icon: <PieChart className="w-4 h-4" /> },
-  { type: 'cashflow' as AnalysisType, label: 'Cash Flow', icon: <Activity className="w-4 h-4" /> },
-  { type: 'comprehensive' as AnalysisType, label: 'Full', icon: <FileText className="w-4 h-4" /> },
-  { type: 'metrics' as AnalysisType, label: 'Metrics', icon: <BarChart3 className="w-4 h-4" /> },
+  { type: 'income' as AnalysisType, label: 'Income', icon: DollarSign },
+  { type: 'balance' as AnalysisType, label: 'Balance', icon: PieChart },
+  { type: 'cashflow' as AnalysisType, label: 'Cash Flow', icon: Activity },
+  { type: 'comprehensive' as AnalysisType, label: 'Full', icon: FileText },
+  { type: 'metrics' as AnalysisType, label: 'Metrics', icon: BarChart3 },
 ];
 
 export const FinancialAnalysisPanel: React.FC<{ ticker?: string; companyName?: string; }> = ({ ticker = 'AAPL', companyName = 'Apple Inc.' }) => {
@@ -25,41 +41,211 @@ export const FinancialAnalysisPanel: React.FC<{ ticker?: string; companyName?: s
   const run = useCallback(async () => {
     setLoading(true);
     try {
-      const cmds: Record<AnalysisType, string> = { income: 'analyze_income_statement', balance: 'analyze_balance_sheet', cashflow: 'analyze_cash_flow', comprehensive: 'analyze_financial_statements', metrics: 'get_financial_key_metrics' };
-      const res = await invoke<string>(cmds[selected], { data: { company: { ticker, name: companyName }, period: { period_end: new Date().toISOString().split('T')[0], fiscal_year: new Date().getFullYear() }, financials: {} } });
+      const cmds: Record<AnalysisType, string> = {
+        income: 'analyze_income_statement',
+        balance: 'analyze_balance_sheet',
+        cashflow: 'analyze_cash_flow',
+        comprehensive: 'analyze_financial_statements',
+        metrics: 'get_financial_key_metrics'
+      };
+      const res = await invoke<string>(cmds[selected], {
+        data: {
+          company: { ticker, name: companyName },
+          period: { period_end: new Date().toISOString().split('T')[0], fiscal_year: new Date().getFullYear() },
+          financials: {}
+        }
+      });
       const p = JSON.parse(res);
       setResult({ success: p.success !== false, summary: p.summary || p.error, results: p.results, metrics: p.metrics, error: p.error });
-    } catch (e) { setResult({ success: false, error: e instanceof Error ? e.message : 'Failed' }); }
-    finally { setLoading(false); }
+    } catch (e) {
+      setResult({ success: false, error: e instanceof Error ? e.message : 'Failed' });
+    } finally {
+      setLoading(false);
+    }
   }, [selected, ticker, companyName]);
 
   return (
-    <div className="bg-gray-900 rounded-xl border border-gray-700/50 overflow-hidden">
-      <div className="flex items-center justify-between p-4 bg-gray-800/50 cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <div className="flex items-center gap-3"><BarChart3 className="w5 h-5 text-blue-400" /><h3 className="font-semibold text-white">Financial Analysis</h3></div>
-        {expanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w5 h-5 text-gray-400" />}
+    <div style={{
+      backgroundColor: COLORS.PANEL_BG,
+      border: `1px solid ${COLORS.BORDER}`,
+      overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          backgroundColor: COLORS.HEADER_BG,
+          borderBottom: `2px solid ${COLORS.ORANGE}`,
+          cursor: 'pointer',
+        }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <BarChart3 size={20} color={COLORS.ORANGE} />
+          <h3 style={{
+            fontWeight: 700,
+            color: COLORS.WHITE,
+            fontSize: '12px',
+            letterSpacing: '0.5px',
+            textTransform: 'uppercase',
+          }}>
+            Financial Analysis
+          </h3>
+        </div>
+        {expanded ?
+          <ChevronUp size={20} color={COLORS.GRAY} /> :
+          <ChevronDown size={20} color={COLORS.GRAY} />
+        }
       </div>
+
+      {/* Content */}
       {expanded && (
-        <div className="p-4 space-y-4">
-          <div className="flex flex-wrap gap-2">{ANALYSIS_TYPES.map(({ type, label, icon }) => (<button key={type} onClick={() => setSelected(type)} className={selected === type ? 'flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-blue-600 text-white' : 'flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-gray-800 text-gray-300'}>{icon}<span>{label}</span></button>))}</div>
-          <button onClick={run} disabled={loading} className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 text-white rounded-lg flex items-center justify-center gap-2">{loading ? <><Loader2 className="w-5 h-5 animate-spin" />Analyzing...</> : <><BarChart3 className="w-5 h-5" />Run Analysis</>}</button>
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Analysis Type Buttons */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {ANALYSIS_TYPES.map(({ type, label, icon: Icon }) => (
+              <button
+                key={type}
+                onClick={() => setSelected(type)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  backgroundColor: selected === type ? COLORS.ORANGE : 'transparent',
+                  border: `1px solid ${selected === type ? COLORS.ORANGE : COLORS.BORDER}`,
+                  color: selected === type ? COLORS.DARK_BG : COLORS.GRAY,
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (selected !== type) {
+                    e.currentTarget.style.backgroundColor = COLORS.HOVER;
+                    e.currentTarget.style.borderColor = COLORS.ORANGE;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selected !== type) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.borderColor = COLORS.BORDER;
+                  }
+                }}
+              >
+                <Icon size={14} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Run Analysis Button */}
+          <button
+            onClick={run}
+            disabled={loading}
+            style={{
+              width: '100%',
+              padding: '12px',
+              backgroundColor: loading ? COLORS.BORDER : COLORS.ORANGE,
+              border: 'none',
+              color: loading ? COLORS.GRAY : COLORS.DARK_BG,
+              fontSize: '11px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              opacity: loading ? 0.6 : 1,
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) e.currentTarget.style.opacity = '0.85';
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) e.currentTarget.style.opacity = '1';
+            }}
+          >
+            {loading ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                <span>Analyzing...</span>
+              </>
+            ) : (
+              <>
+                <BarChart3 size={18} />
+                <span>Run Analysis</span>
+              </>
+            )}
+          </button>
+
+          {/* Results */}
           {result && (
-            <div className={result.success ? "p-4 bg-green-900/20 border border-green-700/30 rounded-lg" : "p-4 bg-red-900/20 border border-red-700/30 rounded-lg"}>
-              <div className="flex items-center gap-2 mb-2">
-                {result.success ? <CheckCircle className="w-5 h-5 text-green-400" /> : <AlertCircle className="w-5 h-5 text-red-400" />}
-                <span className={result.success ? "text-green-400 font-bold" : "text-red-400 font-bold"}>
+            <div style={{
+              padding: '16px',
+              backgroundColor: result.success ? `${COLORS.GREEN}15` : `${COLORS.RED}15`,
+              border: `1px solid ${result.success ? COLORS.GREEN : COLORS.RED}`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                {result.success ?
+                  <CheckCircle size={18} color={COLORS.GREEN} /> :
+                  <AlertCircle size={18} color={COLORS.RED} />
+                }
+                <span style={{
+                  color: result.success ? COLORS.GREEN : COLORS.RED,
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                }}>
                   {result.success ? 'Analysis Complete' : 'Analysis Failed'}
                 </span>
               </div>
-              {result.summary && <div className="text-gray-300 text-sm mb-2">{result.summary}</div>}
-              {result.error && !result.success && <div className="text-red-400 text-sm">{result.error}</div>}
+
+              {result.summary && (
+                <div style={{ color: COLORS.WHITE, fontSize: '10px', marginBottom: '8px' }}>
+                  {result.summary}
+                </div>
+              )}
+
+              {result.error && !result.success && (
+                <div style={{ color: COLORS.RED, fontSize: '10px' }}>
+                  {result.error}
+                </div>
+              )}
+
               {result.results && result.results.length > 0 && (
-                <div className="mt-2 max-h-40 overflow-y-auto">
-                  <div className="text-gray-500 text-xs mb-1">{result.results.length} metrics analyzed</div>
-                  {result.results.slice(0,5).map((r: any, i: number) => (
-                    <div key={i} className="flex justify-between text-xs py-1 border-b border-gray-700">
-                      <span className="text-cyan-400">{r.metric_name}</span>
-                      <span className={r.risk_level === 'low' ? 'text-green-400' : r.risk_level === 'high' ? 'text-red-400' : 'text-yellow-400'}>
+                <div style={{ marginTop: '8px', maxHeight: '160px', overflowY: 'auto' }}>
+                  <div style={{ color: COLORS.GRAY, fontSize: '9px', marginBottom: '4px' }}>
+                    {result.results.length} metrics analyzed
+                  </div>
+                  {result.results.slice(0, 5).map((r: any, i: number) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '10px',
+                        padding: '4px 0',
+                        borderBottom: `1px solid ${COLORS.BORDER}`,
+                      }}
+                    >
+                      <span style={{ color: COLORS.CYAN, textTransform: 'uppercase' }}>
+                        {r.metric_name}
+                      </span>
+                      <span style={{
+                        color: r.risk_level === 'low' ? COLORS.GREEN :
+                               r.risk_level === 'high' ? COLORS.RED :
+                               COLORS.YELLOW,
+                        fontWeight: 600,
+                      }}>
                         {typeof r.value === 'number' ? r.value.toFixed(4) : r.value}
                       </span>
                     </div>
