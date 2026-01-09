@@ -297,3 +297,53 @@ pub fn execute_python_subprocess(
         Err(format!("Python script failed:\nstderr: {}\nstdout: {}", stderr, stdout))
     }
 }
+
+/// Execute Python script with data passed via stdin (for large payloads)
+/// This avoids Windows command line length limits
+pub fn execute_python_subprocess_with_stdin(
+    app: &tauri::AppHandle,
+    script_relative_path: &str,
+    command: &str,
+    stdin_data: &str,
+    library_hint: Option<&str>,
+) -> Result<String, String> {
+    use std::process::{Command, Stdio};
+    use std::io::Write;
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+
+    let script_path = get_script_path(app, script_relative_path)?;
+    let python_path = get_python_path_for_library(app, library_hint)?;
+
+    let mut cmd = Command::new(&python_path);
+    cmd.arg(&script_path)
+        .arg(command)
+        .arg("--stdin")  // Signal to read from stdin
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = cmd.spawn()
+        .map_err(|e| format!("Failed to spawn Python: {}", e))?;
+
+    // Write data to stdin
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(stdin_data.as_bytes())
+            .map_err(|e| format!("Failed to write to stdin: {}", e))?;
+    }
+
+    let output = child.wait_with_output()
+        .map_err(|e| format!("Failed to wait for Python: {}", e))?;
+
+    if output.status.success() {
+        String::from_utf8(output.stdout)
+            .map_err(|e| format!("Failed to parse output: {}", e))
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Err(format!("Python script failed:\nstderr: {}\nstdout: {}", stderr, stdout))
+    }
+}

@@ -99,12 +99,20 @@ def serialize_result(data: Any) -> str:
         elif isinstance(obj, np.bool_):
             return bool(obj)
 
-        # Handle pandas types
+        # Handle pandas types - with tuple key support
         elif isinstance(obj, pd.Series):
-            return {str(k): convert(v) for k, v in obj.items()}
+            # Handle Series with tuple index
+            return {str(k) if isinstance(k, tuple) else str(k): convert(v) for k, v in obj.items()}
         elif isinstance(obj, pd.DataFrame):
-            return {str(col): {str(idx): convert(val) for idx, val in obj[col].items()}
-                    for col in obj.columns}
+            # Handle DataFrames with tuple column names (MultiIndex)
+            result = {}
+            for col in obj.columns:
+                col_key = str(col) if isinstance(col, tuple) else str(col)
+                result[col_key] = {}
+                for idx in obj.index:
+                    idx_key = str(idx) if isinstance(idx, tuple) else str(idx)
+                    result[col_key][idx_key] = convert(obj.loc[idx, col])
+            return result
         elif isinstance(obj, (datetime, pd.Timestamp)):
             return obj.isoformat()
 
@@ -112,9 +120,9 @@ def serialize_result(data: Any) -> str:
         elif isinstance(obj, float) and np.isnan(obj):
             return None
 
-        # Handle dicts and lists
+        # Handle dicts and lists - convert tuple keys to strings
         elif isinstance(obj, dict):
-            return {k: convert(v) for k, v in obj.items()}
+            return {str(k) if isinstance(k, tuple) else k: convert(v) for k, v in obj.items()}
         elif isinstance(obj, list):
             return [convert(v) for v in obj]
 

@@ -291,9 +291,9 @@ def serialize_result(data: Any) -> str:
         elif isinstance(obj, tuple):
             return [convert(v) for v in obj]
 
-        # Handle dicts and lists
+        # Handle dicts and lists - convert tuple keys to strings
         elif isinstance(obj, dict):
-            return {str(k): convert(v) for k, v in obj.items()}
+            return {str(k) if isinstance(k, tuple) else str(k): convert(v) for k, v in obj.items()}
         elif isinstance(obj, list):
             return [convert(v) for v in obj]
 
