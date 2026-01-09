@@ -1,4 +1,4 @@
-// Peer Comparison Panel Component
+// Peer Comparison Panel Component - Bloomberg Style
 // Main UI for peer analysis and comparison
 
 import React, { useState } from 'react';
@@ -7,6 +7,7 @@ import type { PeerCompany, CompanyMetrics, ViewMode } from '../../../../types/pe
 import { formatMetricValue, getMetricValue, getAllMetricNames } from '../../../../types/peer';
 import { usePeerComparison } from '../../../../hooks/usePeerComparison';
 import { PercentileRankMini } from './PercentileRankChart';
+import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../../portfolio-tab/bloombergStyles';
 
 interface PeerComparisonPanelProps {
   initialSymbol?: string;
@@ -149,86 +150,197 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
   }, [comparisonData, selectedMetrics]);
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.LARGE }}>
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div className="flex-1">
-          <h2 className="text-2xl font-bold text-white mb-3">Peer Comparison</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: SPACING.LARGE }}>
+        <div style={{ flex: 1 }}>
+          <h2 style={{
+            ...COMMON_STYLES.sectionHeader,
+            fontSize: TYPOGRAPHY.LARGE,
+            marginBottom: SPACING.MEDIUM,
+          }}>
+            PEER COMPARISON
+          </h2>
 
           {/* Target Symbol Input */}
-          <div className="flex gap-2 max-w-md">
-            <div className="flex-1">
-              <label className="text-xs text-gray-400 mb-1 block">Target Company Symbol</label>
+          <div style={{ display: 'flex', gap: SPACING.SMALL, maxWidth: '500px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{
+                ...COMMON_STYLES.dataLabel,
+                display: 'block',
+                marginBottom: SPACING.TINY,
+              }}>
+                TARGET COMPANY SYMBOL
+              </label>
               <input
                 type="text"
                 value={targetSymbol}
                 onChange={(e) => setTargetSymbol(e.target.value.toUpperCase())}
-                placeholder="Enter symbol (e.g., AAPL, GOOGL)"
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                placeholder="e.g., AAPL, GOOGL"
+                style={{
+                  ...COMMON_STYLES.inputField,
+                  fontSize: TYPOGRAPHY.BODY,
+                }}
+                onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
+                onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
               />
             </div>
           </div>
-          <p className="text-gray-400 text-xs mt-2">
+          <p style={{
+            color: BLOOMBERG.GRAY,
+            fontSize: TYPOGRAPHY.SMALL,
+            marginTop: SPACING.SMALL,
+          }}>
             Select target company and add peer companies to compare
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div style={{ display: 'flex', gap: SPACING.SMALL }}>
           {comparisonData && (
             <button
               onClick={handleExportToCSV}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+              style={{
+                ...COMMON_STYLES.buttonSecondary,
+                display: 'flex',
+                alignItems: 'center',
+                gap: SPACING.SMALL,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+              }}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg style={{ width: '14px', height: '14px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Export CSV
+              <span>EXPORT CSV</span>
             </button>
           )}
           <button
             onClick={handleRunComparison}
             disabled={loading || !targetSymbol || selectedPeers.length === 0}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium"
+            style={{
+              ...COMMON_STYLES.buttonPrimary,
+              opacity: (loading || !targetSymbol || selectedPeers.length === 0) ? 0.5 : 1,
+              cursor: (loading || !targetSymbol || selectedPeers.length === 0) ? 'not-allowed' : 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              if (!loading && targetSymbol && selectedPeers.length > 0) {
+                e.currentTarget.style.opacity = '0.85';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading && targetSymbol && selectedPeers.length > 0) {
+                e.currentTarget.style.opacity = '1';
+              }
+            }}
           >
-            {loading ? 'Comparing...' : 'Run Comparison'}
+            {loading ? 'COMPARING...' : 'RUN COMPARISON'}
           </button>
         </div>
       </div>
 
       {/* Error Display */}
       {error && (
-        <div className="bg-red-900/20 border border-red-700 rounded-lg p-4">
-          <p className="text-red-400">{error}</p>
+        <div style={{
+          backgroundColor: `${BLOOMBERG.RED}15`,
+          border: `1px solid ${BLOOMBERG.RED}`,
+          padding: SPACING.DEFAULT,
+        }}>
+          <p style={{ color: BLOOMBERG.RED, fontSize: TYPOGRAPHY.BODY }}>{error}</p>
         </div>
       )}
 
       {/* Peer Selection */}
-      <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
-        <h3 className="text-lg font-semibold text-white mb-3">Selected Peers ({selectedPeers.length})</h3>
+      <div style={{
+        ...COMMON_STYLES.panel,
+        padding: SPACING.LARGE,
+      }}>
+        <h3 style={{
+          color: BLOOMBERG.WHITE,
+          fontSize: TYPOGRAPHY.SUBHEADING,
+          fontWeight: TYPOGRAPHY.BOLD,
+          marginBottom: SPACING.MEDIUM,
+          letterSpacing: TYPOGRAPHY.WIDE,
+          textTransform: 'uppercase',
+        }}>
+          SELECTED PEERS ({selectedPeers.length})
+        </h3>
 
         {selectedPeers.length === 0 ? (
-          <p className="text-gray-400 text-sm">No peers selected. Add peers manually using the input below.</p>
+          <p style={{
+            color: BLOOMBERG.GRAY,
+            fontSize: TYPOGRAPHY.BODY,
+          }}>
+            No peers selected. Add peers manually using the input below.
+          </p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))',
+            gap: SPACING.MEDIUM,
+          }}>
             {selectedPeers.map((peer) => (
               <div
                 key={peer.symbol}
-                className="flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-700"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: SPACING.MEDIUM,
+                  backgroundColor: BLOOMBERG.DARK_BG,
+                  border: BORDERS.STANDARD,
+                }}
               >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-white">{peer.symbol}</span>
-                    <span className="text-xs px-2 py-0.5 bg-blue-900/30 text-blue-400 rounded">
-                      {(peer.similarityScore * 100).toFixed(0)}% match
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+                    <span style={{
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      color: BLOOMBERG.WHITE,
+                      fontSize: TYPOGRAPHY.DEFAULT,
+                    }}>
+                      {peer.symbol}
+                    </span>
+                    <span style={{
+                      fontSize: TYPOGRAPHY.TINY,
+                      padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+                      backgroundColor: `${BLOOMBERG.CYAN}20`,
+                      color: BLOOMBERG.CYAN,
+                      border: `1px solid ${BLOOMBERG.CYAN}`,
+                    }}>
+                      {(peer.similarityScore * 100).toFixed(0)}% MATCH
                     </span>
                   </div>
-                  <p className="text-xs text-gray-400 truncate">{peer.name}</p>
+                  <p style={{
+                    fontSize: TYPOGRAPHY.SMALL,
+                    color: BLOOMBERG.GRAY,
+                    marginTop: SPACING.TINY,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {peer.name}
+                  </p>
                 </div>
                 <button
                   onClick={() => removePeer(peer.symbol)}
-                  className="ml-2 p-1 hover:bg-gray-700 rounded transition-colors"
+                  style={{
+                    marginLeft: SPACING.SMALL,
+                    padding: SPACING.TINY,
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: BLOOMBERG.GRAY,
+                    transition: 'color 0.2s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = BLOOMBERG.RED}
+                  onMouseLeave={(e) => e.currentTarget.style.color = BLOOMBERG.GRAY}
                 >
-                  <svg className="w-5 h-5 text-gray-400 hover:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg style={{ width: '16px', height: '16px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
@@ -238,42 +350,93 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
         )}
 
         {/* Manual Peer Input */}
-        <div className="mt-4">
-          <h4 className="text-sm font-medium text-gray-400 mb-2">Add Peer Manually</h4>
-          <div className="flex gap-2">
+        <div style={{ marginTop: SPACING.LARGE }}>
+          <h4 style={{
+            ...COMMON_STYLES.dataLabel,
+            marginBottom: SPACING.SMALL,
+          }}>
+            ADD PEER MANUALLY
+          </h4>
+          <div style={{ display: 'flex', gap: SPACING.SMALL }}>
             <input
               type="text"
               value={manualPeerSymbol}
               onChange={(e) => setManualPeerSymbol(e.target.value.toUpperCase())}
               onKeyPress={(e) => e.key === 'Enter' && handleAddManualPeer()}
-              placeholder="Enter peer symbol (e.g., MSFT, GOOGL)"
-              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="e.g., MSFT, GOOGL"
+              style={{
+                ...COMMON_STYLES.inputField,
+                flex: 1,
+                fontSize: TYPOGRAPHY.BODY,
+              }}
+              onFocus={(e) => e.currentTarget.style.borderColor = BLOOMBERG.ORANGE}
+              onBlur={(e) => e.currentTarget.style.borderColor = BLOOMBERG.BORDER}
             />
             <button
               onClick={handleAddManualPeer}
               disabled={!manualPeerSymbol.trim()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium text-sm"
+              style={{
+                ...COMMON_STYLES.buttonPrimary,
+                opacity: !manualPeerSymbol.trim() ? 0.5 : 1,
+                cursor: !manualPeerSymbol.trim() ? 'not-allowed' : 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                if (manualPeerSymbol.trim()) {
+                  e.currentTarget.style.opacity = '0.85';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (manualPeerSymbol.trim()) {
+                  e.currentTarget.style.opacity = '1';
+                }
+              }}
             >
-              Add Peer
+              ADD PEER
             </button>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
+          <p style={{
+            fontSize: TYPOGRAPHY.SMALL,
+            color: BLOOMBERG.MUTED,
+            marginTop: SPACING.TINY,
+          }}>
             Tip: Add companies from the same industry/sector for better comparison
           </p>
         </div>
 
         {/* Available Peers */}
         {availablePeers.length > 0 && (
-          <div className="mt-4">
-            <h4 className="text-sm font-medium text-gray-400 mb-2">Available Peers</h4>
-            <div className="flex flex-wrap gap-2">
+          <div style={{ marginTop: SPACING.LARGE }}>
+            <h4 style={{
+              ...COMMON_STYLES.dataLabel,
+              marginBottom: SPACING.SMALL,
+            }}>
+              AVAILABLE PEERS
+            </h4>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.SMALL }}>
               {availablePeers
                 .filter((peer) => !selectedPeers.find((p) => p.symbol === peer.symbol))
                 .map((peer) => (
                   <button
                     key={peer.symbol}
                     onClick={() => addPeer(peer)}
-                    className="px-3 py-1 text-sm bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white rounded transition-colors"
+                    style={{
+                      padding: `${SPACING.TINY} ${SPACING.MEDIUM}`,
+                      fontSize: TYPOGRAPHY.BODY,
+                      backgroundColor: BLOOMBERG.DARK_BG,
+                      border: BORDERS.STANDARD,
+                      color: BLOOMBERG.WHITE,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      fontWeight: TYPOGRAPHY.SEMIBOLD,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = BLOOMBERG.HOVER;
+                      e.currentTarget.style.borderColor = BLOOMBERG.ORANGE;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = BLOOMBERG.DARK_BG;
+                      e.currentTarget.style.borderColor = BLOOMBERG.BORDER;
+                    }}
                   >
                     + {peer.symbol}
                   </button>
@@ -285,18 +448,40 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
 
       {/* View Mode Selector */}
       {comparisonData && (
-        <div className="flex gap-2 border-b border-gray-700">
+        <div style={{
+          display: 'flex',
+          gap: SPACING.SMALL,
+          borderBottom: BORDERS.STANDARD,
+        }}>
           {(['table', 'chart', 'radar'] as ViewMode[]).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
-              className={`px-4 py-2 font-medium transition-colors ${
-                viewMode === mode
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-gray-400 hover:text-gray-300'
-              }`}
+              style={{
+                padding: `${SPACING.MEDIUM} ${SPACING.LARGE}`,
+                fontWeight: TYPOGRAPHY.BOLD,
+                fontSize: TYPOGRAPHY.BODY,
+                textTransform: 'uppercase',
+                letterSpacing: TYPOGRAPHY.NORMAL,
+                transition: 'all 0.2s',
+                backgroundColor: 'transparent',
+                border: 'none',
+                borderBottom: viewMode === mode ? `2px solid ${BLOOMBERG.ORANGE}` : '2px solid transparent',
+                color: viewMode === mode ? BLOOMBERG.ORANGE : BLOOMBERG.GRAY,
+                cursor: 'pointer',
+              }}
+              onMouseEnter={(e) => {
+                if (viewMode !== mode) {
+                  e.currentTarget.style.color = BLOOMBERG.WHITE;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (viewMode !== mode) {
+                  e.currentTarget.style.color = BLOOMBERG.GRAY;
+                }
+              }}
             >
-              {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              {mode.toUpperCase()}
             </button>
           ))}
         </div>
@@ -304,7 +489,7 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
 
       {/* Comparison Results */}
       {comparisonData && (
-        <div className="space-y-4">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.LARGE }}>
           {/* Valuation Assessment */}
           {(() => {
             // Calculate valuation status based on percentiles
@@ -337,29 +522,57 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
             else if (psPercentile > 66) score--;
 
             const getStatus = () => {
-              if (score >= 2) return { label: 'Undervalued', color: 'green', bgColor: 'bg-green-900/30', textColor: 'text-green-400', borderColor: 'border-green-700' };
-              if (score >= 1) return { label: 'Potentially Undervalued', color: 'emerald', bgColor: 'bg-emerald-900/30', textColor: 'text-emerald-400', borderColor: 'border-emerald-700' };
-              if (score <= -2) return { label: 'Overvalued', color: 'red', bgColor: 'bg-red-900/30', textColor: 'text-red-400', borderColor: 'border-red-700' };
-              if (score <= -1) return { label: 'Potentially Overvalued', color: 'orange', bgColor: 'bg-orange-900/30', textColor: 'text-orange-400', borderColor: 'border-orange-700' };
-              return { label: 'Fairly Valued', color: 'blue', bgColor: 'bg-blue-900/30', textColor: 'text-blue-400', borderColor: 'border-blue-700' };
+              if (score >= 2) return { label: 'UNDERVALUED', bgColor: `${BLOOMBERG.GREEN}15`, textColor: BLOOMBERG.GREEN, borderColor: BLOOMBERG.GREEN };
+              if (score >= 1) return { label: 'POTENTIALLY UNDERVALUED', bgColor: `${BLOOMBERG.GREEN}10`, textColor: BLOOMBERG.GREEN, borderColor: BLOOMBERG.GREEN };
+              if (score <= -2) return { label: 'OVERVALUED', bgColor: `${BLOOMBERG.RED}15`, textColor: BLOOMBERG.RED, borderColor: BLOOMBERG.RED };
+              if (score <= -1) return { label: 'POTENTIALLY OVERVALUED', bgColor: `${BLOOMBERG.YELLOW}15`, textColor: BLOOMBERG.YELLOW, borderColor: BLOOMBERG.YELLOW };
+              return { label: 'FAIRLY VALUED', bgColor: `${BLOOMBERG.CYAN}15`, textColor: BLOOMBERG.CYAN, borderColor: BLOOMBERG.CYAN };
             };
 
             const status = getStatus();
 
             return (
-              <div className={`rounded-lg p-4 border ${status.borderColor} ${status.bgColor}`}>
-                <div className="flex items-center justify-between">
+              <div style={{
+                padding: SPACING.LARGE,
+                border: `1px solid ${status.borderColor}`,
+                backgroundColor: status.bgColor,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">Valuation Assessment</h3>
-                    <p className="text-sm text-gray-400">
+                    <h3 style={{
+                      fontSize: TYPOGRAPHY.SUBHEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      color: BLOOMBERG.WHITE,
+                      marginBottom: SPACING.TINY,
+                      letterSpacing: TYPOGRAPHY.WIDE,
+                      textTransform: 'uppercase',
+                    }}>
+                      VALUATION ASSESSMENT
+                    </h3>
+                    <p style={{
+                      fontSize: TYPOGRAPHY.BODY,
+                      color: BLOOMBERG.GRAY,
+                    }}>
                       Based on P/E, P/B, and P/S percentile rankings vs peers
                     </p>
                   </div>
-                  <div className="text-right">
-                    <span className={`inline-block px-4 py-2 rounded-lg font-semibold text-lg ${status.textColor}`}>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{
+                      display: 'inline-block',
+                      padding: `${SPACING.SMALL} ${SPACING.LARGE}`,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontSize: TYPOGRAPHY.SUBHEADING,
+                      color: status.textColor,
+                      border: `1px solid ${status.borderColor}`,
+                      letterSpacing: TYPOGRAPHY.WIDE,
+                    }}>
                       {status.label}
                     </span>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p style={{
+                      fontSize: TYPOGRAPHY.SMALL,
+                      color: BLOOMBERG.GRAY,
+                      marginTop: SPACING.TINY,
+                    }}>
                       P/E: {pePercentile.toFixed(0)}th • P/B: {pbPercentile.toFixed(0)}th • P/S: {psPercentile.toFixed(0)}th percentile
                     </p>
                   </div>
@@ -369,41 +582,138 @@ export const PeerComparisonPanel: React.FC<PeerComparisonPanelProps> = ({ initia
           })()}
 
           {/* Sector Benchmarks Card */}
-          <div className="bg-gray-900 rounded-lg p-6 border border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-white">Sector Benchmarks</h3>
-              <span className="text-xs px-2 py-1 bg-blue-900/30 text-blue-400 rounded">
+          <div style={{
+            ...COMMON_STYLES.panel,
+            padding: SPACING.XLARGE,
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: SPACING.LARGE,
+            }}>
+              <h3 style={{
+                fontSize: TYPOGRAPHY.SUBHEADING,
+                fontWeight: TYPOGRAPHY.BOLD,
+                color: BLOOMBERG.WHITE,
+                letterSpacing: TYPOGRAPHY.WIDE,
+                textTransform: 'uppercase',
+              }}>
+                SECTOR BENCHMARKS
+              </h3>
+              <span style={{
+                fontSize: TYPOGRAPHY.SMALL,
+                padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+                backgroundColor: `${BLOOMBERG.CYAN}20`,
+                color: BLOOMBERG.CYAN,
+                border: `1px solid ${BLOOMBERG.CYAN}`,
+                fontWeight: TYPOGRAPHY.BOLD,
+              }}>
                 {comparisonData.benchmarks.sector}
               </span>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              <div className="bg-gray-800 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">Median P/E</p>
-                <p className="text-xl font-semibold text-white">
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+              gap: SPACING.LARGE,
+            }}>
+              <div style={{
+                backgroundColor: BLOOMBERG.DARK_BG,
+                border: BORDERS.STANDARD,
+                padding: SPACING.MEDIUM,
+              }}>
+                <p style={{
+                  ...COMMON_STYLES.dataLabel,
+                  marginBottom: SPACING.TINY,
+                }}>
+                  MEDIAN P/E
+                </p>
+                <p style={{
+                  fontSize: TYPOGRAPHY.LARGE,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: BLOOMBERG.WHITE,
+                  fontFamily: TYPOGRAPHY.MONO,
+                }}>
                   {comparisonData.benchmarks.medianPe?.toFixed(1) || 'N/A'}
                 </p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">Median P/B</p>
-                <p className="text-xl font-semibold text-white">
+              <div style={{
+                backgroundColor: BLOOMBERG.DARK_BG,
+                border: BORDERS.STANDARD,
+                padding: SPACING.MEDIUM,
+              }}>
+                <p style={{
+                  ...COMMON_STYLES.dataLabel,
+                  marginBottom: SPACING.TINY,
+                }}>
+                  MEDIAN P/B
+                </p>
+                <p style={{
+                  fontSize: TYPOGRAPHY.LARGE,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: BLOOMBERG.WHITE,
+                  fontFamily: TYPOGRAPHY.MONO,
+                }}>
                   {comparisonData.benchmarks.medianPb?.toFixed(1) || 'N/A'}
                 </p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">Median ROE</p>
-                <p className="text-xl font-semibold text-white">
+              <div style={{
+                backgroundColor: BLOOMBERG.DARK_BG,
+                border: BORDERS.STANDARD,
+                padding: SPACING.MEDIUM,
+              }}>
+                <p style={{
+                  ...COMMON_STYLES.dataLabel,
+                  marginBottom: SPACING.TINY,
+                }}>
+                  MEDIAN ROE
+                </p>
+                <p style={{
+                  fontSize: TYPOGRAPHY.LARGE,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: BLOOMBERG.WHITE,
+                  fontFamily: TYPOGRAPHY.MONO,
+                }}>
                   {comparisonData.benchmarks.medianRoe?.toFixed(1) || 'N/A'}%
                 </p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">Median Revenue Growth</p>
-                <p className="text-xl font-semibold text-white">
+              <div style={{
+                backgroundColor: BLOOMBERG.DARK_BG,
+                border: BORDERS.STANDARD,
+                padding: SPACING.MEDIUM,
+              }}>
+                <p style={{
+                  ...COMMON_STYLES.dataLabel,
+                  marginBottom: SPACING.TINY,
+                }}>
+                  MEDIAN REV GROWTH
+                </p>
+                <p style={{
+                  fontSize: TYPOGRAPHY.LARGE,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: BLOOMBERG.WHITE,
+                  fontFamily: TYPOGRAPHY.MONO,
+                }}>
                   {comparisonData.benchmarks.medianRevenueGrowth?.toFixed(1) || 'N/A'}%
                 </p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-3">
-                <p className="text-xs text-gray-400 mb-1">Median D/E</p>
-                <p className="text-xl font-semibold text-white">
+              <div style={{
+                backgroundColor: BLOOMBERG.DARK_BG,
+                border: BORDERS.STANDARD,
+                padding: SPACING.MEDIUM,
+              }}>
+                <p style={{
+                  ...COMMON_STYLES.dataLabel,
+                  marginBottom: SPACING.TINY,
+                }}>
+                  MEDIAN D/E
+                </p>
+                <p style={{
+                  fontSize: TYPOGRAPHY.LARGE,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  color: BLOOMBERG.WHITE,
+                  fontFamily: TYPOGRAPHY.MONO,
+                }}>
                   {comparisonData.benchmarks.medianDebtToEquity?.toFixed(2) || 'N/A'}
                 </p>
               </div>

@@ -45,6 +45,25 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
     hasSpecialChar: false
   });
 
+  // Username validation state
+  const [usernameValidation, setUsernameValidation] = useState({
+    isValid: false,
+    length: 0,
+    message: ''
+  });
+
+  // Email validation state
+  const [emailValidation, setEmailValidation] = useState({
+    isValid: false,
+    message: ''
+  });
+
+  // Phone validation state
+  const [phoneValidation, setPhoneValidation] = useState({
+    isValid: false,
+    message: ''
+  });
+
   // Handle navigation after successful authentication
   useEffect(() => {
     if (session?.authenticated && session?.user_type === 'registered' && isVerificationComplete) {
@@ -75,11 +94,83 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
         hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(value)
       });
     }
+
+    // Real-time email validation
+    if (field === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const isValid = emailRegex.test(value);
+      setEmailValidation({
+        isValid: isValid || value === '',
+        message: value && !isValid ? 'Invalid email format' : ''
+      });
+    }
+
+    // Real-time username validation (firstName or lastName changes)
+    if (field === 'firstName' || field === 'lastName') {
+      const updatedFormData = { ...formData, [field]: value };
+      const username = `${updatedFormData.firstName.trim()}${updatedFormData.lastName.trim()}`.toLowerCase();
+      const length = username.length;
+
+      if (updatedFormData.firstName || updatedFormData.lastName) {
+        if (length < 3) {
+          setUsernameValidation({
+            isValid: false,
+            length,
+            message: `Username too short (${length}/3 min)`
+          });
+        } else if (length > 50) {
+          setUsernameValidation({
+            isValid: false,
+            length,
+            message: `Username too long (${length}/50 max)`
+          });
+        } else {
+          setUsernameValidation({
+            isValid: true,
+            length,
+            message: `Username valid (${length} characters)`
+          });
+        }
+      } else {
+        setUsernameValidation({
+          isValid: false,
+          length: 0,
+          message: ''
+        });
+      }
+    }
   };
 
   const handlePhoneChange = (value: string | undefined) => {
     setPhoneNumber(value);
     if (error) setError("");
+
+    // Real-time phone validation
+    if (value) {
+      // Basic validation - check if it has enough digits (minimum 7)
+      const digitsOnly = value.replace(/\D/g, '');
+      if (digitsOnly.length < 7) {
+        setPhoneValidation({
+          isValid: false,
+          message: 'Phone number too short'
+        });
+      } else if (digitsOnly.length > 15) {
+        setPhoneValidation({
+          isValid: false,
+          message: 'Phone number too long'
+        });
+      } else {
+        setPhoneValidation({
+          isValid: true,
+          message: 'Valid phone number'
+        });
+      }
+    } else {
+      setPhoneValidation({
+        isValid: false,
+        message: 'Phone number required'
+      });
+    }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -87,6 +178,11 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
 
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword) {
       setError(t('register.errors.requiredFields'));
+      return;
+    }
+
+    if (!phoneNumber) {
+      setError('Phone number is required');
       return;
     }
 
@@ -109,6 +205,13 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
       // Create username from first and last name, ensuring no spaces
       const username = `${formData.firstName.trim()}${formData.lastName.trim()}`.toLowerCase();
       console.log('Generated username:', username);
+
+      // Validate username length (3-50 characters as per API requirement)
+      if (username.length < 3 || username.length > 50) {
+        setError('Username must be between 3 and 50 characters. Please use shorter first/last names.');
+        setIsLoading(false);
+        return;
+      }
 
       // Parse phone number if provided
       let phone = '';
@@ -277,9 +380,12 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                   placeholder={t('register.firstNamePlaceholder')}
                   value={formData.firstName}
                   onChange={(e) => handleChange("firstName", e.target.value)}
-                  className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
+                  className={`bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 ${
+                    formData.firstName && formData.firstName.length < 1 ? 'border-red-500' : ''
+                  }`}
                   disabled={isLoading}
                   required
+                  minLength={1}
                 />
               </div>
             </div>
@@ -294,12 +400,25 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                 placeholder={t('register.lastNamePlaceholder')}
                 value={formData.lastName}
                 onChange={(e) => handleChange("lastName", e.target.value)}
-                className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
+                className={`bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 ${
+                  formData.lastName && formData.lastName.length < 1 ? 'border-red-500' : ''
+                }`}
                 disabled={isLoading}
                 required
+                minLength={1}
               />
             </div>
           </div>
+
+          {/* Username validation feedback */}
+          {(formData.firstName || formData.lastName) && usernameValidation.message && (
+            <div className={`flex items-center gap-1.5 text-xs ${
+              usernameValidation.isValid ? 'text-green-400' : 'text-amber-400'
+            }`}>
+              {usernameValidation.isValid ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+              <span>{usernameValidation.message}</span>
+            </div>
+          )}
 
           <div className="space-y-1">
             <Label htmlFor="email" className="text-white text-xs">
@@ -313,16 +432,24 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                 placeholder={t('register.emailPlaceholder')}
                 value={formData.email}
                 onChange={(e) => handleChange("email", e.target.value)}
-                className="bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500"
+                className={`bg-zinc-800 border-zinc-600 text-white placeholder-zinc-500 pl-9 py-2 h-9 text-sm focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 ${
+                  emailValidation.message ? 'border-red-500' : ''
+                }`}
                 disabled={isLoading}
                 required
               />
             </div>
+            {emailValidation.message && (
+              <div className="flex items-center gap-1.5 text-red-400 text-xs">
+                <X className="h-3 w-3" />
+                <span>{emailValidation.message}</span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">
             <Label htmlFor="phone" className="text-white text-xs">
-              {t('register.phoneLabel')} <span className="text-zinc-500">(Optional)</span>
+              {t('register.phoneLabel')}
             </Label>
             <PhoneInput
               international
@@ -331,7 +458,8 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
               onChange={handlePhoneChange}
               disabled={isLoading}
               placeholder={t('register.phonePlaceholder')}
-              className="phone-input-custom"
+              className={`phone-input-custom ${!phoneValidation.isValid && phoneNumber ? 'phone-input-error' : ''}`}
+              required
               style={{
                 '--PhoneInput-color--focus': '#71717a',
                 '--PhoneInputInternationalIconPhone-opacity': '0.8',
@@ -352,6 +480,14 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({ onNavigate }) => {
                 '--PhoneInputCountryFlag-backgroundColor--loading': 'rgba(0,0,0,0.1)'
               } as any}
             />
+            {phoneValidation.message && (
+              <div className={`flex items-center gap-1.5 text-xs ${
+                phoneValidation.isValid ? 'text-green-400' : 'text-amber-400'
+              }`}>
+                {phoneValidation.isValid ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                <span>{phoneValidation.message}</span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1">

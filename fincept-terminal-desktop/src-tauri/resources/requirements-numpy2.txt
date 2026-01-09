@@ -1,5 +1,5 @@
-# NumPy 2.x Environment - Modern Libraries
-# For libraries that require or support NumPy 2.x
+# NumPy 2.x Environment - Modern Libraries (DEFAULT - USE THIS)
+# All libraries compatible with NumPy 2.x
 
 # Core dependencies
 numpy>=2.2.3,<3.0
@@ -19,94 +19,6 @@ databento==0.66.0
 databento-dbn==0.44.0
 feedparser==6.0.12
 gnews==0.4.2
-
-# SEC EDGAR data
-edgartools>=5.6.0
-
-# LLM and AI
-openai>=2.8.1,<3.0
-anthropic>=0.71.0,<1.0
-google-generativeai>=0.8.5,<1.0
-langchain>=0.1.0
-langchain-community>=0.0.1
-litellm>=1.73
-tiktoken>=0.5.0
-
-# ML/DL (NumPy 2.x compatible)
-# PyTorch 2.3.1+ doesn't support macOS Intel, use 2.2.2 for compatibility
-torch==2.2.2; platform_machine == "x86_64" and sys_platform == "darwin"
-torch>=2.3.1; platform_machine != "x86_64" or sys_platform != "darwin"
-scikit-learn>=1.4.2,<1.7.0
-scipy>=1.13.0,<1.16.0
-lightgbm>=4.6.0,<5.0.0
-xgboost>=2.1.0,<2.2.0
-catboost>=1.2.0,<1.3.0
-
-# Time series and forecasting (NumPy 2.x compatible)
-statsmodels>=0.14.2
-pmdarima>=2.1.1
-
-# Technical analysis
-ta==0.11.0
-talipp==2.7.0
-
-# Portfolio optimization
-# Note: PyPortfolioOpt moved to NumPy 1.x due to plotly<6.0.0 requirement
-finquant-enhanced
-cvxpy>=1.0.0
-cvxopt==1.3.2
-
-# Financial modeling
-py_vollib==1.0.1
-pypme==0.6.2
-# financepy moved to NumPy 1.x (requires old numba incompatible with Python 3.12)
-ffn==1.1.2
-fortitudo.tech==1.2
-rateslib==2.1.1
-
-# Quant libraries
-pyqlib==0.9.7
-rdagent==0.8.0
-gs-quant==1.4.67
-
-# Time series (additional)
-tsmoothie==1.0.5
-
-# Visualization
-plotly>=6.0.0
-matplotlib>=3.9.3,<4.0
-seaborn>=0.12.0
-jinja2==3.1.3
-weasyprint==62.3
-
-# Development tools
-jupyter>=1.0.0
-nbformat>=5.0.0
-nbconvert>=7.0.0
-streamlit>=1.47
-rich>=13.0.0
-typer>=0.9.0
-
-# Utilities
-loguru>=0.6.0
-pydantic-settings>=2.0.0
-fire>=0.4.0
-dill>=0.3.0
-# Use ruamel.yaml version with pre-built wheels (avoid C extension build issues)
-ruamel.yaml>=0.17.38,<0.18.0
-python-redis-lock>=4.0.0
-setuptools-scm>=8.0.0
-tables>=3.8.0
-selenium>=4.0.0
-pyarrow>=16.0.0
-
-# Database
-peewee>=3.17.0,<3.18.0
-
-# MLflow
-mlflow>=2.0.0
-
-# Additional data utilities
 aiohappyeyeballs==2.6.1
 aiosignal==1.4.0
 attrs==25.4.0
@@ -134,5 +46,86 @@ tzdata==2025.2
 urllib3==2.5.0
 yarl==1.22.0
 zstandard==0.25.0
+
+# SEC EDGAR data
+edgartools>=5.6.0
+
+# LLM and AI
+openai>=2.8.1,<3.0
+anthropic>=0.71.0,<1.0
+google-generativeai>=0.8.5,<1.0
+langchain>=0.1.0
+langchain-community>=0.0.1
+litellm>=1.73
+tiktoken>=0.5.0
+
+# ML/DL (NumPy 2.x compatible)
+# PyTorch 2.3.1+ doesn't support macOS Intel, use 2.2.2 for compatibility
+torch==2.2.2; platform_machine == "x86_64" and sys_platform == "darwin"
+torch>=2.3.1; platform_machine != "x86_64" or sys_platform != "darwin"
+scikit-learn>=1.4.2,<1.7.0
+scipy>=1.13.0,<1.16.0
+lightgbm>=4.6.0,<5.0.0
+xgboost>=2.1.0,<2.2.0
+catboost>=1.2.0,<1.3.0
+
+# Time series and forecasting (NumPy 2.x compatible)
+statsmodels>=0.14.2
+pmdarima>=2.1.1
+tsmoothie==1.0.5
+
+# Technical analysis
+ta==0.11.0
+talipp==2.7.0
+
+# Portfolio optimization
+finquant-enhanced
+cvxpy>=1.0.0
+cvxopt==1.3.2
+
+# Financial modeling
+py_vollib==1.0.1
+pypme==0.6.2
+ffn==1.1.2
+fortitudo.tech==1.2
+rateslib==2.1.1
+
+# Quant libraries
+pyqlib==0.9.7
+rdagent==0.8.0
+gs-quant==1.4.67
+
+# Visualization
+plotly>=6.0.0
+matplotlib>=3.9.3,<4.0
+seaborn>=0.12.0
+jinja2==3.1.3
+weasyprint==62.3
+
+# Development tools
+jupyter>=1.0.0
+nbformat>=5.0.0
+nbconvert>=7.0.0
+streamlit>=1.47
+rich>=13.0.0
+typer>=0.9.0
+
+# Utilities
+loguru>=0.6.0
+pydantic-settings>=2.0.0
+fire>=0.4.0
+dill>=0.3.0
+ruamel.yaml>=0.17.38,<0.18.0
+python-redis-lock>=4.0.0
+setuptools-scm>=8.0.0
+tables>=3.8.0
+selenium>=4.0.0
+pyarrow>=16.0.0
 pandarallel>=1.6.0
 gym>=0.26.0
+
+# Database
+peewee>=3.17.0,<3.18.0
+
+# MLflow
+mlflow>=2.0.0

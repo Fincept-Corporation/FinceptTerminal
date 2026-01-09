@@ -8,21 +8,27 @@ import { FinancialAnalysisPanel } from './equity-research/components/FinancialAn
 import { PeerComparisonPanel } from './equity-research/components/PeerComparisonPanel';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { Search, TrendingUp, BarChart3, FileText, Users, Newspaper, RefreshCw, AlertCircle } from 'lucide-react';
+
+// Import Bloomberg styles
+import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, LAYOUT, EFFECTS, COMMON_STYLES } from './portfolio-tab/bloombergStyles';
 
 const COLORS = {
-  ORANGE: '#FFA500',
-  WHITE: '#FFFFFF',
-  RED: '#ef4444',
-  GREEN: '#10b981',
-  YELLOW: '#fbbf24',
-  GRAY: '#787878',
-  BLUE: '#3b82f6',
-  CYAN: '#06b6d4',
-  DARK_BG: '#0a0a0a',
-  PANEL_BG: '#1a1a1a',
-  BORDER: '#333333',
+  ORANGE: BLOOMBERG.ORANGE,
+  WHITE: BLOOMBERG.WHITE,
+  RED: BLOOMBERG.RED,
+  GREEN: BLOOMBERG.GREEN,
+  YELLOW: BLOOMBERG.YELLOW,
+  GRAY: BLOOMBERG.GRAY,
+  BLUE: BLOOMBERG.BLUE,
+  CYAN: BLOOMBERG.CYAN,
+  DARK_BG: BLOOMBERG.DARK_BG,
+  PANEL_BG: BLOOMBERG.PANEL_BG,
+  BORDER: BLOOMBERG.BORDER,
   MAGENTA: '#FF00FF',
-  PURPLE: '#9D4EDD',
+  PURPLE: BLOOMBERG.PURPLE,
+  HEADER_BG: BLOOMBERG.HEADER_BG,
+  HOVER: BLOOMBERG.HOVER,
 };
 
 interface StockInfo {
@@ -1098,17 +1104,29 @@ const EquityResearchTab: React.FC = () => {
   // Update financial charts when data or metrics change
   useEffect(() => {
     if (activeTab === 'financials' && financials) {
-      // Cleanup existing charts
+      // Cleanup existing charts with safety check
       if (financialChart1InstanceRef.current) {
-        financialChart1InstanceRef.current.remove();
+        try {
+          financialChart1InstanceRef.current.remove();
+        } catch (e) {
+          // Chart already disposed, ignore error
+        }
         financialChart1InstanceRef.current = null;
       }
       if (financialChart2InstanceRef.current) {
-        financialChart2InstanceRef.current.remove();
+        try {
+          financialChart2InstanceRef.current.remove();
+        } catch (e) {
+          // Chart already disposed, ignore error
+        }
         financialChart2InstanceRef.current = null;
       }
       if (financialChart3InstanceRef.current) {
-        financialChart3InstanceRef.current.remove();
+        try {
+          financialChart3InstanceRef.current.remove();
+        } catch (e) {
+          // Chart already disposed, ignore error
+        }
         financialChart3InstanceRef.current = null;
       }
 
@@ -1155,9 +1173,31 @@ const EquityResearchTab: React.FC = () => {
       window.addEventListener('resize', handleResize);
       return () => {
         window.removeEventListener('resize', handleResize);
-        if (financialChart1InstanceRef.current) financialChart1InstanceRef.current.remove();
-        if (financialChart2InstanceRef.current) financialChart2InstanceRef.current.remove();
-        if (financialChart3InstanceRef.current) financialChart3InstanceRef.current.remove();
+        // Safe cleanup with try-catch to prevent disposal errors
+        if (financialChart1InstanceRef.current) {
+          try {
+            financialChart1InstanceRef.current.remove();
+          } catch (e) {
+            // Chart already disposed, ignore error
+          }
+          financialChart1InstanceRef.current = null;
+        }
+        if (financialChart2InstanceRef.current) {
+          try {
+            financialChart2InstanceRef.current.remove();
+          } catch (e) {
+            // Chart already disposed, ignore error
+          }
+          financialChart2InstanceRef.current = null;
+        }
+        if (financialChart3InstanceRef.current) {
+          try {
+            financialChart3InstanceRef.current.remove();
+          } catch (e) {
+            // Chart already disposed, ignore error
+          }
+          financialChart3InstanceRef.current = null;
+        }
       };
     }
   }, [financials, activeTab, chart1Metrics, chart2Metrics, chart3Metrics]);
@@ -1302,71 +1342,299 @@ const EquityResearchTab: React.FC = () => {
 
   return (
     <div style={{
-      height: '100%',
-      width: '100%',
-      backgroundColor: COLORS.DARK_BG,
-      color: COLORS.WHITE,
-      fontFamily: 'Consolas, monospace',
-      display: 'flex',
-      flexDirection: 'column',
-      fontSize: '11px',
-      overflow: 'hidden',
+      ...COMMON_STYLES.container,
+      fontFamily: TYPOGRAPHY.MONO,
     }}>
-      {/* Header */}
+      {/* Bloomberg-Style Header */}
       <div style={{
-        backgroundColor: COLORS.PANEL_BG,
-        borderBottom: `1px solid ${COLORS.BORDER}`,
-        padding: '6px 12px',
-        flexShrink: 0,
+        ...COMMON_STYLES.header,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: SPACING.MEDIUM,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ color: COLORS.ORANGE, fontWeight: 'bold', fontSize: '13px' }}>{t('title')} TERMINAL</span>
-            <span style={{ color: COLORS.GRAY }}>|</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {/* Left Section */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.LARGE, flex: 1 }}>
+          {/* Title with Icon */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+            <TrendingUp size={16} color={COLORS.ORANGE} />
+            <span style={{
+              color: COLORS.ORANGE,
+              fontWeight: TYPOGRAPHY.BOLD,
+              fontSize: TYPOGRAPHY.SUBHEADING,
+              letterSpacing: TYPOGRAPHY.WIDE,
+              textTransform: 'uppercase',
+            }}>
+              RESEARCH
+            </span>
+          </div>
+
+          {/* Divider */}
+          <div style={COMMON_STYLES.verticalDivider} />
+
+          {/* Symbol Search */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <Search size={14} style={{
+                position: 'absolute',
+                left: '6px',
+                pointerEvents: 'none',
+                color: COLORS.GRAY
+              }} />
               <input
                 type="text"
                 value={searchSymbol}
                 onChange={(e) => setSearchSymbol(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="Enter symbol..."
+                placeholder="SYMBOL..."
                 style={{
-                  backgroundColor: COLORS.DARK_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  color: COLORS.WHITE,
-                  padding: '3px 8px',
-                  fontSize: '11px',
-                  width: '120px',
-                  fontFamily: 'Consolas, monospace',
+                  ...COMMON_STYLES.inputField,
+                  paddingLeft: '26px',
+                  width: '140px',
+                  fontSize: TYPOGRAPHY.BODY,
+                  padding: `${SPACING.SMALL} ${SPACING.SMALL} ${SPACING.SMALL} 26px`,
+                  textTransform: 'uppercase',
                 }}
+                onFocus={(e) => e.currentTarget.style.borderColor = COLORS.ORANGE}
+                onBlur={(e) => e.currentTarget.style.borderColor = COLORS.BORDER}
               />
-              <button
-                onClick={handleSearch}
-                style={{
-                  backgroundColor: COLORS.ORANGE,
-                  border: 'none',
-                  color: COLORS.DARK_BG,
-                  padding: '3px 10px',
-                  fontSize: '10px',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                }}
-              >
-                SEARCH
-              </button>
             </div>
+            <button
+              onClick={handleSearch}
+              style={{
+                ...COMMON_STYLES.buttonPrimary,
+                padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+                fontSize: TYPOGRAPHY.SMALL,
+                display: 'flex',
+                alignItems: 'center',
+                gap: SPACING.TINY,
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.85'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+            >
+              <Search size={12} />
+              SEARCH
+            </button>
+            <button
+              onClick={() => fetchStockData(currentSymbol)}
+              style={{
+                ...COMMON_STYLES.buttonSecondary,
+                padding: `${SPACING.SMALL} ${SPACING.MEDIUM}`,
+                fontSize: TYPOGRAPHY.SMALL,
+                display: 'flex',
+                alignItems: 'center',
+                gap: SPACING.TINY,
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = COLORS.HOVER}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <RefreshCw size={12} />
+              REFRESH
+            </button>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '10px' }}>
-            <span style={{ color: COLORS.GRAY }}>{currentTime.toLocaleTimeString()}</span>
-            <span style={{ color: COLORS.GRAY }}>|</span>
-            <span style={{ color: COLORS.CYAN, fontWeight: 'bold' }}>{currentSymbol}</span>
-            {loading && <span style={{ color: COLORS.YELLOW }}>● LOADING...</span>}
-            {!loading && <span style={{ color: COLORS.GREEN }}>● LIVE</span>}
+
+          {/* Divider */}
+          <div style={COMMON_STYLES.verticalDivider} />
+
+          {/* Tab Navigation Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.SMALL }}>
+            {[
+              { id: 'overview', label: 'OVERVIEW', icon: TrendingUp },
+              { id: 'financials', label: 'FINANCIALS', icon: BarChart3 },
+              { id: 'analysis', label: 'ANALYSIS', icon: FileText },
+              { id: 'technicals', label: 'TECHNICALS', icon: BarChart3 },
+              { id: 'peers', label: 'PEERS', icon: Users },
+              { id: 'news', label: 'NEWS', icon: Newspaper },
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  style={{
+                    padding: `${SPACING.SMALL} ${SPACING.DEFAULT}`,
+                    backgroundColor: activeTab === tab.id ? COLORS.ORANGE : 'transparent',
+                    border: BORDERS.STANDARD,
+                    borderColor: activeTab === tab.id ? COLORS.ORANGE : COLORS.BORDER,
+                    color: activeTab === tab.id ? COLORS.DARK_BG : COLORS.GRAY,
+                    fontSize: TYPOGRAPHY.SMALL,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    cursor: 'pointer',
+                    textTransform: 'uppercase',
+                    letterSpacing: TYPOGRAPHY.NORMAL,
+                    transition: EFFECTS.TRANSITION_FAST,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: SPACING.SMALL,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (activeTab !== tab.id) {
+                      e.currentTarget.style.backgroundColor = COLORS.HOVER;
+                      e.currentTarget.style.borderColor = COLORS.ORANGE;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (activeTab !== tab.id) {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.borderColor = COLORS.BORDER;
+                    }
+                  }}
+                  title={tab.label}
+                >
+                  <Icon size={12} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right Section - Status */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: SPACING.DEFAULT,
+          fontSize: TYPOGRAPHY.BODY,
+        }}>
+          <span style={{ color: COLORS.GRAY, fontSize: TYPOGRAPHY.SMALL }}>
+            {currentTime.toLocaleTimeString()}
+          </span>
+          <div style={COMMON_STYLES.verticalDivider} />
+          <span style={{ color: COLORS.CYAN, fontWeight: TYPOGRAPHY.BOLD }}>
+            {currentSymbol}
+          </span>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.TINY,
+            padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+            backgroundColor: loading ? `${COLORS.YELLOW}15` : `${COLORS.GREEN}15`,
+            border: `1px solid ${loading ? COLORS.YELLOW : COLORS.GREEN}`,
+          }}>
+            <div style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: loading ? COLORS.YELLOW : COLORS.GREEN,
+              animation: loading ? 'pulse 1.5s ease-in-out infinite' : 'none',
+            }} />
+            <span style={{
+              color: loading ? COLORS.YELLOW : COLORS.GREEN,
+              fontWeight: TYPOGRAPHY.BOLD,
+              fontSize: TYPOGRAPHY.SMALL,
+            }}>
+              {loading ? 'LOADING' : 'LIVE'}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
+      {/* Ticker Bar - Stock Price and Info */}
+      <div style={{
+        backgroundColor: COLORS.PANEL_BG,
+        borderBottom: BORDERS.STANDARD,
+        padding: `${SPACING.MEDIUM} ${SPACING.DEFAULT}`,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}>
+        {/* Left - Company Info */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.LARGE }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.MEDIUM, marginBottom: SPACING.TINY }}>
+              <span style={{
+                color: COLORS.ORANGE,
+                fontSize: TYPOGRAPHY.LARGE,
+                fontWeight: TYPOGRAPHY.BOLD,
+                letterSpacing: TYPOGRAPHY.WIDE,
+              }}>
+                {currentSymbol}
+              </span>
+              <span style={{
+                color: COLORS.WHITE,
+                fontSize: TYPOGRAPHY.SUBHEADING,
+                fontWeight: TYPOGRAPHY.SEMIBOLD,
+              }}>
+                {stockInfo?.company_name || 'Loading...'}
+              </span>
+              {stockInfo?.sector && (
+                <span style={{
+                  color: COLORS.BLUE,
+                  fontSize: TYPOGRAPHY.SMALL,
+                  padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+                  backgroundColor: `${COLORS.BLUE}15`,
+                  border: `1px solid ${COLORS.BLUE}`,
+                  fontWeight: TYPOGRAPHY.SEMIBOLD,
+                  textTransform: 'uppercase',
+                  letterSpacing: TYPOGRAPHY.NORMAL,
+                }}>
+                  {stockInfo.sector}
+                </span>
+              )}
+              {stockInfo?.recommendation_key && (
+                <span style={{
+                  color: getRecommendationColor(stockInfo.recommendation_key),
+                  fontSize: TYPOGRAPHY.SMALL,
+                  padding: `${SPACING.TINY} ${SPACING.SMALL}`,
+                  backgroundColor: `${getRecommendationColor(stockInfo.recommendation_key)}20`,
+                  border: `1px solid ${getRecommendationColor(stockInfo.recommendation_key)}`,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  textTransform: 'uppercase',
+                }}>
+                  {getRecommendationText(stockInfo.recommendation_key)}
+                </span>
+              )}
+            </div>
+            <div style={{
+              fontSize: TYPOGRAPHY.SMALL,
+              color: COLORS.GRAY,
+              display: 'flex',
+              alignItems: 'center',
+              gap: SPACING.SMALL,
+            }}>
+              <span>{stockInfo?.exchange || 'N/A'}</span>
+              <span>•</span>
+              <span>{stockInfo?.industry || 'N/A'}</span>
+              <span>•</span>
+              <span>{stockInfo?.country || 'N/A'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Right - Price Info */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: SPACING.TINY,
+        }}>
+          <div style={{
+            fontSize: '28px',
+            fontWeight: TYPOGRAPHY.BOLD,
+            color: COLORS.WHITE,
+            fontFamily: TYPOGRAPHY.MONO,
+            letterSpacing: TYPOGRAPHY.TIGHT,
+          }}>
+            ${formatNumber(currentPrice)}
+          </div>
+          <div style={{
+            fontSize: TYPOGRAPHY.SUBHEADING,
+            color: priceChange >= 0 ? COLORS.GREEN : COLORS.RED,
+            fontWeight: TYPOGRAPHY.BOLD,
+            display: 'flex',
+            alignItems: 'center',
+            gap: SPACING.TINY,
+          }}>
+            <span>{priceChange >= 0 ? '▲' : '▼'}</span>
+            <span>${Math.abs(priceChange).toFixed(2)}</span>
+            <span>({priceChangePercent.toFixed(2)}%)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
       <div style={{
         flex: 1,
         overflow: 'auto',
@@ -1376,93 +1644,13 @@ const EquityResearchTab: React.FC = () => {
         backgroundColor: COLORS.DARK_BG,
       }} className="custom-scrollbar">
 
-        {/* Stock Header with Price */}
-        <div style={{
-          backgroundColor: COLORS.PANEL_BG,
-          border: `1px solid ${COLORS.BORDER}`,
-          padding: '12px',
-          margin: '8px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                <span style={{ color: COLORS.ORANGE, fontSize: '20px', fontWeight: 'bold' }}>{currentSymbol}</span>
-                <span style={{ color: COLORS.WHITE, fontSize: '14px' }}>{stockInfo?.company_name || 'Loading...'}</span>
-                {stockInfo?.sector && (
-                  <span style={{
-                    color: COLORS.BLUE,
-                    fontSize: '10px',
-                    padding: '2px 6px',
-                    backgroundColor: 'rgba(100,150,250,0.2)',
-                    border: `1px solid ${COLORS.BLUE}`,
-                  }}>
-                    {stockInfo.sector}
-                  </span>
-                )}
-                {stockInfo?.recommendation_key && (
-                  <span style={{
-                    color: getRecommendationColor(stockInfo.recommendation_key),
-                    fontSize: '10px',
-                    padding: '2px 6px',
-                    backgroundColor: `${getRecommendationColor(stockInfo.recommendation_key)}20`,
-                    border: `1px solid ${getRecommendationColor(stockInfo.recommendation_key)}`,
-                    fontWeight: 'bold',
-                  }}>
-                    {getRecommendationText(stockInfo.recommendation_key)}
-                  </span>
-                )}
-              </div>
-              <div style={{ fontSize: '10px', color: COLORS.GRAY }}>
-                {stockInfo?.exchange || 'N/A'} | {stockInfo?.industry || 'N/A'} | {stockInfo?.country || 'N/A'}
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: COLORS.WHITE, marginBottom: '2px' }}>
-                ${formatNumber(currentPrice)}
-              </div>
-              <div style={{ fontSize: '12px', color: priceChange >= 0 ? COLORS.GREEN : COLORS.RED }}>
-                {priceChange >= 0 ? '▲' : '▼'} ${Math.abs(priceChange).toFixed(2)} ({priceChangePercent.toFixed(2)}%)
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div style={{
-          backgroundColor: COLORS.PANEL_BG,
-          border: `1px solid ${COLORS.BORDER}`,
-          margin: '0 8px 8px 8px',
-          display: 'flex',
-          gap: '1px',
-        }}>
-          {(['overview', 'financials', 'analysis', 'technicals', 'peers', 'news'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                flex: 1,
-                backgroundColor: activeTab === tab ? COLORS.ORANGE : COLORS.DARK_BG,
-                border: 'none',
-                color: activeTab === tab ? COLORS.DARK_BG : COLORS.WHITE,
-                padding: '8px 16px',
-                fontSize: '11px',
-                cursor: 'pointer',
-                fontWeight: activeTab === tab ? 'bold' : 'normal',
-                textTransform: 'uppercase',
-              }}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
-
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '6px',
-            padding: '8px',
+            gap: SPACING.MEDIUM,
+            padding: SPACING.DEFAULT,
             height: '100%',
             boxSizing: 'border-box',
           }}>
@@ -1470,117 +1658,139 @@ const EquityResearchTab: React.FC = () => {
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '6px',
+              gap: SPACING.MEDIUM,
               flex: '0 0 auto',
               minHeight: '400px',
             }}>
               {/* Column 1 - Trading & Valuation */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
                 {/* Today's Trading */}
                 <div style={{
-                  backgroundColor: COLORS.PANEL_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  padding: '6px',
+                  ...COMMON_STYLES.panel,
+                  padding: SPACING.MEDIUM,
                 }}>
-                  <div style={{ color: COLORS.ORANGE, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                  <div style={{
+                    ...COMMON_STYLES.sectionHeader,
+                    fontSize: TYPOGRAPHY.BODY,
+                    paddingBottom: SPACING.TINY,
+                    marginBottom: SPACING.SMALL,
+                    borderBottom: BORDERS.STANDARD,
+                  }}>
                     TODAY'S TRADING
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, fontSize: TYPOGRAPHY.SMALL }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>OPEN:</span>
-                      <span style={{ color: COLORS.CYAN }}>${formatNumber(quoteData?.open)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>OPEN</span>
+                      <span style={{ color: COLORS.CYAN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>${formatNumber(quoteData?.open)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>HIGH:</span>
-                      <span style={{ color: COLORS.GREEN }}>${formatNumber(quoteData?.high)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>HIGH</span>
+                      <span style={{ color: COLORS.GREEN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>${formatNumber(quoteData?.high)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>LOW:</span>
-                      <span style={{ color: COLORS.RED }}>${formatNumber(quoteData?.low)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>LOW</span>
+                      <span style={{ color: COLORS.RED, fontWeight: TYPOGRAPHY.SEMIBOLD }}>${formatNumber(quoteData?.low)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>PREV CLOSE:</span>
-                      <span style={{ color: COLORS.WHITE }}>${formatNumber(quoteData?.previous_close)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>PREV CLOSE</span>
+                      <span style={{ color: COLORS.WHITE, fontWeight: TYPOGRAPHY.SEMIBOLD }}>${formatNumber(quoteData?.previous_close)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>VOLUME:</span>
-                      <span style={{ color: COLORS.YELLOW }}>{formatNumber(quoteData?.volume || 0, 0)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>VOLUME</span>
+                      <span style={{ color: COLORS.YELLOW, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatNumber(quoteData?.volume || 0, 0)}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Valuation Metrics */}
                 <div style={{
-                  backgroundColor: COLORS.PANEL_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  padding: '6px',
+                  ...COMMON_STYLES.panel,
+                  padding: SPACING.MEDIUM,
                 }}>
-                  <div style={{ color: COLORS.CYAN, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                  <div style={{
+                    color: COLORS.CYAN,
+                    fontSize: TYPOGRAPHY.BODY,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    letterSpacing: TYPOGRAPHY.WIDE,
+                    textTransform: 'uppercase',
+                    paddingBottom: SPACING.TINY,
+                    marginBottom: SPACING.SMALL,
+                    borderBottom: BORDERS.STANDARD,
+                  }}>
                     VALUATION
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, fontSize: TYPOGRAPHY.SMALL }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>MARKET CAP:</span>
-                      <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.market_cap)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>MARKET CAP</span>
+                      <span style={{ color: COLORS.CYAN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatLargeNumber(stockInfo?.market_cap)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>P/E RATIO:</span>
-                      <span style={{ color: COLORS.YELLOW }}>{formatNumber(stockInfo?.pe_ratio)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>P/E RATIO</span>
+                      <span style={{ color: COLORS.YELLOW, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatNumber(stockInfo?.pe_ratio)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>FWD P/E:</span>
-                      <span style={{ color: COLORS.YELLOW }}>{formatNumber(stockInfo?.forward_pe)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>FWD P/E</span>
+                      <span style={{ color: COLORS.YELLOW, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatNumber(stockInfo?.forward_pe)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>PEG RATIO:</span>
-                      <span style={{ color: COLORS.YELLOW }}>{formatNumber(stockInfo?.peg_ratio)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>PEG RATIO</span>
+                      <span style={{ color: COLORS.YELLOW, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatNumber(stockInfo?.peg_ratio)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>P/B RATIO:</span>
-                      <span style={{ color: COLORS.CYAN }}>{formatNumber(stockInfo?.price_to_book)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>P/B RATIO</span>
+                      <span style={{ color: COLORS.CYAN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatNumber(stockInfo?.price_to_book)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>DIV YIELD:</span>
-                      <span style={{ color: COLORS.GREEN }}>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>DIV YIELD</span>
+                      <span style={{ color: COLORS.GREEN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>
                         {formatPercent(stockInfo?.dividend_yield)}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>BETA:</span>
-                      <span style={{ color: COLORS.WHITE }}>{formatNumber(stockInfo?.beta)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>BETA</span>
+                      <span style={{ color: COLORS.WHITE, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatNumber(stockInfo?.beta)}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Share Statistics */}
                 <div style={{
-                  backgroundColor: COLORS.PANEL_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  padding: '6px',
+                  ...COMMON_STYLES.panel,
+                  padding: SPACING.MEDIUM,
+                  flex: 1,
                 }}>
-                  <div style={{ color: COLORS.CYAN, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                  <div style={{
+                    color: COLORS.PURPLE,
+                    fontSize: TYPOGRAPHY.BODY,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    letterSpacing: TYPOGRAPHY.WIDE,
+                    textTransform: 'uppercase',
+                    paddingBottom: SPACING.TINY,
+                    marginBottom: SPACING.SMALL,
+                    borderBottom: BORDERS.STANDARD,
+                  }}>
                     SHARE STATS
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, fontSize: TYPOGRAPHY.SMALL }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>SHARES OUT:</span>
-                      <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.shares_outstanding)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>SHARES OUT</span>
+                      <span style={{ color: COLORS.CYAN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatLargeNumber(stockInfo?.shares_outstanding)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>FLOAT:</span>
-                      <span style={{ color: COLORS.CYAN }}>{formatLargeNumber(stockInfo?.float_shares)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>FLOAT</span>
+                      <span style={{ color: COLORS.CYAN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatLargeNumber(stockInfo?.float_shares)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>INSIDERS:</span>
-                      <span style={{ color: COLORS.YELLOW }}>{formatPercent(stockInfo?.held_percent_insiders)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>INSIDERS</span>
+                      <span style={{ color: COLORS.YELLOW, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatPercent(stockInfo?.held_percent_insiders)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>INSTITUTIONS:</span>
-                      <span style={{ color: COLORS.YELLOW }}>{formatPercent(stockInfo?.held_percent_institutions)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>INSTITUTIONS</span>
+                      <span style={{ color: COLORS.YELLOW, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatPercent(stockInfo?.held_percent_institutions)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>SHORT %:</span>
-                      <span style={{ color: COLORS.RED }}>{formatPercent(stockInfo?.short_percent_of_float)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>SHORT %</span>
+                      <span style={{ color: COLORS.RED, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatPercent(stockInfo?.short_percent_of_float)}</span>
                     </div>
                   </div>
                 </div>
@@ -1590,34 +1800,52 @@ const EquityResearchTab: React.FC = () => {
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '6px',
+                gap: SPACING.MEDIUM,
                 gridColumn: 'span 2',
                 overflow: 'hidden',
                 minHeight: 0,
               }}>
                 {/* Chart Period Selector */}
                 <div style={{
-                  backgroundColor: COLORS.PANEL_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  padding: '4px 6px',
+                  ...COMMON_STYLES.panel,
+                  padding: SPACING.SMALL,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
+                  gap: SPACING.SMALL,
                   flexShrink: 0,
                 }}>
-                  <span style={{ color: COLORS.GRAY, fontSize: '9px' }}>PERIOD:</span>
+                  <span style={{
+                    ...COMMON_STYLES.dataLabel,
+                    marginRight: SPACING.TINY,
+                  }}>
+                    PERIOD
+                  </span>
                   {(['1M', '3M', '6M', '1Y', '5Y'] as const).map((period) => (
                     <button
                       key={period}
                       onClick={() => setChartPeriod(period)}
                       style={{
-                        backgroundColor: chartPeriod === period ? COLORS.ORANGE : COLORS.DARK_BG,
-                        border: `1px solid ${COLORS.BORDER}`,
+                        padding: `${SPACING.TINY} ${SPACING.MEDIUM}`,
+                        backgroundColor: chartPeriod === period ? COLORS.ORANGE : 'transparent',
+                        border: BORDERS.STANDARD,
+                        borderColor: chartPeriod === period ? COLORS.ORANGE : COLORS.BORDER,
                         color: chartPeriod === period ? COLORS.DARK_BG : COLORS.WHITE,
-                        padding: '3px 8px',
-                        fontSize: '8px',
+                        fontSize: TYPOGRAPHY.SMALL,
                         cursor: 'pointer',
-                        fontWeight: chartPeriod === period ? 'bold' : 'normal',
+                        fontWeight: TYPOGRAPHY.BOLD,
+                        transition: EFFECTS.TRANSITION_FAST,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (chartPeriod !== period) {
+                          e.currentTarget.style.backgroundColor = COLORS.HOVER;
+                          e.currentTarget.style.borderColor = COLORS.ORANGE;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (chartPeriod !== period) {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                          e.currentTarget.style.borderColor = COLORS.BORDER;
+                        }
                       }}
                     >
                       {period}
@@ -1625,10 +1853,10 @@ const EquityResearchTab: React.FC = () => {
                   ))}
                 </div>
 
-                {/* Chart with Volume - NOW WITH FULL TRADING TOOLKIT! */}
+                {/* Chart with Volume - Full Trading Toolkit */}
                 <div style={{
-                  backgroundColor: COLORS.PANEL_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
+                  ...COMMON_STYLES.panel,
+                  padding: SPACING.NONE,
                   overflow: 'hidden',
                   flex: 1,
                   display: 'flex',
@@ -1660,82 +1888,110 @@ const EquityResearchTab: React.FC = () => {
                       justifyContent: 'center',
                       height: '100%',
                       color: COLORS.GRAY,
-                      fontSize: '11px',
+                      fontSize: TYPOGRAPHY.DEFAULT,
+                      flexDirection: 'column',
+                      gap: SPACING.MEDIUM,
                     }}>
-                      {loading ? 'Loading chart data...' : 'No chart data available'}
+                      <AlertCircle size={32} color={COLORS.GRAY} />
+                      <span>{loading ? 'Loading chart data...' : 'No chart data available'}</span>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Column 3 - Analyst & Performance */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.MEDIUM }}>
                 {/* Analyst Targets */}
                 <div style={{
-                  backgroundColor: COLORS.PANEL_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  padding: '6px',
+                  ...COMMON_STYLES.panel,
+                  padding: SPACING.MEDIUM,
                 }}>
-                  <div style={{ color: COLORS.MAGENTA, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                  <div style={{
+                    color: COLORS.MAGENTA,
+                    fontSize: TYPOGRAPHY.BODY,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    letterSpacing: TYPOGRAPHY.WIDE,
+                    textTransform: 'uppercase',
+                    paddingBottom: SPACING.TINY,
+                    marginBottom: SPACING.SMALL,
+                    borderBottom: BORDERS.STANDARD,
+                  }}>
                     ANALYST TARGETS
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, fontSize: TYPOGRAPHY.SMALL }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>HIGH:</span>
-                      <span style={{ color: COLORS.GREEN }}>${formatNumber(stockInfo?.target_high_price)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>HIGH</span>
+                      <span style={{ color: COLORS.GREEN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>${formatNumber(stockInfo?.target_high_price)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>MEAN:</span>
-                      <span style={{ color: COLORS.YELLOW }}>${formatNumber(stockInfo?.target_mean_price)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>MEAN</span>
+                      <span style={{ color: COLORS.YELLOW, fontWeight: TYPOGRAPHY.SEMIBOLD }}>${formatNumber(stockInfo?.target_mean_price)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>LOW:</span>
-                      <span style={{ color: COLORS.RED }}>${formatNumber(stockInfo?.target_low_price)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>LOW</span>
+                      <span style={{ color: COLORS.RED, fontWeight: TYPOGRAPHY.SEMIBOLD }}>${formatNumber(stockInfo?.target_low_price)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>ANALYSTS:</span>
-                      <span style={{ color: COLORS.CYAN }}>{stockInfo?.number_of_analyst_opinions || 'N/A'}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>ANALYSTS</span>
+                      <span style={{ color: COLORS.CYAN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{stockInfo?.number_of_analyst_opinions || 'N/A'}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* 52 Week Range */}
                 <div style={{
-                  backgroundColor: COLORS.PANEL_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  padding: '6px',
+                  ...COMMON_STYLES.panel,
+                  padding: SPACING.MEDIUM,
                 }}>
-                  <div style={{ color: COLORS.YELLOW, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                  <div style={{
+                    color: COLORS.YELLOW,
+                    fontSize: TYPOGRAPHY.BODY,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    letterSpacing: TYPOGRAPHY.WIDE,
+                    textTransform: 'uppercase',
+                    paddingBottom: SPACING.TINY,
+                    marginBottom: SPACING.SMALL,
+                    borderBottom: BORDERS.STANDARD,
+                  }}>
                     52 WEEK RANGE
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, fontSize: TYPOGRAPHY.SMALL }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>HIGH:</span>
-                      <span style={{ color: COLORS.GREEN }}>${formatNumber(stockInfo?.fifty_two_week_high)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>HIGH</span>
+                      <span style={{ color: COLORS.GREEN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>${formatNumber(stockInfo?.fifty_two_week_high)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>LOW:</span>
-                      <span style={{ color: COLORS.RED }}>${formatNumber(stockInfo?.fifty_two_week_low)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>LOW</span>
+                      <span style={{ color: COLORS.RED, fontWeight: TYPOGRAPHY.SEMIBOLD }}>${formatNumber(stockInfo?.fifty_two_week_low)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>AVG VOL:</span>
-                      <span style={{ color: COLORS.CYAN }}>{formatNumber(stockInfo?.average_volume, 0)}</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>AVG VOL</span>
+                      <span style={{ color: COLORS.CYAN, fontWeight: TYPOGRAPHY.SEMIBOLD }}>{formatNumber(stockInfo?.average_volume, 0)}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Profitability */}
                 <div style={{
-                  backgroundColor: COLORS.PANEL_BG,
-                  border: `1px solid ${COLORS.BORDER}`,
-                  padding: '6px',
+                  ...COMMON_STYLES.panel,
+                  padding: SPACING.MEDIUM,
+                  flex: 1,
                 }}>
-                  <div style={{ color: COLORS.GREEN, fontSize: '10px', fontWeight: 'bold', marginBottom: '6px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '3px' }}>
+                  <div style={{
+                    color: COLORS.GREEN,
+                    fontSize: TYPOGRAPHY.BODY,
+                    fontWeight: TYPOGRAPHY.BOLD,
+                    letterSpacing: TYPOGRAPHY.WIDE,
+                    textTransform: 'uppercase',
+                    paddingBottom: SPACING.TINY,
+                    marginBottom: SPACING.SMALL,
+                    borderBottom: BORDERS.STANDARD,
+                  }}>
                     PROFITABILITY
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '9px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.SMALL, fontSize: TYPOGRAPHY.SMALL }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: COLORS.GRAY }}>GROSS MARGIN:</span>
+                      <span style={{ ...COMMON_STYLES.dataLabel }}>GROSS MARGIN</span>
                       <span style={{ color: COLORS.GREEN }}>{formatPercent(stockInfo?.gross_margins)}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -2292,135 +2548,430 @@ const EquityResearchTab: React.FC = () => {
 
         {/* Analysis Tab */}
         {activeTab === 'analysis' && (
-          <div style={{ padding: '0 8px 8px 8px' }}>
+          <div style={{ padding: SPACING.DEFAULT }}>
             {/* Financial Analysis Panel - CFA-Compliant Analysis */}
-            <div style={{ marginBottom: '8px' }}>
+            <div style={{ marginBottom: SPACING.MEDIUM }}>
               <FinancialAnalysisPanel
                 ticker={currentSymbol}
                 companyName={stockInfo?.company_name || currentSymbol}
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+
+            {/* Financial Metrics Grid - 2x2 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: SPACING.MEDIUM }}>
               {/* Financial Health */}
               <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '12px',
+                ...COMMON_STYLES.panel,
+                padding: SPACING.LARGE,
               }}>
-                <div style={{ color: COLORS.ORANGE, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '6px' }}>
+                <div style={{
+                  ...COMMON_STYLES.sectionHeader,
+                  fontSize: TYPOGRAPHY.SUBHEADING,
+                  paddingBottom: SPACING.SMALL,
+                  marginBottom: SPACING.LARGE,
+                  borderBottom: BORDERS.ORANGE,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: SPACING.SMALL,
+                }}>
+                  <div style={{
+                    width: '4px',
+                    height: '16px',
+                    backgroundColor: COLORS.ORANGE,
+                  }} />
                   FINANCIAL HEALTH
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '11px' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: SPACING.LARGE,
+                }}>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>TOTAL CASH</div>
-                    <div style={{ color: COLORS.GREEN, fontSize: '16px', fontWeight: 'bold' }}>{formatLargeNumber(stockInfo?.total_cash)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      TOTAL CASH
+                    </div>
+                    <div style={{
+                      color: COLORS.GREEN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatLargeNumber(stockInfo?.total_cash)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>TOTAL DEBT</div>
-                    <div style={{ color: COLORS.RED, fontSize: '16px', fontWeight: 'bold' }}>{formatLargeNumber(stockInfo?.total_debt)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      TOTAL DEBT
+                    </div>
+                    <div style={{
+                      color: COLORS.RED,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatLargeNumber(stockInfo?.total_debt)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>FREE CASHFLOW</div>
-                    <div style={{ color: COLORS.CYAN, fontSize: '16px', fontWeight: 'bold' }}>{formatLargeNumber(stockInfo?.free_cashflow)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      FREE CASHFLOW
+                    </div>
+                    <div style={{
+                      color: COLORS.CYAN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatLargeNumber(stockInfo?.free_cashflow)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>OPERATING CASHFLOW</div>
-                    <div style={{ color: COLORS.BLUE, fontSize: '16px', fontWeight: 'bold' }}>{formatLargeNumber(stockInfo?.operating_cashflow)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      OPERATING CF
+                    </div>
+                    <div style={{
+                      color: COLORS.BLUE,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatLargeNumber(stockInfo?.operating_cashflow)}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Enterprise Value */}
               <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '12px',
+                ...COMMON_STYLES.panel,
+                padding: SPACING.LARGE,
               }}>
-                <div style={{ color: COLORS.CYAN, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '6px' }}>
-                  ENTERPRISE VALUE METRICS
+                <div style={{
+                  color: COLORS.CYAN,
+                  fontSize: TYPOGRAPHY.SUBHEADING,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  letterSpacing: TYPOGRAPHY.WIDE,
+                  textTransform: 'uppercase',
+                  paddingBottom: SPACING.SMALL,
+                  marginBottom: SPACING.LARGE,
+                  borderBottom: BORDERS.CYAN,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: SPACING.SMALL,
+                }}>
+                  <div style={{
+                    width: '4px',
+                    height: '16px',
+                    backgroundColor: COLORS.CYAN,
+                  }} />
+                  ENTERPRISE VALUE
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '11px' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: SPACING.LARGE,
+                }}>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>ENTERPRISE VALUE</div>
-                    <div style={{ color: COLORS.YELLOW, fontSize: '16px', fontWeight: 'bold' }}>{formatLargeNumber(stockInfo?.enterprise_value)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      ENTERPRISE VALUE
+                    </div>
+                    <div style={{
+                      color: COLORS.YELLOW,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatLargeNumber(stockInfo?.enterprise_value)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>EV/REVENUE</div>
-                    <div style={{ color: COLORS.CYAN, fontSize: '16px', fontWeight: 'bold' }}>{formatNumber(stockInfo?.enterprise_to_revenue)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      EV/REVENUE
+                    </div>
+                    <div style={{
+                      color: COLORS.CYAN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatNumber(stockInfo?.enterprise_to_revenue)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>EV/EBITDA</div>
-                    <div style={{ color: COLORS.CYAN, fontSize: '16px', fontWeight: 'bold' }}>{formatNumber(stockInfo?.enterprise_to_ebitda)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      EV/EBITDA
+                    </div>
+                    <div style={{
+                      color: COLORS.CYAN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatNumber(stockInfo?.enterprise_to_ebitda)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>BOOK VALUE</div>
-                    <div style={{ color: COLORS.WHITE, fontSize: '16px', fontWeight: 'bold' }}>${formatNumber(stockInfo?.book_value)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      BOOK VALUE
+                    </div>
+                    <div style={{
+                      color: COLORS.WHITE,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      ${formatNumber(stockInfo?.book_value)}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Revenue & Profits */}
               <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '12px',
+                ...COMMON_STYLES.panel,
+                padding: SPACING.LARGE,
               }}>
-                <div style={{ color: COLORS.GREEN, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '6px' }}>
+                <div style={{
+                  color: COLORS.GREEN,
+                  fontSize: TYPOGRAPHY.SUBHEADING,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  letterSpacing: TYPOGRAPHY.WIDE,
+                  textTransform: 'uppercase',
+                  paddingBottom: SPACING.SMALL,
+                  marginBottom: SPACING.LARGE,
+                  borderBottom: BORDERS.GREEN,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: SPACING.SMALL,
+                }}>
+                  <div style={{
+                    width: '4px',
+                    height: '16px',
+                    backgroundColor: COLORS.GREEN,
+                  }} />
                   REVENUE & PROFITS
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '11px' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: SPACING.LARGE,
+                }}>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>TOTAL REVENUE</div>
-                    <div style={{ color: COLORS.GREEN, fontSize: '16px', fontWeight: 'bold' }}>{formatLargeNumber(stockInfo?.total_revenue)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      TOTAL REVENUE
+                    </div>
+                    <div style={{
+                      color: COLORS.GREEN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatLargeNumber(stockInfo?.total_revenue)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>REVENUE PER SHARE</div>
-                    <div style={{ color: COLORS.CYAN, fontSize: '16px', fontWeight: 'bold' }}>${formatNumber(stockInfo?.revenue_per_share)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      REVENUE/SHARE
+                    </div>
+                    <div style={{
+                      color: COLORS.CYAN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      ${formatNumber(stockInfo?.revenue_per_share)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>GROSS PROFITS</div>
-                    <div style={{ color: COLORS.GREEN, fontSize: '16px', fontWeight: 'bold' }}>{formatLargeNumber(stockInfo?.gross_profits)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      GROSS PROFITS
+                    </div>
+                    <div style={{
+                      color: COLORS.GREEN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatLargeNumber(stockInfo?.gross_profits)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '10px', marginBottom: '4px' }}>EBITDA MARGINS</div>
-                    <div style={{ color: COLORS.YELLOW, fontSize: '16px', fontWeight: 'bold' }}>{formatPercent(stockInfo?.ebitda_margins)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      EBITDA MARGINS
+                    </div>
+                    <div style={{
+                      color: COLORS.YELLOW,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatPercent(stockInfo?.ebitda_margins)}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Key Ratios Summary */}
               <div style={{
-                backgroundColor: COLORS.PANEL_BG,
-                border: `1px solid ${COLORS.BORDER}`,
-                padding: '12px',
+                ...COMMON_STYLES.panel,
+                padding: SPACING.LARGE,
               }}>
-                <div style={{ color: COLORS.YELLOW, fontSize: '13px', fontWeight: 'bold', marginBottom: '12px', borderBottom: `1px solid ${COLORS.BORDER}`, paddingBottom: '6px' }}>
-                  KEY RATIOS SUMMARY
+                <div style={{
+                  color: COLORS.PURPLE,
+                  fontSize: TYPOGRAPHY.SUBHEADING,
+                  fontWeight: TYPOGRAPHY.BOLD,
+                  letterSpacing: TYPOGRAPHY.WIDE,
+                  textTransform: 'uppercase',
+                  paddingBottom: SPACING.SMALL,
+                  marginBottom: SPACING.LARGE,
+                  borderBottom: `2px solid ${COLORS.PURPLE}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: SPACING.SMALL,
+                }}>
+                  <div style={{
+                    width: '4px',
+                    height: '16px',
+                    backgroundColor: COLORS.PURPLE,
+                  }} />
+                  KEY RATIOS
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '10px' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: SPACING.LARGE,
+                }}>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '9px', marginBottom: '3px' }}>P/E RATIO</div>
-                    <div style={{ color: COLORS.WHITE, fontSize: '14px', fontWeight: 'bold' }}>{formatNumber(stockInfo?.pe_ratio)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      P/E RATIO
+                    </div>
+                    <div style={{
+                      color: COLORS.WHITE,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatNumber(stockInfo?.pe_ratio)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '9px', marginBottom: '3px' }}>PEG RATIO</div>
-                    <div style={{ color: COLORS.WHITE, fontSize: '14px', fontWeight: 'bold' }}>{formatNumber(stockInfo?.peg_ratio)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      PEG RATIO
+                    </div>
+                    <div style={{
+                      color: COLORS.WHITE,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatNumber(stockInfo?.peg_ratio)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '9px', marginBottom: '3px' }}>ROE</div>
-                    <div style={{ color: COLORS.GREEN, fontSize: '14px', fontWeight: 'bold' }}>{formatPercent(stockInfo?.return_on_equity)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      ROE
+                    </div>
+                    <div style={{
+                      color: COLORS.GREEN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatPercent(stockInfo?.return_on_equity)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '9px', marginBottom: '3px' }}>ROA</div>
-                    <div style={{ color: COLORS.GREEN, fontSize: '14px', fontWeight: 'bold' }}>{formatPercent(stockInfo?.return_on_assets)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      ROA
+                    </div>
+                    <div style={{
+                      color: COLORS.GREEN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatPercent(stockInfo?.return_on_assets)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '9px', marginBottom: '3px' }}>BETA</div>
-                    <div style={{ color: COLORS.CYAN, fontSize: '14px', fontWeight: 'bold' }}>{formatNumber(stockInfo?.beta)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      BETA
+                    </div>
+                    <div style={{
+                      color: COLORS.CYAN,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatNumber(stockInfo?.beta)}
+                    </div>
                   </div>
                   <div>
-                    <div style={{ color: COLORS.GRAY, fontSize: '9px', marginBottom: '3px' }}>SHORT RATIO</div>
-                    <div style={{ color: COLORS.RED, fontSize: '14px', fontWeight: 'bold' }}>{formatNumber(stockInfo?.short_ratio)}</div>
+                    <div style={{
+                      ...COMMON_STYLES.dataLabel,
+                      marginBottom: SPACING.TINY,
+                    }}>
+                      SHORT RATIO
+                    </div>
+                    <div style={{
+                      color: COLORS.RED,
+                      fontSize: TYPOGRAPHY.HEADING,
+                      fontWeight: TYPOGRAPHY.BOLD,
+                      fontFamily: TYPOGRAPHY.MONO,
+                    }}>
+                      {formatNumber(stockInfo?.short_ratio)}
+                    </div>
                   </div>
                 </div>
               </div>

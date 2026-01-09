@@ -103,3 +103,12 @@
 .PhoneInputCountrySelect option:focus {
   background-color: #3f3f46; /* hover:bg-zinc-700 */
 }
+
+/* Error state */
+.phone-input-error .PhoneInputInput {
+  border-color: #ef4444 !important; /* border-red-500 */
+}
+
+.phone-input-error .PhoneInputCountry {
+  border-color: #ef4444 !important; /* border-red-500 */
+}
