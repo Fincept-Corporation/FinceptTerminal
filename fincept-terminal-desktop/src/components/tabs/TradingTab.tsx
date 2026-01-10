@@ -1857,7 +1857,7 @@ export function TradingTab() {
         alignItems: 'center',
         flexShrink: 0
       }}>
-        <span>Fincept Terminal v3.1.0 | Professional Trading Platform</span>
+        <span>Fincept Terminal v3.1.4 | Professional Trading Platform</span>
         <span>
           Broker: <span style={{ color: BLOOMBERG.ORANGE }}>{activeBroker?.toUpperCase() || 'NONE'}</span> |
           Mode: <span style={{ color: tradingMode === 'paper' ? BLOOMBERG.GREEN : BLOOMBERG.RED }}>

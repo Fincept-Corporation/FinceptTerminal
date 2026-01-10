@@ -1688,7 +1688,7 @@ dependencies = [
 
 [[package]]
 name = "fincept-terminal-desktop"
-version = "3.1.0"
+version = "3.1.4"
 dependencies = [
  "ahash 0.8.12",
  "anyhow",

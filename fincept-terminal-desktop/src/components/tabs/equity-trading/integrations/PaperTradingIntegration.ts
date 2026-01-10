@@ -193,7 +193,7 @@ export class PaperTradingIntegration {
       id: 'paper-trading',
       name: 'Paper Trading',
       type: PluginType.PRE_ORDER,
-      version: '3.1.0', // Updated to match paper trading system version
+      version: '3.1.4', // Updated to match paper trading system version
       execute: async (context: PluginContext): Promise<PluginResult> => {
 
         if (!this.enabled) {

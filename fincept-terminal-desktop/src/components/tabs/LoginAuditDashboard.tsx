@@ -64,7 +64,7 @@ const mockLoginEvents: LoginEvent[] = [
         ipAddress: '192.168.1.1',
         geoCountry: 'US',
         geoCity: 'New York',
-        clientVersion: '3.1.0',
+        clientVersion: '3.1.4',
     },
     {
         logId: '2',

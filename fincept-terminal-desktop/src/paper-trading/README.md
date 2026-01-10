@@ -335,6 +335,12 @@ assert(stats.profitFactor >= 0);
 
 ## 🎯 Version History
 
+### v3.1.4 (2026-01-10) - Current Release 🚀
+**Latest stable release**
+- Updated pricing system integration
+- Removed free plan references
+- Bug fixes and improvements
+
 ### v3.1.0 (2025-12-31) - Production-Hardened 🛡️
 **All critical bugs fixed - Truly production-ready**
 - ✅ **CRITICAL FIX**: TransactionLockManager lock release (was completely broken)
@@ -346,7 +352,7 @@ assert(stats.profitFactor >= 0);
 - 📄 Added comprehensive audit documentation
 
 ### v3.0.0 (2025-12-31) - Production Release 🚀
-**⚠️ WARNING: Had critical bugs, use v3.1.0 instead**
+**⚠️ WARNING: Had critical bugs, use v3.1.4 or v3.1.0 instead**
 - ✅ Transaction locking for thread safety (but broken release)
 - ✅ Atomic order editing
 - ✅ Optimized price caching (asset class-specific)
@@ -364,7 +370,7 @@ assert(stats.profitFactor >= 0);
 
 ---
 
-**Version**: 3.1.0 (Production-Hardened)
+**Version**: 3.1.4 (Current Release)
 **Location**: `src/paper-trading/`
 **License**: MIT
 **Status**: ✅ **PRODUCTION-READY** for real-time trading simulation

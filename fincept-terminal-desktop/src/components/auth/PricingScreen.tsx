@@ -101,9 +101,9 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
   // Separate effect to set default selection when plans are loaded
   useEffect(() => {
     if (availablePlans.length > 0 && !selectedPlan) {
-      const currentPlanId = session?.user_info?.account_type || 'free';
-      // Auto-select user's current plan
-      setSelectedPlan(currentPlanId);
+      const currentPlanId = session?.user_info?.account_type;
+      // Auto-select user's current plan if they have one, otherwise select 'basic'
+      setSelectedPlan(currentPlanId || 'basic');
     }
   }, [availablePlans.length, selectedPlan, session?.user_info?.account_type]);
 
@@ -113,20 +113,20 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
 
   const getPlanIcon = (planId: string) => {
     const iconMap: Record<string, React.ReactNode> = {
-      'free': <Shield className="w-4 h-4" />,
       'basic': <Star className="w-4 h-4" />,
       'standard': <Zap className="w-4 h-4" />,
       'pro': <Crown className="w-4 h-4" />,
       'enterprise': <Rocket className="w-4 h-4" />
     };
-    return iconMap[planId] || <Shield className="w-4 h-4" />;
+    return iconMap[planId] || <Star className="w-4 h-4" />;
   };
 
   // Check if selecting a plan is a downgrade
   const isDowngrade = (targetPlanId: string): boolean => {
-    const currentPlanId = session?.user_info?.account_type || 'free';
+    const currentPlanId = session?.user_info?.account_type;
+    if (!currentPlanId) return false; // No current plan, can't downgrade
+
     const planTiers: { [key: string]: number } = {
-      'free': 0,
       'basic': 1,
       'standard': 2,
       'pro': 3,
@@ -219,10 +219,6 @@ const handleSelectPlan = async () => {
     setIsLoading(false);
   }
 };
-
-  const handleContinueWithFree = () => {
-    onProceedToDashboard();
-  };
 
   const handleRetryLoadPlans = async () => {
     setError('');
@@ -388,11 +384,9 @@ const handleSelectPlan = async () => {
   const selectedPlanData = availablePlans.find(p => p.plan_id === selectedPlan);
 
   // Get current plan info (credit-based system)
-  // In credit system, users can always buy more credits
-  // Free plan users have 350 credits, can purchase any plan
-  const currentPlanId = session?.user_info?.account_type || 'free';
-  const currentPlanData = availablePlans.find(p => p.plan_id === currentPlanId);
-  const hasActiveSubscription = !!session?.user_info?.account_type && session.user_info.account_type !== 'free';
+  const currentPlanId = session?.user_info?.account_type;
+  const currentPlanData = currentPlanId ? availablePlans.find(p => p.plan_id === currentPlanId) : undefined;
+  const hasActiveSubscription = !!currentPlanId;
   const isCurrentPlanSelected = selectedPlan === currentPlanId;
   const pendingPlanData = availablePlans.find(p => p.plan_id === pendingPlanSelection);
 
@@ -473,10 +467,8 @@ const handleSelectPlan = async () => {
 
         <p className="text-zinc-400 text-sm">
           {hasActiveSubscription && currentPlanData
-            ? `Currently on ${currentPlanData.name} plan. Select a different plan to upgrade or downgrade.`
-            : userType === 'existing'
-            ? 'Currently on Free plan. Upgrade for advanced features and higher limits.'
-            : 'Select a plan that fits your financial analysis needs. Start with 14-day free trial.'
+            ? `Currently on ${currentPlanData.name}. Select a different plan to upgrade or downgrade.`
+            : 'Select a plan that fits your financial analysis needs.'
           }
         </p>
       </div>
@@ -526,8 +518,8 @@ const handleSelectPlan = async () => {
 
               <div className="flex gap-3">
                 <Button
-                  onClick={selectedPlan === 'free' ? handleContinueWithFree : handleSelectPlan}
-                  disabled={!selectedPlan || isLoading}
+                  onClick={handleSelectPlan}
+                  disabled={!selectedPlan || isLoading || isCurrentPlanSelected}
                   className="bg-blue-600 hover:bg-blue-500 text-white font-medium px-6 py-2 text-sm transition-colors disabled:opacity-50"
                 >
                   {isLoading ? (
@@ -535,8 +527,8 @@ const handleSelectPlan = async () => {
                       <Loader2 className="w-3 h-3 animate-spin mr-2" />
                       Processing...
                     </div>
-                  ) : selectedPlan === 'free' ? (
-                    'Continue with Free'
+                  ) : isCurrentPlanSelected ? (
+                    'Current Plan'
                   ) : (
                     `Proceed with ${selectedPlanData?.name || 'Plan'}`
                   )}

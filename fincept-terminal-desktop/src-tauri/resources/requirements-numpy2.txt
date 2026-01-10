@@ -124,8 +124,5 @@ pyarrow>=16.0.0
 pandarallel>=1.6.0
 gym>=0.26.0
 
-# Database
-peewee>=3.17.0,<3.18.0
-
 # MLflow
 mlflow>=2.0.0

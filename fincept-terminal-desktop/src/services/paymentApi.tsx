@@ -31,19 +31,11 @@ interface CheckoutRequest {
 interface SubscriptionPlan {
   plan_id: string;
   name: string;
-  pricing: {
-    currency: string;
-    amount: number;
-    base_usd: number;
-    symbol: string;
-  };
+  price_usd: number;
   credits: number;
-  validity_days: number;
   features: string[];
-  is_free: boolean;
-  // Legacy fields for backward compatibility
+  // Computed fields for display
   description?: string;
-  price_usd?: number;
   price_display?: string;
   credits_amount?: number;
   support_type?: string;
@@ -209,18 +201,18 @@ export class PaymentApiService {
       plansData = (plansData as any).data;
     }
 
-    // Add backward compatibility fields to each plan
+    // Add computed display fields to each plan
     if (response.success && plansData?.plans) {
       plansData.plans = plansData.plans.map((plan: any, index: number) => ({
         ...plan,
-        // Add backward compatibility fields
-        price_usd: plan.pricing?.base_usd || 0,
-        price_display: `${plan.pricing?.symbol || '$'}${plan.pricing?.amount || 0}`,
-        credits_amount: plan.credits || 0,
-        description: plan.features?.join(', ') || '',
-        support_type: plan.is_free ? 'community' : 'priority',
-        support_display: plan.is_free ? 'Community Support' : 'Priority Support',
-        validity_display: plan.validity_days > 0 ? `${plan.validity_days} days` : 'One-time',
+        // Add computed display fields
+        price_display: `$${plan.price_usd}`,
+        credits_amount: plan.credits,
+        description: plan.features?.[0] || '',
+        support_type: plan.price_usd === 0 ? 'community' : 'priority',
+        support_display: plan.features?.find((f: string) => f.toLowerCase().includes('support')) ||
+                        (plan.price_usd === 0 ? 'Community Support' : 'Priority Support'),
+        validity_display: '30 days', // Default to monthly
         is_popular: plan.plan_id === 'standard', // Mark standard as popular
         display_order: index + 1
       }));
