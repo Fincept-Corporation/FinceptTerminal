@@ -19,7 +19,8 @@ import {
   Activity,
   Sparkles,
   CheckCircle2,
-  Clock
+  Clock,
+  Sigma
 } from 'lucide-react';
 import { TabFooter } from '@/components/common/TabFooter';
 import { qlibService } from '@/services/aiQuantLab/qlibService';
@@ -33,6 +34,7 @@ import { LiveSignalsPanel } from './LiveSignalsPanel';
 import { FFNAnalyticsPanel } from './FFNAnalyticsPanel';
 import { FunctimePanel } from './FunctimePanel';
 import { FortitudoPanel } from './FortitudoPanel';
+import { StatsmodelsPanel } from './StatsmodelsPanel';
 import { StatusBar } from './StatusBar';
 
 // Bloomberg Professional Color Palette - Consistent across all tabs
@@ -54,7 +56,7 @@ const BLOOMBERG = {
   MUTED: '#4A4A4A'
 };
 
-type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'ffn_analytics' | 'functime' | 'fortitudo';
+type ViewMode = 'factor_discovery' | 'model_library' | 'backtesting' | 'live_signals' | 'ffn_analytics' | 'functime' | 'fortitudo' | 'statsmodels';
 
 export default function AIQuantLabTab() {
   // State
@@ -158,7 +160,8 @@ export default function AIQuantLabTab() {
     { id: 'live_signals', label: 'LIVE SIGNALS', icon: Activity, description: 'Real-time predictions' },
     { id: 'ffn_analytics', label: 'FFN ANALYTICS', icon: TrendingUp, description: 'Portfolio performance & risk metrics' },
     { id: 'functime', label: 'FUNCTIME', icon: Zap, description: 'ML time series forecasting' },
-    { id: 'fortitudo', label: 'FORTITUDO', icon: Database, description: 'VaR, CVaR, option pricing, entropy pooling' }
+    { id: 'fortitudo', label: 'FORTITUDO', icon: Database, description: 'VaR, CVaR, option pricing, entropy pooling' },
+    { id: 'statsmodels', label: 'STATSMODELS', icon: Sigma, description: 'ARIMA, regression, statistical tests, PCA' }
   ];
 
   return (
@@ -284,6 +287,7 @@ export default function AIQuantLabTab() {
         {activeView === 'ffn_analytics' && <FFNAnalyticsPanel />}
         {activeView === 'functime' && <FunctimePanel />}
         {activeView === 'fortitudo' && <FortitudoPanel />}
+        {activeView === 'statsmodels' && <StatsmodelsPanel />}
       </div>
 
       {/* Status Bar */}
