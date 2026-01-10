@@ -97,8 +97,6 @@ class FFNPortfolioOptimizer:
         self.prices = prices
         self.returns = ffn.to_returns(prices).dropna()  # Remove NaN from first row
 
-        print(f"Portfolio data loaded: {len(self.prices)} periods, {len(self.prices.columns)} assets")
-
     def calculate_erc_weights(self,
                              returns: pd.DataFrame = None,
                              initial_weights: np.ndarray = None,

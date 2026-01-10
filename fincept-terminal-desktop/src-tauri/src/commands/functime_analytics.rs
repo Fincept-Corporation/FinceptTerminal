@@ -1,7 +1,6 @@
-// Functime Analytics Commands - Time series forecasting via PyO3
+// Functime Analytics Commands - Time series forecasting via subprocess
 #![allow(dead_code)]
-use crate::python_runtime;
-use crate::utils::python::get_script_path;
+use crate::utils::python::execute_python_subprocess;
 
 // ============================================================================
 // FUNCTIME ANALYTICS COMMANDS
@@ -11,8 +10,12 @@ use crate::utils::python::get_script_path;
 #[tauri::command]
 pub async fn functime_check_status(app: tauri::AppHandle) -> Result<String, String> {
     let args = vec!["check_status".to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Run forecasting with specified model
@@ -41,8 +44,12 @@ pub async fn functime_forecast(
     });
 
     let args = vec!["forecast".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Apply preprocessing transformations to time series data
@@ -73,8 +80,12 @@ pub async fn functime_preprocess(
     });
 
     let args = vec!["preprocess".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Perform cross-validation splits
@@ -99,8 +110,12 @@ pub async fn functime_cross_validate(
     });
 
     let args = vec!["cross_validate".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Calculate forecast accuracy metrics
@@ -119,8 +134,12 @@ pub async fn functime_metrics(
     });
 
     let args = vec!["metrics".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Add calendar or holiday features
@@ -141,8 +160,12 @@ pub async fn functime_add_features(
     });
 
     let args = vec!["add_features".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Get seasonal period for a frequency
@@ -156,8 +179,12 @@ pub async fn functime_seasonal_period(
     });
 
     let args = vec!["seasonal_period".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Run a complete forecasting pipeline with preprocessing and evaluation
@@ -181,8 +208,12 @@ pub async fn functime_full_pipeline(
     });
 
     let args = vec!["full_pipeline".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 // ============================================================================
@@ -216,8 +247,12 @@ pub async fn functime_advanced_forecast(
     });
 
     let args = vec!["advanced_forecast".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Ensemble forecasting combining multiple models
@@ -239,8 +274,12 @@ pub async fn functime_ensemble(
     });
 
     let args = vec!["ensemble".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Automatic ensemble with weight optimization
@@ -258,8 +297,12 @@ pub async fn functime_auto_ensemble(
     });
 
     let args = vec!["auto_ensemble".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Anomaly detection in time series
@@ -281,8 +324,12 @@ pub async fn functime_anomaly_detection(
     });
 
     let args = vec!["anomaly_detection".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Seasonality analysis (decomposition, strength, detection)
@@ -321,8 +368,12 @@ pub async fn functime_seasonality(
     });
 
     let args = vec!["seasonality".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Calculate confidence intervals for forecasts
@@ -344,8 +395,12 @@ pub async fn functime_confidence_intervals(
     });
 
     let args = vec!["confidence_intervals".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Feature importance analysis for ML models
@@ -365,8 +420,12 @@ pub async fn functime_feature_importance(
     });
 
     let args = vec!["feature_importance".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Advanced cross-validation with model evaluation
@@ -390,8 +449,12 @@ pub async fn functime_advanced_cv(
     });
 
     let args = vec!["advanced_cv".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }
 
 /// Strategy backtesting for forecasting models
@@ -415,6 +478,10 @@ pub async fn functime_backtest(
     });
 
     let args = vec!["backtest".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/functime_wrapper/functime_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/functime_wrapper/functime_service.py",
+        &args,
+        Some("functime"),
+    )
 }

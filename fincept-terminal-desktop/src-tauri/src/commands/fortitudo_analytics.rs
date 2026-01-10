@@ -1,7 +1,6 @@
-// Fortitudo.tech Analytics Commands - Portfolio risk analytics via PyO3
+// Fortitudo.tech Analytics Commands - Portfolio risk analytics via subprocess
 #![allow(dead_code)]
-use crate::python_runtime;
-use crate::utils::python::get_script_path;
+use crate::utils::python::{execute_python_subprocess, execute_python_subprocess_with_stdin};
 
 // ============================================================================
 // FORTITUDO ANALYTICS COMMANDS
@@ -11,8 +10,12 @@ use crate::utils::python::get_script_path;
 #[tauri::command]
 pub async fn fortitudo_check_status(app: tauri::AppHandle) -> Result<String, String> {
     let args = vec!["check_status".to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        &args,
+        Some("fortitudo"),
+    )
 }
 
 /// Calculate comprehensive portfolio risk metrics (VaR, CVaR, volatility, Sharpe)
@@ -31,9 +34,13 @@ pub async fn fortitudo_portfolio_metrics(
         "probabilities": probabilities
     });
 
-    let args = vec!["portfolio_metrics".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess_with_stdin(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "portfolio_metrics",
+        &params.to_string(),
+        Some("fortitudo"),
+    )
 }
 
 /// Calculate covariance and correlation matrices with statistical moments
@@ -48,9 +55,13 @@ pub async fn fortitudo_covariance_analysis(
         "probabilities": probabilities
     });
 
-    let args = vec!["covariance_analysis".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess_with_stdin(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "covariance_analysis",
+        &params.to_string(),
+        Some("fortitudo"),
+    )
 }
 
 /// Calculate exponentially decaying probabilities for scenario weighting
@@ -65,9 +76,13 @@ pub async fn fortitudo_exp_decay_weighting(
         "half_life": half_life.unwrap_or(252)
     });
 
-    let args = vec!["exp_decay_weighting".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess_with_stdin(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "exp_decay_weighting",
+        &params.to_string(),
+        Some("fortitudo"),
+    )
 }
 
 /// Price options using Black-Scholes model
@@ -91,8 +106,12 @@ pub async fn fortitudo_option_pricing(
     });
 
     let args = vec!["option_pricing".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        &args,
+        Some("fortitudo"),
+    )
 }
 
 /// Generate option chain for multiple strikes
@@ -116,8 +135,12 @@ pub async fn fortitudo_option_chain(
     });
 
     let args = vec!["option_chain".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        &args,
+        Some("fortitudo"),
+    )
 }
 
 /// Apply entropy pooling for scenario probability adjustment
@@ -133,8 +156,12 @@ pub async fn fortitudo_entropy_pooling(
     });
 
     let args = vec!["entropy_pooling".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        &args,
+        Some("fortitudo"),
+    )
 }
 
 /// Calculate exposure stacking portfolio from sample portfolios
@@ -149,9 +176,13 @@ pub async fn fortitudo_exposure_stacking(
         "n_partitions": n_partitions.unwrap_or(4)
     });
 
-    let args = vec!["exposure_stacking".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess_with_stdin(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "exposure_stacking",
+        &params.to_string(),
+        Some("fortitudo"),
+    )
 }
 
 /// Full portfolio risk analysis combining all metrics
@@ -170,9 +201,13 @@ pub async fn fortitudo_full_analysis(
         "half_life": half_life.unwrap_or(252)
     });
 
-    let args = vec!["full_analysis".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess_with_stdin(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "full_analysis",
+        &params.to_string(),
+        Some("fortitudo"),
+    )
 }
 
 /// Calculate option Greeks (Delta, Gamma, Vega, Theta, Rho)
@@ -196,8 +231,12 @@ pub async fn fortitudo_option_greeks(
     });
 
     let args = vec!["option_greeks".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        &args,
+        Some("fortitudo"),
+    )
 }
 
 /// Mean-Variance portfolio optimization
@@ -222,9 +261,13 @@ pub async fn fortitudo_optimize_mean_variance(
         "target_return": target_return
     });
 
-    let args = vec!["optimize_mean_variance".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess_with_stdin(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "optimize_mean_variance",
+        &params.to_string(),
+        Some("fortitudo"),
+    )
 }
 
 /// Mean-CVaR portfolio optimization
@@ -251,9 +294,13 @@ pub async fn fortitudo_optimize_mean_cvar(
         "target_return": target_return
     });
 
-    let args = vec!["optimize_mean_cvar".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess_with_stdin(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "optimize_mean_cvar",
+        &params.to_string(),
+        Some("fortitudo"),
+    )
 }
 
 /// Generate Mean-Variance efficient frontier
@@ -274,9 +321,13 @@ pub async fn fortitudo_efficient_frontier_mv(
         "risk_free_rate": risk_free_rate.unwrap_or(0.0)
     });
 
-    let args = vec!["efficient_frontier_mv".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess_with_stdin(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "efficient_frontier_mv",
+        &params.to_string(),
+        Some("fortitudo"),
+    )
 }
 
 /// Generate Mean-CVaR efficient frontier
@@ -297,7 +348,11 @@ pub async fn fortitudo_efficient_frontier_cvar(
         "max_weight": max_weight
     });
 
-    let args = vec!["efficient_frontier_cvar".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/fortitudo_tech_wrapper/fortitudo_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess_with_stdin(
+        &app,
+        "Analytics/fortitudo_tech_wrapper/fortitudo_service.py",
+        "efficient_frontier_cvar",
+        &params.to_string(),
+        Some("fortitudo"),
+    )
 }

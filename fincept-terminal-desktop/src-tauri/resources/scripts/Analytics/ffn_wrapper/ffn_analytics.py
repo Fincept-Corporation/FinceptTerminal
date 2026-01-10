@@ -111,10 +111,6 @@ class FFNAnalyticsEngine:
         else:
             self.returns = ffn.to_returns(prices)
 
-        print(f"Data loaded: {len(self.prices)} periods")
-        if isinstance(prices, pd.DataFrame):
-            print(f"Assets: {len(self.prices.columns)}")
-
     def calculate_performance_stats(self,
                                     prices: pd.Series = None,
                                     rf: float = None) -> Dict[str, Any]:

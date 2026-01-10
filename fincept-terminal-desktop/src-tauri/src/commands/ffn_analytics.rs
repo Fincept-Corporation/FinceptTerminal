@@ -1,7 +1,6 @@
-// FFN Analytics Commands - Portfolio performance analysis via PyO3
+// FFN Analytics Commands - Portfolio performance analysis via subprocess
 #![allow(dead_code)]
-use crate::python_runtime;
-use crate::utils::python::get_script_path;
+use crate::utils::python::execute_python_subprocess;
 
 // ============================================================================
 // FFN ANALYTICS COMMANDS
@@ -11,8 +10,12 @@ use crate::utils::python::get_script_path;
 #[tauri::command]
 pub async fn ffn_check_status(app: tauri::AppHandle) -> Result<String, String> {
     let args = vec!["check_status".to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Calculate comprehensive performance statistics for price data
@@ -28,8 +31,12 @@ pub async fn ffn_calculate_performance(
     });
 
     let args = vec!["calculate_performance".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Calculate drawdown analysis with details
@@ -45,8 +52,12 @@ pub async fn ffn_calculate_drawdowns(
     });
 
     let args = vec!["calculate_drawdowns".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Calculate rolling performance metrics
@@ -64,8 +75,12 @@ pub async fn ffn_calculate_rolling_metrics(
     });
 
     let args = vec!["calculate_rolling_metrics".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Calculate monthly returns table
@@ -79,8 +94,12 @@ pub async fn ffn_monthly_returns(
     });
 
     let args = vec!["monthly_returns".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Rebase prices to a starting value
@@ -96,8 +115,12 @@ pub async fn ffn_rebase_prices(
     });
 
     let args = vec!["rebase_prices".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Compare multiple assets performance
@@ -115,8 +138,12 @@ pub async fn ffn_compare_assets(
     });
 
     let args = vec!["compare_assets".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Calculate risk metrics (Ulcer Index, etc.)
@@ -132,8 +159,12 @@ pub async fn ffn_risk_metrics(
     });
 
     let args = vec!["risk_metrics".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Full portfolio analysis - combines all metrics
@@ -149,8 +180,12 @@ pub async fn ffn_full_analysis(
     });
 
     let args = vec!["full_analysis".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Portfolio optimization - calculate optimal weights using various methods
@@ -171,8 +206,12 @@ pub async fn ffn_portfolio_optimization(
     });
 
     let args = vec!["portfolio_optimization".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }
 
 /// Benchmark comparison - compare portfolio against a benchmark
@@ -192,6 +231,10 @@ pub async fn ffn_benchmark_comparison(
     });
 
     let args = vec!["benchmark_comparison".to_string(), params.to_string()];
-    let script_path = get_script_path(&app, "Analytics/ffn_wrapper/ffn_service.py")?;
-    python_runtime::execute_python_script(&script_path, args)
+    execute_python_subprocess(
+        &app,
+        "Analytics/ffn_wrapper/ffn_service.py",
+        &args,
+        Some("ffn"),
+    )
 }

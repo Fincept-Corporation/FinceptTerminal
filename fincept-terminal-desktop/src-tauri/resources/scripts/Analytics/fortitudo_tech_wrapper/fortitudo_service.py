@@ -86,15 +86,25 @@ def serialize_result(data: Any) -> str:
         elif isinstance(obj, np.bool_):
             return bool(obj)
         elif isinstance(obj, pd.DataFrame):
-            return obj.to_dict()
+            # Handle DataFrames with tuple column names (MultiIndex)
+            result = {}
+            for col in obj.columns:
+                col_key = str(col) if isinstance(col, tuple) else col
+                result[col_key] = {}
+                for idx in obj.index:
+                    idx_key = str(idx) if isinstance(idx, tuple) else str(idx)
+                    result[col_key][idx_key] = convert(obj.loc[idx, col])
+            return result
         elif isinstance(obj, pd.Series):
-            return obj.to_dict()
+            # Handle Series with tuple index
+            return {str(k) if isinstance(k, tuple) else str(k): convert(v) for k, v in obj.items()}
         elif isinstance(obj, pd.Timestamp):
             return str(obj)
         elif isinstance(obj, datetime):
             return obj.isoformat()
         elif isinstance(obj, dict):
-            return {k: convert(v) for k, v in obj.items()}
+            # Convert tuple keys to strings for JSON compatibility
+            return {str(k) if isinstance(k, tuple) else k: convert(v) for k, v in obj.items()}
         elif isinstance(obj, (list, tuple)):
             return [convert(i) for i in obj]
         return obj
@@ -548,13 +558,21 @@ def main(args: list) -> str:
 
     command = args[0]
 
-    # Parse params if provided
+    # Parse params - either from args or stdin
     params = {}
     if len(args) > 1:
-        try:
-            params = json.loads(args[1])
-        except json.JSONDecodeError as e:
-            return serialize_result({"success": False, "error": f"Invalid JSON params: {e}"})
+        if args[1] == "--stdin":
+            # Read params from stdin (for large payloads)
+            try:
+                stdin_data = sys.stdin.read()
+                params = json.loads(stdin_data)
+            except json.JSONDecodeError as e:
+                return serialize_result({"success": False, "error": f"Invalid JSON from stdin: {e}"})
+        else:
+            try:
+                params = json.loads(args[1])
+            except json.JSONDecodeError as e:
+                return serialize_result({"success": False, "error": f"Invalid JSON params: {e}"})
 
     # Route commands
     handlers = {

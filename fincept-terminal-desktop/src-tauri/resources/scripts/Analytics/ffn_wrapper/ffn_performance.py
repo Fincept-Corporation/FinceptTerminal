@@ -68,7 +68,6 @@ class FFNPerformanceAnalyzer:
                 prices = prices[prices.index <= end_date]
 
         self.prices = prices
-        print(f"Multi-asset data loaded: {len(self.prices)} periods, {len(self.prices.columns)} assets")
 
     def calculate_group_stats(self, prices: pd.DataFrame = None) -> ffn.GroupStats:
         """
@@ -377,7 +376,6 @@ class FFNPerformanceAnalyzer:
         # Limit to first 4 assets for readability
         if len(returns.columns) > 4:
             returns = returns.iloc[:, :4]
-            print("Limited to first 4 assets for scatter matrix visualization")
 
         import plotly.express as px
         fig = px.scatter_matrix(
