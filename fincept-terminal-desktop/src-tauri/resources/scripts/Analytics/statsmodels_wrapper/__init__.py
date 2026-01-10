@@ -74,10 +74,8 @@ from .glm import (
     fit_gee,
     fit_zero_inflated_poisson,
     fit_conditional_logit,
-    fit_conditional_mnlogit,
     fit_conditional_poisson,
     fit_generalized_poisson,
-    fit_zero_inflated_negative_binomial,
     fit_zero_inflated_generalized_poisson
 )
 
@@ -166,9 +164,8 @@ __all__ = [
     # GLM models
     'fit_glm', 'fit_logit', 'predict_logit', 'fit_probit', 'fit_poisson', 'fit_negative_binomial',
     'fit_mnlogit', 'fit_quantreg', 'fit_gee', 'fit_zero_inflated_poisson',
-    'fit_conditional_logit', 'fit_conditional_mnlogit', 'fit_conditional_poisson',
-    'fit_generalized_poisson', 'fit_zero_inflated_negative_binomial',
-    'fit_zero_inflated_generalized_poisson',
+    'fit_conditional_logit', 'fit_conditional_poisson',
+    'fit_generalized_poisson', 'fit_zero_inflated_generalized_poisson',
     # Statistical tests
     'ttest_ind', 'ttest_1samp', 'ztest', 'anova_lm', 'proportions_ztest', 'proportion_confint',
     'chisquare_test', 'jarque_bera_test', 'omnibus_normtest', 'durbin_watson_test',

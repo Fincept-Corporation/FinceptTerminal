@@ -496,3 +496,39 @@ pub async fn calculate_rates(
     let script_path = get_script_path(&app, "Analytics/quant/rate_calculations.py")?;
     python_runtime::execute_python_script(&script_path, args)
 }
+
+#[tauri::command]
+pub async fn execute_economics_analytics(
+    app: tauri::AppHandle,
+    command: String,
+    params: Option<String>,
+    config: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec![command];
+    if let Some(p) = params {
+        args.push(p);
+    }
+    if let Some(c) = config {
+        args.push(c);
+    }
+    let script_path = get_script_path(&app, "Analytics/economics_wrapper.py")?;
+    python_runtime::execute_python_script(&script_path, args)
+}
+
+#[tauri::command]
+pub async fn execute_statsmodels_analytics(
+    app: tauri::AppHandle,
+    command: String,
+    params: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec![command];
+    if let Some(p) = params {
+        args.push(p);
+    }
+    crate::utils::python::execute_python_subprocess(
+        &app,
+        "Analytics/statsmodels_cli.py",
+        &args,
+        Some("statsmodels")
+    )
+}
