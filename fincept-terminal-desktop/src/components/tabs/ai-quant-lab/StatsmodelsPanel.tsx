@@ -148,7 +148,7 @@ const getParamFields = (analysisId: string): ParamField[] => {
 export function StatsmodelsPanel() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<StatsmodelsResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<StatsmodelsResult<Record<string, unknown>> | null>(null);
 
   const [dataSourceType, setDataSourceType] = useState<DataSourceType>('symbol');
   const [symbolInput, setSymbolInput] = useState('AAPL');
@@ -239,7 +239,7 @@ export function StatsmodelsPanel() {
       });
 
       const result = await statsmodelsService.executeCustomCommand(selectedAnalysis, params);
-      setAnalysisResult(result);
+      setAnalysisResult(result as StatsmodelsResult<Record<string, unknown>>);
 
       if (!result.success && result.error) {
         setError(result.error);

@@ -9,75 +9,78 @@ export interface StatsmodelsResult<T = Record<string, unknown>> {
   timestamp?: string;
   available_commands?: string[];
   available_analyses?: Record<string, Record<string, string>>;
+  message?: string;
+  suggestions?: string[];
+  [key: string]: unknown;
 }
 
-export interface ARIMAParams {
+export interface ARIMAParams extends Record<string, unknown> {
   data: number[] | string;
   order?: [number, number, number];
 }
 
-export interface ARIMAForecastParams {
+export interface ARIMAForecastParams extends Record<string, unknown> {
   data: number[] | string;
   order?: [number, number, number];
   steps?: number;
 }
 
-export interface SARIMAXParams {
+export interface SARIMAXParams extends Record<string, unknown> {
   data: number[] | string;
   order?: [number, number, number];
   seasonal_order?: [number, number, number, number];
 }
 
-export interface ExponentialSmoothingParams {
+export interface ExponentialSmoothingParams extends Record<string, unknown> {
   data: number[] | string;
   trend?: 'add' | 'mul' | null;
   seasonal?: 'add' | 'mul' | null;
   seasonal_periods?: number;
 }
 
-export interface STLDecomposeParams {
+export interface STLDecomposeParams extends Record<string, unknown> {
   data: number[] | string;
   period?: number;
   seasonal?: number;
 }
 
-export interface StationarityTestParams {
+export interface StationarityTestParams extends Record<string, unknown> {
   data: number[] | string;
 }
 
-export interface ACFPACFParams {
+export interface ACFPACFParams extends Record<string, unknown> {
   data: number[] | string;
   nlags?: number;
 }
 
-export interface OLSParams {
+export interface OLSParams extends Record<string, unknown> {
   data: number[] | string;
   X?: number[][] | string;
 }
 
-export interface TTestIndParams {
+export interface TTestIndParams extends Record<string, unknown> {
   sample1: number[] | string;
   sample2: number[] | string;
 }
 
-export interface TTestOneSampleParams {
+export interface TTestOneSampleParams extends Record<string, unknown> {
   data: number[] | string;
   popmean?: number;
 }
 
-export interface PowerAnalysisParams {
+export interface PowerAnalysisParams extends Record<string, unknown> {
   effect_size?: number;
   alpha?: number;
   power?: number;
   nobs?: number;
 }
 
-export interface PCAParams {
+export interface PCAParams extends Record<string, unknown> {
   data: Record<string, number[]>;
   n_components?: number;
 }
 
-export interface LOWESSParams {
+export interface LOWESSParams extends Record<string, unknown> {
   data: number[] | string;
   x?: number[] | string;
   frac?: number;
