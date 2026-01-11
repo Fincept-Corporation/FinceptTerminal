@@ -198,6 +198,23 @@ bun install && bun run tauri:dev
 - [Rust](https://www.rust-lang.org/) (latest stable)
 - Platform-specific dependencies (see [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md))
 
+### macOS Installation (Unsigned Builds)
+
+⚠️ **Important:** Development and artifact builds are not signed with an Apple Developer certificate.
+
+**After downloading the DMG:**
+```bash
+# Remove quarantine flag from DMG
+xattr -cr ~/Downloads/FinceptTerminal-*.dmg
+
+# Open DMG, drag to Applications, then remove quarantine from app
+xattr -cr /Applications/FinceptTerminal.app
+```
+
+**Alternative:** Right-click the app → Select "Open" → Click "Open" in the warning dialog.
+
+Official releases from the [Releases page](https://github.com/Fincept-Corporation/FinceptTerminal/releases) include detailed installation instructions.
+
 ---
 
 ## 🛣️ What's Next

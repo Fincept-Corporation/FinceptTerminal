@@ -504,6 +504,42 @@ font-size: 9px   /* Dense data tables */
 
 ## 🐛 Troubleshooting
 
+### Issue: macOS won't open the app (Gatekeeper)
+
+**Symptoms:** "App is damaged and can't be opened" or "App can't be opened because it is from an unidentified developer"
+
+**Cause:** Unsigned development builds are blocked by macOS Gatekeeper
+
+**Solutions:**
+
+**Method 1: Remove Quarantine Flag (Recommended)**
+```bash
+# After downloading DMG
+xattr -cr ~/Downloads/FinceptTerminal-*.dmg
+
+# After dragging to Applications
+xattr -cr /Applications/FinceptTerminal.app
+
+# Now launch normally
+open /Applications/FinceptTerminal.app
+```
+
+**Method 2: Right-Click Method**
+1. **Right-click** (or Control+Click) on the app
+2. Select **"Open"** from the menu
+3. Click **"Open"** in the warning dialog
+4. App will launch and be remembered for future launches
+
+**Method 3: System Settings**
+1. Try to open the app normally (it will fail)
+2. Go to **System Settings** → **Privacy & Security**
+3. Scroll down and click **"Open Anyway"**
+4. Confirm by clicking **"Open"**
+
+**Why this happens:** Development and artifact builds are not signed with an Apple Developer certificate ($99/year). Official releases from GitHub Releases page may include signed versions.
+
+---
+
 ### Issue: `bun install` fails
 
 **Symptoms:** Errors during `bun install`, missing modules
