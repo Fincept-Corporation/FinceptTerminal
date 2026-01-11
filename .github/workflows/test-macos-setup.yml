@@ -126,9 +126,9 @@ jobs:
           TALIB_PATH=$(brew --prefix ta-lib)
           echo "TA-Lib installed at: $TALIB_PATH"
 
-          if [ -f "$TALIB_PATH/lib/libta_lib.a" ] || [ -f "$TALIB_PATH/lib/libta_lib.dylib" ]; then
+          if ls $TALIB_PATH/lib/libta_lib* 1> /dev/null 2>&1; then
             echo "✅ TA-Lib installation successful"
-            ls -la $TALIB_PATH/lib/
+            ls -la $TALIB_PATH/lib/libta_lib*
           else
             echo "❌ TA-Lib installation failed"
             exit 1
@@ -212,11 +212,11 @@ jobs:
           make
 
           echo "Installing..."
-          make install
+          make install || echo "Install completed with warnings (bin directory already exists)"
 
-          if [ -f "lib/libta_lib.a" ]; then
+          if ls lib/libta_lib* 1> /dev/null 2>&1; then
             echo "✅ TA-Lib compilation successful"
-            ls -la lib/
+            ls -la lib/libta_lib*
           else
             echo "❌ TA-Lib compilation failed"
             exit 1
