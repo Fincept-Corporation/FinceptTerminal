@@ -230,8 +230,12 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
         } else {
             "x86_64-unknown-linux-gnu-install_only"
         };
-        let download_url = format!("https://github.com/indygreg/python-build-standalone/releases/download/20240107/cpython-3.12.7+20240107-{}.tar.gz", platform);
+
+        // Use python-build-standalone release 20240726 (same as macOS)
+        let download_url = format!("https://github.com/astral-sh/python-build-standalone/releases/download/20240726/cpython-3.12.4+20240726-{}.tar.gz", platform);
         let tar_path = python_dir.join("python.tar.gz");
+
+        emit_progress(app, "python", 40, "Downloading Python...", false);
 
         let mut cmd = Command::new("curl");
         cmd.args(&["-L", "-o", tar_path.to_str().unwrap(), &download_url]);
@@ -239,6 +243,9 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
         if !output.status.success() {
             return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
+
+        eprintln!("[SETUP] Download complete, file size: {} bytes",
+            std::fs::metadata(&tar_path).map(|m| m.len()).unwrap_or(0));
 
         emit_progress(app, "python", 60, "Extracting Python...", false);
 
