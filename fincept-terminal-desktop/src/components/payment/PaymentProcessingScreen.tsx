@@ -51,28 +51,36 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
     }
 
     try {
-      console.log(`Payment status check #${checkCount + 1}`);
+      // Check if we have a transaction_id from localStorage (set by PricingScreen)
+      const pendingTransactionId = localStorage.getItem('pending_payment_order_id');
 
-      // Check if we have an order_id from localStorage (set by PricingScreen)
-      const pendingOrderId = localStorage.getItem('pending_payment_order_id');
+      if (pendingTransactionId) {
+        // Use the new transaction status endpoint
+        const statusResponse = await PaymentApiService.getTransactionStatus(
+          session.api_key,
+          pendingTransactionId
+        );
 
-      if (pendingOrderId) {
-        // Check the actual order status from backend
-        const statusResponse = await PaymentApiService.getPaymentHistory(session.api_key, 1, 10);
+        if (statusResponse.success && statusResponse.data) {
+          const transactionData = statusResponse.data;
+          const transactionStatus = transactionData.status || transactionData.payment_status;
 
-        if (statusResponse.success && statusResponse.data?.payments) {
-          const recentPayment = statusResponse.data.payments.find(
-            (p: any) => p.payment_uuid === pendingOrderId
-          );
-
-          if (recentPayment && recentPayment.status === 'completed') {
-            console.log('Payment completed!', recentPayment);
+          if (transactionStatus === 'completed' || transactionStatus === 'success' || transactionStatus === 'paid') {
             setStatus('completed');
-            setPaymentData(recentPayment);
+            setPaymentData(transactionData);
             localStorage.removeItem('pending_payment_order_id');
 
             // Refresh user data to get updated credits
             await refreshUserData();
+
+            // Clear intervals
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            return;
+          } else if (transactionStatus === 'failed' || transactionStatus === 'cancelled') {
+            setStatus(transactionStatus as PaymentStatus);
+            setPaymentData(transactionData);
+            localStorage.removeItem('pending_payment_order_id');
 
             // Clear intervals
             if (intervalRef.current) clearInterval(intervalRef.current);
@@ -84,14 +92,12 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 
       // Fallback: Check credit balance increase
       await refreshUserData();
-      console.log('User credits:', session.user_info?.credit_balance);
 
       setCheckCount(prev => prev + 1);
       setLastChecked(new Date());
 
       // If we've checked too many times, timeout
       if (checkCount >= maxChecks) {
-        console.log('Payment check timeout reached');
         setStatus('timeout');
         if (intervalRef.current) clearInterval(intervalRef.current);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -105,7 +111,6 @@ const PaymentProcessingScreen: React.FC<PaymentProcessingScreenProps> = ({
 
   // Start checking payment status
   useEffect(() => {
-    console.log('Starting payment status monitoring...');
     setStatus('waiting');
 
     // Initial delay before first check

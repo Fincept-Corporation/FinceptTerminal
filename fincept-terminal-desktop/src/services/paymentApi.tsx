@@ -160,9 +160,7 @@ const makePaymentApiRequest = async <T = any>(
       };
     }
 
-    if (!response.ok) {
-      console.error('Payment request failed:', response.status, responseData.message || response.statusText);
-    }
+    // Response handling
 
     return {
       success: response.ok,
@@ -229,7 +227,7 @@ export class PaymentApiService {
     return makePaymentApiRequest<SubscriptionPlan>('GET', `/payment/plans/${planId}`);
   }
 
-  // Create checkout session - Updated to use /payment/create-order endpoint
+  // Create checkout session - Updated to use /payment/checkout/create endpoint
   static async createCheckoutSession(
     apiKey: string,
     request: CheckoutRequest
@@ -252,8 +250,12 @@ export class PaymentApiService {
       'X-API-Key': apiKey
     };
 
-    console.log('Creating payment order:', { plan_id: request.plan_id, currency: request.currency });
-    return await makePaymentApiRequest<CheckoutResponse>('POST', '/payment/create-order', request, headers);
+    // Only send plan_id, not currency (based on API spec)
+    const requestBody = {
+      plan_id: request.plan_id
+    };
+
+    return await makePaymentApiRequest<CheckoutResponse>('POST', '/payment/checkout/create', requestBody, headers);
   }
 
   // Handle payment success
@@ -274,9 +276,9 @@ export class PaymentApiService {
     });
   }
 
-  // Get user's current subscription
+  // Get user's current subscription - Updated to use new endpoint
   static async getUserSubscription(apiKey: string): Promise<PaymentApiResponse<UserSubscriptionResponse>> {
-    return makePaymentApiRequest<UserSubscriptionResponse>('GET', '/user/subscriptions', undefined, {
+    return makePaymentApiRequest<UserSubscriptionResponse>('GET', '/payment/subscription', undefined, {
       'X-API-Key': apiKey
     });
   }
@@ -288,29 +290,24 @@ export class PaymentApiService {
     });
   }
 
-  // Cancel subscription
+  // Cancel subscription - Updated to use new endpoint
+  // Cancels subscription in Polar, user keeps access until billing period ends
+  // Auto-downgrades to free plan when subscription expires via webhook
   static async cancelSubscription(apiKey: string): Promise<PaymentApiResponse<any>> {
-    return makePaymentApiRequest('POST', '/payment/cancel', undefined, {
+    return makePaymentApiRequest('POST', '/payment/subscription/cancel', undefined, {
       'X-API-Key': apiKey
     });
   }
 
-  // Reactivate subscription
-  static async reactivateSubscription(apiKey: string): Promise<PaymentApiResponse<any>> {
-    return makePaymentApiRequest('POST', '/payment/reactivate', undefined, {
-      'X-API-Key': apiKey
-    });
-  }
-
-  // Get payment history (transactions)
+  // Get payment history (transactions) - Updated to use /payment/history endpoint
   static async getPaymentHistory(
     apiKey: string,
     page: number = 1,
-    limit: number = 10
+    limit: number = 20
   ): Promise<PaymentApiResponse<PaymentHistoryResponse>> {
     return makePaymentApiRequest<PaymentHistoryResponse>(
       'GET',
-      `/user/transactions?page=${page}&limit=${limit}`,
+      `/payment/history?limit=${limit}`,
       undefined,
       { 'X-API-Key': apiKey }
     );
@@ -324,6 +321,19 @@ export class PaymentApiService {
     return makePaymentApiRequest(
       'GET',
       `/payment/payments/${paymentUuid}`,
+      undefined,
+      { 'X-API-Key': apiKey }
+    );
+  }
+
+  // Get transaction status - New endpoint
+  static async getTransactionStatus(
+    apiKey: string,
+    transactionId: string
+  ): Promise<PaymentApiResponse<any>> {
+    return makePaymentApiRequest(
+      'GET',
+      `/payment/status/${transactionId}`,
       undefined,
       { 'X-API-Key': apiKey }
     );

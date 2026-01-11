@@ -152,6 +152,7 @@ interface AuthContextType {
   fetchPlans: () => Promise<{ success: boolean; error?: string }>;
   createPaymentSession: (planId: string, currency?: string) => Promise<{ success: boolean; data?: PaymentSession; error?: string }>;
   getUserSubscription: () => Promise<{ success: boolean; data?: UserSubscription; error?: string }>;
+  cancelSubscription: () => Promise<{ success: boolean; error?: string }>;
   refreshUserData: () => Promise<void>;
 }
 
@@ -443,22 +444,42 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
       });
 
       if (result.success && result.data) {
-        // Handle double-wrapped response
+        // Handle potential double-wrapped response
         const apiData = (result.data as any)?.data || result.data;
 
-        // Map the new API response to PaymentSession format
+        // Map the API response to PaymentSession format
+        // Try multiple field names for checkout URL
+        const checkoutUrl = apiData.checkout_url || apiData.url || apiData.payment_url;
+
+        if (!checkoutUrl) {
+          return { success: false, error: 'No checkout URL received from server' };
+        }
+
         const paymentSession: PaymentSession = {
-          checkout_url: apiData.checkout_url,
-          session_id: apiData.payment_session_id,
-          payment_uuid: apiData.order_id,
+          checkout_url: checkoutUrl,
+          session_id: apiData.payment_session_id || apiData.session_id || apiData.id || '',
+          payment_uuid: apiData.order_id || apiData.payment_uuid || apiData.transaction_id || '',
           plan: {
-            name: apiData.plan?.name || 'Unknown Plan',
-            price: apiData.pricing?.amount || 0
+            name: apiData.plan?.name || planId,
+            price: apiData.pricing?.amount || apiData.price || 0
           }
         };
+
         return { success: true, data: paymentSession };
       } else {
-        return { success: false, error: result.error || 'Failed to create payment session' };
+        // Parse and provide user-friendly error messages
+        let errorMessage = result.error || 'Failed to create payment session';
+
+        // Check for specific error patterns
+        if (errorMessage.includes('customer with this email address already exists')) {
+          errorMessage = 'Your account is already registered in our payment system. Please contact support to complete your subscription.';
+        } else if (errorMessage.includes('Customer creation failed')) {
+          errorMessage = 'Unable to set up payment account. Please contact support for assistance.';
+        } else if (errorMessage.includes('PolarRequestValidationError')) {
+          errorMessage = 'Payment system error. Please contact support with your email address.';
+        }
+
+        return { success: false, error: errorMessage };
       }
     } catch (error) {
       console.error('Failed to create payment session:', error);
@@ -482,6 +503,29 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     } catch (error) {
       console.error('Failed to get subscription:', error);
       return { success: false, error: 'Failed to get subscription' };
+    }
+  };
+
+  // Cancel subscription
+  // Cancels subscription in Polar, user keeps access until end of billing period
+  // Subscription auto-downgrades to free plan when it expires (via webhook)
+  const cancelSubscription = async (): Promise<{ success: boolean; error?: string }> => {
+    if (!session?.api_key) {
+      return { success: false, error: 'No API key available' };
+    }
+
+    try {
+      const result = await PaymentApiService.cancelSubscription(session.api_key);
+      if (result.success) {
+        // Refresh user data to reflect the cancellation status
+        await refreshUserData();
+        return { success: true };
+      } else {
+        return { success: false, error: result.error || 'Failed to cancel subscription' };
+      }
+    } catch (error) {
+      console.error('Failed to cancel subscription:', error);
+      return { success: false, error: 'Failed to cancel subscription' };
     }
   };
 
@@ -829,6 +873,7 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
     fetchPlans,
     createPaymentSession,
     getUserSubscription,
+    cancelSubscription,
     refreshUserData
   };
 

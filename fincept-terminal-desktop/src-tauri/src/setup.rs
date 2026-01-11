@@ -80,9 +80,8 @@ fn get_install_dir(app: &AppHandle) -> Result<PathBuf, String> {
 fn check_python(install_dir: &PathBuf) -> (bool, Option<String>) {
     let python_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/python.exe")
-    } else if cfg!(target_os = "macos") {
-        install_dir.join("python/Versions/3.12/bin/python3")
     } else {
+        // Linux and macOS both use python-build-standalone now
         install_dir.join("python/bin/python3")
     };
 
@@ -92,6 +91,7 @@ fn check_python(install_dir: &PathBuf) -> (bool, Option<String>) {
 
     let mut cmd = Command::new(&python_exe);
     cmd.arg("--version");
+
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -199,6 +199,7 @@ fn check_packages(install_dir: &PathBuf) -> bool {
     // Check numpy1 venv for key packages
     let mut cmd1 = Command::new(&venv1_python);
     cmd1.args(&["-c", "import numpy, pandas, vectorbt, backtesting, gluonts"]);
+
     #[cfg(target_os = "windows")]
     cmd1.creation_flags(CREATE_NO_WINDOW);
     let check1 = cmd1.output().map(|o| o.status.success()).unwrap_or(false);
@@ -210,6 +211,7 @@ fn check_packages(install_dir: &PathBuf) -> bool {
     // Check numpy2 venv for key packages
     let mut cmd2 = Command::new(&venv2_python);
     cmd2.args(&["-c", "import numpy, pandas, yfinance, vnpy"]);
+
     #[cfg(target_os = "windows")]
     cmd2.creation_flags(CREATE_NO_WINDOW);
     let check2 = cmd2.output().map(|o| o.status.success()).unwrap_or(false);
@@ -297,12 +299,21 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
     #[cfg(target_os = "macos")]
     {
-        // Download official Python.org universal2 installer
-        let download_url = format!("https://www.python.org/ftp/python/{}/python-{}-macos11.pkg", PYTHON_VERSION, PYTHON_VERSION);
-        let pkg_path = python_dir.join("python.pkg");
+        // Use python-build-standalone for macOS (same approach as Linux)
+        // Detect architecture (Apple Silicon M1/M2 or Intel)
+        let arch = std::env::consts::ARCH;
+        let platform = if arch == "aarch64" {
+            "aarch64-apple-darwin-install_only"
+        } else {
+            "x86_64-apple-darwin-install_only"
+        };
+
+        // Use latest python-build-standalone release
+        let download_url = format!("https://github.com/astral-sh/python-build-standalone/releases/download/20241217/cpython-3.12.8+20241217-{}.tar.gz", platform);
+        let tar_path = python_dir.join("python.tar.gz");
 
         let mut cmd = Command::new("curl");
-        cmd.args(&["-L", "-o", pkg_path.to_str().unwrap(), &download_url]);
+        cmd.args(&["-L", "-o", tar_path.to_str().unwrap(), &download_url]);
         let output = cmd.output().map_err(|e| format!("Download failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Download failed: {}", String::from_utf8_lossy(&output.stderr)));
@@ -310,43 +321,23 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
 
         emit_progress(app, "python", 60, "Extracting Python...", false);
 
-        // Extract pkg using xar (works better than pkgutil)
-        let temp_extract = std::env::temp_dir().join(format!("fincept_py_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&temp_extract);
-        std::fs::create_dir_all(&temp_extract)
-            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
-
-        let mut cmd = Command::new("xar");
-        cmd.args(&["-xf", pkg_path.to_str().unwrap(), "-C", temp_extract.to_str().unwrap()]);
+        let mut cmd = Command::new("tar");
+        cmd.args(&["-xzf", tar_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=1"]);
         let output = cmd.output().map_err(|e| format!("Extract failed: {}", e))?;
         if !output.status.success() {
             return Err(format!("Extract failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
 
-        // Find and extract Python Framework payload
-        let payload_path = temp_extract.join("Python_Framework.pkg/Payload");
-        if payload_path.exists() {
-            let mut cmd = Command::new("tar");
-            cmd.args(&["-xzf", payload_path.to_str().unwrap(), "-C", python_dir.to_str().unwrap(), "--strip-components=0"]);
-            let output = cmd.output().map_err(|e| format!("Payload extract failed: {}", e))?;
-            if !output.status.success() {
-                return Err(format!("Payload extract failed: {}", String::from_utf8_lossy(&output.stderr)));
-            }
-
-            // Also check what was actually extracted
-            eprintln!("[SETUP] Checking extracted files...");
-            if let Ok(entries) = std::fs::read_dir(&python_dir) {
-                for entry in entries.flatten() {
-                    eprintln!("[SETUP]   - {:?}", entry.path());
-                }
-            }
-        } else {
-            return Err("Python Framework payload not found in pkg".to_string());
-        }
-
         // Cleanup
-        let _ = std::fs::remove_file(&pkg_path);
-        let _ = std::fs::remove_dir_all(&temp_extract);
+        let _ = std::fs::remove_file(&tar_path);
+
+        // Check what was extracted
+        eprintln!("[SETUP] Checking extracted Python files...");
+        if let Ok(entries) = std::fs::read_dir(&python_dir) {
+            for entry in entries.flatten() {
+                eprintln!("[SETUP]   - {:?}", entry.path());
+            }
+        }
     }
 
     // Enable pip by modifying python312._pth (Windows only)
@@ -393,23 +384,18 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
     // Install pip
     let python_exe = if cfg!(target_os = "windows") {
         python_dir.join("python.exe")
-    } else if cfg!(target_os = "macos") {
-        // macOS: Python extracted from .pkg has Versions/3.12/bin/python3
-        let versions_python = python_dir.join(format!("Versions/{}/bin/python3", &PYTHON_VERSION[..4]));
-        let bin_python = python_dir.join("bin/python3");
-        if versions_python.exists() {
-            versions_python
-        } else if bin_python.exists() {
-            bin_python
-        } else {
-            return Err(format!("Python executable not found. Checked:\n  - {:?}\n  - {:?}", versions_python, bin_python));
-        }
     } else {
+        // Linux and macOS both use python-build-standalone now
         python_dir.join("bin/python3")
     };
 
+    if !python_exe.exists() {
+        return Err(format!("Python executable not found at: {:?}", python_exe));
+    }
+
     let mut cmd = Command::new(&python_exe);
     cmd.arg(get_pip_path.to_str().unwrap());
+
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -671,14 +657,14 @@ async fn install_uv(app: &AppHandle, install_dir: &PathBuf) -> Result<(), String
     // Use python -m pip instead of pip directly (more reliable)
     let python_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/python.exe")
-    } else if cfg!(target_os = "macos") {
-        install_dir.join("python/Versions/3.12/bin/python3")
     } else {
+        // Linux and macOS both use python-build-standalone now
         install_dir.join("python/bin/python3")
     };
 
     let mut cmd = Command::new(&python_exe);
     cmd.args(&["-m", "pip", "install", "uv"]);
+
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -702,20 +688,14 @@ async fn create_venv(app: &AppHandle, install_dir: &PathBuf, venv_name: &str) ->
 
     let python_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/python.exe")
-    } else if cfg!(target_os = "macos") {
-        install_dir.join("python/Versions/3.12/bin/python3")
     } else {
+        // Linux and macOS both use python-build-standalone now
         install_dir.join("python/bin/python3")
     };
 
-    // Find UV executable - check multiple possible locations
+    // Find UV executable - check possible locations
     let uv_candidates = if cfg!(target_os = "windows") {
         vec![install_dir.join("python/Scripts/uv.exe")]
-    } else if cfg!(target_os = "macos") {
-        vec![
-            install_dir.join("python/Versions/3.12/bin/uv"),
-            install_dir.join("python/bin/uv"),
-        ]
     } else {
         vec![install_dir.join("python/bin/uv")]
     };
@@ -740,6 +720,7 @@ async fn create_venv(app: &AppHandle, install_dir: &PathBuf, venv_name: &str) ->
         venv_path.to_str().unwrap(),
         "--python", python_exe.to_str().unwrap()
     ]);
+
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -769,9 +750,8 @@ async fn install_packages_in_venv(
 
     let python_exe = if cfg!(target_os = "windows") {
         install_dir.join("python/python.exe")
-    } else if cfg!(target_os = "macos") {
-        install_dir.join("python/Versions/3.12/bin/python3")
     } else {
+        // Linux and macOS both use python-build-standalone now
         install_dir.join("python/bin/python3")
     };
 
@@ -781,14 +761,9 @@ async fn install_packages_in_venv(
         install_dir.join(format!("{}/bin/python3", venv_name))
     };
 
-    // Find UV executable - check multiple possible locations
+    // Find UV executable - check possible locations
     let uv_candidates = if cfg!(target_os = "windows") {
         vec![install_dir.join("python/Scripts/uv.exe")]
-    } else if cfg!(target_os = "macos") {
-        vec![
-            install_dir.join("python/Versions/3.12/bin/uv"),
-            install_dir.join("python/bin/uv"),
-        ]
     } else {
         vec![install_dir.join("python/bin/uv")]
     };

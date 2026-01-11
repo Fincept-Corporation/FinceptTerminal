@@ -25,8 +25,6 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
   const [hasLoadedPlans, setHasLoadedPlans] = useState(false);
-  const [showDowngradeConfirm, setShowDowngradeConfirm] = useState(false);
-  const [pendingPlanSelection, setPendingPlanSelection] = useState<string>('');
 
   // Prevent multiple simultaneous requests
   const loadingRef = useRef(false);
@@ -121,45 +119,17 @@ const PricingScreen: React.FC<PricingScreenProps> = ({
     return iconMap[planId] || <Star className="w-4 h-4" />;
   };
 
-  // Check if selecting a plan is a downgrade
-  const isDowngrade = (targetPlanId: string): boolean => {
-    const currentPlanId = session?.user_info?.account_type;
-    if (!currentPlanId) return false; // No current plan, can't downgrade
-
-    const planTiers: { [key: string]: number } = {
-      'basic': 1,
-      'standard': 2,
-      'pro': 3,
-      'enterprise': 4
-    };
-
-    const currentTier = planTiers[currentPlanId] || 0;
-    const targetTier = planTiers[targetPlanId] || 0;
-
-    return targetTier < currentTier && currentTier > 0;
-  };
-
-  // Handle plan selection with downgrade confirmation
+  // Handle plan selection - Block selection if user has active subscription and trying to select different plan
   const handlePlanClick = (planId: string) => {
-    if (isDowngrade(planId)) {
-      setPendingPlanSelection(planId);
-      setShowDowngradeConfirm(true);
-    } else {
-      setSelectedPlan(planId);
+    const currentPlanId = session?.user_info?.account_type;
+
+    // If user has active subscription and trying to select a different plan, show message
+    if (currentPlanId && currentPlanId !== 'free' && planId !== currentPlanId) {
+      setError('You already have an active subscription. To change plans, cancel your current subscription first. You will keep access until the end of your billing period, then you can select a new plan.');
+      return;
     }
-  };
 
-  // Confirm downgrade
-  const confirmDowngrade = () => {
-    setSelectedPlan(pendingPlanSelection);
-    setShowDowngradeConfirm(false);
-    setPendingPlanSelection('');
-  };
-
-  // Cancel downgrade
-  const cancelDowngrade = () => {
-    setShowDowngradeConfirm(false);
-    setPendingPlanSelection('');
+    setSelectedPlan(planId);
   };
 
 const handleSelectPlan = async () => {
@@ -180,36 +150,45 @@ const handleSelectPlan = async () => {
     const result = await createPaymentSession(selectedPlan, 'USD');
 
     if (result.success && result.data) {
-      console.log('=== PAYMENT SESSION DEBUG ===');
-      console.log('Full response data:', JSON.stringify(result.data, null, 2));
-      console.log('checkout_url:', result.data.checkout_url);
-      console.log('session_id:', result.data.session_id);
-      console.log('order_id:', result.data.payment_uuid);
-      console.log('========================');
-
-      // Use checkout_url from the new API format
       const checkoutUrl = result.data.checkout_url;
 
-      if (checkoutUrl && checkoutUrl !== 'undefined') {
-        console.log('Opening payment in external browser:', checkoutUrl);
+      if (checkoutUrl && checkoutUrl !== 'undefined' && checkoutUrl !== 'null') {
+        // Store transaction_id in localStorage for payment processing screen
+        if (result.data.payment_uuid) {
+          localStorage.setItem('pending_payment_order_id', result.data.payment_uuid);
+        }
 
-        // Store order_id in localStorage for payment processing screen
-        localStorage.setItem('pending_payment_order_id', result.data.payment_uuid);
+        try {
+          // Import Tauri shell plugin and open in system browser
+          const { open } = await import('@tauri-apps/plugin-shell');
+          await open(checkoutUrl);
 
-        // Open in external browser using Tauri shell
-        const { open } = await import('@tauri-apps/plugin-shell');
-        await open(checkoutUrl);
+          // Navigate to payment processing screen which will poll for status
+          onNavigate('paymentProcessing' as Screen);
+        } catch (shellError) {
+          // Fallback: try to open with window.open
+          const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
 
-        // Navigate to payment processing screen which will poll for status
-        onNavigate('paymentProcessing' as Screen);
+          if (!newWindow) {
+            // If window.open was blocked, show the URL to the user
+            setError(`Please open this URL in your browser to complete payment: ${checkoutUrl}`);
+
+            // Try to copy to clipboard
+            try {
+              await navigator.clipboard.writeText(checkoutUrl);
+              setError(`Payment URL copied to clipboard! Please paste it in your browser to complete payment.`);
+            } catch (clipboardError) {
+              console.error('Failed to copy to clipboard:', clipboardError);
+            }
+          } else {
+            // Window opened successfully, proceed to payment processing
+            onNavigate('paymentProcessing' as Screen);
+          }
+        }
       } else {
-        console.error('[ERROR] No checkout_url found in response!');
-        console.error('Available fields:', Object.keys(result.data));
-        console.error('Full response:', result.data);
-        setError(`No payment session received. Available fields: ${Object.keys(result.data).join(', ')}`);
+        setError(`Payment URL not received from server. Please contact support.`);
       }
     } else {
-      console.error('Failed to create payment session:', result.error);
       setError(result.error || 'Failed to create payment session. Please try again.');
     }
   } catch (err) {
@@ -240,7 +219,8 @@ const handleSelectPlan = async () => {
 
     // Use API's is_popular flag
     const isPopular = plan.is_popular;
-    const isRecommended = plan.plan_id === 'pro' || plan.plan_id === 'enterprise';
+    // Only show Best Value badge on the $50 plan
+    const isRecommended = plan.price_usd === 50;
 
     // Check if this is the current plan
     const currentPlanId = session?.user_info?.account_type || 'free';
@@ -264,14 +244,6 @@ const handleSelectPlan = async () => {
           <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
             <span className="bg-green-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
               Current Plan
-            </span>
-          </div>
-        )}
-
-        {!isCurrentPlan && isPopular && (
-          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2">
-            <span className="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
-              Popular
             </span>
           </div>
         )}
@@ -386,59 +358,11 @@ const handleSelectPlan = async () => {
   // Get current plan info (credit-based system)
   const currentPlanId = session?.user_info?.account_type;
   const currentPlanData = currentPlanId ? availablePlans.find(p => p.plan_id === currentPlanId) : undefined;
-  const hasActiveSubscription = !!currentPlanId;
+  const hasActiveSubscription = !!currentPlanId && currentPlanId !== 'free';
   const isCurrentPlanSelected = selectedPlan === currentPlanId;
-  const pendingPlanData = availablePlans.find(p => p.plan_id === pendingPlanSelection);
 
   return (
     <>
-      {/* Downgrade Confirmation Modal */}
-      {showDowngradeConfirm && pendingPlanData && currentPlanData && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl">
-            <div className="flex items-center mb-4">
-              <AlertCircle className="w-6 h-6 text-orange-500 mr-3" />
-              <h3 className="text-white text-lg font-semibold">Confirm Plan Downgrade</h3>
-            </div>
-
-            <div className="space-y-3 mb-6">
-              <p className="text-zinc-300 text-sm">
-                You are about to downgrade from <span className="font-semibold text-white">{currentPlanData.name}</span> to <span className="font-semibold text-white">{pendingPlanData.name}</span>.
-              </p>
-
-              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
-                <p className="text-orange-200 text-xs font-medium mb-2">What happens when you downgrade:</p>
-                <ul className="text-orange-200/80 text-xs space-y-1">
-                  <li>• Credits: {currentPlanData.credits_amount.toLocaleString()} → {pendingPlanData.credits_amount.toLocaleString()} per month</li>
-                  <li>• Price: {currentPlanData.price_display} → {pendingPlanData.price_display} per month</li>
-                  <li>• Your remaining credits from the current plan will be lost</li>
-                  <li>• The new plan will take effect immediately after payment</li>
-                </ul>
-              </div>
-
-              <p className="text-zinc-400 text-xs">
-                Are you sure you want to continue with the downgrade?
-              </p>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={cancelDowngrade}
-                variant="outline"
-                className="flex-1 bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={confirmDowngrade}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                Confirm Downgrade
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-700 rounded-xl p-6 w-full max-w-6xl mx-auto shadow-2xl overflow-y-auto max-h-[90vh]">
       <div className="mb-6">
@@ -467,7 +391,7 @@ const handleSelectPlan = async () => {
 
         <p className="text-zinc-400 text-sm">
           {hasActiveSubscription && currentPlanData
-            ? `Currently on ${currentPlanData.name}. Select a different plan to upgrade or downgrade.`
+            ? `Currently on ${currentPlanData.name}. To change plans, cancel your current subscription first.`
             : 'Select a plan that fits your financial analysis needs.'
           }
         </p>
@@ -491,11 +415,38 @@ const handleSelectPlan = async () => {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-900/20 border border-red-900/50 rounded-lg">
-              <div className="flex items-center text-red-400 text-sm">
-                <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-                {error}
+            <div className="mb-4 p-4 bg-red-900/20 border border-red-900/50 rounded-lg">
+              <div className="flex items-start text-red-400 text-sm mb-2">
+                <AlertCircle className="w-5 h-5 mr-2 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-medium mb-1">Payment Error</p>
+                  <p className="text-red-300 text-xs">{error}</p>
+                </div>
               </div>
+              {error.includes('contact support') && (
+                <div className="mt-3 pt-3 border-t border-red-900/30">
+                  <p className="text-red-300 text-xs mb-2">Need help? Contact our support team:</p>
+                  <div className="flex gap-2 text-xs">
+                    <a
+                      href="mailto:support@fincept.in"
+                      className="text-blue-400 hover:text-blue-300 underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      support@fincept.in
+                    </a>
+                    <span className="text-zinc-500">•</span>
+                    <a
+                      href="https://discord.gg/ae87a8ygbN"
+                      className="text-blue-400 hover:text-blue-300 underline"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Discord Support
+                    </a>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
