@@ -251,9 +251,41 @@ jobs:
 
           ## Installation
 
-          - **macOS**: Open .dmg and drag to Applications, or extract .app.tar.gz
-          - **Linux**: \`chmod +x *.AppImage && ./FinceptTerminal*.AppImage\`
-          - **Windows**: Run the .msi installer
+          ### macOS Setup (Unsigned App)
+
+          ⚠️ **Important:** This app is not signed with an Apple Developer certificate. Follow these steps:
+
+          **Method 1: Remove Quarantine Flag (Recommended)**
+          \`\`\`bash
+          # After downloading, run in Terminal:
+          xattr -cr ~/Downloads/FinceptTerminal-v${VERSION}-macOS-*.dmg
+
+          # Then open the DMG and drag to Applications
+          # After installing, also run:
+          xattr -cr /Applications/FinceptTerminal.app
+          \`\`\`
+
+          **Method 2: Right-Click Method**
+          1. Download the DMG file
+          2. **Right-click** (or Control+Click) on the DMG → Select **"Open"**
+          3. Click **"Open"** in the warning dialog
+          4. Mount DMG and drag app to Applications
+          5. **Right-click** on FinceptTerminal.app → Select **"Open"**
+          6. Click **"Open"** to bypass Gatekeeper
+
+          **Method 3: System Settings**
+          1. Try to open the app normally (it will fail)
+          2. Go to **System Settings** → **Privacy & Security**
+          3. Scroll down and click **"Open Anyway"**
+
+          ### Linux Setup
+          \`\`\`bash
+          chmod +x FinceptTerminal-v${VERSION}-Linux-x64.AppImage
+          ./FinceptTerminal-v${VERSION}-Linux-x64.AppImage
+          \`\`\`
+
+          ### Windows Setup
+          Run the \`.msi\` installer and follow the prompts.
 
           ## First Launch
 
