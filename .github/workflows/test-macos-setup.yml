@@ -117,22 +117,46 @@ jobs:
 
       - name: Test TA-Lib installation via Homebrew
         run: |
+          set -x  # Enable debug mode
           echo "Installing TA-Lib via Homebrew..."
           brew install ta-lib
 
-          echo "Checking TA-Lib installation..."
+          echo "=== Homebrew Info ==="
+          brew info ta-lib
           brew --prefix ta-lib
 
           TALIB_PATH=$(brew --prefix ta-lib)
-          echo "TA-Lib installed at: $TALIB_PATH"
+          echo "TALIB_PATH=$TALIB_PATH"
 
-          if ls $TALIB_PATH/lib/libta_lib* 1> /dev/null 2>&1; then
-            echo "✅ TA-Lib installation successful"
-            ls -la $TALIB_PATH/lib/libta_lib*
+          echo "=== Directory Structure ==="
+          find "$TALIB_PATH" -type f -o -type d | head -50
+
+          echo "=== Lib Directory Contents ==="
+          ls -laR "$TALIB_PATH/lib/" 2>&1 || echo "No lib directory found"
+
+          echo "=== Include Directory Contents ==="
+          ls -laR "$TALIB_PATH/include/" 2>&1 || echo "No include directory found"
+
+          echo "=== Searching for TA-Lib files ==="
+          find "$TALIB_PATH" -name "*ta_lib*" -o -name "*talib*" 2>&1 || echo "No TA-Lib files found"
+
+          echo "=== Final Check ==="
+          if [ -d "$TALIB_PATH/lib" ]; then
+            echo "lib directory exists"
+            FILE_COUNT=$(ls "$TALIB_PATH/lib/" 2>/dev/null | wc -l)
+            echo "Files in lib: $FILE_COUNT"
+            if [ "$FILE_COUNT" -gt 0 ]; then
+              echo "✅ TA-Lib installation successful"
+              ls -la "$TALIB_PATH/lib/"
+            else
+              echo "❌ lib directory is empty"
+              exit 1
+            fi
           else
-            echo "❌ TA-Lib installation failed"
+            echo "❌ lib directory does not exist"
             exit 1
           fi
+          set +x
 
       - name: Test package installation with Homebrew dependencies
         run: |
@@ -194,33 +218,49 @@ jobs:
 
       - name: Test TA-Lib source compilation
         run: |
+          set -x  # Enable debug mode
           echo "Testing TA-Lib source compilation..."
           mkdir -p test-talib
 
+          echo "=== Downloading TA-Lib source ==="
           curl -L -o test-talib/ta-lib.tar.gz "https://downloads.sourceforge.net/project/ta-lib/ta-lib/0.4.0/ta-lib-0.4.0-src.tar.gz"
+          ls -lh test-talib/ta-lib.tar.gz
+          file test-talib/ta-lib.tar.gz
 
-          echo "Extracting source..."
+          echo "=== Extracting source ==="
           gunzip test-talib/ta-lib.tar.gz
           tar -xf test-talib/ta-lib.tar -C test-talib --strip-components=1
+          ls -la test-talib/ | head -20
 
           cd test-talib
 
-          echo "Configuring..."
-          ./configure --prefix=$(pwd)
+          echo "=== Configuring ==="
+          ./configure --prefix=$(pwd) 2>&1 | tail -30
 
-          echo "Compiling..."
-          make
+          echo "=== Compiling ==="
+          make 2>&1 | tail -50
 
-          echo "Installing..."
-          make install || echo "Install completed with warnings (bin directory already exists)"
+          echo "=== Installing ==="
+          make install 2>&1 | tail -50 || echo "Install completed with warnings"
 
-          if ls lib/libta_lib* 1> /dev/null 2>&1; then
-            echo "✅ TA-Lib compilation successful"
-            ls -la lib/libta_lib*
+          echo "=== Checking installation ==="
+          find . -name "libta_lib*" 2>&1
+
+          if [ -d "lib" ]; then
+            echo "lib directory exists:"
+            ls -la lib/
+            if ls lib/libta_lib* >/dev/null 2>&1; then
+              echo "✅ TA-Lib compilation successful"
+              ls -la lib/libta_lib*
+            else
+              echo "❌ No TA-Lib library files found"
+              exit 1
+            fi
           else
-            echo "❌ TA-Lib compilation failed"
+            echo "❌ lib directory not created"
             exit 1
           fi
+          set +x
 
       - name: Summary
         run: |
