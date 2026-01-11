@@ -300,8 +300,8 @@ async fn install_python(app: &AppHandle, install_dir: &PathBuf) -> Result<(), St
             "x86_64-apple-darwin-install_only"
         };
 
-        // Use latest python-build-standalone release
-        let download_url = format!("https://github.com/astral-sh/python-build-standalone/releases/download/20241217/cpython-3.12.8+20241217-{}.tar.gz", platform);
+        // Use python-build-standalone release 20240726
+        let download_url = format!("https://github.com/astral-sh/python-build-standalone/releases/download/20240726/cpython-3.12.4+20240726-{}.tar.gz", platform);
         let tar_path = python_dir.join("python.tar.gz");
 
         emit_progress(app, "python", 40, "Downloading Python...", false);

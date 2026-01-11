@@ -16,10 +16,10 @@ jobs:
         include:
           - runner: macos-14
             arch: Apple Silicon (ARM64)
-            python-url: https://github.com/astral-sh/python-build-standalone/releases/download/20241217/cpython-3.12.8+20241217-aarch64-apple-darwin-install_only.tar.gz
+            python-url: https://github.com/astral-sh/python-build-standalone/releases/download/20240726/cpython-3.12.4+20240726-aarch64-apple-darwin-install_only.tar.gz
           - runner: macos-13
             arch: Intel (x64)
-            python-url: https://github.com/astral-sh/python-build-standalone/releases/download/20241217/cpython-3.12.8+20241217-x86_64-apple-darwin-install_only.tar.gz
+            python-url: https://github.com/astral-sh/python-build-standalone/releases/download/20240726/cpython-3.12.4+20240726-x86_64-apple-darwin-install_only.tar.gz
 
     runs-on: ${{ matrix.runner }}
 
