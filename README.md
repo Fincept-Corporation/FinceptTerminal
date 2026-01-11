@@ -30,15 +30,15 @@ State-of-the-art financial intelligence platform with CFA-level analytics, AI au
 
 ## 📥 Download Latest Release
 
-**Version:** `v3.1.4` | **Released:** 2026-01-10
+**Version:** `v3.1.5` | **Released:** 2026-01-11
 
 | Platform | Architecture | Download |
 |----------|-------------|----------|
-| **macOS** | Apple Silicon | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.4/FinceptTerminal-v3.1.4-macOS-arm64.dmg) |
-| **macOS** | Intel | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.4/FinceptTerminal-v3.1.4-macOS-x64.dmg) |
-| **Linux** | x64 (AppImage) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.4/FinceptTerminal-v3.1.4-Linux-x64.AppImage) |
-| **Linux** | x64 (Debian) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.4/FinceptTerminal-v3.1.4-Linux-x64.deb) |
-| **Windows** | x64 | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.4/FinceptTerminal-v3.1.4-Windows-x64.msi) |
+| **macOS** | Apple Silicon | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.5/FinceptTerminal-v3.1.5-macOS-arm64.dmg) |
+| **macOS** | Intel | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.5/FinceptTerminal-v3.1.5-macOS-x64.dmg) |
+| **Linux** | x64 (AppImage) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.5/FinceptTerminal-v3.1.5-Linux-x64.AppImage) |
+| **Linux** | x64 (Debian) | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.5/FinceptTerminal-v3.1.5-Linux-x64.deb) |
+| **Windows** | x64 | [Download](https://github.com/Fincept-Corporation/FinceptTerminal/releases/download/v3.1.5/FinceptTerminal-v3.1.5-Windows-x64.msi) |
 
 [View All Releases](https://github.com/Fincept-Corporation/FinceptTerminal/releases)
 
