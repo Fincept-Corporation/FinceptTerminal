@@ -1495,6 +1495,7 @@ pub fn run() {
             commands::analytics::calculate_rates,
             commands::analytics::execute_economics_analytics,
             commands::analytics::execute_statsmodels_analytics,
+            commands::analytics::execute_quant_analytics,
             // FinancePy - Derivatives Pricing Commands
             commands::financepy::financepy_create_date,
             commands::financepy::financepy_date_range,

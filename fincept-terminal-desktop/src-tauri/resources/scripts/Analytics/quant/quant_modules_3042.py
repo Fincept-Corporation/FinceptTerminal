@@ -214,13 +214,22 @@ class AdvancedQuantAnalyzer(BaseCalculator):
                         seasonal_order: Optional[Tuple[int, int, int, int]] = None) -> Dict[str, Any]:
         """Fit ARIMA model to time series data."""
         data = self._validate_returns(data, "data")
+
+        # Validate order parameter
+        if order is None or not isinstance(order, (tuple, list)) or len(order) != 3:
+            raise DataValidationError("order must be a tuple/list of 3 integers (p, d, q)", "order")
+
+        order = tuple(order)  # Ensure it's a tuple
         self._check_data_length(data, min_length=max(20, sum(order) * 3))
 
         try:
             from statsmodels.tsa.arima.model import ARIMA
 
-            # Fit ARIMA model
-            model = ARIMA(data, order=order, seasonal_order=seasonal_order)
+            # Fit ARIMA model - only pass seasonal_order if it's not None
+            if seasonal_order is not None:
+                model = ARIMA(data, order=order, seasonal_order=seasonal_order)
+            else:
+                model = ARIMA(data, order=order)
             fitted_model = model.fit()
 
             # Model diagnostics
@@ -237,7 +246,7 @@ class AdvancedQuantAnalyzer(BaseCalculator):
 
             return self._create_result_dict(
                 value={
-                    'parameters': fitted_model.params.to_dict(),
+                    'parameters': fitted_model.params.tolist() if hasattr(fitted_model.params, 'tolist') else list(fitted_model.params),
                     'fitted_values': fitted_values.tolist(),
                     'residuals': residuals.tolist()
                 },
@@ -400,7 +409,7 @@ class AdvancedQuantAnalyzer(BaseCalculator):
             raise DataValidationError(f"Invalid problem_type: {problem_type}", "problem_type")
 
         # Split data
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=self.random_seed)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
         # Scale features
         scaler = StandardScaler()
@@ -462,6 +471,7 @@ class AdvancedQuantAnalyzer(BaseCalculator):
             metadata={
                 'train_size': len(X_train),
                 'test_size': len(X_test),
+                'y_test': y_test.tolist(),
                 'n_features': X.shape[1],
                 'best_algorithm': max(results.keys(), key=lambda k: results[k].get(
                     'r2_score' if problem_type == 'regression' else 'accuracy', -np.inf)) if results else None

@@ -219,6 +219,38 @@ class BaseCalculator(ABC):
         else:
             return result
 
+    def _sanitize_for_json(self, obj: Any) -> Any:
+        """
+        Recursively sanitize objects for JSON serialization.
+        Converts numpy types and Python booleans to JSON-compatible types.
+        """
+        if isinstance(obj, dict):
+            return {k: self._sanitize_for_json(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._sanitize_for_json(x) for x in obj]
+        elif isinstance(obj, tuple):
+            return [self._sanitize_for_json(x) for x in obj]
+        elif isinstance(obj, np.ndarray):
+            return [self._sanitize_for_json(x) for x in obj.tolist()]
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, bool):
+            return obj
+        elif isinstance(obj, (np.int64, np.int32, np.int16, np.int8)):
+            return int(obj)
+        elif isinstance(obj, (np.float64, np.float32, np.float16)):
+            val = float(obj)
+            if np.isnan(val) or np.isinf(val):
+                return None
+            return val
+        elif isinstance(obj, float):
+            if np.isnan(obj) or np.isinf(obj):
+                return None
+            return obj
+        elif isinstance(obj, datetime):
+            return obj.isoformat()
+        return obj
+
     def _create_result_dict(self,
                             value: Union[float, np.ndarray],
                             method: str,
@@ -234,7 +266,7 @@ class BaseCalculator(ABC):
             metadata: Additional metadata
 
         Returns:
-            Standardized result dictionary
+            Standardized result dictionary with all values sanitized for JSON
         """
         result = {
             'value': self._round_result(value),
@@ -244,10 +276,10 @@ class BaseCalculator(ABC):
         }
 
         if parameters:
-            result['parameters'] = parameters
+            result['parameters'] = self._sanitize_for_json(parameters)
 
         if metadata:
-            result['metadata'] = metadata
+            result['metadata'] = self._sanitize_for_json(metadata)
 
         return result
 
