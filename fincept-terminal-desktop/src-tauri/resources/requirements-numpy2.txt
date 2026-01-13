@@ -19,6 +19,7 @@ databento==0.66.0
 databento-dbn==0.44.0
 feedparser==6.0.12
 gnews==0.4.2
+geopy>=2.4.0
 aiohappyeyeballs==2.6.1
 aiosignal==1.4.0
 attrs==25.4.0
@@ -88,7 +89,6 @@ py_vollib==1.0.1
 pypme==0.6.2
 ffn==1.1.2
 fortitudo.tech==1.2
-rateslib==2.1.1
 
 # Quant libraries
 pyqlib==0.9.7

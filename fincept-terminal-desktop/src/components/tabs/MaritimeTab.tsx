@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '@/contexts/AuthContext';
+import { MarineApiService, VesselData } from '@/services/marineApi';
 
 interface MarkerData {
   lat: number;
@@ -26,9 +28,23 @@ interface IntelligenceData {
   trade_volume: string;
 }
 
+interface RealVesselData {
+  imo: string;
+  name: string;
+  lat: number;
+  lng: number;
+  speed: string;
+  angle: string;
+  from_port?: string;
+  to_port?: string;
+  route_progress?: number;
+}
+
 export default function MaritimeTab() {
   const { colors, fontSize, fontFamily, fontWeight, fontStyle } = useTerminalTheme();
   const { t } = useTranslation('maritime');
+  const { session } = useAuth();
+  const apiKey = session?.api_key || null;
   const [markers, setMarkers] = useState<MarkerData[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<TradeRoute | null>(null);
   const [markerType, setMarkerType] = useState<MarkerData['type']>('Ship');
@@ -37,10 +53,18 @@ export default function MaritimeTab() {
   const [showPlanes, setShowPlanes] = useState(true);
   const [showSatellites, setShowSatellites] = useState(true);
   const [isRotating, setIsRotating] = useState(true);
+  const [realVessels, setRealVessels] = useState<RealVesselData[]>([]);
+  const [isLoadingVessels, setIsLoadingVessels] = useState(false);
+  const [vesselLoadError, setVesselLoadError] = useState<string | null>(null);
+  const [searchImo, setSearchImo] = useState('');
+  const [searchingVessel, setSearchingVessel] = useState(false);
+  const [searchResult, setSearchResult] = useState<VesselData | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [mapMode, setMapMode] = useState<'3D' | '2D'>('3D');
   const [intelligence, setIntelligence] = useState<IntelligenceData>({
     timestamp: new Date().toISOString(),
     threat_level: 'low',
-    active_vessels: 1247,
+    active_vessels: 0,
     monitored_routes: 48,
     trade_volume: '$847.3B'
   });
@@ -81,12 +105,146 @@ export default function MaritimeTab() {
     setMarkers([...markers, { ...preset, title: preset.name }]);
   };
 
+  // Toggle between 2D and 3D map modes
+  const toggleMapMode = () => {
+    const newMode = mapMode === '3D' ? '2D' : '3D';
+    setMapMode(newMode);
+
+    if (mapRef.current?.contentWindow) {
+      // Pass the current vessel data when switching to 2D
+      if (newMode === '2D' && realVessels.length > 0) {
+        console.log('Toggling to 2D with', realVessels.length, 'vessels from React state');
+        (mapRef.current.contentWindow as any).switchMapMode?.(newMode, realVessels);
+      } else {
+        (mapRef.current.contentWindow as any).switchMapMode?.(newMode);
+      }
+    }
+  };
+
+  // Load real vessel data from API with performance optimization
+  const loadRealVessels = async (limitCount: number = 500) => {
+    if (!apiKey) {
+      setVesselLoadError('No API key available');
+      return;
+    }
+
+    setIsLoadingVessels(true);
+    setVesselLoadError(null);
+
+    try {
+      // Search for vessels in focused Mumbai port area (smaller region for performance)
+      const response = await MarineApiService.searchVesselsByArea(
+        {
+          min_lat: 18.5,
+          max_lat: 19.5,
+          min_lng: 72.0,
+          max_lng: 73.5
+        },
+        apiKey
+      );
+
+      if (response.success && response.data) {
+        // Filter and limit vessels for performance
+        const allVessels = response.data.vessels
+          .filter(v => v.last_pos_latitude && v.last_pos_longitude)
+          .map(v => ({
+            imo: v.imo,
+            name: v.name,
+            lat: parseFloat(v.last_pos_latitude),
+            lng: parseFloat(v.last_pos_longitude),
+            speed: v.last_pos_speed,
+            angle: v.last_pos_angle,
+            from_port: v.route_from_port_name || undefined,
+            to_port: v.route_to_port_name || undefined,
+            route_progress: v.route_progress ? parseFloat(v.route_progress) : undefined
+          }));
+
+        // Limit to prevent performance issues (take vessels with routes first, then others)
+        const vesselsWithRoutes = allVessels.filter(v => v.from_port || v.to_port);
+        const vesselsWithoutRoutes = allVessels.filter(v => !v.from_port && !v.to_port);
+
+        const limitedVessels = [
+          ...vesselsWithRoutes.slice(0, Math.floor(limitCount * 0.7)),
+          ...vesselsWithoutRoutes.slice(0, Math.floor(limitCount * 0.3))
+        ].slice(0, limitCount);
+
+        console.log(`Loaded ${limitedVessels.length} vessels out of ${allVessels.length} total (limited for performance)`);
+
+        setRealVessels(limitedVessels);
+        setIntelligence(prev => ({
+          ...prev,
+          active_vessels: allVessels.length, // Show total count
+          timestamp: new Date().toISOString()
+        }));
+
+        // Send vessel data to globe visualization
+        if (mapRef.current?.contentWindow) {
+          (mapRef.current.contentWindow as any).updateRealVessels?.(limitedVessels);
+        }
+      } else {
+        setVesselLoadError(response.error || 'Failed to load vessel data');
+      }
+    } catch (error) {
+      console.error('Error loading vessels:', error);
+      setVesselLoadError(error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setIsLoadingVessels(false);
+    }
+  };
+
+  // Search for a specific vessel by IMO
+  const searchVesselByImo = async () => {
+    if (!apiKey) {
+      setSearchError('No API key available');
+      return;
+    }
+
+    if (!searchImo.trim()) {
+      setSearchError('Please enter an IMO number');
+      return;
+    }
+
+    setSearchingVessel(true);
+    setSearchError(null);
+    setSearchResult(null);
+
+    try {
+      const response = await MarineApiService.getVesselPosition(searchImo.trim(), apiKey);
+
+      if (response.success && response.data) {
+        const vessel = response.data.vessel;
+        setSearchResult(vessel);
+
+        // Zoom to vessel location on globe
+        if (mapRef.current?.contentWindow && vessel.last_pos_latitude && vessel.last_pos_longitude) {
+          const lat = parseFloat(vessel.last_pos_latitude);
+          const lng = parseFloat(vessel.last_pos_longitude);
+          (mapRef.current.contentWindow as any).world?.pointOfView?.({ lat, lng, altitude: 0.5 }, 1000);
+        }
+      } else {
+        setSearchError(response.error || 'Vessel not found');
+      }
+    } catch (error) {
+      console.error('Error searching vessel:', error);
+      setSearchError(error instanceof Error ? error.message : 'Search failed');
+    } finally {
+      setSearchingVessel(false);
+    }
+  };
+
+  // Load vessels on mount and every 5 minutes
+  useEffect(() => {
+    loadRealVessels();
+    const interval = setInterval(loadRealVessels, 300000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [apiKey]);
+
+  // Update timestamp periodically
   useEffect(() => {
     const interval = setInterval(() => {
       setIntelligence(prev => ({
         ...prev,
-        timestamp: new Date().toISOString(),
-        active_vessels: prev.active_vessels + Math.floor(Math.random() * 10 - 5)
+        timestamp: new Date().toISOString()
       }));
     }, 5000);
     return () => clearInterval(interval);
@@ -156,26 +314,25 @@ export default function MaritimeTab() {
             map2D = L.map('mapViz', {
               zoomControl: true,
               attributionControl: false,
-              preferCanvas: false
-            }).setView([20, 75], 12);
+              preferCanvas: true, // Better performance for many markers
+              scrollWheelZoom: true, // Enable mousewheel/trackpad zoom
+              doubleClickZoom: true, // Enable double-click zoom
+              touchZoom: true, // Enable pinch zoom on touch devices
+              boxZoom: true, // Enable shift+drag to zoom
+              keyboard: true, // Enable keyboard navigation
+              dragging: true, // Enable map dragging
+              maxZoom: 18,
+              minZoom: 3
+            }).setView([19.0, 72.8], 11);
 
-            // Add satellite imagery layer (Google Satellite)
-            L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-              attribution: 'FINCEPT MARITIME INTELLIGENCE | Satellite Imagery',
-              maxZoom: 20,
-              minZoom: 3,
-              subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+            // Add clean street map with maritime focus
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: 'FINCEPT MARITIME INTELLIGENCE',
+              maxZoom: 18,
+              minZoom: 3
             }).addTo(map2D);
 
-            // Monitor 2D map zoom to switch back to 3D
-            map2D.on('zoomend', function() {
-              const zoom = map2D.getZoom();
-              console.log('2D map zoom:', zoom);
-              if (zoom < 8 && currentMode === '2D') {
-                const center = map2D.getCenter();
-                switchTo3D(center.lat, center.lng, 2.0);
-              }
-            });
+            // No auto-switching - user controls mode manually via button
 
             // Force map to resize and load tiles
             setTimeout(() => {
@@ -204,11 +361,11 @@ export default function MaritimeTab() {
 
         console.log('Camera positioned');
 
-        // Hybrid mode state
+        // Hybrid mode state (disabled auto-switch to prevent white screen issues)
         let currentMode = '3D'; // '3D' or '2D'
         let lastGlobeView = { lat: 20, lng: 75, altitude: 2.0 };
         let targetCoords = { lat: 20, lng: 75 }; // Track where user is actually looking
-        const ZOOM_THRESHOLD = 0.3; // Switch to 2D when altitude < 0.3 (very close)
+        const ZOOM_THRESHOLD = 0.05; // Very close before switching (effectively disabled with minDistance=150)
 
       var markers = [];
       var allArcs = [];
@@ -783,6 +940,195 @@ export default function MaritimeTab() {
         world.htmlElementsData(allLabels);
       };
 
+      // Function to update with real vessel data from API (optimized for performance)
+      var realVesselPoints = [];
+      var vesselTexture = null; // Reuse texture for better performance
+
+      // Create vessel texture once
+      function createVesselTexture() {
+        if (!vesselTexture) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 64;
+          canvas.height = 64;
+          const ctx = canvas.getContext('2d');
+          ctx.font = '48px Arial';
+          ctx.fillText('🚢', 8, 48);
+          vesselTexture = new THREE.CanvasTexture(canvas);
+        }
+        return vesselTexture;
+      }
+
+      window.updateRealVessels = function(vessels) {
+        console.log('Updating real vessels:', vessels.length);
+
+        if (!vessels || vessels.length === 0) {
+          world.customLayerData([]);
+          realVesselPoints = [];
+          return;
+        }
+
+        // Convert API vessel data to globe points
+        realVesselPoints = vessels.map(vessel => ({
+          lat: vessel.lat,
+          lng: vessel.lng,
+          size: 0.15,  // Slightly smaller for better performance
+          color: 'rgba(0, 255, 255, 0.9)',  // Cyan for real vessels
+          altitude: 0.003,
+          name: vessel.name,
+          imo: vessel.imo,
+          speed: vessel.speed,
+          angle: vessel.angle,
+          from_port: vessel.from_port,
+          to_port: vessel.to_port,
+          route_progress: vessel.route_progress
+        }));
+
+        // Update the custom layer with real vessels (optimized rendering)
+        if (showShipsFlag) {
+          const texture = createVesselTexture();
+
+          world.customLayerData(realVesselPoints)
+            .customThreeObject(d => {
+              // Reuse the same texture for all vessels for better performance
+              const material = new THREE.SpriteMaterial({
+                map: texture,
+                transparent: true,
+                opacity: 0.9,
+                sizeAttenuation: true
+              });
+              const sprite = new THREE.Sprite(material);
+              sprite.scale.set(1.5, 1.5, 1);
+
+              return sprite;
+            })
+            .customThreeObjectUpdate((obj, d) => {
+              const coords = world.getCoords(d.lat, d.lng, d.altitude);
+              if (coords && coords.x !== undefined && coords.y !== undefined && coords.z !== undefined) {
+                Object.assign(obj.position, coords);
+              }
+            });
+        }
+      };
+
+      // Manual mode switching between 3D Globe and 2D Map
+      var vesselMarkers = []; // Store 2D map vessel markers
+      window.switchMapMode = function(mode, vesselsFromReact) {
+        console.log('Switching to mode:', mode, '| Vessel data from React:', vesselsFromReact ? vesselsFromReact.length : 0, '| realVesselPoints:', realVesselPoints ? realVesselPoints.length : 0);
+
+        if (mode === '2D') {
+          // Switch to 2D Map Mode - Clean, Only Real Vessels
+          initMap2D();
+
+          document.getElementById('globeViz').style.display = 'none';
+          document.getElementById('mapViz').style.display = 'block';
+          document.getElementById('modeIndicator').textContent = '2D MAP MODE - Real Vessels Only';
+          document.getElementById('modeIndicator').style.background = 'rgba(255, 215, 0, 0.9)';
+
+          // Center on Mumbai area and load vessels
+          setTimeout(() => {
+            if (map2D) {
+              map2D.setView([19.0, 72.8], 11);
+              map2D.invalidateSize();
+
+              // Prefer vessels passed from React, fallback to realVesselPoints
+              const vesselsToRender = vesselsFromReact || realVesselPoints;
+
+              // Add real vessel markers to 2D map
+              if (vesselsToRender && vesselsToRender.length > 0) {
+                console.log('✅ Rendering vessels on 2D map:', vesselsToRender.length);
+                updateVesselsOn2DMap(vesselsToRender);
+              } else {
+                console.warn('⚠️ No vessel data available! vesselsFromReact:', vesselsFromReact, 'realVesselPoints:', realVesselPoints);
+              }
+            }
+          }, 200); // Increased timeout
+
+        } else {
+          // Switch to 3D Globe Mode
+          document.getElementById('globeViz').style.display = 'block';
+          document.getElementById('mapViz').style.display = 'none';
+          document.getElementById('modeIndicator').textContent = '3D GLOBE MODE';
+          document.getElementById('modeIndicator').style.background = 'rgba(0, 255, 255, 0.9)';
+
+          // Clear 2D markers
+          vesselMarkers.forEach(marker => marker.remove());
+          vesselMarkers = [];
+        }
+      };
+
+      // Function to update vessels on 2D map
+      function updateVesselsOn2DMap(vessels) {
+        console.log('updateVesselsOn2DMap called with', vessels ? vessels.length : 0, 'vessels');
+        console.log('map2D exists:', !!map2D);
+
+        if (!map2D) {
+          console.error('❌ map2D is not initialized!');
+          return;
+        }
+
+        if (!vessels || vessels.length === 0) {
+          console.warn('⚠️ No vessels to display on 2D map');
+          return;
+        }
+
+        // Clear existing markers
+        vesselMarkers.forEach(marker => marker.remove());
+        vesselMarkers = [];
+
+        // Create custom ship icon
+        const shipIcon = L.divIcon({
+          className: 'vessel-marker',
+          html: '<div style="font-size: 16px;">🚢</div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+
+        // Add vessel markers (limit to 500 for performance)
+        const vesselsToDisplay = vessels.slice(0, 500);
+        console.log('Displaying', vesselsToDisplay.length, 'vessels on 2D map');
+
+        vesselsToDisplay.forEach(vessel => {
+          const marker = L.marker([vessel.lat, vessel.lng], { icon: shipIcon })
+            .bindPopup(\`
+              <div style="font-family: 'Consolas', monospace; font-size: 11px;">
+                <div style="font-weight: bold; color: #0ff; margin-bottom: 4px;">\${vessel.name}</div>
+                <div style="font-size: 9px;">
+                  <div><strong>IMO:</strong> \${vessel.imo}</div>
+                  <div><strong>Position:</strong> \${vessel.lat.toFixed(4)}°, \${vessel.lng.toFixed(4)}°</div>
+                  <div><strong>Speed:</strong> \${vessel.speed} kts</div>
+                  \${vessel.from_port ? \`<div><strong>From:</strong> \${vessel.from_port}</div>\` : ''}
+                  \${vessel.to_port ? \`<div><strong>To:</strong> \${vessel.to_port}</div>\` : ''}
+                </div>
+              </div>
+            \`)
+            .addTo(map2D);
+
+          vesselMarkers.push(marker);
+        });
+
+        console.log(\`Added \${vesselMarkers.length} vessel markers to 2D map\`);
+      }
+
+      // Update 2D map vessels when real vessels are updated
+      var previousUpdateRealVessels = window.updateRealVessels;
+      window.updateRealVessels = function(vessels) {
+        previousUpdateRealVessels(vessels); // Update 3D globe
+
+        // Also update 2D map if visible
+        const mapViz = document.getElementById('mapViz');
+        if (mapViz && mapViz.style.display === 'block' && map2D) {
+          updateVesselsOn2DMap(vessels.map(v => ({
+            lat: v.lat,
+            lng: v.lng,
+            name: v.name,
+            imo: v.imo,
+            speed: v.speed,
+            from_port: v.from_port,
+            to_port: v.to_port
+          })));
+        }
+      };
+
       window.toggleRoutes = function() {
         if (showRoutesFlag) {
           world.arcsData([]);
@@ -796,27 +1142,54 @@ export default function MaritimeTab() {
         if (showShipsFlag) {
           world.customLayerData([]);
         } else {
-          // Regenerate ship positions
-          function interpolateArc(startLat, startLng, endLat, endLng, progress) {
-            const lat = startLat + (endLat - startLat) * progress;
-            const lng = startLng + (endLng - startLng) * progress;
-            return { lat, lng };
-          }
+          // Show real vessels if available, otherwise show mock ships
+          if (realVesselPoints.length > 0) {
+            world.customLayerData(realVesselPoints)
+              .customThreeObject(d => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 64;
+                canvas.height = 64;
+                const ctx = canvas.getContext('2d');
+                ctx.font = '48px Arial';
+                ctx.fillText('🚢', 8, 48);
 
-          const shipPoints = allLabels.map(ship => {
-            const pos = interpolateArc(ship.startLat, ship.startLng, ship.endLat, ship.endLng, ship.progress);
-            return {
-              lat: pos.lat,
-              lng: pos.lng,
-              size: 0.15,
-              color: 'rgba(255, 255, 255, 0.95)',
-              altitude: 0.003,
-              label: ship.label,
-              value: ship.value,
-              vessels: ship.vessels
-            };
-          });
-          world.customLayerData(shipPoints);
+                const texture = new THREE.CanvasTexture(canvas);
+                const material = new THREE.SpriteMaterial({
+                  map: texture,
+                  transparent: true,
+                  opacity: 0.95
+                });
+                const sprite = new THREE.Sprite(material);
+                sprite.scale.set(2, 2, 1);
+
+                return sprite;
+              })
+              .customThreeObjectUpdate((obj, d) => {
+                Object.assign(obj.position, world.getCoords(d.lat, d.lng, d.altitude));
+              });
+          } else {
+            // Fallback to mock ships
+            function interpolateArc(startLat, startLng, endLat, endLng, progress) {
+              const lat = startLat + (endLat - startLat) * progress;
+              const lng = startLng + (endLng - startLng) * progress;
+              return { lat, lng };
+            }
+
+            const shipPoints = allLabels.map(ship => {
+              const pos = interpolateArc(ship.startLat, ship.startLng, ship.endLat, ship.endLng, ship.progress);
+              return {
+                lat: pos.lat,
+                lng: pos.lng,
+                size: 0.15,
+                color: 'rgba(255, 255, 255, 0.95)',
+                altitude: 0.003,
+                label: ship.label,
+                value: ship.value,
+                vessels: ship.vessels
+              };
+            });
+            world.customLayerData(shipPoints);
+          }
         }
         showShipsFlag = !showShipsFlag;
       };
@@ -879,13 +1252,13 @@ export default function MaritimeTab() {
         world.controls().enableDamping = true;
         world.controls().dampingFactor = 0.05;
 
-        // Allow deep zoom but not too extreme on 3D globe
-        world.controls().minDistance = 50;     // Don't go too close on 3D (will switch to 2D)
+        // Prevent extreme close zoom to avoid white screen issue
+        world.controls().minDistance = 150;    // Don't allow too close zoom (prevents white screen)
         world.controls().maxDistance = 800;    // Very far zoom (space view)
-        world.controls().zoomSpeed = 1.5;      // Faster zoom for better control
+        world.controls().zoomSpeed = 1.2;      // Moderate zoom speed
         world.controls().enableZoom = true;
 
-        console.log('Controls configured');
+        console.log('Controls configured - minDistance:', 150, 'maxDistance:', 800);
 
       // Keep rotation state controlled by user toggle
       let userPausedRotation = false;
@@ -921,8 +1294,6 @@ export default function MaritimeTab() {
           const altitudeFactor = Math.max(0, 0.3 - lastGlobeView.altitude);
           const zoom2D = Math.max(14, Math.min(18, Math.floor(16 + altitudeFactor * 20)));
 
-          console.log('Switching to 2D - Final coords:', finalLat.toFixed(6), finalLng.toFixed(6), 'zoom:', zoom2D);
-
           // Set view and force map refresh
           setTimeout(() => {
             map2D.setView([finalLat, finalLng], zoom2D);
@@ -953,16 +1324,11 @@ export default function MaritimeTab() {
           console.log('Switched to 3D mode at altitude:', altitude);
         }
 
-        // Monitor zoom level and switch modes
+        // Track zoom level (no auto-switching, manual control only)
         world.onZoom((view) => {
           lastGlobeView = view;
           targetCoords = { lat: view.lat, lng: view.lng };
-          console.log('Globe zoom - altitude:', view.altitude, 'lat:', view.lat.toFixed(4), 'lng:', view.lng.toFixed(4));
-
-          if (view.altitude < ZOOM_THRESHOLD && currentMode === '3D') {
-            console.log('Triggering switch to 2D at exact position:', view.lat, view.lng);
-            switchTo2D(view.lat, view.lng);
-          }
+          // Removed spam log: console.log('Globe zoom - altitude:', view.altitude, 'lat:', view.lat.toFixed(4), 'lng:', view.lng.toFixed(4));
         });
 
         // Listen for user interactions
@@ -1066,20 +1432,14 @@ export default function MaritimeTab() {
           <div style={{ width: '1px', height: '16px', background: '#00ff00' }} />
           <span style={{ color: '#0ff', fontSize: '10px' }}>CLASSIFIED // TRADE ROUTE ANALYSIS</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
-            onClick={() => {
-              const newRotating = !isRotating;
-              setIsRotating(newRotating);
-              if (mapRef.current?.contentWindow) {
-                (mapRef.current.contentWindow as any).toggleRotation?.(newRotating);
-              }
-            }}
+            onClick={toggleMapMode}
             style={{
-              background: isRotating ? '#0a0a0a' : '#1a1a1a',
-              color: isRotating ? '#00ff00' : '#888',
-              border: `1px solid ${isRotating ? '#00ff00' : '#444'}`,
-              padding: '4px 10px',
+              background: mapMode === '2D' ? '#ffd700' : '#0a0a0a',
+              color: mapMode === '2D' ? '#000' : '#ffd700',
+              border: '1px solid #ffd700',
+              padding: '4px 12px',
               fontSize: '9px',
               cursor: 'pointer',
               fontWeight: 'bold',
@@ -1087,8 +1447,32 @@ export default function MaritimeTab() {
               transition: 'all 0.2s'
             }}
           >
-            {isRotating ? '● ROTATING' : '○ PAUSED'}
+            {mapMode === '3D' ? '🌍 3D GLOBE' : '🗺️ 2D MAP'}
           </button>
+          {mapMode === '3D' && (
+            <button
+              onClick={() => {
+                const newRotating = !isRotating;
+                setIsRotating(newRotating);
+                if (mapRef.current?.contentWindow) {
+                  (mapRef.current.contentWindow as any).toggleRotation?.(newRotating);
+                }
+              }}
+              style={{
+                background: isRotating ? '#0a0a0a' : '#1a1a1a',
+                color: isRotating ? '#00ff00' : '#888',
+                border: `1px solid ${isRotating ? '#00ff00' : '#444'}`,
+                padding: '4px 10px',
+                fontSize: '9px',
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                fontFamily: 'Consolas, monospace',
+                transition: 'all 0.2s'
+              }}
+            >
+              {isRotating ? '● ROTATING' : '○ PAUSED'}
+            </button>
+          )}
           <span style={{ color: intelligence.threat_level === 'critical' ? '#ff0000' : intelligence.threat_level === 'high' ? '#ff8c00' : intelligence.threat_level === 'medium' ? '#ffd700' : '#00ff00', fontSize: '10px', fontWeight: 'bold' }}>
             THREAT: {intelligence.threat_level.toUpperCase()}
           </span>
@@ -1105,10 +1489,24 @@ export default function MaritimeTab() {
           {/* Intelligence Stats */}
           <div style={{ padding: '12px', borderBottom: '1px solid #1a1a1a' }}>
             <div style={{ color: '#00ff00', fontSize: '10px', fontWeight: 'bold', marginBottom: '8px', letterSpacing: '1px' }}>GLOBAL INTEL</div>
+            {isLoadingVessels && (
+              <div style={{ background: 'rgba(0, 255, 255, 0.1)', border: '1px solid #0ff', padding: '6px', fontSize: '8px', color: '#0ff', marginBottom: '8px', textAlign: 'center' }}>
+                ⏳ LOADING VESSELS...
+              </div>
+            )}
+            {vesselLoadError && (
+              <div style={{ background: 'rgba(255, 0, 0, 0.1)', border: '1px solid #ff0000', padding: '6px', fontSize: '8px', color: '#ff0000', marginBottom: '8px' }}>
+                ⚠ {vesselLoadError}
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '8px' }}>
-                <div style={{ color: '#888', fontSize: '8px' }}>ACTIVE VESSELS</div>
+                <div style={{ color: '#888', fontSize: '8px' }}>TOTAL VESSELS</div>
                 <div style={{ color: '#0ff', fontSize: '16px', fontWeight: 'bold' }}>{intelligence.active_vessels}</div>
+              </div>
+              <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '8px' }}>
+                <div style={{ color: '#888', fontSize: '8px' }}>DISPLAYED</div>
+                <div style={{ color: '#00ff00', fontSize: '16px', fontWeight: 'bold' }}>{realVessels.length}</div>
               </div>
               <div style={{ background: '#0a0a0a', border: '1px solid #1a1a1a', padding: '8px' }}>
                 <div style={{ color: '#888', fontSize: '8px' }}>ROUTES</div>
@@ -1348,6 +1746,86 @@ export default function MaritimeTab() {
               </div>
             </div>
           )}
+
+          {/* Vessel Search by IMO */}
+          <div style={{ padding: '12px', borderBottom: '1px solid #1a1a1a' }}>
+            <div style={{ color: '#00ff00', fontSize: '10px', fontWeight: 'bold', marginBottom: '8px', letterSpacing: '1px' }}>VESSEL SEARCH</div>
+
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ color: '#888', fontSize: '8px', marginBottom: '4px' }}>IMO NUMBER</div>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <input
+                  type="text"
+                  value={searchImo}
+                  onChange={(e) => setSearchImo(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && searchVesselByImo()}
+                  placeholder="e.g., 8020604"
+                  style={{
+                    flex: 1,
+                    background: '#0a0a0a',
+                    color: '#0ff',
+                    border: '1px solid #1a1a1a',
+                    padding: '6px',
+                    fontSize: '9px',
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  onClick={searchVesselByImo}
+                  disabled={searchingVessel}
+                  style={{
+                    background: searchingVessel ? '#1a1a1a' : '#0ff',
+                    color: searchingVessel ? '#888' : '#000',
+                    border: '1px solid #0ff',
+                    padding: '6px 12px',
+                    fontSize: '9px',
+                    cursor: searchingVessel ? 'not-allowed' : 'pointer',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {searchingVessel ? 'SEARCHING...' : 'TRACK'}
+                </button>
+              </div>
+            </div>
+
+            {searchError && (
+              <div style={{ background: 'rgba(255, 0, 0, 0.1)', border: '1px solid #ff0000', padding: '6px', fontSize: '8px', color: '#ff0000', marginBottom: '8px' }}>
+                ⚠ {searchError}
+              </div>
+            )}
+
+            {searchResult && (
+              <div style={{ background: '#0a0a0a', border: '1px solid #0ff', padding: '8px', fontSize: '9px', marginBottom: '8px' }}>
+                <div style={{ color: '#0ff', fontWeight: 'bold', marginBottom: '6px' }}>{searchResult.name}</div>
+                <div style={{ display: 'grid', gap: '4px', color: '#fff' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#888' }}>IMO:</span>
+                    <span>{searchResult.imo}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#888' }}>Position:</span>
+                    <span>{parseFloat(searchResult.last_pos_latitude).toFixed(4)}°, {parseFloat(searchResult.last_pos_longitude).toFixed(4)}°</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#888' }}>Speed:</span>
+                    <span>{searchResult.last_pos_speed} kts</span>
+                  </div>
+                  {searchResult.route_from_port_name && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>From:</span>
+                      <span>{searchResult.route_from_port_name}</span>
+                    </div>
+                  )}
+                  {searchResult.route_to_port_name && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#888' }}>To:</span>
+                      <span>{searchResult.route_to_port_name}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Add Markers */}
           <div style={{ padding: '12px', borderBottom: '1px solid #1a1a1a' }}>

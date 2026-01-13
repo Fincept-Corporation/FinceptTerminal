@@ -1802,7 +1802,10 @@ pub fn run() {
             commands::screener_commands::save_custom_screen,
             commands::screener_commands::load_custom_screens,
             commands::screener_commands::delete_custom_screen,
-            commands::screener_commands::get_available_metrics
+            commands::screener_commands::get_available_metrics,
+            commands::geocoding::execute_geocoding_command,
+            commands::geocoding::search_geocode,
+            commands::geocoding::reverse_geocode
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

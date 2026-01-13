@@ -130,3 +130,6 @@ pub mod peer_commands;
 
 // Stock Screener - Advanced equity screening
 pub mod screener_commands;
+
+// Geocoding - Location search and reverse geocoding
+pub mod geocoding;

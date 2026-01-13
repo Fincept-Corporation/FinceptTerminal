@@ -50,7 +50,7 @@ const TradingTab = React.lazy(() => import('@/components/tabs/TradingTab').then(
 const EquityTradingTab = React.lazy(() => import('@/components/tabs/equity-trading/EquityTradingTab'));
 const DBnomicsTab = React.lazy(() => import('@/components/tabs/DBnomicsTab'));
 const EconomicsTab = React.lazy(() => import('@/components/tabs/EconomicsTab'));
-const MaritimeTab = React.lazy(() => import('@/components/tabs/MaritimeTab'));
+const MaritimeTab = React.lazy(() => import('@/components/tabs/MaritimeTabDeck'));
 const ReportBuilderTab = React.lazy(() => import('@/components/tabs/ReportBuilderTab'));
 const DataMappingTab = React.lazy(() => import('@/components/tabs/data-mapping/DataMappingTab'));
 const ExcelTab = React.lazy(() => import('@/components/tabs/ExcelTab'));

@@ -239,7 +239,7 @@ jobs:
           ## Downloads
 
           ### macOS
-          - **Apple Silicon (M1/M2/M3)**: \`FinceptTerminal-v${VERSION}-macOS-arm64.dmg\` or \`.app.tar.gz\`
+          - **Apple Silicon (M1/M2/M3/M4)**: \`FinceptTerminal-v${VERSION}-macOS-arm64.dmg\` or \`.app.tar.gz\`
           - **Intel**: \`FinceptTerminal-v${VERSION}-macOS-x64.dmg\` or \`.app.tar.gz\`
 
           ### Linux
