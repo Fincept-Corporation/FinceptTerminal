@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Mail, Key, Eye, EyeOff } from "lucide-react";
 import { Screen } from '../../App';
 import { AuthApiService } from '@/services/authApi';
+import { CompactLanguageSelector } from './CompactLanguageSelector';
 
 interface ForgotPasswordScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -135,6 +136,11 @@ const ForgotPasswordScreen: React.FC<ForgotPasswordScreenProps> = ({ onNavigate 
   if (step === 'email') {
     return (
       <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
+        {/* Language Selector at Top */}
+        <div className="mb-4">
+          <CompactLanguageSelector />
+        </div>
+
         <div className="mb-6">
           <div className="flex items-center mb-3">
             <button

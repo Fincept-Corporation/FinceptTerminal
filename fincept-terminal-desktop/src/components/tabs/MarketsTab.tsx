@@ -437,6 +437,48 @@ const MarketsTab: React.FC = () => {
     );
   };
 
+  // Show loading screen while database initializes
+  if (!dbInitialized) {
+    return (
+      <div style={{
+        height: '100%',
+        backgroundColor: colors.background,
+        color: colors.text,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '20px'
+      }}>
+        <div style={{
+          width: '60px',
+          height: '60px',
+          border: '4px solid #404040',
+          borderTop: '4px solid #ea580c',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+        <div style={{ textAlign: 'center', maxWidth: '500px' }}>
+          <h3 style={{ color: '#ea580c', fontSize: '18px', marginBottom: '10px' }}>
+            {t('loading.title', 'Initializing Markets Terminal')}
+          </h3>
+          <p style={{ color: '#a3a3a3', fontSize: '13px', lineHeight: '1.5' }}>
+            {t('loading.description', 'Setting up database and market data connections...')}
+          </p>
+          <p style={{ color: '#787878', fontSize: '11px', marginTop: '10px' }}>
+            {t('loading.note', 'This may take a few moments on first launch')}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       height: '100%',

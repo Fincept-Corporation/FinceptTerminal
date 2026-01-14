@@ -1,6 +1,6 @@
 [package]
 name = "fincept-terminal-desktop"
-version = "3.1.5"
+version = "3.1.6"
 description = "Professional-grade financial analysis platform with AI-powered insights and real-time market data"
 authors = ["Fincept Corporation <support@fincept.in>"]
 edition = "2021"

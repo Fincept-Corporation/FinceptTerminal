@@ -576,6 +576,7 @@ function FinxeptTerminalContent() {
     { label: 'AI Assistant', shortcut: 'F10', action: () => setActiveTab('chat') },
     { label: 'Agent Config', action: () => setActiveTab('agents') },
     { label: 'MCP Servers', action: () => setActiveTab('mcp'), separator: true },
+    { label: 'Monitoring', action: () => setActiveTab('monitoring') },
     { label: 'Trade Visualization', action: () => setActiveTab('trade-viz') },
     { label: 'Excel Workbook', action: () => setActiveTab('excel') },
     { label: 'Node Editor', action: () => setActiveTab('nodes') },
@@ -859,13 +860,6 @@ function FinxeptTerminalContent() {
                   title="News (F3)"
                 >
                   {t('navigation.news')}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="monitoring"
-                  style={activeTab === 'monitoring' ? tabStyles.active : tabStyles.default}
-                  title="Monitoring"
-                >
-                  Monitoring
                 </TabsTrigger>
                 <TabsTrigger
                   value="portfolio"

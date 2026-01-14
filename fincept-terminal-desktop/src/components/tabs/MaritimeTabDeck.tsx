@@ -556,7 +556,7 @@ export default function MaritimeTabDeck() {
             )}
           </div>
           <button
-            onClick={searchByLocation}
+            onClick={() => searchByLocation()}
             disabled={searchingLocation || !locationSearch.trim()}
             style={{
               padding: '4px 12px',

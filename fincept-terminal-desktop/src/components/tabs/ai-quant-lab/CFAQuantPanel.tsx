@@ -332,17 +332,19 @@ export function CFAQuantPanel() {
   }, [analysisResult, priceData.length, selectedAnalysis]);
 
   // Mouse selection handlers for drag zoom
-  const handleMouseDown = useCallback((e: { activeLabel?: number }, chartType: 'data' | 'results') => {
-    if (e.activeLabel !== undefined) {
-      setRefAreaLeft(e.activeLabel);
+  const handleMouseDown = useCallback((e: any, chartType: 'data' | 'results') => {
+    const activeLabel = typeof e.activeLabel === 'string' ? parseInt(e.activeLabel, 10) : e.activeLabel;
+    if (activeLabel !== undefined && !isNaN(activeLabel)) {
+      setRefAreaLeft(activeLabel);
       setIsSelecting(true);
       setActiveChart(chartType);
     }
   }, []);
 
-  const handleMouseMove = useCallback((e: { activeLabel?: number }) => {
-    if (isSelecting && e.activeLabel !== undefined) {
-      setRefAreaRight(e.activeLabel);
+  const handleMouseMove = useCallback((e: any) => {
+    const activeLabel = typeof e.activeLabel === 'string' ? parseInt(e.activeLabel, 10) : e.activeLabel;
+    if (isSelecting && activeLabel !== undefined && !isNaN(activeLabel)) {
+      setRefAreaRight(activeLabel);
     }
   }, [isSelecting]);
 
@@ -1705,7 +1707,7 @@ export function CFAQuantPanel() {
                 projection: projectedValue,
                 projectionUpper: projectedValue + ciWidth,
                 projectionLower: projectedValue - ciWidth,
-              });
+              } as any);
             }
           }
 
@@ -1805,7 +1807,7 @@ export function CFAQuantPanel() {
                 forecast: forecast,
                 forecastUpper: ciUpper ?? (forecast + defaultCiWidth),
                 forecastLower: ciLower ?? (forecast - defaultCiWidth),
-              });
+              } as any);
             });
           } else {
             // Generate simple forecast projection if not provided by backend
@@ -1830,7 +1832,7 @@ export function CFAQuantPanel() {
                 forecast: forecastVal,
                 forecastUpper: forecastVal + ciWidth,
                 forecastLower: forecastVal - ciWidth,
-              });
+              } as any);
             }
           }
 
@@ -1920,7 +1922,7 @@ export function CFAQuantPanel() {
             enhancedData[lastTrainIdx] = {
               ...enhancedData[lastTrainIdx],
               forecastStart: enhancedData[lastTrainIdx].value,
-            };
+            } as any;
           }
 
           return [...enhancedData, ...futureForecasts];
@@ -2116,10 +2118,10 @@ export function CFAQuantPanel() {
           bootstrapCiHigh = ci[1];
         }
         // Get indices from chart data
-        if (resultChartData.length > 0 && resultChartData[0]?.meanBinIdx !== undefined) {
-          bootstrapMeanIdx = resultChartData[0].meanBinIdx as number;
-          bootstrapCiLowIdx = resultChartData[0].ciLowIdx as number;
-          bootstrapCiHighIdx = resultChartData[0].ciHighIdx as number;
+        if (resultChartData.length > 0 && (resultChartData[0] as any)?.meanBinIdx !== undefined) {
+          bootstrapMeanIdx = (resultChartData[0] as any).meanBinIdx as number;
+          bootstrapCiLowIdx = (resultChartData[0] as any).ciLowIdx as number;
+          bootstrapCiHighIdx = (resultChartData[0] as any).ciHighIdx as number;
         }
       }
     }
@@ -2243,8 +2245,8 @@ export function CFAQuantPanel() {
                     axisLine={{ stroke: BB.borderDark }}
                     interval={selectedAnalysis === 'resampling_methods' ? 'preserveStartEnd' : 'preserveStartEnd'}
                     tickFormatter={(val) => {
-                      if (selectedAnalysis === 'resampling_methods' && resultChartData[val]?.binCenter !== undefined) {
-                        return formatNumber(resultChartData[val].binCenter as number, 1);
+                      if (selectedAnalysis === 'resampling_methods' && (resultChartData[val] as any)?.binCenter !== undefined) {
+                        return formatNumber((resultChartData[val] as any).binCenter as number, 1);
                       }
                       return val;
                     }}
@@ -2361,9 +2363,9 @@ export function CFAQuantPanel() {
                     />
                   )}
                   {/* Stationarity Test: Overall Mean Reference */}
-                  {selectedAnalysis === 'stationarity_test' && resultChartData.length > 0 && (resultChartData[0] as { overallMean?: number }).overallMean !== undefined && (
+                  {selectedAnalysis === 'stationarity_test' && resultChartData.length > 0 && (resultChartData[0] as any).overallMean !== undefined && (
                     <ReferenceLine
-                      y={(resultChartData[0] as { overallMean: number }).overallMean}
+                      y={(resultChartData[0] as any).overallMean}
                       stroke={BB.blueLight}
                       strokeWidth={2}
                       strokeDasharray="5 5"
@@ -2388,8 +2390,8 @@ export function CFAQuantPanel() {
                       dataKey="suspiciousValue"
                       fill={BB.amber}
                       name="Suspicious"
-                      shape={(props: { cx: number; cy: number }) => {
-                        if (!props.cx || !props.cy) return null;
+                      shape={(props: any) => {
+                        if (!props.cx || !props.cy) return <g />;
                         return (
                           <circle
                             cx={props.cx}
@@ -2409,8 +2411,8 @@ export function CFAQuantPanel() {
                       dataKey="outlierValue"
                       fill={BB.red}
                       name="Outlier"
-                      shape={(props: { cx: number; cy: number }) => {
-                        if (!props.cx || !props.cy) return null;
+                      shape={(props: any) => {
+                        if (!props.cx || !props.cy) return <g />;
                         return (
                           <g>
                             <circle
@@ -2437,9 +2439,9 @@ export function CFAQuantPanel() {
                     />
                   )}
                   {/* Data Quality: Mean reference line */}
-                  {selectedAnalysis === 'validate_data' && resultChartData.length > 0 && (resultChartData[0] as { mean?: number }).mean !== undefined && (
+                  {selectedAnalysis === 'validate_data' && resultChartData.length > 0 && (resultChartData[0] as any).mean !== undefined && (
                     <ReferenceLine
-                      y={(resultChartData[0] as { mean: number }).mean}
+                      y={(resultChartData[0] as any).mean}
                       stroke={BB.blueLight}
                       strokeWidth={2}
                       strokeDasharray="5 5"
@@ -2462,7 +2464,7 @@ export function CFAQuantPanel() {
                     <Bar
                       dataKey="value"
                       name="Frequency"
-                      shape={(props: { x: number; y: number; width: number; height: number; payload?: { inCI?: boolean; isMean?: boolean } }) => {
+                      shape={(props: any) => {
                         const { x, y, width, height, payload } = props;
                         const inCI = payload?.inCI;
                         const isMean = payload?.isMean;

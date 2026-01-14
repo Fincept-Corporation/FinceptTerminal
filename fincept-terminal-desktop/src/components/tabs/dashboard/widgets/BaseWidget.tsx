@@ -147,12 +147,28 @@ export const BaseWidget: React.FC<BaseWidgetProps> = ({
           </div>
         ) : isLoading ? (
           <div style={{
-            padding: '12px',
-            color: BLOOMBERG_GRAY,
-            fontSize: '10px',
-            textAlign: 'center'
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            gap: '8px'
           }}>
-            {t('widgets.loading')}
+            <div style={{
+              width: '30px',
+              height: '30px',
+              border: '3px solid #404040',
+              borderTop: '3px solid #ea580c',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }} />
+            <div style={{
+              color: BLOOMBERG_GRAY,
+              fontSize: '9px',
+              textAlign: 'center'
+            }}>
+              {t('widgets.loading')}
+            </div>
           </div>
         ) : (
           children

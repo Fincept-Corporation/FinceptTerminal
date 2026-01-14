@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { check, Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { Button } from '@/components/ui/button';
@@ -29,18 +29,28 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
   const [showDialog, setShowDialog] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
 
-  const checkForUpdates = async (silent = false) => {
+  const checkingRef = useRef<boolean>(false);
+  const relaunchTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  const checkForUpdates = useCallback(async (silent = false) => {
+    // Prevent duplicate checks
+    if (checkingRef.current) {
+      console.log('[AutoUpdater Component] Check already in progress, skipping');
+      return;
+    }
+
     try {
+      checkingRef.current = true;
       setChecking(true);
       setError(null);
 
-      console.log('[AutoUpdater] Checking for updates...');
+      console.log('[AutoUpdater Component] Checking for updates...');
       const update = await check();
 
       if (update?.available) {
-        console.log(`[AutoUpdater] Update available: v${update.version}`);
-        console.log(`[AutoUpdater] Current version: v${update.currentVersion}`);
-        console.log(`[AutoUpdater] Release date: ${update.date}`);
+        console.log(`[AutoUpdater Component] Update available: v${update.version}`);
+        console.log(`[AutoUpdater Component] Current version: v${update.currentVersion}`);
+        console.log(`[AutoUpdater Component] Release date: ${update.date}`);
 
         setUpdateInfo(update);
         setUpdateAvailable(true);
@@ -49,7 +59,7 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
           setShowDialog(true);
         }
       } else {
-        console.log('[AutoUpdater] No updates available');
+        console.log('[AutoUpdater Component] No updates available');
 
         if (!silent) {
           // Show a brief notification that app is up to date
@@ -59,18 +69,25 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('[AutoUpdater] Error checking for updates:', errorMessage);
+      console.error('[AutoUpdater Component] Error checking for updates:', errorMessage, err);
 
-      // Only show error if it's not a silent check and not a network error
-      if (!silent && !errorMessage.includes('network')) {
-        setError(`Failed to check for updates: ${errorMessage}`);
+      // Silently fail for development/network errors
+      if (!silent) {
+        if (!errorMessage.toLowerCase().includes('network') &&
+            !errorMessage.toLowerCase().includes('fetch') &&
+            !errorMessage.toLowerCase().includes('failed to fetch')) {
+          setError(`Failed to check for updates: ${errorMessage}`);
+        } else {
+          console.log('[AutoUpdater Component] Network error during update check (silent)');
+        }
       }
     } finally {
       setChecking(false);
+      checkingRef.current = false;
     }
-  };
+  }, []);
 
-  const downloadAndInstall = async () => {
+  const downloadAndInstall = useCallback(async () => {
     if (!updateInfo) return;
 
     try {
@@ -78,7 +95,7 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
       setError(null);
       setDownloadProgress(0);
 
-      console.log('[AutoUpdater] Starting download and installation...');
+      console.log('[AutoUpdater Component] Starting download and installation...');
 
       // Download and install with progress tracking
       let totalBytes = 0;
@@ -89,66 +106,78 @@ export function AutoUpdater({ checkOnMount = true, checkIntervalMinutes = 30 }: 
           case 'Started':
             totalBytes = (event.data as any).contentLength || 0;
             downloadedBytes = 0;
-            console.log(`[AutoUpdater] Download started - Total size: ${totalBytes} bytes`);
+            console.log(`[AutoUpdater Component] Download started - Total size: ${totalBytes} bytes`);
             setDownloadProgress(0);
             break;
           case 'Progress':
             downloadedBytes += event.data.chunkLength;
             const progress = totalBytes > 0 ? (downloadedBytes / totalBytes) * 100 : 0;
-            console.log(`[AutoUpdater] Download progress: ${progress.toFixed(2)}%`);
             setDownloadProgress(progress);
             break;
           case 'Finished':
-            console.log('[AutoUpdater] Download finished, installing...');
+            console.log('[AutoUpdater Component] Download finished, installing...');
             setDownloadProgress(100);
             break;
         }
       });
 
-      console.log('[AutoUpdater] Update installed successfully! Preparing to relaunch...');
+      console.log('[AutoUpdater Component] Update installed successfully! Preparing to relaunch...');
       setUpdateReady(true);
 
+      // Clear any existing relaunch timer
+      if (relaunchTimerRef.current) {
+        clearTimeout(relaunchTimerRef.current);
+      }
+
       // Auto-relaunch after 2 seconds
-      setTimeout(async () => {
-        console.log('[AutoUpdater] Relaunching application...');
+      relaunchTimerRef.current = setTimeout(async () => {
+        console.log('[AutoUpdater Component] Relaunching application...');
         await relaunch();
       }, 2000);
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('[AutoUpdater] Error during download/install:', errorMessage);
+      console.error('[AutoUpdater Component] Error during download/install:', errorMessage);
       setError(`Failed to install update: ${errorMessage}`);
       setDownloading(false);
     }
-  };
+  }, [updateInfo]);
 
-  const handleLater = () => {
+  const handleLater = useCallback(() => {
     setShowDialog(false);
-    console.log('[AutoUpdater] Update postponed by user');
-  };
+    console.log('[AutoUpdater Component] Update postponed by user');
+  }, []);
 
   // Check for updates on mount
   useEffect(() => {
     if (checkOnMount) {
-      // Delay initial check by 3 seconds to not interfere with app startup
+      console.log('[AutoUpdater Component] Initialized');
+      // Delay initial check by 15 seconds to not interfere with app startup
       const timer = setTimeout(() => {
+        console.log('[AutoUpdater Component] Running initial update check...');
         checkForUpdates(true);
-      }, 3000);
+      }, 15000); // Increased to 15s to avoid conflict with hook
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        if (relaunchTimerRef.current) {
+          clearTimeout(relaunchTimerRef.current);
+        }
+      };
     }
-  }, [checkOnMount]);
+  }, [checkOnMount, checkForUpdates]);
 
   // Set up periodic update checks
   useEffect(() => {
     if (checkIntervalMinutes > 0) {
       const interval = setInterval(() => {
+        console.log('[AutoUpdater Component] Running periodic update check...');
         checkForUpdates(true);
       }, checkIntervalMinutes * 60 * 1000);
 
       return () => clearInterval(interval);
     }
-  }, [checkIntervalMinutes]);
+  }, [checkIntervalMinutes, checkForUpdates]);
 
   return (
     <>

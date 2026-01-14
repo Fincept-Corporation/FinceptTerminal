@@ -1892,8 +1892,24 @@ const EquityResearchTab: React.FC = () => {
                       flexDirection: 'column',
                       gap: SPACING.MEDIUM,
                     }}>
-                      <AlertCircle size={32} color={COLORS.GRAY} />
-                      <span>{loading ? 'Loading chart data...' : 'No chart data available'}</span>
+                      {loading ? (
+                        <>
+                          <div style={{
+                            width: '40px',
+                            height: '40px',
+                            border: '3px solid #404040',
+                            borderTop: '3px solid #ea580c',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite'
+                          }} />
+                          <span>Loading chart data...</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle size={32} color={COLORS.GRAY} />
+                          <span>No chart data available</span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2142,6 +2158,16 @@ const EquityResearchTab: React.FC = () => {
                 height: '400px',
                 gap: '16px',
               }}>
+                {loading && (
+                  <div style={{
+                    width: '50px',
+                    height: '50px',
+                    border: '4px solid #404040',
+                    borderTop: '4px solid #ea580c',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                )}
                 <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
                   {loading ? ' LOADING FINANCIAL DATA...' : '[WARN]️ NO FINANCIAL DATA AVAILABLE'}
                 </div>
@@ -2991,6 +3017,14 @@ const EquityResearchTab: React.FC = () => {
                 height: '400px',
                 gap: '16px',
               }}>
+                <div style={{
+                  width: '50px',
+                  height: '50px',
+                  border: '4px solid #404040',
+                  borderTop: '4px solid #ea580c',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
                 <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
                    FETCHING LATEST NEWS...
                 </div>
@@ -3200,6 +3234,14 @@ const EquityResearchTab: React.FC = () => {
                 height: '400px',
                 gap: '16px',
               }}>
+                <div style={{
+                  width: '50px',
+                  height: '50px',
+                  border: '4px solid #404040',
+                  borderTop: '4px solid #ea580c',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
                 <div style={{ color: COLORS.YELLOW, fontSize: '14px', fontWeight: 'bold' }}>
                    COMPUTING TECHNICAL INDICATORS...
                 </div>

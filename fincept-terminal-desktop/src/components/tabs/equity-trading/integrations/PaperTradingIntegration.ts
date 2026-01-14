@@ -8,6 +8,7 @@ import { OrderRequest, UnifiedOrder, UnifiedPosition, BrokerType, OrderSide, Ord
 import { createPaperTradingAdapter } from '@/paper-trading';
 import type { IExchangeAdapter } from '@/brokers/crypto/types';
 import type { PaperTradingConfig } from '@/paper-trading/types';
+import { APP_VERSION } from '@/constants/version';
 
 /**
  * Adapter bridge to make equity brokers compatible with crypto paper trading system
@@ -193,7 +194,7 @@ export class PaperTradingIntegration {
       id: 'paper-trading',
       name: 'Paper Trading',
       type: PluginType.PRE_ORDER,
-      version: '3.1.4', // Updated to match paper trading system version
+      version: APP_VERSION, // Automatically synced with app version
       execute: async (context: PluginContext): Promise<PluginResult> => {
 
         if (!this.enabled) {

@@ -15,6 +15,7 @@ import React, { useState, useEffect } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { APP_VERSION } from '@/constants/version';
 
 // Types
 interface LoginEvent {
@@ -64,7 +65,7 @@ const mockLoginEvents: LoginEvent[] = [
         ipAddress: '192.168.1.1',
         geoCountry: 'US',
         geoCity: 'New York',
-        clientVersion: '3.1.4',
+        clientVersion: APP_VERSION,
     },
     {
         logId: '2',

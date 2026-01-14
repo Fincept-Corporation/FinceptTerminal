@@ -139,6 +139,10 @@ jobs:
               fi
             fi
 
+            # Copy macOS updater signature files
+            TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos -name "*.tar.gz.sig" -type f 2>/dev/null | head -1)
+            [ -f "$TAR_GZ_SIG" ] && cp "$TAR_GZ_SIG" "release-artifacts/" && echo "Found macOS signature: $TAR_GZ_SIG" || echo "Warning: macOS signature not found"
+
           elif [[ "${{ matrix.platform }}" == "ubuntu-22.04" ]]; then
             SUFFIX="Linux-x64"
             APPIMAGE=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -type f 2>/dev/null | head -1)
@@ -146,10 +150,31 @@ jobs:
             [ -f "$APPIMAGE" ] && cp "$APPIMAGE" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.AppImage" || { echo "Error: AppImage not found"; exit 1; }
             [ -f "$DEB" ] && cp "$DEB" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.deb" || echo "Warning: DEB not found"
 
+            # Copy Linux updater signature files
+            APPIMAGE_TAR_GZ_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage -name "*.tar.gz.sig" -type f 2>/dev/null | head -1)
+            [ -f "$APPIMAGE_TAR_GZ_SIG" ] && cp "$APPIMAGE_TAR_GZ_SIG" "release-artifacts/" && echo "Found Linux signature: $APPIMAGE_TAR_GZ_SIG" || echo "Warning: Linux signature not found"
+
           elif [[ "${{ matrix.platform }}" == "windows-2022" ]]; then
             SUFFIX="Windows-x64"
             MSI=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "*.msi" -type f 2>/dev/null | head -1)
             [ -f "$MSI" ] && cp "$MSI" "release-artifacts/FinceptTerminal-v${VERSION}-${SUFFIX}.msi" || { echo "Error: MSI not found"; exit 1; }
+
+            # Copy Windows updater signature files
+            NSIS_ZIP=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis -name "*.nsis.zip" -type f 2>/dev/null | head -1)
+            NSIS_ZIP_SIG=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis -name "*.nsis.zip.sig" -type f 2>/dev/null | head -1)
+            [ -f "$NSIS_ZIP" ] && cp "$NSIS_ZIP" "release-artifacts/" && echo "Found NSIS zip: $NSIS_ZIP" || echo "Warning: NSIS zip not found"
+            [ -f "$NSIS_ZIP_SIG" ] && cp "$NSIS_ZIP_SIG" "release-artifacts/" && echo "Found Windows signature: $NSIS_ZIP_SIG" || echo "Warning: Windows signature not found"
+          fi
+
+          # Copy latest.json (updater manifest) - only one platform needs to generate this
+          LATEST_JSON=$(find fincept-terminal-desktop/src-tauri/target/${{ matrix.target }}/release/bundle -name "latest.json" -type f 2>/dev/null | head -1)
+          if [ -f "$LATEST_JSON" ]; then
+            cp "$LATEST_JSON" "release-artifacts/latest.json"
+            echo "Found latest.json: $LATEST_JSON"
+            echo "latest.json content:"
+            cat "$LATEST_JSON"
+          else
+            echo "Warning: latest.json not found for ${{ matrix.platform }}"
           fi
 
           echo "=== Release Artifacts ==="
@@ -196,11 +221,23 @@ jobs:
         run: |
           mkdir -p release-files
 
+          # Copy installer files
           find all-artifacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.app.tar.gz" \) -exec cp {} release-files/ \;
-          find all-artifacts -type f \( -name "latest.json" -o -name "*.tar.gz.sig" -o -name "*.zip" -o -name "*.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || echo "No updater files found"
+
+          # Copy updater files (signatures and manifest)
+          find all-artifacts -type f \( -name "latest.json" -o -name "*.tar.gz.sig" -o -name "*.nsis.zip" -o -name "*.nsis.zip.sig" \) -exec cp {} release-files/ \; 2>/dev/null || echo "No updater files found"
 
           echo "=== Release Files ==="
           ls -lh release-files/
+
+          # Validate latest.json exists
+          if [ -f "release-files/latest.json" ]; then
+            echo "SUCCESS: latest.json found"
+            echo "latest.json content:"
+            cat release-files/latest.json
+          else
+            echo "WARNING: latest.json not found - auto-updater will not work!"
+          fi
 
           file_count=$(find release-files -type f | wc -l)
           [ "$file_count" -eq 0 ] && { echo "Error: No release files found"; exit 1; }

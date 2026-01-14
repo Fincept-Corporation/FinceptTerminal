@@ -1,6 +1,9 @@
 # .gitignore - Root level for entire finceptTerminal project
 # ============================================================
 
+# Version management notes
+versionterminal.txt
+
 # Python artifacts
 *.egg-info/
 __pycache__/

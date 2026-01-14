@@ -9,6 +9,7 @@ import { Mail, Lock, Eye, EyeOff, Shield } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { CompactLanguageSelector } from './CompactLanguageSelector';
 
 interface LoginScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -126,6 +127,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
   if (mfaRequired) {
     return (
       <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
+        {/* Language Selector at Top */}
+        <div className="mb-4">
+          <CompactLanguageSelector />
+        </div>
+
         <div className="mb-6">
           <div className="flex items-center gap-2 mb-3">
             <Shield className="h-6 w-6 text-blue-400" />
@@ -199,6 +205,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onNavigate }) => {
   // Regular Login Screen
   return (
     <div className="bg-zinc-900/90 backdrop-blur-sm border border-zinc-700 rounded-lg p-6 w-full max-w-sm mx-4 shadow-2xl">
+      {/* Language Selector at Top */}
+      <div className="mb-4">
+        <CompactLanguageSelector />
+      </div>
+
       <div className="mb-6">
         <h2 className="text-white text-2xl font-light mb-3">{t('login.title')}</h2>
         <p className="text-zinc-400 text-xs leading-5">

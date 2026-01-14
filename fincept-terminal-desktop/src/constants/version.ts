@@ -1,8 +1,12 @@
 // Application version constants
 // This file is the single source of truth for the app version displayed in the UI
-// The build version comes from tauri.conf.json and package.json
+// Version is automatically synced from package.json during build
 
-export const APP_VERSION = '3.1.4';
+// IMPORTANT: Do not modify this file manually
+// Run `bun run sync-version` to sync from package.json
+// Or edit package.json and run build/dev to auto-sync
+
+export const APP_VERSION = '3.1.6';
 export const APP_NAME = 'Fincept Terminal';
 export const APP_BUILD_DATE = new Date().toISOString().split('T')[0];
 
