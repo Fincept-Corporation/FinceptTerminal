@@ -532,3 +532,21 @@ pub async fn execute_statsmodels_analytics(
         Some("statsmodels")
     )
 }
+
+#[tauri::command]
+pub async fn execute_quant_analytics(
+    app: tauri::AppHandle,
+    command: String,
+    params: Option<String>,
+) -> Result<String, String> {
+    let mut args = vec![command];
+    if let Some(p) = params {
+        args.push(p);
+    }
+    crate::utils::python::execute_python_subprocess(
+        &app,
+        "Analytics/quant_analytics_cli.py",
+        &args,
+        Some("quant_analytics")
+    )
+}
