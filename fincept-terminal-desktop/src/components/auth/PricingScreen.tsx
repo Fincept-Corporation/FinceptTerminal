@@ -215,12 +215,11 @@ const handleSelectPlan = async () => {
 
   const getPlanCard = (plan: any) => {
     const isSelected = selectedPlan === plan.plan_id;
-    const displayPrice = plan.price_usd;
 
-    // Use API's is_popular flag
+    // Use API's is_popular flag (set by backend or computed in paymentApi)
     const isPopular = plan.is_popular;
-    // Only show Best Value badge on the $50 plan
-    const isRecommended = plan.price_usd === 50;
+    // Show Best Value badge based on is_popular flag
+    const isRecommended = plan.is_popular;
 
     // Check if this is the current plan
     const currentPlanId = session?.user_info?.account_type || 'free';
@@ -282,11 +281,11 @@ const handleSelectPlan = async () => {
         <div className="mb-3">
           <div className="grid grid-cols-2 gap-1 text-xs">
             <div className="bg-zinc-800/30 p-1.5 rounded text-center">
-              <div className="text-zinc-400 text-xs">{plan.credits_amount.toLocaleString()}</div>
+              <div className="text-zinc-400 text-xs">{(plan.credits || 0).toLocaleString()}</div>
               <div className="text-white font-medium text-xs">Credits</div>
             </div>
             <div className="bg-zinc-800/30 p-1.5 rounded text-center">
-              <div className="text-zinc-400 text-xs">{plan.validity_display}</div>
+              <div className="text-zinc-400 text-xs">{plan.validity_display || `${plan.validity_days} days`}</div>
               <div className="text-white font-medium text-xs">Validity</div>
             </div>
           </div>
@@ -459,7 +458,7 @@ const handleSelectPlan = async () => {
                 <div className="text-zinc-400 text-xs">
                   {selectedPlanData ? (
                     <>
-                      {selectedPlanData.price_display} • {selectedPlanData.credits_amount.toLocaleString()} credits • {selectedPlanData.validity_display}
+                      {selectedPlanData.price_display} • {selectedPlanData.credits.toLocaleString()} credits • {selectedPlanData.validity_display}
                     </>
                   ) : (
                     'Select a plan to continue'

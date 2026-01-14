@@ -58,20 +58,25 @@ export interface ApiResponse {
   status_code?: number;
 }
 
-// Payment related types - Credit-based system
+// Payment related types - Credit-based system (matches backend API)
 export interface SubscriptionPlan {
   plan_id: string;
   name: string;
   description: string;
   price_usd: number;
-  price_display: string;
-  credits_amount: number;
-  support_type: string;
-  support_display: string;
+  currency: string;
+  credits: number;
+  support_type: string; // "community" | "fincept"
   validity_days: number;
-  validity_display: string;
-  is_popular: boolean;
+  features: string[];
+  is_free: boolean;
   display_order: number;
+  // Computed fields for UI display (added by frontend)
+  price_display?: string;
+  credits_amount?: number;
+  support_display?: string;
+  validity_display?: string;
+  is_popular?: boolean;
 }
 
 export interface PaymentSession {
@@ -411,8 +416,8 @@ const fetchUserProfile = async (apiKey: string): Promise<UserProfileResponse['da
       const result = await PaymentApiService.getSubscriptionPlans();
 
       if (result.success && result.data) {
-        const plansData = (result.data as any).data || result.data;
-        const plans = plansData.plans || [];
+        // result.data is already the array of plans
+        const plans = Array.isArray(result.data) ? result.data : [];
 
         if (plans.length > 0) {
           setAvailablePlans(plans);

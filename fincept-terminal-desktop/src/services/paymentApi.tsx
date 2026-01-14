@@ -27,28 +27,31 @@ interface CheckoutRequest {
   currency: string; // USD, EUR, INR, etc.
 }
 
-// Response Types
+// Response Types - Matches backend exactly
 interface SubscriptionPlan {
   plan_id: string;
   name: string;
+  description: string;
   price_usd: number;
+  currency: string;
   credits: number;
+  support_type: string; // "community" | "fincept"
+  validity_days: number;
   features: string[];
-  // Computed fields for display
-  description?: string;
+  is_free: boolean;
+  display_order: number;
+  // Computed fields for UI display (added by frontend)
   price_display?: string;
   credits_amount?: number;
-  support_type?: string;
   support_display?: string;
   validity_display?: string;
   is_popular?: boolean;
-  display_order?: number;
 }
 
 interface PlansResponse {
-  plans: SubscriptionPlan[];
-  currency: string;
-  total_plans?: number;
+  success: boolean;
+  message: string;
+  data: SubscriptionPlan[];
 }
 
 interface CheckoutResponse {
@@ -189,37 +192,39 @@ const makePaymentApiRequest = async <T = any>(
 // Payment API Service Class with enhanced debugging
 export class PaymentApiService {
   // Get all subscription plans from API
-  static async getSubscriptionPlans(): Promise<PaymentApiResponse<PlansResponse>> {
+  static async getSubscriptionPlans(): Promise<PaymentApiResponse<SubscriptionPlan[]>> {
     const response = await makePaymentApiRequest<PlansResponse>('GET', '/payment/plans');
 
-    // Handle double-wrapped response: response.data might contain {success, data: {plans}}
-    let plansData = response.data;
-    if (plansData && (plansData as any).data && (plansData as any).success) {
-      // Double-wrapped - extract the inner data
-      plansData = (plansData as any).data;
-    }
+    // Backend returns: { success: true, message: "Success", data: [plans array] }
+    if (response.success && response.data) {
+      const plansResponse = response.data;
 
-    // Add computed display fields to each plan
-    if (response.success && plansData?.plans) {
-      plansData.plans = plansData.plans.map((plan: any, index: number) => ({
+      // Extract plans array from the data field
+      const plans = plansResponse.data || [];
+
+      // Add computed display fields to each plan
+      const enrichedPlans = plans.map((plan) => ({
         ...plan,
-        // Add computed display fields
-        price_display: `$${plan.price_usd}`,
+        // Add computed display fields for UI
+        price_display: plan.price_usd === 0 ? 'Free' : `$${plan.price_usd}/mo`,
         credits_amount: plan.credits,
-        description: plan.features?.[0] || '',
-        support_type: plan.price_usd === 0 ? 'community' : 'priority',
-        support_display: plan.features?.find((f: string) => f.toLowerCase().includes('support')) ||
-                        (plan.price_usd === 0 ? 'Community Support' : 'Priority Support'),
-        validity_display: '30 days', // Default to monthly
-        is_popular: plan.plan_id === 'standard', // Mark standard as popular
-        display_order: index + 1
+        support_display: plan.support_type === 'community' ? 'Community Support' : 'Fincept Support',
+        validity_display: plan.validity_days === 0 ? 'Forever' : `${plan.validity_days} days`,
+        is_popular: plan.plan_id === 'pro', // Mark Pro ($50) as popular
       }));
 
-      plansData.total_plans = plansData.plans.length;
-      response.data = plansData;
+      return {
+        success: true,
+        data: enrichedPlans,
+        status_code: response.status_code
+      };
     }
 
-    return response;
+    return {
+      success: false,
+      error: response.error || 'Failed to load plans',
+      status_code: response.status_code
+    };
   }
 
   // Get specific plan details
@@ -227,7 +232,7 @@ export class PaymentApiService {
     return makePaymentApiRequest<SubscriptionPlan>('GET', `/payment/plans/${planId}`);
   }
 
-  // Create checkout session - Updated to use /payment/checkout/create endpoint
+  // Create checkout session - Updated to use /payment/create-order endpoint
   static async createCheckoutSession(
     apiKey: string,
     request: CheckoutRequest
@@ -250,12 +255,13 @@ export class PaymentApiService {
       'X-API-Key': apiKey
     };
 
-    // Only send plan_id, not currency (based on API spec)
+    // Send plan_id and currency (based on API spec)
     const requestBody = {
-      plan_id: request.plan_id
+      plan_id: request.plan_id,
+      currency: request.currency || 'USD'
     };
 
-    return await makePaymentApiRequest<CheckoutResponse>('POST', '/payment/checkout/create', requestBody, headers);
+    return await makePaymentApiRequest<CheckoutResponse>('POST', '/payment/create-order', requestBody, headers);
   }
 
   // Handle payment success
