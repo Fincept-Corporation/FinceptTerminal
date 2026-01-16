@@ -5,7 +5,7 @@
 
 import React, { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { AlphaPerformanceSnapshot } from '@/services/sqliteService';
+import { AlphaPerformanceSnapshot } from '@/services/core/sqliteService';
 
 interface AlphaArenaChartProps {
   snapshots: AlphaPerformanceSnapshot[];

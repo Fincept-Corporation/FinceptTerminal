@@ -4,7 +4,7 @@ import { ScatterplotLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { useAuth } from '@/contexts/AuthContext';
-import { NewsEventsService, NewsEvent, UniqueCity, UniqueCountry, UniqueCategory } from '@/services/newsEventsService';
+import { NewsEventsService, NewsEvent, UniqueCity, UniqueCountry, UniqueCategory } from '@/services/news/newsEventsService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
 
@@ -271,7 +271,7 @@ const GeopoliticsTab: React.FC = () => {
         renderSubLayers: (props: any) => {
           const { boundingBox } = props.tile;
           return new BitmapLayer(props, {
-            data: null,
+            data: undefined,
             image: props.data,
             bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]]
           });
@@ -1007,7 +1007,7 @@ const GeopoliticsTab: React.FC = () => {
           layers={layers}
           width="100%"
           height="100%"
-          style={{ position: 'absolute', inset: 0 }}
+          style={{ position: 'absolute', inset: '0' }}
           getTooltip={({ object }: any) => object && {
             html: `<div style="max-width: 250px;">
                    <strong>${object.event.event_category?.toUpperCase() || 'EVENT'}</strong><br/>

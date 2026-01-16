@@ -53,7 +53,7 @@ import {
   type PortfolioAnomalyResult,
   type PortfolioSeasonalityResult
 } from '@/services/aiQuantLab/portfolioFunctimeService';
-import { portfolioService, type Portfolio } from '@/services/portfolioService';
+import { portfolioService, type Portfolio } from '@/services/portfolio/portfolioService';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {

@@ -1,5 +1,5 @@
 import { Node, Edge } from 'reactflow';
-import { workflowService } from '@/services/workflowService';
+import { workflowService } from '@/services/core/workflowService';
 import { invoke } from '@tauri-apps/api/core';
 
 interface ExecuteOptions {
@@ -157,7 +157,7 @@ class WorkflowExecutor {
     console.log('[WorkflowExecutor] Executing Python agent node:', node.id);
 
     try {
-      const { pythonAgentService } = await import('../../../services/pythonAgentService');
+      const { pythonAgentService } = await import('../../../services/chat/pythonAgentService');
       const { agentId, parameters } = node.data;
 
       if (!agentId) {

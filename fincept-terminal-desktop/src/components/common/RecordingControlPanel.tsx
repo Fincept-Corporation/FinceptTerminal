@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Play, Square, Settings2 } from 'lucide-react';
-import { contextRecorderService } from '@/services/contextRecorderService';
+import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 interface RecordingControlPanelProps {

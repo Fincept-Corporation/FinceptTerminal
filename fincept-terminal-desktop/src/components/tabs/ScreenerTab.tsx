@@ -2,7 +2,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Download, TrendingUp, BarChart3, Loader2, AlertCircle, FolderTree, X, Plus, ArrowLeft, ChevronRight } from 'lucide-react';
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { sqliteService } from '@/services/sqliteService';
+import { sqliteService } from '@/services/core/sqliteService';
 import { invoke } from '@tauri-apps/api/core';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';

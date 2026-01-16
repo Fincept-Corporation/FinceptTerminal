@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
-import { watchlistService, WatchlistStockWithQuote } from '../../../../services/watchlistService';
+import { watchlistService, WatchlistStockWithQuote } from '../../../../services/core/watchlistService';
 
 const BLOOMBERG_WHITE = '#FFFFFF';
 const BLOOMBERG_GREEN = '#00C800';

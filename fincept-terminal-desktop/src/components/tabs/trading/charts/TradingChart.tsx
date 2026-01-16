@@ -1,11 +1,12 @@
 /**
  * TradingChart - TradingView-style candlestick chart with drawing tools
  * Uses ProChartWithToolkit for professional drawing capabilities
+ * Integrates with UnifiedMarketDataService for live price updates
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ProChartWithToolkit } from './ProChartWithToolkit';
-import { useOHLCV } from '../hooks/useMarketData';
+import { useOHLCV, useTicker } from '../hooks/useMarketData';
 import type { Timeframe } from '../types';
 
 interface TradingChartProps {
@@ -22,19 +23,38 @@ export function TradingChart({
   showVolume = true
 }: TradingChartProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>(timeframe);
-  const { ohlcv, isLoading, error } = useOHLCV(symbol, selectedTimeframe, 100); // Reduced from 200 to 100
+  const { ohlcv, isLoading, error } = useOHLCV(symbol, selectedTimeframe, 100);
+  const { ticker } = useTicker(symbol, true); // Live price updates from market data service
 
   const timeframes: Timeframe[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
 
-  // Prepare data for ProChartWithToolkit
-  const chartData = ohlcv.map((candle) => ({
-    time: candle.timestamp > 10000000000 ? Math.floor(candle.timestamp / 1000) : candle.timestamp,
-    open: candle.open,
-    high: candle.high,
-    low: candle.low,
-    close: candle.close,
-    volume: candle.volume,
-  }));
+  // Prepare data for ProChartWithToolkit with live price update on last candle
+  const chartData = useMemo(() => {
+    const data = ohlcv.map((candle) => ({
+      time: candle.timestamp > 10000000000 ? Math.floor(candle.timestamp / 1000) : candle.timestamp,
+      open: candle.open,
+      high: candle.high,
+      low: candle.low,
+      close: candle.close,
+      volume: candle.volume,
+    }));
+
+    // Update the last candle with live price from ticker
+    if (data.length > 0 && ticker && ticker.last > 0) {
+      const lastCandle = data[data.length - 1];
+      const livePrice = ticker.last;
+
+      // Update the close price and adjust high/low if needed
+      data[data.length - 1] = {
+        ...lastCandle,
+        close: livePrice,
+        high: Math.max(lastCandle.high, livePrice),
+        low: Math.min(lastCandle.low, livePrice),
+      };
+    }
+
+    return data;
+  }, [ohlcv, ticker]);
 
   return (
     <div style={{
@@ -93,7 +113,7 @@ export function TradingChart({
           </div>
         </div>
 
-        {/* OHLC Data */}
+        {/* OHLC Data with live price */}
         {!isLoading && !error && chartData.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '2px', fontSize: '10px', fontFamily: 'monospace' }}>
@@ -118,6 +138,17 @@ export function TradingChart({
               >
                 {chartData[chartData.length - 1].close.toFixed(2)}
               </span>
+              {/* Live price indicator */}
+              {ticker && ticker.last > 0 && (
+                <span style={{
+                  color: '#00D66F',
+                  fontWeight: 600,
+                  marginRight: '12px',
+                  animation: 'pulse 1s ease-in-out infinite'
+                }}>
+                  LIVE
+                </span>
+              )}
               <span style={{ color: '#787878', fontSize: '9px' }}>{chartData.length} BARS</span>
             </div>
           </div>

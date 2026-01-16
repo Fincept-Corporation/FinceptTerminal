@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { TrendingUp, TrendingDown, Circle, CheckCircle, XCircle } from 'lucide-react';
-import { AlphaDecisionLog } from '@/services/sqliteService';
+import { AlphaDecisionLog } from '@/services/core/sqliteService';
 
 interface TradeHistoryPanelProps {
   decisions: AlphaDecisionLog[];

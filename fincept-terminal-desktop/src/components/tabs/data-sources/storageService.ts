@@ -2,7 +2,7 @@
 // Uses SQLiteService for persistent storage
 
 import { DataSourceConnection } from './types';
-import { sqliteService } from '@/services/sqliteService';
+import { sqliteService } from '@/services/core/sqliteService';
 
 export class DataSourceStorageService {
   /**

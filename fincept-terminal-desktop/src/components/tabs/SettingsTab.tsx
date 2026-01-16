@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Lock, User, Settings as SettingsIcon, Database, Terminal, Bell, Bot, Edit3, Type, Palette, Wifi, WifiOff, Activity, Zap, Link, Globe, Check, Plus, Trash2, ToggleLeft, ToggleRight, Eye, EyeOff, TrendingUp } from 'lucide-react';
-import { sqliteService, type LLMConfig, type LLMGlobalSettings, type LLMModelConfig, PREDEFINED_API_KEYS, type ApiKeys, saveSetting, getSetting } from '@/services/sqliteService';
-import { ollamaService } from '@/services/ollamaService';
+import { sqliteService, type LLMConfig, type LLMGlobalSettings, type LLMModelConfig, PREDEFINED_API_KEYS, type ApiKeys, saveSetting, getSetting } from '@/services/core/sqliteService';
+import { ollamaService } from '@/services/chat/ollamaService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { terminalThemeService, FONT_FAMILIES, COLOR_THEMES, FontSettings } from '@/services/terminalThemeService';
-import { getWebSocketManager, ConnectionStatus, getAvailableProviders } from '@/services/websocketBridge';
+import { terminalThemeService, FONT_FAMILIES, COLOR_THEMES, FontSettings } from '@/services/core/terminalThemeService';
+import { getWebSocketManager, ConnectionStatus, getAvailableProviders } from '@/services/trading/websocketBridge';
 import { DataSourcesPanel } from '@/components/settings/DataSourcesPanel';
 import { BacktestingProvidersPanel } from '@/components/settings/BacktestingProvidersPanel';
 import { LanguageSelector } from '@/components/settings/LanguageSelector';

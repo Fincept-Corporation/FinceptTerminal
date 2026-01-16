@@ -12,6 +12,7 @@ import {
 import { useBrokerContext } from '../../contexts/BrokerContext';
 import { useRustTicker, useRustOrderBook, useRustTrades } from '../../hooks/useRustWebSocket';
 import { invoke } from '@tauri-apps/api/core';
+import { getMarketDataService } from '../../services/trading/UnifiedMarketDataService';
 // Import new enhanced order form
 import { EnhancedOrderForm } from './trading/core/OrderForm';
 import { HyperLiquidVaultManager } from './trading/exchange-specific/hyperliquid';
@@ -92,6 +93,7 @@ export function TradingTab() {
     paperPortfolioMode,
     setPaperPortfolioMode,
     activeAdapter,
+    realAdapter,
     paperAdapter,
     defaultSymbols,
     isConnecting,
@@ -189,15 +191,15 @@ export function TradingTab() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch watchlist prices - Using bulk API fetch (updated every 15 minutes)
+  // Fetch watchlist prices - Use realAdapter for exchange data (works in both paper and live modes)
   // NOTE: This batches all requests into one API call for optimal performance
   useEffect(() => {
     const fetchWatchlistPrices = async () => {
       try {
-        // Approach 1: Try using exchange's bulk fetchTickers if available
-        if (activeAdapter?.isConnected() && typeof activeAdapter.fetchTickers === 'function') {
+        // Approach 1: Try using realAdapter's bulk fetchTickers (works in paper mode too)
+        if (realAdapter?.isConnected() && typeof realAdapter.fetchTickers === 'function') {
           try {
-            const tickers = await activeAdapter.fetchTickers(watchlist);
+            const tickers = await realAdapter.fetchTickers(watchlist);
             const prices: Record<string, { price: number; change: number }> = {};
 
             let hasValidData = false;
@@ -215,7 +217,7 @@ export function TradingTab() {
             // Only update if we got valid data
             if (hasValidData) {
               setWatchlistPrices(prices);
-              console.log('[Watchlist] Successfully fetched prices from adapter');
+              console.log('[Watchlist] Successfully fetched prices from realAdapter');
               return;
             }
           } catch (err) {
@@ -272,10 +274,10 @@ export function TradingTab() {
     // Initial fetch
     fetchWatchlistPrices();
 
-    // Update every 15 minutes (900000ms)
-    const interval = setInterval(fetchWatchlistPrices, 900000);
+    // Update every 30 seconds for more responsive watchlist
+    const interval = setInterval(fetchWatchlistPrices, 30000);
     return () => clearInterval(interval);
-  }, [activeAdapter, watchlist]);
+  }, [realAdapter, watchlist]);
 
   // Clear data when symbol changes - but don't clear orderbook immediately
   useEffect(() => {
@@ -284,6 +286,21 @@ export function TradingTab() {
     // Don't clear orderbook - let WebSocket update it
   }, [selectedSymbol]);
 
+  // Reset data when broker changes
+  useEffect(() => {
+    // Clear all market data when broker switches
+    setTickerData(null);
+    setOrderBook({ bids: [], asks: [], symbol: '' });
+    setTradesData([]);
+    setWatchlistPrices({});
+    setLastOrderBookUpdate(0);
+
+    // Reset symbol to default for new broker
+    if (defaultSymbols.length > 0) {
+      setSelectedSymbol(defaultSymbols[0]);
+    }
+  }, [activeBroker, defaultSymbols]);
+
   // Subscribe to Rust WebSocket feeds (10,000+ connections, minimal memory)
   const { data: tickerData, error: tickerError } = useRustTicker(
     activeBroker || '',
@@ -291,6 +308,7 @@ export function TradingTab() {
     !!activeBroker
   );
 
+  // Use Rust WebSocket for orderbook (primary source of real-time data)
   const { data: orderbookData, error: orderbookError } = useRustOrderBook(
     activeBroker || '',
     selectedSymbol,
@@ -306,6 +324,7 @@ export function TradingTab() {
   );
 
   // Update ticker data from Rust WebSocket
+  // Also feed into UnifiedMarketDataService for paper trading
   useEffect(() => {
     if (!tickerData) return;
 
@@ -323,20 +342,23 @@ export function TradingTab() {
       open: tickerData.open,
     });
 
-    if (tradingMode === 'paper' && paperAdapter) {
-      const matchingEngine = paperAdapter && 'matchingEngine' in paperAdapter
-        ? (paperAdapter as any).matchingEngine
-        : null;
-
-      if (matchingEngine && typeof matchingEngine.updatePriceFromWebSocket === 'function') {
-        matchingEngine.updatePriceFromWebSocket(selectedSymbol, {
-          bid: tickerData.bid,
-          ask: tickerData.ask,
-          last: tickerData.price,
-        });
-      }
+    // Feed price into UnifiedMarketDataService for paper trading
+    // This keeps positions updated and allows order matching
+    if (activeBroker && tickerData.price > 0) {
+      const marketDataService = getMarketDataService();
+      marketDataService.updatePrice(activeBroker, selectedSymbol, {
+        price: tickerData.price,
+        bid: tickerData.bid,
+        ask: tickerData.ask,
+        volume: tickerData.volume,
+        high: tickerData.high,
+        low: tickerData.low,
+        change: tickerData.change,
+        change_percent: tickerData.change_percent,
+        timestamp: tickerData.timestamp,
+      });
     }
-  }, [tickerData]);
+  }, [tickerData, activeBroker, selectedSymbol]);
 
   // Update orderbook from Rust WebSocket
   useEffect(() => {
@@ -376,16 +398,40 @@ export function TradingTab() {
         setEquity(totalEquity);
 
         const positionsData = await paperAdapter.fetchPositions();
-        const mappedPositions: Position[] = positionsData.map((p: any) => ({
-          symbol: p.symbol,
-          side: p.side,
-          quantity: p.contracts,
-          entryPrice: p.entryPrice,
-          positionValue: p.info?.positionValue || (p.entryPrice * p.contracts),
-          currentPrice: p.markPrice,
-          unrealizedPnl: p.unrealizedPnl,
-          pnlPercent: p.percentage || 0,
-        }));
+        const marketDataService = getMarketDataService();
+
+        const mappedPositions: Position[] = positionsData.map((p: any) => {
+          // Get live price from market data service
+          const livePrice = marketDataService.getCurrentPrice(p.symbol, activeBroker || undefined);
+          const currentPrice = livePrice?.last || p.markPrice || p.current_price || 0;
+          const entryPrice = p.entryPrice || p.entry_price || 0;
+          const quantity = p.contracts || p.quantity || 0;
+
+          // Recalculate P&L with live price
+          let unrealizedPnl = p.unrealizedPnl || p.unrealized_pnl || 0;
+          let pnlPercent = p.percentage || 0;
+
+          if (currentPrice > 0 && entryPrice > 0 && quantity > 0) {
+            if (p.side === 'long') {
+              unrealizedPnl = (currentPrice - entryPrice) * quantity;
+            } else {
+              unrealizedPnl = (entryPrice - currentPrice) * quantity;
+            }
+            pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+            if (p.side === 'short') pnlPercent = -pnlPercent;
+          }
+
+          return {
+            symbol: p.symbol,
+            side: p.side,
+            quantity: quantity,
+            entryPrice: entryPrice,
+            positionValue: p.info?.positionValue || (currentPrice * quantity),
+            currentPrice: currentPrice,
+            unrealizedPnl: unrealizedPnl,
+            pnlPercent: pnlPercent,
+          };
+        });
         setPositions(mappedPositions);
 
         const ordersData = await paperAdapter.fetchOpenOrders();
@@ -414,15 +460,15 @@ export function TradingTab() {
     };
 
     loadPaperTradingData();
-    // Use useRef for interval cleanup to avoid closure issues
+    // Refresh every 1 second for live position updates
     const intervalRef = { current: null as NodeJS.Timeout | null };
-    intervalRef.current = setInterval(loadPaperTradingData, 2000);
+    intervalRef.current = setInterval(loadPaperTradingData, 1000);
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [tradingMode, paperAdapter]);
+  }, [tradingMode, paperAdapter, activeBroker]);
 
   // Update slippage & fees - use proper adapter methods instead of direct mutation
   useEffect(() => {
@@ -436,21 +482,21 @@ export function TradingTab() {
     }
   }, [slippage, makerFee, takerFee, paperAdapter]);
 
-  // Fetch markets - with proper null checks and connection validation
+  // Fetch markets - use realAdapter to get exchange symbols (works in both paper and live modes)
   useEffect(() => {
     const fetchMarkets = async () => {
-      if (!activeAdapter || !activeAdapter.isConnected()) {
+      if (!realAdapter || !realAdapter.isConnected()) {
         setAvailableSymbols(defaultSymbols);
         return;
       }
       setIsLoadingSymbols(true);
       try {
-        const markets = await activeAdapter.fetchMarkets();
+        const markets = await realAdapter.fetchMarkets();
         const symbols = markets
           .filter((m: any) => m.active && m.spot && (m.quote === 'USD' || m.quote === 'USDT' || m.quote === 'USDC'))
           .map((m: any) => m.symbol)
           .sort();
-        setAvailableSymbols(symbols);
+        setAvailableSymbols(symbols.length > 0 ? symbols : defaultSymbols);
       } catch (error) {
         console.error('[TradingTab] Failed to fetch markets:', error);
         setAvailableSymbols(defaultSymbols);
@@ -459,7 +505,7 @@ export function TradingTab() {
       }
     };
     fetchMarkets();
-  }, [activeAdapter, defaultSymbols]);
+  }, [realAdapter, defaultSymbols]);
 
   // Handle order placement - re-validate adapter before each async operation
   const handlePlaceOrder = useCallback(async (orderRequest: OrderRequest) => {

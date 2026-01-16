@@ -11,7 +11,7 @@ import {
   Clock, TrendingUp, Activity, BarChart3, Sliders, Play, Pause,
   Power, Info, ChevronDown, ChevronUp, Save
 } from 'lucide-react';
-import agnoTradingService, { type AgentConfig } from '../../../../services/agnoTradingService';
+import agnoTradingService, { type AgentConfig } from '../../../../services/trading/agnoTradingService';
 
 const BLOOMBERG = {
   ORANGE: '#FF8800',

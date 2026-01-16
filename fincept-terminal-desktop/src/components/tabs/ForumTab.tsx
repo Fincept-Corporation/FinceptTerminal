@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { ForumApiService, ForumPost as APIForumPost, ForumCategory, ForumStats, ForumComment as APIForumComment } from '../../services/forumApi';
-import { sqliteService, getSetting, saveSetting } from '../../services/sqliteService';
+import { ForumApiService, ForumPost as APIForumPost, ForumCategory, ForumStats, ForumComment as APIForumComment } from '../../services/forum/forumApi';
+import { sqliteService, getSetting, saveSetting } from '../../services/core/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 
@@ -170,7 +170,6 @@ const ForumTab: React.FC = () => {
       if (!forceRefresh) {
         const cachedCategories = await sqliteService.getCachedForumCategories(5);
         if (cachedCategories) {
-          console.log('[Forum] Loaded categories from cache');
           setCategories(cachedCategories);
           return;
         }
@@ -201,7 +200,6 @@ const ForumTab: React.FC = () => {
 
         // Cache the formatted categories
         await sqliteService.cacheForumCategories(formattedCategories);
-        console.log('[Forum] Cached categories');
       }
     } catch (error) {
       // Silently fail - backend may not be available
@@ -214,9 +212,6 @@ const ForumTab: React.FC = () => {
     setIsLoading(true);
     try {
       const categoryId = activeCategory === 'ALL' ? null : categories.find(c => c.name === activeCategory)?.id || null;
-
-      // Skip cache for now to test API
-      console.log('[Forum] Fetching posts - Category:', activeCategory, 'ID:', categoryId, 'Sort:', sortBy);
 
       // Fetch from API
       const { apiKey, deviceId } = await getApiCredentials();
@@ -247,27 +242,19 @@ const ForumTab: React.FC = () => {
         }
       }
 
-      console.log('[Forum] API Response:', JSON.stringify(response, null, 2));
-
       if (response?.success && response.data) {
         const responseData = response.data as any;
         const posts = responseData.data?.posts || [];
-        console.log('[Forum] Extracted posts:', posts.length, posts);
 
         if (posts.length > 0) {
           const formattedPosts = posts.map(convertApiPostToUIFormat);
-          console.log('[Forum] Formatted posts:', formattedPosts);
           setForumPosts(formattedPosts);
 
           // Cache the formatted posts
           await sqliteService.cacheForumPosts(categoryId, sortBy, formattedPosts);
-          console.log('[Forum] Cached posts');
         } else {
-          console.warn('[Forum] No posts in response');
           setForumPosts([]);
         }
-      } else {
-        console.warn('[Forum] Invalid response structure:', response);
       }
     } catch (error) {
       // Silently fail - backend may not be available
@@ -284,7 +271,6 @@ const ForumTab: React.FC = () => {
       if (!forceRefresh) {
         const cachedStats = await sqliteService.getCachedForumStats(5);
         if (cachedStats) {
-          console.log('[Forum] Loaded stats from cache');
           setForumStats(cachedStats);
           if (cachedStats.active_users) {
             setOnlineUsers(cachedStats.active_users);
@@ -305,7 +291,6 @@ const ForumTab: React.FC = () => {
 
         // Cache the stats
         await sqliteService.cacheForumStats(response.data.data);
-        console.log('[Forum] Cached stats');
       }
     } catch (error) {
       // Silently fail - backend may not be available
@@ -363,7 +348,6 @@ const ForumTab: React.FC = () => {
         alert(`Failed to create post: ${response.error || response.data?.message || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error creating post:', error);
       alert('Error creating post');
     }
   };
@@ -414,7 +398,6 @@ const ForumTab: React.FC = () => {
         alert(`Failed to add comment: ${response.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error adding comment:', error);
       alert('Error adding comment');
     }
   };
@@ -439,7 +422,7 @@ const ForumTab: React.FC = () => {
         alert(`Vote failed: ${response.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error voting on post:', error);
+      // Silently handle error
     }
   };
 
@@ -458,7 +441,7 @@ const ForumTab: React.FC = () => {
         handleViewPost(selectedPost); // Refresh comments
       }
     } catch (error) {
-      console.error('Error voting on comment:', error);
+      // Silently handle error
     }
   };
 
@@ -478,7 +461,7 @@ const ForumTab: React.FC = () => {
         setSearchResults(formattedPosts);
       }
     } catch (error) {
-      console.error('Error searching:', error);
+      // Silently handle error
     } finally {
       setIsLoading(false);
     }
@@ -507,7 +490,6 @@ const ForumTab: React.FC = () => {
         setShowProfile(true);
       }
     } catch (error) {
-      console.error('Error fetching profile:', error);
       alert('Error loading profile');
     }
   };
@@ -530,7 +512,6 @@ const ForumTab: React.FC = () => {
         setShowProfile(true);
       }
     } catch (error) {
-      console.error('Error fetching user profile:', error);
       alert('Error loading user profile');
     }
   };
@@ -551,7 +532,6 @@ const ForumTab: React.FC = () => {
         alert(`Failed to update profile: ${response.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Error updating profile:', error);
       alert('Error updating profile');
     }
   };
@@ -601,7 +581,6 @@ const ForumTab: React.FC = () => {
     if (isRefreshing) return; // Prevent multiple simultaneous refreshes
 
     setIsRefreshing(true);
-    console.log('[Forum] Manual refresh triggered');
 
     try {
       // Force refresh all data (bypass cache)
@@ -612,9 +591,8 @@ const ForumTab: React.FC = () => {
       ]);
 
       setLastRefreshTime(new Date());
-      console.log('[Forum] Manual refresh completed');
     } catch (error) {
-      console.error('[Forum] Refresh failed:', error);
+      // Silently handle error
     } finally {
       setIsRefreshing(false);
     }
@@ -649,7 +627,7 @@ const ForumTab: React.FC = () => {
                 setShowPostDetail(true);
               }
             } catch (err) {
-              console.error('Failed to load post:', err);
+              // Silently handle error
             }
           }
         }, 1000);
@@ -685,7 +663,6 @@ const ForumTab: React.FC = () => {
   // Auto-refresh every 5 minutes
   useEffect(() => {
     const autoRefreshInterval = setInterval(() => {
-      console.log('[Forum] Auto-refresh triggered (5 min interval)');
       handleRefresh();
     }, 5 * 60 * 1000); // 5 minutes in milliseconds
 

@@ -422,7 +422,7 @@ class AgentBridgeClass {
     // First try to get from Python agent service
     try {
       if (!this.pythonAgentService) {
-        const module = await import('@/services/pythonAgentService');
+        const module = await import('@/services/chat/pythonAgentService');
         this.pythonAgentService = module.pythonAgentService;
       }
 
@@ -475,7 +475,7 @@ class AgentBridgeClass {
       // Try Python agent service first
       if (!this.pythonAgentService) {
         try {
-          const module = await import('@/services/pythonAgentService');
+          const module = await import('@/services/chat/pythonAgentService');
           this.pythonAgentService = module.pythonAgentService;
         } catch (error) {
           console.warn('[AgentBridge] Python agent service not available');
@@ -569,7 +569,7 @@ class AgentBridgeClass {
       // Try to use agentLLMService
       if (!this.agentLLMService) {
         try {
-          const module = await import('@/services/agentLLMService');
+          const module = await import('@/services/chat/agentLLMService');
           this.agentLLMService = module.agentLLMService;
         } catch (error) {
           console.warn('[AgentBridge] Agent LLM service not available');

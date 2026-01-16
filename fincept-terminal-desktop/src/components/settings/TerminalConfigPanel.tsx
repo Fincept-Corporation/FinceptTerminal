@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { tabConfigService } from '@/services/tabConfigService';
+import { tabConfigService } from '@/services/core/tabConfigService';
 import { TabConfiguration, MenuSection, DEFAULT_TABS, DEFAULT_TAB_CONFIG } from '@/types/tabConfig';
 import { GripVertical, Plus, Trash2, RotateCcw, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';

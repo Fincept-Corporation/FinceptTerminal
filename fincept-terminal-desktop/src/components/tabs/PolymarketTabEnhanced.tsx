@@ -31,11 +31,11 @@ import polymarketService, {
   PolymarketTag,
   PolymarketSport,
   PolymarketTrade
-} from '@/services/polymarketService';
+} from '@/services/polymarket/polymarketService';
 import polymarketServiceEnhanced, {
   HistoricalPrice,
   PricePoint
-} from '@/services/polymarketServiceEnhanced';
+} from '@/services/polymarket/polymarketServiceEnhanced';
 
 const PolymarketTabEnhanced: React.FC = () => {
   // State management

@@ -1,4 +1,4 @@
-import { terminalThemeService } from '@/services/terminalThemeService';
+import { terminalThemeService } from '@/services/core/terminalThemeService';
 
 export const getColors = () => {
   const theme = terminalThemeService.getTheme();

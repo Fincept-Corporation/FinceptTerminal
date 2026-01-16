@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Check, Star, Zap, Crown, Rocket, Shield, Loader2, AlertCircle } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
-import { PaymentUtils } from '@/services/paymentApi';
-import { saveSetting } from '@/services/sqliteService';
+import { PaymentUtils } from '@/services/payment/paymentApi';
+import { saveSetting } from '@/services/core/sqliteService';
 
 interface PricingScreenProps {
   onNavigate: (screen: Screen) => void;

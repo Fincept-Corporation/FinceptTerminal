@@ -4,7 +4,7 @@ import {
   Portfolio,
   PortfolioSummary,
   Transaction
-} from '../../../../services/portfolioService';
+} from '../../../../services/portfolio/portfolioService';
 
 export const usePortfolioOperations = () => {
   const [portfolios, setPortfolios] = useState<Portfolio[]>([]);

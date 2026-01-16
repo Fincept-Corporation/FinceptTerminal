@@ -1,29 +1,21 @@
-// Paper Trading Service (Stub - to be fully implemented)
+// Paper Trading WebSocket Service - uses unified paper_trading module
 
-use crate::websocket::types::*;
-use dashmap::DashMap;
-use std::sync::Arc;
+use crate::paper_trading;
 
-pub struct PaperTradingService {
-    price_cache: Arc<DashMap<String, f64>>,
-}
+pub struct PaperTradingService;
 
 impl PaperTradingService {
     pub fn new() -> Self {
-        Self {
-            price_cache: Arc::new(DashMap::new()),
-        }
+        Self
     }
 
-    pub fn update_price(&self, data: &TickerData) {
-        self.price_cache.insert(
-            format!("{}.{}", data.provider, data.symbol),
-            data.price
-        );
+    pub fn update_price(&self, portfolio_id: &str, symbol: &str, price: f64) {
+        let _ = paper_trading::update_position_price(portfolio_id, symbol, price);
     }
+}
 
-    pub fn get_price(&self, provider: &str, symbol: &str) -> Option<f64> {
-        let key = format!("{}.{}", provider, symbol);
-        self.price_cache.get(&key).map(|v| *v)
+impl Default for PaperTradingService {
+    fn default() -> Self {
+        Self::new()
     }
 }

@@ -1,6 +1,6 @@
 // Portfolio Utility Functions
 // Formatting, calculations, and helper functions
-import { terminalThemeService } from '@/services/terminalThemeService';
+import { terminalThemeService } from '@/services/core/terminalThemeService';
 
 export const getBloombergColors = () => {
   const theme = terminalThemeService.getTheme();

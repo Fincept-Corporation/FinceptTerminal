@@ -4,8 +4,8 @@ import {
   watchlistService,
   Watchlist,
   WatchlistStockWithQuote
-} from '../../services/watchlistService';
-import { contextRecorderService } from '../../services/contextRecorderService';
+} from '../../services/core/watchlistService';
+import { contextRecorderService } from '../../services/data-sources/contextRecorderService';
 import WatchlistSidebar from './watchlist/WatchlistSidebar';
 import StockListView from './watchlist/StockListView';
 import { TabFooter } from '@/components/common/TabFooter';

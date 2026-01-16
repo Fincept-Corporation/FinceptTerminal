@@ -2,7 +2,7 @@
 // Advanced equity screening UI with filter builder and preset screens
 
 import React, { useState, useEffect } from 'react';
-import { screenerApi } from '../../../../services/screenerApi';
+import { screenerApi } from '../../../../services/screener/screenerApi';
 import type {
   ScreenCriteria,
   ScreenResult,

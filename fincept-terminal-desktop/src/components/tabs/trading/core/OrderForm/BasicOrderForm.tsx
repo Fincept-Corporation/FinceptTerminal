@@ -29,6 +29,7 @@ interface BasicOrderFormProps {
   side: OrderSide;
   onOrderChange: (order: Partial<UnifiedOrderRequest>) => void;
   balance?: number;
+  positionQuantity?: number; // Amount of asset owned (for sell orders)
 }
 
 export function BasicOrderForm({
@@ -38,13 +39,18 @@ export function BasicOrderForm({
   side,
   onOrderChange,
   balance = 0,
+  positionQuantity = 0,
 }: BasicOrderFormProps) {
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState(currentPrice.toFixed(2));
 
   // Calculate total
   const total = (parseFloat(quantity) || 0) * (parseFloat(price) || currentPrice);
-  const maxQuantity = balance > 0 && currentPrice > 0 ? balance / currentPrice : 0;
+
+  // Max quantity depends on buy/sell
+  const maxQuantity = side === 'buy'
+    ? (balance > 0 && currentPrice > 0 ? balance / currentPrice : 0)
+    : positionQuantity;
 
   // Update parent
   const notifyParent = useCallback((qty: number, prc: number) => {
@@ -81,13 +87,23 @@ export function BasicOrderForm({
 
   // Handle percentage buttons
   const handlePercentage = useCallback((percent: number) => {
-    if (balance === 0 || currentPrice === 0) return;
     const prc = parseFloat(price) || currentPrice;
-    const qty = (balance * percent) / prc;
+    let qty: number;
+
+    if (side === 'buy') {
+      // For BUY: percentage of available cash balance
+      if (balance === 0 || prc === 0) return;
+      qty = (balance * percent) / prc;
+    } else {
+      // For SELL: percentage of position quantity (asset owned)
+      if (positionQuantity === 0) return;
+      qty = positionQuantity * percent;
+    }
+
     const qtyStr = qty.toFixed(4);
     setQuantity(qtyStr);
     notifyParent(qty, prc);
-  }, [balance, currentPrice, price, notifyParent]);
+  }, [balance, positionQuantity, currentPrice, price, side, notifyParent]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -177,7 +193,7 @@ export function BasicOrderForm({
           onBlur={(e) => (e.target.style.borderColor = BLOOMBERG.BORDER)}
         />
         <div style={{ fontSize: '8px', color: BLOOMBERG.GRAY, marginTop: '4px' }}>
-          Max: {maxQuantity.toFixed(4)} {symbol.split('/')[0]}
+          {side === 'buy' ? 'Max (buy)' : 'Available'}: {maxQuantity.toFixed(4)} {symbol.split('/')[0]}
         </div>
       </div>
 

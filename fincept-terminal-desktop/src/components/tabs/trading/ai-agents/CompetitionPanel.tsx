@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Play, Square } from 'lucide-react';
-import { agnoTradingService } from '../../../../services/agnoTradingService';
+import { agnoTradingService } from '../../../../services/trading/agnoTradingService';
 
 const COLORS = {
   ORANGE: '#FF8800',
@@ -34,7 +34,7 @@ export function CompetitionPanel({ selectedSymbol }: { selectedSymbol: string })
   useEffect(() => {
     (async () => {
       try {
-        const { sqliteService } = await import('../../../../services/sqliteService');
+        const { sqliteService } = await import('../../../../services/core/sqliteService');
         const configs = await sqliteService.getLLMConfigs();
         const modelList = configs
           .filter(c => c.api_key?.trim())
@@ -74,7 +74,7 @@ export function CompetitionPanel({ selectedSymbol }: { selectedSymbol: string })
       setIsRunning(true);
 
       // Start price feed
-      const { krakenPriceFeed } = await import('../../../../services/krakenPriceFeed');
+      const { krakenPriceFeed } = await import('../../../../services/markets/krakenPriceFeed');
       await krakenPriceFeed.connect();
 
       krakenPriceFeed.subscribe(selectedSymbol, async (p) => {
@@ -97,7 +97,7 @@ export function CompetitionPanel({ selectedSymbol }: { selectedSymbol: string })
   // Stop competition
   const stop = async () => {
     setIsRunning(false);
-    const { krakenPriceFeed } = await import('../../../../services/krakenPriceFeed');
+    const { krakenPriceFeed } = await import('../../../../services/markets/krakenPriceFeed');
     await krakenPriceFeed.disconnect();
   };
 

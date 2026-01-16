@@ -1,5 +1,5 @@
 import React from 'react';
-import { PortfolioSummary } from '../../../../services/portfolioService';
+import { PortfolioSummary } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency } from './utils';
 import { Bell } from 'lucide-react';
 import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';

@@ -35,15 +35,15 @@ import {
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { reportService, ReportTemplate, ReportComponent } from '@/services/reportService';
+import { reportService, ReportTemplate, ReportComponent } from '@/services/core/reportService';
 import { save, open } from '@tauri-apps/plugin-dialog';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { llmApiService, ChatMessage as APIMessage } from '@/services/llmApi';
-import { sqliteService } from '@/services/sqliteService';
+import { llmApiService, ChatMessage as APIMessage } from '@/services/chat/llmApi';
+import { sqliteService } from '@/services/core/sqliteService';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';

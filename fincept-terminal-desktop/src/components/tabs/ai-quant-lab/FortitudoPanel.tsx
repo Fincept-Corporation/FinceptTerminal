@@ -54,7 +54,7 @@ import {
   portfolioFortitudoService,
   type PortfolioReturnsData
 } from '@/services/aiQuantLab/portfolioFortitudoService';
-import { type Portfolio, type PortfolioSummary } from '@/services/portfolioService';
+import { type Portfolio, type PortfolioSummary } from '@/services/portfolio/portfolioService';
 import { Briefcase, Database } from 'lucide-react';
 
 // Bloomberg Professional Color Palette

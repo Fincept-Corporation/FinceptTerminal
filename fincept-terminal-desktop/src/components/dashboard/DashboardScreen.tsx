@@ -47,7 +47,7 @@ const NodeEditorTab = React.lazy(() => import('@/components/tabs/NodeEditorTab')
 const PolygonEqTab = React.lazy(() => import('@/components/tabs/PolygonEqTab'));
 const DerivativesTab = React.lazy(() => import('@/components/tabs/DerivativesTab').then(m => ({ default: m.DerivativesTab })));
 const TradingTab = React.lazy(() => import('@/components/tabs/TradingTab').then(m => ({ default: m.TradingTab })));
-const EquityTradingTab = React.lazy(() => import('@/components/tabs/equity-trading/EquityTradingTab'));
+// const EquityTradingTab = React.lazy(() => import('@/components/tabs/equity-trading/EquityTradingTab')); // TODO: Implement
 const DBnomicsTab = React.lazy(() => import('@/components/tabs/DBnomicsTab'));
 const EconomicsTab = React.lazy(() => import('@/components/tabs/EconomicsTab'));
 const MaritimeTab = React.lazy(() => import('@/components/tabs/MaritimeTabDeck'));
@@ -224,7 +224,7 @@ function FinxeptTerminalContent() {
     (async () => {
       try {
         // Initialize database first
-        const { sqliteService } = await import('@/services/sqliteService');
+        const { sqliteService } = await import('@/services/core/sqliteService');
         if (!sqliteService.isReady()) {
           console.log('[App] Initializing database on app start...');
           await sqliteService.initialize();
@@ -233,7 +233,7 @@ function FinxeptTerminalContent() {
 
         // Auto-start MCP servers that have auto_start enabled
         try {
-          const { mcpManager } = await import('@/services/mcpManager');
+          const { mcpManager } = await import('@/services/mcp/mcpManager');
           await mcpManager.startAutoStartServers();
         } catch (mcpError) {
           console.warn('[App] MCP auto-start failed (this is OK if no servers are configured):', mcpError);
@@ -1107,11 +1107,13 @@ function FinxeptTerminalContent() {
                 <TradingTab />
               </React.Suspense>
             </TabsContent>
+            {/* TODO: Implement EquityTradingTab
             <TabsContent value="equity-trading" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <EquityTradingTab />
               </React.Suspense>
             </TabsContent>
+            */}
             <TabsContent value="polymarket" className="h-full m-0 p-0">
               <React.Suspense fallback={<TabLoadingFallback />}>
                 <PolymarketTab />

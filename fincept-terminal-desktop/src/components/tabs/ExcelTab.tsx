@@ -6,7 +6,7 @@ import { HyperFormula } from 'hyperformula';
 import { Upload, Download, Plus, Trash2, Save, FileSpreadsheet, History, Camera, RotateCcw, Clock, FolderOpen, X } from 'lucide-react';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import { readFile as tauriReadFile, writeFile as tauriWriteFile } from '@tauri-apps/plugin-fs';
-import { excelService, ExcelFile, ExcelSnapshot } from '@/services/excelService';
+import { excelService, ExcelFile, ExcelSnapshot } from '@/services/core/excelService';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 

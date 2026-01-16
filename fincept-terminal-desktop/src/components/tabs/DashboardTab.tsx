@@ -4,7 +4,7 @@ import { Plus, RotateCcw, Save, Info } from 'lucide-react';
 import { createDashboardTabTour } from './tours/dashboardTabTour';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { sqliteService, saveSetting, getSetting } from '../../services/sqliteService';
+import { sqliteService, saveSetting, getSetting } from '../../services/core/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
 import {
   NewsWidget,
@@ -133,11 +133,9 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
         if (healthCheck.healthy) {
           setDbInitialized(true);
         } else {
-          console.warn('[Dashboard] Database not healthy:', healthCheck.message);
           setDbInitialized(true); // Allow dashboard to load anyway
         }
       } catch (error) {
-        console.error('[Dashboard] Database initialization error:', error);
         setDbInitialized(true); // Allow dashboard to load anyway
       }
     };
@@ -157,7 +155,6 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
           setWidgets(DEFAULT_LAYOUT);
         }
       } catch (error) {
-        console.error('Failed to load dashboard layout:', error);
         setWidgets(DEFAULT_LAYOUT);
       }
     };
@@ -212,7 +209,6 @@ const DashboardTab: React.FC<DashboardTabProps> = ({ onNavigateToTab }) => {
       await saveSetting(STORAGE_KEY, JSON.stringify({ widgets, nextId }), 'dashboard');
       alert(t('messages.layoutSaved'));
     } catch (error) {
-      console.error('Failed to save dashboard layout:', error);
       alert('Failed to save layout');
     }
   };

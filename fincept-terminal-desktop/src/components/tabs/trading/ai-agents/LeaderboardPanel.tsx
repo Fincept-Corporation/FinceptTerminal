@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Trophy, TrendingUp, TrendingDown, Award, Target, Percent, DollarSign } from 'lucide-react';
-import type { ModelPerformance } from '../../../../services/agnoTradingService';
+import type { ModelPerformance } from '../../../../services/trading/agnoTradingService';
 
 const BLOOMBERG = {
   ORANGE: '#FF8800',

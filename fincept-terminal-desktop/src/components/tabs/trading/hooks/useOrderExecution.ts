@@ -19,7 +19,7 @@ export interface UseOrderExecutionResult {
 }
 
 export function useOrderExecution(): UseOrderExecutionResult {
-  const { activeAdapter, tradingMode, paperAdapter } = useBrokerContext();
+  const { activeAdapter, tradingMode } = useBrokerContext();
   const [isPlacing, setIsPlacing] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
   const [isEditing, setIsEditing] = useState(false);

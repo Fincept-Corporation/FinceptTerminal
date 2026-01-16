@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Target, Activity, Award, AlertTriangle } from 'lucide-react';
-import { activeManagementService, type ComprehensiveAnalysisResult } from '@/services/activeManagementService';
+import { activeManagementService, type ComprehensiveAnalysisResult } from '@/services/portfolio/activeManagementService';
 import { formatPercent, formatNumber } from './utils';
 import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
 

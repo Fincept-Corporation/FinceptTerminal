@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { sqliteService } from '../services/sqliteService';
+import { sqliteService } from '../services/core/sqliteService';
 
 export type DataSourceCategory = 'database' | 'api' | 'file' | 'streaming' | 'cloud' | 'timeseries' | 'market-data';
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { PortfolioSummary } from '../../../../services/portfolioService';
+import { PortfolioSummary } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatNumber, formatPercent } from './utils';
 import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
 

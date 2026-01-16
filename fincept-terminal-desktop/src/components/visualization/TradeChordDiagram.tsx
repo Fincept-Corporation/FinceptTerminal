@@ -3,7 +3,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import type { ChordData } from '@/services/tradeService';
+import type { ChordData } from '@/services/trading/tradeService';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {

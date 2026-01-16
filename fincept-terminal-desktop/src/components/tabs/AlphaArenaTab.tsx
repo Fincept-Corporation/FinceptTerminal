@@ -9,8 +9,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 import { useBrokerContext } from '@/contexts/BrokerContext';
-import { alphaArenaBrokerBridge } from '@/services/alphaArenaBrokerBridge';
-import { createPaperTradingAdapter } from '@/paper-trading';
+import { alphaArenaBrokerBridge } from '@/services/trading/alphaArenaBrokerBridge';
 
 // Bloomberg color palette
 const COLORS = {
@@ -59,7 +58,7 @@ const AlphaArenaTab: React.FC = () => {
     setActiveBroker,
     tradingMode,
     setTradingMode,
-    paperAdapter,
+    paperPortfolio,
     activeAdapter,
     defaultSymbols,
   } = useBrokerContext();

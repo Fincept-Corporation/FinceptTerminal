@@ -2,7 +2,7 @@
 
 import { DataMappingConfig } from '../types';
 import { encryptionService } from './EncryptionService';
-import { sqliteService } from '@/services/sqliteService';
+import { sqliteService } from '@/services/core/sqliteService';
 
 /**
  * Database service for storing mappings and API response cache

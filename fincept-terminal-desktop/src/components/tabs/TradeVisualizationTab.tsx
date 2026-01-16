@@ -19,7 +19,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
 } from 'lucide-react';
-import { tradeService, type ChordData, type Country } from '@/services/tradeService';
+import { tradeService, type ChordData, type Country } from '@/services/trading/tradeService';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 import { TradeChordDiagram } from '@/components/visualization/TradeChordDiagram';

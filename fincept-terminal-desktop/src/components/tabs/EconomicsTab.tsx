@@ -2,7 +2,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import React, { useState } from 'react';
 import { RefreshCw, Download, Globe, TrendingUp, BarChart3, PieChart } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import bisDataService from '@/services/bisDataService';
+import bisDataService from '@/services/data-sources/bisDataService';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 

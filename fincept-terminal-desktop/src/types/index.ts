@@ -8,7 +8,7 @@
  */
 
 // WebSocket message types
-export * from './websocket';
+// export * from './websocket'; // TODO: Create websocket types file if needed
 
 // API response types
 export * from './api';

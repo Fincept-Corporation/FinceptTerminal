@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { saveSetting, getSetting } from '@/services/sqliteService';
+import { saveSetting, getSetting } from '@/services/core/sqliteService';
 
 interface Language {
   code: string;

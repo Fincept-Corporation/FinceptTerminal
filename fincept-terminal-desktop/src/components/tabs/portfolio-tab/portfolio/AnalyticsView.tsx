@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PortfolioSummary, portfolioService } from '../../../../services/portfolioService';
+import { PortfolioSummary, portfolioService } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent, formatLargeNumber } from './utils';
 import { TrendingUp, Activity, PieChart, Target } from 'lucide-react';
 import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, GRID_TEMPLATES } from '../bloombergStyles';

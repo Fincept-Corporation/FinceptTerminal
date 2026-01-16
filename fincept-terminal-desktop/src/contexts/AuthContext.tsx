@@ -2,10 +2,10 @@
 // Authentication context for managing user state and backend API integration with payment support
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AuthApiService } from '@/services/authApi';
-import { PaymentApiService } from '@/services/paymentApi';
-import { UserApiService } from '@/services/userApi';
-import { saveSetting, getSetting } from '@/services/sqliteService';
+import { AuthApiService } from '@/services/auth/authApi';
+import { PaymentApiService } from '@/services/payment/paymentApi';
+import { UserApiService } from '@/services/auth/userApi';
+import { saveSetting, getSetting } from '@/services/core/sqliteService';
 
 // Response types to match your API
 export interface LoginResponse {

@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { Play, Square, Trash2 } from 'lucide-react';
-import { MCPServerWithStats } from '../../../services/mcpManager';
+import { MCPServerWithStats } from '../../../services/mcp/mcpManager';
 
 interface MCPServerCardProps {
   server: MCPServerWithStats;

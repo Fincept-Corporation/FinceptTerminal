@@ -6,8 +6,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Trash2, Download, Search, Eye, FileJson, FileText, ListTree, X } from 'lucide-react';
-import { contextRecorderService } from '@/services/contextRecorderService';
-import { RecordedContext } from '@/services/sqliteService';
+import { contextRecorderService } from '@/services/data-sources/contextRecorderService';
+import { RecordedContext } from '@/services/core/sqliteService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 
 export const RecordedContextsManager: React.FC = () => {

@@ -4,10 +4,10 @@ import { Settings, Trash2, Bot, User, Clock, Send, Plus, Search, Edit2, Check, X
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { llmApiService, ChatMessage as APIMessage } from '../../services/llmApi';
-import { sqliteService, ChatSession, ChatMessage, RecordedContext } from '../../services/sqliteService';
-import { llmConfigService } from '../../services/llmConfig';
-import { contextRecorderService } from '../../services/contextRecorderService';
+import { llmApiService, ChatMessage as APIMessage } from '../../services/chat/llmApi';
+import { sqliteService, ChatSession, ChatMessage, RecordedContext } from '../../services/core/sqliteService';
+import { llmConfigService } from '../../services/chat/llmConfig';
+import { contextRecorderService } from '../../services/data-sources/contextRecorderService';
 import LLMSettingsModal from './LLMSettingsModal';
 import MarkdownRenderer from '../common/MarkdownRenderer';
 import ContextSelector from '../common/ContextSelector';
@@ -171,7 +171,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
 
   const loadMCPToolsCount = async (retryCount = 0, maxRetries = 5) => {
     try {
-      const { mcpToolService } = await import('../../services/mcpToolService');
+      const { mcpToolService } = await import('../../services/mcp/mcpToolService');
       const tools = await mcpToolService.getAllTools();
       setMcpToolsCount(tools.length);
 
@@ -396,7 +396,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ onNavigateToSettings, onNavigateToTab
       // Get MCP tools if available using the unified service
       let mcpTools: any[] = [];
       try {
-        const { mcpToolService } = await import('../../services/mcpToolService');
+        const { mcpToolService } = await import('../../services/mcp/mcpToolService');
         mcpTools = await mcpToolService.getAllTools();
       } catch (error) {
         // MCP tools not available

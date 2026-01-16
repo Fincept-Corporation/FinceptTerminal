@@ -233,14 +233,13 @@ export function useMarginInfo(autoRefresh: boolean = true) {
 // ============================================================================
 
 export function useTradingStats() {
-  const { activeAdapter, tradingMode, paperAdapter } = useBrokerContext();
+  const { activeAdapter, tradingMode, paperTradingApi, paperPortfolio } = useBrokerContext();
   const [stats, setStats] = useState<TradingStatistics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchStats = useCallback(async () => {
-    // Remove redundant adapter logic - just use activeAdapter directly
-    if (!activeAdapter) {
+    if (!activeAdapter && tradingMode !== 'paper') {
       setStats(null);
       return;
     }
@@ -249,10 +248,42 @@ export function useTradingStats() {
     setError(null);
 
     try {
-      // Get statistics from paper trading adapter if available
-      if (tradingMode === 'paper' && (activeAdapter as any).getStatistics) {
-        const paperStats = await (activeAdapter as any).getStatistics();
-        setStats(paperStats);
+      // Get statistics from Rust paper trading module
+      if (tradingMode === 'paper' && paperPortfolio) {
+        const rustStats = await paperTradingApi.getStats(paperPortfolio.id);
+        // Get fresh portfolio data for balance info
+        const portfolio = await paperTradingApi.getPortfolio(paperPortfolio.id);
+
+        const totalPnL = rustStats.total_pnl;
+        const currentBalance = portfolio.balance;
+        const initialBalance = portfolio.initial_balance;
+        const returnPercent = initialBalance > 0 ? ((currentBalance - initialBalance) / initialBalance) * 100 : 0;
+
+        setStats({
+          // Account
+          initialBalance,
+          currentBalance,
+          totalEquity: currentBalance,
+
+          // P&L
+          totalPnL,
+          realizedPnL: totalPnL, // For paper trading, total = realized
+          unrealizedPnL: 0, // Would need to sum position unrealized P&L
+          returnPercent,
+
+          // Trading
+          totalTrades: rustStats.total_trades,
+          winningTrades: rustStats.winning_trades,
+          losingTrades: rustStats.losing_trades,
+          winRate: rustStats.win_rate,
+
+          // Performance
+          largestWin: rustStats.largest_win,
+          largestLoss: rustStats.largest_loss,
+
+          // Fees
+          totalFees: 0, // Could accumulate from trades
+        });
       } else {
         // For live trading, calculate stats from closed orders
         setStats(null); // Not implemented for live yet
@@ -265,7 +296,7 @@ export function useTradingStats() {
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, tradingMode]);
+  }, [activeAdapter, tradingMode, paperPortfolio, paperTradingApi]);
 
   useEffect(() => {
     // Add isMounted ref for cleanup

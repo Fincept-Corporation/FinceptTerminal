@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Watchlist } from '../../../services/watchlistService';
+import { Watchlist } from '../../../services/core/watchlistService';
 import { BLOOMBERG_COLORS } from './utils';
 import { Trash2, Plus } from 'lucide-react';
 

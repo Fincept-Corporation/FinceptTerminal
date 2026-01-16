@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Edit2, Info } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { marketDataService, QuoteData } from '../../services/marketDataService';
-import { tickerStorage, UserMarketPreferences } from '../../services/tickerStorageService';
-import { sqliteService } from '../../services/sqliteService';
-import { contextRecorderService } from '../../services/contextRecorderService';
+import { marketDataService, QuoteData } from '../../services/markets/marketDataService';
+import { tickerStorage, UserMarketPreferences } from '../../services/core/tickerStorageService';
+import { sqliteService } from '../../services/core/sqliteService';
+import { contextRecorderService } from '../../services/data-sources/contextRecorderService';
 import TickerEditModal from './TickerEditModal';
 import RecordingControlPanel from '../common/RecordingControlPanel';
 import { TabFooter } from '@/components/common/TabFooter';

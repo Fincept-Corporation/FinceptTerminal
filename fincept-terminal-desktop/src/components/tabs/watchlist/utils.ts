@@ -1,5 +1,5 @@
 // Watchlist Utilities - Shared constants, formatting, and helper functions
-import { terminalThemeService } from '@/services/terminalThemeService';
+import { terminalThemeService } from '@/services/core/terminalThemeService';
 
 // Bloomberg Color Scheme
 export const getBloombergColors = () => {

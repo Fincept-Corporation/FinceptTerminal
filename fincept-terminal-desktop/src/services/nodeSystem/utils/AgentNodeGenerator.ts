@@ -14,7 +14,7 @@ import {
   NodePropertyType,
   INodeProperties,
 } from '../types';
-import { pythonAgentService, AgentMetadata } from '@/services/pythonAgentService';
+import { pythonAgentService, AgentMetadata } from '@/services/chat/pythonAgentService';
 
 /**
  * Convert Python agent metadata to node properties

@@ -1,8 +1,8 @@
-export { FilterTransformNode } from './FilterTransform.node';
-export { MapNode } from './Map.node';
-export { AggregateNode } from './Aggregate.node';
-export { SortNode } from './Sort.node';
-export { GroupByNode } from './GroupBy.node';
-export { JoinNode } from './Join.node';
-export { DeduplicateNode } from './Deduplicate.node';
-export { ReshapeNode } from './Reshape.node';
+export { FilterTransformNode } from './FilterNode';
+export { MapNode } from './MapNode';
+export { AggregateNode } from './AggregateNode';
+export { SortNode } from './SortNode';
+export { GroupByNode } from './GroupByNode';
+export { JoinNode } from './JoinNode';
+export { DeduplicateNode } from './DeduplicateNode';
+export { ReshapeNode } from './ReshapeNode';

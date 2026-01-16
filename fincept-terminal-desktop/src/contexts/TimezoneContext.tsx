@@ -8,7 +8,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { saveSetting, getSetting } from '@/services/sqliteService';
+import { saveSetting, getSetting } from '@/services/core/sqliteService';
 
 // ============================================================================
 // Types & Constants

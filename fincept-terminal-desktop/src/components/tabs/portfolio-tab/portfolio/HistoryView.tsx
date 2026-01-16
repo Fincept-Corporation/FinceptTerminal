@@ -1,5 +1,5 @@
 import React from 'react';
-import { Transaction } from '../../../../services/portfolioService';
+import { Transaction } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatNumber, formatDateTime } from './utils';
 import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
 

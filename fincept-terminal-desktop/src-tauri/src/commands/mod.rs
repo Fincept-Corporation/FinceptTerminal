@@ -134,8 +134,7 @@ pub mod screener_commands;
 // Geocoding - Location search and reverse geocoding
 pub mod geocoding;
 
-// Stock Paper Trading - Equity trading with product types (CNC/MIS/NRML)
-pub mod stock_paper_trading;
+// Paper Trading moved to src-tauri/src/paper_trading.rs (universal module)
 
 // Broker Credentials - Secure encrypted storage for broker API credentials
 pub mod broker_credentials;

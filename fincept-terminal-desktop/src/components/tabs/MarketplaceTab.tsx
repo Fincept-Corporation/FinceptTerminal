@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { MarketplaceApiService, Dataset } from '@/services/marketplaceApi';
+import { MarketplaceApiService, Dataset } from '@/services/marketplace/marketplaceApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';

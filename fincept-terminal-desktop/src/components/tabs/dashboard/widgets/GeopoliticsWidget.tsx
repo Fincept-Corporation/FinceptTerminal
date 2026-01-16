@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, AlertTriangle, Shield, TrendingUp, TrendingDown, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
-import { geopoliticsService } from '@/services/geopoliticsService';
+import { geopoliticsService } from '@/services/geopolitics/geopoliticsService';
 
 interface GeopoliticsWidgetProps {
   id: string;

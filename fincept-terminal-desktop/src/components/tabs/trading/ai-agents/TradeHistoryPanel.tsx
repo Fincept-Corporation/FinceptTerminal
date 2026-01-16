@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Activity, BarChart3, RefreshCw, Filter, ArrowUpDown } from 'lucide-react';
-import agnoTradingService, { type AgentTrade, type AgentPerformance } from '../../../../services/agnoTradingService';
+import agnoTradingService, { type AgentTrade, type AgentPerformance } from '../../../../services/trading/agnoTradingService';
 
 const BLOOMBERG = {
   ORANGE: '#FF8800',

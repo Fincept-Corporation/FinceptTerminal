@@ -8,7 +8,7 @@ import KeplerGl from 'kepler.gl/components';
 import { addDataToMap, wrapTo } from 'kepler.gl/actions';
 import { useDispatch } from 'react-redux';
 import { useAuth } from '@/contexts/AuthContext';
-import { MarineApiService, VesselData } from '@/services/marineApi';
+import { MarineApiService, VesselData } from '@/services/maritime/marineApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';

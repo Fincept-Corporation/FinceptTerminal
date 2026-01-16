@@ -22,7 +22,7 @@ import {
   Copy
 } from 'lucide-react';
 import { statsmodelsService, type StatsmodelsResult } from '@/services/aiQuantLab/statsmodelsService';
-import { yfinanceService } from '@/services/yfinanceService';
+import { yfinanceService } from '@/services/markets/yfinanceService';
 
 const BLOOMBERG = {
   ORANGE: '#FF8800',

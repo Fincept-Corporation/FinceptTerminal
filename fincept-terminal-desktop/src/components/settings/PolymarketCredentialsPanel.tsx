@@ -21,8 +21,8 @@ import {
   Shield,
   Link as LinkIcon
 } from 'lucide-react';
-import polymarketServiceEnhanced from '@/services/polymarketServiceEnhanced';
-import { getSetting, saveSetting } from '@/services/sqliteService';
+import polymarketServiceEnhanced from '@/services/polymarket/polymarketServiceEnhanced';
+import { getSetting, saveSetting } from '@/services/core/sqliteService';
 
 interface PolymarketCredentials {
   apiKey: string;

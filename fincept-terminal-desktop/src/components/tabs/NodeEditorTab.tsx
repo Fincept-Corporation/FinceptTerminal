@@ -1,6 +1,6 @@
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { saveSetting, getSetting } from '@/services/sqliteService';
+import { saveSetting, getSetting } from '@/services/core/sqliteService';
 import ReactFlow, {
   Node,
   Edge,
@@ -44,10 +44,10 @@ import DataSourceNode from './node-editor/DataSourceNode';
 import TechnicalIndicatorNode from './node-editor/TechnicalIndicatorNode';
 import WorkflowManager from './node-editor/WorkflowManager';
 import ResultsModal from './node-editor/ResultsModal';
-import { pythonAgentService, AgentMetadata } from '@/services/pythonAgentService';
+import { pythonAgentService, AgentMetadata } from '@/services/chat/pythonAgentService';
 import { workflowExecutor } from './node-editor/WorkflowExecutor';
-import { Workflow, workflowService } from '@/services/workflowService';
-import { nodeExecutionManager } from '@/services/nodeExecutionManager';
+import { Workflow, workflowService } from '@/services/core/workflowService';
+import { nodeExecutionManager } from '@/services/core/nodeExecutionManager';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 

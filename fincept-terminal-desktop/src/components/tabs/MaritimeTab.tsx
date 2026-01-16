@@ -3,7 +3,7 @@ import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
-import { MarineApiService, VesselData } from '@/services/marineApi';
+import { MarineApiService, VesselData } from '@/services/maritime/marineApi';
 
 interface MarkerData {
   lat: number;

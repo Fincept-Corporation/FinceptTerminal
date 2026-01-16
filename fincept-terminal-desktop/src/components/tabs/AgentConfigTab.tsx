@@ -19,7 +19,7 @@ import {
   Globe,
   Building2,
 } from 'lucide-react';
-import { getLLMConfigs } from '@/services/sqliteService';
+import { getLLMConfigs } from '@/services/core/sqliteService';
 import { TabFooter } from '@/components/common/TabFooter';
 
 // Bloomberg Professional Color Palette

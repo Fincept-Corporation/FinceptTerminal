@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { MessageSquare, TrendingUp, TrendingDown, Brain, Loader2, AlertCircle, CheckCircle, Zap, Play } from 'lucide-react';
-import agnoTradingService, { type DebateResult } from '../../../../services/agnoTradingService';
+import agnoTradingService, { type DebateResult } from '../../../../services/trading/agnoTradingService';
 
 const BLOOMBERG = {
   ORANGE: '#FF8800',
@@ -49,7 +49,7 @@ export function DebateArenaPanel({ selectedSymbol, currentPrice, marketData }: D
 
   const loadAvailableModels = async () => {
     try {
-      const { sqliteService } = await import('../../../../services/sqliteService');
+      const { sqliteService } = await import('../../../../services/core/sqliteService');
       const configs = await sqliteService.getLLMConfigs();
 
       const configured = configs.filter(c => c.api_key && c.api_key.trim().length > 0);

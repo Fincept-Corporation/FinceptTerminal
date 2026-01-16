@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { WidgetType, DEFAULT_WIDGET_CONFIGS } from './widgets';
-import { watchlistService } from '../../../services/watchlistService';
-import { getAllDataSources } from '../../../services/dataSourceRegistry';
-import { DataSource } from '../../../services/sqliteService';
+import { watchlistService } from '../../../services/core/watchlistService';
+import { getAllDataSources } from '../../../services/data-sources/dataSourceRegistry';
+import { DataSource } from '../../../services/core/sqliteService';
 
 const BLOOMBERG_ORANGE = '#FFA500';
 const BLOOMBERG_WHITE = '#FFFFFF';

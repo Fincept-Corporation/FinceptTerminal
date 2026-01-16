@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { useProviderContext } from '../../../contexts/ProviderContext';
-import { paperTradingDatabase } from '../../../paper-trading';
+import { createPortfolio } from '../../../paper-trading';
 
 interface PaperTradingPanelProps {
   portfolioId: string | null;
@@ -31,18 +31,14 @@ export function PaperTradingPanel({
       // Enable paper trading - create new portfolio
       setIsCreating(true);
       try {
-        const newPortfolioId = crypto.randomUUID();
-
-        await paperTradingDatabase.createPortfolio({
-          id: newPortfolioId,
-          name: `${activeProvider.toUpperCase()} Paper Trading`,
-          provider: activeProvider,
-          initialBalance: 100000,
-          currency: 'USD',
-        });
+        const portfolio = await createPortfolio(
+          `${activeProvider.toUpperCase()} Paper Trading`,
+          100000,
+          'USD'
+        );
 
         setEnabled(true);
-        onPortfolioChange(newPortfolioId);
+        onPortfolioChange(portfolio.id);
       } catch (error) {
         console.error('[PaperTradingPanel] Failed to create portfolio:', error);
       } finally {

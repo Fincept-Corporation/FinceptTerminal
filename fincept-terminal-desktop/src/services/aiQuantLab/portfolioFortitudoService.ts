@@ -6,8 +6,8 @@
  * for use with portfolio risk metrics, optimization, and efficient frontier.
  */
 
-import { portfolioService, Portfolio, PortfolioSummary, HoldingWithQuote } from '../portfolioService';
-import { yfinanceService, HistoricalDataPoint } from '../yfinanceService';
+import { portfolioService, Portfolio, PortfolioSummary, HoldingWithQuote } from '../portfolio/portfolioService';
+import { yfinanceService, HistoricalDataPoint } from '../markets/yfinanceService';
 import { fortitudoService, ReturnsData, WeightsData, OptimizationResult, EfficientFrontierResponse, FullAnalysisResponse } from './fortitudoService';
 
 // ============================================================================

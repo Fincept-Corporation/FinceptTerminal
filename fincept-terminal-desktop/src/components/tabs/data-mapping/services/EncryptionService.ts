@@ -1,7 +1,7 @@
 // Encryption Service - Secure credential storage
 // PURE SQLite - No localStorage fallback
 
-import { getSetting, saveSetting } from '@/services/sqliteService';
+import { getSetting, saveSetting } from '@/services/core/sqliteService';
 
 /**
  * Simple encryption/decryption service using Web Crypto API

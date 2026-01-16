@@ -6,8 +6,8 @@
  * for use with forecasting, anomaly detection, seasonality analysis, etc.
  */
 
-import { portfolioService, Portfolio, PortfolioSummary, HoldingWithQuote } from '../portfolioService';
-import { yfinanceService, HistoricalDataPoint } from '../yfinanceService';
+import { portfolioService, Portfolio, PortfolioSummary, HoldingWithQuote } from '../portfolio/portfolioService';
+import { yfinanceService, HistoricalDataPoint } from '../markets/yfinanceService';
 import {
   functimeService,
   PanelData,

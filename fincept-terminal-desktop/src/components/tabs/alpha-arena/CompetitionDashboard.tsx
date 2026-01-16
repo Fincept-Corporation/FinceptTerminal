@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Trophy, Play, Eye, Trash2, Plus, TrendingUp, Calendar, Clock } from 'lucide-react';
-import { sqliteService, AlphaCompetition } from '@/services/sqliteService';
+import { sqliteService, AlphaCompetition } from '@/services/core/sqliteService';
 
 const BLOOMBERG = {
   DARK_BG: '#000000',

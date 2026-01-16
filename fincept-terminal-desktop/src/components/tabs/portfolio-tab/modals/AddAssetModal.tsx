@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { marketDataService } from '../../../../services/marketDataService';
+import { marketDataService } from '../../../../services/markets/marketDataService';
 import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES, createFocusHandlers } from '../bloombergStyles';
 
 interface AddAssetModalProps {

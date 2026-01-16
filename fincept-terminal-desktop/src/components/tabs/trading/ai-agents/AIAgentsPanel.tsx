@@ -19,7 +19,7 @@ import agnoTradingService, {
   type TradeSignal,
   type RiskAnalysis,
   type TradeExecutionResult
-} from '../../../../services/agnoTradingService';
+} from '../../../../services/trading/agnoTradingService';
 import { AgentConfigurationUI } from './AgentConfigurationUI';
 import { CompetitionPanel } from './CompetitionPanel';
 import { DebateArenaPanel } from './DebateArenaPanel';
@@ -76,7 +76,7 @@ export function AIAgentsPanel({ selectedSymbol, portfolioData }: AIAgentsPanelPr
   useEffect(() => {
     const checkAPIKeys = async () => {
       try {
-        const { sqliteService } = await import('../../../../services/sqliteService');
+        const { sqliteService } = await import('../../../../services/core/sqliteService');
         const configs = await sqliteService.getLLMConfigs();
 
         const configured = configs.filter(c => c.api_key && c.api_key.trim().length > 0);

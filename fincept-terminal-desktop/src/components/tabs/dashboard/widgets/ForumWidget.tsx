@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BaseWidget } from './BaseWidget';
-import { ForumApiService } from '../../../../services/forumApi';
-import { getSetting, saveSetting } from '@/services/sqliteService';
+import { ForumApiService } from '../../../../services/forum/forumApi';
+import { getSetting, saveSetting } from '@/services/core/sqliteService';
 
 const BLOOMBERG_WHITE = '#FFFFFF';
 const BLOOMBERG_GRAY = '#787878';

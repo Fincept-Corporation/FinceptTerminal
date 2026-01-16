@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Info } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { fetchNewsWithCache, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData } from '../../services/newsService';
-import { contextRecorderService } from '../../services/contextRecorderService';
+import { fetchNewsWithCache, type NewsArticle, getRSSFeedCount, getActiveSources, isUsingMockData } from '../../services/news/newsService';
+import { contextRecorderService } from '../../services/data-sources/contextRecorderService';
 import RecordingControlPanel from '../common/RecordingControlPanel';
 import { TimezoneSelector } from '../common/TimezoneSelector';
 import { useTranslation } from 'react-i18next';
-import { analyzeNewsArticle, type NewsAnalysisData, getSentimentColor, getUrgencyColor, getRiskColor } from '../../services/newsAnalysisService';
+import { analyzeNewsArticle, type NewsAnalysisData, getSentimentColor, getUrgencyColor, getRiskColor } from '../../services/news/newsAnalysisService';
 import { createNewsTabTour } from './tours/newsTabTour';
 
 // Extend Window interface for Tauri

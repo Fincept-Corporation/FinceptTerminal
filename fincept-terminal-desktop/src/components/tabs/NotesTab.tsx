@@ -8,8 +8,8 @@ import {
   BookOpen, Briefcase, PieChart, DollarSign, Globe, ChevronDown,
   ChevronRight, Copy, Download, Upload, RefreshCw, Maximize2, Minimize2, Bell
 } from 'lucide-react';
-import { notesService, Note, NoteTemplate } from '../../services/notesService';
-import { noteReminderService } from '../../services/noteReminderService.tsx';
+import { notesService, Note, NoteTemplate } from '../../services/core/notesService';
+import { noteReminderService } from '../../services/core/noteReminderService.tsx';
 import { toast } from 'sonner';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';

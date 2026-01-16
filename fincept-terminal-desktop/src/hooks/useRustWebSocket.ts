@@ -9,7 +9,7 @@ import {
   CandleData,
   StatusData,
   ConnectionMetrics,
-} from '@/services/websocketBridge';
+} from '@/services/trading/websocketBridge';
 
 /**
  * Normalize a symbol for comparison (removes slashes, dashes, underscores, uppercase)

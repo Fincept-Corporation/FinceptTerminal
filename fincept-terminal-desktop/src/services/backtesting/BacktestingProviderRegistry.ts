@@ -6,7 +6,7 @@
 
 import { IBacktestingProvider } from './interfaces/IBacktestingProvider';
 import { ProviderInfo, ProviderConfig } from './interfaces/types';
-import { backtestingLogger } from '../loggerService';
+import { backtestingLogger } from '../core/loggerService';
 
 /**
  * BacktestingProviderRegistry

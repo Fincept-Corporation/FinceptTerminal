@@ -15,7 +15,7 @@
  */
 
 export { TechnicalIndicatorsNode } from './TechnicalIndicatorsNode';
-export { TechnicalIndicatorsPythonNode } from './TechnicalIndicatorsPython.node';
+// export { TechnicalIndicatorsPythonNode } from './TechnicalIndicatorsPython.node'; // Deleted
 export { PortfolioOptimizationNode } from './PortfolioOptimizationNode';
 export { BacktestEngineNode } from './BacktestEngineNode';
 export { RiskAnalysisNode } from './RiskAnalysisNode';

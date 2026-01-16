@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { Search, Download, Zap, CheckCircle } from 'lucide-react';
 import { MARKETPLACE_SERVERS, MCPServerDefinition } from './serverDefinitions';
-import { MCPServerWithStats } from '../../../../services/mcpManager';
+import { MCPServerWithStats } from '../../../../services/mcp/mcpManager';
 import PostgresForm from './forms/PostgresForm';
 import QuestDBForm from './forms/QuestDBForm';
 import GenericForm from './forms/GenericForm';

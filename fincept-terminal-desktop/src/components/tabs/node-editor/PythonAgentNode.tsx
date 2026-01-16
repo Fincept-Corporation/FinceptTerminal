@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Play, Settings, CheckCircle, AlertCircle, Loader, TrendingUp, Brain } from 'lucide-react';
-import { sqliteService, LLMConfig } from '@/services/sqliteService';
+import { sqliteService, LLMConfig } from '@/services/core/sqliteService';
 
 interface PythonAgentNodeProps {
   id: string;

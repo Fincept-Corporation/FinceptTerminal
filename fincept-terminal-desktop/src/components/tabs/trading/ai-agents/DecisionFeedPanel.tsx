@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Activity, Brain, Target, Shield, TrendingUp, Filter, RefreshCw } from 'lucide-react';
-import agnoTradingService, { type Decision } from '../../../../services/agnoTradingService';
+import agnoTradingService, { type Decision } from '../../../../services/trading/agnoTradingService';
 
 const BLOOMBERG = {
   ORANGE: '#FF8800',

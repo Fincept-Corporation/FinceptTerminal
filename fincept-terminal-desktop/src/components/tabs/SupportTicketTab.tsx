@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { SupportApiService } from '@/services/supportApi';
+import { SupportApiService } from '@/services/forum/supportApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { RefreshCw, Plus, ArrowLeft, Send, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { TabFooter } from '@/components/common/TabFooter';

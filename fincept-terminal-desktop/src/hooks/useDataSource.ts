@@ -4,8 +4,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { getAllDataSources } from '@/services/dataSourceRegistry';
-import { DataSource } from '@/services/sqliteService';
+import { getAllDataSources } from '@/services/data-sources/dataSourceRegistry';
+import { DataSource } from '@/services/core/sqliteService';
 
 interface UseDataSourceReturn {
   dataSources: DataSource[];

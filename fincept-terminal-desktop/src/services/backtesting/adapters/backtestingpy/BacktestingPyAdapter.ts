@@ -7,7 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { BaseBacktestingAdapter } from '../BaseAdapter';
-import { backtestingLogger } from '../../../loggerService';
+import { backtestingLogger } from '../../../core/loggerService';
 import {
   ProviderCapabilities,
   ProviderConfig,

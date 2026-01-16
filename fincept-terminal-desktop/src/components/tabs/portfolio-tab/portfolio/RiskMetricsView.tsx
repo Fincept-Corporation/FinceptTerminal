@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PortfolioSummary, portfolioService } from '../../../../services/portfolioService';
+import { PortfolioSummary, portfolioService } from '../../../../services/portfolio/portfolioService';
 import {
   BLOOMBERG_COLORS,
   formatPercent,

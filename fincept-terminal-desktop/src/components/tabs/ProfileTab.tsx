@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserApiService } from '@/services/userApi';
+import { UserApiService } from '@/services/auth/userApi';
 import { TabHeader } from '@/components/common/TabHeader';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';

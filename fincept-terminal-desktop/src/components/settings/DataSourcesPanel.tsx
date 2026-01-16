@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Wifi, Database, Edit3, Trash2, Power, PowerOff, Search, Filter, RefreshCw } from 'lucide-react';
-import { DataSource } from '@/services/sqliteService';
+import { DataSource } from '@/services/core/sqliteService';
 import {
   getAllDataSources,
   toggleDataSource,
@@ -13,8 +13,8 @@ import {
   getDataSourceStats,
   getWebSocketTopic,
   parseDataSourceConfig
-} from '@/services/dataSourceRegistry';
-import { getAvailableProviders } from '@/services/websocketBridge';
+} from '@/services/data-sources/dataSourceRegistry';
+import { getAvailableProviders } from '@/services/trading/websocketBridge';
 
 interface DataSourcesPanelProps {
   colors: any;

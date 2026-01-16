@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { check, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
-import { getSetting, saveSetting } from '@/services/sqliteService';
+import { getSetting, saveSetting } from '@/services/core/sqliteService';
 
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // Check every 30 minutes
 const LAST_CHECK_KEY = 'hook_updater_last_check';

@@ -7,7 +7,7 @@ import { NavigationProvider } from './contexts/NavigationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { DataSourceProvider } from './contexts/DataSourceContext';
 import { ProviderProvider } from './contexts/ProviderContext';
-import { workflowService } from './services/workflowService';
+import { workflowService } from './services/core/workflowService';
 
 // Import screens
 import LoginScreen from './components/auth/LoginScreen';

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
-import { PortfolioSummary, PortfolioHolding } from '../../../../services/portfolioService';
+import { PortfolioSummary, PortfolioHolding } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent } from './utils';
-import { sectorService } from '../../../../services/sectorService';
+import { sectorService } from '../../../../services/data-sources/sectorService';
 import { BLOOMBERG, TYPOGRAPHY, SPACING, BORDERS, COMMON_STYLES } from '../bloombergStyles';
 
 interface SectorsViewProps {

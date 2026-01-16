@@ -1,20 +1,17 @@
 // File: src/services/trading/index.ts
 // Trading services exports
 
-// DEPRECATED: Old paper trading service replaced by new adapter-based system
-// The old service has been moved to paperTradingService.ts.deprecated
-//
-// Use the new institutional-grade paper trading adapter instead:
-// import { createPaperTradingAdapter } from '../../brokers/crypto/paper-trading';
-//
-// Example:
-// const adapter = createPaperTradingAdapter({
-//   portfolioId: 'my-portfolio',
-//   portfolioName: 'Test Strategy',
-//   realExchange: 'kraken',
-//   initialBalance: 100000,
-//   fees: { maker: 0.0002, taker: 0.0005 },
-//   slippage: { market: 0.001, limit: 0 },
-// });
+// Market data service - unified source for prices
+export * from './UnifiedMarketDataService';
 
+// WebSocket bridge - communication with Rust backend
+export * from './websocketBridge';
+
+// Alpha Arena broker bridge - for AI competition
+export * from './alphaArenaBrokerBridge';
+
+// Trading types
 export type * from '../../types/trading';
+
+// Paper trading is now at src/paper-trading/
+// Use: import { createPaperTradingAdapter } from '../../paper-trading';

@@ -1,6 +1,6 @@
-export { WebhookNotificationNode } from './WebhookNotification.node';
-export { EmailNode } from './Email.node';
-export { TelegramNode } from './Telegram.node';
-export { DiscordNode } from './Discord.node';
-export { SlackNode } from './Slack.node';
-export { SMSNode } from './SMS.node';
+export { WebhookNotificationNode } from './WebhookNode';
+export { EmailNode } from './EmailNode';
+export { TelegramNode } from './TelegramNode';
+export { DiscordNode } from './DiscordNode';
+export { SlackNode } from './SlackNode';
+export { SMSNode } from './SMSNode';

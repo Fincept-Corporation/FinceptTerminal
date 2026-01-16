@@ -8,6 +8,7 @@ import { BasicOrderForm } from './BasicOrderForm';
 import { AdvancedOrderForm } from './AdvancedOrderForm';
 import { useExchangeCapabilities } from '../../hooks/useExchangeCapabilities';
 import { useOrderExecution } from '../../hooks/useOrderExecution';
+import { usePositions } from '../../hooks/usePositions';
 import { useBrokerContext } from '../../../../../contexts/BrokerContext';
 import { HyperLiquidLeverageControl } from '../../exchange-specific/hyperliquid';
 import type { UnifiedOrderRequest } from '../../types';
@@ -37,6 +38,7 @@ interface EnhancedOrderFormProps {
 export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced }: EnhancedOrderFormProps) {
   const capabilities = useExchangeCapabilities();
   const { placeOrder, isPlacing, error } = useOrderExecution();
+  const { positions, refresh: refreshPositions } = usePositions(symbol, true, 3000); // Auto-refresh every 3 seconds
   const { activeBroker } = useBrokerContext();
 
   // Order state
@@ -44,6 +46,12 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
   const [side, setSide] = useState<OrderSide>('buy');
   const [orderData, setOrderData] = useState<Partial<UnifiedOrderRequest>>({});
   const [validationError, setValidationError] = useState<string>('');
+
+  // Calculate position quantity for the current symbol (for sell orders)
+  const positionQuantity = useMemo(() => {
+    const position = positions.find(p => p.symbol === symbol);
+    return position?.quantity || 0;
+  }, [positions, symbol]);
 
   // Merge order data changes
   const handleOrderChange = useCallback((updates: Partial<UnifiedOrderRequest>) => {
@@ -58,12 +66,14 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
       type: orderType,
       side,
       quantity: orderData.quantity || 0,
-      price: orderData.price,
+      // For market orders, use currentPrice as the execution price
+      // For limit orders, use the user-specified price
+      price: orderType === 'market' ? currentPrice : orderData.price,
       stopLossPrice: orderData.stopLossPrice,
       takeProfitPrice: orderData.takeProfitPrice,
       trailingPercent: orderData.trailingPercent,
     }),
-    [symbol, orderType, side, orderData]
+    [symbol, orderType, side, orderData, currentPrice]
   );
 
   // Handle order submission
@@ -96,6 +106,11 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
       // Reset form on success
       setOrderData({});
       setValidationError('');
+
+      // Refresh positions after order is placed
+      setTimeout(() => {
+        refreshPositions();
+      }, 500); // Small delay to let the order settle
 
       // Notify parent
       if (onOrderPlaced) {
@@ -214,6 +229,7 @@ export function EnhancedOrderForm({ symbol, currentPrice, balance, onOrderPlaced
         side={side}
         onOrderChange={handleOrderChange}
         balance={balance}
+        positionQuantity={positionQuantity}
       />
 
       {/* Advanced Order Form (capability-based) */}

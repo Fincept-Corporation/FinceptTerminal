@@ -14,11 +14,12 @@ import {
   detectBrokerFeatures,
   createFeatureChecker,
 } from '../brokers';
-import { createPaperTradingAdapter } from '../paper-trading';
+import * as paperTrading from '../paper-trading';
+import { createPaperTradingAdapter, PaperTradingAdapter, type Portfolio } from '../paper-trading';
 import type { IExchangeAdapter } from '../brokers/crypto/types';
-import type { PaperTradingAdapter } from '../paper-trading/PaperTradingAdapter';
-import { websocketBridge, type ProviderConfig, type ConnectionStatus } from '../services/websocketBridge';
-import { saveSetting, getSetting } from '@/services/sqliteService';
+import { websocketBridge, type ProviderConfig } from '../services/trading/websocketBridge';
+import { saveSetting, getSetting } from '@/services/core/sqliteService';
+import { initializeMarketDataService, getMarketDataService } from '../services/trading/UnifiedMarketDataService';
 
 // Constants
 const CONNECTION_TIMEOUT = 10000; // 10 seconds
@@ -98,7 +99,11 @@ interface BrokerContextType {
   // Broker adapters
   realAdapter: IExchangeAdapter | null;
   paperAdapter: PaperTradingAdapter | null;
+  paperPortfolio: Portfolio | null;
   activeAdapter: IExchangeAdapter | PaperTradingAdapter | null;
+
+  // Paper trading functions (direct Rust calls)
+  paperTradingApi: typeof paperTrading;
 
   // Broker capabilities
   features: BrokerFeatures | null;
@@ -134,10 +139,12 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
   // Adapter instances
   const [realAdapter, setRealAdapter] = useState<IExchangeAdapter | null>(null);
   const [paperAdapter, setPaperAdapter] = useState<PaperTradingAdapter | null>(null);
+  const [paperPortfolio, setPaperPortfolio] = useState<Portfolio | null>(null);
 
   // Refs for cleanup and abort control
   const abortControllerRef = useRef<AbortController | null>(null);
   const hasInitializedRef = useRef(false); // Prevent duplicate initialization
+  const marketDataInitializedRef = useRef(false); // Track market data service init
 
   // Get available brokers (memoized once, doesn't change)
   const availableBrokers = useMemo(() => {
@@ -156,16 +163,15 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
   // Detect features
   const features = useMemo(() => {
-    const adapter = tradingMode === 'paper' ? paperAdapter : realAdapter;
-    return adapter ? detectBrokerFeatures(adapter) : null;
-  }, [realAdapter, paperAdapter, tradingMode]);
+    return realAdapter ? detectBrokerFeatures(realAdapter) : null;
+  }, [realAdapter]);
 
   // Create feature checker
   const supports = useMemo(() => {
     return features ? createFeatureChecker(features) : null;
   }, [features]);
 
-  // Get active adapter
+  // Get active adapter based on trading mode
   const activeAdapter = useMemo(() => {
     return tradingMode === 'paper' ? paperAdapter : realAdapter;
   }, [tradingMode, realAdapter, paperAdapter]);
@@ -238,6 +244,14 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       } finally {
         setIsLoading(false);
 
+        // Initialize market data service (only once)
+        if (!marketDataInitializedRef.current) {
+          marketDataInitializedRef.current = true;
+          initializeMarketDataService()
+            .then(() => console.log('[BrokerContext] Market data service initialized'))
+            .catch((err) => console.error('[BrokerContext] Market data service init failed:', err));
+        }
+
         // Trigger initialization only once
         if (!hasInitializedRef.current) {
           hasInitializedRef.current = true;
@@ -252,8 +266,7 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
 
   // Cleanup adapters helper
   const cleanupAdapters = useCallback(async (
-    real: IExchangeAdapter | null,
-    paper: PaperTradingAdapter | null
+    real: IExchangeAdapter | null
   ) => {
     try {
       if (real) {
@@ -261,13 +274,6 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
           await Promise.race([real.disconnect(), createTimeout(5000)]);
         } catch (err) {
           console.error('[BrokerContext] Real adapter disconnect error:', err);
-        }
-      }
-      if (paper) {
-        try {
-          await Promise.race([paper.disconnect(), createTimeout(5000)]);
-        } catch (err) {
-          console.error('[BrokerContext] Paper adapter disconnect error:', err);
         }
       }
     } catch (err) {
@@ -283,18 +289,13 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
 
-    // Don't check isMountedRef here - it causes issues with lazy loading and Suspense
-    // The abort signal is sufficient to prevent stale operations
-    if (signal.aborted) {
-      return;
-    }
+    if (signal.aborted) return;
 
     setIsConnecting(true);
 
     try {
-
       // Clean up old adapters first
-      await cleanupAdapters(realAdapter, paperAdapter);
+      await cleanupAdapters(realAdapter);
 
       if (signal.aborted) return;
 
@@ -308,76 +309,71 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       }
 
       if (signal.aborted) {
-        await cleanupAdapters(newRealAdapter, null);
+        await cleanupAdapters(newRealAdapter);
         return;
       }
 
       // Update real adapter state
       setRealAdapter(newRealAdapter);
 
-      // Create paper adapter (wrapping real adapter)
-      const portfolioId = paperPortfolioMode === 'unified'
-        ? 'paper_global'
-        : `paper_${activeBroker}`;
+      // Create or get paper portfolio from Rust backend
+      const portfolioName = paperPortfolioMode === 'unified'
+        ? 'Global Paper Trading Portfolio'
+        : `${activeBroker.toUpperCase()} Paper Trading`;
 
       const fees = getBrokerFees(activeBrokerMetadata);
 
-      const newPaperAdapter = createPaperTradingAdapter(
-        {
-          portfolioId,
-          portfolioName: paperPortfolioMode === 'unified'
-            ? 'Global Paper Trading Portfolio'
-            : `${activeBroker.toUpperCase()} Paper Trading`,
-          provider: activeBroker,
-          assetClass: 'crypto',
-          initialBalance: 100000,
-          currency: 'USD',
-          fees,
-          slippage: {
-            market: 0.001, // 0.1% realistic slippage
-            limit: 0,
-          },
-          enableMarginTrading: true,
-          defaultLeverage: 1,
-          maxLeverage: activeBrokerMetadata?.advancedFeatures.maxLeverage || 1,
-        },
-        newRealAdapter
-      );
-
-      if (signal.aborted) {
-        await cleanupAdapters(newRealAdapter, newPaperAdapter);
-        return;
-      }
-
       try {
-        await retryConnect(() => newPaperAdapter.connect());
-      } catch (connectError) {
-        console.error(`[BrokerContext] [WARN] Failed to connect paper adapter:`, connectError);
-        throw connectError; // Paper adapter is critical
-      }
+        // Create paper trading adapter with market data service (NO realAdapter dependency)
+        // This allows paper trading to work independently of real broker connection
+        const marketDataService = getMarketDataService();
+        const newPaperAdapter = createPaperTradingAdapter(
+          {
+            portfolioId: '',
+            portfolioName,
+            provider: activeBroker,
+            assetClass: 'crypto',
+            initialBalance: 100000,
+            currency: 'USD',
+            fees,
+            slippage: { market: 0.001, limit: 0 },
+            enableMarginTrading: true,
+            defaultLeverage: 1,
+            maxLeverage: activeBrokerMetadata?.advancedFeatures.maxLeverage || 1,
+          },
+          marketDataService
+        );
 
-      if (signal.aborted) {
-        await cleanupAdapters(newRealAdapter, newPaperAdapter);
-        return;
-      }
+        await newPaperAdapter.connect();
 
-      // Update paper adapter state
-      setPaperAdapter(newPaperAdapter);
+        if (signal.aborted) {
+          await newPaperAdapter.disconnect();
+          return;
+        }
+
+        setPaperAdapter(newPaperAdapter);
+
+        // Also get the portfolio for direct Rust API access
+        const portfolio = await paperTrading.getPortfolio(newPaperAdapter.portfolioId);
+        setPaperPortfolio(portfolio);
+      } catch (error) {
+        console.error('[BrokerContext] Failed to create paper adapter:', error);
+        setPaperAdapter(null);
+        setPaperPortfolio(null);
+      }
 
     } catch (error) {
       if (signal.aborted) return;
 
       console.error(`[BrokerContext] [FAIL] Failed to initialize ${activeBroker}:`, error);
-      console.error(`[BrokerContext] Error details:`, error);
-      console.error(`[BrokerContext] Stack trace:`, (error as Error)?.stack);
 
-      // Set adapters to null on failure
       setRealAdapter(null);
       setPaperAdapter(null);
+      setPaperPortfolio(null);
     } finally {
       setIsConnecting(false);
     }
-  }, [activeBroker, paperPortfolioMode, activeBrokerMetadata, cleanupAdapters, realAdapter, paperAdapter, getBrokerFees]);
+  }, [activeBroker, paperPortfolioMode, activeBrokerMetadata, cleanupAdapters, realAdapter, getBrokerFees]);
 
   // Set active broker
   const setActiveBroker = useCallback(async (brokerId: string) => {
@@ -437,7 +433,7 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
       newConfigs.set(provider, updatedConfig);
 
       // Update config in Rust WebSocket backend
-      websocketBridge.setConfig(updatedConfig).catch(error => {
+      websocketBridge.setConfig(updatedConfig).catch((error: unknown) => {
         console.error(`[BrokerContext] Failed to update provider config for ${provider}:`, error);
       });
 
@@ -457,7 +453,9 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
     setPaperPortfolioMode,
     realAdapter,
     paperAdapter,
+    paperPortfolio,
     activeAdapter,
+    paperTradingApi: paperTrading,
     features,
     supports,
     defaultSymbols,
@@ -476,6 +474,7 @@ export function BrokerProvider({ children }: BrokerProviderProps) {
     setPaperPortfolioMode,
     realAdapter,
     paperAdapter,
+    paperPortfolio,
     activeAdapter,
     features,
     supports,
@@ -539,12 +538,14 @@ export function useBrokerFeatures() {
  * Hook for adapter access
  */
 export function useBrokerAdapter() {
-  const { activeAdapter, realAdapter, paperAdapter, tradingMode } = useBrokerContext();
+  const { activeAdapter, realAdapter, paperAdapter, paperPortfolio, paperTradingApi, tradingMode } = useBrokerContext();
 
   return {
     adapter: activeAdapter,
     realAdapter,
     paperAdapter,
+    paperPortfolio,
+    paperTradingApi,
     tradingMode,
   };
 }

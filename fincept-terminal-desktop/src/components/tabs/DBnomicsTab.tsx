@@ -3,7 +3,7 @@ import { RefreshCw, Download, Plus, Minus, Trash2 } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
 import { useTranslation } from 'react-i18next';
-import { getSetting, saveSetting } from '@/services/sqliteService';
+import { getSetting, saveSetting } from '@/services/core/sqliteService';
 
 interface Provider {
   code: string;

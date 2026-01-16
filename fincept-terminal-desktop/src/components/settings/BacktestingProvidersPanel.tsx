@@ -21,7 +21,7 @@ import {
   Plus,
   Zap,
 } from 'lucide-react';
-import { sqliteService, type BacktestingProvider } from '@/services/sqliteService';
+import { sqliteService, type BacktestingProvider } from '@/services/core/sqliteService';
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
 import { PathService } from '@/services/backtesting/PathService';
 

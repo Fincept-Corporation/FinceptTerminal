@@ -1,7 +1,7 @@
 // MCP Node Configurations
 // Dynamically generates node configs from available MCP servers
 
-import { mcpToolService, MCPTool } from '../../../services/mcpToolService';
+import { mcpToolService, MCPTool } from '../../../services/mcp/mcpToolService';
 
 export interface MCPNodeConfig {
   id: string;

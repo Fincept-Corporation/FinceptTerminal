@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import * as HDXService from '@/services/hdxService';
+import * as HDXService from '@/services/data-sources/hdxService';
 import {
   HDXDataset,
   HDXDatasetDetails,
   HDXSearchResult,
   HDXConflictResult,
   HDXQueries
-} from '@/services/hdxService';
+} from '@/services/data-sources/hdxService';
 import GeopoliticsRelationshipMap from './GeopoliticsRelationshipMap';
 
 interface HDXPanelProps {

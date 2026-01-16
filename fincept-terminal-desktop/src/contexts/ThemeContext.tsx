@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { terminalThemeService, TerminalTheme, FontSizes, ColorTheme } from '@/services/terminalThemeService';
+import { terminalThemeService, TerminalTheme, FontSizes, ColorTheme } from '@/services/core/terminalThemeService';
 
 interface ThemeContextValue {
   theme: TerminalTheme;

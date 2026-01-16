@@ -1,10 +1,12 @@
 /**
  * Market Data Hooks
  * Fetches OHLCV, orderbook, and ticker data across all exchanges
+ * Uses UnifiedMarketDataService for live price streaming
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useBrokerContext } from '../../../../contexts/BrokerContext';
+import { getMarketDataService } from '../../../../services/trading/UnifiedMarketDataService';
 import type { OHLCV, Timeframe, UnifiedOrderBook, UnifiedTicker } from '../types';
 
 // ============================================================================
@@ -16,13 +18,15 @@ const ohlcvCache = new Map<string, { data: OHLCV[]; timestamp: number }>();
 const OHLCV_CACHE_TTL = 30000; // 30 seconds
 
 export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: number = 100) {
-  const { activeAdapter } = useBrokerContext();
+  // Use realAdapter for OHLCV data - works in both paper and live modes
+  const { realAdapter } = useBrokerContext();
   const [ohlcv, setOhlcv] = useState<OHLCV[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchOHLCV = useCallback(async () => {
-    if (!activeAdapter || !symbol) {
+    // Use realAdapter directly for OHLCV (paper adapter returns empty)
+    if (!realAdapter || !symbol) {
       setOhlcv([]);
       return;
     }
@@ -40,15 +44,14 @@ export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: nu
     setError(null);
 
     try {
-      // Re-validate adapter before async operation
-      if (!activeAdapter || !activeAdapter.isConnected()) {
-        setOhlcv([]);
+      // Check if realAdapter is connected
+      if (!realAdapter.isConnected()) {
         setIsLoading(false);
         return;
       }
 
-      // Fetch OHLCV from adapter
-      const rawData = await activeAdapter.fetchOHLCV(symbol, timeframe, limit);
+      // Fetch OHLCV from real adapter (exchange API)
+      const rawData = await realAdapter.fetchOHLCV(symbol, timeframe, limit);
 
       // Normalize to unified format
       const normalized: OHLCV[] = (rawData || []).map((candle: any) => ({
@@ -66,13 +69,13 @@ export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: nu
       ohlcvCache.set(cacheKey, { data: normalized, timestamp: Date.now() });
     } catch (err) {
       const error = err as Error;
-      console.error('[useOHLCV] Failed to fetch OHLCV:', error);
+      console.warn('[useOHLCV] Failed to fetch OHLCV:', error.message);
       setError(error);
-      setOhlcv([]);
+      // Don't clear OHLCV on error - keep cached data
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, symbol, timeframe, limit]);
+  }, [realAdapter, symbol, timeframe, limit]);
 
   useEffect(() => {
     fetchOHLCV();
@@ -91,14 +94,21 @@ export function useOHLCV(symbol?: string, timeframe: Timeframe = '1h', limit: nu
 // ============================================================================
 
 export function useOrderBook(symbol?: string, limit: number = 20, autoRefresh: boolean = true) {
-  const { activeAdapter } = useBrokerContext();
+  // Use realAdapter for orderbook data - works in both paper and live modes
+  const { realAdapter } = useBrokerContext();
   const [orderBook, setOrderBook] = useState<UnifiedOrderBook | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const fetchOrderBook = useCallback(async () => {
-    if (!activeAdapter || !symbol) {
+    // Use realAdapter directly for orderbook (paper adapter returns empty)
+    if (!realAdapter || !symbol) {
       setOrderBook(null);
+      return;
+    }
+
+    // Check if connected
+    if (!realAdapter.isConnected()) {
       return;
     }
 
@@ -106,38 +116,51 @@ export function useOrderBook(symbol?: string, limit: number = 20, autoRefresh: b
     setError(null);
 
     try {
-      const rawBook = await activeAdapter.fetchOrderBook(symbol, limit);
+      const rawBook = await realAdapter.fetchOrderBook(symbol, limit);
+
+      // Handle both array format [price, size] and object format {price, size/quantity}
+      const normalizeLevels = (levels: any[]) => {
+        return (levels || [])
+          .filter((level: any) => {
+            if (Array.isArray(level)) {
+              return level.length >= 2;
+            }
+            return level && (level.price !== undefined);
+          })
+          .map((level: any) => {
+            if (Array.isArray(level)) {
+              return { price: level[0] as number, size: level[1] as number };
+            }
+            return { price: level.price as number, size: (level.size || level.quantity || level.amount) as number };
+          });
+      };
 
       // Normalize to unified format with array element validation
       const normalized: UnifiedOrderBook = {
         symbol,
-        bids: (rawBook.bids || [])
-          .filter((level: any) => Array.isArray(level) && level.length >= 2)
-          .map((level: any) => ({ price: level[0] as number, size: level[1] as number })),
-        asks: (rawBook.asks || [])
-          .filter((level: any) => Array.isArray(level) && level.length >= 2)
-          .map((level: any) => ({ price: level[0] as number, size: level[1] as number })),
+        bids: normalizeLevels(rawBook.bids),
+        asks: normalizeLevels(rawBook.asks),
         timestamp: rawBook.timestamp || Date.now(),
       };
 
       setOrderBook(normalized);
     } catch (err) {
       const error = err as Error;
-      console.error('[useOrderBook] Failed to fetch orderbook:', error);
+      console.warn('[useOrderBook] Failed to fetch orderbook:', error.message);
       setError(error);
-      setOrderBook(null);
+      // Don't clear orderbook on error - keep existing data
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, symbol, limit]);
+  }, [realAdapter, symbol, limit]);
 
   useEffect(() => {
     fetchOrderBook();
 
     if (!autoRefresh) return;
 
-    // Changed from 1000ms to 3000ms to reduce API load
-    const interval = setInterval(fetchOrderBook, 3000);
+    // Fetch orderbook every 2 seconds for more responsive updates
+    const interval = setInterval(fetchOrderBook, 2000);
     return () => clearInterval(interval);
   }, [fetchOrderBook, autoRefresh]);
 
@@ -154,29 +177,105 @@ export function useOrderBook(symbol?: string, limit: number = 20, autoRefresh: b
 // ============================================================================
 
 export function useTicker(symbol?: string, autoRefresh: boolean = true) {
-  const { activeAdapter } = useBrokerContext();
+  // Use realAdapter for additional ticker data (high, low, volume)
+  const { realAdapter, activeBroker } = useBrokerContext();
   const [ticker, setTicker] = useState<UnifiedTicker | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  const fetchTicker = useCallback(async () => {
-    if (!activeAdapter || !symbol) {
+  // Subscribe to market data service for live updates (primary source)
+  useEffect(() => {
+    if (!symbol) {
       setTicker(null);
       return;
     }
 
+    const marketDataService = getMarketDataService();
+
+    // Get initial price from cache
+    const cachedPrice = marketDataService.getCurrentPrice(symbol, activeBroker || undefined);
+    if (cachedPrice) {
+      setTicker({
+        symbol,
+        last: cachedPrice.last,
+        bid: cachedPrice.bid,
+        ask: cachedPrice.ask,
+        high: 0,
+        low: 0,
+        open: undefined,
+        close: undefined,
+        volume: 0,
+        quoteVolume: undefined,
+        change: 0,
+        changePercent: 0,
+        timestamp: cachedPrice.timestamp,
+      });
+      setIsLoading(false);
+    }
+
+    // Subscribe to live updates from market data service
+    const unsubscribe = marketDataService.subscribeToPrice(symbol, (price) => {
+      setTicker((prev) => ({
+        symbol,
+        last: price.last,
+        bid: price.bid,
+        ask: price.ask,
+        high: prev?.high || price.high || 0,
+        low: prev?.low || price.low || 0,
+        open: prev?.open,
+        close: prev?.close,
+        volume: prev?.volume || price.volume || 0,
+        quoteVolume: prev?.quoteVolume,
+        change: prev?.change || price.change || 0,
+        changePercent: prev?.changePercent || price.changePercent || 0,
+        timestamp: price.timestamp,
+      }));
+      setIsLoading(false);
+      setError(null);
+    });
+
+    unsubscribeRef.current = unsubscribe;
+
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
+    };
+  }, [symbol, activeBroker]);
+
+  // Fetch full ticker data from realAdapter (works in both paper and live modes)
+  const fetchTicker = useCallback(async () => {
+    if (!realAdapter || !symbol) {
+      return;
+    }
+
+    // Check if connected
+    if (!realAdapter.isConnected()) {
+      return;
+    }
+
     setIsLoading(true);
-    setError(null);
 
     try {
-      const rawTicker = await activeAdapter.fetchTicker(symbol);
+      const rawTicker = await realAdapter.fetchTicker(symbol);
+
+      // Get live price from market data service
+      const marketDataService = getMarketDataService();
+      const livePrice = marketDataService.getCurrentPrice(symbol, activeBroker || undefined);
+
+      // Merge: use live price if available, fallback to adapter
+      const lastPrice = livePrice?.last || rawTicker.last || 0;
+      const bidPrice = livePrice?.bid || rawTicker.bid || 0;
+      const askPrice = livePrice?.ask || rawTicker.ask || 0;
 
       // Normalize to unified format
       const normalized: UnifiedTicker = {
         symbol,
-        last: rawTicker.last || 0,
-        bid: rawTicker.bid || 0,
-        ask: rawTicker.ask || 0,
+        last: lastPrice,
+        bid: bidPrice,
+        ask: askPrice,
         high: rawTicker.high || 0,
         low: rawTicker.low || 0,
         open: rawTicker.open,
@@ -185,26 +284,28 @@ export function useTicker(symbol?: string, autoRefresh: boolean = true) {
         quoteVolume: rawTicker.quoteVolume,
         change: rawTicker.change || 0,
         changePercent: rawTicker.percentage || 0,
-        timestamp: rawTicker.timestamp || Date.now(),
+        timestamp: livePrice?.timestamp || rawTicker.timestamp || Date.now(),
       };
 
       setTicker(normalized);
+      setError(null);
     } catch (err) {
-      const error = err as Error;
-      console.error('[useTicker] Failed to fetch ticker:', error);
-      setError(error);
-      setTicker(null);
+      console.warn('[useTicker] Failed to fetch ticker from adapter:', (err as Error).message);
+      // Don't clear ticker on error - keep live price data from market data service
     } finally {
       setIsLoading(false);
     }
-  }, [activeAdapter, symbol]);
+  }, [realAdapter, symbol, activeBroker]);
 
+  // Fetch full ticker data on mount and periodically
   useEffect(() => {
     fetchTicker();
 
     if (!autoRefresh) return;
 
-    const interval = setInterval(fetchTicker, 2000); // Update every 2s
+    // Fetch full ticker data every 5 seconds (for high/low/volume)
+    // Live price updates come from market data service subscription
+    const interval = setInterval(fetchTicker, 5000);
     return () => clearInterval(interval);
   }, [fetchTicker, autoRefresh]);
 

@@ -4,7 +4,7 @@
 import React from 'react';
 import { Terminal, User } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { ChatModeMessage } from '@/services/chatModeApi';
+import { ChatModeMessage } from '@/services/data-sources/chatModeApi';
 import MarkdownRenderer from '@/components/common/MarkdownRenderer';
 
 interface ChatMessageBubbleProps {

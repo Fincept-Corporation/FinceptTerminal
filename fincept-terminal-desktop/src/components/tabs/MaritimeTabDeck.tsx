@@ -4,10 +4,10 @@ import { ScatterplotLayer, PathLayer } from '@deck.gl/layers';
 import { TileLayer } from '@deck.gl/geo-layers';
 import { BitmapLayer } from '@deck.gl/layers';
 import { useAuth } from '@/contexts/AuthContext';
-import { MarineApiService, VesselData } from '@/services/marineApi';
+import { MarineApiService, VesselData } from '@/services/maritime/marineApi';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
-import { GeocodingService, GeocodeLocation } from '@/services/geocodingService';
+import { GeocodingService, GeocodeLocation } from '@/services/geopolitics/geocodingService';
 
 const INITIAL_VIEW_STATE = {
   longitude: 72.8,
@@ -368,7 +368,7 @@ export default function MaritimeTabDeck() {
         renderSubLayers: (props: any) => {
           const { boundingBox } = props.tile;
           return new BitmapLayer(props, {
-            data: null,
+            data: undefined,
             image: props.data,
             bounds: [boundingBox[0][0], boundingBox[0][1], boundingBox[1][0], boundingBox[1][1]]
           });
@@ -724,7 +724,7 @@ export default function MaritimeTabDeck() {
           layers={layers}
           width="100%"
           height="100%"
-          style={{ position: 'absolute', inset: 0 }}
+          style={{ position: 'absolute', inset: '0' }}
           getTooltip={({ object }: any) => object && {
             html: `<strong>${object.name}</strong><br/>IMO: ${object.imo}<br/>Speed: ${object.speed.toFixed(1)} kts`,
             style: {

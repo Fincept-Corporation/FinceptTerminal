@@ -48,7 +48,7 @@ import {
   ReferenceArea
 } from 'recharts';
 import { quantAnalyticsService, type QuantAnalyticsResult } from '@/services/aiQuantLab/quantAnalyticsService';
-import { yfinanceService } from '@/services/yfinanceService';
+import { yfinanceService } from '@/services/markets/yfinanceService';
 
 // Bloomberg-style color palette
 const BB = {

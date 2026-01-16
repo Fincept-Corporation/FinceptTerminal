@@ -44,8 +44,8 @@ import {
   GitCompare
 } from 'lucide-react';
 import { ffnService, type PerformanceMetrics, type DrawdownInfo, type FFNConfig, type MonthlyReturnsResponse, type RollingMetricsResponse, type AssetComparisonResponse, type PortfolioOptimizationResponse, type BenchmarkComparisonResponse } from '@/services/aiQuantLab/ffnService';
-import { portfolioService, type Portfolio } from '@/services/portfolioService';
-import { yfinanceService } from '@/services/yfinanceService';
+import { portfolioService, type Portfolio } from '@/services/portfolio/portfolioService';
+import { yfinanceService } from '@/services/markets/yfinanceService';
 
 // Bloomberg Professional Color Palette
 const BLOOMBERG = {

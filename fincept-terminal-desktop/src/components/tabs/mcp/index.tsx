@@ -3,8 +3,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, RefreshCw, Search, Play, Square, Trash2, Settings, Zap, CheckCircle, XCircle, AlertCircle, MessageSquare } from 'lucide-react';
-import { mcpManager, MCPServerWithStats } from '../../../services/mcpManager';
-import { sqliteService } from '../../../services/sqliteService';
+import { mcpManager, MCPServerWithStats } from '../../../services/mcp/mcpManager';
+import { sqliteService } from '../../../services/core/sqliteService';
 import MCPMarketplace from './marketplace/MCPMarketplace';
 import MCPAddServerModal from './MCPAddServerModal';
 

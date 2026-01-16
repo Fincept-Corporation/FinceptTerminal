@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { Handle, Position } from 'reactflow';
 import { Zap, AlertCircle, CheckCircle, Loader } from 'lucide-react';
-import { mcpToolService, MCPTool } from '../../../services/mcpToolService';
+import { mcpToolService, MCPTool } from '../../../services/mcp/mcpToolService';
 
 interface MCPToolNodeProps {
   data: {

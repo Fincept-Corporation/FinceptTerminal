@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, Mail, Key, Eye, EyeOff } from "lucide-react";
 import { Screen } from '../../App';
-import { AuthApiService } from '@/services/authApi';
+import { AuthApiService } from '@/services/auth/authApi';
 import { CompactLanguageSelector } from './CompactLanguageSelector';
 
 interface ForgotPasswordScreenProps {

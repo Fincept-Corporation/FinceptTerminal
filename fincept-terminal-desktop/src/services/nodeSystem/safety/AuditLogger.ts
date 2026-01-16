@@ -89,7 +89,7 @@ class AuditLoggerClass {
 
     try {
       // Try to load SQLite service
-      const module = await import('@/services/sqliteService');
+      const module = await import('@/services/core/sqliteService');
       this.sqliteService = module.default || module.sqliteService;
 
       // Create audit table if not exists

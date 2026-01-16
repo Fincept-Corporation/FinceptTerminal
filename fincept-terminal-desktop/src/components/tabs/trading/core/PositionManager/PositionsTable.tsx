@@ -24,7 +24,8 @@ const BLOOMBERG = {
 };
 
 export function PositionsTable() {
-  const { positions, isLoading, refresh } = usePositions(undefined, true, 2000);
+  // Refresh positions every 1 second for live P&L updates
+  const { positions, isLoading, refresh } = usePositions(undefined, true, 1000);
   const { closePosition, isClosing } = useClosePosition();
   const capabilities = useExchangeCapabilities();
   const { activeBroker } = useBrokerContext();

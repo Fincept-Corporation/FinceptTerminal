@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Terminal, Activity, Zap, Database, TrendingUp } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { chatModeApiService, ChatModeMessage } from '@/services/chatModeApi';
+import { chatModeApiService, ChatModeMessage } from '@/services/data-sources/chatModeApi';
 import ChatMessageBubble from './components/ChatMessageBubble';
 import ChatSuggestions from './components/ChatSuggestions';
 

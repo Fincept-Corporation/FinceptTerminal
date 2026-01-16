@@ -16,7 +16,7 @@ import 'reactflow/dist/style.css';
 import { Search, Building2, Users, TrendingUp, Calendar, BarChart3, Globe, DollarSign, FileText, Award, Activity, Briefcase, PieChart, ExternalLink } from 'lucide-react';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import { TabFooter } from '@/components/common/TabFooter';
-import { relationshipMapService } from '@/services/relationshipMapService';
+import { relationshipMapService } from '@/services/geopolitics/relationshipMapService';
 import { open } from '@tauri-apps/plugin-shell';
 
 // ============================================================================

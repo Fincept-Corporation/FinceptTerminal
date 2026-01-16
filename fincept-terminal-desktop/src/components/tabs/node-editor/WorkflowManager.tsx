@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Node, Edge } from 'reactflow';
-import { Workflow, workflowService } from '@/services/workflowService';
+import { Workflow, workflowService } from '@/services/core/workflowService';
 import { Play, Trash2, Edit3, Eye, FileText, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface WorkflowManagerProps {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { polygonService } from '../../services/polygonService';
+import { polygonService } from '../../services/data-sources/polygonService';
 import { useTerminalTheme } from '@/contexts/ThemeContext';
-import { yfinanceService, HistoricalDataPoint } from '../../services/yfinanceService';
+import { yfinanceService, HistoricalDataPoint } from '../../services/markets/yfinanceService';
 import CandlestickChart, { CandlestickDataPoint } from '../charts/CandlestickChart';
 import { TabFooter } from '@/components/common/TabFooter';
 

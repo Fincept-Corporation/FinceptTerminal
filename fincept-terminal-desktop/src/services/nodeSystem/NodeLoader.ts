@@ -15,7 +15,7 @@ import { INodeType } from './types';
 import { StockDataNode } from '../../nodes/finance/StockData.node';
 
 // Import core nodes
-import { FilterNode } from '../../nodes/core/Filter.node';
+import { FilterNode as CoreFilterNode } from '../../nodes/core/Filter.node';
 import { MergeNode as CoreMergeNode } from '../../nodes/core/Merge.node';
 import { SetNode } from '../../nodes/core/Set.node';
 import { SwitchNode as CoreSwitchNode } from '../../nodes/core/Switch.node';
@@ -24,7 +24,7 @@ import { CodeNode as CoreCodeNode } from '../../nodes/core/Code.node';
 // Import analytics nodes
 import {
   TechnicalIndicatorsNode,
-  TechnicalIndicatorsPythonNode,
+  // TechnicalIndicatorsPythonNode, // Deleted
   PortfolioOptimizationNode,
   BacktestEngineNode,
   RiskAnalysisNode,
@@ -46,10 +46,10 @@ import {
   MergeNode,
   SplitNode,
   ErrorHandlerNode,
-  CodeNode,
-  StopAndErrorNode,
-  CompareDatasetsNode,
-  NoOpNode,
+  // CodeNode, // Deleted
+  // StopAndErrorNode, // Deleted
+  // CompareDatasetsNode, // Deleted
+  // NoOpNode, // Deleted
 } from './nodes/controlFlow';
 
 // Import safety nodes
@@ -151,8 +151,8 @@ class NodeLoaderClass {
 
     try {
       // Filter Node - Remove items based on conditions
-      const filterNode = new FilterNode();
-      NodeRegistry.registerNodeType(filterNode, 'FilterNode');
+      const filterNode = new CoreFilterNode();
+      NodeRegistry.registerNodeType(filterNode, 'CoreFilterNode');
       this.loadedNodes.set('filter', filterNode);
 
       // Merge Node - Combine data from multiple inputs
@@ -254,7 +254,7 @@ class NodeLoaderClass {
     try {
       const nodes = [
         { instance: new TechnicalIndicatorsNode(), name: 'TechnicalIndicatorsNode' },
-        { instance: new TechnicalIndicatorsPythonNode(), name: 'TechnicalIndicatorsPythonNode' },
+        // { instance: new TechnicalIndicatorsPythonNode(), name: 'TechnicalIndicatorsPythonNode' }, // Deleted
         { instance: new PortfolioOptimizationNode(), name: 'PortfolioOptimizationNode' },
         { instance: new BacktestEngineNode(), name: 'BacktestEngineNode' },
         { instance: new RiskAnalysisNode(), name: 'RiskAnalysisNode' },
@@ -310,10 +310,10 @@ class NodeLoaderClass {
         { instance: new MergeNode(), name: 'MergeNode' },
         { instance: new SplitNode(), name: 'SplitNode' },
         { instance: new ErrorHandlerNode(), name: 'ErrorHandlerNode' },
-        { instance: new CodeNode(), name: 'CodeNode' },
-        { instance: new StopAndErrorNode(), name: 'StopAndErrorNode' },
-        { instance: new CompareDatasetsNode(), name: 'CompareDatasetsNode' },
-        { instance: new NoOpNode(), name: 'NoOpNode' },
+        // { instance: new CodeNode(), name: 'CodeNode' }, // Deleted
+        // { instance: new StopAndErrorNode(), name: 'StopAndErrorNode' }, // Deleted
+        // { instance: new CompareDatasetsNode(), name: 'CompareDatasetsNode' }, // Deleted
+        // { instance: new NoOpNode(), name: 'NoOpNode' }, // Deleted
       ];
 
       for (const { instance, name} of nodes) {

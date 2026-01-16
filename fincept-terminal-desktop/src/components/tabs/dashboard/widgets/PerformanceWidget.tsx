@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, BarChart3, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
-import { sqliteService } from '@/services/sqliteService';
+import { sqliteService } from '@/services/core/sqliteService';
 
 interface PerformanceWidgetProps {
   id: string;

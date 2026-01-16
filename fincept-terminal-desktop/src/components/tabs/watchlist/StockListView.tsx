@@ -1,5 +1,5 @@
 import React from 'react';
-import { WatchlistStockWithQuote } from '../../../services/watchlistService';
+import { WatchlistStockWithQuote } from '../../../services/core/watchlistService';
 import { BLOOMBERG_COLORS, formatCurrency, formatPercent, formatVolume, getChangeColor, SortCriteria } from './utils';
 import { Trash2 } from 'lucide-react';
 

@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Activity, TrendingUp, Settings, Play, StopCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { backtestingRegistry } from '@/services/backtesting/BacktestingProviderRegistry';
 import { BacktestRequest, BacktestResult } from '@/services/backtesting/interfaces/types';
-import { sqliteService } from '@/services/sqliteService';
+import { sqliteService } from '@/services/core/sqliteService';
 
 // ============================================================================
 // Types

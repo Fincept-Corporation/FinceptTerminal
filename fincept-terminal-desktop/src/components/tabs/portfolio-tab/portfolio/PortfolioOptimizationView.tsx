@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { TrendingUp, BarChart3, PieChart, LineChart, Target, Shield, Calculator, Download } from 'lucide-react';
-import { PortfolioSummary } from '../../../../services/portfolioService';
+import { PortfolioSummary } from '../../../../services/portfolio/portfolioService';
 import { LineChart as RechartsLine, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Scatter, ScatterChart, ZAxis } from 'recharts';
-import { getSetting, saveSetting } from '@/services/sqliteService';
+import { getSetting, saveSetting } from '@/services/core/sqliteService';
 
 // Library selection
 const LIBRARIES = [

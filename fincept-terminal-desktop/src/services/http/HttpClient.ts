@@ -3,7 +3,19 @@
  * Unified HTTP client with interceptors for broker API calls
  */
 
-import type { BrokerError, RateLimitError } from '@/brokers/stocks/base/types';
+// TODO: Re-enable once broker types are properly defined
+// import type { BrokerError, RateLimitError } from '@/brokers/stocks/base/types';
+
+// Temporary inline types until broker types are properly defined
+interface BrokerError extends Error {
+  code?: string;
+  statusCode?: number;
+  response?: any;
+}
+
+interface RateLimitError extends BrokerError {
+  retryAfter?: number;
+}
 
 export interface HttpClientConfig {
   baseURL: string;

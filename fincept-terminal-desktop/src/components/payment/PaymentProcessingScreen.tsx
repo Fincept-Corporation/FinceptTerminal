@@ -15,8 +15,8 @@ import {
 } from "lucide-react";
 import { Screen } from '../../App';
 import { useAuth } from '@/contexts/AuthContext';
-import { PaymentApiService, PaymentUtils } from '@/services/paymentApi';
-import { getSetting, saveSetting } from '@/services/sqliteService';
+import { PaymentApiService, PaymentUtils } from '@/services/payment/paymentApi';
+import { getSetting, saveSetting } from '@/services/core/sqliteService';
 
 interface PaymentProcessingScreenProps {
   onNavigate: (screen: Screen) => void;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Activity, ExternalLink } from 'lucide-react';
 import { BaseWidget } from './BaseWidget';
-import polymarketService, { PolymarketMarket } from '@/services/polymarketService';
+import polymarketService, { PolymarketMarket } from '@/services/polymarket/polymarketService';
 
 interface PolymarketWidgetProps {
   id: string;

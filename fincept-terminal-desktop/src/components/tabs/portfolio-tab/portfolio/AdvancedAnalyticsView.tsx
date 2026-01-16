@@ -1,6 +1,6 @@
 import { useTerminalTheme } from '@/contexts/ThemeContext';
 import React, { useState } from 'react';
-import { PortfolioSummary, portfolioService } from '../../../../services/portfolioService';
+import { PortfolioSummary, portfolioService } from '../../../../services/portfolio/portfolioService';
 import { formatCurrency, formatPercent } from './utils';
 import { Shield, Target, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react';
 
